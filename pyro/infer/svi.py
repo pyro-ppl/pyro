@@ -24,8 +24,8 @@ class SVI(TracePosterior):
         See the :class:`~pyro.infer.elbo.ELBO` docs to learn how to implement
         a custom loss.
     :type loss: pyro.infer.elbo.ELBO
-    :param num_samples: the number of samples for Monte Carlo posterior approximation
-    :param num_steps: the number of optimization steps to take in ``run()``
+    :param num_samples: (DEPRECATED) the number of samples for Monte Carlo posterior approximation
+    :param num_steps: (DEPRECATED) the number of optimization steps to take in ``run()``
 
     A unified interface for stochastic variational inference in Pyro. The most
     commonly used loss is ``loss=Trace_ELBO()``. See the tutorial
@@ -68,6 +68,11 @@ class SVI(TracePosterior):
             self.loss_and_grads = loss_and_grads
 
     def run(self, *args, **kwargs):
+        """
+        .. warning::
+            This method is deprecated. For inference, use :meth:`step` directly,
+            and for predictions, use the :class:`~pyro.infer.predictive.Predictive` class.
+        """
         warnings.warn('This method is deprecated. For inference, use `SVI.step` directly, '
                       'and for predictions, use the `pyro.infer.Predictive` class.')
         if self.num_steps > 0:

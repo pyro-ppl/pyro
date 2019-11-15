@@ -172,7 +172,7 @@ class Predictive(torch.nn.Module):
         .. warning::
             This method may be removed once PyTorch JIT tracer starts accepting
             `dict` as valid return types. See
-            `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
+            `issue <https://github.com/pytorch/pytorch/issues/27743>`_.
         """
         result = self.forward(*args, **kwargs)
         return tuple(v for _, v in sorted(result.items()))

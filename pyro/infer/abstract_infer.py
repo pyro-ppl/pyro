@@ -273,6 +273,10 @@ class TracePosterior(object, metaclass=ABCMeta):
 
 class TracePredictive(TracePosterior):
     """
+    .. warning::
+        This class is deprecated and will be removed in the next release.
+        Use the :class:`~pyro.infer.predictive.Predictive` class instead.
+
     Generates and holds traces from the posterior predictive distribution,
     given model execution traces from the approximate posterior. This is
     achieved by constraining latent sites to randomly sampled parameter
