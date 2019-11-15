@@ -10,6 +10,7 @@ effects.  To create a poutine-aware attribute, use either the
 
 """
 import functools
+from abc import ABCMeta
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -77,7 +78,40 @@ def _get_pyro_params(module):
         yield name, module._parameters[name]
 
 
-class PyroModule(torch.nn.Module):
+# Inherit from ABCMeta because many practical nn.Module subclasses also inherit
+# from ABCMeta (e.g. EasyGuide), and this will avoid metclass conflict errors.
+class _PyroModuleMeta(ABCMeta):
+    _pyro_mixin_cache = {}
+
+    # Unpickling helper to create an empty object of type PyroModule[Module].
+    class _New:
+        def __init__(self, Module):
+            self.__class__ = PyroModule[Module]
+
+    def __getitem__(cls, Module):
+        assert isinstance(Module, type)
+        assert issubclass(Module, torch.nn.Module)
+        if issubclass(Module, PyroModule):
+            return Module
+        if Module is torch.nn.Module:
+            return PyroModule
+        if Module in _PyroModuleMeta._pyro_mixin_cache:
+            return _PyroModuleMeta._pyro_mixin_cache[Module]
+
+        # Unpickling helper to load an object of type PyroModule[Module].
+        def __reduce__(self):
+            state = getattr(self, '__getstate__', self.__dict__.copy)()
+            return _PyroModuleMeta._New, (Module,), state
+
+        name = "Pyro" + Module.__name__
+        bases = (Module, PyroModule)
+        dct = {"__reduce__": __reduce__}
+        result = type(name, bases, dct)
+        _PyroModuleMeta._pyro_mixin_cache[Module] = result
+        return result
+
+
+class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     """
     EXPERIMENTAL Subclass of :class:`torch.nn.Module` whose attributes can be
     modified by Pyro effects. Attributes can be set using helpers
@@ -169,6 +203,42 @@ class PyroModule(torch.nn.Module):
                                      .expand([self.out_features,
                                               self.in_features])
                                      .to_event(2))
+
+    **Mixin classes**
+
+    :class:`PyroModule` can be used as a mixin class, and supports simple
+    syntax for dynamically creating mixins, for example the following are
+    equivalent::
+
+        # Version 1. create a named mixin class
+        class PyroLinear(nn.Linear, PyroModule):
+            pass
+
+        m.linear = PyroLinear(m, n)
+
+        # Version 2. create a dynamic mixin class
+        m.linear = PyroModule[nn.Linear](m, n)
+
+    This notation can be used recursively to create Bayesian modules, e.g.::
+
+        model = PyroModule[nn.Sequential](
+            PyroModule[nn.Linear](28 * 28, 100),
+            PyroModule[nn.Sigmoid](),
+            PyroModule[nn.Linear](100, 100),
+            PyroModule[nn.Sigmoid](),
+            PyroModule[nn.Linear](100, 10),
+        )
+        assert isinstance(model, nn.Sequential)
+        assert isinstance(model, PyroModule)
+
+        # Now we can be Bayesian about weights in the first layer.
+        model[0].weight = PyroSample(
+            prior=dist.Normal(0, 1).expand([28 * 28, 100]).to_event(2))
+        guide = AutoDiagonalNormal(model)
+
+    Note that ``PyroModule[...]`` does not recursively mix in
+    :class:`PyroModule` to submodules of the input ``Module``; hence we needed
+    to wrap each submodule of the ``nn.Sequential`` above.
 
     :param str name: Optional name for a root PyroModule. This is ignored in
         sub-PyroModules of another PyroModule.
