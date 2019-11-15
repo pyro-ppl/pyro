@@ -2,10 +2,10 @@ import math
 
 import torch
 from torch.distributions import constraints
-from torch.nn import Parameter
 
-from .isotropic import Isotropy
-from .kernel import Kernel
+from pyro.contrib.gp.kernels.isotropic import Isotropy
+from pyro.contrib.gp.kernels.kernel import Kernel
+from pyro.nn.module import PyroParam
 
 
 class Cosine(Isotropy):
@@ -47,16 +47,13 @@ class Periodic(Kernel):
         super(Periodic, self).__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
-        self.variance = Parameter(variance)
-        self.set_constraint("variance", constraints.positive)
+        self.variance = PyroParam(variance, constraints.positive)
 
         lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
-        self.lengthscale = Parameter(lengthscale)
-        self.set_constraint("lengthscale", constraints.positive)
+        self.lengthscale = PyroParam(lengthscale, constraints.positive)
 
         period = torch.tensor(1.) if period is None else period
-        self.period = Parameter(period)
-        self.set_constraint("period", constraints.positive)
+        self.period = PyroParam(period, constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
