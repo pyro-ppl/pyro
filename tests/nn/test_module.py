@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.nn.module import Pyro, PyroModule, PyroParam, PyroSample, clear
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -326,21 +326,21 @@ def test_cache():
 
 
 def test_mixin_factory():
-    assert Pyro(nn.Module) is PyroModule
-    assert Pyro(PyroModule) is PyroModule
+    assert PyroModule[nn.Module] is PyroModule
+    assert PyroModule[PyroModule] is PyroModule
 
-    module = Pyro(nn.Sequential)(
-        Pyro(nn.Linear)(28 * 28, 200),
-        Pyro(nn.Sigmoid)(),
-        Pyro(nn.Linear)(200, 200),
-        Pyro(nn.Sigmoid)(),
-        Pyro(nn.Linear)(200, 10),
+    module = PyroModule[nn.Sequential](
+        PyroModule[nn.Linear](28 * 28, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 10),
     )
 
     assert isinstance(module, nn.Sequential)
     assert isinstance(module, PyroModule)
     assert type(module).__name__ == "PyroSequential"
-    assert Pyro(type(module)) is type(module)
+    assert PyroModule[type(module)] is type(module)
 
     assert isinstance(module[0], nn.Linear)
     assert isinstance(module[0], PyroModule)
