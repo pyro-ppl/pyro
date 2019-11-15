@@ -345,6 +345,7 @@ class MCMC(object):
 
     @poutine.block
     def run(self, *args, **kwargs):
+        self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
         with pyro.validation_enabled(not self.disable_validation):
