@@ -405,7 +405,7 @@ def do(fn=None, data=None):
 
     To intervene with a value for site `z`, we can write
 
-        >>> intervened_model = do(model, data={"z": torch.tensor(1.)})
+        >>> intervened_model = pyro.poutine.do(model, data={"z": torch.tensor(1.)})
 
     This is equivalent to replacing `z = pyro.sample("z", ...)` with
     `z = pyro.sample("z__CF", dist.Delta(v=torch.tensor(1.)))`

@@ -70,17 +70,24 @@ class DoMessenger(Messenger):
             # apply intervention
             intervention = self.data[msg['name']]
             msg['name'] = msg['name'] + "__CF"  # mangle old name
+
+            # if intervention is None, use same variable with different randomness
+            # this is equivalent to the posterior predictive distribution
             if intervention is None:
                 intervention = msg['fn']
-            elif not isinstance(intervention, Distribution):
+
+            if isinstance(intervention, Distribution):
+                # stochastically intervened site is no longer observed
+                msg['done'] = False
+                msg['value'] = None
+                msg['is_observed'] = False
+                msg['fn'] = intervention
+            else:
                 if isinstance(intervention, numbers.Number):
                     # Delta doesn't automatically convert its argument to tensor
                     intervention = torch.tensor(float(intervention))
-                intervention = Delta(intervention, event_dim=len(msg['fn'].event_shape))
-            msg['fn'] = intervention
-            # intervened site is no longer observed
-            msg['value'] = None
-            msg['is_observed'] = False
-            msg['done'] = False
+                msg['value'] = intervention
+                msg['fn'] = Delta(intervention, event_dim=len(msg['fn'].event_shape))
+                msg['is_observed'] = True  # keep inference algorithms from complaining about Deltas
 
         return None
