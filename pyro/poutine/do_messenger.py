@@ -1,4 +1,9 @@
+import numbers
 import warnings
+
+import torch
+
+from pyro.distributions import Delta, Distribution
 
 from .messenger import Messenger
 from .runtime import apply_stack
@@ -28,7 +33,8 @@ class DoMessenger(Messenger):
 
         >>> intervened_model = do(model, data={"z": torch.tensor(1.)})
 
-    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`
+    This is equivalent to replacing `z = pyro.sample("z", ...)` with
+    `z = pyro.sample("z__CF", dist.Delta(v=torch.tensor(1.)))`
     and introducing a fresh sample site pyro.sample("z", ...) whose value is not used elsewhere.
 
     References
@@ -47,7 +53,7 @@ class DoMessenger(Messenger):
 
     def _pyro_sample(self, msg):
         if msg.get('_intervener_id', None) != self._intervener_id and \
-                self.data.get(msg['name']) is not None:
+                msg['name'] in self.data:
 
             if msg.get('_intervener_id', None) is not None:
                 warnings.warn(
@@ -55,14 +61,26 @@ class DoMessenger(Messenger):
                     "this is almost certainly incorrect behavior".format(msg['name']),
                     RuntimeWarning)
 
+            msg['_intervener_id'] = self._intervener_id
+
             # split node, avoid reapplying self recursively to new node
             new_msg = msg.copy()
-            new_msg['_intervener_id'] = self._intervener_id
             apply_stack(new_msg)
+
             # apply intervention
-            msg['value'] = self.data[msg['name']]
-            msg['stop'] = True
-            msg['is_observed'] = True
-            msg['name'] = "INTERVENED__" + msg['name']  # mangle old name just in case
+            intervention = self.data[msg['name']]
+            msg['name'] = msg['name'] + "__CF"  # mangle old name
+            if intervention is None:
+                intervention = msg['fn']
+            elif not isinstance(intervention, Distribution):
+                if isinstance(intervention, numbers.Number):
+                    # Delta doesn't automatically convert its argument to tensor
+                    intervention = torch.tensor(float(intervention))
+                intervention = Delta(intervention, event_dim=len(msg['fn'].event_shape))
+            msg['fn'] = intervention
+            # intervened site is no longer observed
+            msg['value'] = None
+            msg['is_observed'] = False
+            msg['done'] = False
 
         return None

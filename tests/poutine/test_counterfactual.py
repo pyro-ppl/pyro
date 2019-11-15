@@ -1,9 +1,16 @@
 import pytest
+import torch
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from tests.common import assert_equal, assert_not_equal
+
+
+def _item(x):
+    if isinstance(x, torch.Tensor):
+        x = x.item()
+    return x
 
 
 @pytest.mark.parametrize('intervene,observe,flip', [
@@ -20,10 +27,10 @@ def test_counterfactual_query(intervene, observe, flip):
     interventions = {"x": None, "y": 0., "z": 2., "w": 1.}
 
     def model():
-        x = pyro.sample("x", dist.Normal(0, 1))
-        y = pyro.sample("y", dist.Normal(x, 1))
-        z = pyro.sample("z", dist.Normal(y, 1))
-        w = pyro.sample("w", dist.Normal(z, 1))
+        x = _item(pyro.sample("x", dist.Normal(0, 1)))
+        y = _item(pyro.sample("y", dist.Normal(x, 1)))
+        z = _item(pyro.sample("z", dist.Normal(y, 1)))
+        w = _item(pyro.sample("w", dist.Normal(z, 1)))
         return dict(x=x, y=y, z=z, w=w)
 
     if not flip:
@@ -50,12 +57,14 @@ def test_counterfactual_query(intervene, observe, flip):
         # case 2: purely interventional query like old poutine.do
         elif intervene and not observe:
             assert not tr.nodes[name]['is_observed']
+            assert name + "__CF" in tr
             if interventions[name] is not None:
                 assert_equal(interventions[name], actual_values[name])
             assert_not_equal(observations[name], tr.nodes[name]['value'])
             assert_not_equal(interventions[name], tr.nodes[name]['value'])
         # case 3: counterfactual query mixing intervention and observation
         elif intervene and observe:
+            assert name + "__CF" in tr
             if observations[name] is not None:
                 assert tr.nodes[name]['is_observed']
                 assert_equal(observations[name], tr.nodes[name]['value'])

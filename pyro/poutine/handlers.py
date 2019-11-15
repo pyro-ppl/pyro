@@ -407,7 +407,8 @@ def do(fn=None, data=None):
 
         >>> intervened_model = do(model, data={"z": torch.tensor(1.)})
 
-    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`
+    This is equivalent to replacing `z = pyro.sample("z", ...)` with
+    `z = pyro.sample("z__CF", dist.Delta(v=torch.tensor(1.)))`
     and introducing a fresh sample site pyro.sample("z", ...) whose value is not used elsewhere.
 
     References
