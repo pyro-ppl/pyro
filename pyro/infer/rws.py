@@ -9,7 +9,7 @@ from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace_detached
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_if_enumerated, warn_if_nan, check_model_guide_match
+from pyro.util import check_if_enumerated, check_model_guide_match, warn_if_nan
 
 
 class ReweightedWakeSleep(ELBO):
@@ -119,27 +119,17 @@ class ReweightedWakeSleep(ELBO):
 
         # COMPUTE WAKE THETA LOSS
         log_sum_weight = torch.logsumexp(log_weights, dim=0)
-        # TODO: check whether sum or mean over batch dim (currently sum)
-        #   the following line sums IWAE ELBO over all plate dims in the model
-        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()  # <-- TA: I think this is right
-        #   the following line means IWAE ELBO over all plate dims in the model
-        # wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).mean()
+        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
         warn_if_nan(wake_theta_loss, "wake theta loss")
 
         if self.insomnia > 0:
             # COMPUTE WAKE PHI LOSS
             normalised_weights = (log_weights - log_sum_weight).exp().detach()
-            # TODO: check whether sum or mean over batch dim (currently sum)
-            #   the following line sums over the particle dimension
-            #   and sums over all other plate dimensions in the model
-            wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum()  # <-- TA: I think this is right
-            #   the following line sums over the particle dimension
-            #   and means over all other plate dimensions in the model
-            # wake_phi_loss = -(normalised_weights * log_qs).sum(0).mean()
+            wake_phi_loss = -(normalised_weights * log_qs).sum()
             warn_if_nan(wake_phi_loss, "wake phi loss")
 
         if self.insomnia < 1:
-            # sleep phi = csis
+            # COMPUTE SLEEP PHI LOSS
             _model = pyro.poutine.uncondition(model)
             _guide = guide
             _log_q = 0.
@@ -159,13 +149,7 @@ class ReweightedWakeSleep(ELBO):
             if should_vectorize:
                 self.num_particles = old_num_particles
 
-            # TODO: check whether sum or mean over batch dim (currently sum)
-            #   the following line sums over particles and
-            #   sums over all other plate dims in the model
-            sleep_phi_loss = -_log_q
-            #   the following line means over particles and
-            #   sums over all other plate dims in the model
-            # sleep_phi_loss = -_log_q / self.num_sleep_particles <-- TA: I think this is right
+            sleep_phi_loss = -_log_q / self.num_sleep_particles
             warn_if_nan(sleep_phi_loss, "sleep phi loss")
 
         # COMPUTE PHI LOSS
