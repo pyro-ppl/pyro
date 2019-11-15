@@ -241,8 +241,9 @@ def main(args):
 
     # (1) Full Pooling Model
     # In this model, we illustrate how to use MCMC with general potential_fn.
-    init_params, potential_fn, transforms, _ = initialize_model(fully_pooled, model_args=(at_bats, hits),
-                                                                num_chains=args.num_chains)
+    init_params, potential_fn, transforms, _ = initialize_model(
+        fully_pooled, model_args=(at_bats, hits), num_chains=args.num_chains,
+        jit_compile=args.jit, skip_jit_warnings=True)
     nuts_kernel = NUTS(potential_fn=potential_fn)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
@@ -266,7 +267,7 @@ def main(args):
     evaluate_log_posterior_density(fully_pooled, samples_fully_pooled, baseball_dataset)
 
     # (2) No Pooling Model
-    nuts_kernel = NUTS(not_pooled)
+    nuts_kernel = NUTS(not_pooled, jit_compile=args.jit, ignore_jit_warnings=True)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps,
@@ -287,7 +288,7 @@ def main(args):
     evaluate_log_posterior_density(not_pooled, samples_not_pooled, baseball_dataset)
 
     # (3) Partially Pooled Model
-    nuts_kernel = NUTS(partially_pooled)
+    nuts_kernel = NUTS(partially_pooled, jit_compile=args.jit, ignore_jit_warnings=True)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps,
@@ -308,7 +309,7 @@ def main(args):
     evaluate_log_posterior_density(partially_pooled, samples_partially_pooled, baseball_dataset)
 
     # (4) Partially Pooled with Logit Model
-    nuts_kernel = NUTS(partially_pooled_with_logit)
+    nuts_kernel = NUTS(partially_pooled_with_logit, jit_compile=args.jit, ignore_jit_warnings=True)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps,
