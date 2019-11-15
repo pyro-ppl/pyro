@@ -58,7 +58,7 @@ def mk_dataset(n, mnist, max_digits, canvas_size):
         canvas, labels = sample_multi(num_digits, canvas_size, mnist)
         x.append(canvas)
         y.append(labels)
-    return np.array(x, dtype=np.bool), y
+    return np.array(x, dtype=np.uint8), y
 
 
 def load_mnist(root_path):
