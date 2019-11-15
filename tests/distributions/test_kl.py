@@ -71,3 +71,14 @@ def test_kl_independent_normal_mvn(batch_shape, size):
     actual = kl_divergence(p1, q)
     expected = kl_divergence(p2, q)
     assert_close(actual, expected)
+
+
+@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
+def test_kl_transformed_transformed(batch_shape):
+    shape = batch_shape + (5,)
+    p_base = dist.Normal(torch.zeros(shape), torch.ones(shape)).independent(1)
+    q_base = dist.Normal(torch.ones(shape) * 2, torch.ones(shape)).independent(1)
+    p = dist.TransformedDistribution(p_base, torch.distributions.transforms.ExpTransform())
+    q = dist.TransformedDistribution(q_base, torch.distributions.transforms.ExpTransform())
+    kl = kl_divergence(q, p)
+    assert kl.shape == batch_shape
