@@ -24,8 +24,8 @@ from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
+import pyro.distributions.transforms as transforms
 import pyro.poutine as poutine
-from pyro.distributions import transforms
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
@@ -656,10 +656,9 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoIAFNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
-    distribution transformed via a
-    :class:`~pyro.distributions.transforms.iaf.InverseAutoregressiveFlow`
-    to construct a guide over the entire latent space. The guide does not
-    depend on the model's ``*args, **kwargs``.
+    distribution transformed via a :class:`~pyro.distributions.transforms.AffineAutoregressive`
+    to construct a guide over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
 
     Usage::
 
@@ -689,7 +688,7 @@ class AutoIAFNormal(AutoContinuous):
         if self.arn is None:
             self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
 
-        iaf = transforms.InverseAutoregressiveFlow(self.arn)
+        iaf = transforms.AffineAutoregressive(self.arn)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist
 

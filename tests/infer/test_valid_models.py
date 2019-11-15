@@ -1071,10 +1071,14 @@ def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_, expand, num_sampl
 
         # check shapes
         if enumerate_ == "parallel":
-            if num_samples:
+            if num_samples and expand:
                 assert b.shape == (num_samples, 50, 1, 5)
                 assert c.shape == (num_samples, 1, 50, 6, 1)
                 assert d.shape == (num_samples, 1, num_samples, 50, 6, 5)
+            elif num_samples and not expand:
+                assert b.shape == (num_samples, 50, 1, 5)
+                assert c.shape == (num_samples, 1, 50, 6, 1)
+                assert d.shape == (num_samples, 1, 1, 50, 6, 5)
             elif expand:
                 assert b.shape == (50, 1, 5)
                 assert c.shape == (2, 50, 6, 1)
@@ -1384,10 +1388,14 @@ def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_samples,
         # check shapes
         if num_particles > 1:
             if enumerate_ == "parallel":
-                if num_samples:
+                if num_samples and expand:
                     assert b.shape == (num_samples, num_particles, 1, 5)
                     assert c.shape == (num_samples, 1, num_particles, 6, 1)
                     assert d.shape == (num_samples, 1, num_samples, num_particles, 6, 5)
+                elif num_samples and not expand:
+                    assert b.shape == (num_samples, num_particles, 1, 5)
+                    assert c.shape == (num_samples, 1, num_particles, 6, 1)
+                    assert d.shape == (num_samples, 1, 1, num_particles, 6, 5)
                 elif expand:
                     assert b.shape == (num_particles, 1, 5)
                     assert c.shape == (2, num_particles, 6, 1)
@@ -1411,10 +1419,14 @@ def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_samples,
                 assert d.shape == (num_particles, 6, 5)
         else:
             if enumerate_ == "parallel":
-                if num_samples:
+                if num_samples and expand:
                     assert b.shape == (num_samples, 1, 5,)
                     assert c.shape == (num_samples, 1, 6, 1)
                     assert d.shape == (num_samples, 1, num_samples, 6, 5)
+                elif num_samples and not expand:
+                    assert b.shape == (num_samples, 1, 5,)
+                    assert c.shape == (num_samples, 1, 6, 1)
+                    assert d.shape == (num_samples, 1, 1, 6, 5)
                 elif expand:
                     assert b.shape == (5,)
                     assert c.shape == (2, 6, 1)
