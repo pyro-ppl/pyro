@@ -289,8 +289,8 @@ class TracePredictive(TracePosterior):
         self.num_samples = num_samples
         self.keep_sites = keep_sites
         super(TracePredictive, self).__init__()
-        warnings.warn('This class will be removed in the next release. Use the '
-                      '`pyro.infer.Predictive` class instead.', DeprecationWarning)
+        warnings.warn('This class is deprecated and will  be removed in the next release. '
+                      'Use the `pyro.infer.Predictive` class instead.')
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:

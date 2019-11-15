@@ -40,6 +40,10 @@ class SVI(TracePosterior):
                  num_samples=10,
                  num_steps=0,
                  **kwargs):
+        if num_steps > 0:
+            warnings.warn('The `num_steps` argument is deprecated and will be removed. '
+                          'Use `SVI.step` directly to control the number of iterations.')
+
         self.model = model
         self.guide = guide
         self.optim = optim
@@ -64,9 +68,8 @@ class SVI(TracePosterior):
             self.loss_and_grads = loss_and_grads
 
     def run(self, *args, **kwargs):
-        warnings.warn('SVI will not derive from TracePosterior, and this method might be '
-                      'unavailable in future releases. For predictions, use the '
-                      '`pyro.infer.Predictive` class directly.', DeprecationWarning)
+        warnings.warn('This method is deprecated. For inference, use `SVI.step` directly, '
+                      'and for predictions, use the `pyro.infer.Predictive` class.')
         if self.num_steps > 0:
             with poutine.block():
                 for i in range(self.num_steps):
