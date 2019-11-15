@@ -7,10 +7,9 @@ import torch
 
 import pyro
 from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Uniform
-from pyro.distributions.util import scalar_like, sum_rightmost
+from pyro.distributions.util import scalar_like
 from pyro.infer import MCMC, NUTS, Predictive
 from pyro.infer.mcmc.util import initialize_model, summary
-from pyro.poutine.util import site_is_subsample
 from pyro.util import ignore_experimental_warning
 
 """
@@ -207,7 +206,7 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset):
     logging.info(test_summary)
 
 
-def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset):
+def evaluate_pointwise_pred_density(model, posterior_samples, baseball_dataset):
     """
     Evaluate the log probability density of observing the unseen data (season hits)
     given a model and posterior distribution over the parameters.
@@ -218,17 +217,12 @@ def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset):
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     trace.compute_log_prob()
-    log_joint = 0.
-    for name, site in trace.nodes.items():
-        if site["type"] == "sample" and not site_is_subsample(site):
-            # We use `sum_rightmost(x, -1)` to take the sum of all rightmost dimensions of `x`
-            # except the first dimension (which corresponding to the number of posterior samples)
-            site_log_prob_sum = sum_rightmost(site['log_prob'], -1)
-            log_joint += site_log_prob_sum
-    posterior_pred_density = torch.logsumexp(log_joint, dim=0) - math.log(log_joint.shape[0])
-    logging.info("\nLog posterior predictive density")
+    post_loglik = trace.nodes["obs"]["log_prob"]
+    # computes expected log predictive density at each data point
+    exp_log_density = (post_loglik.logsumexp(0) - math.log(post_loglik.shape[0])).sum()
+    logging.info("\nLog pointwise predictive density")
     logging.info("--------------------------------")
-    logging.info("{:.4f}\n".format(posterior_pred_density))
+    logging.info("{:.4f}\n".format(exp_log_density))
 
 
 def main(args):
@@ -263,7 +257,7 @@ def main(args):
     num_divergences = sum(map(len, mcmc.diagnostics()["divergences"].values()))
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
     sample_posterior_predictive(fully_pooled, samples_fully_pooled, baseball_dataset)
-    evaluate_log_posterior_density(fully_pooled, samples_fully_pooled, baseball_dataset)
+    evaluate_pointwise_pred_density(fully_pooled, samples_fully_pooled, baseball_dataset)
 
     # (2) No Pooling Model
     nuts_kernel = NUTS(not_pooled, jit_compile=args.jit, ignore_jit_warnings=True)
@@ -284,7 +278,7 @@ def main(args):
     num_divergences = sum(map(len, mcmc.diagnostics()["divergences"].values()))
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
     sample_posterior_predictive(not_pooled, samples_not_pooled, baseball_dataset)
-    evaluate_log_posterior_density(not_pooled, samples_not_pooled, baseball_dataset)
+    evaluate_pointwise_pred_density(not_pooled, samples_not_pooled, baseball_dataset)
 
     # (3) Partially Pooled Model
     nuts_kernel = NUTS(partially_pooled, jit_compile=args.jit, ignore_jit_warnings=True)
@@ -305,7 +299,7 @@ def main(args):
     num_divergences = sum(map(len, mcmc.diagnostics()["divergences"].values()))
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
     sample_posterior_predictive(partially_pooled, samples_partially_pooled, baseball_dataset)
-    evaluate_log_posterior_density(partially_pooled, samples_partially_pooled, baseball_dataset)
+    evaluate_pointwise_pred_density(partially_pooled, samples_partially_pooled, baseball_dataset)
 
     # (4) Partially Pooled with Logit Model
     nuts_kernel = NUTS(partially_pooled_with_logit, jit_compile=args.jit, ignore_jit_warnings=True)
@@ -328,8 +322,8 @@ def main(args):
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
     sample_posterior_predictive(partially_pooled_with_logit, samples_partially_pooled_logit,
                                 baseball_dataset)
-    evaluate_log_posterior_density(partially_pooled_with_logit, samples_partially_pooled_logit,
-                                   baseball_dataset)
+    evaluate_pointwise_pred_density(partially_pooled_with_logit, samples_partially_pooled_logit,
+                                    baseball_dataset)
 
 
 if __name__ == "__main__":
