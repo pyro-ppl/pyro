@@ -392,7 +392,7 @@ def do(fn=None, data=None):
     and introduce fresh sample sites with the same names
     whose values do not propagate.
 
-    Composes freely with :function:`~pyro.poutine.handlers.condition`
+    Composes freely with :func:`~pyro.poutine.handlers.condition`
     to represent counterfactual distributions over potential outcomes.
     See Single World Intervention Graphs [1] for additional details and theory.
 
