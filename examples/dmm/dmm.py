@@ -26,7 +26,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import InverseAutoregressiveFlow
-from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.optim import ClippedAdam
 from util import get_logger
@@ -190,7 +190,8 @@ class DMM(nn.Module):
         # this marks that each datapoint is conditionally independent of the others
         with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z and observed x's one time step at a time
-            for t in range(1, T_max + 1):
+            # we wrap this loop in pyro.markov so that TraceEnum_ELBO can use multiple samples from the guide at each z
+            for t in pyro.markov(range(1, T_max + 1)):
                 # the next chunk of code samples z_t ~ p(z_t | z_{t-1})
                 # note that (both here and elsewhere) we use poutine.scale to take care
                 # of KL annealing. we use the mask() method to deal with raggedness
@@ -246,7 +247,8 @@ class DMM(nn.Module):
         # this marks that each datapoint is conditionally independent of the others.
         with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z one time step at a time
-            for t in range(1, T_max + 1):
+            # we wrap this loop in pyro.markov so that TraceEnum_ELBO can use multiple samples from the guide at each z
+            for t in pyro.markov(range(1, T_max + 1)):
                 # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
                 z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t - 1, :])
 
@@ -256,11 +258,11 @@ class DMM(nn.Module):
                 if len(self.iafs) > 0:
                     z_dist = TransformedDistribution(dist.Normal(z_loc, z_scale), self.iafs)
                     assert z_dist.event_shape == (self.z_q_0.size(0),)
-                    assert z_dist.batch_shape == (len(mini_batch),)
+                    assert z_dist.batch_shape[-1:] == (len(mini_batch),)
                 else:
                     z_dist = dist.Normal(z_loc, z_scale)
                     assert z_dist.event_shape == ()
-                    assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
+                    assert z_dist.batch_shape[-2:] == (len(mini_batch), self.z_q_0.size(0))
 
                 # sample z_t from the distribution z_dist
                 with pyro.poutine.scale(scale=annealing_factor):
@@ -333,8 +335,13 @@ def main(args):
     adam = ClippedAdam(adam_params)
 
     # setup inference algorithm
-    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
-    svi = SVI(dmm.model, dmm.guide, adam, loss=elbo)
+    if args.tmcelbo:
+        elbo = JitTraceEnum_ELBO() if args.jit else TraceEnum_ELBO()
+        dmm_guide = config_enumerate(dmm.guide, default="parallel", num_samples=args.tmc_num_samples, expand=False)
+        svi = SVI(dmm.model, dmm_guide, adam, loss=elbo)
+    else:
+        elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+        svi = SVI(dmm.model, dmm.guide, adam, loss=elbo)
 
     # now we're going to define some functions we need to form the main training loop
 
@@ -456,6 +463,8 @@ if __name__ == '__main__':
     parser.add_argument('-smod', '--save-model', type=str, default='')
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
+    parser.add_argument('--tmcelbo', action='store_true')
+    parser.add_argument('--tmc-num-samples', default=10, type=int)
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
 

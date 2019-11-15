@@ -50,6 +50,30 @@ def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
                                      .format(name, f.name))
 
 
+def _check_tmc_elbo_constraint(model_trace, guide_trace):
+    num_samples = frozenset(
+        site["infer"].get("num_samples")
+        for site in guide_trace.nodes.values()
+        if site["type"] == "sample" and
+        site["infer"].get("enumerate") == "parallel" and
+        site["infer"].get("num_samples") is not None)
+    if len(num_samples) > 1:
+        warnings.warn('\n'.join([
+            "Using different numbers of Monte Carlo samples for different guide sites in TraceEnum_ELBO.",
+            "This may be biased if the guide is not factorized",
+        ]), UserWarning)
+    for name, site in model_trace.nodes.items():
+        if site["type"] == "sample" and \
+                site["infer"].get("enumerate", None) == "parallel" and \
+                site["infer"].get("num_samples", None) and \
+                name not in guide_trace:
+            warnings.warn('\n'.join([
+                "Site {} is multiply sampled in model,".format(site["name"]),
+                "expect incorrect gradient estimates from TraceEnum_ELBO.",
+                "Consider using exact enumeration or guide sampling if possible.",
+            ]), RuntimeWarning)
+
+
 def _find_ordinal(trace, site):
     return frozenset(trace.plate_to_symbol[f.name]
                      for f in site["cond_indep_stack"]
@@ -248,7 +272,7 @@ class TraceEnum_ELBO(ELBO):
     """
     A trace implementation of ELBO-based SVI that supports
     - exhaustive enumeration over discrete sample sites, and
-    - local parallel sampling over any sample site.
+    - local parallel sampling over any sample site in the guide.
 
     To enumerate over a sample site in the ``guide``, mark the site with either
     ``infer={'enumerate': 'sequential'}`` or
@@ -272,6 +296,7 @@ class TraceEnum_ELBO(ELBO):
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
+            _check_tmc_elbo_constraint(model_trace, guide_trace)
 
             has_enumerated_sites = any(site["infer"].get("enumerate")
                                        for trace in (guide_trace, model_trace)
