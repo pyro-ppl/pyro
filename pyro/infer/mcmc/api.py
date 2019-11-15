@@ -301,6 +301,8 @@ class MCMC(object):
         self.transforms = transforms
         self.disable_validation = disable_validation
         self._samples = None
+        self._args = None
+        self._kwargs = None
         if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
             if initial_params is None:
                 raise ValueError("Must provide valid initial parameters to begin sampling"
@@ -345,6 +347,7 @@ class MCMC(object):
 
     @poutine.block
     def run(self, *args, **kwargs):
+        self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
         with pyro.validation_enabled(not self.disable_validation):
