@@ -20,7 +20,7 @@ from pyro.ops.contract import contract_to_tensor
 from pyro.ops.integrator import potential_grad
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings, ExperimentalWarning
+from pyro.util import check_site_shape, ignore_jit_warnings
 
 
 class TraceTreeEvaluator(object):
