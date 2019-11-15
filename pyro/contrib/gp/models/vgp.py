@@ -107,6 +107,7 @@ class VariationalGP(GPModel):
         else:
             return self.likelihood(f_loc, f_var, self.y)
 
+    @pyro_method
     def guide(self):
         self.set_mode("guide")
         self._load_pyro_samples()

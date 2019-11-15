@@ -127,6 +127,7 @@ class VariationalSparseGP(GPModel):
             with poutine.scale(scale=self.num_data / self.X.size(0)):
                 return self.likelihood(f_loc, f_var, self.y)
 
+    @pyro_method
     def guide(self):
         self.set_mode("guide")
         self._load_pyro_samples()

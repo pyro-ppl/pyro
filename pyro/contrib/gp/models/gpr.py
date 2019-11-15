@@ -89,6 +89,7 @@ class GPRegression(GPModel):
                                    .to_event(self.y.dim() - 1),
                                obs=self.y)
 
+    @pyro_method
     def guide(self):
         self.set_mode("guide")
         self._load_pyro_samples()
