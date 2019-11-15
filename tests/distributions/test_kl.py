@@ -1,6 +1,6 @@
 import pytest
 import torch
-from torch.distributions import kl_divergence
+from torch.distributions import kl_divergence, transforms
 
 import pyro.distributions as dist
 from pyro.distributions.util import sum_rightmost
@@ -73,12 +73,14 @@ def test_kl_independent_normal_mvn(batch_shape, size):
     assert_close(actual, expected)
 
 
-@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-def test_kl_transformed_transformed(batch_shape):
-    shape = batch_shape + (5,)
-    p_base = dist.Normal(torch.zeros(shape), torch.ones(shape)).independent(1)
-    q_base = dist.Normal(torch.ones(shape) * 2, torch.ones(shape)).independent(1)
-    p = dist.TransformedDistribution(p_base, torch.distributions.transforms.ExpTransform())
-    q = dist.TransformedDistribution(q_base, torch.distributions.transforms.ExpTransform())
+@pytest.mark.parametrize('shape', [(5,), (4, 5), (2, 3, 5)], ids=str)
+@pytest.mark.parametrize('event_dim', [0, 1])
+@pytest.mark.parametrize('transform', [transforms.ExpTransform(), transforms.StickBreakingTransform()])
+def test_kl_transformed_transformed(shape, event_dim, transform):
+    p_base = dist.Normal(torch.zeros(shape), torch.ones(shape)).to_event(event_dim)
+    q_base = dist.Normal(torch.ones(shape) * 2, torch.ones(shape)).to_event(event_dim)
+    p = dist.TransformedDistribution(p_base, transform)
+    q = dist.TransformedDistribution(q_base, transform)
     kl = kl_divergence(q, p)
-    assert kl.shape == batch_shape
+    expected_shape = shape[:-1] if max(transform.event_dim, event_dim) == 1 else shape
+    assert kl.shape == expected_shape
