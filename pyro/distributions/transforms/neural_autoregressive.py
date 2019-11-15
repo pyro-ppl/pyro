@@ -6,16 +6,18 @@ import torch
 import torch.nn as nn
 from pyro.distributions.torch_transform import TransformModule
 from torch.distributions import constraints
+from torch.distributions.transforms import Transform, SigmoidTransform
 import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
+from pyro.nn import AutoRegressiveNN
 
 eps = 1e-8
 
 
-class ELUTransform(torch.distributions.transforms.Transform):
+class ELUTransform(Transform):
     r"""
-    Transform via the mapping :math:`y = \text{ELU}(x)`.
+    Bijective transform via the mapping :math:`y = \text{ELU}(x)`.
     """
     domain = constraints.real
     codomain = constraints.positive
@@ -35,9 +37,17 @@ class ELUTransform(torch.distributions.transforms.Transform):
         return -F.relu(-x)
 
 
-class LeakyReLUTransform(torch.distributions.transforms.Transform):
+def elu():
+    """
+    A helper function to create an :class:`~pyro.distributions.transform.ELUTransform` object for consistency with
+    other helpers.
+    """
+    return ELUTransform()
+
+
+class LeakyReLUTransform(Transform):
     r"""
-    Transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
+    Bijective transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
     """
     domain = constraints.real
     codomain = constraints.positive
@@ -57,9 +67,17 @@ class LeakyReLUTransform(torch.distributions.transforms.Transform):
         return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(0.01))
 
 
-class TanhTransform(torch.distributions.transforms.Transform):
+def leaky_relu():
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.LeakyReLUTransform` object for consistency
+    with other helpers.
+    """
+    return LeakyReLUTransform()
+
+
+class TanhTransform(Transform):
     r"""
-    Transform via the mapping :math:`y = \text{tanh}(x)`.
+    Bijective transform via the mapping :math:`y = \text{tanh}(x)`.
     """
     domain = constraints.real
     codomain = constraints.interval(-1., 1.)
@@ -84,21 +102,29 @@ class TanhTransform(torch.distributions.transforms.Transform):
         return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
 
 
+def tanh():
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.TanhTransform` object for consistency with
+    other helpers.
+    """
+    return TanhTransform()
+
+
 @copy_docs_from(TransformModule)
 class NeuralAutoregressive(TransformModule):
     """
-    An implementation of deep Neural Autoregressive Flow (NAF), of the "IAF flavour"
-    that can be used for sampling and scoring samples drawn from it (but not arbitrary ones).
+    An implementation of the deep Neural Autoregressive Flow (NAF) bijective transform of the
+    "IAF flavour" that can be used for sampling and scoring samples drawn from it (but not arbitrary ones).
 
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> arn = AutoRegressiveNN(10, [40], param_dims=[16]*3)
-    >>> naf = NeuralAutoregressive(arn, hidden_units=16)
-    >>> pyro.module("my_naf", naf)  # doctest: +SKIP
-    >>> naf_dist = dist.TransformedDistribution(base_dist, [naf])
-    >>> naf_dist.sample()  # doctest: +SKIP
+    >>> transform = NeuralAutoregressive(arn, hidden_units=16)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
@@ -133,7 +159,7 @@ class NeuralAutoregressive(TransformModule):
         name_to_mixin = {
             'ELU': ELUTransform,
             'LeakyReLU': LeakyReLUTransform,
-            'sigmoid': torch.distributions.transforms.SigmoidTransform,
+            'sigmoid': SigmoidTransform,
             'tanh': TanhTransform}
         if activation not in name_to_mixin:
             raise ValueError('Invalid activation function "{}"'.format(activation))
@@ -153,8 +179,9 @@ class NeuralAutoregressive(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         # A, W, b ~ batch_shape x hidden_units x event_shape
         A, W_pre, b = self.arn(x)
@@ -179,7 +206,7 @@ class NeuralAutoregressive(TransformModule):
     # This method returns log(abs(det(dy/dx)), which is equal to -log(abs(det(dx/dy))
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
 
         A = self._cached_A
@@ -193,3 +220,26 @@ class NeuralAutoregressive(TransformModule):
                                    T.log_abs_det_jacobian(C, T_C), dim=-2)
         log_det = log_dydD + log_dDdx
         return log_det.sum(-1)
+
+
+def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', width=16):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.NeuralAutoregressive` object that takes care
+    of constructing an autoregressive network with the correct input/output dimensions.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param hidden_dims: The desired hidden dimensions of the autoregressive network. Defaults
+        to using [3*input_dim + 1]
+    :type hidden_dims: list[int]
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU', 'sigmoid', or 'tanh'.
+    :type activation: string
+    :param width: The width of the "multilayer perceptron" in the transform (see paper). Defaults to 16
+    :type width: int
+
+    """
+
+    if hidden_dims is None:
+        hidden_dims = [3 * input_dim + 1]
+    arn = AutoRegressiveNN(input_dim, hidden_dims, param_dims=[width] * 3)
+    return NeuralAutoregressive(arn, hidden_units=width, activation=activation)
