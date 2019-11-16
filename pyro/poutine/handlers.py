@@ -484,7 +484,7 @@ def queue(fn=None, queue=None, max_tries=None,
     return wrapper(fn) if fn is not None else wrapper
 
 
-def markov(fn=None, history=1, keep=False):
+def markov(fn=None, history=1, keep=False, dim=None, name=None):
     """
     Markov dependency declaration.
 
@@ -500,15 +500,20 @@ def markov(fn=None, history=1, keep=False):
         when branching: if ``keep=True``, neighboring branches at the same
         level can depend on each other; if ``keep=False``, neighboring branches
         are independent (conditioned on their share"
+    :param int dim: An optional dimension to use for this independence index.
+        Interface stub, behavior not yet implemented.
+    :param str name: An optional unique name to help inference algorithms match
+        :func:`pyro.markov` sites between models and guides.
+        Interface stub, behavior not yet implemented.
     """
     if fn is None:
         # Used as a decorator with bound args
-        return MarkovMessenger(history=history, keep=keep)
+        return MarkovMessenger(history=history, keep=keep, dim=dim, name=name)
     if not callable(fn):
         # Used as a generator
-        return MarkovMessenger(history=history, keep=keep).generator(iterable=fn)
+        return MarkovMessenger(history=history, keep=keep, dim=dim, name=name).generator(iterable=fn)
     # Used as a decorator with bound args
-    return MarkovMessenger(history=history, keep=keep)(fn)
+    return MarkovMessenger(history=history, keep=keep, dim=dim, name=name)(fn)
 
 
 class _SeedMessenger(Messenger):
