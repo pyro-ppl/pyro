@@ -9,7 +9,7 @@ from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_eig
 import pyro.contrib.gp as gp
-from pyro.contrib.glmm import (
+from pyro.contrib.oed.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
 )
 
