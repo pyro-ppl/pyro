@@ -16,7 +16,11 @@ from pyro.nn.module import PyroModule, PyroParam
 from pyro.poutine.util import prune_subsample_sites
 
 
-class EasyGuide(PyroModule, metaclass=ABCMeta):
+class _EasyGuideMeta(type(PyroModule), ABCMeta):
+    pass
+
+
+class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
     """
     Base class for "easy guides", which are more flexible than
     :class:`~pyro.infer.AutoGuide` s, but are easier to write than raw Pyro guides.

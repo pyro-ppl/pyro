@@ -10,7 +10,6 @@ effects.  To create a poutine-aware attribute, use either the
 
 """
 import functools
-from abc import ABCMeta
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -78,9 +77,7 @@ def _get_pyro_params(module):
         yield name, module._parameters[name]
 
 
-# Inherit from ABCMeta because many practical nn.Module subclasses also inherit
-# from ABCMeta (e.g. EasyGuide), and this will avoid metclass conflict errors.
-class _PyroModuleMeta(ABCMeta):
+class _PyroModuleMeta(type):
     _pyro_mixin_cache = {}
 
     # Unpickling helper to create an empty object of type PyroModule[Module].
@@ -98,15 +95,13 @@ class _PyroModuleMeta(ABCMeta):
         if Module in _PyroModuleMeta._pyro_mixin_cache:
             return _PyroModuleMeta._pyro_mixin_cache[Module]
 
-        # Unpickling helper to load an object of type PyroModule[Module].
-        def __reduce__(self):
-            state = getattr(self, '__getstate__', self.__dict__.copy)()
-            return _PyroModuleMeta._New, (Module,), state
+        class result(Module, PyroModule):
+            # Unpickling helper to load an object of type PyroModule[Module].
+            def __reduce__(self):
+                state = getattr(self, '__getstate__', self.__dict__.copy)()
+                return _PyroModuleMeta._New, (Module,), state
 
-        name = "Pyro" + Module.__name__
-        bases = (Module, PyroModule)
-        dct = {"__reduce__": __reduce__}
-        result = type(name, bases, dct)
+        result.__name__ = "Pyro" + Module.__name__
         _PyroModuleMeta._pyro_mixin_cache[Module] = result
         return result
 
