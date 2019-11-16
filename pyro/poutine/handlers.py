@@ -55,6 +55,7 @@ from pyro.util import get_rng_state, set_rng_seed, set_rng_state
 from .block_messenger import BlockMessenger
 from .broadcast_messenger import BroadcastMessenger
 from .condition_messenger import ConditionMessenger
+from .do_messenger import DoMessenger
 from .enumerate_messenger import EnumerateMessenger
 from .escape_messenger import EscapeMessenger
 from .infer_config_messenger import InferConfigMessenger
@@ -382,18 +383,18 @@ def enum(fn=None, first_available_dim=None):
     return msngr(fn) if fn is not None else msngr
 
 
-#########################################
-# Begin composite operations
-#########################################
-
 def do(fn=None, data=None):
     """
     Given a stochastic function with some sample statements
     and a dictionary of values at names,
     set the return values of those sites equal to the values
-    and hide them from the rest of the stack
     as if they were hard-coded to those values
-    by using ``block``.
+    and introduce fresh sample sites with the same names
+    whose values do not propagate.
+
+    Composes freely with :func:`~pyro.poutine.handlers.condition`
+    to represent counterfactual distributions over potential outcomes.
+    See Single World Intervention Graphs [1] for additional details and theory.
 
     Consider the following Pyro program:
 
@@ -404,19 +405,28 @@ def do(fn=None, data=None):
 
     To intervene with a value for site `z`, we can write
 
-        >>> intervened_model = do(model, data={"z": torch.tensor(1.)})
+        >>> intervened_model = pyro.poutine.do(model, data={"z": torch.tensor(1.)})
 
-    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`.
+    This is equivalent to replacing `z = pyro.sample("z", ...)` with
+    `z = torch.tensor(1.)`
+    and introducing a fresh sample site pyro.sample("z", ...) whose value is not used elsewhere.
+
+    References
+
+    [1] `Single World Intervention Graphs: A Primer`,
+        Thomas Richardson, James Robins
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param data: a ``dict`` or a :class:`~pyro.poutine.Trace`
-    :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
-      and :class:`pyro.poutine.condition_messenger.ConditionMessenger`
+    :param data: a ``dict`` mapping sample site names to interventions
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.do_messenger.DoMessenger`
     """
-    def wrapper(wrapped):
-        return block(condition(wrapped, data=data), hide=list(data.keys()))
-    return wrapper(fn) if fn is not None else wrapper
+    msngr = DoMessenger(data=data)
+    return msngr(fn) if fn is not None else msngr
 
+
+#########################################
+# Begin composite operations
+#########################################
 
 def queue(fn=None, queue=None, max_tries=None,
           extend_fn=None, escape_fn=None, num_samples=None):
@@ -474,7 +484,7 @@ def queue(fn=None, queue=None, max_tries=None,
     return wrapper(fn) if fn is not None else wrapper
 
 
-def markov(fn=None, history=1, keep=False):
+def markov(fn=None, history=1, keep=False, dim=None, name=None):
     """
     Markov dependency declaration.
 
@@ -490,15 +500,20 @@ def markov(fn=None, history=1, keep=False):
         when branching: if ``keep=True``, neighboring branches at the same
         level can depend on each other; if ``keep=False``, neighboring branches
         are independent (conditioned on their share"
+    :param int dim: An optional dimension to use for this independence index.
+        Interface stub, behavior not yet implemented.
+    :param str name: An optional unique name to help inference algorithms match
+        :func:`pyro.markov` sites between models and guides.
+        Interface stub, behavior not yet implemented.
     """
     if fn is None:
         # Used as a decorator with bound args
-        return MarkovMessenger(history=history, keep=keep)
+        return MarkovMessenger(history=history, keep=keep, dim=dim, name=name)
     if not callable(fn):
         # Used as a generator
-        return MarkovMessenger(history=history, keep=keep).generator(iterable=fn)
+        return MarkovMessenger(history=history, keep=keep, dim=dim, name=name).generator(iterable=fn)
     # Used as a decorator with bound args
-    return MarkovMessenger(history=history, keep=keep)(fn)
+    return MarkovMessenger(history=history, keep=keep, dim=dim, name=name)(fn)
 
 
 class _SeedMessenger(Messenger):
