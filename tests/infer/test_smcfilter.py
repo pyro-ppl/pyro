@@ -208,7 +208,7 @@ def test_gaussian_filter():
             self.t += 1
 
     # Generate data.
-    num_steps = 10
+    num_steps = 20
     model = Model()
     state = {}
     model.init(state)
@@ -217,13 +217,12 @@ def test_gaussian_filter():
     # Perform inference.
     model = Model()
     guide = Guide()
-    smc = SMCFilter(model, guide, num_particles=10000, max_plate_nesting=0)
+    smc = SMCFilter(model, guide, num_particles=1000, max_plate_nesting=0)
     smc.init()
     for t, datum in enumerate(data):
-        print(t)
         smc.step(datum)
-        expected = hmm.filter(data)
+        expected = hmm.filter(data[:1+t])
         actual = smc.get_empirical()["z"]
-        assert_close(actual.variance ** 0.5, expected.variance ** 0.5, rtol=1.5)
-        atol = actual.variance.max().item() ** 0.5
-        assert_close(actual.mean, expected.mean, atol=atol)
+        assert_close(actual.variance ** 0.5, expected.variance ** 0.5, atol=0.1, rtol=0.5)
+        sigma = actual.variance.max().item() ** 0.5
+        assert_close(actual.mean, expected.mean, atol=3 * sigma)
