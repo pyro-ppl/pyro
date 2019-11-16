@@ -1,5 +1,5 @@
 """
-.. warning :: This module will eventually be deprecated and removed in favor of [brmp](https://github.com/pyro-ppl/brmp)
+.. warning :: This module will eventually be deprecated in favor of `brmp <https://github.com/pyro-ppl/brmp/>`_
 
 The :mod:`pyro.contrib.oed.glmm` module provides models and guides for
 generalised linear mixed models (GLMM). It also includes the
