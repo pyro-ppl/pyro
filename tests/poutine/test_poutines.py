@@ -519,11 +519,6 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
             tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is data["latent2"]
 
-    def test_do(self):
-        data = {"latent2": torch.randn(2)}
-        tr3 = poutine.trace(poutine.do(self.model, data=data)).get_trace()
-        assert "latent2" not in tr3
-
     def test_trace_data(self):
         tr1 = poutine.trace(
             poutine.block(self.model, expose_types=["sample"])).get_trace()
@@ -533,13 +528,14 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
             tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is tr1.nodes["latent2"]["value"]
 
-    def test_stack_overwrite_failure(self):
+    def test_stack_overwrite_behavior(self):
         data1 = {"latent2": torch.randn(2)}
         data2 = {"latent2": torch.randn(2)}
-        cm = poutine.condition(poutine.condition(self.model, data=data1),
-                               data=data2)
-        with pytest.raises(AssertionError):
+        with poutine.trace() as tr:
+            cm = poutine.condition(poutine.condition(self.model, data=data1),
+                                   data=data2)
             cm()
+        assert tr.trace.nodes['latent2']['value'] is data2['latent2']
 
     def test_stack_success(self):
         data1 = {"latent1": torch.randn(2)}
@@ -553,23 +549,6 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
         assert tr.nodes["latent2"]["type"] == "sample" and \
             tr.nodes["latent2"]["is_observed"]
         assert tr.nodes["latent2"]["value"] is data2["latent2"]
-
-    def test_do_propagation(self):
-        pyro.clear_param_store()
-
-        def model():
-            z = pyro.sample("z", Normal(10.0 * torch.ones(1), 0.0001 * torch.ones(1)))
-            latent_prob = torch.exp(z) / (torch.exp(z) + torch.ones(1))
-            flip = pyro.sample("flip", Bernoulli(latent_prob))
-            return flip
-
-        sample_from_model = model()
-        z_data = {"z": -10.0 * torch.ones(1)}
-        # under model flip = 1 with high probability; so do indirect DO surgery to make flip = 0
-        sample_from_do_model = poutine.trace(poutine.do(model, data=z_data))()
-
-        assert eq(sample_from_model, torch.ones(1))
-        assert eq(sample_from_do_model, torch.zeros(1))
 
 
 class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
@@ -791,31 +770,6 @@ def test_decorator_interface_queue():
     tr = poutine.trace(model).get_trace()
     for name in sites:
         assert name in tr
-
-
-def test_decorator_interface_do():
-
-    sites = ["x", "y", "z", "_INPUT", "_RETURN"]
-    data = {"x": torch.ones(1)}
-
-    @poutine.do(data=data)
-    def model():
-        p = torch.tensor([0.5])
-        loc = torch.zeros(1)
-        scale = torch.ones(1)
-
-        x = pyro.sample("x", Normal(loc, scale))  # Before the discrete variable.
-        y = pyro.sample("y", Bernoulli(p))
-        z = pyro.sample("z", Normal(loc, scale))  # After the discrete variable.
-        return dict(x=x, y=y, z=z)
-
-    tr = poutine.trace(model).get_trace()
-    for name in sites:
-        if name not in data:
-            assert name in tr
-        else:
-            assert name not in tr
-            assert_equal(tr.nodes["_RETURN"]["value"][name], data[name])
 
 
 def test_method_decorator_interface_condition():
