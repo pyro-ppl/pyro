@@ -83,8 +83,15 @@ class Trace_MMD(ELBO):
     @kernel.setter
     def kernel(self, kernel):
         if isinstance(kernel, dict):
+            # fix kernel's parameters
+            for k in kernel.values():
+                if isinstance(k, pyro.contrib.gp.kernels.kernel.Kernel):
+                    k.requires_grad_(False)
+                else:
+                    raise TypeError("`kernel` values should be instances of `pyro.contrib.gp.kernels.kernel.Kernel`")
             self._kernel = kernel
         elif isinstance(kernel, pyro.contrib.gp.kernels.kernel.Kernel):
+            kernel.requires_grad_(False)
             self._kernel = defaultdict(lambda: kernel)
         else:
             raise TypeError("`kernel` should be an instance of `pyro.contrib.gp.kernels.kernel.Kernel`")

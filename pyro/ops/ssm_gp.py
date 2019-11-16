@@ -1,24 +1,25 @@
 import math
 
 import torch
-import torch.nn as nn
+from torch.distributions import constraints
 
+from pyro.nn import PyroModule, pyro_method, PyroParam
 
 root_three = math.sqrt(3.0)
 root_five = math.sqrt(5.0)
 five_thirds = 5.0 / 3.0
 
 
-class MaternKernel(nn.Module):
+class MaternKernel(PyroModule):
     """
     Provides the building blocks for representing univariate Gaussian Processes (GPs)
     with Matern kernels as state space models.
 
     :param float nu: The order of the Matern kernel (one of 0.5, 1.5 or 2.5)
     :param int num_gps: the number of GPs
-    :param torch.Tensor log_length_scale_init: optional `num_gps`-dimensional vector of initializers
+    :param torch.Tensor length_scale_init: optional `num_gps`-dimensional vector of initializers
         for the length scale
-    :param torch.Tensor log_kernel_scale_init: optional `num_gps`-dimensional vector of initializers
+    :param torch.Tensor kernel_scale_init: optional `num_gps`-dimensional vector of initializers
         for the kernel scale
 
     **References**
@@ -28,25 +29,25 @@ class MaternKernel(nn.Module):
     [2] `Stochastic Differential Equation Methods for Spatio-Temporal Gaussian Process Regression`,
         Arno Solin.
     """
-    def __init__(self, nu=1.5, num_gps=1, log_length_scale_init=None, log_kernel_scale_init=None):
+    def __init__(self, nu=1.5, num_gps=1, length_scale_init=None, kernel_scale_init=None):
         if nu not in [0.5, 1.5, 2.5]:
             raise NotImplementedError("The only supported values of nu are 0.5, 1.5 and 2.5")
         self.nu = nu
         self.state_dim = {0.5: 1, 1.5: 2, 2.5: 3}[nu]
         self.num_gps = num_gps
 
-        if log_length_scale_init is None:
-            log_length_scale_init = torch.zeros(num_gps)
-        assert log_length_scale_init.shape == (num_gps,)
+        if length_scale_init is None:
+            length_scale_init = torch.ones(num_gps)
+        assert length_scale_init.shape == (num_gps,)
 
-        if log_kernel_scale_init is None:
-            log_kernel_scale_init = torch.zeros(num_gps)
-        assert log_kernel_scale_init.shape == (num_gps,)
+        if kernel_scale_init is None:
+            kernel_scale_init = torch.ones(num_gps)
+        assert kernel_scale_init.shape == (num_gps,)
 
-        super(MaternKernel, self).__init__()
+        super().__init__()
 
-        self.log_length_scale = nn.Parameter(log_length_scale_init)
-        self.log_kernel_scale = nn.Parameter(log_kernel_scale_init)
+        self.length_scale = PyroParam(length_scale_init, constraint=constraints.positive)
+        self.kernel_scale = PyroParam(kernel_scale_init, constraint=constraints.positive)
 
         if self.state_dim > 1:
             for x in range(self.state_dim):
@@ -55,6 +56,7 @@ class MaternKernel(nn.Module):
                     mask[x, y] = 1.0
                     self.register_buffer("mask{}{}".format(x, y), mask)
 
+    @pyro_method
     def transition_matrix(self, dt):
         """
         Compute the (exponentiated) transition matrix of the GP latent space.
@@ -68,10 +70,10 @@ class MaternKernel(nn.Module):
             (num_gps, state_dim, state_dim).
         """
         if self.nu == 0.5:
-            rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
+            rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
             return torch.exp(-dt / rho)
         elif self.nu == 1.5:
-            rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
+            rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
             dt_rho = dt / rho
             trans = (1.0 + root_three * dt_rho) * self.mask00 + \
                 (-3.0 * dt_rho / rho) * self.mask01 + \
@@ -79,7 +81,7 @@ class MaternKernel(nn.Module):
                 (1.0 - root_three * dt_rho) * self.mask11
             return torch.exp(-root_three * dt_rho) * trans
         elif self.nu == 2.5:
-            rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
+            rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
             dt_rho = root_five * dt / rho
             dt_rho_sq = dt_rho.pow(2.0)
             dt_rho_cu = dt_rho.pow(3.0)
@@ -96,6 +98,7 @@ class MaternKernel(nn.Module):
                 (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
             return torch.exp(-dt_rho) * trans
 
+    @pyro_method
     def stationary_covariance(self):
         """
         Compute the stationary state covariance. See Eqn. 3.26 in reference [2].
@@ -104,22 +107,23 @@ class MaternKernel(nn.Module):
             (num_gps, state_dim, state_dim).
         """
         if self.nu == 0.5:
-            sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
+            sigmasq = self.kernel_scale.pow(2).unsqueeze(-1).unsqueeze(-1)
             return sigmasq
         elif self.nu == 1.5:
-            sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
-            rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
+            sigmasq = self.kernel_scale.pow(2).unsqueeze(-1).unsqueeze(-1)
+            rhosq = self.length_scale.pow(2).unsqueeze(-1).unsqueeze(-1)
             p_infinity = self.mask00 + (3.0 / rhosq) * self.mask11
             return sigmasq * p_infinity
         elif self.nu == 2.5:
-            sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
-            rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
+            sigmasq = self.kernel_scale.pow(2).unsqueeze(-1).unsqueeze(-1)
+            rhosq = self.length_scale.pow(2).unsqueeze(-1).unsqueeze(-1)
             p_infinity = 0.0
             p_infinity = self.mask00 + \
                 (five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20) + \
                 (25.0 / rhosq.pow(2.0)) * self.mask22
             return sigmasq * p_infinity
 
+    @pyro_method
     def process_covariance(self, A):
         """
         Given a transition matrix `A` computed with `transition_matrix` compute the
@@ -132,6 +136,7 @@ class MaternKernel(nn.Module):
         q = p - torch.matmul(A.transpose(-1, -2), torch.matmul(p, A))
         return q
 
+    @pyro_method
     def transition_matrix_and_covariance(self, dt):
         """
         Get the transition matrix and process covariance corresponding to a time interval `dt`.

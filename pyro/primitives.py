@@ -322,12 +322,17 @@ def module(name, nn_module, update_module_params=False):
 
 def random_module(name, nn_module, prior, *args, **kwargs):
     r"""
+    .. warning::
+        The `random_module` primitive is deprecated, and will be removed
+        in a future release. Use :class:`~pyro.nn.PyroModule` instead to
+        to create Bayesian modules from :class:`torch.nn.Module` instances.
+        See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
+        for an example.
+
+
     Places a prior over the parameters of the module `nn_module`.
     Returns a distribution (callable) over `nn.Module`\s, which
     upon calling returns a sampled `nn.Module`.
-
-    See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
-    for an example.
 
     :param name: name of pyro module
     :type name: str
@@ -337,6 +342,10 @@ def random_module(name, nn_module, prior, *args, **kwargs):
                   as keys and respective distributions/stochastic functions as values.
     :returns: a callable which returns a sampled module
     """
+    warnings.warn("The `random_module` primitive is deprecated, and will be removed "
+                  "in a future release. Use `pyro.nn.Module` to create Bayesian "
+                  "modules from `torch.nn.Module` instances.", FutureWarning)
+
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
     lifted_fn = poutine.lift(module, prior=prior)

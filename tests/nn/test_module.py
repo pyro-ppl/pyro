@@ -1,3 +1,4 @@
+import io
 import warnings
 
 import pytest
@@ -9,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.nn.module import PyroModule, PyroParam, PyroSample
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -44,15 +45,15 @@ def test_svi_smoke():
     trace = poutine.trace(model).get_trace(data)
     assert "loc" in trace.nodes.keys()
     assert trace.nodes["loc"]["type"] == "param"
-    assert "scale_unconstrained" in trace.nodes
-    assert trace.nodes["scale_unconstrained"]["type"] == "param"
+    assert "scale" in trace.nodes
+    assert trace.nodes["scale"]["type"] == "param"
 
     guide = Guide()
     trace = poutine.trace(guide).get_trace(data)
     assert "loc" in trace.nodes.keys()
     assert trace.nodes["loc"]["type"] == "param"
-    assert "scale_unconstrained" in trace.nodes
-    assert trace.nodes["scale_unconstrained"]["type"] == "param"
+    assert "scale" in trace.nodes
+    assert trace.nodes["scale"]["type"] == "param"
 
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, Trace_ELBO())
@@ -61,14 +62,27 @@ def test_svi_smoke():
 
 
 def test_names():
-    root = PyroModule()
-    root.x = nn.Parameter(torch.tensor(0.))
-    root.y = PyroParam(torch.tensor(1.), constraint=constraints.positive)
-    root.m = nn.Module()
-    root.m.u = nn.Parameter(torch.tensor(2.0))
-    root.p = PyroModule()
-    root.p.v = nn.Parameter(torch.tensor(3.))
-    root.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = nn.Parameter(torch.tensor(0.))
+            self.y = PyroParam(torch.tensor(1.), constraint=constraints.positive)
+            self.m = nn.Module()
+            self.m.u = nn.Parameter(torch.tensor(2.0))
+            self.p = PyroModule()
+            self.p.v = nn.Parameter(torch.tensor(3.))
+            self.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+
+        def forward(self):
+            # trigger .__getattr__()
+            self.x
+            self.y
+            self.m
+            self.p.v
+            self.p.w
+
+    model = Model()
 
     # Check named_parameters.
     expected = {
@@ -78,27 +92,95 @@ def test_names():
         "p.v",
         "p.w_unconstrained",
     }
-    actual = set(name for name, _ in root.named_parameters())
+    actual = set(name for name, _ in model.named_parameters())
     assert actual == expected
 
     # Check pyro.param names.
-    expected = {
-        "x",
-        "y_unconstrained",
-        "m$$$u",
-        "p.v",
-        "p.w_unconstrained",
-    }
+    expected = {"x", "y", "m$$$u", "p.v", "p.w"}
     with poutine.trace(param_only=True) as param_capture:
-        # trigger .__getattr__()
-        root.x
-        root.y
-        root.m
-        root.p.v
-        root.p.w
+        model()
     actual = {name for name, site in param_capture.trace.nodes.items()
               if site["type"] == "param"}
     assert actual == expected
+
+    # Check pyro_parameters method
+    expected = {"x", "y", "m.u", "p.v", "p.w"}
+    actual = set(k for k, v in model.named_pyro_params())
+    assert actual == expected
+
+
+def test_delete():
+    m = PyroModule()
+    m.a = PyroParam(torch.tensor(1.))
+    del m.a
+    m.a = PyroParam(torch.tensor(0.1))
+    assert_equal(m.a.detach(), torch.tensor(0.1))
+
+
+def test_nested():
+    class Child(PyroModule):
+        def __init__(self, a):
+            super().__init__()
+            self.a = PyroParam(a, constraints.positive)
+
+    class Family(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.child1 = Child(torch.tensor(1.))
+            self.child2 = Child(torch.tensor(2.))
+
+    f = Family()
+    assert_equal(f.child1.a.detach(), torch.tensor(1.))
+    assert_equal(f.child2.a.detach(), torch.tensor(2.))
+
+
+def test_module_cache():
+    class Child(PyroModule):
+        def __init__(self, x):
+            super().__init__()
+            self.a = PyroParam(torch.tensor(x))
+
+        def forward(self):
+            return self.a
+
+    class Family(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.c = Child(1.0)
+
+        def forward(self):
+            return self.c.a
+
+    f = Family()
+    assert_equal(f().detach(), torch.tensor(1.))
+    f.c = Child(3.)
+    assert_equal(f().detach(), torch.tensor(3.))
+    assert_equal(f.c().detach(), torch.tensor(3.))
+
+
+def test_submodule_contains_torch_module():
+    submodule = PyroModule()
+    submodule.linear = nn.Linear(1, 1)
+    module = PyroModule()
+    module.child = submodule
+
+
+def test_hierarchy_prior_cached():
+    def hierarchy_prior(module):
+        latent = pyro.sample("a", dist.Normal(0, 1))
+        return dist.Normal(latent, 1)
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.b = PyroSample(hierarchy_prior)
+
+        def forward(self):
+            return self.b + self.b
+
+    model = Model()
+    trace = poutine.trace(model).get_trace()
+    assert "a" in trace.nodes
 
 
 SHAPE_CONSTRAINT = [
@@ -160,6 +242,45 @@ def test_constraints(shape, constraint_):
     assert not hasattr(module, 'x_unconstrained')
 
 
+def test_clear():
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = nn.Parameter(torch.tensor(0.))
+            self.m = torch.nn.Linear(2, 3)
+            self.m.weight.data.fill_(1.)
+            self.m.bias.data.fill_(2.)
+            self.p = PyroModule()
+            self.p.x = nn.Parameter(torch.tensor(3.))
+
+        def forward(self):
+            return [x.clone() for x in [self.x, self.m.weight, self.m.bias, self.p.x]]
+
+    assert set(pyro.get_param_store().keys()) == set()
+    m = Model()
+    state0 = m()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+
+    # mutate
+    for x in pyro.get_param_store().values():
+        x.unconstrained().data += torch.randn(())
+    state1 = m()
+    for x, y in zip(state0, state1):
+        assert not (x == y).all()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+
+    clear(m)
+    del m
+    assert set(pyro.get_param_store().keys()) == set()
+
+    m = Model()
+    state2 = m()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+    for actual, expected in zip(state2, state0):
+        assert_equal(actual, expected)
+
+
 def test_sample():
 
     class Model(nn.Linear, PyroModule):
@@ -215,7 +336,7 @@ def test_cache():
     module.p.e = PyroParam(torch.tensor(4.), constraint=constraints.positive)
     module.p.f = PyroSample(dist.Normal(0, 1))
 
-    assert module._pyro_cache is module.p._pyro_cache
+    assert module._pyro_context is module.p._pyro_context
 
     # Check that results are cached with an invocation of .__call__().
     result1 = module()
@@ -229,17 +350,96 @@ def test_cache():
         assert result1[0] is not result2[0], key
 
 
-def test_serialization():
+def test_mixin_factory():
+    assert PyroModule[nn.Module] is PyroModule
+    assert PyroModule[PyroModule] is PyroModule
 
+    module = PyroModule[nn.Sequential](
+        PyroModule[nn.Linear](28 * 28, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 10),
+    )
+
+    assert isinstance(module, nn.Sequential)
+    assert isinstance(module, PyroModule)
+    assert type(module).__name__ == "PyroSequential"
+    assert PyroModule[type(module)] is type(module)
+
+    assert isinstance(module[0], nn.Linear)
+    assert isinstance(module[0], PyroModule)
+    assert type(module[0]).__name__ == "PyroLinear"
+    assert type(module[2]) is type(module[0])  # noqa: E721
+
+    # Ensure new types are serializable.
+    data = torch.randn(28 * 28)
+    expected = module(data)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        f = io.BytesIO()
+        torch.save(module, f)
+        del module
+        pyro.clear_param_store()
+        f.seek(0)
+        module = torch.load(f)
+    assert type(module).__name__ == "PyroSequential"
+    actual = module(data)
+    assert_equal(actual, expected)
+
+
+def test_torch_serialize():
     module = PyroModule()
     module.x = PyroParam(torch.tensor(1.234), constraints.positive)
+    module.y = nn.Parameter(torch.randn(3))
     assert isinstance(module.x, torch.Tensor)
 
     # Work around https://github.com/pytorch/pytorch/issues/27972
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning)
-        torch.save(module, "/tmp/test_pyro_module.pkl")
-        actual = torch.load("/tmp/test_pyro_module.pkl")
+        f = io.BytesIO()
+        torch.save(module, f)
+        pyro.clear_param_store()
+        f.seek(0)
+        actual = torch.load(f)
+
+    assert_equal(actual.x, module.x)
+    actual_names = {name for name, _ in actual.named_parameters()}
+    expected_names = {name for name, _ in module.named_parameters()}
+    assert actual_names == expected_names
+
+
+def test_pyro_serialize():
+    class MyModule(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = PyroParam(torch.tensor(1.234), constraints.positive)
+            self.y = nn.Parameter(torch.randn(3))
+
+        def forward(self):
+            return self.x, self.y
+
+    module = MyModule()
+    assert len(pyro.get_param_store()) == 0
+
+    assert isinstance(module.x, torch.Tensor)
+    assert len(pyro.get_param_store()) == 0
+
+    actual = module()  # triggers saving in param store
+    assert_equal(actual[0], module.x)
+    assert_equal(actual[1], module.y)
+    assert set(pyro.get_param_store().keys()) == {"x", "y"}
+    assert_equal(pyro.param("x").detach(), module.x.detach())
+    assert_equal(pyro.param("y").detach(), module.y.detach())
+
+    pyro.get_param_store().save("/tmp/pyro_module.pt")
+    pyro.clear_param_store()
+    assert len(pyro.get_param_store()) == 0
+    pyro.get_param_store().load("/tmp/pyro_module.pt")
+    assert set(pyro.get_param_store().keys()) == {"x", "y"}
+    actual = MyModule()
+    actual()
+
     assert_equal(actual.x, module.x)
     actual_names = {name for name, _ in actual.named_parameters()}
     expected_names = {name for name, _ in module.named_parameters()}

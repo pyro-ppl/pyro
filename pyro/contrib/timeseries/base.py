@@ -1,12 +1,15 @@
-import torch.nn as nn
+from pyro.nn import PyroModule, pyro_method
 
 
-class TimeSeriesModel(nn.Module):
+class TimeSeriesModel(PyroModule):
     """
     Base class for univariate and multivariate time series models.
     """
+    @pyro_method
     def log_prob(self, targets):
         """
+        Log probability function.
+
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
             of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
             is the dimension of the real-valued ``targets`` at each time step
@@ -17,6 +20,7 @@ class TimeSeriesModel(nn.Module):
         """
         raise NotImplementedError
 
+    @pyro_method
     def forecast(self, targets, dts):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets

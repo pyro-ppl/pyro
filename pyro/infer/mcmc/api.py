@@ -22,7 +22,7 @@ import pyro
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-from pyro.infer.mcmc.util import diagnostics, initialize_model, summary
+from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
 import pyro.poutine as poutine
 
 MAX_SEED = 2**32 - 1
@@ -301,6 +301,8 @@ class MCMC(object):
         self.transforms = transforms
         self.disable_validation = disable_validation
         self._samples = None
+        self._args = None
+        self._kwargs = None
         if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
             if initial_params is None:
                 raise ValueError("Must provide valid initial parameters to begin sampling"
@@ -345,6 +347,7 @@ class MCMC(object):
 
     @poutine.block
     def run(self, *args, **kwargs):
+        self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
         with pyro.validation_enabled(not self.disable_validation):
@@ -445,4 +448,7 @@ class MCMC(object):
 
         :param float prob: the probability mass of samples within the credibility interval.
         """
-        summary(self._samples, prob=prob)
+        print_summary(self._samples, prob=prob)
+        if 'divergences' in self._diagnostics[0]:
+            print("Number of divergences: {}".format(
+                sum([len(self._diagnostics[i]['divergences']) for i in range(self.num_chains)])))

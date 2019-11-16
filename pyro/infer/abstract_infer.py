@@ -273,6 +273,10 @@ class TracePosterior(object, metaclass=ABCMeta):
 
 class TracePredictive(TracePosterior):
     """
+    .. warning::
+        This class is deprecated and will be removed in a future release.
+        Use the :class:`~pyro.infer.predictive.Predictive` class instead.
+
     Generates and holds traces from the posterior predictive distribution,
     given model execution traces from the approximate posterior. This is
     achieved by constraining latent sites to randomly sampled parameter
@@ -289,8 +293,9 @@ class TracePredictive(TracePosterior):
         self.num_samples = num_samples
         self.keep_sites = keep_sites
         super(TracePredictive, self).__init__()
-        warnings.warn('This class will be removed in the next release. Use the '
-                      '`pyro.infer.Predictive` class instead.', DeprecationWarning)
+        warnings.warn('The `TracePredictive` class is deprecated and will be removed '
+                      'in a future release. Use the `pyro.infer.Predictive` class instead.',
+                      FutureWarning)
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:

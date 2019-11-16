@@ -1,11 +1,11 @@
 import torch
 from torch.distributions import constraints
-from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
 
-from .likelihood import Likelihood
+from pyro.contrib.gp.likelihoods.likelihood import Likelihood
+from pyro.nn.module import PyroParam
 
 
 class Gaussian(Likelihood):
@@ -21,8 +21,7 @@ class Gaussian(Likelihood):
         super(Gaussian, self).__init__()
 
         variance = torch.tensor(1.) if variance is None else variance
-        self.variance = Parameter(variance)
-        self.set_constraint("variance", constraints.positive)
+        self.variance = PyroParam(variance, constraints.positive)
 
     def forward(self, f_loc, f_var, y=None):
         r"""
@@ -43,4 +42,4 @@ class Gaussian(Likelihood):
         y_dist = dist.Normal(f_loc, y_var.sqrt())
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f_loc.dim()]).to_event(y.dim())
-        return pyro.sample("y", y_dist, obs=y)
+        return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)

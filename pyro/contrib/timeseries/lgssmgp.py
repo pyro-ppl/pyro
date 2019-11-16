@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
-from torch.distributions import MultivariateNormal
+from torch.distributions import MultivariateNormal, constraints
 
 import pyro.distributions as dist
 from pyro.contrib.timeseries.base import TimeSeriesModel
-from pyro.ops.tensor_utils import repeated_matmul, block_diag_embed
+from pyro.nn import PyroParam, pyro_method
 from pyro.ops.ssm_gp import MaternKernel
+from pyro.ops.tensor_utils import block_diag_embed, repeated_matmul
 
 
 class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
@@ -27,40 +28,43 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
     :param int obs_dim: The dimension of the targets at each time step.
     :param int state_dim: The dimension of the :math:`{\\bf z}` latent state at each time step.
     :param float nu: The order of the Matern kernel; one of 0.5, 1.5 or 2.5.
-    :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
+    :param torch.Tensor length_scale_init: optional initial values for the kernel length scale
         given as a ``obs_dim``-dimensional tensor
-    :param torch.Tensor log_kernel_scale_init: optional initial values for the kernel scale
+    :param torch.Tensor kernel_scale_init: optional initial values for the kernel scale
         given as a ``obs_dim``-dimensional tensor
-    :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
+    :param torch.Tensor obs_noise_scale_init: optional initial values for the observation noise scale
         given as a ``obs_dim``-dimensional tensor
     :param bool learnable_observation_loc: whether the mean of the observation model should be learned or not;
             defaults to False.
     """
-    def __init__(self, obs_dim=1, state_dim=2, nu=1.5, log_obs_noise_scale_init=None,
-                 log_length_scale_init=None, log_kernel_scale_init=None,
+    def __init__(self, obs_dim=1, state_dim=2, nu=1.5, obs_noise_scale_init=None,
+                 length_scale_init=None, kernel_scale_init=None,
                  learnable_observation_loc=False):
         self.obs_dim = obs_dim
         self.state_dim = state_dim
         self.nu = nu
 
-        if log_obs_noise_scale_init is None:
-            log_obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
-        assert log_obs_noise_scale_init.shape == (obs_dim,)
+        if obs_noise_scale_init is None:
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
+        assert obs_noise_scale_init.shape == (obs_dim,)
 
         super().__init__()
 
         self.kernel = MaternKernel(nu=nu, num_gps=obs_dim,
-                                   log_length_scale_init=log_length_scale_init,
-                                   log_kernel_scale_init=log_kernel_scale_init)
+                                   length_scale_init=length_scale_init,
+                                   kernel_scale_init=kernel_scale_init)
         self.dt = 1.0
         self.full_state_dim = self.kernel.state_dim * obs_dim + state_dim
         self.full_gp_state_dim = self.kernel.state_dim * obs_dim
 
-        self.log_obs_noise_scale = nn.Parameter(log_obs_noise_scale_init)
-        self.log_trans_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))
+        self.obs_noise_scale = PyroParam(obs_noise_scale_init,
+                                         constraint=constraints.positive)
+        self.trans_noise_scale_sq = PyroParam(torch.ones(state_dim),
+                                              constraint=constraints.positive)
         self.z_trans_matrix = nn.Parameter(torch.eye(state_dim) + 0.03 * torch.randn(state_dim, state_dim))
         self.z_obs_matrix = nn.Parameter(0.3 * torch.randn(state_dim, obs_dim))
-        self.log_init_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))
+        self.init_noise_scale_sq = PyroParam(torch.ones(state_dim),
+                                             constraint=constraints.positive)
 
         gp_obs_matrix = torch.zeros(self.kernel.state_dim * obs_dim, obs_dim)
         for i in range(obs_dim):
@@ -78,19 +82,15 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         # (obs_dim + state_dim, obs_dim) => (gp_state_dim * obs_dim + state_dim, obs_dim)
         return torch.cat([self.gp_obs_matrix, self.z_obs_matrix], dim=0)
 
-    def _get_obs_noise_scale(self):
-        return self.log_obs_noise_scale.exp()
-
     def _get_init_dist(self):
         loc = self.z_trans_matrix.new_zeros(self.full_state_dim)
         covar = self.z_trans_matrix.new_zeros(self.full_state_dim, self.full_state_dim)
         covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag_embed(self.kernel.stationary_covariance())
-        eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
-        covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.log_init_noise_scale_sq.exp() * eye
+        covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.init_noise_scale_sq.diag_embed()
         return MultivariateNormal(loc, covar)
 
     def _get_obs_dist(self):
-        return dist.Normal(self.obs_loc, self._get_obs_noise_scale()).to_event(1)
+        return dist.Normal(self.obs_loc, self.obs_noise_scale).to_event(1)
 
     def _get_dist(self):
         """
@@ -101,8 +101,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
         trans_covar = self.z_trans_matrix.new_zeros(self.full_state_dim, self.full_state_dim)
         trans_covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag_embed(gp_process_covar)
-        eye = torch.eye(self.state_dim, device=trans_covar.device, dtype=trans_covar.dtype)
-        trans_covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.log_trans_noise_scale_sq.exp() * eye
+        trans_covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.trans_noise_scale_sq.diag_embed()
         trans_dist = MultivariateNormal(trans_covar.new_zeros(self.full_state_dim), trans_covar)
 
         full_trans_mat = trans_covar.new_zeros(self.full_state_dim, self.full_state_dim)
@@ -112,6 +111,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         return dist.GaussianHMM(self._get_init_dist(), full_trans_mat, trans_dist,
                                 self._get_obs_matrix(), self._get_obs_dist())
 
+    @pyro_method
     def log_prob(self, targets):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
@@ -163,8 +163,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
         # next compute the contribution from process noise that is injected at each timestep.
         # (we need to do a cumulative sum to integrate across time for the z-state contribution)
-        eye = torch.eye(self.state_dim, device=fs_cov.device, dtype=fs_cov.dtype)
-        z_process_covar = self.log_trans_noise_scale_sq.exp() * eye
+        z_process_covar = self.trans_noise_scale_sq.diag_embed()
         N_trans_obs_shift = torch.cat([self.z_obs_matrix.unsqueeze(0), N_trans_obs[0:-1]])
         predicted_covar2z = torch.matmul(N_trans_obs_shift.transpose(-1, -2),
                                          torch.matmul(z_process_covar, N_trans_obs_shift))  # N O O
@@ -173,11 +172,11 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
             torch.cumsum(predicted_covar2z, dim=0)
 
         if include_observation_noise:
-            eye = torch.eye(self.obs_dim, device=fs_cov.device, dtype=fs_cov.dtype)
-            predicted_covar = predicted_covar + self._get_obs_noise_scale().pow(2.0) * eye
+            predicted_covar = predicted_covar + self.obs_noise_scale.pow(2.0).diag_embed()
 
         return predicted_mean, predicted_covar
 
+    @pyro_method
     def forecast(self, targets, N_timesteps):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets

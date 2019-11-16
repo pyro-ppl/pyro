@@ -25,9 +25,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
-from pyro.distributions.transforms import InverseAutoregressiveFlow
+from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
-from pyro.nn import AutoRegressiveNN
 from pyro.optim import ClippedAdam
 from util import get_logger
 
@@ -156,7 +155,7 @@ class DMM(nn.Module):
                           dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
-        self.iafs = [InverseAutoregressiveFlow(AutoRegressiveNN(z_dim, [iaf_dim])) for _ in range(num_iafs)]
+        self.iafs = [affine_autoregressive(z_dim, hidden_dims=[iaf_dim]) for _ in range(num_iafs)]
         self.iafs_modules = nn.ModuleList(self.iafs)
 
         # define a (trainable) parameters z_0 and z_q_0 that help define the probability
@@ -190,6 +189,7 @@ class DMM(nn.Module):
         # this marks that each datapoint is conditionally independent of the others
         with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z and observed x's one time step at a time
+            # we wrap this loop in pyro.markov so that TraceEnum_ELBO can use multiple samples from the guide at each z
             for t in pyro.markov(range(1, T_max + 1)):
                 # the next chunk of code samples z_t ~ p(z_t | z_{t-1})
                 # note that (both here and elsewhere) we use poutine.scale to take care
@@ -246,6 +246,7 @@ class DMM(nn.Module):
         # this marks that each datapoint is conditionally independent of the others.
         with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z one time step at a time
+            # we wrap this loop in pyro.markov so that TraceEnum_ELBO can use multiple samples from the guide at each z
             for t in pyro.markov(range(1, T_max + 1)):
                 # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
                 z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t - 1, :])

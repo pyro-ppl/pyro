@@ -24,11 +24,12 @@ def log_matrix_product(A, B):
 @copy_docs_from(TransformModule)
 class BlockAutoregressive(TransformModule):
     """
-    An implementation of Block Neural Autoregressive Flow (block-NAF) (De Cao et al., 2019) transformation.
+    An implementation of Block Neural Autoregressive Flow (block-NAF) (De Cao et al., 2019) bijective transform.
     Block-NAF uses a similar transformation to deep dense NAF, building the autoregressive NN into the structure
-    of the flow, in a sense.
+    of the transform, in a sense.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
+    variational approximations.
 
     Example usage:
 
@@ -86,7 +87,7 @@ class BlockAutoregressive(TransformModule):
             raise ValueError('Invalid activation function "{}"'.format(activation))
         self.T = name_to_mixin[activation]()
 
-        # Initialize modules for each layer in flow
+        # Initialize modules for each layer in transform
         self.residual = residual
         self.input_dim = input_dim
         self.layers = nn.ModuleList([MaskedBlockLinear(input_dim, input_dim * hidden_factors[0], input_dim)])
@@ -104,8 +105,9 @@ class BlockAutoregressive(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         y = x
         for idx in range(len(self.layers)):
@@ -152,7 +154,7 @@ class BlockAutoregressive(TransformModule):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("BlockAutoregressive expected to find key in intermediates cache but didn't")
+        raise KeyError("BlockAutoregressive object expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -237,3 +239,26 @@ class MaskedBlockLinear(torch.nn.Module):
 
         w, wpl = self.get_weights()
         return (torch.matmul(w, x) + self.bias.unsqueeze(-1)).squeeze(-1), wpl
+
+
+def block_autoregressive(input_dim, **kwargs):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.BlockAutoregressive` object for consistency
+    with other helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param hidden_factors: Hidden layer i has hidden_factors[i] hidden units per input dimension. This
+        corresponds to both :math:`a` and :math:`b` in De Cao et al. (2019). The elements of hidden_factors
+        must be integers.
+    :type hidden_factors: list
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU', 'sigmoid', or 'tanh'.
+    :type activation: string
+    :param residual: Type of residual connections to use. Choices are "None", "normal" for
+        :math:`\\mathbf{y}+f(\\mathbf{y})`, and "gated" for :math:`\\alpha\\mathbf{y} + (1 - \\alpha\\mathbf{y})`
+        for learnable parameter :math:`\\alpha`.
+    :type residual: string
+
+    """
+
+    return BlockAutoregressive(input_dim, **kwargs)

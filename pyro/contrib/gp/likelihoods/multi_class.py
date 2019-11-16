@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import pyro
 import pyro.distributions as dist
 
-from .likelihood import Likelihood
+from pyro.contrib.gp.likelihoods.likelihood import Likelihood
 
 
 def _softmax(x):
@@ -64,4 +64,4 @@ class MultiClass(Likelihood):
             y_dist = dist.Categorical(f_res)
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f.dim() + 1]).to_event(y.dim())
-        return pyro.sample("y", y_dist, obs=y)
+        return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)

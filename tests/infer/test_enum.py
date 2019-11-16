@@ -437,10 +437,14 @@ def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_sample
     ]))
 
 
-@pytest.mark.parametrize("num_samples", [None, 10000])
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,enumerate3,num_samples", [
+    (e1, e2, e3, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for e3 in [None, "sequential", "parallel"]
+    for num_samples in [None, 10000]
+    if num_samples is None or (e1, e2, e3) == ("parallel", "parallel", "parallel")
+])
 @pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
 def test_elbo_berns(method, enumerate1, enumerate2, enumerate3, num_samples):
     pyro.clear_param_store()
@@ -505,11 +509,14 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_plate_nesting
 
     def guide():
         pyro.sample("x1", dist.Categorical(pyro.param("q1")),
-                    infer={"enumerate": enumerate1, "num_samples": num_samples})
+                    infer={"enumerate": enumerate1,
+                           "num_samples": num_samples if enumerate1 == "parallel" else None})
         pyro.sample("x2", dist.Categorical(pyro.param("q2")),
-                    infer={"enumerate": enumerate2, "num_samples": num_samples})
+                    infer={"enumerate": enumerate2,
+                           "num_samples": num_samples if enumerate2 == "parallel" else None})
         pyro.sample("x3", dist.Categorical(pyro.param("q3")),
-                    infer={"enumerate": enumerate3, "num_samples": num_samples})
+                    infer={"enumerate": enumerate3,
+                           "num_samples": num_samples if enumerate3 == "parallel" else None})
 
     kl = (kl_divergence(dist.Categorical(q1), dist.Categorical(p1)) +
           kl_divergence(dist.Categorical(q2), dist.Categorical(p2)) +
@@ -579,9 +586,13 @@ def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
     ]))
 
 
-@pytest.mark.parametrize("num_samples", [None, 10000])
-@pytest.mark.parametrize("enumerate1", ["parallel"])
-@pytest.mark.parametrize("enumerate2", ["parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,num_samples", [
+    (e1, e2, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for num_samples in [None, 10000]
+    if num_samples is None or (e1, e2) == ("parallel", "parallel")
+])
 @pytest.mark.parametrize("plate_dim", [1, 2])
 def test_elbo_plate(plate_dim, enumerate1, enumerate2, num_samples):
     pyro.clear_param_store()
@@ -664,11 +675,15 @@ def test_elbo_iplate(plate_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("num_samples", [None, 100000])
-@pytest.mark.parametrize("enumerate4", ["parallel"])
-@pytest.mark.parametrize("enumerate3", ["parallel"])
-@pytest.mark.parametrize("enumerate2", ["parallel"])
-@pytest.mark.parametrize("enumerate1", ["parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,enumerate3,enumerate4,num_samples", [
+    (e1, e2, e3, e4, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for e3 in [None, "sequential", "parallel"]
+    for e4 in [None, "sequential", "parallel"]
+    for num_samples in [None, 10000]
+    if num_samples is None or (e1, e2, e3, e4) == ("parallel",) * 4
+])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4, num_samples):
@@ -722,10 +737,14 @@ def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerat
     ]))
 
 
-@pytest.mark.parametrize("num_samples", [None, 2000])
-@pytest.mark.parametrize("enumerate3", ["parallel"])
-@pytest.mark.parametrize("enumerate2", ["parallel"])
-@pytest.mark.parametrize("enumerate1", ["parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,enumerate3,num_samples", [
+    (e1, e2, e3, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for e3 in [None, "sequential", "parallel"]
+    for num_samples in [None, 2000]
+    if num_samples is None or (e1, e2, e3) == ("parallel",) * 3
+])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [3])
 def test_elbo_plate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, num_samples):

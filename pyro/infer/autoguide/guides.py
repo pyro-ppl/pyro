@@ -12,6 +12,8 @@ For example to generate a mean field Gaussian guide::
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
+import functools
+import operator
 import warnings
 import weakref
 from contextlib import ExitStack  # python 3
@@ -22,8 +24,8 @@ from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
+import pyro.distributions.transforms as transforms
 import pyro.poutine as poutine
-from pyro.distributions import transforms
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
@@ -31,6 +33,26 @@ from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN, PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.poutine.util import prune_subsample_sites
+
+
+def _deep_setattr(obj, key, val):
+    """
+    Set an attribute `key` on the object. If any of the prefix attributes do
+    not exist, they are set to :class:`~pyro.nn.PyroModule`.
+    """
+
+    def _getattr(obj, attr):
+        obj_next = getattr(obj, attr, None)
+        if obj_next is not None:
+            return obj_next
+        setattr(obj, attr, PyroModule())
+        return getattr(obj, attr)
+
+    lpart, _, rpart = key.rpartition(".")
+    # Recursive getattr while setting any prefix attributes to PyroModule
+    if lpart:
+        obj = functools.reduce(_getattr, [obj] + lpart.split('.'))
+    setattr(obj, rpart, val)
 
 
 class AutoGuide(PyroModule):
@@ -47,11 +69,10 @@ class AutoGuide(PyroModule):
     """
 
     def __init__(self, model):
-        super().__init__()
+        super().__init__(name=type(self).__name__)
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
-        self._pyro_name = type(self).__name__
         self.prototype_trace = None
         self._plates = {}
 
@@ -283,7 +304,7 @@ class AutoDelta(AutoGuide):
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
-            setattr(self, name, value)
+            _deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
         """
@@ -303,7 +324,8 @@ class AutoDelta(AutoGuide):
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
-                result[name] = pyro.sample(name, dist.Delta(getattr(self, name),
+                attr_get = operator.attrgetter(name)
+                result[name] = pyro.sample(name, dist.Delta(attr_get(self),
                                                             event_dim=site["fn"].event_dim))
         return result
 
@@ -494,7 +516,7 @@ class AutoMultivariateNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized by ``init_loc_fn()`` and the
-    Cholesky factor is initialized to the identity.
+    Cholesky factor is initialized to the identity times a small factor.
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -503,8 +525,7 @@ class AutoMultivariateNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    def __init__(self, model, init_loc_fn=init_to_median,
-                 init_scale=1.0):
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
@@ -539,7 +560,7 @@ class AutoDiagonalNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
-    initialized to the identity.
+    initialized to the identity times a small factor.
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -548,8 +569,7 @@ class AutoDiagonalNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    def __init__(self, model, init_loc_fn=init_to_median,
-                 init_scale=1.0):
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
@@ -584,22 +604,24 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         guide = AutoLowRankMultivariateNormal(model, rank=10)
         svi = SVI(model, guide, ...)
 
-    By default the ``cov_diag`` is initialized to 1/2 and the ``cov_factor`` is
-    intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
-    identity matrix.
+    By default the ``cov_diag`` is initialized to a small constant and the
+    ``cov_factor`` is initialized randomly such that on average
+    ``cov_factor.matmul(cov_factor.t())`` has the same scale as ``cov_diag``.
 
     :param callable model: A generative model.
-    :param int rank: The rank of the low-rank part of the covariance matrix.
+    :param rank: The rank of the low-rank part of the covariance matrix.
+        Defaults to approximately ``sqrt(latent dim)``.
+    :type rank: int or None
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Approximate initial scale for the standard
         deviation of each (unconstrained transformed) latent variable.
     """
 
-    def __init__(self, model, init_loc_fn=init_to_median, init_scale=1.0, rank=1):
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1, rank=None):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
-        if not isinstance(rank, int) or not rank > 0:
+        if not (rank is None or isinstance(rank, int) and rank > 0):
             raise ValueError("Expected rank > 0 but got {}".format(rank))
         self._init_scale = init_scale
         self.rank = rank
@@ -609,6 +631,8 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
+        if self.rank is None:
+            self.rank = int(round(self.latent_dim ** 0.5))
         self.scale = PyroParam(
             self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
             constraint=constraints.positive)
@@ -632,10 +656,9 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoIAFNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
-    distribution transformed via a
-    :class:`~pyro.distributions.transforms.iaf.InverseAutoregressiveFlow`
-    to construct a guide over the entire latent space. The guide does not
-    depend on the model's ``*args, **kwargs``.
+    distribution transformed via a :class:`~pyro.distributions.transforms.AffineAutoregressive`
+    to construct a guide over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
 
     Usage::
 
@@ -665,7 +688,7 @@ class AutoIAFNormal(AutoContinuous):
         if self.arn is None:
             self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
 
-        iaf = transforms.InverseAutoregressiveFlow(self.arn)
+        iaf = transforms.AffineAutoregressive(self.arn)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist
 
@@ -767,8 +790,8 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             for param_name, param_init, param_constraint in param_spec:
-                setattr(self, "{}_{}".format(name, param_name),
-                        PyroParam(param_init, constraint=param_constraint))
+                _deep_setattr(self, "{}_{}".format(name, param_name),
+                              PyroParam(param_init, constraint=param_constraint))
 
     def forward(self, *args, **kwargs):
         """
@@ -788,7 +811,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             dist_params = {
-                param_name: getattr(self, "{}_{}".format(name, param_name))
+                param_name: operator.attrgetter("{}_{}".format(name, param_name))(self)
                 for param_name, param_init, param_constraint in param_spec
             }
             discrete_dist = Dist(**dist_params)
