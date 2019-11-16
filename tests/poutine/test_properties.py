@@ -104,7 +104,6 @@ def get_trace(fn, *args, **kwargs):
 @pytest.mark.parametrize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
 @pytest.mark.parametrize('poutine_name', [
     'block',
-    'do',
     'replay',
     'trace',
 ])
