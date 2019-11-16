@@ -20,7 +20,7 @@ from pyro.ops.contract import contract_to_tensor
 from pyro.ops.integrator import potential_grad
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings, ExperimentalWarning
+from pyro.util import check_site_shape, ignore_jit_warnings
 
 
 class TraceTreeEvaluator(object):
@@ -531,15 +531,14 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
 
 def predictive(model, posterior_samples, *args, **kwargs):
     """
+    .. warning::
+        This function is deprecated and will be removed in a future release.
+        Use the :class:`~pyro.infer.predictive.Predictive` class instead.
+
     Run model by sampling latent parameters from `posterior_samples`, and return
     values at sample sites from the forward run. By default, only sites not contained in
     `posterior_samples` are returned. This can be modified by changing the `return_sites`
     keyword argument.
-
-    .. warning::
-        The interface for the `predictive` class is experimental, and
-        might change in the future. e.g. a unified interface for predictive
-        with SVI.
 
     :param model: Python callable containing Pyro primitives.
     :param dict posterior_samples: dictionary of samples from the posterior.
@@ -561,8 +560,9 @@ def predictive(model, posterior_samples, *args, **kwargs):
     :return: dict of samples from the predictive distribution, or a single vectorized
         `trace` (if `return_trace=True`).
     """
-    warnings.warn('This function or its interface might change in the future.',
-                  ExperimentalWarning)
+    warnings.warn('The `mcmc.predictive` function is deprecated and will be removed in '
+                  'a future release. Use the `pyro.infer.Predictive` class instead.',
+                  FutureWarning)
     num_samples = kwargs.pop('num_samples', None)
     return_sites = kwargs.pop('return_sites', None)
     return_trace = kwargs.pop('return_trace', False)

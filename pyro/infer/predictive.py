@@ -106,9 +106,10 @@ def _predictive(model, posterior_samples, num_samples, return_sites=(),
 
 class Predictive(torch.nn.Module):
     """
-    This class is used to construct predictive distribution. The predictive distribution is obtained
-    by running the `model` conditioned on latent samples from `posterior_samples`. If a `guide` is
-    provided, then samples from all the latent sites are returned.
+    EXPERIMENTAL class used to construct predictive distribution. The predictive
+    distribution is obtained by running the `model` conditioned on latent samples
+    from `posterior_samples`. If a `guide` is provided, then posterior samples
+    from all the latent sites are also returned.
 
     .. warning::
         The interface for the :class:`Predictive` class is experimental, and
@@ -172,7 +173,7 @@ class Predictive(torch.nn.Module):
         .. warning::
             This method may be removed once PyTorch JIT tracer starts accepting
             `dict` as valid return types. See
-            `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
+            `issue <https://github.com/pytorch/pytorch/issues/27743>`_.
         """
         result = self.forward(*args, **kwargs)
         return tuple(v for _, v in sorted(result.items()))

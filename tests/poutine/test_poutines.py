@@ -379,6 +379,7 @@ class LiftHandlerTests(TestCase):
             if name in ('scale2', 'loc2'):
                 assert lifted_tr.nodes[name]["type"] == "param"
 
+    @pytest.mark.filterwarnings('ignore::FutureWarning')
     def test_random_module(self):
         pyro.clear_param_store()
         with pyro.validation_enabled():
@@ -388,6 +389,7 @@ class LiftHandlerTests(TestCase):
                 assert lifted_tr.nodes[name]["type"] == "sample"
                 assert not lifted_tr.nodes[name]["is_observed"]
 
+    @pytest.mark.filterwarnings('ignore::FutureWarning')
     def test_random_module_warn(self):
         pyro.clear_param_store()
         bad_prior = {'foo': None}
@@ -399,6 +401,7 @@ class LiftHandlerTests(TestCase):
             for warning in w:
                 logger.info(warning)
 
+    @pytest.mark.filterwarnings('ignore::FutureWarning')
     def test_random_module_prior_dict(self):
         pyro.clear_param_store()
         lifted_nn = pyro.random_module("name", self.model, prior=self.nn_prior)
