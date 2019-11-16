@@ -493,7 +493,7 @@ def markov(fn=None, history=1, keep=False, dim=None, name=None):
     :param int dim: An optional dimension to use for this independence index.
         Interface stub, behavior not yet implemented.
     :param str name: An optional unique name to help inference algorithms match
-        :fn:`pyro.markov` sites between models and guides.
+        :func:`pyro.markov` sites between models and guides.
         Interface stub, behavior not yet implemented.
     """
     if fn is None:
