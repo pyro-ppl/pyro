@@ -3,8 +3,6 @@ import warnings
 
 import torch
 
-from pyro.distributions import Delta, Distribution
-
 from .messenger import Messenger
 from .runtime import apply_stack
 
@@ -53,7 +51,7 @@ class DoMessenger(Messenger):
 
     def _pyro_sample(self, msg):
         if msg.get('_intervener_id', None) != self._intervener_id and \
-                msg['name'] in self.data:
+                self.data.get(msg['name']) is not None:
 
             if msg.get('_intervener_id', None) is not None:
                 warnings.warn(
@@ -71,26 +69,12 @@ class DoMessenger(Messenger):
             intervention = self.data[msg['name']]
             msg['name'] = msg['name'] + "__CF"  # mangle old name
 
-            # if intervention is None, use same variable with different randomness
-            # this is equivalent to the posterior predictive distribution
-            if intervention is None:
-                intervention = msg['fn']
-
-            if isinstance(intervention, Distribution):
-                # stochastically intervened site is no longer observed
-                msg['done'] = False
-                msg['value'] = None
-                msg['is_observed'] = False
-                msg['fn'] = intervention
-            elif isinstance(intervention, (numbers.Number, torch.Tensor)):
-                if isinstance(intervention, numbers.Number):
-                    # Delta doesn't automatically convert its argument to tensor
-                    intervention = torch.tensor(float(intervention))
+            if isinstance(intervention, (numbers.Number, torch.Tensor)):
                 msg['value'] = intervention
-                msg['fn'] = Delta(intervention, event_dim=len(msg['fn'].event_shape))
-                msg['is_observed'] = True  # keep inference algorithms from complaining about Deltas
+                msg['is_observed'] = True
+                msg['stop'] = True
             else:
                 raise NotImplementedError(
-                    "Interventions of type {} not implemented".format(type(intervention)))
+                    "Interventions of type {} not implemented (yet)".format(type(intervention)))
 
         return None
