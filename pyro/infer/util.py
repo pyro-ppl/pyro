@@ -37,6 +37,9 @@ def dict_to_namedtuple(dct):
     Converts a dictionary to a namedtuple.
     """
     assert isinstance(dct, dict)
+    dct = {key if key.isidentifier() and not key.startswith("_") else
+           "key_{}".format(i): value
+           for i, (key, value) in enumerate(sorted(dct.items()))}
     cache = dict_to_namedtuple._cache
     keys = tuple(sorted(dct.keys()))
     if keys not in cache:
