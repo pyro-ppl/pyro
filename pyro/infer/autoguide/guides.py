@@ -30,6 +30,7 @@ from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
+from pyro.infer.util import dict_to_namedtuple
 from pyro.nn import AutoRegressiveNN, PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.poutine.util import prune_subsample_sites
@@ -86,7 +87,7 @@ class AutoGuide(PyroModule):
     def call(self, *args, **kwargs):
         """
         Method that calls :meth:`forward` and returns parameter values of the
-        guide as a `tuple` instead of a `dict`, which is a requirement for
+        guide as a `namedtuple` instead of a `dict`, which is a requirement for
         JIT tracing. Unlike :meth:`forward`, this method can be traced by
         :func:`torch.jit.trace_module`.
 
@@ -96,7 +97,7 @@ class AutoGuide(PyroModule):
             `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
         """
         result = self(*args, **kwargs)
-        return tuple(v for _, v in sorted(result.items()))
+        return dict_to_namedtuple(result)
 
     def sample_latent(*args, **kwargs):
         """

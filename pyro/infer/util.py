@@ -1,6 +1,6 @@
 import math
 import numbers
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, namedtuple
 
 import torch
 from opt_einsum import shared_intermediates
@@ -30,6 +30,30 @@ def torch_item(x):
     Like ``x.item()`` for a :class:`~torch.Tensor`, but also works with numbers.
     """
     return x if isinstance(x, numbers.Number) else x.item()
+
+
+def dict_to_namedtuple(dct):
+    """
+    Converts a dictionary to a namedtuple.
+    """
+    assert isinstance(dct, dict)
+    cache = dict_to_namedtuple._cache
+    keys = tuple(sorted(dct.keys()))
+    if keys not in cache:
+        cache[keys] = namedtuple("DictAsNamedTuple", keys)
+    tp = cache[keys]
+    return tp(**dct)
+
+
+def namedtuple_to_dict(ntup):
+    """
+    Converts a namedtuple to a dictionary.
+    """
+    assert isinstance(ntup, tuple)
+    return dict(zip(ntup._fields, ntup))
+
+
+dict_to_namedtuple._cache = {}
 
 
 def torch_backward(x, retain_graph=None):

@@ -1,10 +1,11 @@
-from functools import reduce
 import warnings
+from functools import reduce
 
 import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.util import dict_to_namedtuple
 from pyro.poutine.util import prune_subsample_sites
 
 
@@ -176,7 +177,7 @@ class Predictive(torch.nn.Module):
             `issue <https://github.com/pytorch/pytorch/issues/27743>`_.
         """
         result = self.forward(*args, **kwargs)
-        return tuple(v for _, v in sorted(result.items()))
+        return dict_to_namedtuple(result)
 
     def forward(self, *args, **kwargs):
         """

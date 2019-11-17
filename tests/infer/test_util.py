@@ -7,7 +7,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 import pytest
 from pyro.infer.importance import psis_diagnostic
-from pyro.infer.util import MultiFrameTensor
+from pyro.infer.util import MultiFrameTensor, dict_to_namedtuple, namedtuple_to_dict
 from tests.common import assert_equal
 
 
@@ -46,6 +46,20 @@ def test_multi_frame_tensor():
     for name, expected_sum in expected.items():
         actual_sum = actual.sum_to(stacks[name])
         assert_equal(actual_sum, expected_sum, msg=name)
+
+
+@pytest.mark.parametrize("bar", [None, 1.234, {"baz": 0}])
+def test_dict_to_namedtuple(bar):
+    x = {"foo": torch.tensor(0.1), "bar": bar}
+    y = dict_to_namedtuple(x)
+    assert isinstance(y, tuple)
+    assert y.foo is x["foo"]
+    assert y.bar is x["bar"]
+    z = namedtuple_to_dict(y)
+    assert isinstance(z, dict)
+    assert set(x.keys()) == set(z.keys())
+    for key in x.keys():
+        assert x[key] is z[key]
 
 
 @pytest.mark.parametrize('max_particles', [250 * 1000, 500 * 1000])
