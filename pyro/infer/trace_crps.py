@@ -27,7 +27,7 @@ class Trace_CRPS:
     tractible density functions. CRPS is a robust loss function, and is well
     defined for any distribution with finite absolute moment ``E[|data|]``.
 
-    This requires static model structure, fully reparametrized guide, and
+    This requires static model structure, a fully reparametrized guide, and
     reparametrized likelihood distributions in the model. Model latent
     distributions may be non-reparametrized.
 
@@ -39,9 +39,8 @@ class Trace_CRPS:
     :param int num_particles: The number of particles/samples used to form the
         gradient estimators. Must be at least 2.
     :param int max_plate_nesting: Optional bound on max number of nested
-        :func:`pyro.plate` contexts. If omitted, ELBO may guess a valid value
-        by running the (model,guide) pair once, however this guess may be
-        incorrect if model or guide structure is dynamic.
+        :func:`pyro.plate` contexts. If omitted, this will guess a valid value
+        by running the (model,guide) pair once.
     :param float kl_scale: Nonnegative scale for ``KL(q,p)`` regularization.
         If zero (default), then log densities will not be computed.
     """
