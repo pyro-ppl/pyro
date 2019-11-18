@@ -74,6 +74,8 @@ class ReweightedWakeSleep(ELBO):
 
         assert(insomnia >= 0 and insomnia <= 1), \
             "insomnia should be in [0, 1]"
+        if not (model_has_params or insomnia == 0.):
+            warnings.warn("model_has_params = False is ignored when insomnia != 0.")
 
     def _get_trace(self, model, guide, *args, **kwargs):
         """
