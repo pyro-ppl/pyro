@@ -77,6 +77,13 @@ class ReweightedWakeSleep(ELBO):
         if not (model_has_params or insomnia == 0.):
             warnings.warn("model_has_params = False is ignored when insomnia != 0.")
 
+        print("Running {} {}".format(
+            "wake-theta" if model_has_params or insomnia > 0. else "",
+            "wake-phi" if insomnia == 1. else
+            "sleep-phi" if insomnia == 0. else
+            "({}*wake-phi + {}*sleep-phi)".format(insomnia, 1. - insomnia)
+        ))
+
     def _get_trace(self, model, guide, *args, **kwargs):
         """
         Returns a single trace from the guide, and the model that is run against it.
