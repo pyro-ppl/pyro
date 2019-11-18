@@ -21,11 +21,26 @@ def _squared_error(x, y, scale, mask):
 
 class Trace_CRPS:
     """
-    Posterior predictive CRPS loss.
+    Posterior predictive CRPS loss with ``KL(q,p)`` regularization.
 
-    This is a likelihood-free method; no densities are evaluated.
+    This is a likelihood-free method, and can be used for likelihoods without
+    tractible density functions. CRPS is a robust loss function, and is well
+    defined for any distribution with finite absolute moment ``E[|data|]``.
 
-    :param num_particles: The number of particles/samples used to form the
+    This requires static model structure, fully reparametrized guide, and
+    reparametrized likelihood distributions in the model. Model latent
+    distributions may be non-reparametrized.
+
+    Note that in the loss ``CRPS + KL(q,p)``, the ``CRPS`` term has data units
+    whereas the ``KL(q,p)`` term has units of nats.  To calibrate these units,
+    you can wrap likelihood sites in ``poutine.scale``.
+
+    References
+    [1] `Strictly Proper Scoring Rules, Prediction, and Estimation`
+    Tilmann Gneiting, Adrian E. Raftery (2007)
+    https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+
+    :param int num_particles: The number of particles/samples used to form the
         gradient estimators. Must be at least 2.
     :param int max_plate_nesting: Optional bound on max number of nested
         :func:`pyro.plate` contexts. This is only required when enumerating
@@ -37,23 +52,25 @@ class Trace_CRPS:
     def __init__(self,
                  num_particles=2,
                  max_plate_nesting=float('inf')):
-        assert isinstance(num_particles, int) and num_particles >= 2
+        if not isinstance(num_particles, int) and num_particles >= 2:
+            raise ValueError("Expected num_particles >= 2, actual {}".format(num_particles))
         self.num_particles = num_particles
         self.vectorize_particles = True
         self.max_plate_nesting = max_plate_nesting
 
     def _get_traces(self, model, guide, *args, **kwargs):
         if self.max_plate_nesting == float("inf"):
+            # TODO factor this out as a stand-alone helper.
             ELBO._guess_max_plate_nesting(self, model, guide, *args, **kwargs)
         vectorize = pyro.plate("num_particles_vectorized", self.num_particles,
-                               dim=-1 - self.max_plate_nesting)
+                               dim=-self.max_plate_nesting)
 
         # Trace the guide as in ELBO.
         with poutine.trace() as tr, vectorize:
             guide(*args, **kwargs)
         guide_trace = tr.trace
 
-        # Trace the model, saving obs in tr2 and posterior predictives in tr1.
+        # Trace the model, drawing posterior predictive samples.
         with poutine.trace() as tr, poutine.uncondition():
             with poutine.replay(trace=guide_trace), vectorize:
                 model(*args, **kwargs)
@@ -61,7 +78,6 @@ class Trace_CRPS:
         for site in model_trace.nodes.values():
             if site["type"] == "sample" and site["infer"].get("was_observed", False):
                 site["is_observed"] = True
-
         if is_validation_enabled():
             check_model_guide_match(model_trace, guide_trace, self.max_plate_nesting)
 
@@ -69,7 +85,6 @@ class Trace_CRPS:
         model_trace = prune_subsample_sites(model_trace)
         guide_trace.compute_log_prob()
         model_trace.compute_log_prob(site_filter=lambda name, site: not site["is_observed"])
-
         if is_validation_enabled():
             for site in guide_trace.nodes.values():
                 if site["type"] == "sample":
@@ -87,6 +102,10 @@ class Trace_CRPS:
         return guide_trace, model_trace
 
     def __call__(self, model, guide, *args, **kwargs):
+        """
+        Computes the surrogate loss that can be differentiated with autograd
+        to produce gradient estimates for the model and guide parameters.
+        """
         guide_trace, model_trace = self._get_traces(model, guide, *args, **kwargs)
 
         # Extract observations and posterior predictive samples.
@@ -143,4 +162,7 @@ class Trace_CRPS:
         return loss
 
     def loss(self, *args, **kwargs):
+        """
+        Not implemented. Added for compatibility with unit tests only.
+        """
         raise NotImplementedError("Trace_CRPS implements only surrogate loss")
