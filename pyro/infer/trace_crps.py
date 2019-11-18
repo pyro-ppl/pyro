@@ -138,7 +138,7 @@ class Trace_CRPS:
                 kl_qp = kl_qp - site["log_prob_sum"]
 
         # Compute final loss.
-        loss = crps - kl_qp
+        loss = crps + kl_qp
         warn_if_nan(loss, "loss")
         return loss
 
