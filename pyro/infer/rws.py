@@ -28,6 +28,8 @@ class ReweightedWakeSleep(ELBO):
     :param insomnia: The scaling between the wake-phi and sleep-phi terms. Default is 1.0 [wake-phi]
     :param num_sleep_particles: The number of particles used to form the sleep-phi estimator.
         Default is 1 [matching the batch size].
+    :param bool model_has_params: Whether to bother running the wake-theta computation;
+        useful only for pure sleep-phi (csis). Default is True.
     :param int max_plate_nesting: Bound on max number of nested
         :func:`pyro.plate` contexts. Default is infinity.
     :param bool strict_enumeration_warning: Whether to warn about possible
@@ -47,6 +49,7 @@ class ReweightedWakeSleep(ELBO):
     def __init__(self,
                  num_particles=2,
                  insomnia=1.,
+                 model_has_params=True,
                  num_sleep_particles=None,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
@@ -66,6 +69,7 @@ class ReweightedWakeSleep(ELBO):
                                                   vectorize_particles=vectorize_particles,
                                                   strict_enumeration_warning=strict_enumeration_warning)
         self.insomnia = insomnia
+        self.model_has_params = model_has_params
         if num_sleep_particles is None:
             num_sleep_particles = num_particles
         self.num_sleep_particles = num_sleep_particles
@@ -92,35 +96,37 @@ class ReweightedWakeSleep(ELBO):
         Performs backward as appropriate on both, over the specified number of particles.
         """
 
-        # COMPUTE QUANTITIES FOR WAKE THETA AND WAKE PHI
-        log_joints = []
-        log_qs = []
+        wake_theta_loss = torch.tensor(100.)
+        if self.model_has_params or self.insomnia > 0.:
+            # compute quantities for wake theta and wake phi
+            log_joints = []
+            log_qs = []
 
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            log_joint = 0.
-            log_q = 0.
+            for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                log_joint = 0.
+                log_q = 0.
 
-            for name, site in model_trace.nodes.items():
-                if site["type"] == "sample":
-                    log_p_site = site["log_prob"]
-                    log_joint = log_joint + log_p_site
+                for name, site in model_trace.nodes.items():
+                    if site["type"] == "sample":
+                        log_p_site = site["log_prob"]
+                        log_joint = log_joint + log_p_site
 
-            for name, site in guide_trace.nodes.items():
-                if site["type"] == "sample":
-                    log_q_site = site["log_prob"]
-                    log_q = log_q + log_q_site
+                for name, site in guide_trace.nodes.items():
+                    if site["type"] == "sample":
+                        log_q_site = site["log_prob"]
+                        log_q = log_q + log_q_site
 
-            log_joints.append(log_joint)
-            log_qs.append(log_q)
+                log_joints.append(log_joint)
+                log_qs.append(log_q)
 
-        log_joints = log_joints[0] if self.vectorize_particles else torch.stack(log_joints)
-        log_qs = log_qs[0] if self.vectorize_particles else torch.stack(log_qs)
-        log_weights = log_joints - log_qs.detach()
+            log_joints = log_joints[0] if self.vectorize_particles else torch.stack(log_joints)
+            log_qs = log_qs[0] if self.vectorize_particles else torch.stack(log_qs)
+            log_weights = log_joints - log_qs.detach()
 
-        # COMPUTE WAKE THETA LOSS
-        log_sum_weight = torch.logsumexp(log_weights, dim=0)
-        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
-        warn_if_nan(wake_theta_loss, "wake theta loss")
+            # compute wake theta loss
+            log_sum_weight = torch.logsumexp(log_weights, dim=0)
+            wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
+            warn_if_nan(wake_theta_loss, "wake theta loss")
 
         if self.insomnia > 0:
             # COMPUTE WAKE PHI LOSS
@@ -137,6 +143,8 @@ class ReweightedWakeSleep(ELBO):
             if should_vectorize:
                 old_num_particles = self.num_particles
                 self.num_particles = self.num_sleep_particles
+                if self.max_plate_nesting == float('inf'):
+                    self._guess_max_plate_nesting(_model, _guide, *args, **kwargs)
                 _model = self._vectorized_num_particles(_model)
                 _guide = self._vectorized_num_particles(guide)
             for _ in range(1 if should_vectorize else self.num_sleep_particles):
