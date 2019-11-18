@@ -15,8 +15,12 @@ from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
 
 def _squared_error(x, y, scale, mask):
     diff = x - y
-    error = torch.einsum("np,np->n", diff, diff)
-    return scale_and_mask(error, scale, mask)
+    if getattr(scale, 'shape', ()) or getattr(mask, 'shape', ()):
+        error = torch.einsum("nbe,nbe->nb", diff, diff)
+        return scale_and_mask(error, scale, mask).sum(-1)
+    else:
+        error = torch.einsum("nbe,nbe->n", diff, diff)
+        return scale_and_mask(error, scale, mask)
 
 
 class Trace_CRPS:
@@ -135,14 +139,16 @@ class Trace_CRPS:
             scale = model_trace.nodes[name]["scale"]
             mask = model_trace.nodes[name]["mask"]
 
-            # Flatten.
-            batch_shape = obs.shape[:obs.dim() - model_trace.nodes[name]["fn"].event_dim]
-            if isinstance(scale, torch.Tensor):
+            # Flatten to subshapes of (num_particles, batch_size, event_size).
+            event_dim = model_trace.nodes[name]["fn"].event_dim
+            batch_shape = obs.shape[:obs.dim() - event_dim]
+            event_shape = obs.shape[obs.dim() - event_dim:]
+            if getattr(scale, 'shape', ()):
                 scale = scale.expand(batch_shape).reshape(-1)
-            if isinstance(mask, torch.Tensor):
+            if getattr(mask, 'shape', ()):
                 mask = mask.expand(batch_shape).reshape(-1)
-            obs = obs.reshape(-1)
-            sample = sample.reshape(self.num_particles, -1)
+            obs = obs.reshape(batch_shape.numel(), event_shape.numel())
+            sample = sample.reshape(self.num_particles, batch_shape.numel(), event_shape.numel())
 
             squared_error.append(_squared_error(sample, obs, scale, mask))
             squared_entropy.append(_squared_error(*sample[pairs].unbind(1), scale, mask))
