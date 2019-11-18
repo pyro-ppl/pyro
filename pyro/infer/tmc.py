@@ -1,11 +1,9 @@
 import math
 import queue
 import warnings
-import weakref
 
 import torch
 
-import pyro.ops.jit
 import pyro.poutine as poutine
 
 from pyro.distributions.util import is_identically_zero
