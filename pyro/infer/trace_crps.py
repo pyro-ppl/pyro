@@ -21,7 +21,7 @@ def _squared_error(x, y, scale, mask):
 
 class Trace_CRPS:
     """
-    Posterior predictive CRPS loss with ``KL(q,p)`` regularization.
+    Posterior predictive CRPS loss with optional ``KL(q,p)`` regularization.
 
     This is a likelihood-free method, and can be used for likelihoods without
     tractible density functions. CRPS is a robust loss function, and is well
@@ -31,10 +31,6 @@ class Trace_CRPS:
     reparametrized likelihood distributions in the model. Model latent
     distributions may be non-reparametrized.
 
-    Note that in the loss ``CRPS + KL(q,p)``, the ``CRPS`` term has data units
-    whereas the ``KL(q,p)`` term has units of nats.  To calibrate these units,
-    you can wrap likelihood sites in ``poutine.scale``.
-
     References
     [1] `Strictly Proper Scoring Rules, Prediction, and Estimation`
     Tilmann Gneiting, Adrian E. Raftery (2007)
@@ -43,20 +39,24 @@ class Trace_CRPS:
     :param int num_particles: The number of particles/samples used to form the
         gradient estimators. Must be at least 2.
     :param int max_plate_nesting: Optional bound on max number of nested
-        :func:`pyro.plate` contexts. This is only required when enumerating
-        over sample sites in parallel, e.g. if a site sets
-        ``infer={"enumerate": "parallel"}``. If omitted, ELBO may guess a valid
-        value by running the (model,guide) pair once, however this guess may
-        be incorrect if model or guide structure is dynamic.
+        :func:`pyro.plate` contexts. If omitted, ELBO may guess a valid value
+        by running the (model,guide) pair once, however this guess may be
+        incorrect if model or guide structure is dynamic.
+    :param float kl_scale: Nonnegative scale for ``KL(q,p)`` regularization.
+        If zero (default), then log densities will not be computed.
     """
     def __init__(self,
                  num_particles=2,
-                 max_plate_nesting=float('inf')):
-        if not isinstance(num_particles, int) and num_particles >= 2:
+                 max_plate_nesting=float('inf'),
+                 kl_scale=0.):
+        if not (isinstance(num_particles, int) and num_particles >= 2):
             raise ValueError("Expected num_particles >= 2, actual {}".format(num_particles))
+        if not (isinstance(kl_scale, (float, int)) and kl_scale >= 0):
+            raise ValueError("Expected kl_scalw >= 0, actual {}".format(kl_scale))
         self.num_particles = num_particles
         self.vectorize_particles = True
         self.max_plate_nesting = max_plate_nesting
+        self.kl_scale = kl_scale
 
     def _get_traces(self, model, guide, *args, **kwargs):
         if self.max_plate_nesting == float("inf"):
@@ -83,12 +83,9 @@ class Trace_CRPS:
 
         guide_trace = prune_subsample_sites(guide_trace)
         model_trace = prune_subsample_sites(model_trace)
-        guide_trace.compute_log_prob()
-        model_trace.compute_log_prob(site_filter=lambda name, site: not site["is_observed"])
         if is_validation_enabled():
             for site in guide_trace.nodes.values():
                 if site["type"] == "sample":
-                    check_site_shape(site, self.max_plate_nesting)
                     if not getattr(site["fn"], "has_rsample", False):
                         raise ValueError("Trace_CRPS requires fully reparametrized guides")
             for trace in model_trace.nodes.values():
@@ -96,8 +93,18 @@ class Trace_CRPS:
                     if site["is_observed"]:
                         if not getattr(site["fn"], "has_rsample", False):
                             raise ValueError("Trace_CRPS requires reparametrized likelihoods")
-                    else:
+
+        if self.kl_scale > 0:
+            guide_trace.compute_log_prob()
+            model_trace.compute_log_prob(site_filter=lambda name, site: not site["is_observed"])
+            if is_validation_enabled():
+                for site in guide_trace.nodes.values():
+                    if site["type"] == "sample":
                         check_site_shape(site, self.max_plate_nesting)
+                for trace in model_trace.nodes.values():
+                    if site["type"] == "sample":
+                        if not site["is_observed"]:
+                            check_site_shape(site, self.max_plate_nesting)
 
         return guide_trace, model_trace
 
@@ -147,17 +154,18 @@ class Trace_CRPS:
         entropy = squared_entropy.sqrt().mean()  # E[ |X-X'| ]
         crps = error - 0.5 * entropy
 
-        # Compute KL(guide||model).
+        # Compute KL(guide,model).
         kl_qp = 0
-        for site in model_trace.nodes.values():
-            if site["type"] == "sample" and not site["is_observed"]:
-                kl_qp = kl_qp + site["log_prob_sum"]
-        for site in guide_trace.nodes.values():
-            if site["type"] == "sample":
-                kl_qp = kl_qp - site["log_prob_sum"]
+        if self.kl_scale > 0:
+            for site in guide_trace.nodes.values():
+                if site["type"] == "sample":
+                    kl_qp = kl_qp + site["log_prob_sum"]
+            for site in model_trace.nodes.values():
+                if site["type"] == "sample" and not site["is_observed"]:
+                    kl_qp = kl_qp - site["log_prob_sum"]
 
         # Compute final loss.
-        loss = crps + kl_qp
+        loss = crps + self.kl_scale * kl_qp
         warn_if_nan(loss, "loss")
         return loss
 

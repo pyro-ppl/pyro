@@ -21,8 +21,14 @@ logger = logging.getLogger(__name__)
 # This file tests a variety of model,guide pairs with valid and invalid structure.
 
 
-# Testing helper to adapt kwargs.
-def Trace_CRPS_(**kwargs):
+def Trace_CRPS_kl(**kwargs):
+    kwargs["kl_scale"] = 0.0
+    kwargs.pop("strict_enumeration_warning", None)
+    return Trace_CRPS(**kwargs)
+
+
+def Trace_CRPS_nokl(**kwargs):
+    kwargs["kl_scale"] = 1.0
     kwargs.pop("strict_enumeration_warning", None)
     return Trace_CRPS(**kwargs)
 
@@ -78,7 +84,13 @@ def assert_warning(model, guide, elbo):
             logger.info(warning)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, Trace_CRPS_])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    Trace_CRPS_kl,
+    Trace_CRPS_nokl,
+])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
@@ -1855,7 +1867,12 @@ def test_tail_adaptive_warning():
     assert_warning(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=1))
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO, Trace_CRPS])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceMeanField_ELBO,
+    Trace_CRPS_kl,
+    Trace_CRPS_nokl,
+])
 def test_reparam_ok(Elbo):
 
     def model():
@@ -1870,7 +1887,12 @@ def test_reparam_ok(Elbo):
 
 
 @pytest.mark.parametrize("mask", [True, False, torch.tensor(True), torch.tensor(False)])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO, Trace_CRPS])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceMeanField_ELBO,
+    Trace_CRPS_kl,
+    Trace_CRPS_nokl,
+])
 def test_reparam_mask_ok(Elbo, mask):
 
     def model():
@@ -1886,7 +1908,12 @@ def test_reparam_mask_ok(Elbo, mask):
 
 
 @pytest.mark.parametrize("scale", [1, 0.1, torch.tensor(0.5)])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO, Trace_CRPS])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceMeanField_ELBO,
+    Trace_CRPS_kl,
+    Trace_CRPS_nokl,
+])
 def test_reparam_scale_ok(Elbo, scale):
 
     def model():

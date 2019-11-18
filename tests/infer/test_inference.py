@@ -1,3 +1,4 @@
+import logging
 import math
 from unittest import TestCase
 
@@ -17,6 +18,7 @@ from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELB
 from pyro.infer.util import torch_item
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
+logger = logging.getLogger(__name__)
 
 def param_mse(name, target):
     return torch.sum(torch.pow(target - pyro.param(name), 2.0)).item()
@@ -609,32 +611,39 @@ class SafetyTests(TestCase):
             svi.step()
 
 
-def test_crps():
+@pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.parametrize("kl_scale", [0, 1e-4])
+def test_crps(kl_scale):
 
     def model(data):
-        with poutine.mask(mask=False):
-            loc = pyro.sample("loc", dist.Normal(0, 100))
+        loc = pyro.sample("loc", dist.Normal(0, 100))
+        scale = pyro.sample("scale", dist.LogNormal(0, 1))
         with pyro.plate("data", len(data)):
-            pyro.sample("obs", dist.Normal(loc, 1), obs=data)
+            pyro.sample("obs", dist.Normal(loc, scale), obs=data)
 
     def guide(data):
-        loc = pyro.param("loc_loc", torch.tensor(0.))
-        scale = pyro.param("loc_scale", torch.tensor(1.),
-                           constraint=constraints.positive)
-        with poutine.mask(mask=False):
-            pyro.sample("loc", dist.Normal(loc, scale))
+        loc_loc = pyro.param("loc_loc", torch.tensor(0.))
+        loc_scale = pyro.param("loc_scale", torch.tensor(1.),
+                               constraint=constraints.positive)
+        log_scale_loc = pyro.param("log_scale_loc", torch.tensor(0.))
+        log_scale_scale = pyro.param("log_scale_scale", torch.tensor(1.),
+                                     constraint=constraints.positive)
+        pyro.sample("loc", dist.Normal(loc_loc, loc_scale))
+        pyro.sample("scale", dist.LogNormal(log_scale_loc, log_scale_scale))
 
-    data = torch.randn(8)
-    adam = optim.Adam({"lr": 0.01})
-    svi = SVI(model, guide, adam, Trace_CRPS(num_particles=32))
-    for step in range(1001):
+    data = 10.0 + torch.randn(8)
+    adam = optim.Adam({"lr": 0.1})
+    svi = SVI(model, guide, adam, Trace_CRPS(num_particles=32, kl_scale=kl_scale))
+    for step in range(2001):
         loss = svi.step(data)
         if step % 20 == 0:
-            print("step {} loss = {}".format(step, loss))
+            print("step {} loss = {:0.4g}, loc = {:0.4g}, scale = {:0.4g}"
+                  .format(step, loss, pyro.param("loc_loc").item(),
+                          pyro.param("log_scale_loc").exp().item()))
 
     expected_loc = data.mean()
     expected_scale = data.std()
     actual_loc = pyro.param("loc_loc").detach()
-    actual_scale = pyro.param("loc_scale").detach()
+    actual_scale = pyro.param("log_scale_loc").exp().detach()
     assert_close(actual_loc, expected_loc, atol=0.05)
-    assert_close(actual_scale, expected_scale, rtol=0.05)
+    assert_close(actual_scale, expected_scale, rtol=0.1 if kl_scale else 0.05)
