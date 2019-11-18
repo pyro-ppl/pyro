@@ -10,7 +10,6 @@ import pyro
 import pyro.contrib.gp.kernels as kernels
 import pyro.distributions as dist
 import pyro.optim as optim
-import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO, Trace_CRPS, Trace_ELBO,
@@ -19,6 +18,7 @@ from pyro.infer.util import torch_item
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
 logger = logging.getLogger(__name__)
+
 
 def param_mse(name, target):
     return torch.sum(torch.pow(target - pyro.param(name), 2.0)).item()
@@ -637,9 +637,9 @@ def test_crps(kl_scale):
     for step in range(2001):
         loss = svi.step(data)
         if step % 20 == 0:
-            print("step {} loss = {:0.4g}, loc = {:0.4g}, scale = {:0.4g}"
-                  .format(step, loss, pyro.param("loc_loc").item(),
-                          pyro.param("log_scale_loc").exp().item()))
+            logger.info("step {} loss = {:0.4g}, loc = {:0.4g}, scale = {:0.4g}"
+                        .format(step, loss, pyro.param("loc_loc").item(),
+                                pyro.param("log_scale_loc").exp().item()))
 
     expected_loc = data.mean()
     expected_scale = data.std()
