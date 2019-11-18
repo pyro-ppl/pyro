@@ -21,13 +21,15 @@ class ReweightedWakeSleep(ELBO):
 
     .. note:: This returns _two_ losses, one each for the model and the guide.
 
-    :param num_particles: The number of particles/samples used to form the objective
+    :param int num_particles: The number of particles/samples used to form the objective
         (gradient) estimator. Default is 2.
     :param insomnia: The scaling between the wake-phi and sleep-phi terms. Default is 1.0 [wake-phi]
-    :param num_sleep_particles: The number of particles used to form the sleep-phi estimator.
-        Default is 1 [matching the batch size].
     :param bool model_has_params: Whether to bother running the wake-theta computation;
         useful only for pure sleep-phi (csis). Default is True.
+    :param int num_sleep_particles: The number of particles used to form the sleep-phi estimator.
+        Default is 2 [matching `num_particles`].
+    :param bool vectorize_particles: Whether the traces should be vectorised
+        across `num_particles`. Default is True.
     :param int max_plate_nesting: Bound on max number of nested
         :func:`pyro.plate` contexts. Default is infinity.
     :param bool strict_enumeration_warning: Whether to warn about possible
@@ -49,9 +51,9 @@ class ReweightedWakeSleep(ELBO):
                  insomnia=1.,
                  model_has_params=True,
                  num_sleep_particles=None,
+                 vectorize_particles=True,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
-                 vectorize_particles=True,
                  strict_enumeration_warning=True):
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
@@ -127,13 +129,13 @@ class ReweightedWakeSleep(ELBO):
             warn_if_nan(wake_theta_loss, "wake theta loss")
 
         if self.insomnia > 0:
-            # COMPUTE WAKE PHI LOSS
+            # compute wake phi loss
             normalised_weights = (log_weights - log_sum_weight).exp().detach()
             wake_phi_loss = -(normalised_weights * log_qs).sum()
             warn_if_nan(wake_phi_loss, "wake phi loss")
 
         if self.insomnia < 1:
-            # COMPUTE SLEEP PHI LOSS
+            # compute sleep phi loss
             _model = pyro.poutine.uncondition(model)
             _guide = guide
             _log_q = 0.
@@ -158,7 +160,7 @@ class ReweightedWakeSleep(ELBO):
             sleep_phi_loss = -_log_q / self.num_sleep_particles
             warn_if_nan(sleep_phi_loss, "sleep phi loss")
 
-        # COMPUTE PHI LOSS
+        # compute phi loss
         phi_loss = sleep_phi_loss if self.insomnia == 0 \
             else wake_phi_loss if self.insomnia == 1 \
             else self.insomnia * wake_phi_loss + (1. - self.insomnia) * sleep_phi_loss
