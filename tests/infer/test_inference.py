@@ -6,15 +6,16 @@ import torch
 from torch.distributions import constraints
 
 import pyro
+import pyro.contrib.gp.kernels as kernels
 import pyro.distributions as dist
 import pyro.optim as optim
-import pyro.contrib.gp.kernels as kernels
-from pyro.infer.util import torch_item
+import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO, Trace_MMD)
-from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO, Trace_CRPS, Trace_ELBO,
+                        Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO)
+from pyro.infer.util import torch_item
+from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
 
 def param_mse(name, target):
@@ -606,3 +607,34 @@ class SafetyTests(TestCase):
 
         with pytest.raises(RuntimeError):
             svi.step()
+
+
+def test_crps():
+
+    def model(data):
+        with poutine.mask(mask=False):
+            loc = pyro.sample("loc", dist.Normal(0, 100))
+        with pyro.plate("data", len(data)):
+            pyro.sample("obs", dist.Normal(loc, 1), obs=data)
+
+    def guide(data):
+        loc = pyro.param("loc_loc", torch.tensor(0.))
+        scale = pyro.param("loc_scale", torch.tensor(1.),
+                           constraint=constraints.positive)
+        with poutine.mask(mask=False):
+            pyro.sample("loc", dist.Normal(loc, scale))
+
+    data = torch.randn(8)
+    adam = optim.Adam({"lr": 0.01})
+    svi = SVI(model, guide, adam, Trace_CRPS(num_particles=32))
+    for step in range(1001):
+        loss = svi.step(data)
+        if step % 20 == 0:
+            print("step {} loss = {}".format(step, loss))
+
+    expected_loc = data.mean()
+    expected_scale = data.std()
+    actual_loc = pyro.param("loc_loc").detach()
+    actual_scale = pyro.param("loc_scale").detach()
+    assert_close(actual_loc, expected_loc, atol=0.05)
+    assert_close(actual_scale, expected_scale, rtol=0.05)
