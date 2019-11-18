@@ -52,7 +52,7 @@ class Trace_CRPS:
         if not (isinstance(num_particles, int) and num_particles >= 2):
             raise ValueError("Expected num_particles >= 2, actual {}".format(num_particles))
         if not (isinstance(kl_scale, (float, int)) and kl_scale >= 0):
-            raise ValueError("Expected kl_scalw >= 0, actual {}".format(kl_scale))
+            raise ValueError("Expected kl_scale >= 0, actual {}".format(kl_scale))
         self.num_particles = num_particles
         self.vectorize_particles = True
         self.max_plate_nesting = max_plate_nesting
