@@ -70,9 +70,8 @@ class ReweightedWakeSleep(ELBO):
                                                   strict_enumeration_warning=strict_enumeration_warning)
         self.insomnia = insomnia
         self.model_has_params = model_has_params
-        if num_sleep_particles is None:
-            num_sleep_particles = num_particles
-        self.num_sleep_particles = num_sleep_particles
+        self.num_sleep_particles = num_particles if num_sleep_particles is None else num_sleep_particles
+
         assert(insomnia >= 0 and insomnia <= 1), \
             "insomnia should be in [0, 1]"
 
