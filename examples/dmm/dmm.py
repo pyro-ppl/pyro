@@ -26,7 +26,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import affine_autoregressive
-from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
+from pyro.infer import SVI, JitTrace_ELBO, TensorMonteCarlo, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
 from util import get_logger
 
@@ -335,12 +335,15 @@ def main(args):
 
     # setup inference algorithm
     if args.tmc:
-        from pyro.infer.tmc import JitTensorMonteCarlo, TensorMonteCarlo
-        tmc_loss = JitTensorMonteCarlo() if args.jit else TensorMonteCarlo()
+        if args.jit:
+            raise NotImplementedError("no JIT support yet for TMC")
+        tmc_loss = TensorMonteCarlo()
         dmm_guide = config_enumerate(dmm.guide, default="parallel", num_samples=args.tmc_num_samples, expand=False)
         svi = SVI(dmm.model, dmm_guide, adam, loss=tmc_loss)
     elif args.tmcelbo:
-        elbo = JitTraceEnum_ELBO() if args.jit else TraceEnum_ELBO()
+        if args.jit:
+            raise NotImplementedError("no JIT support yet for TMC ELBO")
+        elbo = TraceEnum_ELBO()
         dmm_guide = config_enumerate(dmm.guide, default="parallel", num_samples=args.tmc_num_samples, expand=False)
         svi = SVI(dmm.model, dmm_guide, adam, loss=elbo)
     else:
