@@ -9,8 +9,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO, Trace_CRPS,
-                        config_enumerate)
+from pyro.infer import (SVI, Trace_CRPS, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
+                        TraceTailAdaptive_ELBO, config_enumerate)
 from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
@@ -1769,7 +1769,7 @@ def test_markov_history(history):
         assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
-def test_mean_field_ok(Elbo):
+def test_mean_field_ok():
 
     def model():
         x = pyro.sample("x", dist.Normal(0., 1.))
