@@ -1,31 +1,55 @@
+import operator
 from collections import OrderedDict
+from functools import reduce
 
 import torch
 
 import pyro
 import pyrp.poutine as poutine
+from pyro.distributions.util import scale_and_mask
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import torch_item
-from pyro.util import warn_if_nan
+from pyro.infer.util import is_validation_enabled
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
+
+
+def _squared_error(x, y, scale, mask):
+    diff = x - y
+    error = torch.einsum("np,np->n", diff, diff)
+    return scale_and_mask(error, scale, mask)
 
 
 class Trace_CRPS:
     """
     Posterior predictive CRPS loss.
 
-    This is a non-Bayesian, likelihood-free method; no densities are evaluated.
+    This is a likelihood-free method; no densities are evaluated.
+
+    :param num_particles: The number of particles/samples used to form the ELBO
+        (gradient) estimators. Must be at least 2.
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts. This is only required when enumerating
+        over sample sites in parallel, e.g. if a site sets
+        ``infer={"enumerate": "parallel"}``. If omitted, ELBO may guess a valid
+        value by running the (model,guide) pair once, however this guess may
+        be incorrect if model or guide structure is dynamic.
+    :param bool retain_graph: Whether to retain autograd graph during an SVI
+        step. Defaults to None (False).
     """
     def __init__(self,
                  num_particles=2,
-                 max_plate_nesting=float('inf')):
-        assert num_particles >= 2
+                 max_plate_nesting=float('inf'),
+                 retain_graph=None):
+        assert isinstance(num_particles, int) and num_particles >= 2
         self.max_plate_nesting = max_plate_nesting
         self.vectorize_particles = True
+        self.retain_graph = retain_graph
 
-    def _get_samples(self, model, guide, *args, **kwargs):
+    def _get_traces(self, model, guide, *args, **kwargs):
         if self._max_plate_nesting == float("inf"):
-            ELBO._guess_max_plate_nesting(self, model, guide, args, **kwargs)
-        vectorize = pyro.plate("particles", self.num_particles, dim=-1 - self.max_plate_nesting)
+            ELBO._guess_max_plate_nesting(self, model, guide, *args, **kwargs)
+        vectorize = pyro.plate("particles", self.num_particles,
+                               dim=-1 - self.max_plate_nesting)
 
         # Trace the guide as in ELBO.
         with poutine.trace() as tr, vectorize:
@@ -37,58 +61,82 @@ class Trace_CRPS:
             with poutine.trace() as tr2:
                 with poutine.replay(trace=guide_trace), vectorize:
                     model(*args, **kwargs)
+        pred_trace = tr1.trace
+        obs_trace = tr2.trace
+
+        if is_validation_enabled():
+            check_model_guide_match(pred_trace, guide_trace, self.max_plate_nesting)
+            check_model_guide_match(obs_trace, guide_trace, self.max_plate_nesting)
+
+        guide_trace = prune_subsample_sites(guide_trace)
+        pred_trace = prune_subsample_sites(pred_trace)
+        obs_trace = prune_subsample_sites(obs_trace)
+        if self.kl_scale > 0:
+            obs_trace.compute_log_prob(site_filter=lambda name, site:
+                                       not site["is_observed"] and site["mask"] is not False)
+
+        if is_validation_enabled():
+            for trace in [guide_trace, pred_trace, obs_trace]:
+                for site in trace.nodes.values():
+                    if site["type"] == "sample":
+                        check_site_shape(site, self.max_plate_nesting)
+            for site in guide_trace.nodes.values():
+                if site["type"] == "sample":
+                    if not getattr(site["fn"], "has_rsample", False):
+                        raise ValueError("Trace_CRPS only supports fully reparametrized guides")
+
+        return guide_trace, obs_trace, pred_trace
+
+    def __call__(self, model, guide, *args, **kwargs):
+        guide_trace, obs_trace, pred_trace = self._get_traces(model, guide, *args, **kwargs)
 
         # Extract observations and posterior predictive samples.
         data = OrderedDict()
         samples = OrderedDict()
-        for name, site in tr2.trace.nodes.items():
+        for name, site in obs_trace.nodes.items():
             if site["type"] == "sample" and site["is_observed"]:
                 data[name] = site["value"]
-                samples[name] = tr1.trace.nodes[name]["value"]
-        assert set(data) == set(samples)
+                samples[name] = pred_trace.nodes[name]["value"]
+        assert list(data.keys()) == list(samples.keys())
+        if not data:
+            raise ValueError("Found no observations")
 
-        return data, samples
-
-    def differentiable_loss(self, model, guide, *args, **kwargs):
-        data, samples = self._get_traces()
-
-        # Compute mean average error and generalized entropy.
-        squared_error = 0  # E[ (X - x)^2 ]
-        squared_entropy = 0  # E[ (X - X')^2 ]
+        # Compute crps from mean average error and generalized entropy.
+        squared_error = []  # E[ (X - x)^2 ]
+        squared_entropy = []  # E[ (X - X')^2 ]
         prototype = next(iter(data.values()))
-        i = prototype.new_ones(self.num_particles, self.num_particles).tril(-1).nonzero()
+        pairs = prototype.new_ones(self.num_particles, self.num_particles).tril(-1).nonzero()
         for name, obs in data.items():
-            obs = obs.reshape(-1)
-            sample = samples[name].reshape(self.num_samples, -1)
-            squared_error = squared_error + (sample - obs).pow(2).sum(-1)
-            x, y = sample[i].unbind(0)
-            squared_entropy = squared_entropy + (x - y).pow(2).sum(-1)
+            sample = samples[name]
+            scale = obs_trace.nodes["scale"]
+            mask = obs_trace.nodes["mask"]
 
+            # Flatten.
+            batch_shape = obs.shape[:obs.dim() - obs_trace.nodes[name]["fn"].event_dim]
+            if isinstance(scale, torch.Tensor):
+                scale = scale.expand_as(batch_shape).reshape(-1)
+            if isinstance(mask, torch.Tensor):
+                mask = mask.expand_as(batch_shape).reshape(-1)
+            obs = obs.reshape(-1)
+            sample = sample.reshape(self.num_samples, -1)
+
+            squared_error.append(_squared_error(sample, obs, scale, mask))
+            squared_entropy.append(_squared_error(*sample[pairs], scale, mask))
+
+        squared_error = reduce(operator.add, squared_error)
+        squared_entropy = reduce(operator.add, squared_entropy)
         error = squared_error.sqrt().mean()  # E[ |X-x| ]
         entropy = squared_entropy.sqrt().mean()  # E[ |X-X'| ]
-        loss = error - 0.5 * entropy
-        return loss
+        crps = error - 0.5 * entropy
 
-    @torch.no_grad()
-    def loss(self, model, guide, *args, **kwargs):
-        """
-        :returns: returns an estimate of the CRPS
-        :rtype: float
+        # Compute log p(z).
+        logp = 0
+        if self.kl_scale > 0:
+            for site in obs_trace.nodes.values():
+                if "log_prob" in site:
+                    logp = logp + site["log_prob"]
 
-        Evaluates the CRPS with an estimator that uses num_particles many samples/particles.
-        """
-        loss = self.differentiable_loss(model, guide, *args, **kwargs)
-        return torch_item(loss)
-
-    def loss_and_grads(self, model, guide, *args, **kwargs):
-        """
-        :returns: returns an estimate of the CRPS
-        :rtype: float
-
-        Computes the CRPS as well as the surrogate CRPS that is used to form the gradient estimator.
-        Performs backward on the latter. Num_particle many samples are used to form the estimators.
-        """
-        loss = self.differentiable_loss(model, guide, *args, **kwargs)
+        # Compute final loss.
+        loss = crps - logp
         warn_if_nan(loss, "loss")
-        loss.backward()
-        return torch_item(loss)
+        return loss
