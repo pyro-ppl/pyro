@@ -54,8 +54,8 @@ class Trace_CRPS:
         guide_trace = tr.trace
 
         # Trace the model, saving obs in tr2 and posterior predictives in tr1.
-        with poutine.trace() as tr, vectorize, poutine.uncondition():
-            with poutine.replay(trace=guide_trace):
+        with poutine.trace() as tr, poutine.uncondition():
+            with poutine.replay(trace=guide_trace), vectorize:
                 model(*args, **kwargs)
         model_trace = tr.trace
         for site in model_trace.nodes.values():
@@ -67,17 +67,22 @@ class Trace_CRPS:
 
         guide_trace = prune_subsample_sites(guide_trace)
         model_trace = prune_subsample_sites(model_trace)
-        model_trace.compute_log_prob(site_filter=lambda name, site:
-                                     not site["is_observed"] and site["mask"] is not False)
+        guide_trace.compute_log_prob()
+        model_trace.compute_log_prob(site_filter=lambda name, site: not site["is_observed"])
 
         if is_validation_enabled():
             for site in guide_trace.nodes.values():
                 if site["type"] == "sample":
-                    if not getattr(site["fn"], "has_rsample", False):
-                        raise ValueError("Trace_CRPS only supports fully reparametrized guides")
-            for trace in model_trace.nodes.values():
-                if site["type"] == "sample" and "log_prob" in site:
                     check_site_shape(site, self.max_plate_nesting)
+                    if not getattr(site["fn"], "has_rsample", False):
+                        raise ValueError("Trace_CRPS requires fully reparametrized guides")
+            for trace in model_trace.nodes.values():
+                if site["type"] == "sample":
+                    if site["is_observed"]:
+                        if not getattr(site["fn"], "has_rsample", False):
+                            raise ValueError("Trace_CRPS requires reparametrized likelihoods")
+                    else:
+                        check_site_shape(site, self.max_plate_nesting)
 
         return guide_trace, model_trace
 
@@ -123,14 +128,17 @@ class Trace_CRPS:
         entropy = squared_entropy.sqrt().mean()  # E[ |X-X'| ]
         crps = error - 0.5 * entropy
 
-        # Compute log p(z).
-        logp = 0
+        # Compute KL(guide||model).
+        kl_qp = 0
         for site in model_trace.nodes.values():
-            if site["type"] == "sample" and "log_prob_sum" in site:
-                logp = logp + site["log_prob_sum"]
+            if site["type"] == "sample" and not site["is_observed"]:
+                kl_qp = kl_qp + site["log_prob_sum"]
+        for site in guide_trace.nodes.values():
+            if site["type"] == "sample":
+                kl_qp = kl_qp - site["log_prob_sum"]
 
         # Compute final loss.
-        loss = crps - logp
+        loss = crps - kl_qp
         warn_if_nan(loss, "loss")
         return loss
 
