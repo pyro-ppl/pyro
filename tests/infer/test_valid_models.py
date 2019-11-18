@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
+from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO, Trace_CRPS,
                         config_enumerate)
 from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
@@ -19,6 +19,12 @@ from tests.common import assert_close
 logger = logging.getLogger(__name__)
 
 # This file tests a variety of model,guide pairs with valid and invalid structure.
+
+
+# Testing helper to adapt kwargs.
+def Trace_CRPS_(**kwargs):
+    kwargs.pop("strict_enumeration_warning", None)
+    return Trace_CRPS(**kwargs)
 
 
 def assert_ok(model, guide, elbo, **kwargs):
@@ -72,7 +78,7 @@ def assert_warning(model, guide, elbo):
             logger.info(warning)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, Trace_CRPS_])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
@@ -1763,7 +1769,7 @@ def test_markov_history(history):
         assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
-def test_mean_field_ok():
+def test_mean_field_ok(Elbo):
 
     def model():
         x = pyro.sample("x", dist.Normal(0., 1.))
@@ -1847,3 +1853,49 @@ def test_tail_adaptive_warning():
         pyro.sample("x", dist.Normal(0., 2.))
 
     assert_warning(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=1))
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO, Trace_CRPS])
+def test_reparam_ok(Elbo):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.Normal(x, 1.), obs=torch.tensor(0.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        pyro.sample("x", dist.Normal(loc, 1.))
+
+    assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("mask", [True, False, torch.tensor(True), torch.tensor(False)])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO, Trace_CRPS])
+def test_reparam_mask_ok(Elbo, mask):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with poutine.mask(mask=mask):
+            pyro.sample("y", dist.Normal(x, 1.), obs=torch.tensor(0.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        pyro.sample("x", dist.Normal(loc, 1.))
+
+    assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("scale", [1, 0.1, torch.tensor(0.5)])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO, Trace_CRPS])
+def test_reparam_scale_ok(Elbo, scale):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with poutine.scale(scale=scale):
+            pyro.sample("y", dist.Normal(x, 1.), obs=torch.tensor(0.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        pyro.sample("x", dist.Normal(loc, 1.))
+
+    assert_ok(model, guide, Elbo())
