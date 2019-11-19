@@ -613,7 +613,7 @@ class SafetyTests(TestCase):
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.parametrize("kl_scale", [0, 1e-4])
-def test_crps(kl_scale):
+def test_crps_univariate(kl_scale):
 
     def model(data):
         loc = pyro.sample("loc", dist.Normal(0, 100))
@@ -647,3 +647,35 @@ def test_crps(kl_scale):
     actual_scale = pyro.param("log_scale_loc").exp().detach()
     assert_close(actual_loc, expected_loc, atol=0.05)
     assert_close(actual_scale, expected_scale, rtol=0.1 if kl_scale else 0.05)
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.parametrize("kl_scale", [0, 1e-4])
+def test_crps_multivariate(kl_scale):
+
+    def model(data):
+        loc = torch.zeros(2)
+        cov = pyro.sample("cov", dist.Normal(0, 100).expand([2, 2]).to_event(2))
+        with pyro.plate("data", len(data)):
+            pyro.sample("obs", dist.MultivariateNormal(loc, cov), obs=data)
+
+    def guide(data):
+        scale_tril = pyro.param("scale_tril", torch.eye(2),
+                                constraint=constraints.lower_cholesky)
+        pyro.sample("cov", dist.Delta(scale_tril @ scale_tril.t(), event_dim=2))
+
+    cov = torch.tensor([[1, 0.8], [0.8, 1]])
+    data = dist.MultivariateNormal(torch.zeros(2), cov).sample([10])
+    svi = SVI(model, guide,
+              optim.Adam({"lr": 0.1}),
+              Trace_CRPS(num_particles=32, kl_scale=kl_scale))
+    for step in range(2001):
+        loss = svi.step(data)
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+    delta = data - data.mean(0)
+    expected_cov = (delta.t() @ delta) / len(data)
+    scale_tril = pyro.param("scale_tril").detach()
+    actual_cov = scale_tril @ scale_tril.t()
+    assert_close(actual_cov, expected_cov, atol=0.2)
