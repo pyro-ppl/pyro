@@ -114,15 +114,13 @@ class ReweightedWakeSleep(ELBO):
                 log_joint = 0.
                 log_q = 0.
 
-                for name, site in model_trace.nodes.items():
+                for _, site in model_trace.nodes.items():
                     if site["type"] == "sample":
-                        log_p_site = site["log_prob"]
-                        log_joint = log_joint + log_p_site
+                        log_joint = log_joint + site["log_prob"]
 
-                for name, site in guide_trace.nodes.items():
+                for _, site in guide_trace.nodes.items():
                     if site["type"] == "sample":
-                        log_q_site = site["log_prob"]
-                        log_q = log_q + log_q_site
+                        log_q = log_q + site["log_prob"]
 
                 log_joints.append(log_joint)
                 log_qs.append(log_q)
@@ -147,23 +145,17 @@ class ReweightedWakeSleep(ELBO):
             _model = pyro.poutine.uncondition(model)
             _guide = guide
             _log_q = 0.
-            should_vectorize = self.vectorize_particles and self.num_sleep_particles > 1
-            if should_vectorize:
-                old_num_particles = self.num_particles
-                self.num_particles = self.num_sleep_particles
+
+            if self.vectorize_particles:
                 if self.max_plate_nesting == float('inf'):
                     self._guess_max_plate_nesting(_model, _guide, *args, **kwargs)
-                _model = self._vectorized_num_particles(_model)
-                _guide = self._vectorized_num_particles(guide)
-            for _ in range(1 if should_vectorize else self.num_sleep_particles):
-                _model_trace = poutine.trace(_model).get_trace(*args, **kwargs)
-                for site in _model_trace.nodes.values():
-                    if site["type"] == "sample":
-                        site["value"] = site["value"].detach()
+                _model = self._vectorized_num_sleep_particles(_model)
+                _guide = self._vectorized_num_sleep_particles(guide)
+
+            for _ in range(1 if self.vectorize_particles else self.num_sleep_particles):
+                _model_trace = poutine.trace(_model).get_trace(*args, **kwargs).detach()
                 _guide_trace = self._get_matched_trace(_model_trace, _guide, *args, **kwargs)
                 _log_q += _guide_trace.log_prob_sum()
-            if should_vectorize:
-                self.num_particles = old_num_particles
 
             sleep_phi_loss = -_log_q / self.num_sleep_particles
             warn_if_nan(sleep_phi_loss, "sleep phi loss")
@@ -205,6 +197,18 @@ class ReweightedWakeSleep(ELBO):
 
         return wake_theta_loss.detach(), phi_loss.detach()
 
+    def _vectorized_num_sleep_particles(self, fn):
+        """
+        Copy of `_vectorised_num_particles` that uses `num_sleep_particles`.
+        """
+        def wrapped_fn(*args, **kwargs):
+            if self.num_sleep_particles == 1:
+                return fn(*args, **kwargs)
+            with pyro.plate("num_sleep_particles_vectorized", self.num_sleep_particles, dim=-self.max_plate_nesting):
+                return fn(*args, **kwargs)
+
+        return wrapped_fn
+
     @staticmethod
     def _get_matched_trace(model_trace, guide, *args, **kwargs):
         # TODO: hardcoded kwarg 'observations'?
@@ -217,4 +221,5 @@ class ReweightedWakeSleep(ELBO):
         guide_trace = poutine.trace(poutine.replay(guide, model_trace)).get_trace(*args, **kwargs)
         check_model_guide_match(model_trace, guide_trace)
         guide_trace = prune_subsample_sites(guide_trace)
+
         return guide_trace

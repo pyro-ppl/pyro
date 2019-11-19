@@ -67,13 +67,7 @@ def get_importance_trace_detached(graph_type, max_plate_nesting, model, guide, *
     against it. Detaches all samples from the guide.
     """
 
-    guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
-
-    # RWS: detaching happens here
-    for site in guide_trace.nodes.values():
-        if site["type"] == "sample":
-            site["value"] = site["value"].detach()
-
+    guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs).detach()
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
     if is_validation_enabled():
