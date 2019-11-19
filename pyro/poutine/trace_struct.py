@@ -252,6 +252,15 @@ class Trace(object):
                     warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
                     warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
 
+    def detach(self):
+        """
+        Detach values (in-place) at each sample site of the trace.
+        """
+        for _, site in self.nodes.items():
+            if site["type"] == "sample":
+                site["value"].detach_()
+        return self
+
     @property
     def observation_nodes(self):
         """
