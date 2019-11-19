@@ -4,6 +4,7 @@ from collections import defaultdict
 
 import pytest
 import torch
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -1907,6 +1908,37 @@ def test_reparam_mask_ok(Elbo, mask):
     assert_ok(model, guide, Elbo())
 
 
+@pytest.mark.parametrize("mask", [
+    True,
+    False,
+    torch.tensor(True),
+    torch.tensor(False),
+    torch.tensor([False, True]),
+])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceMeanField_ELBO,
+    Trace_CRPS_kl,
+    Trace_CRPS_nokl,
+])
+def test_reparam_mask_plate_ok(Elbo, mask):
+    data = torch.randn(2, 3).exp()
+    data /= data.sum(-1, keepdim=True)
+
+    def model():
+        c = pyro.sample("c", dist.LogNormal(0., 1.).expand([3]).to_event(1))
+        with pyro.plate("data", len(data)), poutine.mask(mask=mask):
+            pyro.sample("obs", dist.Dirichlet(c), obs=data)
+
+    def guide():
+        loc = pyro.param("loc", torch.zeros(3))
+        scale = pyro.param("scale", torch.ones(3),
+                           constraint=constraints.positive)
+        pyro.sample("c", dist.LogNormal(loc, scale).to_event(1))
+
+    assert_ok(model, guide, Elbo())
+
+
 @pytest.mark.parametrize("scale", [1, 0.1, torch.tensor(0.5)])
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
@@ -1924,5 +1956,35 @@ def test_reparam_scale_ok(Elbo, scale):
     def guide():
         loc = pyro.param("loc", torch.tensor(0.))
         pyro.sample("x", dist.Normal(loc, 1.))
+
+    assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("scale", [
+    1,
+    0.1,
+    torch.tensor(0.5),
+    torch.tensor([0.1, 0.9]),
+])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceMeanField_ELBO,
+    Trace_CRPS_kl,
+    Trace_CRPS_nokl,
+])
+def test_reparam_scale_plate_ok(Elbo, scale):
+    data = torch.randn(2, 3).exp()
+    data /= data.sum(-1, keepdim=True)
+
+    def model():
+        c = pyro.sample("c", dist.LogNormal(0., 1.).expand([3]).to_event(1))
+        with pyro.plate("data", len(data)), poutine.scale(scale=scale):
+            pyro.sample("obs", dist.Dirichlet(c), obs=data)
+
+    def guide():
+        loc = pyro.param("loc", torch.zeros(3))
+        scale = pyro.param("scale", torch.ones(3),
+                           constraint=constraints.positive)
+        pyro.sample("c", dist.LogNormal(loc, scale).to_event(1))
 
     assert_ok(model, guide, Elbo())
