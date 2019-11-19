@@ -25,7 +25,8 @@ def _squared_error(x, y, scale, mask):
 
 class Trace_CRPS:
     """
-    Posterior predictive CRPS loss with optional ``KL(q,p)`` regularization.
+    Posterior predictive CRPS or energy loss [1] with optional ``KL(q,p)``
+    regularization.
 
     This is a likelihood-free method, and can be used for likelihoods without
     tractible density functions. CRPS is a robust loss function, and is well
@@ -47,19 +48,45 @@ class Trace_CRPS:
         by running the (model,guide) pair once.
     :param float kl_scale: Nonnegative scale for ``KL(q,p)`` regularization.
         If zero (default), then log densities will not be computed.
+    :param float beta: Exponent ``beta`` from [1]. The loss function is
+        strictly proper for distributions with finite ``beta``-absolute moment
+        ``E[||X||^beta]``; thus for heavy tailed distributions, ``beta`` should
+        be small, e.g. for ``Cauchy`` distributions, ``beta<1`` is strictly
+        proper.  Defaults to 1. Must be in the open interval (0,2).
+    :param float tol: Small nonnegative number added to squared norms to
+        stabilize gradients. The loss function is strictly proper even for
+        large values of ``tol``.
     """
     def __init__(self,
                  num_particles=2,
                  max_plate_nesting=float('inf'),
-                 kl_scale=0.):
+                 kl_scale=0.,
+                 beta=1.,
+                 tol=0.1):
         if not (isinstance(num_particles, int) and num_particles >= 2):
             raise ValueError("Expected num_particles >= 2, actual {}".format(num_particles))
         if not (isinstance(kl_scale, (float, int)) and kl_scale >= 0):
             raise ValueError("Expected kl_scale >= 0, actual {}".format(kl_scale))
+        if not (isinstance(beta, (float, int)) and 0 < beta and beta < 2):
+            raise ValueError("Expected beta in (0,2), actual {}".format(beta))
+        if not (isinstance(tol, (float, int)) and 0 <= tol):
+            raise ValueError("Expected tol >= 0, actual {}".format(tol))
         self.num_particles = num_particles
         self.vectorize_particles = True
         self.max_plate_nesting = max_plate_nesting
         self.kl_scale = kl_scale
+        self.beta = beta
+        self.tol = tol
+
+    def _pow(self, x):
+        # Numerically stabilize to avoid nan grads near zero.
+        # By Thereom 5 of (Gneiting and Raftery 2007), the stabilized loss
+        # remains strictly proper even for large values of tol.
+        x = x.add(self.tol ** 2)
+
+        if self.beta == 1:
+            return x.sqrt()  # cheaper than .pow()
+        return x.pow(self.beta / 2)
 
     def _get_traces(self, model, guide, *args, **kwargs):
         if self.max_plate_nesting == float("inf"):
@@ -89,11 +116,13 @@ class Trace_CRPS:
         if is_validation_enabled():
             for site in guide_trace.nodes.values():
                 if site["type"] == "sample":
+                    warn_if_nan(site["value"], site["name"])
                     if not getattr(site["fn"], "has_rsample", False):
                         raise ValueError("Trace_CRPS requires fully reparametrized guides")
             for trace in model_trace.nodes.values():
                 if site["type"] == "sample":
                     if site["is_observed"]:
+                        warn_if_nan(site["value"], site["name"])
                         if not getattr(site["fn"], "has_rsample", False):
                             raise ValueError("Trace_CRPS requires reparametrized likelihoods")
 
@@ -155,8 +184,8 @@ class Trace_CRPS:
 
         squared_error = reduce(operator.add, squared_error)
         squared_entropy = reduce(operator.add, squared_entropy)
-        error = squared_error.sqrt().mean()  # E[ |X-x| ]
-        entropy = squared_entropy.sqrt().mean()  # E[ |X-X'| ]
+        error = self._pow(squared_error).mean()  # E[ ||X-x||^beta ]
+        entropy = self._pow(squared_entropy).mean()  # E[ ||X-X'||^beta ]
         crps = error - 0.5 * entropy
 
         # Compute KL(guide,model).
