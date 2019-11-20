@@ -36,6 +36,8 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
 
     qs = [q.unconstrained() for q in qs]
 
+    data = (torch.rand(4, 3) > 0.5).to(dtype=qs[-1].dtype, device=qs[-1].device)
+
     def model():
         x = pyro.sample("x0", dist.Categorical(pyro.param("q0")))
         with pyro.plate("local", 3):
@@ -44,7 +46,7 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
                                 dist.Categorical(pyro.param("q{}".format(i))[..., x, :]))
             with pyro.plate("data", 4):
                 pyro.sample("y", dist.Bernoulli(pyro.param("qy")[..., x]),
-                            obs=torch.ones(4, 3))
+                            obs=data)
 
     elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
     enum_model = config_enumerate(model, default="parallel", expand=False, num_samples=None)
