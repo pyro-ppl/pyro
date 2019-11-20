@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
 @pytest.mark.parametrize("num_samples", [None, 1000])
-@pytest.mark.parametrize("max_plate_nesting", [0, 1])
+@pytest.mark.parametrize("max_plate_nesting", [2, 3])
 def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
     pyro.clear_param_store()
     qs = [pyro.param("q0", torch.tensor([0.4, 0.6], requires_grad=True))]
@@ -38,11 +38,13 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
 
     def model():
         x = pyro.sample("x0", dist.Categorical(pyro.param("q0")))
-        for i in range(1, depth):
-            x = pyro.sample("x{}".format(i),
-                            dist.Categorical(pyro.param("q{}".format(i))[..., x, :]))
-        pyro.sample("y", dist.Bernoulli(pyro.param("qy")[..., x]),
-                    obs=torch.tensor(float(1)))
+        with pyro.plate("local", 3):
+            for i in range(1, depth):
+                x = pyro.sample("x{}".format(i),
+                                dist.Categorical(pyro.param("q{}".format(i))[..., x, :]))
+            with pyro.plate("data", 4):
+                pyro.sample("y", dist.Bernoulli(pyro.param("qy")[..., x]),
+                            obs=torch.ones(4, 3))
 
     elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
     enum_model = config_enumerate(model, default="parallel", expand=False, num_samples=None)
