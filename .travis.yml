@@ -4,9 +4,13 @@ sudo: true
 
 env:
     global:
+        - COVERALLS_PARALLEL=true
         - PYTHONPATH=$PWD:$PYTHONPATH
         - CXX="g++-8"
         - CC="gcc-8"
+
+notifications:
+    webhooks: https://coveralls.io/webhook
 
 addons:
     apt:
@@ -82,4 +86,5 @@ jobs:
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
 
 after_success:
-          - coveralls
+    - coverage combine
+    - coveralls
