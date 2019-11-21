@@ -37,18 +37,25 @@ RADIUS = 0.01
 
 
 def _standard_stable(shape, alpha, beta):
-    # Avoids the hole at alpha=0 by interpololating between evenly-weighted
-    # antithetic pairs each of which is at least RADIUS away from zero.
+    # Avoids the hole at alpha=0 by interpolating between pairs
+    # of points at -RADIUS and +RADIUS.
     shape_ = shape + (1,)
+    beta_ = beta.unsqueeze(-1)
     alpha_ = alpha.unsqueeze(-1).expand(alpha.shape + (2,)).contiguous()
     with torch.no_grad():
         near_zero = alpha.data.abs() <= RADIUS
         lower, upper = alpha_.unbind(-1)
-        lower.data[near_zero] -= RADIUS
-        upper.data[near_zero] += RADIUS
-    beta_ = beta.unsqueeze(-1)
-    result = _unsafe_standard_stable(shape_, alpha_, beta_)
-    return result.mean(-1)
+        lower.data[near_zero] = -RADIUS
+        upper.data[near_zero] = RADIUS
+        # We don't need to backprop through weights, since we've pretended
+        # alpha_ is reparametrized, even though we've clamped some values.
+        #               |a - a'|
+        # weight = 1 - ----------
+        #              2 * RADIUS
+        weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
+        weights[~near_zero] = 0.5
+    pairs = _unsafe_standard_stable(shape_, alpha_, beta_)
+    return (pairs * weights).sum(-1)
 
 
 class Stable(TorchDistribution):
