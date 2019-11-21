@@ -8,7 +8,7 @@ import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import scale_and_mask
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import is_validation_enabled
+from pyro.infer.util import is_validation_enabled, validation_enabled
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
 
@@ -78,8 +78,9 @@ class Trace_CRPS:
 
     def _get_traces(self, model, guide, *args, **kwargs):
         if self.max_plate_nesting == float("inf"):
-            # TODO factor this out as a stand-alone helper.
-            ELBO._guess_max_plate_nesting(self, model, guide, *args, **kwargs)
+            with validation_enabled(False):  # Avoid calling .log_prob() when undefined.
+                # TODO factor this out as a stand-alone helper.
+                ELBO._guess_max_plate_nesting(self, model, guide, *args, **kwargs)
         vectorize = pyro.plate("num_particles_vectorized", self.num_particles,
                                dim=-self.max_plate_nesting)
 

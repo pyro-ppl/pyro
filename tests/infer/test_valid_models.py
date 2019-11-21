@@ -1988,3 +1988,27 @@ def test_reparam_scale_plate_ok(Elbo, scale):
         pyro.sample("c", dist.LogNormal(loc, scale).to_event(1))
 
     assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("Elbo", [
+    Trace_CRPS_kl,
+    Trace_CRPS_nokl,
+])
+def test_no_log_prob_ok(Elbo):
+
+    def model(data):
+        loc = pyro.sample("loc", dist.Normal(0, 1))
+        scale = pyro.sample("scale", dist.LogNormal(0, 1))
+        with pyro.plate("data", len(data)):
+            pyro.sample("obs", dist.Stable(1.5, 0.5, scale, loc),
+                        obs=data)
+
+    def guide(data):
+        map_loc = pyro.param("map_loc", torch.tensor(0.))
+        map_scale = pyro.param("map_scale", torch.tensor(1.),
+                               constraint=constraints.positive)
+        pyro.sample("loc", dist.Delta(map_loc))
+        pyro.sample("scale", dist.Delta(map_scale))
+
+    data = torch.randn(10)
+    assert_ok(model, guide, Elbo(), data=data)
