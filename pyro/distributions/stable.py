@@ -28,7 +28,7 @@ def _unsafe_standard_stable(shape, alpha, beta):
 
     # Convert to Nolan's parametrization S^0 so that samples depend
     # continuously on (alpha,beta), allowing us to interpolate around the hole
-    # at alpha=0.
+    # at alpha=1.
     X = Z - b
     return X
 
@@ -37,16 +37,16 @@ RADIUS = 0.01
 
 
 def _standard_stable(shape, alpha, beta):
-    # Avoids the hole at alpha=0 by interpolating between pairs
+    # Avoids the hole at alpha=1 by interpolating between pairs
     # of points at -RADIUS and +RADIUS.
     shape_ = shape + (1,)
     beta_ = beta.unsqueeze(-1)
     alpha_ = alpha.unsqueeze(-1).expand(alpha.shape + (2,)).contiguous()
     with torch.no_grad():
-        near_zero = alpha.data.abs() <= RADIUS
+        near_zero = alpha.data.sub(1).abs() <= RADIUS
         lower, upper = alpha_.unbind(-1)
-        lower.data[near_zero] = -RADIUS
-        upper.data[near_zero] = RADIUS
+        lower.data[near_zero] = 1 - RADIUS
+        upper.data[near_zero] = 1 + RADIUS
         # We don't need to backprop through weights, since we've pretended
         # alpha_ is reparametrized, even though we've clamped some values.
         #               |a - a'|
