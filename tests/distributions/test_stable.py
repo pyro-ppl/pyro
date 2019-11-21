@@ -34,8 +34,8 @@ def test_sample(alpha, beta):
     d = dist.Stable(alpha, beta)
 
     def sampler(size):
-        # Temporarily increas radius to test hole-patching logic.
-        # Scipy doesn't handle values too close to 1.
+        # Temporarily increase radius to test hole-patching logic.
+        # Scipy doesn't handle values of alpha very close to 1.
         try:
             old = pyro.distributions.stable.RADIUS
             pyro.distributions.stable.RADIUS = 0.02

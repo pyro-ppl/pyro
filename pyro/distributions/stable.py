@@ -21,10 +21,9 @@ def _unsafe_standard_stable(shape, alpha, beta):
     # Differentiably transform noise via parameters.
     inv_alpha = alpha.reciprocal()
     b = beta * (half_pi * alpha).tan()
-    atan_b = b.atan()
-    Z = (atan_b + alpha * V).sin() \
-        / (atan_b.cos() * V.cos()).pow(inv_alpha) \
-        * ((atan_b + (alpha - 1) * V).cos() / W).pow(inv_alpha - 1)
+    v = b.atan() + alpha * V
+    Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
+        * ((v - V).cos() / W).pow(inv_alpha - 1)
 
     # Convert to Nolan's parametrization S^0 so that samples depend
     # continuously on (alpha,beta), allowing us to interpolate around the hole
