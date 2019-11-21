@@ -38,7 +38,7 @@ RADIUS = 0.01
 
 def _standard_stable(shape, alpha, beta):
     # Avoids the hole at alpha=1 by interpolating between pairs
-    # of points at -RADIUS and +RADIUS.
+    # of points at hole-RADIUS and hole+RADIUS.
     shape_ = shape + (1,)
     beta_ = beta.unsqueeze(-1)
     alpha_ = alpha.unsqueeze(-1).expand(alpha.shape + (2,)).contiguous()
@@ -97,6 +97,7 @@ class Stable(TorchDistribution):
                        "skew": constraints.interval(-1, 1),  # closed [-1, 1]
                        "scale": constraints.positive,
                        "loc": constraints.real}
+    support = constraints.real
 
     def __init__(self, stability, skew, scale=1.0, loc=0.0, validate_args=None):
         self.stability, self.skew, self.scale, self.loc = broadcast_all(
