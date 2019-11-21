@@ -183,7 +183,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.5.1')
+    assert pyro.__version__.startswith('1.0.0')
     parser = argparse.ArgumentParser(description="Causal Effect Variational Autoencoder")
     parser.add_argument("--latent-dim", default=20, type=int)
     parser.add_argument("-n", "--num-epochs", default=1000, type=int)
