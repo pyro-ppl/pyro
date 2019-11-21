@@ -37,14 +37,18 @@ RADIUS = 0.01
 
 
 def _standard_stable(shape, alpha, beta):
-    # Avoids the hole at alpha=1 by interpolating between pairs
+    with torch.no_grad():
+        hole = 1.
+        near_hole = (alpha - hole).abs() <= RADIUS
+    if not torch._C._get_tracing_state() and not near_hole.any():
+        return _unsafe_standard_stable(shape, alpha, beta)
+
+    # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
     shape_ = shape + (1,)
     beta_ = beta.unsqueeze(-1)
     alpha_ = alpha.unsqueeze(-1).expand(alpha.shape + (2,)).contiguous()
     with torch.no_grad():
-        hole = 1.
-        near_hole = (alpha - hole).abs() <= RADIUS
         lower, upper = alpha_.unbind(-1)
         lower.data[near_hole] = hole - RADIUS
         upper.data[near_hole] = hole + RADIUS

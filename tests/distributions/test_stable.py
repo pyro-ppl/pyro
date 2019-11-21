@@ -7,6 +7,7 @@ from scipy.integrate.quadpack import IntegrationWarning
 from scipy.stats import kstest, levy_stable
 
 import pyro.distributions as dist
+import pyro.distributions.stable
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)])
@@ -26,16 +27,22 @@ def test_shape(sample_shape, batch_shape):
     x.sum().backward()
 
 
-@pytest.mark.parametrize("beta", [-0.6, -0.3, 0.0, 0.3, 0.6])
-@pytest.mark.parametrize("alpha", [0.2, 0.5, 0.8, 0.99, 1.0, 1.01, 1.2, 1.5, 1.8])
+@pytest.mark.parametrize("beta", [-1.0, -0.5, 0.0, 0.5, 1.0])
+@pytest.mark.parametrize("alpha", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
 def test_sample(alpha, beta):
-    num_samples = 64
+    num_samples = 100
     d = dist.Stable(alpha, beta)
-    levy_stable.pdf_default_method = "zolotarev"
-    levy_stable.pdf_fft_n_points_two_power = 16
 
     def sampler(size):
-        x = d.sample([size])
+        # Temporarily increas radius to test hole-patching logic.
+        # Scipy doesn't handle values too close to 1.
+        try:
+            old = pyro.distributions.stable.RADIUS
+            pyro.distributions.stable.RADIUS = 0.02
+            x = d.sample([size])
+        finally:
+            pyro.distributions.stable.RADIUS = old
+
         # Convert from Nolan's parametrization S^0 to scipy parametrization S.
         if alpha == 1:
             z = x
