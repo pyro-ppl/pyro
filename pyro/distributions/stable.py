@@ -10,7 +10,7 @@ from pyro.distributions.torch_distribution import TorchDistribution
 def _unsafe_standard_stable(shape, alpha, beta):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
-    # by Nolan [4]. This will fail if alpha is close to zero.
+    # by Nolan [4]. This will fail if alpha is close to 1.
 
     # Draw parameter-free noise.
     with torch.no_grad():
@@ -43,17 +43,18 @@ def _standard_stable(shape, alpha, beta):
     beta_ = beta.unsqueeze(-1)
     alpha_ = alpha.unsqueeze(-1).expand(alpha.shape + (2,)).contiguous()
     with torch.no_grad():
-        near_zero = alpha.data.sub(1).abs() <= RADIUS
+        hole = 1.
+        near_hole = (alpha - hole).abs() <= RADIUS
         lower, upper = alpha_.unbind(-1)
-        lower.data[near_zero] = 1 - RADIUS
-        upper.data[near_zero] = 1 + RADIUS
+        lower.data[near_hole] = hole - RADIUS
+        upper.data[near_hole] = hole + RADIUS
         # We don't need to backprop through weights, since we've pretended
         # alpha_ is reparametrized, even though we've clamped some values.
         #               |a - a'|
         # weight = 1 - ----------
         #              2 * RADIUS
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
-        weights[~near_zero] = 0.5
+        weights[~near_hole] = 0.5
     pairs = _unsafe_standard_stable(shape_, alpha_, beta_)
     return (pairs * weights).sum(-1)
 
