@@ -52,38 +52,26 @@ class Trace_CRPS:
         strictly proper for distributions with finite ``beta``-absolute moment
         ``E[||X||^beta]``; thus for heavy tailed distributions, ``beta`` should
         be small, e.g. for ``Cauchy`` distributions, ``beta<1`` is strictly
-        proper.  Defaults to 1. Must be in the open interval (0,2).
-    :param float tol: Small nonnegative number added to squared norms to
-        stabilize gradients. The loss function is strictly proper even for
-        large values of ``tol``.
+        proper. Defaults to 1. Must be in the open interval (0,2).
     """
     def __init__(self,
                  num_particles=2,
                  max_plate_nesting=float('inf'),
                  kl_scale=0.,
-                 beta=1.,
-                 tol=0.1):
+                 beta=1.):
         if not (isinstance(num_particles, int) and num_particles >= 2):
             raise ValueError("Expected num_particles >= 2, actual {}".format(num_particles))
         if not (isinstance(kl_scale, (float, int)) and kl_scale >= 0):
             raise ValueError("Expected kl_scale >= 0, actual {}".format(kl_scale))
         if not (isinstance(beta, (float, int)) and 0 < beta and beta < 2):
             raise ValueError("Expected beta in (0,2), actual {}".format(beta))
-        if not (isinstance(tol, (float, int)) and 0 <= tol):
-            raise ValueError("Expected tol >= 0, actual {}".format(tol))
         self.num_particles = num_particles
         self.vectorize_particles = True
         self.max_plate_nesting = max_plate_nesting
         self.kl_scale = kl_scale
         self.beta = beta
-        self.tol = tol
 
     def _pow(self, x):
-        # Numerically stabilize to avoid nan grads near zero.
-        # By Thereom 5 of (Gneiting and Raftery 2007), the stabilized loss
-        # remains strictly proper even for large values of tol.
-        x = x.add(self.tol ** 2)
-
         if self.beta == 1:
             return x.sqrt()  # cheaper than .pow()
         return x.pow(self.beta / 2)
