@@ -29,6 +29,14 @@ SOURCE_FILES = [
 ]
 
 
+def _mkdir_p(dirname):
+    if not os.path.exists(dirname):
+        try:
+            os.makedirs(dirname)
+        except FileExistsError:
+            pass
+
+
 def _load_hourly_od(basename):
     filename = os.path.join(DATA, basename.replace(".csv.gz", ".pkl.gz"))
     if os.path.exists(filename):
@@ -36,8 +44,7 @@ def _load_hourly_od(basename):
             return torch.load(f)
 
     # Download source files.
-    if not os.path.exists(DATA):
-        os.makedirs(DATA)
+    _mkdir_p(DATA)
     gz_filename = os.path.join(DATA, basename)
     if not os.path.exists(gz_filename):
         url = SOURCE_DIR + basename
