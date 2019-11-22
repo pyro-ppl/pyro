@@ -27,7 +27,10 @@ def init_to_feasible(site):
     Initialize to an arbitrary feasible point, ignoring distribution
     parameters.
     """
-    value = site["fn"].sample().detach()
+    try:
+        value = site["fn"].sample().detach()
+    except NotImplementedError:
+        value = torch.zeros(site["fn"].shape())
     t = transform_to(site["fn"].support)
     return t(torch.zeros_like(t.inv(value)))
 
@@ -89,7 +92,7 @@ class InitMessenger(Messenger):
     """
     def __init__(self, init_fn):
         self.init_fn = init_fn
-        super(InitMessenger, self).__init__()
+        super().__init__()
 
     def _pyro_sample(self, msg):
         if msg["done"] or msg["is_observed"] or type(msg["fn"]).__name__ == "_Subsample":
