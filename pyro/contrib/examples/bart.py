@@ -1,7 +1,6 @@
 import argparse
 import csv
 import datetime
-import bz2
 import logging
 import multiprocessing
 import os
@@ -26,7 +25,6 @@ SOURCE_FILES = [
     "date-hour-soo-dest-2016.csv.gz",
     "date-hour-soo-dest-2017.csv.gz",
     "date-hour-soo-dest-2018.csv.gz",
-    "date-hour-soo-dest-2019.csv.gz",
 ]
 CACHE_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/bart_full.pkl.bz2"
 
@@ -94,7 +92,7 @@ def _load_hourly_od(basename):
 def load_bart_od(force=False):
     """
     Load a dataset of hourly origin-destination ridership counts for every pair
-    of BART stations during the years 2011-2019.
+    of BART stations during the years 2011-2018.
 
     **Source** https://www.bart.gov/about/reports/ridership
 
