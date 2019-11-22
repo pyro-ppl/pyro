@@ -32,6 +32,7 @@ Pyro Documentation
    contrib.autoname
    contrib.bnn
    contrib.easyguide
+   contrib.examples
    contrib.gp
    contrib.minipyro
    contrib.oed

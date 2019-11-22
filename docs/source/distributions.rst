@@ -210,6 +210,13 @@ SpanningTree
     :undoc-members:
     :show-inheritance:
 
+Stable
+------
+.. autoclass:: pyro.distributions.Stable
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit
