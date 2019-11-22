@@ -270,6 +270,12 @@ class PoissonGammaTests(TestCase):
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 12500, RenyiELBO(alpha=0.2, num_particles=2))
 
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 12500, ReweightedWakeSleep(num_particles=2))
+
     def test_mmd_vectorized(self):
         z_size = 1
         self.do_fit_prior_test(
@@ -372,6 +378,7 @@ class PoissonGammaTests(TestCase):
     TraceGraph_ELBO,
     TraceEnum_ELBO,
     RenyiELBO,
+    ReweightedWakeSleep
 ])
 @pytest.mark.parametrize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
@@ -405,6 +412,8 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
     if elbo_impl is RenyiELBO:
         elbo = elbo_impl(alpha=0.2, num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
+    elif elbo_impl is ReweightedWakeSleep:
+        elbo = elbo_impl(num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     else:
         elbo = elbo_impl(max_plate_nesting=1, strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo)
@@ -466,6 +475,20 @@ class BernoulliBetaTests(TestCase):
     def test_renyi_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
                                                  max_plate_nesting=1))
+
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_reparameterized_vectorized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2, vectorize_particles=True,
+                                                          max_plate_nesting=1))
+
+    def test_rws_nonreparameterized_vectorized(self):
+        self.do_elbo_test(False, 5000, ReweightedWakeSleep(num_particles=2, vectorize_particles=True,
+                                                           max_plate_nesting=1))
 
     def test_mmd_vectorized(self):
         z_size = 1
