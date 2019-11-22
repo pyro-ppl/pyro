@@ -258,7 +258,7 @@ class Trace(object):
         """
         for _, site in self.nodes.items():
             if site["type"] == "sample":
-                site["value"].detach_()
+                site["value"] = site["value"].detach()
         return self
 
     @property
