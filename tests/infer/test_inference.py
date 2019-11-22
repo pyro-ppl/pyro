@@ -13,7 +13,8 @@ from pyro.infer.util import torch_item
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO, Trace_MMD)
+                        TraceGraph_ELBO, RenyiELBO, ReweightedWakeSleep, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
+                        Trace_MMD)
 from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
 
 
@@ -64,6 +65,12 @@ class NormalNormalTests(TestCase):
 
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3))
+
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 2500, ReweightedWakeSleep(num_particles=3))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 7500, ReweightedWakeSleep(num_particles=3))
 
     def test_mmd_vectorized(self):
         z_size = self.loc0.shape[0]
