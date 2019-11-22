@@ -299,7 +299,11 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dataset", default="dipper", type=str)
     parser.add_argument("-n", "--num-steps", default=400, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
-    parser.add_argument("--tmc", action='store_true')
+    parser.add_argument("--tmc", action='store_true',
+                        help="Use Tensor Monte Carlo instead of exact enumeration " +
+                             "to estimate the marginal likelihood. You probably don't want to do this, " +
+                             "except to see that TMC makes Monte Carlo gradient estimation feasible " +
+                             "even with very large numbers of non-reparametrized variables.")
     parser.add_argument("--tmc-num-samples", default=10, type=int)
     args = parser.parse_args()
     main(args)
