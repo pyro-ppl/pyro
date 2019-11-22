@@ -89,7 +89,7 @@ def _load_hourly_od(basename):
     return filename
 
 
-def load_bart_od(force=False):
+def load_bart_od():
     """
     Load a dataset of hourly origin-destination ridership counts for every pair
     of BART stations during the years 2011-2018.
@@ -100,7 +100,6 @@ def load_bart_od(force=False):
     requiring about 300MB of file transfer and storing a few GB of temp files.
     On subsequent calls this reads from a cached ``.pkl.bz2``.
 
-    :param bool force: whether to force download and recomputation
     :returns: a dataset is a dictionary with fields:
 
         -   "stations": a list of strings of station names
@@ -170,10 +169,9 @@ def load_fake_od():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BART data preprocessor")
-    parser.add_argument("-f", "--force", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
     logging.basicConfig(format='%(relativeCreated) 9d %(message)s',
                         level=logging.DEBUG if args.verbose else logging.INFO)
-    load_bart_od(force=args.force)
+    load_bart_od()
