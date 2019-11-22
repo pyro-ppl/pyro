@@ -21,6 +21,8 @@ class ReweightedWakeSleep(ELBO):
 
     .. note:: This returns _two_ losses, one each for the model and the guide.
 
+    .. warning:: Mini-batch training is not supported yet.
+
     :param int num_particles: The number of particles/samples used to form the objective
         (gradient) estimator. Default is 2.
     :param insomnia: The scaling between the wake-phi and sleep-phi terms. Default is 1.0 [wake-phi]
@@ -114,11 +116,19 @@ class ReweightedWakeSleep(ELBO):
 
                 for _, site in model_trace.nodes.items():
                     if site["type"] == "sample":
-                        log_joint = log_joint + site["log_prob"]
+                        if self.vectorize_particles:
+                            log_p_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                        else:
+                            log_p_site = site["log_prob_sum"]
+                        log_joint = log_joint + log_p_site
 
                 for _, site in guide_trace.nodes.items():
                     if site["type"] == "sample":
-                        log_q = log_q + site["log_prob"]
+                        if self.vectorize_particles:
+                            log_q_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                        else:
+                            log_q_site = site["log_prob_sum"]
+                        log_q = log_q + log_q_site
 
                 log_joints.append(log_joint)
                 log_qs.append(log_q)
