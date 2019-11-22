@@ -1,8 +1,8 @@
 import torch
 from torch.distributions import constraints
-from torch.nn import Parameter
 
-from .kernel import Kernel
+from pyro.contrib.gp.kernels.kernel import Kernel
+from pyro.nn.module import PyroParam
 
 
 class DotProduct(Kernel):
@@ -14,8 +14,7 @@ class DotProduct(Kernel):
         super(DotProduct, self).__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
-        self.variance = Parameter(variance)
-        self.set_constraint("variance", constraints.positive)
+        self.variance = PyroParam(variance, constraints.positive)
 
     def _dot_product(self, X, Z=None, diag=False):
         r"""
@@ -69,8 +68,7 @@ class Polynomial(DotProduct):
         super(Polynomial, self).__init__(input_dim, variance, active_dims)
 
         bias = torch.tensor(1.) if bias is None else bias
-        self.bias = Parameter(bias)
-        self.set_constraint("bias", constraints.positive)
+        self.bias = PyroParam(bias, constraints.positive)
 
         if not isinstance(degree, int) or degree < 1:
             raise ValueError("Degree for Polynomial kernel should be a positive integer.")

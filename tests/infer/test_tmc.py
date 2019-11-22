@@ -1,6 +1,5 @@
 import logging
 import math
-import os
 
 import pytest
 import torch
@@ -15,21 +14,15 @@ from pyro.infer import config_enumerate
 from pyro.infer.importance import vectorized_importance_weights
 from pyro.infer.tmc import TensorMonteCarlo
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
-from tests.common import assert_equal, skipif_param
+from tests.common import assert_equal
 
 
 logger = logging.getLogger(__name__)
 
 
-def _skip_cuda(*args):
-    return skipif_param(*args,
-                        condition="CUDA_TEST" in os.environ,
-                        reason="https://github.com/uber/pyro/issues/1380")
-
-
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
 @pytest.mark.parametrize("num_samples", [None, 1000])
-@pytest.mark.parametrize("max_plate_nesting", [0, 1])
+@pytest.mark.parametrize("max_plate_nesting", [2, 3])
 def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
     pyro.clear_param_store()
     qs = [pyro.param("q0", torch.tensor([0.4, 0.6], requires_grad=True))]
@@ -43,13 +36,17 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
 
     qs = [q.unconstrained() for q in qs]
 
+    data = (torch.rand(4, 3) > 0.5).to(dtype=qs[-1].dtype, device=qs[-1].device)
+
     def model():
         x = pyro.sample("x0", dist.Categorical(pyro.param("q0")))
-        for i in range(1, depth):
-            x = pyro.sample("x{}".format(i),
-                            dist.Categorical(pyro.param("q{}".format(i))[..., x, :]))
-        pyro.sample("y", dist.Bernoulli(pyro.param("qy")[..., x]),
-                    obs=torch.tensor(float(1)))
+        with pyro.plate("local", 3):
+            for i in range(1, depth):
+                x = pyro.sample("x{}".format(i),
+                                dist.Categorical(pyro.param("q{}".format(i))[..., x, :]))
+            with pyro.plate("data", 4):
+                pyro.sample("y", dist.Bernoulli(pyro.param("qy")[..., x]),
+                            obs=data)
 
     elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
     enum_model = config_enumerate(model, default="parallel", expand=False, num_samples=None)
@@ -84,9 +81,8 @@ def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
     # compare iwae and tmc
     pyro.clear_param_store()
 
-    q1 = pyro.param("q1", torch.tensor(0.4, requires_grad=True))  # noqa: F841
     q2 = pyro.param("q2", torch.tensor(0.5, requires_grad=True))
-    qs = (q2.unconstrained(),)  # if guide_type == "prior" else (q1.unconstrained(), q2.unconstrained())
+    qs = (q2.unconstrained(),)
 
     def model(reparameterized):
         Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
@@ -149,9 +145,8 @@ def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expan
     # compare reparameterized and nonreparameterized gradient estimates
     pyro.clear_param_store()
 
-    q1 = pyro.param("q1", torch.tensor(0.5, requires_grad=True))  # noqa: F841
     q2 = pyro.param("q2", torch.tensor(0.5, requires_grad=True))
-    qs = (q2.unconstrained(),)  # if guide_type == "prior" else (q1.unconstrained(), q2.unconstrained())
+    qs = (q2.unconstrained(),)
 
     def model(reparameterized):
         Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal

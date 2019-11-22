@@ -4,7 +4,7 @@ import torch
 from tests.common import assert_equal
 import pyro
 from pyro.contrib.timeseries import (IndependentMaternGP, LinearlyCoupledMaternGP, GenericLGSSM,
-                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP, LinearlyCoupledDependentMaternGP)
+                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP)
 from pyro.ops.tensor_utils import block_diag_embed
 import pytest
 
@@ -15,7 +15,7 @@ import pytest
                                                        ('imgp', 1, 1.5), ('imgp', 3, 1.5),
                                                        ('imgp', 1, 2.5), ('imgp', 3, 2.5),
                                                        ('dmgp', 1, 1.5), ('dmgp', 2, 1.5),
-                                                       ('lcdgp', 1, 1.5), ('lcdgp', 3, 1.5),
+                                                       ('dmgp', 3, 1.5),
                                                        ('glgssm', 1, 3), ('glgssm', 3, 1)])
 @pytest.mark.parametrize('T', [11, 37])
 def test_timeseries_models(model, nu_statedim, obs_dim, T):
@@ -25,27 +25,25 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
     if model == 'lcmgp':
         num_gps = 2
         gp = LinearlyCoupledMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt, num_gps=num_gps,
-                                     log_length_scale_init=torch.randn(num_gps),
-                                     log_kernel_scale_init=torch.randn(num_gps),
-                                     log_obs_noise_scale_init=torch.randn(obs_dim))
+                                     length_scale_init=0.5 + torch.rand(num_gps),
+                                     kernel_scale_init=0.5 + torch.rand(num_gps),
+                                     obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'imgp':
         gp = IndependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
-                                 log_length_scale_init=torch.randn(obs_dim),
-                                 log_kernel_scale_init=torch.randn(obs_dim),
-                                 log_obs_noise_scale_init=torch.randn(obs_dim))
+                                 length_scale_init=0.5 + torch.rand(obs_dim),
+                                 kernel_scale_init=0.5 + torch.rand(obs_dim),
+                                 obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'glgssm':
         gp = GenericLGSSM(state_dim=nu_statedim, obs_dim=obs_dim,
-                          log_obs_noise_scale_init=torch.randn(obs_dim))
+                          obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'ssmgp':
         state_dim = {0.5: 4, 1.5: 3, 2.5: 2}[nu_statedim]
         gp = GenericLGSSMWithGPNoiseModel(nu=nu_statedim, state_dim=state_dim, obs_dim=obs_dim,
-                                          log_obs_noise_scale_init=torch.randn(obs_dim))
+                                          obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'dmgp':
-        gp = DependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
-                               log_length_scale_init=torch.randn(obs_dim))
-    elif model == 'lcdgp':
-        gp = LinearlyCoupledDependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
-                                              log_length_scale_init=torch.randn(obs_dim))
+        linearly_coupled = bool(torch.rand(1).item() > 0.5)
+        gp = DependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt, linearly_coupled=linearly_coupled,
+                               length_scale_init=0.5 + torch.rand(obs_dim))
 
     targets = torch.randn(T, obs_dim)
     gp_log_prob = gp.log_prob(targets)
@@ -58,15 +56,16 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
     if model == 'imgp':
         times = dt * torch.arange(T).double()
         for dim in range(obs_dim):
-            lengthscale = gp.kernel.log_length_scale.exp()[dim]
-            variance = (2.0 * gp.kernel.log_kernel_scale).exp()[dim]
-            obs_noise = (2.0 * gp.log_obs_noise_scale).exp()[dim]
+            lengthscale = gp.kernel.length_scale[dim]
+            variance = gp.kernel.kernel_scale.pow(2)[dim]
+            obs_noise = gp.obs_noise_scale.pow(2)[dim]
 
             kernel = {0.5: pyro.contrib.gp.kernels.Exponential,
                       1.5: pyro.contrib.gp.kernels.Matern32,
                       2.5: pyro.contrib.gp.kernels.Matern52}[nu_statedim]
             kernel = kernel(input_dim=1, lengthscale=lengthscale, variance=variance)
-            kernel = kernel(times) + obs_noise * torch.eye(T)
+            # XXX kernel(times) loads old parameters from param store
+            kernel = kernel.forward(times) + obs_noise * torch.eye(T)
 
             mvn = torch.distributions.MultivariateNormal(torch.zeros(T), kernel)
             mvn_log_prob = mvn.log_prob(targets[:, dim])
@@ -105,11 +104,11 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
 def test_dependent_matern_gp(obs_dim):
     dt = 0.5 + torch.rand(1).item()
     gp = DependentMaternGP(nu=1.5, obs_dim=obs_dim, dt=dt,
-                           log_length_scale_init=torch.randn(obs_dim))
+                           length_scale_init=0.5 + torch.rand(obs_dim))
 
     # make sure stationary covariance matrix satisfies the relevant
     # matrix riccati equation
-    lengthscale = gp.kernel.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
+    lengthscale = gp.kernel.length_scale.unsqueeze(-1).unsqueeze(-1)
     F = torch.tensor([[0.0, 1.0], [0.0, 0.0]])
     mask1 = torch.tensor([[0.0, 0.0], [-3.0, 0.0]])
     mask2 = torch.tensor([[0.0, 0.0], [0.0, -math.sqrt(12.0)]])

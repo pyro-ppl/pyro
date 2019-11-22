@@ -166,18 +166,16 @@ class Dice(object):
                 continue
 
             log_prob = site["packed"]["score_parts"].score_function  # not scaled by subsampling
-            if not isinstance(log_prob, torch.Tensor):
-                log_prob = torch.tensor(float(log_prob), device=site["value"].device)
             dims = getattr(log_prob, "_pyro_dims", "")
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
                 num_samples = site["infer"].get("num_samples")
-                if num_samples is not None and site["infer"]["enumerate"] == "parallel":  # site was multiply sampled
+                if num_samples is not None:  # site was multiply sampled
                     if not is_identically_zero(log_prob):
                         log_prob = log_prob - log_prob.detach()
-                    else:
-                        log_prob = torch.zeros_like(log_prob)
                     log_prob = log_prob - math.log(num_samples)
+                    if not isinstance(log_prob, torch.Tensor):
+                        log_prob = torch.tensor(float(log_prob), device=site["value"].device)
                     log_prob._pyro_dims = dims
                     # I don't know why the following broadcast is needed, but it makes tests pass:
                     log_prob, _ = packed.broadcast_all(log_prob, site["packed"]["log_prob"])

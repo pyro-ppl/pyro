@@ -2,15 +2,15 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
-from pyro.distributions.transforms.householder import HouseholderFlow
+from pyro.distributions.transforms.householder import Householder
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
-class SylvesterFlow(HouseholderFlow):
+class Sylvester(Householder):
     """
-    An implementation of Sylvester flow of the Householder variety (Van den Berg Et Al., 2018),
+    An implementation of the Sylvester bijective transform of the Householder variety (Van den Berg Et Al., 2018),
 
         :math:`\\mathbf{y} = \\mathbf{x} + QR\\tanh(SQ^T\\mathbf{x}+\\mathbf{b})`
 
@@ -18,24 +18,26 @@ class SylvesterFlow(HouseholderFlow):
     are upper triangular matrices for input dimension :math:`D`, :math:`Q\\sim D\\times D` is an orthogonal
     matrix, and :math:`\\mathbf{b}\\sim D` is learnable bias term.
 
-    Sylvester flow is a generalization of Planar flow. In the Householder type of Sylvester flow, the
-    orthogonality of :math:`Q` is enforced by representing it as the product of Householder transformations
+    The Sylvester transform is a generalization of :class:`~pyro.distributions.transforms.Planar`. In the
+    Householder type of the Sylvester transform, the orthogonality of :math:`Q` is enforced by representing it as
+    the product of Householder transformations.
 
-    Together with `TransformedDistribution` it provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` it provides a way to create richer
+    variational approximations.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> hsf = SylvesterFlow(10, count_transforms=4)
-    >>> pyro.module("my_hsf", hsf)  # doctest: +SKIP
-    >>> hsf_dist = dist.TransformedDistribution(base_dist, [hsf])
-    >>> hsf_dist.sample()  # doctest: +SKIP
+    >>> transform = Sylvester(10, count_transforms=4)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    Sylvester flow can be scored.
+    the Sylvester transform can be scored.
 
     References:
 
@@ -51,7 +53,7 @@ class SylvesterFlow(HouseholderFlow):
     event_dim = 1
 
     def __init__(self, input_dim, count_transforms=1):
-        super(SylvesterFlow, self).__init__(input_dim, count_transforms)
+        super(Sylvester, self).__init__(input_dim, count_transforms)
 
         # Create parameters for Sylvester transform
         self.R_dense = nn.Parameter(torch.Tensor(input_dim, input_dim))
@@ -101,8 +103,9 @@ class SylvesterFlow(HouseholderFlow):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         Q = self.Q(x)
         R = self.R()
@@ -126,11 +129,28 @@ class SylvesterFlow(HouseholderFlow):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("SylvesterFlow expected to find key in intermediates cache but didn't")
+        raise KeyError("Sylvester object expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
 
         return self._cached_logDetJ
+
+
+def sylvester(input_dim, count_transforms=None):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.Sylvester` object for consistency with
+    other helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param count_transforms: Number of Sylvester operations to apply. Defaults to input_dim // 2 + 1.
+    :type count_transforms: int
+
+    """
+
+    if count_transforms is None:
+        count_transforms = input_dim // 2 + 1
+    return Sylvester(input_dim, count_transforms=count_transforms)

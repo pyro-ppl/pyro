@@ -86,6 +86,7 @@ def test_module_sequential(nn_module):
 
 
 @pytest.mark.parametrize("nn_module", [outest, outer])
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_random_module(nn_module):
     pyro.clear_param_store()
     nn_module = nn_module()

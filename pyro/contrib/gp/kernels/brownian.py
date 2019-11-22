@@ -1,8 +1,8 @@
 import torch
 from torch.distributions import constraints
-from torch.nn import Parameter
 
-from .kernel import Kernel
+from pyro.contrib.gp.kernels.kernel import Kernel
+from pyro.nn.module import PyroParam
 
 
 class Brownian(Kernel):
@@ -26,8 +26,7 @@ class Brownian(Kernel):
         super(Brownian, self).__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
-        self.variance = Parameter(variance)
-        self.set_constraint("variance", constraints.positive)
+        self.variance = PyroParam(variance, constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         if Z is None:

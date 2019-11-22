@@ -210,6 +210,13 @@ SpanningTree
     :undoc-members:
     :show-inheritance:
 
+Stable
+------
+.. autoclass:: pyro.distributions.Stable
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit
@@ -248,6 +255,13 @@ ConditionalTransform
     :undoc-members:
     :show-inheritance:
 
+CorrLCholeskyTransform
+----------------------
+.. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ELUTransform
 ------------
 .. autoclass:: pyro.distributions.transforms.ELUTransform
@@ -262,9 +276,9 @@ LeakyReLUTransform
     :undoc-members:
     :show-inheritance:
 
-PermuteTransform
-----------------
-.. autoclass:: pyro.distributions.transforms.PermuteTransform
+Permute
+-------
+.. autoclass:: pyro.distributions.transforms.Permute
     :members:
     :undoc-members:
     :show-inheritance:
@@ -279,6 +293,13 @@ TanhTransform
 TransformModules
 ~~~~~~~~~~~~~~~~
 
+AffineAutoregressive
+--------------------
+.. autoclass:: pyro.distributions.transforms.AffineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 AffineCoupling
 --------------
 .. autoclass:: pyro.distributions.transforms.AffineCoupling
@@ -286,9 +307,9 @@ AffineCoupling
     :undoc-members:
     :show-inheritance:
 
-BatchNormTransform
-------------------
-.. autoclass:: pyro.distributions.transforms.BatchNormTransform
+BatchNorm
+---------
+.. autoclass:: pyro.distributions.transforms.BatchNorm
     :members:
     :undoc-members:
     :show-inheritance:
@@ -300,9 +321,9 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
-ConditionalPlanarFlow
----------------------
-.. autoclass:: pyro.distributions.transforms.ConditionalPlanarFlow
+ConditionalPlanar
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalPlanar
     :members:
     :undoc-members:
     :show-inheritance:
@@ -314,23 +335,9 @@ ConditionalTransformModule
     :undoc-members:
     :show-inheritance:
 
-HouseholderFlow
----------------
-.. autoclass:: pyro.distributions.transforms.HouseholderFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-InverseAutoRegressiveFlow
--------------------------
-.. autoclass:: pyro.distributions.transforms.InverseAutoregressiveFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-InverseAutoRegressiveFlowStable
--------------------------------
-.. autoclass:: pyro.distributions.transforms.InverseAutoregressiveFlowStable
+Householder
+-----------
+.. autoclass:: pyro.distributions.transforms.Householder
     :members:
     :undoc-members:
     :show-inheritance:
@@ -342,30 +349,30 @@ NeuralAutoregressive
     :undoc-members:
     :show-inheritance:
 
-PlanarFlow
+Planar
+------
+.. autoclass:: pyro.distributions.transforms.Planar
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Polynomial
 ----------
-.. autoclass:: pyro.distributions.transforms.PlanarFlow
+.. autoclass:: pyro.distributions.transforms.Polynomial
     :members:
     :undoc-members:
     :show-inheritance:
 
-PolynomialFlow
---------------
-.. autoclass:: pyro.distributions.transforms.PolynomialFlow
+Radial
+------
+.. autoclass:: pyro.distributions.transforms.Radial
     :members:
     :undoc-members:
     :show-inheritance:
 
-RadialFlow
-----------
-.. autoclass:: pyro.distributions.transforms.RadialFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-SylvesterFlow
--------------
-.. autoclass:: pyro.distributions.transforms.SylvesterFlow
+Sylvester
+---------
+.. autoclass:: pyro.distributions.transforms.Sylvester
     :members:
     :undoc-members:
     :show-inheritance:
@@ -377,10 +384,68 @@ TransformModule
     :undoc-members:
     :show-inheritance:
 
-Constraints
-~~~~~~~~~~~
-.. automodule:: pyro.distributions.constraints
-    :members:
-    :member-order: bysource
-    :undoc-members:
-    :show-inheritance:
+Transform Factories
+~~~~~~~~~~~~~~~~~~~
+
+Each :class:`~torch.distributions.transforms.Transform` and :class:`~pyro.distributions.TransformModule` includes a corresponding helper function in lower case that inputs, at minimum, the input dimensions of the transform, and possibly additional arguments to customize the transform in an intuitive way. The purpose of these helper functions is to hide from the user whether or not the transform requires the construction of a hypernet, and if so, the input and output dimensions of that hypernet.
+
+
+affine_autoregressive
+---------------------
+.. autofunction:: pyro.distributions.transforms.affine_autoregressive
+
+affine_coupling
+---------------
+.. autofunction:: pyro.distributions.transforms.affine_coupling
+
+batchnorm
+---------
+.. autofunction:: pyro.distributions.transforms.batchnorm
+
+block_autoregressive
+--------------------
+.. autofunction:: pyro.distributions.transforms.block_autoregressive
+
+conditional_planar
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_planar
+
+elu
+---
+.. autofunction:: pyro.distributions.transforms.elu
+
+householder
+-----------
+.. autofunction:: pyro.distributions.transforms.householder
+
+leaky_relu
+----------
+.. autofunction:: pyro.distributions.transforms.leaky_relu
+
+neural_autoregressive
+---------------------
+.. autofunction:: pyro.distributions.transforms.neural_autoregressive
+
+permute
+-------
+.. autofunction:: pyro.distributions.transforms.permute
+
+planar
+------
+.. autofunction:: pyro.distributions.transforms.planar
+
+polynomial
+----------
+.. autofunction:: pyro.distributions.transforms.polynomial
+
+radial
+------
+.. autofunction:: pyro.distributions.transforms.radial
+
+sylvester
+---------
+.. autofunction:: pyro.distributions.transforms.sylvester
+
+tanh
+----
+.. autofunction:: pyro.distributions.transforms.tanh

@@ -16,7 +16,6 @@ CPU_EXAMPLES = [
     'air/main.py --num-steps=1 --no-baseline',
     'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2',
     'lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200',
-    'bayesian_regression.py --num-epochs=1',
     'capture_recapture/cjs.py --num-steps=1 -m 1',
     'capture_recapture/cjs.py --num-steps=1 -m 2',
     'capture_recapture/cjs.py --num-steps=1 -m 3',
@@ -86,7 +85,6 @@ CPU_EXAMPLES = [
 
 CUDA_EXAMPLES = [
     'air/main.py --num-steps=1 --cuda',
-    'bayesian_regression.py --num-epochs=1 --cuda',
     'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --cuda',
     'lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --cuda',
@@ -127,7 +125,6 @@ def xfail_jit(*args):
 JIT_EXAMPLES = [
     'air/main.py --num-steps=1 --jit',
     'baseball.py --num-samples=200 --warmup-steps=100 --jit',
-    'bayesian_regression.py --num-epochs=1 --jit',
     'contrib/autoname/mixture.py --num-epochs=1 --jit',
     xfail_jit('lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --jit'),
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),

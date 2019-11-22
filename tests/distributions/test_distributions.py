@@ -189,7 +189,8 @@ def test_subsequent_expands_ok(dist, sample_shapes):
             with xfail_if_not_implemented():
                 n = d.expand(proposed_batch_shape)
             assert n.batch_shape == proposed_batch_shape
-            check_sample_shapes(d, n)
+            with xfail_if_not_implemented():
+                check_sample_shapes(d, n)
             d = n
 
 

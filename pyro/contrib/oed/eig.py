@@ -83,7 +83,10 @@ def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, los
         conditioned_model = pyro.condition(model, data=y_dict)
         # Here just using SVI to run the MAP optimization
         guide.train()
-        SVI(conditioned_model, guide=guide, loss=loss, optim=optim, num_steps=num_steps, num_samples=1).run(design)
+        svi = SVI(conditioned_model, guide=guide, loss=loss, optim=optim)
+        with poutine.block():
+            for _ in range(num_steps):
+                svi.step(design)
         # Recover the entropy
         with poutine.block():
             final_loss = loss(conditioned_model, guide, design)
@@ -162,13 +165,17 @@ def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_p
 
 
 def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None):
+    svi_num_steps = vi_parameters.pop('num_steps')
 
     def posterior_entropy(y_dist, design):
         # Important that y_dist is sampled *within* the function
         y = pyro.sample("conditioning_y", y_dist)
         y_dict = {label: y[i, ...] for i, label in enumerate(observation_labels)}
         conditioned_model = pyro.condition(model, data=y_dict)
-        SVI(conditioned_model, **vi_parameters).run(design)
+        svi = SVI(conditioned_model, **vi_parameters)
+        with poutine.block():
+            for _ in range(svi_num_steps):
+                svi.step(design)
         # Recover the entropy
         with poutine.block():
             guide = vi_parameters["guide"]

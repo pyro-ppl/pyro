@@ -52,13 +52,4 @@ def _Multinomial_support(self):
     return torch.distributions.constraints.integer_interval(0, total_count)
 
 
-@patch_dependency('torch.einsum')
-def _einsum(equation, *operands):
-    if len(operands) == 1 and isinstance(operands[0], (list, tuple)):
-        # the old interface of passing the operands as one list argument
-        operands = operands[0]
-
-    return _einsum._pyro_unpatched(equation, *operands)
-
-
 __all__ = []

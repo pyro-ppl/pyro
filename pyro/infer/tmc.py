@@ -1,11 +1,9 @@
 import math
 import queue
 import warnings
-import weakref
 
 import torch
 
-import pyro.ops.jit
 import pyro.poutine as poutine
 
 from pyro.distributions.util import is_identically_zero
@@ -211,48 +209,3 @@ class TensorMonteCarlo(ELBO):
         loss = self.differentiable_loss(model, guide, *args, **kwargs)
         loss.backward()
         return loss.item()
-
-
-class JitTensorMonteCarlo(TensorMonteCarlo):
-    """
-    Like :class:`TensorMonteCarlo` but uses :func:`pyro.ops.jit.compile` to
-    compile :meth:`loss_and_grads`.
-
-    This works only for a limited set of models:
-
-    -   Models must have static structure.
-    -   Models must not depend on any global data (except the param store).
-    -   All model inputs that are tensors must be passed in via ``*args``.
-    -   All model inputs that are *not* tensors must be passed in via
-        ``**kwargs``, and compilation will be triggered once per unique
-        ``**kwargs``.
-    """
-    def differentiable_loss(self, model, guide, *args, **kwargs):
-        kwargs['_model_id'] = id(model)
-        kwargs['_guide_id'] = id(guide)
-        if getattr(self, '_differentiable_loss', None) is None:
-            # build a closure for differentiable_loss
-            weakself = weakref.ref(self)
-
-            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings,
-                                jit_options=self.jit_options)
-            def differentiable_loss(*args, **kwargs):
-                kwargs.pop('_model_id')
-                kwargs.pop('_guide_id')
-                self = weakself()
-                elbo = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-                    elbo = elbo + _compute_tmc_estimate(model_trace, guide_trace)
-                return elbo * (-1.0 / self.num_particles)
-
-            self._differentiable_loss = differentiable_loss
-
-        return self._differentiable_loss(*args, **kwargs)
-
-    def loss_and_grads(self, model, guide, *args, **kwargs):
-        differentiable_loss = self.differentiable_loss(model, guide, *args, **kwargs)
-        differentiable_loss.backward()  # this line triggers jit compilation
-        loss = differentiable_loss.item()
-
-        warn_if_nan(loss, "loss")
-        return loss

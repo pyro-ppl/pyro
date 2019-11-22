@@ -48,11 +48,11 @@ def main(args):
     # set up model
     if args.model == "imgp":
         gp = IndependentMaternGP(nu=1.5, obs_dim=obs_dim,
-                                 log_length_scale_init=0.5 * torch.ones(obs_dim)).double()
+                                 length_scale_init=1.5 * torch.ones(obs_dim)).double()
     elif args.model == "lcmgp":
         num_gps = 9
         gp = LinearlyCoupledMaternGP(nu=1.5, obs_dim=obs_dim, num_gps=num_gps,
-                                     log_length_scale_init=0.5 * torch.ones(num_gps)).double()
+                                     length_scale_init=1.5 * torch.ones(num_gps)).double()
 
     # set up optimizer
     adam = torch.optim.Adam(gp.parameters(), lr=args.init_learning_rate,
@@ -146,7 +146,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.5.1')
+    assert pyro.__version__.startswith('1.0.0')
     parser = argparse.ArgumentParser(description="contrib.timeseries example usage")
     parser.add_argument("-n", "--num-steps", default=300, type=int)
     parser.add_argument("-s", "--seed", default=0, type=int)

@@ -1,4 +1,5 @@
 import functools
+import io
 import warnings
 from operator import attrgetter
 
@@ -12,13 +13,15 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, Predictive
 from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
                                   AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
                                   init_to_sample)
-from pyro.nn.module import PyroModule, PyroParam
+from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
 
@@ -171,7 +174,6 @@ def auto_guide_module_callable(model):
             self.x_scale = PyroParam(torch.tensor(.1), constraint=constraints.positive)
 
         def forward(self, *args, **kwargs):
-            pyro.module("", self)
             return {"x": pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))}
 
         def median(self, *args, **kwargs):
@@ -215,8 +217,11 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
-    for _ in range(800):
+    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    elbo = Elbo(strict_enumeration_warning=False,
+                num_particles=100, vectorize_particles=True)
+    infer = SVI(model, guide, optim, elbo)
+    for _ in range(100):
         infer.step()
 
     if auto_class is AutoLaplaceApproximation:
@@ -256,14 +261,28 @@ def test_autoguide_serialization(auto_class, Elbo):
     guide()
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
+    pyro.set_rng_seed(0)
+    expected = guide.call()
+    names = sorted(guide())
 
     # Ignore tracer warnings
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         # XXX: check_trace=True fails for AutoLaplaceApproximation
         traced_guide = torch.jit.trace_module(guide, {"call": ()}, check_trace=False)
-    torch.jit.save(traced_guide, "/tmp/test_guide_serialization.pt")
-    guide_deser = torch.jit.load("/tmp/test_guide_serialization.pt")
+    f = io.BytesIO()
+    torch.jit.save(traced_guide, f)
+    f.seek(0)
+    guide_deser = torch.jit.load(f)
+
+    # Check .call() result.
+    pyro.set_rng_seed(0)
+    actual = guide_deser.call()
+    assert len(actual) == len(expected)
+    for name, a, e in zip(names, actual, expected):
+        assert_equal(a, e, msg="{}: {} vs {}".format(name, a, e))
+
+    # Check named_parameters.
     expected_names = {name for name, _ in guide.named_parameters()}
     actual_names = {name for name, _ in guide_deser.named_parameters()}
     assert actual_names == expected_names
@@ -288,7 +307,10 @@ def test_quantiles(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
+    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    elbo = Elbo(strict_enumeration_warning=False,
+                num_particles=100, vectorize_particles=True)
+    infer = SVI(model, guide, optim, elbo)
     for _ in range(100):
         infer.step()
 
@@ -553,10 +575,105 @@ def test_nested_autoguide(Elbo):
     for _ in range(20):
         infer.step()
 
-    tr = poutine.trace(guide).get_trace()
-    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z") for p in tr.param_nodes)
-    stochastic_nodes = set(tr.stochastic_nodes)
+    guide_trace = poutine.trace(guide).get_trace()
+    model_trace = poutine.trace(model).get_trace()
+    check_model_guide_match(model_trace, guide_trace)
+    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z")
+               for p in guide_trace.param_nodes)
+    stochastic_nodes = set(guide_trace.stochastic_nodes)
     assert "x" in stochastic_nodes
     assert "y" in stochastic_nodes
     # Only latent sampled is for the IAF.
     assert "_AutoGuideList.1.z_latent" in stochastic_nodes
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_linear_regression_smoke(auto_class, Elbo):
+    N, D = 10, 3
+
+    class RandomLinear(nn.Linear, PyroModule):
+        def __init__(self, in_features, out_features):
+            super().__init__(in_features, out_features)
+            self.weight = PyroSample(dist.Normal(0., 1.).expand([out_features, in_features]).to_event(2))
+            self.bias = PyroSample(dist.Normal(0., 10.).expand([out_features]).to_event(1))
+
+    class LinearRegression(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.linear = RandomLinear(D, 1)
+
+        def forward(self, x, y=None):
+            mean = self.linear(x).squeeze(-1)
+            sigma = pyro.sample("sigma", dist.LogNormal(0., 1.))
+            with pyro.plate('plate', N):
+                return pyro.sample('obs', dist.Normal(mean, sigma), obs=y)
+
+    x, y = torch.randn(N, D), torch.randn(N)
+    model = LinearRegression()
+    guide = auto_class(model)
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    infer.step(x, y)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+])
+def test_predictive(auto_class):
+    N, D = 3, 2
+
+    class RandomLinear(nn.Linear, PyroModule):
+        def __init__(self, in_features, out_features):
+            super().__init__(in_features, out_features)
+            self.weight = PyroSample(dist.Normal(0., 1.).expand([out_features, in_features]).to_event(2))
+            self.bias = PyroSample(dist.Normal(0., 10.).expand([out_features]).to_event(1))
+
+    class LinearRegression(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.linear = RandomLinear(D, 1)
+
+        def forward(self, x, y=None):
+            mean = self.linear(x).squeeze(-1)
+            sigma = pyro.sample("sigma", dist.LogNormal(0., 1.))
+            with pyro.plate('plate', N):
+                return pyro.sample('obs', dist.Normal(mean, sigma), obs=y)
+
+    x, y = torch.randn(N, D), torch.randn(N)
+    model = LinearRegression()
+    guide = auto_class(model)
+    # XXX: Record `y` as observed in the prototype trace
+    # Is there a better pattern to follow?
+    guide(x, y=y)
+    # Test predictive module
+    model_trace = poutine.trace(model).get_trace(x, y=None)
+    predictive = Predictive(model, guide=guide, num_samples=10)
+    pyro.set_rng_seed(0)
+    samples = predictive(x)
+    for site in prune_subsample_sites(model_trace).stochastic_nodes:
+        assert site in samples
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        traced_predictive = torch.jit.trace_module(predictive, {"call": (x,)})
+    f = io.BytesIO()
+    torch.jit.save(traced_predictive, f)
+    f.seek(0)
+    predictive_deser = torch.jit.load(f)
+    pyro.set_rng_seed(0)
+    samples_deser = predictive_deser.call(x)
+    # Note that the site values are different in the serialized guide
+    assert len(samples) == len(samples_deser)

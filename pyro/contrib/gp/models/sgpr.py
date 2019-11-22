@@ -4,8 +4,8 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
+from pyro.nn.module import PyroParam, pyro_method
 
 
 class SparseGPRegression(GPModel):
@@ -97,8 +97,7 @@ class SparseGPRegression(GPModel):
         self.Xu = Parameter(Xu)
 
         noise = self.X.new_tensor(1.) if noise is None else noise
-        self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.positive)
+        self.noise = PyroParam(noise, constraints.positive)
 
         if approx is None:
             self.approx = "VFE"
@@ -108,7 +107,7 @@ class SparseGPRegression(GPModel):
             raise ValueError("The sparse approximation method should be one of "
                              "'DTC', 'FITC', 'VFE'.")
 
-    @autoname.scope(prefix="SGPR")
+    @pyro_method
     def model(self):
         self.set_mode("model")
 
@@ -146,17 +145,18 @@ class SparseGPRegression(GPModel):
             return f_loc, f_var
         else:
             if self.approx == "VFE":
-                pyro.factor("trace_term", -trace_term / 2.)
+                pyro.factor(self._pyro_get_fullname("trace_term"), -trace_term / 2.)
 
-            return pyro.sample("y",
+            return pyro.sample(self._pyro_get_fullname("y"),
                                dist.LowRankMultivariateNormal(f_loc, W, D)
                                    .expand_by(self.y.shape[:-1])
                                    .to_event(self.y.dim() - 1),
                                obs=self.y)
 
-    @autoname.scope(prefix="SGPR")
+    @pyro_method
     def guide(self):
         self.set_mode("guide")
+        self._load_pyro_samples()
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""

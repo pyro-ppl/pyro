@@ -9,12 +9,13 @@ from torch.distributions import Transform
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
+from pyro.nn import DenseNN
 
 
 @copy_docs_from(Transform)
-class ConditionedPlanarFlow(Transform):
+class ConditionedPlanar(Transform):
     def __init__(self, bias=None, u=None, w=None):
-        super(ConditionedPlanarFlow, self).__init__(cache_size=1)
+        super(ConditionedPlanar, self).__init__(cache_size=1)
         self.bias = bias
         self.u = u
         self.w = w
@@ -30,8 +31,9 @@ class ConditionedPlanarFlow(Transform):
         """
         :param x: the input into the bijection
         :type x: torch.Tensor
-        Invokes the bijection x => y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        Invokes the bijection x => y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
 
         # x ~ (batch_size, dim_size, 1)
@@ -56,19 +58,19 @@ class ConditionedPlanarFlow(Transform):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("ConditionalPlanarFlow expected to find key in intermediates cache but didn't")
+        raise KeyError("ConditionalPlanar object expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
         return self._cached_logDetJ
 
 
-@copy_docs_from(ConditionedPlanarFlow)
-class PlanarFlow(ConditionedPlanarFlow, TransformModule):
+@copy_docs_from(ConditionedPlanar)
+class Planar(ConditionedPlanar, TransformModule):
     """
-    A 'planar' normalizing flow that uses the transformation
+    A 'planar' bijective transform with equation,
 
         :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
 
@@ -77,21 +79,22 @@ class PlanarFlow(ConditionedPlanarFlow, TransformModule):
     dimension :math:`D`. For this to be an invertible transformation, the condition
     :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
+    variational approximations.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> plf = PlanarFlow(10)
-    >>> pyro.module("my_plf", plf)  # doctest: +SKIP
-    >>> plf_dist = dist.TransformedDistribution(base_dist, [plf])
-    >>> plf_dist.sample()  # doctest: +SKIP
+    >>> transform = Planar(10)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    planar flow can be scored.
+    the planar transform can be scored.
 
     :param input_dim: the dimension of the input (and output) variable.
     :type input_dim: int
@@ -109,7 +112,7 @@ class PlanarFlow(ConditionedPlanarFlow, TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super(PlanarFlow, self).__init__()
+        super(Planar, self).__init__()
 
         self.bias = nn.Parameter(torch.Tensor(input_dim,))
         self.u = nn.Parameter(torch.Tensor(input_dim,))
@@ -125,9 +128,9 @@ class PlanarFlow(ConditionedPlanarFlow, TransformModule):
 
 
 @copy_docs_from(ConditionalTransformModule)
-class ConditionalPlanarFlow(ConditionalTransformModule):
+class ConditionalPlanar(ConditionalTransformModule):
     """
-    A conditional 'planar' normalizing flow that uses the transformation
+    A conditional 'planar' bijective transform using the equation,
 
         :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
 
@@ -137,8 +140,8 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
     :math:`z\\in\\mathbb{R}^{M}` representing the context variable to condition on. For this to be an
     invertible transformation, the condition :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
 
-    Together with `ConditionalTransformedDistribution` this provides a way to create richer variational
-    approximations.
+    Together with :class:`~pyro.distributions.ConditionalTransformedDistribution` this provides a way to create
+    richer variational approximations.
 
     Example usage:
 
@@ -148,14 +151,14 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
     >>> batch_size = 3
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
     >>> hypernet = DenseNN(context_dim, [50, 50], param_dims=[1, input_dim, input_dim])
-    >>> plf = ConditionalPlanarFlow(hypernet)
+    >>> transform = ConditionalPlanar(hypernet)
     >>> z = torch.rand(batch_size, context_dim)
-    >>> plf_dist = dist.ConditionalTransformedDistribution(base_dist, [plf]).condition(z)
-    >>> plf_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist, [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    planar flow can be scored.
+    the planar transform can be scored.
 
     :param nn: a function inputting the context variable and outputting a triplet of real-valued parameters
         of dimensions :math:`(1, D, D)`.
@@ -173,9 +176,44 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
     event_dim = 1
 
     def __init__(self, nn):
-        super(ConditionalPlanarFlow, self).__init__()
+        super(ConditionalPlanar, self).__init__()
         self.nn = nn
 
     def condition(self, context):
         bias, u, w = self.nn(context)
-        return ConditionedPlanarFlow(bias, u, w)
+        return ConditionedPlanar(bias, u, w)
+
+
+def planar(input_dim):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.Planar` object for consistency with other
+    helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+
+    """
+
+    return Planar(input_dim)
+
+
+def conditional_planar(input_dim, context_dim, hidden_dims=None):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.ConditionalPlanar` object that takes care of
+    constructing a dense network with the correct input/output dimensions.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param context_dim: Dimension of context variable
+    :type context_dim: int
+    :param hidden_dims: The desired hidden dimensions of the dense network. Defaults
+        to using [input_dim * 10, input_dim * 10]
+    :type hidden_dims: list[int]
+
+
+    """
+
+    if hidden_dims is None:
+        hidden_dims = [input_dim * 10, input_dim * 10]
+    hypernet = DenseNN(context_dim, hidden_dims, param_dims=[1, input_dim, input_dim])
+    return ConditionalPlanar(hypernet)

@@ -309,8 +309,10 @@ def test_gaussian_hmm(num_steps):
         guide = AutoDelta(poutine.block(model, expose_fn=lambda msg: not msg["name"].startswith("x") and
                                         not msg["name"].startswith("y")))
         elbo = TraceEnum_ELBO(max_plate_nesting=1)
-        svi = SVI(model, guide, optim.Adam({"lr": .01}), elbo, num_steps=100).run(data)
-        return svi.exec_traces[-1]
+        svi = SVI(model, guide, optim.Adam({"lr": .01}), elbo)
+        for _ in range(100):
+            svi.step(data)
+        return poutine.trace(guide).get_trace(data)
 
     def _generate_data():
         transition_probs = torch.rand(dim, dim)
