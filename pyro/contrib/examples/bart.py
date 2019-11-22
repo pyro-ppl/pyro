@@ -101,9 +101,10 @@ def load_bart_od():
 
     **Source** https://www.bart.gov/about/reports/ridership
     """
-    filename = os.path.join(DATA, "bart_full.pkl")
+    filename = os.path.join(DATA, "bart_full.pkl.gz")
     if os.path.exists(filename):
-        return torch.load(filename)
+        with gzip.open(filename) as f:
+            return torch.load(f)
 
     datasets = multiprocessing.Pool().map(_load_hourly_od, SOURCE_FILES)
 
@@ -133,7 +134,8 @@ def load_bart_od():
         "start_date": start_date,
         "counts": result,
     }
-    torch.save(dataset, filename)
+    with gzip.open(filename, "wb") as f:
+        torch.save(dataset, f)
     return dataset
 
 
