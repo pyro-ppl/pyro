@@ -1,7 +1,7 @@
 import argparse
 import csv
 import datetime
-import gzip
+import bz2
 import logging
 import multiprocessing
 import os
@@ -26,7 +26,9 @@ SOURCE_FILES = [
     "date-hour-soo-dest-2016.csv.gz",
     "date-hour-soo-dest-2017.csv.gz",
     "date-hour-soo-dest-2018.csv.gz",
+    "date-hour-soo-dest-2019.csv.gz",
 ]
+CACHE_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/bart_full.pkl.bz2"
 
 
 def _mkdir_p(dirname):
@@ -38,10 +40,9 @@ def _mkdir_p(dirname):
 
 
 def _load_hourly_od(basename):
-    filename = os.path.join(DATA, basename.replace(".csv.gz", ".pkl.gz"))
+    filename = os.path.join(DATA, basename.replace(".csv.gz", ".pkl"))
     if os.path.exists(filename):
-        with gzip.open(filename) as f:
-            return torch.load(f)
+        return filename
 
     # Download source files.
     _mkdir_p(DATA)
@@ -84,36 +85,43 @@ def _load_hourly_od(basename):
         "rows": rows,
         "schema": ["time_hours", "origin", "destin", "trip_count"],
     }
+    dataset["rows"]
     logging.debug("saving {}".format(filename))
-    with gzip.open(filename, "wb") as f:
-        torch.save(dataset, f)
-    return dataset
+    torch.save(dataset, filename)
+    return filename
 
 
-def load_bart_od():
+def load_bart_od(force=False):
     """
     Load a dataset of hourly origin-destination ridership counts for every pair
-    of BART stations during the years 2011-2018.
+    of BART stations during the years 2011-2019.
+
+    **Source** https://www.bart.gov/about/reports/ridership
 
     This downloads and preprocesses the dataset the first time it is called,
     requiring about 300MB of file transfer and storing a few GB of temp files.
-    On subsequent calls this reads from a cached ``.pkl.gz``.
+    On subsequent calls this reads from a cached ``.pkl.bz2``.
 
-    The returned dataset is a dictionary with fields:
+    :param bool force: whether to force download and recomputation
+    :returns: a dataset is a dictionary with fields:
 
-    -   "stations": a list of strings of station names
-    -   "start_date": a :py:class:`datetime.datetime` for the first observaion
-    -   "counts": a ``torch.FloatTensor`` of ridership counts, with shape
-        ``(num_hours, len(stations), len(stations))``.
-
-    **Source** https://www.bart.gov/about/reports/ridership
+        -   "stations": a list of strings of station names
+        -   "start_date": a :py:class:`datetime.datetime` for the first observaion
+        -   "counts": a ``torch.FloatTensor`` of ridership counts, with shape
+            ``(num_hours, len(stations), len(stations))``.
     """
-    filename = os.path.join(DATA, "bart_full.pkl.gz")
+    filename = os.path.join(DATA, "bart_full.pkl.bz2")
+    if not os.path.exists(filename):
+        try:
+            urllib.request.urlretrieve(CACHE_URL, filename)
+        except urllib.error.HTTPError:
+            logging.debug("cache miss, preprocessing from scratch")
     if os.path.exists(filename):
-        with gzip.open(filename) as f:
+        with bz2.open(filename, "rb") as f:
             return torch.load(f)
 
-    datasets = multiprocessing.Pool().map(_load_hourly_od, SOURCE_FILES)
+    filenames = multiprocessing.Pool().map(_load_hourly_od, SOURCE_FILES)
+    datasets = list(map(torch.load, filenames))
 
     stations = sorted(set().union(*(d["stations"].keys() for d in datasets)))
     min_time = min(int(d["rows"][:, 0].min()) for d in datasets)
@@ -141,8 +149,11 @@ def load_bart_od():
         "start_date": start_date,
         "counts": result,
     }
-    with gzip.open(filename, "wb") as f:
-        torch.save(dataset, f)
+    # Work around apparent bug in torch.save.
+    pkl_file = filename.rsplit(".", 1)[0]
+    torch.save(dataset, pkl_file)
+    subprocess.check_call(["bzip2", "-k", pkl_file])
+    assert os.path.exists(filename)
     return dataset
 
 
@@ -160,9 +171,10 @@ def load_fake_od():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BART data preprocessor")
+    parser.add_argument("-f", "--force", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
     logging.basicConfig(format='%(relativeCreated) 9d %(message)s',
                         level=logging.DEBUG if args.verbose else logging.INFO)
-    load_bart_od()
+    load_bart_od(force=args.force)
