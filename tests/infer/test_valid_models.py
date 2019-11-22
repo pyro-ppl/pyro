@@ -22,14 +22,14 @@ logger = logging.getLogger(__name__)
 # This file tests a variety of model,guide pairs with valid and invalid structure.
 
 
-def Trace_CRPS_kl(**kwargs):
-    kwargs["kl_scale"] = 0.0
+def Trace_CRPS_prior(**kwargs):
+    kwargs["prior_scale"] = 0.0
     kwargs.pop("strict_enumeration_warning", None)
     return Trace_CRPS(**kwargs)
 
 
-def Trace_CRPS_nokl(**kwargs):
-    kwargs["kl_scale"] = 1.0
+def Trace_CRPS_noprior(**kwargs):
+    kwargs["prior_scale"] = 1.0
     kwargs.pop("strict_enumeration_warning", None)
     return Trace_CRPS(**kwargs)
 
@@ -89,8 +89,8 @@ def assert_warning(model, guide, elbo):
     Trace_ELBO,
     TraceGraph_ELBO,
     TraceEnum_ELBO,
-    Trace_CRPS_kl,
-    Trace_CRPS_nokl,
+    Trace_CRPS_prior,
+    Trace_CRPS_noprior,
 ])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
@@ -1871,8 +1871,8 @@ def test_tail_adaptive_warning():
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_kl,
-    Trace_CRPS_nokl,
+    Trace_CRPS_prior,
+    Trace_CRPS_noprior,
 ])
 def test_reparam_ok(Elbo):
 
@@ -1891,8 +1891,8 @@ def test_reparam_ok(Elbo):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_kl,
-    Trace_CRPS_nokl,
+    Trace_CRPS_prior,
+    Trace_CRPS_noprior,
 ])
 def test_reparam_mask_ok(Elbo, mask):
 
@@ -1918,8 +1918,8 @@ def test_reparam_mask_ok(Elbo, mask):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_kl,
-    Trace_CRPS_nokl,
+    Trace_CRPS_prior,
+    Trace_CRPS_noprior,
 ])
 def test_reparam_mask_plate_ok(Elbo, mask):
     data = torch.randn(2, 3).exp()
@@ -1943,8 +1943,8 @@ def test_reparam_mask_plate_ok(Elbo, mask):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_kl,
-    Trace_CRPS_nokl,
+    Trace_CRPS_prior,
+    Trace_CRPS_noprior,
 ])
 def test_reparam_scale_ok(Elbo, scale):
 
@@ -1969,8 +1969,8 @@ def test_reparam_scale_ok(Elbo, scale):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_kl,
-    Trace_CRPS_nokl,
+    Trace_CRPS_prior,
+    Trace_CRPS_noprior,
 ])
 def test_reparam_scale_plate_ok(Elbo, scale):
     data = torch.randn(2, 3).exp()
@@ -1991,8 +1991,8 @@ def test_reparam_scale_plate_ok(Elbo, scale):
 
 
 @pytest.mark.parametrize("Elbo", [
-    Trace_CRPS_kl,
-    Trace_CRPS_nokl,
+    Trace_CRPS_prior,
+    Trace_CRPS_noprior,
 ])
 def test_no_log_prob_ok(Elbo):
 

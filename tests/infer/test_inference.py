@@ -612,8 +612,8 @@ class SafetyTests(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
-@pytest.mark.parametrize("kl_scale", [0, 1e-4])
-def test_crps_univariate(kl_scale):
+@pytest.mark.parametrize("prior_scale", [0, 1e-4])
+def test_crps_univariate(prior_scale):
 
     def model(data):
         loc = pyro.sample("loc", dist.Normal(0, 100))
@@ -633,7 +633,7 @@ def test_crps_univariate(kl_scale):
 
     data = 10.0 + torch.randn(8)
     adam = optim.Adam({"lr": 0.1})
-    svi = SVI(model, guide, adam, Trace_CRPS(num_particles=32, kl_scale=kl_scale))
+    svi = SVI(model, guide, adam, Trace_CRPS(num_particles=32, prior_scale=prior_scale))
     for step in range(2001):
         loss = svi.step(data)
         if step % 20 == 0:
@@ -646,12 +646,12 @@ def test_crps_univariate(kl_scale):
     actual_loc = pyro.param("loc_loc").detach()
     actual_scale = pyro.param("log_scale_loc").exp().detach()
     assert_close(actual_loc, expected_loc, atol=0.05)
-    assert_close(actual_scale, expected_scale, rtol=0.1 if kl_scale else 0.05)
+    assert_close(actual_scale, expected_scale, rtol=0.1 if prior_scale else 0.05)
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
-@pytest.mark.parametrize("kl_scale", [0, 1e-4])
-def test_crps_multivariate(kl_scale):
+@pytest.mark.parametrize("prior_scale", [0, 1])
+def test_crps_multivariate(prior_scale):
 
     def model(data):
         loc = torch.zeros(2)
@@ -668,7 +668,7 @@ def test_crps_multivariate(kl_scale):
     data = dist.MultivariateNormal(torch.zeros(2), cov).sample([10])
     svi = SVI(model, guide,
               optim.Adam({"lr": 0.1}),
-              Trace_CRPS(num_particles=32, kl_scale=kl_scale))
+              Trace_CRPS(num_particles=32, prior_scale=prior_scale))
     for step in range(2001):
         loss = svi.step(data)
         if step % 20 == 0:
