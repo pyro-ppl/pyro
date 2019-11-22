@@ -13,8 +13,7 @@ from pyro.infer.util import torch_item
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, RenyiELBO, ReweightedWakeSleep, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
-                        Trace_MMD)
+                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO, Trace_MMD)
 from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
 
 
@@ -50,11 +49,6 @@ class NormalNormalTests(TestCase):
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000, Trace_ELBO())
-
-    def test_rws_reparameterized(self):
-        self.do_elbo_test(True, 10000, ReweightedWakeSleep(
-            num_particles=10, model_has_params=False, insomnia=1., vectorize_particles=False
-        ))
 
     def test_elbo_analytic_kl(self):
         self.do_elbo_test(True, 3000, TraceMeanField_ELBO())
@@ -94,8 +88,8 @@ class NormalNormalTests(TestCase):
         )
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
-        # x = x_{1:N}
-        # p(z, x_{1:N}) = p(z) prod_n p(x_n | z)
+        pyro.clear_param_store()
+
         def model():
             loc_latent = pyro.sample("loc_latent",
                                      dist.Normal(self.loc0, torch.pow(self.lam0, -0.5))
@@ -106,69 +100,24 @@ class NormalNormalTests(TestCase):
                             obs=self.data)
             return loc_latent
 
-        # q(z | x_{1:N}) \approx p(z | x_{1:N}) \propto p(z, x)
         def guide():
-            # loc_q = pyro.param("loc_q", self.analytic_loc_n.detach() + 0.134)
-            # loc_q = pyro.param("loc_q", torch.tensor([5., 5.]))
-            loc_q = pyro.param("loc_q", self.analytic_loc_n.data.detach())
-            # log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14)
-            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 2.34)
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.detach() + 0.134)
+            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
             pyro.sample("loc_latent", Normal(loc_q, sig_q).to_event(1))
 
         adam = optim.Adam({"lr": .001})
-        pyro.clear_param_store()
         svi = SVI(model, guide, adam, loss=loss)
 
-        # loc_history = [self.analytic_loc_n + 0.134]
-        # loc_history = [torch.tensor([5., 5.])]
-        loc_history = [self.analytic_loc_n.data.detach()]
-        sig_q_history = [torch.exp(self.analytic_log_sig_n.data.detach() - 2.34)]
-        wake_theta_losses = []
-        phi_losses = []
         for k in range(n_steps):
-            print('{}/{}'.format(k, n_steps))
             svi.step()
 
-            # wake_theta_loss, phi_loss = svi.step()
-            # wake_theta_losses.append(wake_theta_loss)
-            # phi_losses.append(phi_loss)
+            loc_error = param_mse("loc_q", self.analytic_loc_n)
+            log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
 
-            # loc_error = param_mse("loc_q", self.analytic_loc_n)
-            loc_history.append(pyro.param('loc_q').detach())
-            # print('loc_error = {}'.format(loc_error))
-            # log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
-            # print('log_sig_error = {}'.format(log_sig_error))
-            # print('log_sig_q = {}'.format(pyro.param('log_sig_q')))
-            # print('sig_q = {}'.format(torch.exp(pyro.param('log_sig_q'))))
-            sig_q_history.append(torch.exp(pyro.param('log_sig_q')).detach())
-            # print('analytic_log_sig_n = {}'.format(self.analytic_log_sig_n))
-            # print('analytic_sig_n = {}'.format(torch.exp(self.analytic_log_sig_n)))
-
-        loc_history = torch.stack(loc_history).detach()
-        sig_q_history = torch.stack(sig_q_history)
-        import matplotlib.pyplot as plt
-        fig, axs = plt.subplots(1, 4, figsize=(24, 5))
-        axs[0].plot(loc_history[:, 0], loc_history[:, 1])
-        axs[0].scatter(self.analytic_loc_n[0], self.analytic_loc_n[1], color='black')
-        axs[0].scatter(loc_history[0, 0], loc_history[0, 1], color='red')
-        axs[1].plot(sig_q_history[:, 0], sig_q_history[:, 1])
-        axs[1].scatter(self.analytic_log_sig_n.exp()[0], self.analytic_log_sig_n.exp()[1], color='black')
-        axs[1].scatter(sig_q_history[0, 0], sig_q_history[0, 1], color='red')
-        axs[2].plot(wake_theta_losses)
-        axs[2].set_ylabel('wake theta loss')
-        axs[3].plot(phi_losses)
-        axs[3].set_ylabel('phi loss')
-
-        fig.tight_layout()
-        filename = 'debug.pdf'
-        fig.savefig(filename, bbox_inches='tight')
-
-        print('Saved to {}'.format(filename))
-
-        # assert_equal(0.0, loc_error, prec=0.05)
-        # assert_equal(0.0, log_sig_error, prec=0.05)
+        assert_equal(0.0, loc_error, prec=0.05)
+        assert_equal(0.0, log_sig_error, prec=0.05)
 
     def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False):
         pyro.clear_param_store()
