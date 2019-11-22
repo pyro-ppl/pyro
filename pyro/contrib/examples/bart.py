@@ -111,14 +111,17 @@ def load_bart_od(force=False):
             ``(num_hours, len(stations), len(stations))``.
     """
     filename = os.path.join(DATA, "bart_full.pkl.bz2")
-    if not os.path.exists(filename):
+    # Work around apparent bug in torch.load(),torch.save().
+    pkl_file = filename.rsplit(".", 1)[0]
+    if not os.path.exists(pkl_file):
         try:
             urllib.request.urlretrieve(CACHE_URL, filename)
+            logging.debug("cache hit, uncompressing")
+            subprocess.check_call(["bunzip2", "-k", filename])
         except urllib.error.HTTPError:
             logging.debug("cache miss, preprocessing from scratch")
-    if os.path.exists(filename):
-        with bz2.open(filename, "rb") as f:
-            return torch.load(f)
+    if os.path.exists(pkl_file):
+        return torch.load(pkl_file)
 
     filenames = multiprocessing.Pool().map(_load_hourly_od, SOURCE_FILES)
     datasets = list(map(torch.load, filenames))
@@ -149,8 +152,6 @@ def load_bart_od(force=False):
         "start_date": start_date,
         "counts": result,
     }
-    # Work around apparent bug in torch.save.
-    pkl_file = filename.rsplit(".", 1)[0]
     torch.save(dataset, pkl_file)
     subprocess.check_call(["bzip2", "-k", pkl_file])
     assert os.path.exists(filename)
