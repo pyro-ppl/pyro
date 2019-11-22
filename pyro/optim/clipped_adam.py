@@ -49,6 +49,7 @@ class ClippedAdam(Optimizer):
                     continue
                 grad = p.grad.data
                 grad.clamp_(-group['clip_norm'], group['clip_norm'])
+                grad[~(grad == grad)] = 0  # remove NANs
                 state = self.state[p]
 
                 # State initialization
