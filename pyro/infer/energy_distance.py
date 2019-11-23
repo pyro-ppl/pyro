@@ -36,7 +36,7 @@ class EnergyDistance:
 
         & Z \sim q(z|x); \quad X \sim p(x|Z) \\
         & Z' \sim q(z|x); \quad X' \sim p(x|Z') \\
-        & loss = \mathbb E_X \|X-x\|^\beta + 
+        & loss = \mathbb E_X \|X-x\|^\beta
                - \frac 1 2 \mathbb E_{X,X'}\|X-X'\|^\beta
                - \lambda \mathbb E_Z \log p(Z)
 
