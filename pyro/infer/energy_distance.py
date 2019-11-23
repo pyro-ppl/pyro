@@ -24,14 +24,26 @@ def _squared_error(x, y, scale, mask):
 
 
 class EnergyDistance:
-    """
+    r"""
     Posterior predictive energy distance [1,2] with optional Bayesian
     regularization by the prior.
 
-    This is a likelihood-free method, and can be used for likelihoods without
-    tractable density functions. The :math:`beta` energy distance is a robust
-    loss functions, and is well defined for any distribution with finite
-    fractional moment ``E[||X||^beta]``.
+    Let `p(x,z)=p(z) p(x|z)` be the model, `q(z|x)` be the guide.  Then given
+    data `x` and drawing an iid pair of samples :math:`(Z,X)` and
+    :math:`(Z',X')` (where `Z` is latent and `X` is the posterior predictive),
+
+    .. math ::
+
+        & Z \sim q(z|x); \quad X \sim p(x|Z) \\
+        & Z' \sim q(z|x); \quad X' \sim p(x|Z') \\
+        & loss = \mathbb E_X \|X-x\|^\beta + 
+               - \frac 1 2 \mathbb E_{X,X'}\|X-X'\|^\beta
+               - \lambda \mathbb E_Z \log p(Z)
+
+    This is a likelihood-free inference algorithm, and can be used for
+    likelihoods without tractable density functions. The :math:`\beta` energy
+    distance is a robust loss functions, and is well defined for any
+    distribution with finite fractional moment :math:`\mathbb E[\|X\|^\beta]`.
 
     This requires static model structure, a fully reparametrized guide, and
     reparametrized likelihood distributions in the model. Model latent
@@ -45,10 +57,10 @@ class EnergyDistance:
         Strictly Proper Scoring Rules, Prediction, and Estimation.
         https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
 
-    :param float beta: Exponent ``beta`` from [1,2]. The loss function is
-        strictly proper for distributions with finite ``beta``-absolute moment
-        ``E[||X||^beta]``. Thus for heavy tailed distributions ``beta`` should
-        be small, e.g. for ``Cauchy`` distributions, ``beta<1`` is strictly
+    :param float beta: Exponent :math:`\beta` from [1,2]. The loss function is
+        strictly proper for distributions with finite :math:`beta`-absolute moment
+        :math:`E[\|X\|^\beta]`. Thus for heavy tailed distributions ``beta`` should
+        be small, e.g. for ``Cauchy`` distributions, :math:`\beta<1` is strictly
         proper. Defaults to 1. Must be in the open interval (0,2).
     :param float prior_scale: Nonnegative scale for prior regularization.
         Model parameters are trained only if this is positive.
