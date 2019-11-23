@@ -1,6 +1,7 @@
 import argparse
 
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 import pyro
@@ -16,14 +17,48 @@ def TODO(*args):
     raise NotImplementedError("TODO")
 
 
+class FullyConnected(nn.Sequential):
+    def __init__(sizes):
+        layers = []
+        for in_size, out_size in zip(sizes, sizes[1:]):
+            layers.append(nn.Linear(in_size, out_size))
+            layers.append(nn.ELU())
+        layers.pop(-1)
+        super().__init__(*layers)
+
+
+class DiagNormalNet(nn.Module):
+    def __init__(self, sizes):
+        self.fc = FullyConnected(sizes[:-1] + [sizes[-1] * 2])
+
+    def forward(self, x):
+        loc_scale = self.fc(x)
+        d = loc_scale.size(-1) // 2
+        loc = loc_scale[..., :d]
+        scale = nn.functional.softplus(loc_scale[..., d:])
+        return loc, scale
+
+
+class BernoulliNet(nn.Module):
+    def __init__(self, sizes):
+        self.fc = FullyConnected(sizes + [1])
+
+    def forward(self, x):
+        return self.fc(x).squeeze(-1)
+
+
 class Model(PyroModule):
     def __init__(self, args):
         self.latent_dim = args.latent_dim
         super().__init__()
-        self.x_nn = TODO()
-        self.y0_nn = TODO()
-        self.y1_nn = TODO()
-        self.t_nn = TODO()
+        self.x_nn = DiagNormalNet([args.latent_dim] +
+                                  [args.hidden_size] * args.num_layers +
+                                  [args.feature_dim])
+        self.y0_nn = BernoulliNet([args.latent_dim] +
+                                  [args.hidden_size] * args.num_layers)
+        self.y1_nn = BernoulliNet([args.latent_dim] +
+                                  [args.hidden_size] * args.num_layers)
+        self.t_nn = BernoulliNet(args.feature_dim)
 
     def forward(self, x, t=None, y=None, size=None):
         if size is None:
@@ -39,18 +74,18 @@ class Model(PyroModule):
         return Normal(0, 1).expand([self.latent_dim]).to_event(1)
 
     def x_dist(self, z):
-        loc, scale = self.x_nn(z)  # multiple layers
+        loc, scale = self.x_nn(z)
         return Normal(loc, scale).to_event(1)
 
     def y_dist(self, t, z):
         # Parameters are not shared among t values.
-        logits0 = self.y0_nn(z)  # multiple layers
-        logits1 = self.y1_nn(z)  # multiple layers
+        logits0 = self.y0_nn(z)
+        logits1 = self.y1_nn(z)
         logits = torch.where(t, logits1, logits0)
         return Bernoulli(logits=logits)
 
     def t_dist(self, x):
-        logits = self.t_nn(x)  # single layer
+        logits = self.t_nn(x)
         return Bernoulli(logits=logits)
 
 
@@ -58,12 +93,17 @@ class Guide(PyroModule):
     def __init__(self):
         self.latent_dim = args.latent_dim
         super().__init__()
-        self.t_nn = TODO()
-        self.y_nn = TODO()
-        self.y0_nn = TODO()
-        self.y1_nn = TODO()
-        self.z0_nn = TODO()
-        self.z1_nn = TODO()
+        self.t_nn = BernoulliNet(self.feature_dim)
+        self.y_nn = FullyConnected([self.feature_dim] +
+                                   [args.hidden_dim] * args.num_layers)
+        self.y0_nn = BernoulliNet(args.hidden_dim)
+        self.y1_nn = BernoulliNet(args.hidden_dim)
+        self.z0_nn = DiagNormalNet([1 + args.feature_dim] +
+                                   [args.hidden_dim] * args.num_layers +
+                                   [args.latent_dim])
+        self.z1_nn = DiagNormalNet([1 + args.feature_dim] +
+                                   [args.hidden_dim] * args.num_layers +
+                                   [args.latent_dim])
 
     def forward(self, x, t=None, y=None, size=None):
         if size is None:
@@ -74,22 +114,23 @@ class Guide(PyroModule):
             pyro.sample("z", self.z_dist(t, y, x))
 
     def t_dist(self, x):
-        logits = self.t_nn(x)  # single layer
+        logits = self.t_nn(x)
         return Bernoulli(logits=logits)
 
     def y_dist(self, t, x):
         # The first n-1 layers are identical for all t values.
-        hidden = self.y_nn(x)  # multiple layers
+        hidden = self.y_nn(x)
         # In the final layer params are not shared among t values.
-        logits0 = self.y0_nn(hidden)  # single layer
-        logits1 = self.y1_nn(hidden)  # single layer
+        logits0 = self.y0_nn(hidden)
+        logits1 = self.y1_nn(hidden)
         logits = torch.where(t, logits1, logits0)
         return Bernoulli(logits=logits)
 
     def z_dist(self, t, y, x):
         # Parameters are not shared among t values.
-        loc0, scale0 = self.z0_nn(y, x)  # multiple layers
-        loc1, scale1 = self.z1_nn(y, x)  # multiple layers
+        y_x = torch.cat([y.unsqueeze(-1), x], dim=-1)
+        loc0, scale0 = self.z0_nn(y_x)
+        loc1, scale1 = self.z1_nn(y_x)
         loc = torch.where(t, loc1, loc0)
         scale = torch.where(t, scale1, scale0)
         return Normal(loc, scale)
@@ -147,7 +188,8 @@ def train(args, x, t, y):
     dataset = TensorDataset(x, t, y)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
     num_steps = args.num_epochs * len(dataloader)
-    optim = ClippedAdam({"lr": args.learning_ratee,
+    optim = ClippedAdam({"lr": args.learning_rate,
+                         "weight_decay": args.weight_decay,
                          "lrd": args.learning_rate_decay ** (1 / num_steps)})
     svi = SVI(model, guide, optim, TraceCausalEffect_ELBO())
     for epoch in range(args.num_epochs):
@@ -185,11 +227,15 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.0.0')
     parser = argparse.ArgumentParser(description="Causal Effect Variational Autoencoder")
+    parser.add_argument("--feature-dim", default=5, type=int)
     parser.add_argument("--latent-dim", default=20, type=int)
+    parser.add_argument("--num-layers", default=3, type=int)
+    parser.add_argument("--hidden-size", default=200, type=int)
     parser.add_argument("-n", "--num-epochs", default=1000, type=int)
     parser.add_argument("-b", "--batch-size", default=100, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-lrd", "--learning-rate-decay", default=0.1, type=float)
+    parser.add_argument("--weight-decay", default=1e-4, type=float)
     parser.add_argument("--seed", default=1234567890, type=int)
     args = parser.parse_args()
     main(args)
