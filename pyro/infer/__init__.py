@@ -2,6 +2,7 @@ from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior, TracePr
 from pyro.infer.csis import CSIS
 from pyro.infer.discrete import infer_discrete
 from pyro.infer.elbo import ELBO
+from pyro.infer.energy_distance import EnergyDistance
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
 from pyro.infer.mcmc.api import MCMC
@@ -12,7 +13,6 @@ from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svgd import SVGD, IMQSteinKernel, RBFSteinKernel
 from pyro.infer.svi import SVI
-from pyro.infer.trace_crps import Trace_CRPS
 from pyro.infer.trace_elbo import JitTrace_ELBO, Trace_ELBO
 from pyro.infer.trace_mean_field_elbo import JitTraceMeanField_ELBO, TraceMeanField_ELBO
 from pyro.infer.trace_mmd import Trace_MMD
@@ -28,6 +28,7 @@ __all__ = [
     "is_validation_enabled",
     "ELBO",
     "EmpiricalMarginal",
+    "EnergyDistance",
     "HMC",
     "Importance",
     "IMQSteinKernel",
@@ -50,7 +51,6 @@ __all__ = [
     "TracePosterior",
     "TracePredictive",
     "TraceTailAdaptive_ELBO",
-    "Trace_CRPS",
     "Trace_ELBO",
     "Trace_MMD",
 ]

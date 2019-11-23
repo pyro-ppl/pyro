@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, Trace_CRPS, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
+from pyro.infer import (SVI, EnergyDistance, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
                         TraceTailAdaptive_ELBO, config_enumerate)
 from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
@@ -22,16 +22,16 @@ logger = logging.getLogger(__name__)
 # This file tests a variety of model,guide pairs with valid and invalid structure.
 
 
-def Trace_CRPS_prior(**kwargs):
+def EnergyDistance_prior(**kwargs):
     kwargs["prior_scale"] = 0.0
     kwargs.pop("strict_enumeration_warning", None)
-    return Trace_CRPS(**kwargs)
+    return EnergyDistance(**kwargs)
 
 
-def Trace_CRPS_noprior(**kwargs):
+def EnergyDistance_noprior(**kwargs):
     kwargs["prior_scale"] = 1.0
     kwargs.pop("strict_enumeration_warning", None)
-    return Trace_CRPS(**kwargs)
+    return EnergyDistance(**kwargs)
 
 
 def assert_ok(model, guide, elbo, **kwargs):
@@ -89,8 +89,8 @@ def assert_warning(model, guide, elbo):
     Trace_ELBO,
     TraceGraph_ELBO,
     TraceEnum_ELBO,
-    Trace_CRPS_prior,
-    Trace_CRPS_noprior,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
 ])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
@@ -1871,8 +1871,8 @@ def test_tail_adaptive_warning():
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_prior,
-    Trace_CRPS_noprior,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
 ])
 def test_reparam_ok(Elbo):
 
@@ -1891,8 +1891,8 @@ def test_reparam_ok(Elbo):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_prior,
-    Trace_CRPS_noprior,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
 ])
 def test_reparam_mask_ok(Elbo, mask):
 
@@ -1918,8 +1918,8 @@ def test_reparam_mask_ok(Elbo, mask):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_prior,
-    Trace_CRPS_noprior,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
 ])
 def test_reparam_mask_plate_ok(Elbo, mask):
     data = torch.randn(2, 3).exp()
@@ -1943,8 +1943,8 @@ def test_reparam_mask_plate_ok(Elbo, mask):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_prior,
-    Trace_CRPS_noprior,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
 ])
 def test_reparam_scale_ok(Elbo, scale):
 
@@ -1969,8 +1969,8 @@ def test_reparam_scale_ok(Elbo, scale):
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
     TraceMeanField_ELBO,
-    Trace_CRPS_prior,
-    Trace_CRPS_noprior,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
 ])
 def test_reparam_scale_plate_ok(Elbo, scale):
     data = torch.randn(2, 3).exp()
@@ -1991,8 +1991,8 @@ def test_reparam_scale_plate_ok(Elbo, scale):
 
 
 @pytest.mark.parametrize("Elbo", [
-    Trace_CRPS_prior,
-    Trace_CRPS_noprior,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
 ])
 def test_no_log_prob_ok(Elbo):
 

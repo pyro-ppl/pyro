@@ -78,7 +78,7 @@ Stein Methods
 Likelihood free methods
 -----------------------
 
-.. automodule:: pyro.infer.trace_crps
+.. automodule:: pyro.infer.energy_distance
     :members:
     :undoc-members:
     :special-members: __call__
