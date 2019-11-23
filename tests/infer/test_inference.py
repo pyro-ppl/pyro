@@ -12,8 +12,9 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO, Trace_CRPS, Trace_ELBO,
-                        Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO)
+from pyro.infer import (SVI, EnergyDistance, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO,
+                        Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
+                        TraceTailAdaptive_ELBO)
 from pyro.infer.util import torch_item
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
@@ -613,7 +614,7 @@ class SafetyTests(TestCase):
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.parametrize("prior_scale", [0, 1e-4])
-def test_crps_univariate(prior_scale):
+def test_energy_distance_univariate(prior_scale):
 
     def model(data):
         loc = pyro.sample("loc", dist.Normal(0, 100))
@@ -633,7 +634,8 @@ def test_crps_univariate(prior_scale):
 
     data = 10.0 + torch.randn(8)
     adam = optim.Adam({"lr": 0.1})
-    svi = SVI(model, guide, adam, Trace_CRPS(num_particles=32, prior_scale=prior_scale))
+    loss_fn = EnergyDistance(num_particles=32, prior_scale=prior_scale)
+    svi = SVI(model, guide, adam, loss_fn)
     for step in range(2001):
         loss = svi.step(data)
         if step % 20 == 0:
@@ -651,7 +653,7 @@ def test_crps_univariate(prior_scale):
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.parametrize("prior_scale", [0, 1])
-def test_crps_multivariate(prior_scale):
+def test_energy_distance_multivariate(prior_scale):
 
     def model(data):
         loc = torch.zeros(2)
@@ -666,9 +668,8 @@ def test_crps_multivariate(prior_scale):
 
     cov = torch.tensor([[1, 0.8], [0.8, 1]])
     data = dist.MultivariateNormal(torch.zeros(2), cov).sample([10])
-    svi = SVI(model, guide,
-              optim.Adam({"lr": 0.1}),
-              Trace_CRPS(num_particles=32, prior_scale=prior_scale))
+    loss_fn = EnergyDistance(num_particles=32, prior_scale=prior_scale)
+    svi = SVI(model, guide, optim.Adam({"lr": 0.1}), loss_fn)
     for step in range(2001):
         loss = svi.step(data)
         if step % 20 == 0:

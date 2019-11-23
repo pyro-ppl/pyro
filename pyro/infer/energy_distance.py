@@ -23,15 +23,27 @@ def _squared_error(x, y, scale, mask):
         return scale_and_mask(error, scale, mask)
 
 
-class Trace_CRPS:
-    """
-    Posterior predictive CRPS or its generalization the energy loss [1], with
-    optional Bayesian regularization by the prior.
+class EnergyDistance:
+    r"""
+    Posterior predictive energy distance [1,2] with optional Bayesian
+    regularization by the prior.
 
-    This is a likelihood-free method, and can be used for likelihoods without
-    tractable density functions. CRPS and energy loss are robust loss
-    functions, and are well defined for any distribution with finite absolute
-    moment ``E[|X|]`` or fractional moment ``E[||X||^beta]``, respectively.
+    Let `p(x,z)=p(z) p(x|z)` be the model, `q(z|x)` be the guide.  Then given
+    data `x` and drawing an iid pair of samples :math:`(Z,X)` and
+    :math:`(Z',X')` (where `Z` is latent and `X` is the posterior predictive),
+
+    .. math ::
+
+        & Z \sim q(z|x); \quad X \sim p(x|Z) \\
+        & Z' \sim q(z|x); \quad X' \sim p(x|Z') \\
+        & loss = \mathbb E_X \|X-x\|^\beta
+               - \frac 1 2 \mathbb E_{X,X'}\|X-X'\|^\beta
+               - \lambda \mathbb E_Z \log p(Z)
+
+    This is a likelihood-free inference algorithm, and can be used for
+    likelihoods without tractable density functions. The :math:`\beta` energy
+    distance is a robust loss functions, and is well defined for any
+    distribution with finite fractional moment :math:`\mathbb E[\|X\|^\beta]`.
 
     This requires static model structure, a fully reparametrized guide, and
     reparametrized likelihood distributions in the model. Model latent
@@ -39,10 +51,17 @@ class Trace_CRPS:
 
     **References**
 
-    [1] Tilmann Gneiting, Adrian E. Raftery (2007)
+    [1] Gabor J. Szekely, Maria L. Rizzo (2003)
+        Energy Statistics: A Class of Statistics Based on Distances.
+    [2] Tilmann Gneiting, Adrian E. Raftery (2007)
         Strictly Proper Scoring Rules, Prediction, and Estimation.
         https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
 
+    :param float beta: Exponent :math:`\beta` from [1,2]. The loss function is
+        strictly proper for distributions with finite :math:`beta`-absolute moment
+        :math:`E[\|X\|^\beta]`. Thus for heavy tailed distributions ``beta`` should
+        be small, e.g. for ``Cauchy`` distributions, :math:`\beta<1` is strictly
+        proper. Defaults to 1. Must be in the open interval (0,2).
     :param float prior_scale: Nonnegative scale for prior regularization.
         Model parameters are trained only if this is positive.
         If zero (default), then model log densities will not be computed
@@ -52,28 +71,23 @@ class Trace_CRPS:
     :param int max_plate_nesting: Optional bound on max number of nested
         :func:`pyro.plate` contexts. If omitted, this will guess a valid value
         by running the (model,guide) pair once.
-    :param float beta: Exponent ``beta`` from [1]. The loss function is
-        strictly proper for distributions with finite ``beta``-absolute moment
-        ``E[||X||^beta]``; thus for heavy tailed distributions, ``beta`` should
-        be small, e.g. for ``Cauchy`` distributions, ``beta<1`` is strictly
-        proper. Defaults to 1. Must be in the open interval (0,2).
     """
     def __init__(self,
+                 beta=1.,
                  prior_scale=0.,
                  num_particles=2,
-                 max_plate_nesting=float('inf'),
-                 beta=1.):
+                 max_plate_nesting=float('inf')):
+        if not (isinstance(beta, (float, int)) and 0 < beta and beta < 2):
+            raise ValueError("Expected beta in (0,2), actual {}".format(beta))
         if not (isinstance(prior_scale, (float, int)) and prior_scale >= 0):
             raise ValueError("Expected prior_scale >= 0, actual {}".format(prior_scale))
         if not (isinstance(num_particles, int) and num_particles >= 2):
             raise ValueError("Expected num_particles >= 2, actual {}".format(num_particles))
-        if not (isinstance(beta, (float, int)) and 0 < beta and beta < 2):
-            raise ValueError("Expected beta in (0,2), actual {}".format(beta))
+        self.beta = beta
         self.prior_scale = prior_scale
         self.num_particles = num_particles
         self.vectorize_particles = True
         self.max_plate_nesting = max_plate_nesting
-        self.beta = beta
 
     def _pow(self, x):
         if self.beta == 1:
@@ -111,13 +125,13 @@ class Trace_CRPS:
                 if site["type"] == "sample":
                     warn_if_nan(site["value"], site["name"])
                     if not getattr(site["fn"], "has_rsample", False):
-                        raise ValueError("Trace_CRPS requires fully reparametrized guides")
+                        raise ValueError("EnergyDistance requires fully reparametrized guides")
             for trace in model_trace.nodes.values():
                 if site["type"] == "sample":
                     if site["is_observed"]:
                         warn_if_nan(site["value"], site["name"])
                         if not getattr(site["fn"], "has_rsample", False):
-                            raise ValueError("Trace_CRPS requires reparametrized likelihoods")
+                            raise ValueError("EnergyDistance requires reparametrized likelihoods")
 
         if self.prior_scale > 0:
             model_trace.compute_log_prob(site_filter=lambda name, site: not site["is_observed"])
@@ -147,7 +161,7 @@ class Trace_CRPS:
         if not data:
             raise ValueError("Found no observations")
 
-        # Compute crps from mean average error and generalized entropy.
+        # Compute energy distance from mean average error and generalized entropy.
         squared_error = []  # E[ (X - x)^2 ]
         squared_entropy = []  # E[ (X - X')^2 ]
         prototype = next(iter(data.values()))
@@ -175,7 +189,7 @@ class Trace_CRPS:
         squared_entropy = reduce(operator.add, squared_entropy)
         error = self._pow(squared_error).mean()  # E[ ||X-x||^beta ]
         entropy = self._pow(squared_entropy).mean()  # E[ ||X-X'||^beta ]
-        crps = error - 0.5 * entropy
+        energy = error - 0.5 * entropy
 
         # Compute prior.
         log_prior = 0
@@ -185,7 +199,7 @@ class Trace_CRPS:
                     log_prior = log_prior + site["log_prob_sum"]
 
         # Compute final loss.
-        loss = crps - self.prior_scale * log_prior
+        loss = energy - self.prior_scale * log_prior
         warn_if_nan(loss, "loss")
         return loss
 
@@ -193,4 +207,4 @@ class Trace_CRPS:
         """
         Not implemented. Added for compatibility with unit tests only.
         """
-        raise NotImplementedError("Trace_CRPS implements only surrogate loss")
+        raise NotImplementedError("EnergyDistance implements only surrogate loss")

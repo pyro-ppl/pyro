@@ -75,7 +75,7 @@ class Stable(TorchDistribution):
     This implements a reparametrized sampler :meth:`rsample` , but does not
     implement :meth:`log_prob` . Use in inference is thus limited to
     likelihood-free algorithms such as
-    :class:`~pyro.infer.trace_crps.Trace_CRPS`.
+    :class:`~pyro.infer.energy_distance.EnergyDistance`.
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
