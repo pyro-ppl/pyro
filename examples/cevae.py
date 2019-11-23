@@ -175,13 +175,13 @@ def ite(model, guide, x, num_samples=100):
     This has complexity ``O(len(x) * num_samples ** 2``.
     """
     with pyro.plate("guide_particles", num_samples, dim=-2):
-        with poutine.block(hide=["y", "t"]):
-            guide_trace = poutine.trace(guide).get_trace(x)
+        with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
+            guide(x)
         with pyro.plate("model_particles", num_samples, dim=-3):
-            with poutine.do(data=dict(t=0)):
-                y0 = poutine.replay(model, guide_trace)(x).mean(0)
-            with poutine.do(data=dict(t=2)):
-                y1 = poutine.replay(model, guide_trace)(x).mean(0)
+            with poutine.do(data=dict(t=torch.tensor(0.))):
+                y0 = poutine.replay(model, tr.trace)(x).mean(0)
+            with poutine.do(data=dict(t=torch.tensor(1.))):
+                y1 = poutine.replay(model, tr.trace)(x).mean(0)
     return (y1 - y0).mean(0)
 
 
@@ -201,7 +201,7 @@ def train(args, x, t, y):
     for epoch in range(args.num_epochs):
         loss = 0
         for x, t, y in dataloader:
-            loss += svi.step(x, t, y, size=len(dataset))
+            loss += svi.step(x, t, y, size=len(dataset)) / len(dataset)
         print("epoch {: >3d} loss = {:0.6g}".format(epoch, loss / len(dataloader)))
     return model, guide
 
@@ -221,15 +221,18 @@ def main(args):
 
     # Generate synthetic data.
     pyro.set_rng_seed(args.seed)
-    x, t, y = generate_data(args)
+    x_train, t_train, y_train = generate_data(args)
 
     # Train.
     pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
-    train(args, x, t, y)
+    model, guide =train(args, x_train, t_train, y_train)
 
     # Evaluate.
-    raise NotImplementedError("TODO evaluate")
+    x_test, t_test, y_test = generate_data(args)
+    est_ite = ite(model, guide, x_test, num_samples=10)
+    est_ate = est_ite.mean()
+    print("estimated ATE = {:0.3g}".format(est_ate.item()))
 
 
 if __name__ == "__main__":
@@ -240,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument("--latent-dim", default=20, type=int)
     parser.add_argument("--hidden-dim", default=200, type=int)
     parser.add_argument("--num-layers", default=3, type=int)
-    parser.add_argument("-n", "--num-epochs", default=1000, type=int)
+    parser.add_argument("-n", "--num-epochs", default=10, type=int)
     parser.add_argument("-b", "--batch-size", default=100, type=int)
     parser.add_argument("-lr", "--learning-rate", default=1e-3, type=float)
     parser.add_argument("-lrd", "--learning-rate-decay", default=0.1, type=float)
