@@ -26,10 +26,10 @@ class ReweightedWakeSleep(ELBO):
     :param int num_particles: The number of particles/samples used to form the objective
         (gradient) estimator. Default is 2.
     :param insomnia: The scaling between the wake-phi and sleep-phi terms. Default is 1.0 [wake-phi]
-    :param bool model_has_params: Whether to bother running the wake-theta computation;
-        useful only for pure sleep-phi (csis). Default is True.
+    :param bool model_has_params: Indicate if model has learnable params. Useful in avoiding extra
+        computation when running in pure sleep mode [csis]. Default is True.
     :param int num_sleep_particles: The number of particles used to form the sleep-phi estimator.
-        Default is 2 [matching `num_particles`].
+        Matches `num_particles` by default.
     :param bool vectorize_particles: Whether the traces should be vectorised
         across `num_particles`. Default is True.
     :param int max_plate_nesting: Bound on max number of nested
