@@ -37,7 +37,6 @@ class TorchDistributionMixin(Distribution):
             batched). The shape of the result should be `self.shape()`.
         :rtype: torch.Tensor
         """
-        # RWS: can possibly add args to __call__ to do rsample or not
         return self.rsample(sample_shape) if self.has_rsample else self.sample(sample_shape)
 
     @property
