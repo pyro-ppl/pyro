@@ -6,7 +6,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import get_importance_trace_detached
+from pyro.infer.enum import get_importance_trace
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_if_enumerated, check_model_guide_match, warn_if_nan
@@ -88,8 +88,9 @@ class ReweightedWakeSleep(ELBO):
         """
         Returns a single trace from the guide, and the model that is run against it.
         """
-        model_trace, guide_trace = get_importance_trace_detached(
-            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
+        model_trace, guide_trace = get_importance_trace("flat", self.max_plate_nesting,
+                                                        model, guide, detach=True,
+                                                        *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
