@@ -413,7 +413,10 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     if elbo_impl is RenyiELBO:
         elbo = elbo_impl(alpha=0.2, num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     elif elbo_impl is ReweightedWakeSleep:
-        elbo = elbo_impl(num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
+        if gamma_dist is ShapeAugmentedGamma:
+            pytest.xfail(reason="ShapeAugmentedGamma not suported for ReweightedWakeSleep")
+        else:
+            elbo = elbo_impl(num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     else:
         elbo = elbo_impl(max_plate_nesting=1, strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo)
