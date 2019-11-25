@@ -77,13 +77,6 @@ class ReweightedWakeSleep(ELBO):
         assert(insomnia >= 0 and insomnia <= 1), \
             "insomnia should be in [0, 1]"
 
-        print("Running {} {}".format(
-            "wake-theta" if model_has_params or insomnia > 0. else "",
-            "wake-phi" if insomnia == 1. else
-            "sleep-phi" if insomnia == 0. else
-            "({}*wake-phi + {}*sleep-phi)".format(insomnia, 1. - insomnia)
-        ))
-
     def _get_trace(self, model, guide, *args, **kwargs):
         """
         Returns a single trace from the guide, and the model that is run against it.
