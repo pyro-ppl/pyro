@@ -38,7 +38,6 @@ def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, det
     Returns a single trace from the guide, which can optionally be detached,
     and the model that is run against it.
     """
-
     guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
     if detach:
         guide_trace = guide_trace.detach()
