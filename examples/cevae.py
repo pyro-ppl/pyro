@@ -1,3 +1,19 @@
+"""
+This example implements the Causal Effect Variational Autoencoder [1].
+
+This demonstrates a number of innovations including:
+- a generative model for causal effect inference with hidden confounders;
+- a model and guide with twin neural nets to allow imbalanced treatment; and
+- a custom training loss that includes both ELBO terms and extra terms needed
+  to train the guide to be able to answer counterfactual queries.
+
+**References**
+
+[1] C. Louizos, U. Shalit, J. Mooij, D. Sontag, R. Zemel, M. Welling (2017).
+    Causal Effect Inference with Deep Latent-Variable Models.
+    http://papers.nips.cc/paper/7223-causal-effect-inference-with-deep-latent-variable-models.pdf
+    https://github.com/AMLab-Amsterdam/CEVAE
+"""
 import argparse
 
 import torch
@@ -23,7 +39,16 @@ class FullyConnected(nn.Sequential):
         super().__init__(*layers)
 
 
+def nn_init(m):
+    if isinstance(m, nn.Linear):
+        m.weight.data.normal_(0, 0.1 / m.in_features ** 0.5)
+        m.bias.data.fill_(0)
+
+
 class DiagNormalNet(nn.Module):
+    """
+    FullyConnected network outputting a constrained ``loc,scale`` pair.
+    """
     def __init__(self, sizes):
         super().__init__()
         self.fc = FullyConnected(sizes[:-1] + [sizes[-1] * 2])
@@ -36,13 +61,10 @@ class DiagNormalNet(nn.Module):
         return loc, scale
 
 
-def nn_init(m):
-    if isinstance(m, nn.Linear):
-        m.weight.data.normal_(0, 0.1 / m.in_features ** 0.5)
-        m.bias.data.fill_(0)
-
-
 class BernoulliNet(nn.Module):
+    """
+    FullyConnected network outputting a single ``logits`` value.
+    """
     def __init__(self, sizes):
         super().__init__()
         self.fc = FullyConnected(sizes + [1])
@@ -52,6 +74,18 @@ class BernoulliNet(nn.Module):
 
 
 class Model(PyroModule):
+    """
+    Generative model for a causal model with latent confounder::
+
+        z ~ p(z)      # latent confounder
+        x ~ p(x|z)    # partial noisy observation of z
+        t ~ p(t|z)    # treatment, whose application is biased by z
+        y ~ p(y|t,z)  # outcome
+
+    Each of these distributions is defined by a neural network.  The ``y``
+    distribution is defined by a disjoint pair of neural networks defining
+    ``p(y|t=0,z)`` and ``p(y|t=1,z)``; this allows highly imbalanced treatment.
+    """
     def __init__(self, args):
         self.latent_dim = args.latent_dim
         super().__init__()
@@ -94,6 +128,18 @@ class Model(PyroModule):
 
 
 class Guide(PyroModule):
+    """
+    Inference model for causal effect estimation.
+
+        t ~ p(t|x)      # treatment
+        y ~ p(y|t,x)    # outcome
+        z ~ p(t|y,t,x)  # latent confounder, an embedding
+
+    Each of these distributions is defined by a neural network.  The ``y`` and
+    ``z`` distributions are defined by disjoint pairs of neural networks
+    defining ``p(-|t=0,...)`` and ``p(-|t=1,...)``; this allows highly
+    imbalanced treatment.
+    """
     def __init__(self, args):
         self.latent_dim = args.latent_dim
         super().__init__()
@@ -113,9 +159,11 @@ class Guide(PyroModule):
         if size is None:
             size = x.size(0)
         with pyro.plate("data", size, subsample=x):
-            t = pyro.sample("t", self.t_dist(x), obs=t)
-            y = pyro.sample("y", self.y_dist(t, x), obs=y)
-            pyro.sample("z", self.z_dist(t, y, x))
+            t = pyro.sample("t", self.t_dist(x),
+                            obs=t, infer={"is_auxiliary": True})
+            y = pyro.sample("y", self.y_dist(t, x),
+                            obs=y, infer={"is_auxiliary": True})
+            pyro.sample("z", self.z_dist(y, t, x))
 
     def t_dist(self, x):
         logits = self.t_nn(x)
@@ -130,7 +178,7 @@ class Guide(PyroModule):
         logits = torch.where(t.bool(), logits1, logits0)
         return dist.Bernoulli(logits=logits)
 
-    def z_dist(self, t, y, x):
+    def z_dist(self, y, t, x):
         # Parameters are not shared among t values.
         y_x = torch.cat([y.unsqueeze(-1), x], dim=-1)
         loc0, scale0 = self.z0_nn(y_x)
@@ -174,14 +222,13 @@ def ite(model, guide, x, num_samples=100):
     Computes Individual Treatment Effect for a batch of data ``x``.
     This has complexity ``O(len(x) * num_samples ** 2``.
     """
-    with pyro.plate("guide_particles", num_samples, dim=-2):
+    with pyro.plate("num_particles", num_samples, dim=-2):
         with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
             guide(x)
-        with pyro.plate("model_particles", num_samples, dim=-3):
-            with poutine.do(data=dict(t=torch.tensor(0.))):
-                y0 = poutine.replay(model, tr.trace)(x).mean(0)
-            with poutine.do(data=dict(t=torch.tensor(1.))):
-                y1 = poutine.replay(model, tr.trace)(x).mean(0)
+        with poutine.do(data=dict(t=torch.tensor(0.))):
+            y0 = poutine.replay(model, tr.trace)(x)
+        with poutine.do(data=dict(t=torch.tensor(1.))):
+            y1 = poutine.replay(model, tr.trace)(x)
     return (y1 - y0).mean(0)
 
 
@@ -207,13 +254,20 @@ def train(args, x, t, y):
 
 
 def generate_data(args):
-    # args.feature_dim = 1
-    # args.latent_dim = 5
+    """
+    This implements the generative process of [1], but using larger feature and
+    latent spaces ([1] assumes ``feature_dim=1`` and ``latent_dim=5``).
+    """
     z = dist.Bernoulli(0.5).sample([args.num_data])
     x = dist.Normal(z, 5 * z + 3 * (1 - z)).sample([args.feature_dim]).t()
     t = dist.Bernoulli(0.75 * z + 0.25 * (1 - z)).sample()
     y = dist.Bernoulli(logits=3 * (z + 2 * (2 * t - 2))).sample()
-    return x, t, y
+
+    # Compute true ite for evaluation (via Monte Carlo approximation).
+    t0_t1 = torch.tensor([[0.], [1.]])
+    y_t0, y_t1 = dist.Bernoulli(logits=3 * (z + 2 * (2 * t0_t1 - 2))).mean
+    true_ite = y_t1 - y_t0
+    return x, t, y, true_ite
 
 
 def main(args):
@@ -221,15 +275,19 @@ def main(args):
 
     # Generate synthetic data.
     pyro.set_rng_seed(args.seed)
-    x_train, t_train, y_train = generate_data(args)
+    x_train, t_train, y_train, _ = generate_data(args)
 
     # Train.
     pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
-    model, guide =train(args, x_train, t_train, y_train)
+    model, guide = train(args, x_train, t_train, y_train)
 
     # Evaluate.
-    x_test, t_test, y_test = generate_data(args)
+    x_test, t_test, y_test, true_ite = generate_data(args)
+    true_ate = true_ite.mean()
+    print("true ATE = {:0.3g}".format(true_ate.item()))
+    naive_ate = y_test[t_test == 1].mean() - y_test[t_test == 0].mean()
+    print("naive ATE = {:0.3g}".format(naive_ate))
     est_ite = ite(model, guide, x_test, num_samples=10)
     est_ate = est_ite.mean()
     print("estimated ATE = {:0.3g}".format(est_ate.item()))
