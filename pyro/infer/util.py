@@ -130,7 +130,7 @@ class MultiFrameTensor(dict):
 
 
 def compute_site_dice_factor(site):
-    log_denom = None
+    log_denom = 0
     log_prob = site["packed"]["score_parts"].score_function  # not scaled by subsampling
     dims = getattr(log_prob, "_pyro_dims", "")
     if site["infer"].get("enumerate"):
@@ -140,15 +140,15 @@ def compute_site_dice_factor(site):
                 log_prob = log_prob - log_prob.detach()
             log_prob = log_prob - math.log(num_samples)
             if not isinstance(log_prob, torch.Tensor):
-                log_prob = torch.tensor(float(log_prob), device=site["value"].device)
+                log_prob = torch.tensor(log_prob, device=site["value"].device)
             log_prob._pyro_dims = dims
             # I don't know why the following broadcast is needed, but it makes tests pass:
             log_prob, _ = packed.broadcast_all(log_prob, site["packed"]["log_prob"])
         elif site["infer"]["enumerate"] == "sequential":
-            log_denom = math.log(site["infer"]["_enum_total"])
+            log_denom = math.log(site["infer"].get("_enum_total", num_samples))
     else:  # site was monte carlo sampled
         if is_identically_zero(log_prob):
-            log_prob = torch.tensor(0., device=site["value"].device)
+            log_prob = torch.tensor(log_prob, device=site["value"].device)
         log_prob = log_prob - log_prob.detach()
         log_prob._pyro_dims = dims
 
@@ -193,9 +193,10 @@ class Dice(object):
 
             ordinal = ordering[name]
             log_prob, log_denom = compute_site_dice_factor(site)
-            log_probs[ordinal].append(log_prob)
-            if log_denom is not None:
-                log_denoms[ordinal] += math.log(site["infer"]["_enum_total"])
+            if not is_identically_zero(log_prob):
+                log_probs[ordinal].append(log_prob)
+            if not is_identically_zero(log_denom):
+                log_denoms[ordinal] += log_denom
 
         self.log_denom = log_denoms
         self.log_probs = log_probs
