@@ -9,7 +9,7 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
-from pyro.infer.util import is_validation_enabled
+from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.ops import packed
 from pyro.ops.contract import einsum
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
@@ -83,6 +83,9 @@ def _compute_tmc_estimate(model_trace, guide_trace):
     # factors
     log_factors = _compute_tmc_factors(model_trace, guide_trace)
     log_factors += _compute_dice_factors(model_trace, guide_trace)
+
+    if not log_factors:
+        return 0.
 
     # loss
     eqn = ",".join([f._pyro_dims for f in log_factors]) + "->"
@@ -203,9 +206,14 @@ class TensorMonteCarlo(ELBO):
 
     def loss(self, model, guide, *args, **kwargs):
         with torch.no_grad():
-            return self.differentiable_loss(model, guide, *args, **kwargs).item()
+            loss = self.differentiable_loss(model, guide, *args, **kwargs)
+            if is_identically_zero(loss) or not loss.requires_grad:
+                return torch_item(loss)
+            return loss.item()
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         loss = self.differentiable_loss(model, guide, *args, **kwargs)
+        if is_identically_zero(loss) or not loss.requires_grad:
+            return torch_item(loss)
         loss.backward()
         return loss.item()
