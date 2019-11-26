@@ -26,9 +26,10 @@ def _compute_dice_factors(model_trace, guide_trace):
                 continue
 
             log_prob, log_denom = compute_site_dice_factor(site)
-            if log_denom is not None:
+            if not is_identically_zero(log_denom):
                 log_prob = log_prob - log_denom
-            log_probs.append(log_prob)
+            if not is_identically_zero(log_prob):
+                log_probs.append(log_prob)
 
     return log_probs
 
