@@ -1,4 +1,3 @@
-import math
 import queue
 import warnings
 
@@ -9,7 +8,7 @@ import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
-from pyro.infer.util import is_validation_enabled
+from pyro.infer.util import compute_site_dice_factor, is_validation_enabled, torch_item
 from pyro.ops import packed
 from pyro.ops.contract import einsum
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
@@ -26,34 +25,10 @@ def _compute_dice_factors(model_trace, guide_trace):
             if role == "model" and name in guide_trace:
                 continue
 
-            log_prob = site["packed"]["score_parts"].score_function  # not scaled by subsampling
-            dims = getattr(log_prob, "_pyro_dims", "")
-            if not isinstance(log_prob, torch.Tensor):
-                log_prob = torch.tensor(float(log_prob), device=site["value"].device)
-
-            if site["infer"].get("enumerate") == "parallel":
-                num_samples = site["infer"].get("num_samples")
-                if num_samples is not None:
-                    if not is_identically_zero(log_prob):
-                        log_prob = log_prob - log_prob.detach()
-                    else:
-                        log_prob = torch.zeros_like(log_prob)
-                    log_prob = log_prob - math.log(num_samples)
-                    log_prob._pyro_dims = dims
-                    log_prob, _ = packed.broadcast_all(log_prob, site["packed"]["log_prob"])
-                    log_probs.append(log_prob)
-            elif site["infer"].get("enumerate") == "sequential":
-                num_samples = site["infer"].get("num_samples", site["infer"]["_enum_total"])
-                log_denom = torch.tensor(-math.log(num_samples),
-                                         device=site["value"].device)
-                log_denom._pyro_dims = dims
-                log_probs.append(log_denom)
-            else:  # site was singly monte carlo sampled
-                if is_identically_zero(log_prob) or site["fn"].has_rsample:
-                    continue
-                log_prob = log_prob - log_prob.detach()
-                log_prob._pyro_dims = dims
-                log_probs.append(log_prob)
+            log_prob, log_denom = compute_site_dice_factor(site)
+            if log_denom is not None:
+                log_prob = log_prob - log_denom
+            log_probs.append(log_prob)
 
     return log_probs
 
@@ -83,6 +58,9 @@ def _compute_tmc_estimate(model_trace, guide_trace):
     # factors
     log_factors = _compute_tmc_factors(model_trace, guide_trace)
     log_factors += _compute_dice_factors(model_trace, guide_trace)
+
+    if not log_factors:
+        return 0.
 
     # loss
     eqn = ",".join([f._pyro_dims for f in log_factors]) + "->"
@@ -203,9 +181,14 @@ class TensorMonteCarlo(ELBO):
 
     def loss(self, model, guide, *args, **kwargs):
         with torch.no_grad():
-            return self.differentiable_loss(model, guide, *args, **kwargs).item()
+            loss = self.differentiable_loss(model, guide, *args, **kwargs)
+            if is_identically_zero(loss) or not loss.requires_grad:
+                return torch_item(loss)
+            return loss.item()
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         loss = self.differentiable_loss(model, guide, *args, **kwargs)
+        if is_identically_zero(loss) or not loss.requires_grad:
+            return torch_item(loss)
         loss.backward()
         return loss.item()

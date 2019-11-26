@@ -11,6 +11,7 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
                         config_enumerate)
+from pyro.infer.tmc import TensorMonteCarlo
 from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
@@ -72,7 +73,7 @@ def assert_warning(model, guide, elbo):
             logger.info(warning)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
@@ -85,13 +86,13 @@ def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         pass
 
     elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
-    if strict_enumeration_warning and Elbo is TraceEnum_ELBO:
+    if strict_enumeration_warning and Elbo in (TraceEnum_ELBO, TensorMonteCarlo):
         assert_warning(model, guide, elbo)
     else:
         assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
@@ -102,13 +103,13 @@ def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         pass
 
     elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
-    if strict_enumeration_warning and Elbo is TraceEnum_ELBO:
+    if strict_enumeration_warning and Elbo in (TraceEnum_ELBO, TensorMonteCarlo):
         assert_warning(model, guide, elbo)
     else:
         assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_variable_clash_in_model_error(Elbo):
 
     def model():
@@ -123,7 +124,7 @@ def test_variable_clash_in_model_error(Elbo):
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_model_guide_dim_mismatch_error(Elbo):
 
     def model():
@@ -140,7 +141,7 @@ def test_model_guide_dim_mismatch_error(Elbo):
                  match='invalid log_prob shape|Model and guide event_dims disagree')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_model_guide_shape_mismatch_error(Elbo):
 
     def model():
@@ -173,7 +174,7 @@ def test_variable_clash_in_guide_error(Elbo):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_iplate_ok(subsample_size, Elbo):
 
     def model():
@@ -188,11 +189,13 @@ def test_iplate_ok(subsample_size, Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_iplate_variable_clash_error(Elbo):
 
     def model():
@@ -209,12 +212,14 @@ def test_iplate_variable_clash_error(Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_plate_ok(subsample_size, Elbo):
 
     def model():
@@ -229,12 +234,14 @@ def test_plate_ok(subsample_size, Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_plate_subsample_param_ok(subsample_size, Elbo):
 
     def model():
@@ -252,12 +259,14 @@ def test_plate_subsample_param_ok(subsample_size, Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 @pytest.mark.parametrize("shape,ok", [
     ((), True),
     ((1,), True),
@@ -282,6 +291,8 @@ def test_plate_param_size_mismatch_error(subsample_size, Elbo, shape, ok):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     if ok:
         assert_ok(model, guide, Elbo())
@@ -289,7 +300,7 @@ def test_plate_param_size_mismatch_error(subsample_size, Elbo, shape, ok):
         assert_error(model, guide, Elbo(), match="invalid shape of pyro.param")
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_plate_no_size_ok(Elbo):
 
     def model():
@@ -304,13 +315,15 @@ def test_plate_no_size_ok(Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, default="parallel", num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("max_plate_nesting", [0, float('inf')])
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_iplate_iplate_ok(subsample_size, Elbo, max_plate_nesting):
 
     def model():
@@ -331,13 +344,15 @@ def test_iplate_iplate_ok(subsample_size, Elbo, max_plate_nesting):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide, "parallel")
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo(max_plate_nesting=max_plate_nesting))
 
 
 @pytest.mark.parametrize("max_plate_nesting", [0, float('inf')])
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_iplate_iplate_swap_ok(subsample_size, Elbo, max_plate_nesting):
 
     def model():
@@ -358,12 +373,14 @@ def test_iplate_iplate_swap_ok(subsample_size, Elbo, max_plate_nesting):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide, "parallel")
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, default="parallel", num_samples=2)
 
     assert_ok(model, guide, Elbo(max_plate_nesting=max_plate_nesting))
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_iplate_in_model_not_guide_ok(subsample_size, Elbo):
 
     def model():
@@ -378,12 +395,14 @@ def test_iplate_in_model_not_guide_ok(subsample_size, Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 @pytest.mark.parametrize("is_validate", [True, False])
 def test_iplate_in_guide_not_model_error(subsample_size, Elbo, is_validate):
 
@@ -416,7 +435,7 @@ def test_plate_broadcast_error(Elbo):
     assert_error(model, model, Elbo(), match='Shape mismatch inside plate')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_plate_iplate_ok(Elbo):
 
     def model():
@@ -433,11 +452,13 @@ def test_plate_iplate_ok(Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_iplate_plate_ok(Elbo):
 
     def model():
@@ -456,11 +477,13 @@ def test_iplate_plate_ok(Elbo):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 @pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
 def test_plate_stack_ok(Elbo, sizes):
 
@@ -476,11 +499,13 @@ def test_plate_stack_ok(Elbo, sizes):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 @pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
 def test_plate_stack_and_plate_ok(Elbo, sizes):
 
@@ -498,6 +523,8 @@ def test_plate_stack_and_plate_ok(Elbo, sizes):
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(guide, num_samples=2)
 
     assert_ok(model, guide, Elbo())
 
@@ -514,7 +541,7 @@ def test_plate_stack_sizes(sizes):
     model()
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_nested_plate_plate_ok(Elbo):
 
     def model():
@@ -524,11 +551,17 @@ def test_nested_plate_plate_ok(Elbo):
             with pyro.plate("plate_inner", 11, 6) as ind_inner:
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
-    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(model)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(model, num_samples=2)
+    else:
+        guide = model
+
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_plate_reuse_ok(Elbo):
 
     def model():
@@ -542,11 +575,17 @@ def test_plate_reuse_ok(Elbo):
         with plate_outer as ind_outer, plate_inner as ind_inner:
             pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
-    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(model)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(model, num_samples=2)
+    else:
+        guide = model
+
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TensorMonteCarlo])
 def test_nested_plate_plate_dim_error_1(Elbo):
 
     def model():
@@ -557,7 +596,13 @@ def test_nested_plate_plate_dim_error_1(Elbo):
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
-    guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(model)
+    elif Elbo is TensorMonteCarlo:
+        guide = config_enumerate(model, num_samples=2)
+    else:
+        guide = model
+
     assert_error(model, guide, Elbo(), match='invalid log_prob shape')
 
 
