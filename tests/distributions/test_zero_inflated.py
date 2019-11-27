@@ -77,13 +77,13 @@ def test_zip_1_gate(total_count, probs):
 
 @pytest.mark.parametrize("gate", [0.0, 0.25, 0.5, 0.75, 1.0])
 @pytest.mark.parametrize("total_count", [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
-@pytest.mark.parametrize("probs", [0.1, 0.5, 0.9])
-def test_zip_mean_variance(gate, total_count, probs):
+@pytest.mark.parametrize("logits", [-0.5, 0.5, -0.9, 1.9])
+def test_zip_mean_variance(gate, total_count, logits):
     num_samples = 1000000
     zinb_ = ZeroInflatedNegativeBinomial(
         torch.tensor(gate),
         total_count=torch.tensor(total_count),
-        probs=torch.tensor(probs),
+        logits=torch.tensor(logits),
     )
     s = zinb_.sample((num_samples,))
     expected_mean = zinb_.mean
