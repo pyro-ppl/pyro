@@ -12,7 +12,7 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import config_enumerate
 from pyro.infer.importance import vectorized_importance_weights
-from pyro.infer.tmc import TensorMonteCarlo
+from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from tests.common import assert_equal
 
@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_samples", [None, 1000])
 @pytest.mark.parametrize("max_plate_nesting", [2, 3])
 def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
-    pyro.clear_param_store()
     qs = [pyro.param("q0", torch.tensor([0.4, 0.6], requires_grad=True))]
     for i in range(1, depth):
         qs.append(pyro.param(
@@ -53,7 +52,7 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
     expected_loss = (-elbo.differentiable_loss(enum_model, lambda: None)).exp()
     expected_grads = grad(expected_loss, qs)
 
-    tmc = TensorMonteCarlo(max_plate_nesting=max_plate_nesting)
+    tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
     tmc_model = config_enumerate(model, default="parallel", expand=False, num_samples=num_samples)
     actual_loss = (-tmc.differentiable_loss(tmc_model, lambda: None)).exp()
     actual_grads = grad(actual_loss, qs)
@@ -79,8 +78,6 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
 def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
                                 reparameterized, guide_type, expand):
     # compare iwae and tmc
-    pyro.clear_param_store()
-
     q2 = pyro.param("q2", torch.tensor(0.5, requires_grad=True))
     qs = (q2.unconstrained(),)
 
@@ -115,7 +112,7 @@ def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
     expected_loss = (vectorized_log_weights.logsumexp(dim=-1) - math.log(float(flat_num_samples))).exp()
     expected_grads = grad(expected_loss, qs)
 
-    tmc = TensorMonteCarlo(max_plate_nesting=max_plate_nesting)
+    tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
     tmc_model = config_enumerate(
         model, default="parallel", expand=expand, num_samples=num_samples)
     tmc_guide = config_enumerate(
@@ -143,8 +140,6 @@ def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
 @pytest.mark.parametrize("reparameterized", [False, True])
 def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expand, guide_type, reparameterized):
     # compare reparameterized and nonreparameterized gradient estimates
-    pyro.clear_param_store()
-
     q2 = pyro.param("q2", torch.tensor(0.5, requires_grad=True))
     qs = (q2.unconstrained(),)
 
@@ -167,7 +162,7 @@ def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expan
         for i in range(1, depth):
             x = pyro.sample("x{}".format(i), Normal(x, math.sqrt(1. / depth)))
 
-    tmc = TensorMonteCarlo(max_plate_nesting=max_plate_nesting)
+    tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
     tmc_model = config_enumerate(
         model, default="parallel", expand=expand, num_samples=num_samples)
     guide = factorized_guide if guide_type == "factorized" else \

@@ -140,17 +140,16 @@ def compute_site_dice_factor(site):
                 log_prob = log_prob - log_prob.detach()
             log_prob = log_prob - math.log(num_samples)
             if not isinstance(log_prob, torch.Tensor):
-                log_prob = torch.tensor(log_prob, device=site["value"].device)
+                log_prob = torch.tensor(float(log_prob), device=site["value"].device)
             log_prob._pyro_dims = dims
             # I don't know why the following broadcast is needed, but it makes tests pass:
             log_prob, _ = packed.broadcast_all(log_prob, site["packed"]["log_prob"])
         elif site["infer"]["enumerate"] == "sequential":
             log_denom = math.log(site["infer"].get("_enum_total", num_samples))
     else:  # site was monte carlo sampled
-        if is_identically_zero(log_prob):
-            log_prob = torch.tensor(log_prob, device=site["value"].device)
-        log_prob = log_prob - log_prob.detach()
-        log_prob._pyro_dims = dims
+        if not is_identically_zero(log_prob):
+            log_prob = log_prob - log_prob.detach()
+            log_prob._pyro_dims = dims
 
     return log_prob, log_denom
 
