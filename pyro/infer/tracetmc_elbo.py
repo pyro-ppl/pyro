@@ -16,7 +16,10 @@ from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
 def _compute_dice_factors(model_trace, guide_trace):
-    # this logic is adapted from pyro.infer.util.Dice.__init__
+    """
+    compute per-site DiCE log-factors for non-reparameterized proposal sites
+    this logic is adapted from pyro.infer.util.Dice.__init__
+    """
     log_probs = []
     for role, trace in zip(("model", "guide"), (model_trace, guide_trace)):
         for name, site in trace.nodes.items():
@@ -35,7 +38,10 @@ def _compute_dice_factors(model_trace, guide_trace):
 
 
 def _compute_tmc_factors(model_trace, guide_trace):
-    # factors
+    """
+    compute per-site log-factors for all observed and unobserved variables
+    log-factors are log(p / q) for unobserved sites and log(p) for observed sites
+    """
     log_factors = []
     for name, site in guide_trace.nodes.items():
         if site["type"] != "sample" or site["is_observed"]:
@@ -55,7 +61,10 @@ def _compute_tmc_factors(model_trace, guide_trace):
 
 
 def _compute_tmc_estimate(model_trace, guide_trace):
-
+    """
+    Use :func:`~pyro.ops.contract.einsum` to compute the Tensor Monte Carlo
+    estimate of the marginal likelihood given parallel-sampled traces.
+    """
     # factors
     log_factors = _compute_tmc_factors(model_trace, guide_trace)
     log_factors += _compute_dice_factors(model_trace, guide_trace)
@@ -73,7 +82,7 @@ def _compute_tmc_estimate(model_trace, guide_trace):
     return tmc
 
 
-class TensorMonteCarlo(ELBO):
+class TraceTMC_ELBO(ELBO):
     """
     A trace-based implementation of Tensor Monte Carlo [1]
     by way of Tensor Variable Elimination [2] that supports:
@@ -83,13 +92,13 @@ class TensorMonteCarlo(ELBO):
     To take multiple samples, mark the site with
     ``infer={'enumerate': 'parallel', 'num_samples': N}``.
     To configure all sites in a model or guide at once,
-    use :func:`~pyro.infer.enum.config_enumerate`.
+    use :func:`~pyro.infer.enum.config_enumerate` .
     To enumerate or sample a sample site in the ``model``,
     mark the site and ensure the site does not appear in the ``guide``.
 
     This assumes restricted dependency structure on the model and guide:
     variables outside of an :class:`~pyro.plate` can never depend on
-    variables inside that :class:`~pyro.plate`.
+    variables inside that :class:`~pyro.plate` .
 
     References
 
