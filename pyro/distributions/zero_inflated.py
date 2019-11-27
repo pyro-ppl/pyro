@@ -10,13 +10,13 @@ class ZeroInflatedDistribution(TorchDistribution):
     Base class for a Zero Inflated distribution.
 
     :param torch.Tensor gate: probability of extra zeros given via a Bernoulli distribution.
-    :param TorchDistribution distribution: the secondary distribution.
+    :param TorchDistribution base_dist: the base distribution.
     """
     arg_constraints = {"gate": constraints.unit_interval}
 
-    def __init__(self, gate, distribution, validate_args=None):
+    def __init__(self, gate, base_dist, validate_args=None):
         self.gate = gate
-        self.distribution = distribution
+        self.base_dist = base_dist
         batch_shape = self.gate.shape
         event_shape = torch.Size()
 
@@ -29,7 +29,7 @@ class ZeroInflatedDistribution(TorchDistribution):
             self._validate_sample(value)
 
         gate, value = broadcast_all(self.gate, value)
-        log_prob = (-gate).log1p() + self.distribution.log_prob(value)
+        log_prob = (-gate).log1p() + self.base_dist.log_prob(value)
         log_prob = torch.where(value == 0, (gate + log_prob.exp()).log(), log_prob)
         return log_prob
 
@@ -37,25 +37,28 @@ class ZeroInflatedDistribution(TorchDistribution):
         shape = self._extended_shape(sample_shape)
         with torch.no_grad():
             mask = torch.bernoulli(self.gate.expand(shape)).bool()
-            samples = self.distribution.expand(shape).sample()
+            samples = self.base_dist.expand(shape).sample()
             samples = torch.where(mask, samples.new_zeros(()), samples)
         return samples
 
     @lazy_property
     def mean(self):
-        return (1 - self.gate) * self.distribution.mean
+        return (1 - self.gate) * self.base_dist.mean
 
     @lazy_property
     def variance(self):
         return (1 - self.gate) * (
-            self.distribution.mean ** 2 + self.distribution.variance
+            self.base_dist.mean ** 2 + self.base_dist.variance
         ) - (self.mean) ** 2
 
-    def expand(self, batch_shape):
-        validate_args = self.__dict__.get("_validate_args")
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(type(self), _instance)
+        batch_shape = torch.Size(batch_shape)
         gate = self.gate.expand(batch_shape)
-        distribution = self.distribution.expand(batch_shape)
-        return type(self)(gate, distribution, validate_args=validate_args)
+        base_dist = self.base_dist.expand(batch_shape)
+        ZeroInflatedDistribution.__init__(new, gate, base_dist, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
 
 class ZeroInflatedPoisson(ZeroInflatedDistribution):
@@ -68,10 +71,10 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
     support = constraints.nonnegative_integer
 
     def __init__(self, gate, rate, validate_args=None):
-        distribution = Poisson(rate=rate, validate_args=validate_args)
+        base_dist = Poisson(rate=rate, validate_args=validate_args)
 
         super(ZeroInflatedPoisson, self).__init__(
-            gate, distribution, validate_args=validate_args
+            gate, base_dist, validate_args=validate_args
         )
 
 
@@ -87,7 +90,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
     support = constraints.nonnegative_integer
 
     def __init__(self, gate, total_count, probs=None, logits=None, validate_args=None):
-        distribution = NegativeBinomial(
+        base_dist = NegativeBinomial(
             total_count=total_count,
             probs=probs,
             logits=logits,
@@ -95,5 +98,5 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
         )
 
         super(ZeroInflatedNegativeBinomial, self).__init__(
-            gate, distribution, validate_args=validate_args
+            gate, base_dist, validate_args=validate_args
         )
