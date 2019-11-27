@@ -1,8 +1,8 @@
 import torch
-from torch.distributions import constraints, Poisson, NegativeBinomial
+from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all, lazy_property
 
-from pyro.distributions import TorchDistribution
+from pyro.distributions import TorchDistribution, Poisson, NegativeBinomial
 
 
 class ZeroInflatedDistribution(TorchDistribution):
