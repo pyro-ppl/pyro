@@ -5,8 +5,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SMCFilter, config_enumerate
-from pyro.infer.tmc import TensorMonteCarlo
+from pyro.infer import SMCFilter, TraceTMC_ELBO, config_enumerate
 
 logging.basicConfig(format="%(relativeCreated) 9d %(message)s", level=logging.INFO)
 
@@ -104,7 +103,7 @@ def tmc_run(args):
     model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
     guide = SimpleHarmonicModel_Guide(model)
 
-    tmc = TensorMonteCarlo(max_plate_nesting=1)
+    tmc = TraceTMC_ELBO(max_plate_nesting=1)
 
     def tmc_model(ys, initial=None):
         model.init(initial=initial)

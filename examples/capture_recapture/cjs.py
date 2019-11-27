@@ -37,7 +37,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.autoguide import AutoDiagonalNormal
-from pyro.infer import SVI, TraceEnum_ELBO
+from pyro.infer import SVI, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.optim import Adam
 
 
@@ -264,8 +264,7 @@ def main(args):
     # since we enumerate the discrete random variables,
     # we need to use TraceEnum_ELBO.
     if args.tmc:
-        from pyro.infer.tmc import TensorMonteCarlo
-        elbo = TensorMonteCarlo(max_plate_nesting=1)
+        elbo = TraceTMC_ELBO(max_plate_nesting=1)
         tmc_model = poutine.infer_config(
             model,
             lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501

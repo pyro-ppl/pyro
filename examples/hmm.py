@@ -45,7 +45,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.autoguide import AutoDelta
-from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
+from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
@@ -583,8 +583,9 @@ def main(args):
     # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
     # All of our models have two plates: "data" and "tones".
     if args.tmc:
-        from pyro.infer.tmc import JitTensorMonteCarlo, TensorMonteCarlo
-        elbo = (JitTensorMonteCarlo if args.jit else TensorMonteCarlo)(max_plate_nesting=1 if model is model_0 else 2)
+        if args.jit:
+            raise NotImplementedError("jit support not yet added for TraceTMC_ELBO")
+        elbo = TraceTMC_ELBO(max_plate_nesting=1 if model is model_0 else 2)
         tmc_model = poutine.infer_config(
             model,
             lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
