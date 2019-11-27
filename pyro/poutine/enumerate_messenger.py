@@ -3,12 +3,10 @@ from pyro.util import ignore_jit_warnings
 
 from .messenger import Messenger
 from .runtime import _ENUM_ALLOCATOR
-from .subsample_messenger import _Subsample
 
 
 def _tmc_sample(msg):
     dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
-    assert not isinstance(dist, _Subsample)
 
     # find batch dims that aren't plate dims
     batch_shape = [1] * len(dist.batch_shape)
