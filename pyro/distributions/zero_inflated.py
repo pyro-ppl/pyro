@@ -6,6 +6,12 @@ from pyro.distributions import TorchDistribution
 
 
 class ZeroInflatedDistribution(TorchDistribution):
+    """
+    Base class for a Zero Inflated distribution.
+
+    :param torch.Tensor gate: probability of extra zeros given via a Bernoulli distribution.
+    :param TorchDistribution distribution: the secondary distribution.
+    """
     arg_constraints = {"gate": constraints.unit_interval}
 
     def __init__(self, gate, distribution, validate_args=None):
