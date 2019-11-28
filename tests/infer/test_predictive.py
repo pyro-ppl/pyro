@@ -119,3 +119,20 @@ def test_shapes(parallel):
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape
+
+
+def test_deterministic():
+    def model(y=None):
+        x = pyro.sample("x", dist.Normal(0, 1))
+        x2 = pyro.deterministic("x2", x ** 2)
+        return pyro.sample("obs", dist.Normal(x2, 0.1), obs=y)
+
+    y = torch.tensor(4.)
+    guide = AutoDiagonalNormal(model)
+    svi = SVI(model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
+    for i in range(1000):
+        svi.step(y)
+
+    predictive = Predictive(model, guide=guide, return_sites=["x2"], num_samples=1000)
+    actual = predictive()["x2"]
+    assert_close(actual.mean(0), y, rtol=0.1)

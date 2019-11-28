@@ -124,6 +124,17 @@ def factor(name, log_factor):
     sample(name, unit_dist, obs=unit_value)
 
 
+def deterministic(name, value):
+    """
+    Deterministic statement to add a site with `value` to the trace. This does not affect
+    the model density.
+
+    :param str name: Name of the site.
+    :param torch.Tensor value: Value of the site.
+    """
+    return sample(name, dist.Delta(value), obs=value)
+
+
 class plate(PlateMessenger):
     """
     Construct for conditionally independent sequences of variables.
