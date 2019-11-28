@@ -28,7 +28,8 @@ from pyro.distributions.unit import Unit
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
-from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
+from pyro.distributions.zero_inflated import (ZeroInflatedDistribution, ZeroInflatedPoisson,
+                                              ZeroInflatedNegativeBinomial)
 
 from . import constraints, kl, transforms
 
@@ -66,6 +67,8 @@ __all__ = [
     "VonMises",
     "VonMises3D",
     "ZeroInflatedPoisson",
+    "ZeroInflatedNegativeBinomial",
+    "ZeroInflatedDistribution",
     "constraints",
     "enable_validation",
     "is_validation_enabled",
