@@ -12,7 +12,7 @@ def _tmc_sample(msg):
     batch_shape = [1] * len(dist.batch_shape)
     for f in msg["cond_indep_stack"]:
         if f.vectorized:
-            batch_shape[f.dim] = f.size
+            batch_shape[f.dim] = f.size if f.size > 0 else dist.batch_shape[f.dim]
     batch_shape = tuple(batch_shape)
 
     # sample a batch

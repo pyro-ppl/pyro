@@ -26,8 +26,6 @@ class RenyiELBO(ELBO):
         :class:`~pyro.infer.trace_elbo.Trace_ELBO` class because it helps reduce
         variances of gradient estimations.
 
-    .. warning:: Mini-batch training is not supported yet.
-
     :param float alpha: The order of :math:`\alpha`-divergence. Here
         :math:`\alpha \neq 1`. Default is 0.
     :param num_particles: The number of particles/samples used to form the objective

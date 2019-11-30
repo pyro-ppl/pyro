@@ -13,6 +13,7 @@ from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svgd import SVGD, IMQSteinKernel, RBFSteinKernel
 from pyro.infer.svi import SVI
+from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.trace_elbo import JitTrace_ELBO, Trace_ELBO
 from pyro.infer.trace_mean_field_elbo import JitTraceMeanField_ELBO, TraceMeanField_ELBO
 from pyro.infer.trace_mmd import Trace_MMD
@@ -45,6 +46,7 @@ __all__ = [
     "SMCFilter",
     "SVGD",
     "SVI",
+    "TraceTMC_ELBO",
     "TraceEnum_ELBO",
     "TraceGraph_ELBO",
     "TraceMeanField_ELBO",
