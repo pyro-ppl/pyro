@@ -19,6 +19,7 @@ from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
                                                          RelaxedOneHotCategoricalStraightThrough)
 from pyro.distributions.spanning_tree import SpanningTree
+from pyro.distributions.stable import Stable
 from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch_distribution import TorchDistribution
@@ -27,7 +28,8 @@ from pyro.distributions.unit import Unit
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
-from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
+from pyro.distributions.zero_inflated import (ZeroInflatedDistribution, ZeroInflatedPoisson,
+                                              ZeroInflatedNegativeBinomial)
 
 from . import constraints, kl, transforms
 
@@ -58,12 +60,15 @@ __all__ = [
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
     "SpanningTree",
+    "Stable",
     "TorchDistribution",
     "TransformModule",
     "Unit",
     "VonMises",
     "VonMises3D",
     "ZeroInflatedPoisson",
+    "ZeroInflatedNegativeBinomial",
+    "ZeroInflatedDistribution",
     "constraints",
     "enable_validation",
     "is_validation_enabled",
