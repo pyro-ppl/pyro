@@ -371,6 +371,8 @@ def test_mixin_factory():
     assert isinstance(module[0], PyroModule)
     assert type(module[0]).__name__ == "PyroLinear"
     assert type(module[2]) is type(module[0])  # noqa: E721
+    assert module[0]._pyro_name == "0"
+    assert module[1]._pyro_name == "1"
 
     # Ensure new types are serializable.
     data = torch.randn(28 * 28)
