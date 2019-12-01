@@ -424,11 +424,23 @@ def test_to_pyro_module_():
 
     assert_identical(actual, expected)
 
+    # check output
     data = torch.randn(28 * 28)
     actual_out = actual(data)
     pyro.clear_param_store()
     expected_out = expected(data)
     assert_equal(actual_out, expected_out)
+
+    # check randomization
+    def randomize(model):
+        for m in model.modules():
+            for name, value in list(m.named_parameters(recurse=False)):
+                setattr(m, name, PyroSample(prior=dist.Normal(0, 1)
+                                                      .expand(value.shape)
+                                                      .to_event(value.dim())))
+    randomize(actual)
+    randomize(expected)
+    assert_identical(actual, expected)
 
 
 def test_torch_serialize():

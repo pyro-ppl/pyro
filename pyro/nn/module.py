@@ -502,9 +502,11 @@ def to_pyro_module_(m, recurse=True):
         assert isinstance(model[0], PyroModule[nn.Linear])
 
         # Now we can attempt to be fully Bayesian:
-        for name, value in list(model.named_parameters()):
-            deep_setattr(name, PyroSample(prior=
-                dist.Normal(0, 1).expand(value.shape).to_event(value.dim())))
+        for m in model.modules():
+            for name, value in list(m.named_parameters(recurse=False)):
+                setattr(m, name, PyroSample(prior=dist.Normal(0, 1)
+                                                      .expand(value.shape)
+                                                      .to_event(value.dim())))
         guide = AutoDiagonalNormal(model)
 
     :param torch.nn.Module m: A module instance.
@@ -534,15 +536,3 @@ def to_pyro_module_(m, recurse=True):
         if recurse:
             to_pyro_module_(value)
         setattr(m, name, value)
-
-
-def deep_setattr(obj, name, value):
-    """
-    Sets the nested named attribute on the given object to the specified value.
-
-    ``deep_setattr(w, "x.y.z", v)`` is equivalent to ``w.x.y.z = v``.
-    """
-    parts = name.split(".")
-    for part in parts[:-1]:
-        obj = getattr(obj, part)
-    setattr(obj, parts[-1], value)
