@@ -129,7 +129,7 @@ def test_deterministic(with_plate, event_shape):
             x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
             x2 = pyro.deterministic("x2", x ** 2, event_dim=len(event_shape))
 
-        pyro.deterministic("x3", x2, event_dim=len(event_shape) + with_plate)
+        pyro.deterministic("x3", x2)
         return pyro.sample("obs", dist.Normal(x2, 0.1).to_event(), obs=y)
 
     y = torch.tensor(4.)
