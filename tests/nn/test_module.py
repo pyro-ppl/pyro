@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear, to_pyro_module_
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -386,6 +386,44 @@ def test_mixin_factory():
     assert type(module).__name__ == "PyroSequential"
     actual = module(data)
     assert_equal(actual, expected)
+
+
+def test_to_pyro_module_():
+
+    pyro.set_rng_seed(123)
+    actual = nn.Sequential(
+        nn.Linear(28 * 28, 200),
+        nn.Sigmoid(),
+        nn.Linear(200, 200),
+        nn.Sigmoid(),
+        nn.Linear(200, 10),
+    )
+    to_pyro_module_(actual)
+
+    pyro.set_rng_seed(123)
+    expected = PyroModule[nn.Sequential](
+        PyroModule[nn.Linear](28 * 28, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 10),
+    )
+
+    def assert_identical(a, e):
+        assert type(a) is type(e)
+        if isinstance(a, dict):
+            assert set(a) == set(e)
+            for key in a:
+                assert_identical(a[key], e[key])
+        elif isinstance(a, nn.Module):
+            assert_identical(a.__dict__, e.__dict__)
+        elif isinstance(a, torch.Tensor):
+            assert_equal(a, e)
+
+    assert_identical(actual, expected)
+
+    data = torch.randn(28 * 28)
+    assert_equal(actual(data), expected(data))
 
 
 def test_torch_serialize():

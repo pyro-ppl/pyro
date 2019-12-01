@@ -18,6 +18,7 @@ from torch.distributions import constraints, transform_to
 import pyro
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
+
 PyroParam = namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))
 PyroParam.__new__.__defaults__ = (constraints.real, None)
 PyroParam.__doc__ = """
@@ -479,3 +480,69 @@ def clear(mod):
         delattr(mod, name)
     for name in list(mod._modules):
         delattr(mod, name)
+
+
+def to_pyro_module_(m, recurse=True):
+    """
+    Converts an ordinary :class:`torch.nn.Module` instance to a
+    :class:`PyroModule` **in-place**.
+
+    This is useful for adding Pyro effects to third-party modules: no
+    third-party code needs to be modified. For example::
+
+        model = nn.Sequential(
+            nn.Linear(28 * 28, 100),
+            nn.Sigmoid(),
+            nn.Linear(100, 100),
+            nn.Sigmoid(),
+            nn.Linear(100, 10),
+        )
+        to_pyro_module_(model)
+        assert isinstance(model, PyroModule[nn.Sequential])
+        assert isinstance(model[0], PyroModule[nn.Linear])
+
+        # Now we can attempt to be fully Bayesian:
+        for name, value in list(model.named_parameters()):
+            deep_setattr(name, PyroSample(prior=
+                dist.Normal(0, 1).expand(value.shape).to_event(value.dim())))
+        guide = AutoDiagonalNormal(model)
+
+    :param torch.nn.Module m: A module instance.
+    :param bool recurse: Whether to convert submodules to :class:`PyroModules` .
+    """
+    if not isinstance(m, torch.nn.Module):
+        raise TypeError("Expected an nn.Module instance but got a {}".format(type(m)))
+
+    if isinstance(m, PyroModule):
+        if recurse:
+            for name, value in list(m._modules.items()):
+                to_pyro_module_(value)
+                setattr(m, name, value)
+        return
+
+    # Change m's type in-place.
+    m.__class__ = PyroModule[m.__class__]
+    m._pyro_name = ""
+    m._pyro_context = _Context()
+    m._pyro_params = OrderedDict()
+    m._pyro_samples = OrderedDict()
+
+    # Reregister parameters and submodules.
+    for name, value in list(m._parameters.items()):
+        setattr(m, name, value)
+    for name, value in list(m._modules.items()):
+        if recurse:
+            to_pyro_module_(value)
+        setattr(m, name, value)
+
+
+def deep_setattr(obj, name, value):
+    """
+    Sets the nested named attribute on the given object to the specified value.
+
+    ``deep_setattr(w, "x.y.z", v)`` is equivalent to ``w.x.y.z = v``.
+    """
+    parts = name.split(".")
+    for part in parts[:-1]:
+        obj = getattr(obj, part)
+    setattr(obj, parts[-1], value)
