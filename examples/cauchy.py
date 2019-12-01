@@ -1,11 +1,12 @@
 import argparse
 import logging
+import numpy as np
 
 import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SMCFilter, TraceTMC_ELBO, config_enumerate
+from pyro.infer import TraceTMC_ELBO, config_enumerate
 
 from pyro.ops.ssm_gp import MaternKernel
 from pyro.ops.tensor_utils import block_diag_embed
@@ -24,7 +25,7 @@ class SimpleTimeSeriesModel:
         self.sigma_obs = torch.tensor(0.1)
         self.dt = 1.0
         self.trans_matrix, self.process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
-        self.trans_matrix, self.process_covar = self.trans_matrix[0], self.process_covar[0]
+        self.trans_matrix, self.process_covar = self.trans_matrix[0].detach(), self.process_covar[0].detach()
 
     def init(self):
         self.t = 0
@@ -55,29 +56,12 @@ class SimpleTimeSeriesGuide:
 
     def step(self, z_prev, y=None):
         self.t += 1
+        loc = pyro.param("loc_{}".format(self.t), torch.zeros((self.model.kernel.state_dim)))
+        scale = pyro.param("scale_{}".format(self.t), 2.0 * torch.ones(self.model.kernel.state_dim), constraint=constraints.positive)
         return pyro.sample("z_{}".format(self.t),
-                           dist.Normal(z_prev.matmul(self.model.trans_matrix), 2.0).to_event(1))
+                           dist.Normal(loc, scale).to_event(1))
+                           #dist.Normal(z_prev.matmul(self.model.trans_matrix), scale).to_event(1))
 
-
-def smc_run(args, ys):
-    assert False
-    model = SimpleHarmonicModel()
-    guide = SimpleHarmonicModel_Guide(model)
-
-    smc = SMCFilter(model, guide, num_particles=args.num_particles, max_plate_nesting=0)
-
-    logging.info("Filtering")
-
-    smc.init()
-    for y in ys:
-        smc.step(y)
-
-    logging.info("At final time step:")
-    z = smc.get_empirical()["z"]
-    #print("z\n",z._samples[:, 0].data.numpy().tolist())
-    logging.info("ys: {}".format(ys[-5:]))
-    logging.info("mean: {}".format(z.mean))
-    logging.info("std: {}".format(z.variance ** 0.5))
 
 
 def tmc_run(args, ys):
@@ -98,17 +82,21 @@ def tmc_run(args, ys):
             z = guide.step(z, y)
 
 
-    optim = pyro.optim.Adam({'lr': 0.005})
+    optim = pyro.optim.Adam({'lr': 0.003})
     svi = pyro.infer.SVI(tmc_model, tmc_guide, optim, tmc)
 
-    for step in range(10):
+    for step in range(500):
         logp = svi.step(ys)
-        logging.info("[Step {}]  loss: {:.4f}".format(step, logp))
+        if step % 5 == 0:
+            logging.info("[Step {}]  loss: {:.4f}".format(step, logp))
+
+    final_estimate = np.mean([-tmc.loss(tmc_model, tmc_guide, ys) for _ in range(100)])
+    logging.info("TMC-estimated log prob: {:.4f}".format(final_estimate))
 
     gp = IndependentMaternGP(nu=1.5, obs_dim=1,
                              length_scale_init=model.kernel.length_scale).double()
     exact_log_prob = gp.log_prob(ys.unsqueeze(-1).double())
-    logging.info("exact log prob: {:.4f}".format(exact_log_prob.item()))
+    logging.info("Exact log prob: {:.4f}".format(exact_log_prob.item()))
 
 
 
@@ -121,19 +109,15 @@ def main(args):
     ts = 3.0 * torch.arange(T).float() / T
     ys = torch.sin(2.0 * ts)
 
-    if args.inference == "smc":
-        smc_run(args, ys)
-    elif args.inference == "tmc":
-        tmc_run(args, ys)
+    tmc_run(args, ys)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Simple Harmonic Oscillator w/ SMC Filtering Inference")
+    parser = argparse.ArgumentParser(description="Cauchy process")
     parser.add_argument("-n", "--num-timesteps", default=4, type=int)
-    parser.add_argument("-p", "--num-particles", default=50, type=int)
+    parser.add_argument("-p", "--num-particles", default=300, type=int)
     parser.add_argument("--process-noise", default=1., type=float)
     parser.add_argument("--measurement-noise", default=1., type=float)
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--inference", default="smc", type=str)
     args = parser.parse_args()
     main(args)
