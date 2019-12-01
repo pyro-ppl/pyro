@@ -382,6 +382,23 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             super().__setattr__(name + "_unconstrained", unconstrained_value)
             return
 
+        if isinstance(value, torch.nn.Parameter):
+            # Create a new nn.Parameter, overwriting any old value.
+            try:
+                delattr(self, name)
+            except AttributeError:
+                pass
+            if self._pyro_context.active:
+                fullname = self._pyro_get_fullname(name)
+                value = pyro.param(fullname, value)
+                if not isinstance(value, torch.nn.Parameter):
+                    # Update PyroModule ---> ParamStore (type only; data is preserved).
+                    value = torch.nn.Parameter(value)
+                    _PYRO_PARAM_STORE._params[fullname] = value
+                    _PYRO_PARAM_STORE._param_to_name[value] = fullname
+            super().__setattr__(name, value)
+            return
+
         if isinstance(value, torch.Tensor):
             if name in self._pyro_params:
                 # Update value of an existing PyroParam.
