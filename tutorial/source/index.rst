@@ -54,6 +54,7 @@ Welcome to Pyro Examples and Tutorials!
    RSA-hyperbole
    ekf
    working_memory
+   dirichlet_process_mixture
 
 .. toctree::
    :maxdepth: 2
