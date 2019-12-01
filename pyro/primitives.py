@@ -124,15 +124,16 @@ def factor(name, log_factor):
     sample(name, unit_dist, obs=unit_value)
 
 
-def deterministic(name, value):
+def deterministic(name, value, event_dim=0):
     """
     Deterministic statement to add a site with `value` to the trace. This does not affect
     the model density.
 
     :param str name: Name of the site.
     :param torch.Tensor value: Value of the site.
+    :param int event_dim: Optional event dimension, defaults to zero.
     """
-    return sample(name, dist.Delta(value), obs=value)
+    return sample(name, dist.Delta(value, event_dim=event_dim).mask(False), obs=value)
 
 
 class plate(PlateMessenger):
