@@ -3,65 +3,61 @@ import logging
 import numpy as np
 
 import torch
+import torch.distributions.constraints as constraints
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer import TraceTMC_ELBO, config_enumerate
-
 from pyro.ops.ssm_gp import MaternKernel
-from pyro.ops.tensor_utils import block_diag_embed
 from pyro.contrib.timeseries import IndependentMaternGP
-import torch.distributions.constraints as constraints
+from pyro.nn.module import clear
 
 
 logging.basicConfig(format="%(relativeCreated) 9d %(message)s", level=logging.INFO)
 
 
-
 class SimpleTimeSeriesModel:
-
     def __init__(self, nu=1.5):
-        self.kernel = MaternKernel(nu=nu, num_gps=1, length_scale_init=torch.tensor([0.3]))
-        self.sigma_obs = torch.tensor(0.1)
+        self.kernel = MaternKernel(nu=nu, num_gps=1, length_scale_init=torch.tensor([1.5]),
+                                   kernel_scale_init=torch.tensor([0.5]))
         self.dt = 1.0
-        self.trans_matrix, self.process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
-        self.trans_matrix, self.process_covar = self.trans_matrix[0].detach(), self.process_covar[0].detach()
 
     def init(self):
         self.t = 0
+        self.trans_matrix, self.process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
+        self.trans_matrix, self.process_covar = self.trans_matrix[0], self.process_covar[0]
         init_dist = dist.MultivariateNormal(torch.zeros(self.kernel.state_dim),
                                             self.kernel.stationary_covariance().squeeze(-3))
         return pyro.sample("z_0", init_dist)
 
     def step(self, z_prev, y=None):
         self.t += 1
+        sigma_obs = pyro.param("sigma_obs", torch.tensor(0.1), constraint=constraints.positive)
         z = pyro.sample("z_{}".format(self.t),
                         dist.MultivariateNormal(z_prev.matmul(self.trans_matrix),
                                                 self.process_covar))
-        y = pyro.sample("y_{}".format(self.t),
-                        dist.Normal(z[..., 0], self.sigma_obs),
-                        obs=y)
+        pyro.sample("y_{}".format(self.t), dist.Normal(z[..., 0], sigma_obs),
+                    obs=y)
         return z
 
 
 class SimpleTimeSeriesGuide:
-
     def __init__(self, model):
         self.model = model
 
     def init(self):
         self.t = 0
-        scale = pyro.param("scale_{}".format(self.t), 2.0 * torch.ones(self.model.kernel.state_dim), constraint=constraints.positive)
-        return pyro.sample("z_0", dist.Normal(torch.zeros(self.model.kernel.state_dim), scale).to_event(1))
+        scale = pyro.param("scale_{}".format(self.t), 0.5 * torch.ones(self.model.kernel.state_dim),
+                           constraint=constraints.positive)
+        loc = pyro.param("loc_{}".format(self.t), torch.zeros(self.model.kernel.state_dim))
+        return pyro.sample("z_0", dist.Normal(loc, scale).to_event(1))
 
     def step(self, z_prev, y=None):
         self.t += 1
         loc = pyro.param("loc_{}".format(self.t), torch.zeros((self.model.kernel.state_dim)))
-        scale = pyro.param("scale_{}".format(self.t), 2.0 * torch.ones(self.model.kernel.state_dim), constraint=constraints.positive)
-        return pyro.sample("z_{}".format(self.t),
-                           dist.Normal(loc, scale).to_event(1))
-                           #dist.Normal(z_prev.matmul(self.model.trans_matrix), scale).to_event(1))
-
+        scale = pyro.param("scale_{}".format(self.t), 0.5 * torch.ones(self.model.kernel.state_dim),
+                           constraint=constraints.positive)
+        return pyro.sample("z_{}".format(self.t), dist.Normal(loc, scale).to_event(1))
 
 
 def tmc_run(args, ys):
@@ -81,23 +77,33 @@ def tmc_run(args, ys):
         for y in pyro.markov(ys):
             z = guide.step(z, y)
 
+    def exact_eval():
+        gp = IndependentMaternGP(nu=1.5, obs_dim=1,
+                                 length_scale_init=model.kernel.length_scale,
+                                 kernel_scale_init=model.kernel.kernel_scale,
+                                 obs_noise_scale_init=pyro.param("sigma_obs").detach().unsqueeze(-1)).double()
+        log_prob = gp.log_prob(ys.unsqueeze(-1).double()).item()
+        clear(gp)
+        return log_prob
 
-    optim = pyro.optim.Adam({'lr': 0.003})
+    optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
     svi = pyro.infer.SVI(tmc_model, tmc_guide, optim, tmc)
 
-    for step in range(500):
+    pyro.param("sigma_obs", torch.tensor(0.1), constraint=constraints.positive)
+    logging.info("Initial exact log prob: {:.6f}".format(exact_eval()))
+
+    num_steps = 300
+
+    for step in range(num_steps):
         logp = svi.step(ys)
-        if step % 5 == 0:
-            logging.info("[Step {}]  loss: {:.4f}".format(step, logp))
+        if step % 10 == 0 or step == num_steps - 1:
+            frmt = "[Step {}]  loss: {:.4f}  exact: {:.4f}  lengthscale: {:.3f}  kernelscale: {:.3f}  sigmaobs: {:.3f}"
+            logging.info(frmt.format(step, logp, exact_eval(), model.kernel.length_scale.item(),
+                                     model.kernel.kernel_scale.item(), pyro.param("sigma_obs").item()))
 
-    final_estimate = np.mean([-tmc.loss(tmc_model, tmc_guide, ys) for _ in range(100)])
-    logging.info("TMC-estimated log prob: {:.4f}".format(final_estimate))
-
-    gp = IndependentMaternGP(nu=1.5, obs_dim=1,
-                             length_scale_init=model.kernel.length_scale).double()
-    exact_log_prob = gp.log_prob(ys.unsqueeze(-1).double())
-    logging.info("Exact log prob: {:.4f}".format(exact_log_prob.item()))
-
+    tmc_estimates = [-tmc.loss(tmc_model, tmc_guide, ys) for _ in range(100)]
+    logging.info("TMC-estimated log prob: {:.4f} +- {:.4f}".format(np.mean(tmc_estimates), np.std(tmc_estimates)))
+    logging.info("Final exact log prob: {:.6f}".format(exact_eval()))
 
 
 def main(args):
@@ -114,10 +120,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cauchy process")
-    parser.add_argument("-n", "--num-timesteps", default=4, type=int)
-    parser.add_argument("-p", "--num-particles", default=300, type=int)
-    parser.add_argument("--process-noise", default=1., type=float)
-    parser.add_argument("--measurement-noise", default=1., type=float)
+    parser.add_argument("-n", "--num-timesteps", default=10, type=int)
+    parser.add_argument("-p", "--num-particles", default=50, type=int)
     parser.add_argument("--seed", default=0, type=int)
     args = parser.parse_args()
     main(args)
