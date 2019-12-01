@@ -18,7 +18,6 @@ from torch.distributions import constraints, transform_to
 import pyro
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
-
 PyroParam = namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))
 PyroParam.__new__.__defaults__ = (constraints.real, None)
 PyroParam.__doc__ = """
