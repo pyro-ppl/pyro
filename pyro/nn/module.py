@@ -245,6 +245,14 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         self._pyro_samples = OrderedDict()
         super().__init__()
 
+    def add_module(self, name, module):
+        """
+        Adds a child module to the current module.
+        """
+        if isinstance(module, PyroModule):
+            module._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
+        super().add_module(name, module)
+
     def named_pyro_params(self, prefix='', recurse=True):
         """
         Returns an iterator over PyroModule parameters, yielding both the
@@ -339,27 +347,6 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
         return result
 
-    def register_parameter(self, name, param):
-        """
-        Adds a parameter to the module.
-        """
-        if self._pyro_context.active:
-            fullname = self._pyro_get_fullname(name)
-            param = pyro.param(fullname, param)
-            if not isinstance(param, torch.nn.Parameter):
-                # Update PyroModule ---> ParamStore (type only; data is preserved).
-                param = torch.nn.Parameter(param)
-                _PYRO_PARAM_STORE._params[fullname] = param
-                _PYRO_PARAM_STORE._param_to_name[param] = fullname
-        super().register_parameter(name, param)
-
-    def add_module(self, name, module):
-        """
-        Adds a child module to the current module.
-        """
-        module._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
-        super().add_module(name, module)
-
     def __setattr__(self, name, value):
         if isinstance(value, PyroModule):
             # Create a new sub PyroModule, overwriting any old value.
@@ -393,15 +380,6 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             else:  # Cannot determine supermodule and hence cannot compute fullname.
                 unconstrained_value = _unconstrain(constrained_value, constraint)
             super().__setattr__(name + "_unconstrained", unconstrained_value)
-            return
-
-        if isinstance(value, torch.nn.Parameter):
-            # Create a new nn.Parameter, overwriting any old value.
-            try:
-                delattr(self, name)
-            except AttributeError:
-                pass
-            self.register_parameter(name, value)
             return
 
         if isinstance(value, torch.Tensor):
