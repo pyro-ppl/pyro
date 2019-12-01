@@ -339,6 +339,27 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
         return result
 
+    def register_parameter(self, name, param):
+        """
+        Adds a parameter to the module.
+        """
+        if self._pyro_context.active:
+            fullname = self._pyro_get_fullname(name)
+            param = pyro.param(fullname, param)
+            if not isinstance(param, torch.nn.Parameter):
+                # Update PyroModule ---> ParamStore (type only; data is preserved).
+                param = torch.nn.Parameter(param)
+                _PYRO_PARAM_STORE._params[fullname] = param
+                _PYRO_PARAM_STORE._param_to_name[param] = fullname
+        super().register_parameter(name, param)
+
+    def add_module(self, name, module):
+        """
+        Adds a child module to the current module.
+        """
+        module._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
+        super().add_module(name, module)
+
     def __setattr__(self, name, value):
         if isinstance(value, PyroModule):
             # Create a new sub PyroModule, overwriting any old value.
@@ -346,8 +367,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 delattr(self, name)
             except AttributeError:
                 pass
-            value._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
-            super().__setattr__(name, value)
+            self.add_module(name, value)
             return
 
         if isinstance(value, PyroParam):
@@ -381,15 +401,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 delattr(self, name)
             except AttributeError:
                 pass
-            if self._pyro_context.active:
-                fullname = self._pyro_get_fullname(name)
-                value = pyro.param(fullname, value)
-                if not isinstance(value, torch.nn.Parameter):
-                    # Update PyroModule ---> ParamStore (type only; data is preserved).
-                    value = torch.nn.Parameter(value)
-                    _PYRO_PARAM_STORE._params[fullname] = value
-                    _PYRO_PARAM_STORE._param_to_name[value] = fullname
-            super().__setattr__(name, value)
+            self.register_parameter(name, value)
             return
 
         if isinstance(value, torch.Tensor):

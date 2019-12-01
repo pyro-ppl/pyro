@@ -419,7 +419,7 @@ def test_to_pyro_module_():
                 assert_identical(a[key], e[key])
         elif isinstance(a, nn.Module):
             assert_identical(a.__dict__, e.__dict__)
-        elif isinstance(a, torch.Tensor):
+        elif isinstance(a, (str, int, float, torch.Tensor)):
             assert_equal(a, e)
 
     assert_identical(actual, expected)
