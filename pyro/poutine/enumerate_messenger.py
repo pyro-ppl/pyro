@@ -1,3 +1,5 @@
+import torch
+
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.util import ignore_jit_warnings
 
@@ -5,7 +7,41 @@ from .messenger import Messenger
 from .runtime import _ENUM_ALLOCATOR
 
 
-def _tmc_sample(msg):
+def _tmc_mixture_sample(msg):
+    dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
+
+    # find batch dims that aren't plate dims
+    batch_shape = [1] * len(dist.batch_shape)
+    for f in msg["cond_indep_stack"]:
+        if f.vectorized:
+            batch_shape[f.dim] = f.size if f.size > 0 else dist.batch_shape[f.dim]
+    batch_shape = tuple(batch_shape)
+
+    # sample a batch
+    sample_shape = (num_samples,)
+    fat_sample = dist(sample_shape=sample_shape)  # TODO thin before sampling
+    assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
+    assert any(d > 1 for d in fat_sample.shape)
+
+    target_shape = (num_samples,) + batch_shape + dist.event_shape
+
+    # sample mixture components
+    thin_sample = fat_sample
+    while thin_sample.shape != target_shape:
+
+        for squashed_dim1, squashed_size1 in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
+            if squashed_size1 > 1 and (target_shape[squashed_dim1] == 1 or squashed_dim1 == 0):
+                break
+
+        mixture_component = torch.randint(low=0, high=squashed_size1, size=(1,),
+                                          dtype=torch.long, device=thin_sample.device)
+        thin_sample = torch.index_select(thin_sample, squashed_dim1, mixture_component)
+
+    assert thin_sample.shape == target_shape
+    return thin_sample
+
+
+def _tmc_diagonal_sample(msg):
     dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
 
     # find batch dims that aren't plate dims
@@ -65,8 +101,13 @@ def enumerate_site(msg):
         # Enumerate over the support of the distribution.
         value = dist.enumerate_support(expand=msg["infer"].get("expand", False))
     elif num_samples > 1 and not msg["infer"].get("expand", False):
-        value = _tmc_sample(msg)
-    elif num_samples > 1:
+        if msg["infer"].get("tmc", "diagonal"):
+            value = _tmc_diagonal_sample(msg)
+        elif msg["infer"]["tmc"] == "mixture":
+            value = _tmc_mixture_sample(msg)
+        else:
+            raise ValueError("{} not a valid TMC strategy".format(msg["infer"]["tmc"]))
+    elif num_samples > 1 and msg["infer"]["expand"]:
         # Monte Carlo sample the distribution.
         value = dist(sample_shape=(num_samples,))
     assert value.dim() == 1 + len(dist.batch_shape) + len(dist.event_shape)
