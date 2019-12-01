@@ -399,6 +399,7 @@ def test_to_pyro_module_():
         nn.Linear(200, 10),
     )
     to_pyro_module_(actual)
+    pyro.clear_param_store()
 
     pyro.set_rng_seed(123)
     expected = PyroModule[nn.Sequential](
@@ -408,6 +409,7 @@ def test_to_pyro_module_():
         PyroModule[nn.Sigmoid](),
         PyroModule[nn.Linear](200, 10),
     )
+    pyro.clear_param_store()
 
     def assert_identical(a, e):
         assert type(a) is type(e)
@@ -423,7 +425,10 @@ def test_to_pyro_module_():
     assert_identical(actual, expected)
 
     data = torch.randn(28 * 28)
-    assert_equal(actual(data), expected(data))
+    actual_out = actual(data)
+    pyro.clear_param_store()
+    expected_out = expected(data)
+    assert_equal(actual_out, expected_out)
 
 
 def test_torch_serialize():
