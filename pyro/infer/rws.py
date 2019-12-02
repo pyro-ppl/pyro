@@ -37,6 +37,12 @@ class ReweightedWakeSleep(ELBO):
 
     .. note:: This returns _two_ losses, one each for the model and the guide.
 
+    .. note:: In order to enable computing the sleep-phi terms, the guide program must have its observations
+        explicitly passed in through the keyworded argument `observations`. Where the value of the observations
+        is unknown during definition, such as for amortized variation inference, it may be given a default
+        argument as `observations=None`, and the correct value supplied during learning through
+        `svi.step(observations=...)`.
+
     .. warning:: Mini-batch training is not supported yet.
 
     :param int num_particles: The number of particles/samples used to form the objective
@@ -223,7 +229,6 @@ class ReweightedWakeSleep(ELBO):
 
     @staticmethod
     def _get_matched_trace(model_trace, guide, *args, **kwargs):
-        # TODO: hardcoded kwarg 'observations'?
         kwargs["observations"] = {}
         for node in model_trace.stochastic_nodes + model_trace.observation_nodes:
             if "was_observed" in model_trace.nodes[node]["infer"]:
