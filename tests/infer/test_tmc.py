@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
 @pytest.mark.parametrize("num_samples", [None, 1000])
 @pytest.mark.parametrize("max_plate_nesting", [2, 3])
-def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
+@pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
+def test_tmc_categoricals(depth, max_plate_nesting, num_samples, tmc_strategy):
     qs = [pyro.param("q0", torch.tensor([0.4, 0.6], requires_grad=True))]
     for i in range(1, depth):
         qs.append(pyro.param(
@@ -48,12 +49,12 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
                             obs=data)
 
     elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
-    enum_model = config_enumerate(model, default="parallel", expand=False, num_samples=None)
+    enum_model = config_enumerate(model, default="parallel", expand=False, num_samples=None, tmc=tmc_strategy)
     expected_loss = (-elbo.differentiable_loss(enum_model, lambda: None)).exp()
     expected_grads = grad(expected_loss, qs)
 
     tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
-    tmc_model = config_enumerate(model, default="parallel", expand=False, num_samples=num_samples)
+    tmc_model = config_enumerate(model, default="parallel", expand=False, num_samples=num_samples, tmc=tmc_strategy)
     actual_loss = (-tmc.differentiable_loss(tmc_model, lambda: None)).exp()
     actual_grads = grad(actual_loss, qs)
 
@@ -75,8 +76,9 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples):
 @pytest.mark.parametrize("max_plate_nesting", [0])
 @pytest.mark.parametrize("reparameterized", [True, False])
 @pytest.mark.parametrize("guide_type", ["prior", "factorized", "nonfactorized"])
+@pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
 def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
-                                reparameterized, guide_type, expand):
+                                reparameterized, guide_type, expand, tmc_strategy):
     # compare iwae and tmc
     q2 = pyro.param("q2", torch.tensor(0.5, requires_grad=True))
     qs = (q2.unconstrained(),)
@@ -114,9 +116,9 @@ def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
 
     tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
     tmc_model = config_enumerate(
-        model, default="parallel", expand=expand, num_samples=num_samples)
+        model, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
     tmc_guide = config_enumerate(
-        guide, default="parallel", expand=expand, num_samples=num_samples)
+        guide, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
     actual_loss = (-tmc.differentiable_loss(tmc_model, tmc_guide, reparameterized)).exp()
     actual_grads = grad(actual_loss, qs)
 
@@ -138,7 +140,9 @@ def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
 @pytest.mark.parametrize("max_plate_nesting", [0])
 @pytest.mark.parametrize("guide_type", ["prior", "factorized", "nonfactorized"])
 @pytest.mark.parametrize("reparameterized", [False, True])
-def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expand, guide_type, reparameterized):
+@pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
+def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expand,
+                                    guide_type, reparameterized, tmc_strategy):
     # compare reparameterized and nonreparameterized gradient estimates
     q2 = pyro.param("q2", torch.tensor(0.5, requires_grad=True))
     qs = (q2.unconstrained(),)
@@ -164,12 +168,12 @@ def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expan
 
     tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
     tmc_model = config_enumerate(
-        model, default="parallel", expand=expand, num_samples=num_samples)
+        model, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
     guide = factorized_guide if guide_type == "factorized" else \
         nonfactorized_guide if guide_type == "nonfactorized" else \
         lambda *args: None
     tmc_guide = config_enumerate(
-        guide, default="parallel", expand=expand, num_samples=num_samples)
+        guide, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
 
     # gold values from Funsor
     expected_grads = (torch.tensor(

@@ -101,7 +101,7 @@ def enumerate_site(msg):
         # Enumerate over the support of the distribution.
         value = dist.enumerate_support(expand=msg["infer"].get("expand", False))
     elif num_samples > 1 and not msg["infer"].get("expand", False):
-        if msg["infer"].get("tmc", "diagonal"):
+        if msg["infer"].get("tmc", "diagonal") == "diagonal":
             value = _tmc_diagonal_sample(msg)
         elif msg["infer"]["tmc"] == "mixture":
             value = _tmc_mixture_sample(msg)
