@@ -25,17 +25,17 @@ def _tmc_mixture_sample(msg):
 
     target_shape = (num_samples,) + batch_shape + dist.event_shape
 
-    # sample mixture components
+    # sample mixture components (uniformly)
     thin_sample = fat_sample
     while thin_sample.shape != target_shape:
 
-        for squashed_dim1, squashed_size1 in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
-            if squashed_size1 > 1 and (target_shape[squashed_dim1] == 1 or squashed_dim1 == 0):
+        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
+            if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
                 break
 
-        mixture_component = torch.randint(low=0, high=squashed_size1, size=(1,),
+        mixture_component = torch.randint(low=0, high=squashed_size, size=(1,),
                                           dtype=torch.long, device=thin_sample.device)
-        thin_sample = torch.index_select(thin_sample, squashed_dim1, mixture_component)
+        thin_sample = torch.index_select(thin_sample, squashed_dim, mixture_component)
 
     assert thin_sample.shape == target_shape
     return thin_sample
