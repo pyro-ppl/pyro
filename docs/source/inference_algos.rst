@@ -61,7 +61,7 @@ Importance
 
 
 Reweighted Wake-Sleep
-----------
+---------------------
 
 .. automodule:: pyro.infer.rws
     :members:
