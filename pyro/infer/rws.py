@@ -16,6 +16,23 @@ class ReweightedWakeSleep(ELBO):
     r"""
     An implementation of Reweighted Wake Sleep following reference [1].
 
+    .. note:: Sampling and log_prob evaluation asymptotic complexity:
+
+    1) Using wake-theta and/or wake-phi
+        O(`num_particles`) samples from guide,
+        O(`num_particles`) `log_prob` evaluations of model and guide
+
+    2) Using sleep-phi
+        O(`num_sleep_particles`) samples from model,
+        O(`num_sleep_particles`) `log_prob` evaluations of guide
+
+    if 1) and 2) are combined,
+        O(`num_particles`) samples from the guide,
+        O(`num_sleep_particles`) from the model,
+        O(`num_particles` + `num_sleep_particles`) `log_prob` evaluations of the guide, and
+        O(`num_particles`) evaluations of the model
+
+
     .. note:: This is particularly useful for models with stochastic branching,
         as described in [2].
 
