@@ -105,7 +105,8 @@ class SVI(TracePosterior):
         with torch.no_grad():
             loss = self.loss(self.model, self.guide, *args, **kwargs)
             if isinstance(loss, tuple):
-                return torch_item(loss[0]), torch_item(loss[1])
+                # Support losses that return a tuple, e.g. ReweightedWakeSleep.
+                return type(loss)(map(torch_item, loss))
             else:
                 return torch_item(loss)
 
