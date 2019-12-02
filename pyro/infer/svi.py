@@ -132,8 +132,8 @@ class SVI(TracePosterior):
         # zero gradients
         pyro.infer.util.zero_grads(params)
 
-        # RWS: handle loss = (wake_theta_loss, wake_phi_loss)
         if isinstance(loss, tuple):
-            return torch_item(loss[0]), torch_item(loss[1])
+            # Support losses that return a tuple, e.g. ReweightedWakeSleep.
+            return type(loss)(map(torch_item, loss))
         else:
             return torch_item(loss)
