@@ -72,13 +72,7 @@ class ReweightedWakeSleep(ELBO):
                  num_sleep_particles=None,
                  vectorize_particles=True,
                  max_plate_nesting=float('inf'),
-                 max_iarange_nesting=None,  # DEPRECATED
                  strict_enumeration_warning=True):
-        if max_iarange_nesting is not None:
-            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
-                          DeprecationWarning)
-            max_plate_nesting = max_iarange_nesting
-
         # force K > 1 otherwise SNIS not possible
         assert(num_particles > 1), \
             "Reweighted Wake Sleep needs to be run with more than one particle"
