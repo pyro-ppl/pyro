@@ -59,6 +59,16 @@ Importance
     :undoc-members:
     :show-inheritance:
 
+
+Reweighted Wake-Sleep
+----------
+
+.. automodule:: pyro.infer.rws
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 Sequential Monte Carlo
 ----------------------
 
