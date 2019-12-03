@@ -343,10 +343,10 @@ class PoissonGammaTests(TestCase):
                 beta_error = param_mse("beta_q", self.beta0)
                 with torch.no_grad():
                     if k == 0:
-                        avg_loglikelihood, avg_penalty = loss._differentiable_loss_parts(model, guide)
+                        avg_loglikelihood, avg_penalty = loss._differentiable_loss_parts(model, guide, (), {})
                         avg_loglikelihood = torch_item(avg_loglikelihood)
                         avg_penalty = torch_item(avg_penalty)
-                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide)
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide, (), {})
                     avg_loglikelihood = alpha * avg_loglikelihood + (1-alpha) * torch_item(loglikelihood)
                     avg_penalty = alpha * avg_penalty + (1-alpha) * torch_item(penalty)
                 if k % 100 == 0:
