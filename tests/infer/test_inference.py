@@ -14,7 +14,7 @@ from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, EnergyDistance, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO,
                         Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
-                        TraceTailAdaptive_ELBO)
+                        TraceTailAdaptive_ELBO, ReweightedWakeSleep)
 from pyro.infer.util import torch_item
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
@@ -68,6 +68,12 @@ class NormalNormalTests(TestCase):
 
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3))
+
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 2500, ReweightedWakeSleep(num_particles=3))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 7500, ReweightedWakeSleep(num_particles=3))
 
     def test_mmd_vectorized(self):
         z_size = self.loc0.shape[0]
@@ -267,6 +273,12 @@ class PoissonGammaTests(TestCase):
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 12500, RenyiELBO(alpha=0.2, num_particles=2))
 
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 12500, ReweightedWakeSleep(num_particles=2))
+
     def test_mmd_vectorized(self):
         z_size = 1
         self.do_fit_prior_test(
@@ -369,6 +381,7 @@ class PoissonGammaTests(TestCase):
     TraceGraph_ELBO,
     TraceEnum_ELBO,
     RenyiELBO,
+    ReweightedWakeSleep
 ])
 @pytest.mark.parametrize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
@@ -402,6 +415,11 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
     if elbo_impl is RenyiELBO:
         elbo = elbo_impl(alpha=0.2, num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
+    elif elbo_impl is ReweightedWakeSleep:
+        if gamma_dist is ShapeAugmentedGamma:
+            pytest.xfail(reason="ShapeAugmentedGamma not suported for ReweightedWakeSleep")
+        else:
+            elbo = elbo_impl(num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     else:
         elbo = elbo_impl(max_plate_nesting=1, strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo)
@@ -463,6 +481,20 @@ class BernoulliBetaTests(TestCase):
     def test_renyi_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
                                                  max_plate_nesting=1))
+
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_reparameterized_vectorized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2, vectorize_particles=True,
+                                                          max_plate_nesting=1))
+
+    def test_rws_nonreparameterized_vectorized(self):
+        self.do_elbo_test(False, 5000, ReweightedWakeSleep(num_particles=2, vectorize_particles=True,
+                                                           max_plate_nesting=1))
 
     def test_mmd_vectorized(self):
         z_size = 1
