@@ -45,7 +45,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.autoguide import AutoDelta
-from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
+from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
@@ -582,12 +582,21 @@ def main(args):
 
     # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
     # All of our models have two plates: "data" and "tones".
-    Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
-    elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
-                strict_enumeration_warning=(model is not model_7),
-                jit_options={"time_compilation": args.time_compilation})
     optim = Adam({'lr': args.learning_rate})
-    svi = SVI(model, guide, optim, elbo)
+    if args.tmc:
+        if args.jit:
+            raise NotImplementedError("jit support not yet added for TraceTMC_ELBO")
+        elbo = TraceTMC_ELBO(max_plate_nesting=1 if model is model_0 else 2)
+        tmc_model = poutine.infer_config(
+            model,
+            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
+        svi = SVI(tmc_model, guide, optim, elbo)
+    else:
+        Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
+        elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
+                    strict_enumeration_warning=(model is not model_7),
+                    jit_options={"time_compilation": args.time_compilation})
+        svi = SVI(model, guide, optim, elbo)
 
     # We'll train on small minibatches.
     logging.info('Step\tLoss')
@@ -643,5 +652,11 @@ if __name__ == '__main__':
     parser.add_argument('--jit', action='store_true')
     parser.add_argument('--time-compilation', action='store_true')
     parser.add_argument('-rp', '--raftery-parameterization', action='store_true')
+    parser.add_argument('--tmc', action='store_true',
+                        help="Use Tensor Monte Carlo instead of exact enumeration "
+                             "to estimate the marginal likelihood. You probably don't want to do this, "
+                             "except to see that TMC makes Monte Carlo gradient estimation feasible "
+                             "even with very large numbers of non-reparametrized variables.")
+    parser.add_argument('--tmc-num-samples', default=10, type=int)
     args = parser.parse_args()
     main(args)
