@@ -3,7 +3,7 @@ Capture-Recapture Models (CJS Models)
 
 `View cjs.py on github`__
 
-.. _github: https://github.com/uber/pyro/blob/dev/examples/capture_recapture/cjs.py
+.. _github: https://github.com/pyro-ppl/pyro/blob/dev/examples/capture_recapture/cjs.py
 
 __ github_
 

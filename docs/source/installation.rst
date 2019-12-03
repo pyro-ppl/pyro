@@ -9,6 +9,6 @@ Pyro supports 3.4+.  To setup, install `PyTorch <http://pytorch.org>`_ then run:
 
 or install from source::
 
-   git clone https://github.com/uber/pyro.git
+   git clone https://github.com/pyro-ppl/pyro.git
    cd pyro
    python setup.py install

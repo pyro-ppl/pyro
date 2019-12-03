@@ -169,7 +169,7 @@ class RenyiELBO(ELBO):
                         surrogate_elbo_particle = surrogate_elbo_particle - log_prob_sum
 
                         if not is_identically_zero(score_function_term):
-                            # link to the issue: https://github.com/uber/pyro/issues/1222
+                            # link to the issue: https://github.com/pyro-ppl/pyro/issues/1222
                             raise NotImplementedError
 
                     if not is_identically_zero(score_function_term):
