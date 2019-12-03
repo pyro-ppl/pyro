@@ -36,7 +36,7 @@ def test_serialization(feature_dim):
     expected_ite = cevae.ite(x)
 
     # Ignore tracer warnings
-    traced_cevae = cevae.jit_trace()
+    traced_cevae = cevae.to_script_module()
     f = io.BytesIO()
     torch.jit.save(traced_cevae, f)
     f.seek(0)

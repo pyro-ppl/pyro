@@ -380,7 +380,7 @@ class CEVAE(nn.Module):
                 y1 = poutine.replay(self.model, tr.trace)(x)
         return (y1 - y0).mean(0)
 
-    def jit_trace(self):
+    def to_script_module(self):
         """
         Compile this module using :func:`torch.jit.trace_module` ,
         assuming self has already been fit to data.

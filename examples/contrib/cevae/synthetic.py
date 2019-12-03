@@ -65,7 +65,7 @@ def main(args):
     naive_ate = y_test[t_test == 1].mean() - y_test[t_test == 0].mean()
     print("naive ATE = {:0.3g}".format(naive_ate))
     if args.jit:
-        cevae = cevae.jit_trace()
+        cevae = cevae.to_script_module()
     est_ite = cevae.ite(x_test)
     est_ate = est_ite.mean()
     print("estimated ATE = {:0.3g}".format(est_ate.item()))
