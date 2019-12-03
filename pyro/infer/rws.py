@@ -209,11 +209,8 @@ class ReweightedWakeSleep(ELBO):
         Performs backward as appropriate on both, using num_particle many samples/particles.
         """
         wake_theta_loss, phi_loss = self._loss(model, guide, *args, **kwargs)
-        try:
-            wake_theta_loss.backward(retain_graph=True)
-        except RuntimeError:
-            pass
-        phi_loss.backward()
+        # convenience addition to ensure easier gradients without requiring `retain_graph=True`
+        (wake_theta_loss + phi_loss).backward()
 
         return wake_theta_loss.detach().item(), phi_loss.detach().item()
 
