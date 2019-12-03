@@ -1,6 +1,7 @@
 """
 This example demonstrates how to use the Causal Effect Variational Autoencoder
-[1] implemented in :class:`pyro.contrib.cevae.CEVAE` .
+[1] implemented in pyro.contrib.cevae.CEVAE, documented at
+http://docs.pyro.ai/en/latest/contrib.cevae.html
 
 **References**
 
