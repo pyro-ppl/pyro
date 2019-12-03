@@ -178,8 +178,12 @@ class Guide(PyroModule):
         if size is None:
             size = x.size(0)
         with pyro.plate("data", size, subsample=x):
-            t = pyro.sample("t", self.t_dist(x), obs=t)
-            y = pyro.sample("y", self.y_dist(t, x), obs=y)
+            # The t and y sites are needed for prediction, and participate in
+            # the auxiliary CEVAE loss. We mark them auxiliary to indicate they
+            # do not correspond to latent variables during training.
+            t = pyro.sample("t", self.t_dist(x), obs=t, infer={"is_auxiliary": True})
+            y = pyro.sample("y", self.y_dist(t, x), obs=y, infer={"is_auxiliary": True})
+            # The z site participates only in the usual ELBO loss.
             pyro.sample("z", self.z_dist(y, t, x))
 
     def t_dist(self, x):
