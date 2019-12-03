@@ -109,24 +109,24 @@ class Trace_MMD(ELBO):
         else:
             raise TypeError("`mmd_scale` should be either float, or a dict of floats")
 
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         """
         Returns a single trace from the guide, and the model that is run
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, args, kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
 
-    def _differentiable_loss_parts(self, model, guide, *args, **kwargs):
+    def _differentiable_loss_parts(self, model, guide, args, kwargs):
         all_model_samples = defaultdict(list)
         all_guide_samples = defaultdict(list)
 
         loglikelihood = 0.0
         penalty = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             if self.vectorize_particles:
                 model_trace_independent = poutine.trace(
                     self._vectorized_num_particles(model)
@@ -189,7 +189,7 @@ class Trace_MMD(ELBO):
             Shengjia Zhao
             https://ermongroup.github.io/blog/a-tutorial-on-mmd-variational-autoencoders/
         """
-        loglikelihood, penalty = self._differentiable_loss_parts(model, guide, *args, **kwargs)
+        loglikelihood, penalty = self._differentiable_loss_parts(model, guide, args, kwargs)
         loss = -loglikelihood + penalty
         warn_if_nan(loss, "loss")
         return loss

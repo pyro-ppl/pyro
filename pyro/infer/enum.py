@@ -33,7 +33,7 @@ def iter_discrete_extend(trace, site, **ignored):
         yield extended_trace
 
 
-def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, **kwargs):
+def get_importance_trace(graph_type, max_plate_nesting, model, guide, args, kwargs):
     """
     Returns a single trace from the guide, and the model that is run
     against it.
