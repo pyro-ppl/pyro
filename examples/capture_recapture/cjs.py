@@ -262,17 +262,16 @@ def main(args):
     guide = AutoDiagonalNormal(poutine.block(model, expose_fn=expose_fn))
 
     # since we enumerate the discrete random variables,
-    # we need to use TraceEnum_ELBO.
+    # we need to use TraceEnum_ELBO or TraceTMC_ELBO.
+    optim = Adam({'lr': args.learning_rate})
     if args.tmc:
         elbo = TraceTMC_ELBO(max_plate_nesting=1)
         tmc_model = poutine.infer_config(
             model,
             lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
-        optim = Adam({'lr': args.learning_rate})
         svi = SVI(tmc_model, guide, optim, elbo)
     else:
         elbo = TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
-        optim = Adam({'lr': args.learning_rate})
         svi = SVI(model, guide, optim, elbo)
 
     losses = []
@@ -299,9 +298,9 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--num-steps", default=400, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
     parser.add_argument("--tmc", action='store_true',
-                        help="Use Tensor Monte Carlo instead of exact enumeration " +
-                             "to estimate the marginal likelihood. You probably don't want to do this, " +
-                             "except to see that TMC makes Monte Carlo gradient estimation feasible " +
+                        help="Use Tensor Monte Carlo instead of exact enumeration "
+                             "to estimate the marginal likelihood. You probably don't want to do this, "
+                             "except to see that TMC makes Monte Carlo gradient estimation feasible "
                              "even with very large numbers of non-reparametrized variables.")
     parser.add_argument("--tmc-num-samples", default=10, type=int)
     args = parser.parse_args()
