@@ -215,7 +215,7 @@ class ReweightedWakeSleep(ELBO):
             pass
         phi_loss.backward()
 
-        return wake_theta_loss.detach(), phi_loss.detach()
+        return wake_theta_loss.detach().item(), phi_loss.detach().item()
 
     def _vectorized_num_sleep_particles(self, fn):
         """
