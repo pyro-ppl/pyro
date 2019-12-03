@@ -75,6 +75,16 @@ Stein Methods
     :undoc-members:
     :show-inheritance:
 
+Likelihood free methods
+-----------------------
+
+.. automodule:: pyro.infer.energy_distance
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
+
 Discrete Inference
 ------------------
 

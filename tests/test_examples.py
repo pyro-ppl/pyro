@@ -26,6 +26,7 @@ CPU_EXAMPLES = [
     'capture_recapture/cjs.py --num-steps=1 -m 3 --tmc --tmc-num-samples=2',
     'capture_recapture/cjs.py --num-steps=1 -m 4 --tmc --tmc-num-samples=2',
     'capture_recapture/cjs.py --num-steps=1 -m 5 --tmc --tmc-num-samples=2',
+    'cevae.py --num-epochs=1 -n 2',
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
