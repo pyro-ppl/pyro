@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear, to_pyro_module_
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -371,6 +371,8 @@ def test_mixin_factory():
     assert isinstance(module[0], PyroModule)
     assert type(module[0]).__name__ == "PyroLinear"
     assert type(module[2]) is type(module[0])  # noqa: E721
+    assert module[0]._pyro_name == "0"
+    assert module[1]._pyro_name == "1"
 
     # Ensure new types are serializable.
     data = torch.randn(28 * 28)
@@ -386,6 +388,61 @@ def test_mixin_factory():
     assert type(module).__name__ == "PyroSequential"
     actual = module(data)
     assert_equal(actual, expected)
+
+
+def test_to_pyro_module_():
+
+    pyro.set_rng_seed(123)
+    actual = nn.Sequential(
+        nn.Linear(28 * 28, 200),
+        nn.Sigmoid(),
+        nn.Linear(200, 200),
+        nn.Sigmoid(),
+        nn.Linear(200, 10),
+    )
+    to_pyro_module_(actual)
+    pyro.clear_param_store()
+
+    pyro.set_rng_seed(123)
+    expected = PyroModule[nn.Sequential](
+        PyroModule[nn.Linear](28 * 28, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 10),
+    )
+    pyro.clear_param_store()
+
+    def assert_identical(a, e):
+        assert type(a) is type(e)
+        if isinstance(a, dict):
+            assert set(a) == set(e)
+            for key in a:
+                assert_identical(a[key], e[key])
+        elif isinstance(a, nn.Module):
+            assert_identical(a.__dict__, e.__dict__)
+        elif isinstance(a, (str, int, float, torch.Tensor)):
+            assert_equal(a, e)
+
+    assert_identical(actual, expected)
+
+    # check output
+    data = torch.randn(28 * 28)
+    actual_out = actual(data)
+    pyro.clear_param_store()
+    expected_out = expected(data)
+    assert_equal(actual_out, expected_out)
+
+    # check randomization
+    def randomize(model):
+        for m in model.modules():
+            for name, value in list(m.named_parameters(recurse=False)):
+                setattr(m, name, PyroSample(prior=dist.Normal(0, 1)
+                                                      .expand(value.shape)
+                                                      .to_event(value.dim())))
+    randomize(actual)
+    randomize(expected)
+    assert_identical(actual, expected)
 
 
 def test_torch_serialize():
