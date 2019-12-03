@@ -39,7 +39,7 @@ class ReweightedWakeSleep(ELBO):
 
     .. note:: In order to enable computing the sleep-phi terms, the guide program must have its observations
         explicitly passed in through the keyworded argument `observations`. Where the value of the observations
-        is unknown during definition, such as for amortized variation inference, it may be given a default
+        is unknown during definition, such as for amortized variational inference, it may be given a default
         argument as `observations=None`, and the correct value supplied during learning through
         `svi.step(observations=...)`.
 
