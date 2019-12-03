@@ -16,6 +16,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.cevae import CEVAE
 
 
 def generate_data(args):
@@ -49,12 +50,12 @@ def main(args):
                   latent_dim=args.latent_dim,
                   hidden_dim=args.hidden_dim,
                   num_layers=args.num_layers)
-    cevae.train(x_train, t_train, y_train,
-                num_epochs=args.num_epochs,
-                batch_size=args.batch_size,
-                learning_rate=args.learning_rate,
-                learning_rate_decay=args.learning_rate_decay,
-                weight_decay=args.weight_decay)
+    cevae.fit(x_train, t_train, y_train,
+              num_epochs=args.num_epochs,
+              batch_size=args.batch_size,
+              learning_rate=args.learning_rate,
+              learning_rate_decay=args.learning_rate_decay,
+              weight_decay=args.weight_decay)
 
     # Evaluate.
     x_test, t_test, y_test, true_ite = generate_data(args)
@@ -62,7 +63,7 @@ def main(args):
     print("true ATE = {:0.3g}".format(true_ate.item()))
     naive_ate = y_test[t_test == 1].mean() - y_test[t_test == 0].mean()
     print("naive ATE = {:0.3g}".format(naive_ate))
-    est_ite = cevae.ite(model, guide, x_test, num_samples=10)
+    est_ite = cevae.ite(x_test, num_samples=10)
     est_ate = est_ite.mean()
     print("estimated ATE = {:0.3g}".format(est_ate.item()))
 

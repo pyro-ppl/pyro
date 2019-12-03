@@ -256,7 +256,7 @@ class CEVAE(nn.Module):
     Main class implementing a Causal Effect VAE [1]. This assumes a graphical model
 
     .. graphviz:: :graphviz_dot: neato
-        
+
         digraph {
             Z [pos="1,2!",style=filled];
             X [pos="2,1!"];
@@ -290,7 +290,7 @@ class CEVAE(nn.Module):
     """
     def __init__(self, feature_dim, latent_dim=20, hidden_dim=200, num_layers=3):
         config = dict(feature_dim=feature_dim, latent_dim=latent_dim,
-                     hidden_dim=hidden_dim, num_layers=num_layers)
+                      hidden_dim=hidden_dim, num_layers=num_layers)
         for name, size in config.items():
             if not (isinstance(size, int) and size > 0):
                 raise ValueError("Expected {} > 0 but got {}".format(name, size))
