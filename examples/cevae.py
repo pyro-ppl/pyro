@@ -30,6 +30,9 @@ from pyro.optim import ClippedAdam
 
 
 class FullyConnected(nn.Sequential):
+    """
+    Fully connected multi-layer network with ELU activations.
+    """
     def __init__(self, sizes):
         layers = []
         for in_size, out_size in zip(sizes, sizes[1:]):
@@ -39,17 +42,22 @@ class FullyConnected(nn.Sequential):
         super().__init__(*layers)
 
 
-def nn_init(m):
-    if isinstance(m, nn.Linear):
-        m.weight.data.normal_(0, 0.1 / m.in_features ** 0.5)
-        m.bias.data.fill_(0)
-
-
 class DiagNormalNet(nn.Module):
     """
-    FullyConnected network outputting a constrained ``loc,scale`` pair.
+    :class:`FullyConnected` network outputting a constrained ``loc,scale``
+    pair.
+
+    This is used to represent a conditional probability distribution of a
+    ``sizes[-1]``-sized diagonal Normal random variable conditioned on a
+    ``sizes[0]``-size real value, for example::
+
+        net = DiagNormalNet([3, 4, 5])
+        z = torch.randn(3)
+        loc, scale = net(z)
+        x = dist.Normal(loc, scale).sample()
     """
     def __init__(self, sizes):
+        assert len(sizes) >= 2
         super().__init__()
         self.fc = FullyConnected(sizes[:-1] + [sizes[-1] * 2])
 
@@ -63,9 +71,18 @@ class DiagNormalNet(nn.Module):
 
 class BernoulliNet(nn.Module):
     """
-    FullyConnected network outputting a single ``logits`` value.
+    :class:`FullyConnected` network outputting a single ``logits`` value.
+
+    This is used to represent a conditional probability distribution of a
+    single Bernoulli random variable conditioned on a ``sizes[0]``-sized real
+    value, for example::
+
+        net = BernoulliNet([3, 4])
+        z = torch.randn(3)
+        t = dist.Bernoulli(logits=net(z)).sample()
     """
     def __init__(self, sizes):
+        assert len(sizes) >= 1
         super().__init__()
         self.fc = FullyConnected(sizes + [1])
 
@@ -75,7 +92,8 @@ class BernoulliNet(nn.Module):
 
 class Model(PyroModule):
     """
-    Generative model for a causal model with latent confounder::
+    Generative model for a causal model with latent confounder ``z`` and binary
+    treatment ``t``::
 
         z ~ p(z)      # latent confounder
         x ~ p(x|z)    # partial noisy observation of z
@@ -129,7 +147,8 @@ class Model(PyroModule):
 
 class Guide(PyroModule):
     """
-    Inference model for causal effect estimation.
+    Inference model for causal effect estimation with latent confounder ``z``
+    and binary treatment ``t``::
 
         t ~ p(t|x)      # treatment
         y ~ p(y|t,x)    # outcome
@@ -159,10 +178,8 @@ class Guide(PyroModule):
         if size is None:
             size = x.size(0)
         with pyro.plate("data", size, subsample=x):
-            t = pyro.sample("t", self.t_dist(x),
-                            obs=t, infer={"is_auxiliary": True})
-            y = pyro.sample("y", self.y_dist(t, x),
-                            obs=y, infer={"is_auxiliary": True})
+            t = pyro.sample("t", self.t_dist(x), obs=t)
+            y = pyro.sample("y", self.y_dist(t, x), obs=y)
             pyro.sample("z", self.z_dist(y, t, x))
 
     def t_dist(self, x):
@@ -190,7 +207,7 @@ class Guide(PyroModule):
 
 class TraceCausalEffect_ELBO(Trace_ELBO):
     """
-    The CEVAE objective (to maximize) is::
+    The CEVAE objective (to maximize) is [1]::
 
         -loss = ELBO + log q(t|x) + log q(y|t,x)
     """
@@ -218,9 +235,22 @@ class TraceCausalEffect_ELBO(Trace_ELBO):
 
 
 def ite(model, guide, x, num_samples=100):
-    """
+    r"""
     Computes Individual Treatment Effect for a batch of data ``x``.
+
+    .. math::
+
+        ITE(x) = \mathbb E[ \mathbf y \mid \mathbf X=x, do(\mathbf t=1)]
+               - \mathbb E[ \mathbf y \mid \mathbf X=x, do(\mathbf t=0)]
+
     This has complexity ``O(len(x) * num_samples ** 2``.
+
+    :param Model model: A trained CEVAE model.
+    :param Guide guide: A trained CEVAE guide.
+    :param torch.Tensor x: A batch of data.
+    :param int num_samples: The number of monte carlo samples.
+    :return: A ``len(x)``-sized tensor of estimated effects.
+    :rtype: torch.Tensor
     """
     with pyro.plate("num_particles", num_samples, dim=-2):
         with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
@@ -235,8 +265,6 @@ def ite(model, guide, x, num_samples=100):
 def train(args, x, t, y):
     model = Model(args)
     guide = Guide(args)
-    model.apply(nn_init)
-    guide.apply(nn_init)
 
     dataset = TensorDataset(x, t, y)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)

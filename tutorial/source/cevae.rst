@@ -3,7 +3,7 @@ Causal Effect VAE
 
 `View cevae.py on github`__
 
-.. _github: https://github.com/uber/pyro/blob/dev/examples/cevae.py
+.. _github: https://github.com/pyro-ppl/pyro/blob/dev/examples/cevae.py
 
 __ github_
 
