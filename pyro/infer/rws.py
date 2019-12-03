@@ -31,11 +31,12 @@ class ReweightedWakeSleep(ELBO):
         O(`num_particles` + `num_sleep_particles`) `log_prob` evaluations of the guide, and
         O(`num_particles`) evaluations of the model
 
-
     .. note:: This is particularly useful for models with stochastic branching,
         as described in [2].
 
-    .. note:: This returns _two_ losses, one each for the model and the guide.
+    .. note:: This returns _two_ losses, one each for (a) the model parameters (`theta`), computed using the
+        `iwae` objective, and (b) the guide parameters (`phi`), computed using (a combination of) the `csis`
+        objective and a self-normalized importance-sampled version of the `csis` objective.
 
     .. note:: In order to enable computing the sleep-phi terms, the guide program must have its observations
         explicitly passed in through the keyworded argument `observations`. Where the value of the observations
