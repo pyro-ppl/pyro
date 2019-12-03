@@ -69,7 +69,6 @@ CPU_EXAMPLES = [
     'rsa/schelling_false.py --num-samples=10',
     'rsa/semantic_parsing.py --num-samples=10',
     'smcfilter.py --num-timesteps=3 --num-particles=10',
-    'smcfilter.py --num-timesteps=3 --num-particles=10 --tmc',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy',
