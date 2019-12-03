@@ -104,7 +104,12 @@ class SVI(TracePosterior):
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
         with torch.no_grad():
-            return torch_item(self.loss(self.model, self.guide, *args, **kwargs))
+            loss = self.loss(self.model, self.guide, *args, **kwargs)
+            if isinstance(loss, tuple):
+                # Support losses that return a tuple, e.g. ReweightedWakeSleep.
+                return type(loss)(map(torch_item, loss))
+            else:
+                return torch_item(loss)
 
     def step(self, *args, **kwargs):
         """
@@ -129,4 +134,8 @@ class SVI(TracePosterior):
         # zero gradients
         pyro.infer.util.zero_grads(params)
 
-        return torch_item(loss)
+        if isinstance(loss, tuple):
+            # Support losses that return a tuple, e.g. ReweightedWakeSleep.
+            return type(loss)(map(torch_item, loss))
+        else:
+            return torch_item(loss)

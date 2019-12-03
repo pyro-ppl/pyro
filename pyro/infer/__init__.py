@@ -10,6 +10,7 @@ from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.predictive import Predictive
 from pyro.infer.renyi_elbo import RenyiELBO
+from pyro.infer.rws import ReweightedWakeSleep
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svgd import SVGD, IMQSteinKernel, RBFSteinKernel
 from pyro.infer.svi import SVI
@@ -43,6 +44,7 @@ __all__ = [
     "Predictive",
     "RBFSteinKernel",
     "RenyiELBO",
+    "ReweightedWakeSleep",
     "SMCFilter",
     "SVGD",
     "SVI",
