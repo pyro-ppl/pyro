@@ -64,14 +64,14 @@ class DiagNormalNet(nn.Module):
     """
     def __init__(self, sizes):
         assert len(sizes) >= 2
+        self.dim = sizes[-1]
         super().__init__()
-        self.fc = FullyConnected(sizes[:-1] + [sizes[-1] * 2])
+        self.fc = FullyConnected(sizes[:-1] + [self.dim * 2])
 
     def forward(self, x):
         loc_scale = self.fc(x)
-        d = loc_scale.size(-1) // 2
-        loc = loc_scale[..., :d]
-        scale = nn.functional.softplus(loc_scale[..., d:]).clamp(min=1e-10)
+        loc = loc_scale[..., :self.dim]
+        scale = nn.functional.softplus(loc_scale[..., self.dim:]).clamp(min=1e-10)
         return loc, scale
 
 
@@ -287,14 +287,18 @@ class CEVAE(nn.Module):
     :param int hidden_dim: Dimension of hidden layers of fully connected
         networks. Defaults to 200.
     :param int num_layers: Number of hidden layers in fully connected networks.
+    :param int num_samples: Default number of samples for the :meth:`ite`
+        method.
     """
-    def __init__(self, feature_dim, latent_dim=20, hidden_dim=200, num_layers=3):
+    def __init__(self, feature_dim, latent_dim=20, hidden_dim=200, num_layers=3,
+                 num_samples=100):
         config = dict(feature_dim=feature_dim, latent_dim=latent_dim,
                       hidden_dim=hidden_dim, num_layers=num_layers)
         for name, size in config.items():
             if not (isinstance(size, int) and size > 0):
                 raise ValueError("Expected {} > 0 but got {}".format(name, size))
-        self.feature_dim = config["feature_dim"]
+        self.feature_dim = feature_dim
+        self.num_samples = num_samples
 
         super().__init__()
         self.model = Model(config)
@@ -344,7 +348,8 @@ class CEVAE(nn.Module):
             losses.append(loss)
         return losses
 
-    def ite(self, x, num_samples=100):
+    @torch.no_grad()
+    def ite(self, x, num_samples=None):
         r"""
         Computes Individual Treatment Effect for a batch of data ``x``.
 
@@ -357,10 +362,14 @@ class CEVAE(nn.Module):
 
         :param ~torch.Tensor x: A batch of data.
         :param int num_samples: The number of monte carlo samples.
+            Defaults to ``self.num_samples`` which defaults to ``100``.
         :return: A ``len(x)``-sized tensor of estimated effects.
         :rtype: ~torch.Tensor
         """
-        assert x.dim() == 2 and x.size(-1) == self.feature_dim
+        if num_samples is None:
+            num_samples = self.num_samples
+        if not torch._C._get_tracing_state():
+            assert x.dim() == 2 and x.size(-1) == self.feature_dim
 
         with pyro.plate("num_particles", num_samples, dim=-2):
             with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
@@ -370,3 +379,18 @@ class CEVAE(nn.Module):
             with poutine.do(data=dict(t=torch.tensor(1.))):
                 y1 = poutine.replay(self.model, tr.trace)(x)
         return (y1 - y0).mean(0)
+
+    def jit_trace(self):
+        """
+        Compile this module using :func:`torch.jit.trace_module` ,
+        assuming self has already been fit to data.
+
+        :return: A traced version of self with an :meth:`ite` method.
+        :rtype: torch.jit.ScriptModule
+        """
+        self.train(False)
+        fake_x = torch.randn(2, self.feature_dim)
+        with pyro.validation_enabled(False):
+            # Disable check_trace due to nondeterministic nodes.
+            result = torch.jit.trace_module(self, {"ite": (fake_x,)}, check_trace=False)
+        return result
