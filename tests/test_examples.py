@@ -10,6 +10,16 @@ from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
 
+# This is a superset of the filters in the [tool:pytest] section of setup.cfg.
+WARNINGS = [
+    "-Werror",
+    "-Wignore::ImportWarning",
+    "-Wignore:numpy.ufunc size changed:RuntimeWarning",
+    "-Wignore:numpy.dtype size changed:RuntimeWarning",
+    "-Wignore:Default grid_sample and affine_grid behavior will be changed:UserWarning",
+    "-Wignore::DeprecationWarning",
+    "-Wonce::DeprecationWarning",
+]
 
 CPU_EXAMPLES = [
     'air/main.py --num-steps=1',
@@ -154,7 +164,7 @@ def test_cpu(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable] + WARNINGS + [filename] + args)
 
 
 @requires_cuda
@@ -164,7 +174,7 @@ def test_cuda(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable] + WARNINGS + [filename] + args)
 
 
 @pytest.mark.parametrize('example', JIT_EXAMPLES)
@@ -173,4 +183,4 @@ def test_jit(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable] + WARNINGS + [filename] + args)
