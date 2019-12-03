@@ -300,7 +300,8 @@ class CEVAE(nn.Module):
         self.model = Model(config)
         self.guide = Guide(config)
 
-    def fit(self, x, t, y, num_epochs,
+    def fit(self, x, t, y,
+            num_epochs=100,
             batch_size=100,
             learning_rate=1e-3,
             learning_rate_decay=0.1,
@@ -311,7 +312,16 @@ class CEVAE(nn.Module):
 
         :param ~torch.Tensor x:
         :param ~torch.Tensor t:
-        :param ~torch.Tensor y:
+        :param ~to rch.Tensor y:
+        :param int num_epochs: Number of training epochs. Defaults to 100.
+        :param int batch_size: Batch size. Defaults to 100.
+        :param float learning_rate: Learning rate. Defaults to 1e-3.
+        :param float learning_rate_decay: Learning rate decay over all epochs;
+            the per-step decay rate will depend on batch size and number of epochs
+            such that the initial learning rate will be ``learning_rate`` and the final
+            learning rate will be ``learning_rate * learning_rate_decay``.
+            Defaults to 0.1.
+        :param float weight_decay: Weight decay. Defaults to 1e-4.
         :return: list of epoch losses
         """
         assert x.dim() == 2 and x.size(-1) == self.feature_dim
