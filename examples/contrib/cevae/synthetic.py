@@ -49,7 +49,8 @@ def main(args):
     cevae = CEVAE(feature_dim=args.feature_dim,
                   latent_dim=args.latent_dim,
                   hidden_dim=args.hidden_dim,
-                  num_layers=args.num_layers)
+                  num_layers=args.num_layers,
+                  num_samples=10)
     cevae.fit(x_train, t_train, y_train,
               num_epochs=args.num_epochs,
               batch_size=args.batch_size,
@@ -63,7 +64,9 @@ def main(args):
     print("true ATE = {:0.3g}".format(true_ate.item()))
     naive_ate = y_test[t_test == 1].mean() - y_test[t_test == 0].mean()
     print("naive ATE = {:0.3g}".format(naive_ate))
-    est_ite = cevae.ite(x_test, num_samples=10)
+    if args.jit:
+        cevae = cevae.jit_trace()
+    est_ite = cevae.ite(x_test)
     est_ate = est_ite.mean()
     print("estimated ATE = {:0.3g}".format(est_ate.item()))
 
@@ -82,5 +85,6 @@ if __name__ == "__main__":
     parser.add_argument("-lrd", "--learning-rate-decay", default=0.1, type=float)
     parser.add_argument("--weight-decay", default=1e-4, type=float)
     parser.add_argument("--seed", default=1234567890, type=int)
+    parser.add_argument("--jit", action="store_true")
     args = parser.parse_args()
     main(args)

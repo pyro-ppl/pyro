@@ -355,8 +355,8 @@ class CEVAE(nn.Module):
 
         .. math::
 
-            ITE(x) = \mathbb E\left[ \mathbf y \mid \mathbf X=x, do(\mathbf t=1) \right]
-                   - \mathbb E\left[ \mathbf y \mid \mathbf X=x, do(\mathbf t=0) \right]
+            ITE(x) = \mathbb E\bigl[ \mathbf y \mid \mathbf X=x, do(\mathbf t=1) \bigr]
+                   - \mathbb E\bigl[ \mathbf y \mid \mathbf X=x, do(\mathbf t=0) \bigr]
 
         This has complexity ``O(len(x) * num_samples ** 2``.
 
@@ -374,9 +374,9 @@ class CEVAE(nn.Module):
         with pyro.plate("num_particles", num_samples, dim=-2):
             with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
                 self.guide(x)
-            with poutine.do(data=dict(t=torch.tensor(0.))):
+            with poutine.do(data=dict(t=torch.zeros(()))):
                 y0 = poutine.replay(self.model, tr.trace)(x)
-            with poutine.do(data=dict(t=torch.tensor(1.))):
+            with poutine.do(data=dict(t=torch.ones(()))):
                 y1 = poutine.replay(self.model, tr.trace)(x)
         return (y1 - y0).mean(0)
 
