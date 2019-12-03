@@ -171,7 +171,8 @@ class ReweightedWakeSleep(ELBO):
                 _guide = self._vectorized_num_sleep_particles(guide)
 
             for _ in range(1 if self.vectorize_particles else self.num_sleep_particles):
-                _model_trace = poutine.trace(_model).get_trace(*args, **kwargs).detach()
+                _model_trace = poutine.trace(_model).get_trace(*args, **kwargs)
+                _model_trace.detach_()
                 _guide_trace = self._get_matched_trace(_model_trace, _guide, *args, **kwargs)
                 _log_q += _guide_trace.log_prob_sum()
 

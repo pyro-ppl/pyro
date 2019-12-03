@@ -40,7 +40,7 @@ def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, det
     """
     guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
     if detach:
-        guide_trace = guide_trace.detach()
+        guide_trace.detach_()
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
     if is_validation_enabled():
