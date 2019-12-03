@@ -25,7 +25,7 @@ class ConditionedPlanar(Transform):
     def u_hat(self, u, w):
         alpha = torch.matmul(u.unsqueeze(-2), w.unsqueeze(-1)).squeeze(-1)
         a_prime = -1 + F.softplus(alpha)
-        return u + (a_prime - alpha) * w.div(w.norm(dim=-1, keepdim=True))
+        return u + (a_prime - alpha) * w.div(w.pow(2).sum(dim=-1, keepdim=True))
 
     def _call(self, x):
         """
@@ -114,7 +114,7 @@ class Planar(ConditionedPlanar, TransformModule):
     def __init__(self, input_dim):
         super(Planar, self).__init__()
 
-        self.bias = nn.Parameter(torch.Tensor(input_dim,))
+        self.bias = nn.Parameter(torch.Tensor(1,))
         self.u = nn.Parameter(torch.Tensor(input_dim,))
         self.w = nn.Parameter(torch.Tensor(input_dim,))
         self.input_dim = input_dim
@@ -124,7 +124,7 @@ class Planar(ConditionedPlanar, TransformModule):
         stdv = 1. / math.sqrt(self.u.size(0))
         self.w.data.uniform_(-stdv, stdv)
         self.u.data.uniform_(-stdv, stdv)
-        self.bias.data.uniform_(-stdv, stdv)
+        self.bias.data.zero_()
 
 
 @copy_docs_from(ConditionalTransformModule)
