@@ -35,11 +35,11 @@ def _tmc_mixture_sample(msg):
         squashed_dims = []
         for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
             if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
-                # sample one ancestor per particle population
-                squashed_dims.append(squashed_dim)
+                # uniformly sample one ancestor per upstream particle population
                 ancestor_dist = Categorical(logits=torch.zeros((squashed_size,), device=thin_sample.device))
                 ancestor_index = ancestor_dist.sample(sample_shape=(num_samples,))
                 index[squashed_dim] = ancestor_index
+                squashed_dims.append(squashed_dim)
 
         thin_sample = Vindex(thin_sample)[tuple(index)]
         for squashed_dim in squashed_dims:
@@ -75,10 +75,10 @@ def _tmc_diagonal_sample(msg):
         squashed_dims = []
         for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
             if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
-                # identify particle indices across populations
-                squashed_dims.append(squashed_dim)
+                # diagonal approximation: identify particle indices across populations
                 ancestor_index = torch.arange(squashed_size, device=thin_sample.device)
                 index[squashed_dim] = ancestor_index
+                squashed_dims.append(squashed_dim)
 
         thin_sample = Vindex(thin_sample)[tuple(index)]
         for squashed_dim in squashed_dims:
