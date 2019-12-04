@@ -22,19 +22,13 @@ class MultivariateCauchy(TransformedDistribution):
     def __init__(self, loc, scale_tril, validate_args=None):
         base_dist = Cauchy(loc, 1.0).to_event(1)
         transforms = [LowerCholeskyAffine(torch.zeros_like(loc), scale_tril)]
+        self.loc = loc
+        self.scale_tril = scale_tril
         super(MultivariateCauchy, self).__init__(base_dist, transforms, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MultivariateCauchy, _instance)
         return super(MultivariateCauchy, self).expand(batch_shape, _instance=new)
-
-    @property
-    def loc(self):
-        return self.base_dist.loc
-
-    @property
-    def scale(self):
-        return self.base_dist.scale_tril
 
     @property
     def mean(self):

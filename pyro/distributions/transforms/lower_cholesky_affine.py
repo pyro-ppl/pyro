@@ -26,7 +26,8 @@ class LowerCholeskyAffine(Transform):
         self.loc = loc
         self.scale_tril = scale_tril
         assert loc.size(0) == scale_tril.size(0) == scale_tril.size(1), \
-            "loc and scale_tril must be of size D and D x D, respectively."
+            "loc and scale_tril must be of size D and D x D, respectively (instead: {}, {})".format(loc.shape,
+                                                                                                    scale_tril.shape)
 
     def _call(self, x):
         """
@@ -46,7 +47,8 @@ class LowerCholeskyAffine(Transform):
 
         Inverts y => x.
         """
-        return torch.triangular_solve(y - self.loc, self.scale_tril, upper=False, transpose=False)
+        return torch.triangular_solve((y - self.loc).unsqueeze(-1), self.scale_tril,
+                                      upper=False, transpose=False)[0].squeeze(-1)
 
     def log_abs_det_jacobian(self, x, y):
         """
