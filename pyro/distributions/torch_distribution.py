@@ -1,4 +1,5 @@
 import warnings
+from collections import OrderedDict
 
 import torch
 from torch.distributions import constraints
@@ -6,6 +7,7 @@ from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
+from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import broadcast_shape, scale_and_mask
 
 
@@ -197,7 +199,10 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     method to improve gradient estimates and set
     ``.has_enumerate_support = True``.
     """
-    pass
+    # Provides a default `.expand` method for Pyro distributions which overrides
+    # torch.distributions.Distribution.expand (throws a NotImplementedError)
+    def expand(self, batch_shape, _instance=None):
+        return ReshapedDistribution(self, batch_shape)
 
 
 class MaskedDistribution(TorchDistribution):
@@ -278,6 +283,108 @@ class MaskedDistribution(TorchDistribution):
     @property
     def variance(self):
         return self.base_dist.variance
+
+
+class ReshapedDistribution(TorchDistribution):
+    arg_constraints = {}
+
+    def __init__(self, base_dist, batch_shape=torch.Size()):
+        self.base_dist = base_dist
+        super(ReshapedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        # adjust batch shape
+        self.expand(batch_shape)
+
+    def expand(self, batch_shape, _instance=None):
+        # Do basic validation. e.g. we should not "unexpand" distributions even if that is possible.
+        new_shape, _, _ = self._broadcast_shape(self.batch_shape, batch_shape)
+        # Record interstitial and expanded dims/sizes w.r.t. the base distribution
+        new_shape, expanded_sizes, interstitial_sizes = self._broadcast_shape(self.base_dist.batch_shape,
+                                                                              new_shape)
+        self._batch_shape = new_shape
+        self._expanded_sizes = expanded_sizes
+        self._interstitial_sizes = interstitial_sizes
+        return self
+
+    @staticmethod
+    def _broadcast_shape(existing_shape, new_shape):
+        if len(new_shape) < len(existing_shape):
+            raise ValueError("Cannot broadcast distribution of shape {} to shape {}"
+                             .format(existing_shape, new_shape))
+        reversed_shape = list(reversed(existing_shape))
+        expanded_sizes, interstitial_sizes = [], []
+        for i, size in enumerate(reversed(new_shape)):
+            if i >= len(reversed_shape):
+                reversed_shape.append(size)
+                expanded_sizes.append((-i - 1, size))
+            elif reversed_shape[i] == 1:
+                if size != 1:
+                    reversed_shape[i] = size
+                    interstitial_sizes.append((-i - 1, size))
+            elif reversed_shape[i] != size:
+                raise ValueError("Cannot broadcast distribution of shape {} to shape {}"
+                                 .format(existing_shape, new_shape))
+        return tuple(reversed(reversed_shape)), OrderedDict(expanded_sizes), OrderedDict(interstitial_sizes)
+
+    @property
+    def has_rsample(self):
+        return self.base_dist.has_rsample
+
+    @property
+    def has_enumerate_support(self):
+        return self.base_dist.has_enumerate_support
+
+    @constraints.dependent_property
+    def support(self):
+        return self.base_dist.support
+
+    def _sample(self, sample_fn, sample_shape):
+        interstitial_dims = tuple(self._interstitial_sizes.keys())
+        interstitial_dims = tuple(i - self.event_dim for i in interstitial_dims)
+        interstitial_sizes = tuple(self._interstitial_sizes.values())
+        expanded_sizes = tuple(self._expanded_sizes.values())
+        batch_shape = expanded_sizes + interstitial_sizes
+        samples = sample_fn(sample_shape + batch_shape)
+        interstitial_idx = len(sample_shape) + len(expanded_sizes)
+        interstitial_sample_dims = tuple(range(interstitial_idx, interstitial_idx + len(interstitial_sizes)))
+        for dim1, dim2 in zip(interstitial_dims, interstitial_sample_dims):
+            samples = samples.transpose(dim1, dim2)
+        return samples.reshape(sample_shape + self.batch_shape + self.event_shape)
+
+    def sample(self, sample_shape=torch.Size()):
+        return self._sample(self.base_dist.sample, sample_shape)
+
+    def rsample(self, sample_shape=torch.Size()):
+        return self._sample(self.base_dist.rsample, sample_shape)
+
+    def log_prob(self, value):
+        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
+        log_prob = self.base_dist.log_prob(value)
+        return log_prob.expand(shape)
+
+    def score_parts(self, value):
+        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
+        log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
+        if self.batch_shape != self.base_dist.batch_shape:
+            log_prob = log_prob.expand(shape)
+            score_function = score_function.expand(shape)
+            entropy_term = entropy_term.expand(shape)
+        return ScoreParts(log_prob, score_function, entropy_term)
+
+    def enumerate_support(self, expand=True):
+        samples = self.base_dist.enumerate_support(expand=expand)
+        enum_shape = samples.shape[:1]
+        samples = samples.reshape(enum_shape + (1,) * len(self.batch_shape))
+        if expand:
+            samples = samples.expand(enum_shape + self.batch_shape)
+        return samples
+
+    @property
+    def mean(self):
+        return self.base_dist.mean.expand(self.batch_shape + self.event_shape)
+
+    @property
+    def variance(self):
+        return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
 
 
 @register_kl(MaskedDistribution, MaskedDistribution)
