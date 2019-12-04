@@ -126,8 +126,16 @@ def factor(name, log_factor):
 
 def deterministic(name, value, event_dim=None):
     """
-    Deterministic statement to add a site with `value` to the trace. This does not affect
-    the model density.
+    EXPERIMENTAL Deterministic statement to add a :class:`~pyro.distributions.Delta`
+    site with name `name` and value `value` to the trace. This is useful when
+    we want to record values which are completely determined by their parents.
+    For example::
+
+        x = sample("x", dist.Normal(0, 1))
+        x2 = deterministic("x2", x ** 2)
+
+    .. note:: The site does not affect the model density. This currently converts
+        to a :func:`sample` statement, but may change in the future.
 
     :param str name: Name of the site.
     :param torch.Tensor value: Value of the site.
