@@ -46,3 +46,27 @@ def test_rsample(dim, df, num_samples=200 * 1000):
     expected_scale_tril_grad = scale_tril.grad.data
 
     assert_equal(expected_scale_tril_grad, actual_scale_tril_grad, prec=0.1)
+
+
+@pytest.mark.parametrize("df", [9.9])
+@pytest.mark.parametrize("dim", [1, 2])
+def test_log_prob_normalization(dim, df, grid_size=3000, domain_width=10.0):
+    torch.set_default_tensor_type('torch.DoubleTensor')
+
+    scale_tril = (0.2 * torch.randn(dim) - 1.0).exp().diag() + 0.1 * torch.randn(dim, dim)
+    scale_tril = scale_tril.tril(0)
+    scale_tril.requires_grad_(True)
+
+    z = domain_width * torch.arange(grid_size).float() / grid_size - 0.5 * domain_width
+    volume_factor = float(domain_width / grid_size)
+    if dim == 1:
+        z = z.unsqueeze(-1)
+    elif dim == 2:
+        a, b = torch.meshgrid(z, z)
+        z = torch.stack([a, b]).transpose(-1, -3)
+        volume_factor = volume_factor ** 2
+
+    d = MultivariateStudentT(torch.tensor(df), torch.zeros(dim), scale_tril)
+    normalizer = d.log_prob(z).exp().sum().item() * volume_factor
+
+    assert_equal(normalizer, 1.0, prec=0.01)
