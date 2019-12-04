@@ -61,8 +61,6 @@ def test_score_errors_event_dim_mismatch(dist):
         if len(d.event_shape) > 0:
             if dist.get_test_distribution_name() == 'MultivariateNormal':
                 pytest.skip('MultivariateNormal does not do shape validation in log_prob.')
-            elif dist.get_test_distribution_name() == 'MultivariateCauchy':
-                pytest.skip('MultivariateCauchy does not do shape validation in log_prob.')
             elif dist.get_test_distribution_name() == 'LowRankMultivariateNormal':
                 pytest.skip('LowRankMultivariateNormal does not do shape validation in log_prob.')
             with pytest.raises((ValueError, RuntimeError)):
