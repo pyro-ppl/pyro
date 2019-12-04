@@ -131,6 +131,17 @@ class TransformTests(TestCase):
         for input_dim in [2, 5, 10]:
             self._test_inverse(input_dim, T.householder(input_dim, count_transforms=2))
 
+    def test_lower_cholesky_affine(self):
+        for input_dim in [2, 3]:
+            loc = torch.randn(input_dim)
+            scale_tril = torch.randn(input_dim).exp().diag() + 0.03 * torch.randn(input_dim, input_dim)
+            scale_tril = scale_tril.tril(0)
+            transform = T.LowerCholeskyAffine(loc, scale_tril)
+            self._test_inverse(input_dim, transform)
+            self._test_jacobian(input_dim, transform)
+            for shape in [(3,), (3, 4)]:
+                self._test_shape(shape + (input_dim,), transform)
+
     def test_batchnorm_inverses(self):
         for input_dim in [2, 5, 10]:
             transform = T.batchnorm(input_dim)
