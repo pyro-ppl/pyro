@@ -27,9 +27,9 @@ def _tmc_mixture_sample(msg):
 
     target_shape = (num_samples,) + batch_shape + dist.event_shape
 
-    # sample mixture components (uniformly)
+    # if this site has any possible ancestors, sample ancestor indices uniformly
     thin_sample = fat_sample
-    while thin_sample.shape != target_shape:
+    if thin_sample.shape != target_shape:
 
         index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
@@ -67,9 +67,9 @@ def _tmc_diagonal_sample(msg):
 
     target_shape = (num_samples,) + batch_shape + dist.event_shape
 
-    # sample mixture components
+    # if this site has any ancestors, choose ancestors from diagonal approximation
     thin_sample = fat_sample
-    while thin_sample.shape != target_shape:
+    if thin_sample.shape != target_shape:
 
         index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
