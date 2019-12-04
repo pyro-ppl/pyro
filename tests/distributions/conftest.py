@@ -255,12 +255,6 @@ continuous_dists = [
                 {'stability': [1.5], 'skew': 0.1, 'test_data': [-10.]},
                 {'stability': [1.5], 'skew': 0.1, 'scale': 2.0, 'loc': -2.0, 'test_data': [10.]},
                 ]),
-    Fixture(pyro_dist=dist.MultivariateCauchy,
-            examples=[
-               {'loc': [0.1, 0.2], 'scale_tril': [[1.0, 0.0], [0.1, 1.1]], 'test_data': [3.1, -0.7]},
-               {'loc': [0.2, 0.0, 0.3], 'scale_tril': [[1.0, 0.0, 0.0], [0.1, 1.1, 0.0], [-0.01, -0.05, 1.5]],
-                'test_data': [[3.1, -0.7, 0.0], [0.0, 0.5, 1.1]]},
-               ]),
 ]
 
 discrete_dists = [
