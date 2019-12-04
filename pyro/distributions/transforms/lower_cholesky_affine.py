@@ -16,7 +16,7 @@ class LowerCholeskyAffine(Transform):
     :param scale_tril: the D x D lower triangular matrix used in the transformation.
     :type scale_tril: torch.tensor
     """
-    codomain = constraints.real
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
     volume_preserving = False
