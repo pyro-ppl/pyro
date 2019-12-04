@@ -94,13 +94,12 @@ class ReweightedWakeSleep(ELBO):
         assert(insomnia >= 0 and insomnia <= 1), \
             "insomnia should be in [0, 1]"
 
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         """
         Returns a single trace from the guide, and the model that is run against it.
         """
         model_trace, guide_trace = get_importance_trace("flat", self.max_plate_nesting,
-                                                        model, guide, detach=True,
-                                                        *args, **kwargs)
+                                                        model, guide, args, kwargs, detach=True)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -121,7 +120,7 @@ class ReweightedWakeSleep(ELBO):
             log_joints = []
             log_qs = []
 
-            for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
                 log_joint = 0.
                 log_q = 0.
 
