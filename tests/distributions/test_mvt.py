@@ -48,25 +48,21 @@ def test_rsample(dim, df, num_samples=200 * 1000):
     assert_equal(expected_scale_tril_grad, actual_scale_tril_grad, prec=0.1)
 
 
-@pytest.mark.parametrize("df", [9.9])
 @pytest.mark.parametrize("dim", [1, 2])
-def test_log_prob_normalization(dim, df, grid_size=3000, domain_width=10.0):
-    torch.set_default_tensor_type('torch.DoubleTensor')
+def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
+    scale_tril = (0.2 * torch.randn(dim) - 1.5).exp().diag() + 0.1 * torch.randn(dim, dim)
+    scale_tril = 0.1 * scale_tril.tril(0)
 
-    scale_tril = (0.2 * torch.randn(dim) - 1.0).exp().diag() + 0.1 * torch.randn(dim, dim)
-    scale_tril = scale_tril.tril(0)
-    scale_tril.requires_grad_(True)
-
-    z = domain_width * torch.arange(grid_size).float() / grid_size - 0.5 * domain_width
-    volume_factor = float(domain_width / grid_size)
-    if dim == 1:
-        z = z.unsqueeze(-1)
-    elif dim == 2:
-        a, b = torch.meshgrid(z, z)
-        z = torch.stack([a, b]).transpose(-1, -3)
+    volume_factor = domain_width
+    prec = 0.01
+    if dim == 2:
         volume_factor = volume_factor ** 2
+        prec = 0.05
+
+    sample_shape = (grid_size * grid_size, dim)
+    z = torch.distributions.Uniform(-0.5 * domain_width, 0.5 * domain_width).sample(sample_shape)
 
     d = MultivariateStudentT(torch.tensor(df), torch.zeros(dim), scale_tril)
-    normalizer = d.log_prob(z).exp().sum().item() * volume_factor
+    normalizer = d.log_prob(z).exp().mean().item() * volume_factor
 
-    assert_equal(normalizer, 1.0, prec=0.01)
+    assert_equal(normalizer, 1.0, prec=prec)
