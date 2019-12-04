@@ -175,6 +175,13 @@ MixtureOfDiagNormalsSharedCovariance
     :undoc-members:
     :show-inheritance:
 
+MultivariateCauchy
+------------------
+.. autoclass:: pyro.distributions.MultivariateCauchy
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 OMTMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.OMTMultivariateNormal
@@ -286,6 +293,13 @@ ELUTransform
 LeakyReLUTransform
 ------------------
 .. autoclass:: pyro.distributions.transforms.LeakyReLUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LowerCholeskyAffine
+-------------------
+.. autoclass:: pyro.distributions.transforms.LowerCholeskyAffine
     :members:
     :undoc-members:
     :show-inheritance:
