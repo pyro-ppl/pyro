@@ -1,6 +1,7 @@
 import math
 import numbers
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 
 import torch
 from opt_einsum import shared_intermediates
@@ -23,6 +24,16 @@ def enable_validation(is_validate):
 
 def is_validation_enabled():
     return _VALIDATION_ENABLED
+
+
+@contextmanager
+def validation_enabled(is_validate=True):
+    old = is_validation_enabled()
+    try:
+        enable_validation(is_validate)
+        yield
+    finally:
+        enable_validation(old)
 
 
 def torch_item(x):

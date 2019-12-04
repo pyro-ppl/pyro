@@ -39,9 +39,9 @@ alias Pyro statements. For example::
     >>> obs = state.x.sample_(dist.Normal(loc, scale), obs=z)
 
 For deeper examples of how these can be used in model code, see the
-`Tree Data <https://github.com/uber/pyro/blob/dev/examples/contrib/named/tree_data.py>`_
+`Tree Data <https://github.com/pyro-ppl/pyro/blob/dev/examples/contrib/named/tree_data.py>`_
 and
-`Mixture <https://github.com/uber/pyro/blob/dev/examples/contrib/named/mixture.py>`_
+`Mixture <https://github.com/pyro-ppl/pyro/blob/dev/examples/contrib/named/mixture.py>`_
 examples.
 
 Authors: Fritz Obermeyer, Alexander Rush

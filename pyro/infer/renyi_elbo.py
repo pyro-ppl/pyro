@@ -67,13 +67,13 @@ class RenyiELBO(ELBO):
                                         vectorize_particles=vectorize_particles,
                                         strict_enumeration_warning=strict_enumeration_warning)
 
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         """
         Returns a single trace from the guide, and the model that is run
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, args, kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -89,7 +89,7 @@ class RenyiELBO(ELBO):
         is_vectorized = self.vectorize_particles and self.num_particles > 1
 
         # grab a vectorized trace from the generator
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = 0.
 
             # compute elbo
@@ -141,7 +141,7 @@ class RenyiELBO(ELBO):
         tensor_holder = None
 
         # grab a vectorized trace from the generator
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = 0
             surrogate_elbo_particle = 0
 
@@ -169,7 +169,7 @@ class RenyiELBO(ELBO):
                         surrogate_elbo_particle = surrogate_elbo_particle - log_prob_sum
 
                         if not is_identically_zero(score_function_term):
-                            # link to the issue: https://github.com/uber/pyro/issues/1222
+                            # link to the issue: https://github.com/pyro-ppl/pyro/issues/1222
                             raise NotImplementedError
 
                     if not is_identically_zero(score_function_term):

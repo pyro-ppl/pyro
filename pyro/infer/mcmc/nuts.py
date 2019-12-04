@@ -43,7 +43,7 @@ class NUTS(HMC):
     by the :class:`~pyro.infer.mcmc.HMC` kernel. Optionally, the NUTS kernel
     also provides the ability to adapt step size during the warmup phase.
 
-    Refer to the `baseball example <https://github.com/uber/pyro/blob/dev/examples/baseball.py>`_
+    Refer to the `baseball example <https://github.com/pyro-ppl/pyro/blob/dev/examples/baseball.py>`_
     to see how to do Bayesian inference in Pyro using NUTS.
 
     **References**
