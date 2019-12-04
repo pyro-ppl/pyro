@@ -25,7 +25,7 @@ class LowerCholeskyAffine(Transform):
         super(LowerCholeskyAffine, self).__init__(cache_size=1)
         self.loc = loc
         self.scale_tril = scale_tril
-        assert loc.size(0) == scale_tril.size(0) == scale_tril.size(1), \
+        assert loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2), \
             "loc and scale_tril must be of size D and D x D, respectively (instead: {}, {})".format(loc.shape,
                                                                                                     scale_tril.shape)
 
