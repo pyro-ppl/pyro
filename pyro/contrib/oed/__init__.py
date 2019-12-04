@@ -1,9 +1,14 @@
 """Tasks such as choosing the next question to ask in a psychology study, designing an election polling
 strategy, and deciding which compounds to synthesize and test in biological sciences are all fundamentally asking the
-same question: how do we design an experiment to maximize the information gathered? Bayesian
-optimal experimental design (BOED) is a powerful methodology for tackling such
-problems.
+same question: how do we design an experiment to maximize the information gathered?  Pyro is designed to support
+automated optimal experiment design: specifying a model and guide is enough to obtain optimal designs for many different
+kinds of experiment scenarios. Check out our experimental design tutorials that use Pyro to
+[design an adaptive psychology study](https://pyro.ai/examples/working_memory.html) that uses past data to
+select the next question, and [design an election polling strategy](https://pyro.ai/examples/elections.html) that
+aims to give the strongest prediction about the eventual winner of the election.
 
+Bayesian optimal experimental design (BOED) is a powerful methodology for tackling experimental design problems and
+is the framework adopted by Pyro.
 In the BOED framework, we begin with a Bayesian model with a likelihood :math:`p(y|\\theta,d)` and a prior
 :math:`p(\\theta)` on the target latent variables. In Pyro, any fully Bayesian model can be used in the BOED framework.
 The sample sites corresponding to experimental outcomes are the *observation* sites, those corresponding to
