@@ -14,7 +14,7 @@ class LowerCholeskyAffine(Transform):
     :param loc: the fixed D-dimensional vector to shift the input by.
     :type loc: torch.tensor
     :param scale_tril: the D x D lower triangular matrix used in the transformation.
-    :type loc: torch.tensor
+    :type scale_tril: torch.tensor
     """
     codomain = constraints.real
     bijective = True
