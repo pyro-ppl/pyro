@@ -110,13 +110,13 @@ class TraceTMC_ELBO(ELBO):
         Alexander Rush, Noah Goodman (2019)
     """
 
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         """
         Returns a single trace from the guide, and the model that is run
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, args, kwargs)
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
@@ -137,13 +137,13 @@ class TraceTMC_ELBO(ELBO):
         model_trace.pack_tensors(guide_trace.plate_to_symbol)
         return model_trace, guide_trace
 
-    def _get_traces(self, model, guide, *args, **kwargs):
+    def _get_traces(self, model, guide, args, kwargs):
         """
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
         if self.max_plate_nesting == float('inf'):
-            self._guess_max_plate_nesting(model, guide, *args, **kwargs)
+            self._guess_max_plate_nesting(model, guide, args, kwargs)
         if self.vectorize_particles:
             guide = self._vectorized_num_particles(guide)
             model = self._vectorized_num_particles(model)
@@ -163,7 +163,7 @@ class TraceTMC_ELBO(ELBO):
         for i in range(1 if self.vectorize_particles else self.num_particles):
             q.put(poutine.Trace())
             while not q.empty():
-                yield self._get_trace(model, guide, *args, **kwargs)
+                yield self._get_trace(model, guide, args, kwargs)
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
         """
@@ -177,7 +177,7 @@ class TraceTMC_ELBO(ELBO):
         as underlying derivatives have been implemented).
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = _compute_tmc_estimate(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
                 continue

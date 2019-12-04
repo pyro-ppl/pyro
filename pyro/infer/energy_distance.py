@@ -94,11 +94,11 @@ class EnergyDistance:
             return x.sqrt()  # cheaper than .pow()
         return x.pow(self.beta / 2)
 
-    def _get_traces(self, model, guide, *args, **kwargs):
+    def _get_traces(self, model, guide, args, kwargs):
         if self.max_plate_nesting == float("inf"):
             with validation_enabled(False):  # Avoid calling .log_prob() when undefined.
                 # TODO factor this out as a stand-alone helper.
-                ELBO._guess_max_plate_nesting(self, model, guide, *args, **kwargs)
+                ELBO._guess_max_plate_nesting(self, model, guide, args, kwargs)
         vectorize = pyro.plate("num_particles_vectorized", self.num_particles,
                                dim=-self.max_plate_nesting)
 
@@ -148,7 +148,7 @@ class EnergyDistance:
         Computes the surrogate loss that can be differentiated with autograd
         to produce gradient estimates for the model and guide parameters.
         """
-        guide_trace, model_trace = self._get_traces(model, guide, *args, **kwargs)
+        guide_trace, model_trace = self._get_traces(model, guide, args, kwargs)
 
         # Extract observations and posterior predictive samples.
         data = OrderedDict()

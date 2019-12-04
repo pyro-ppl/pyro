@@ -118,7 +118,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
         return _fn
 
     model_trace, guide_trace = get_importance_trace(
-        "flat", max_plate_nesting, vectorize(model), vectorize(guide), *args, **kwargs)
+        "flat", max_plate_nesting, vectorize(model), vectorize(guide), args, kwargs)
 
     guide_trace.pack_tensors()
     model_trace.pack_tensors(guide_trace.plate_to_symbol)
