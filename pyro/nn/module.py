@@ -245,6 +245,14 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         self._pyro_samples = OrderedDict()
         super().__init__()
 
+    def add_module(self, name, module):
+        """
+        Adds a child module to the current module.
+        """
+        if isinstance(module, PyroModule):
+            module._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
+        super().add_module(name, module)
+
     def named_pyro_params(self, prefix='', recurse=True):
         """
         Returns an iterator over PyroModule parameters, yielding both the
@@ -346,8 +354,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 delattr(self, name)
             except AttributeError:
                 pass
-            value._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
-            super().__setattr__(name, value)
+            self.add_module(name, value)
             return
 
         if isinstance(value, PyroParam):
@@ -479,3 +486,59 @@ def clear(mod):
         delattr(mod, name)
     for name in list(mod._modules):
         delattr(mod, name)
+
+
+def to_pyro_module_(m, recurse=True):
+    """
+    Converts an ordinary :class:`torch.nn.Module` instance to a
+    :class:`PyroModule` **in-place**.
+
+    This is useful for adding Pyro effects to third-party modules: no
+    third-party code needs to be modified. For example::
+
+        model = nn.Sequential(
+            nn.Linear(28 * 28, 100),
+            nn.Sigmoid(),
+            nn.Linear(100, 100),
+            nn.Sigmoid(),
+            nn.Linear(100, 10),
+        )
+        to_pyro_module_(model)
+        assert isinstance(model, PyroModule[nn.Sequential])
+        assert isinstance(model[0], PyroModule[nn.Linear])
+
+        # Now we can attempt to be fully Bayesian:
+        for m in model.modules():
+            for name, value in list(m.named_parameters(recurse=False)):
+                setattr(m, name, PyroSample(prior=dist.Normal(0, 1)
+                                                      .expand(value.shape)
+                                                      .to_event(value.dim())))
+        guide = AutoDiagonalNormal(model)
+
+    :param torch.nn.Module m: A module instance.
+    :param bool recurse: Whether to convert submodules to :class:`PyroModules` .
+    """
+    if not isinstance(m, torch.nn.Module):
+        raise TypeError("Expected an nn.Module instance but got a {}".format(type(m)))
+
+    if isinstance(m, PyroModule):
+        if recurse:
+            for name, value in list(m._modules.items()):
+                to_pyro_module_(value)
+                setattr(m, name, value)
+        return
+
+    # Change m's type in-place.
+    m.__class__ = PyroModule[m.__class__]
+    m._pyro_name = ""
+    m._pyro_context = _Context()
+    m._pyro_params = OrderedDict()
+    m._pyro_samples = OrderedDict()
+
+    # Reregister parameters and submodules.
+    for name, value in list(m._parameters.items()):
+        setattr(m, name, value)
+    for name, value in list(m._modules.items()):
+        if recurse:
+            to_pyro_module_(value)
+        setattr(m, name, value)

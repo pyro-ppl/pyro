@@ -60,6 +60,7 @@ Welcome to Pyro Examples and Tutorials!
    :caption: Code Examples:
 
    capture_recapture
+   cevae
    hmm
    lda
    mcmc

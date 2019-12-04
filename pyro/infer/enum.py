@@ -33,12 +33,14 @@ def iter_discrete_extend(trace, site, **ignored):
         yield extended_trace
 
 
-def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, **kwargs):
+def get_importance_trace(graph_type, max_plate_nesting, model, guide, args, kwargs, detach=False):
     """
-    Returns a single trace from the guide, and the model that is run
-    against it.
+    Returns a single trace from the guide, which can optionally be detached,
+    and the model that is run against it.
     """
     guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
+    if detach:
+        guide_trace.detach_()
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
     if is_validation_enabled():

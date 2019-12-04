@@ -59,6 +59,16 @@ Importance
     :undoc-members:
     :show-inheritance:
 
+
+Reweighted Wake-Sleep
+---------------------
+
+.. automodule:: pyro.infer.rws
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 Sequential Monte Carlo
 ----------------------
 
@@ -74,6 +84,16 @@ Stein Methods
     :members:
     :undoc-members:
     :show-inheritance:
+
+Likelihood free methods
+-----------------------
+
+.. automodule:: pyro.infer.energy_distance
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
 
 Discrete Inference
 ------------------

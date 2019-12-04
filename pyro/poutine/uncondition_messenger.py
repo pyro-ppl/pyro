@@ -19,6 +19,7 @@ class UnconditionMessenger(Messenger):
         if msg["is_observed"]:
             msg["is_observed"] = False
             msg["infer"]["was_observed"] = True
+            msg["infer"]["obs"] = msg["value"]
             msg["value"] = None
             msg["done"] = False
         return None

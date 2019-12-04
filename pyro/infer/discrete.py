@@ -208,9 +208,9 @@ class TraceEnumSample_ELBO(TraceEnum_ELBO):
                            first_available_dim=-2)(*args, **kwargs)
 
     """
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         model_trace, guide_trace = super(TraceEnumSample_ELBO, self)._get_trace(
-            model, guide, *args, **kwargs)
+            model, guide, args, kwargs)
 
         # Mark all sample sites with require_backward to gather enumerated
         # sites and adjust cond_indep_stack of all sample sites.

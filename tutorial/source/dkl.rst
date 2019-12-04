@@ -3,7 +3,7 @@ Deep Kernel Learning
 
 `View sv-dkl.py on github`__
 
-.. _github: https://github.com/uber/pyro/blob/dev/examples/contrib/gp/sv-dkl.py
+.. _github: https://github.com/pyro-ppl/pyro/blob/dev/examples/contrib/gp/sv-dkl.py
 
 __ github_
 
