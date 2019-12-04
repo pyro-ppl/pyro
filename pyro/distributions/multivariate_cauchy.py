@@ -20,8 +20,8 @@ class MultivariateCauchy(TransformedDistribution):
     has_rsample = True
 
     def __init__(self, loc, scale_tril, validate_args=None):
-        base_dist = Cauchy(loc, 1.0).to_event(1)
-        transforms = [LowerCholeskyAffine(torch.zeros_like(loc), scale_tril)]
+        base_dist = Cauchy(torch.zeros_like(loc), 1.0).to_event(1)
+        transforms = [LowerCholeskyAffine(loc, scale_tril)]
         self.loc = loc
         self.scale_tril = scale_tril
         super(MultivariateCauchy, self).__init__(base_dist, transforms, validate_args=validate_args)
