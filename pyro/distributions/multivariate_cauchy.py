@@ -1,13 +1,9 @@
 import torch
 from torch.distributions import constraints
 from torch.distributions.transforms import AffineTransform
-from torch.distributions.cauchy import Cauchy
-from pyro.distributions.torch import TransformedDistribution
+from pyro.distributions.torch import TransformedDistribution, Cauchy
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
-
-class _Cauchy(Cauchy, TorchDistributionMixin):
-    pass
 
 
 class MultivariateCauchy(TransformedDistribution):
@@ -26,7 +22,7 @@ class MultivariateCauchy(TransformedDistribution):
     has_rsample = True
 
     def __init__(self, loc, scale_tril, validate_args=None):
-        base_dist = _Cauchy(loc, 1.0).to_event(1)
+        base_dist = Cauchy(loc, 1.0).to_event(1)
         transforms = [AffineTransform(torch.zeros_like(loc), scale_tril, event_dim=1)]
         super(MultivariateCauchy, self).__init__(base_dist, transforms, validate_args=validate_args)
 
