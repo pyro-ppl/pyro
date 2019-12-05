@@ -88,7 +88,6 @@ def test_mean_var(batch_shape):
     loc = torch.randn(batch_shape + (dim,))
     A = torch.randn(batch_shape + (dim, dim + dim))
     scale_tril = A.matmul(A.transpose(-2, -1)).cholesky()
-    x = torch.randn(batch_shape + (dim,))
     df = torch.randn(batch_shape).exp() + 4
     num_samples = 100000
     d = MultivariateStudentT(df, loc, scale_tril)
