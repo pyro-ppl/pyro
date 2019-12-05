@@ -252,7 +252,7 @@ class AffineNormal:
 
 def mvn_to_gaussian(mvn):
     """
-    Convert a MultivaiateNormal distribution to a Gaussian.
+    Convert a MultivariateNormal distribution to a Gaussian.
 
     :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
     :return: An equivalent Gaussian object.
