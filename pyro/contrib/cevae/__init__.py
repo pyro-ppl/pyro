@@ -179,6 +179,13 @@ class Model(PyroModule):
             y = pyro.sample("y", self.y_dist(t, z), obs=y)
         return y
 
+    def y_mean(self, x, t):
+        with pyro.plate("data", x.size(0)):
+            z = pyro.sample("z", self.z_dist())
+            x = pyro.sample("x", self.x_dist(z), obs=x)
+            t = pyro.sample("t", self.t_dist(z), obs=t)
+        return self.y_dist(t, z).mean
+
     def z_dist(self):
         return dist.Normal(0, 1).expand([self.latent_dim]).to_event(1)
 
@@ -332,12 +339,13 @@ class CEVAE(nn.Module):
         networks. Defaults to 200.
     :param int num_layers: Number of hidden layers in fully connected networks.
     :param int num_samples: Default number of samples for the :meth:`ite`
-        method.
+        method. Defaults to 100.
     """
     def __init__(self, feature_dim, latent_dim=20, hidden_dim=200, num_layers=3,
                  num_samples=100):
         config = dict(feature_dim=feature_dim, latent_dim=latent_dim,
-                      hidden_dim=hidden_dim, num_layers=num_layers)
+                      hidden_dim=hidden_dim, num_layers=num_layers,
+                      num_samples=num_samples)
         for name, size in config.items():
             if not (isinstance(size, int) and size > 0):
                 raise ValueError("Expected {} > 0 but got {}".format(name, size))
@@ -396,7 +404,7 @@ class CEVAE(nn.Module):
         return losses
 
     @torch.no_grad()
-    def ite(self, x, num_samples=None):
+    def ite(self, x, num_samples=None, batch_size=None):
         r"""
         Computes Individual Treatment Effect for a batch of data ``x``.
 
@@ -405,11 +413,12 @@ class CEVAE(nn.Module):
             ITE(x) = \mathbb E\bigl[ \mathbf y \mid \mathbf X=x, do(\mathbf t=1) \bigr]
                    - \mathbb E\bigl[ \mathbf y \mid \mathbf X=x, do(\mathbf t=0) \bigr]
 
-        This has complexity ``O(len(x) * num_samples ** 2``.
+        This has complexity ``O(len(x) * num_samples ** 2)``.
 
         :param ~torch.Tensor x: A batch of data.
         :param int num_samples: The number of monte carlo samples.
             Defaults to ``self.num_samples`` which defaults to ``100``.
+        :param int batch_size: Batch size. Defaults to ``len(x)``.
         :return: A ``len(x)``-sized tensor of estimated effects.
         :rtype: ~torch.Tensor
         """
@@ -418,15 +427,21 @@ class CEVAE(nn.Module):
         if not torch._C._get_tracing_state():
             assert x.dim() == 2 and x.size(-1) == self.feature_dim
 
-        x = self.whiten(x)
-        with pyro.plate("num_particles", num_samples, dim=-2):
-            with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
-                self.guide(x)
-            with poutine.do(data=dict(t=torch.zeros(()))):
-                y0 = poutine.replay(self.model, tr.trace)(x)
-            with poutine.do(data=dict(t=torch.ones(()))):
-                y1 = poutine.replay(self.model, tr.trace)(x)
-        return (y1 - y0).mean(0)
+        dataloader = [x] if batch_size is None else DataLoader(x, batch_size=batch_size)
+        logger.info("Evaluating {} minibatches".format(len(dataloader)))
+        result = []
+        for x in dataloader:
+            x = self.whiten(x)
+            with pyro.plate("num_particles", num_samples, dim=-2):
+                with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
+                    self.guide(x)
+                y0 = poutine.replay(self.model.y_mean, tr.trace)(x, t=torch.zeros(()))
+                y1 = poutine.replay(self.model.y_mean, tr.trace)(x, t=torch.ones(()))
+            ite = (y1 - y0).mean(0)
+            if not torch._C._get_tracing_state():
+                logger.debug("batch ate = {:0.6g}".format(ite.mean()))
+            result.append(ite)
+        return torch.cat(result)
 
     def to_script_module(self):
         """
