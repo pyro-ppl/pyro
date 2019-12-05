@@ -57,6 +57,12 @@ Utilities
     :show-inheritance:
     :member-order: bysource
 
+.. autoclass:: pyro.contrib.cevae.LaplaceNet
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 .. autoclass:: pyro.contrib.cevae.NormalNet
     :members:
     :undoc-members:

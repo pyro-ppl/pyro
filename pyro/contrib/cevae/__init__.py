@@ -125,6 +125,36 @@ class ExponentialNet(DistributionNet):
         return dist.Exponential(rate)
 
 
+class LaplaceNet(DistributionNet):
+    """
+    :class:`FullyConnected` network outputting a constrained ``loc,scale``
+    pair.
+
+    This is used to represent a conditional probability distribution of a
+    single Laplace random variable conditioned on a ``sizes[0]``-size real
+    value, for example::
+
+        net = LaplaceNet([3, 4])
+        x = torch.randn(3)
+        loc, scale = net(x)
+        y = net.make_dist(loc, scale).sample()
+    """
+    def __init__(self, sizes):
+        assert len(sizes) >= 1
+        super().__init__()
+        self.fc = FullyConnected(sizes + [2])
+
+    def forward(self, x):
+        loc_scale = self.fc(x)
+        loc = loc_scale[..., 0].clamp(min=-1e6, max=1e6)
+        scale = nn.functional.softplus(loc_scale[..., 1]).clamp(min=1e-3, max=1e6)
+        return loc, scale
+
+    @staticmethod
+    def make_dist(loc, scale):
+        return dist.Laplace(loc, scale)
+
+
 class NormalNet(DistributionNet):
     """
     :class:`FullyConnected` network outputting a constrained ``loc,scale``
@@ -427,8 +457,8 @@ class CEVAE(nn.Module):
     :ivar Model ~CEVAE.model: Generative model.
     :ivar Guide ~CEVAE.guide: Inference model.
     :param int feature_dim: Dimension of the feature space `x`.
-    :param str outcome_dist: One of: "bernoulli", "exponential", "normal",
-        "studentt".  Defaults to "bernoulli".
+    :param str outcome_dist: One of: "bernoulli" (default), "exponential", "laplace",
+        "normal", "studentt".
     :param int latent_dim: Dimension of the latent variable `z`.
         Defaults to 20.
     :param int hidden_dim: Dimension of hidden layers of fully connected

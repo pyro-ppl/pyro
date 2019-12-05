@@ -6,8 +6,11 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.cevae import CEVAE
+from pyro.contrib.cevae import CEVAE, DistributionNet
 from tests.common import assert_close
+
+DIST_NETS = [cls.__name__.lower()[:-3]
+             for cls in DistributionNet.__subclasses__()]
 
 
 def generate_data(num_data, feature_dim):
@@ -20,7 +23,7 @@ def generate_data(num_data, feature_dim):
 
 @pytest.mark.parametrize("num_data", [1, 100, 200])
 @pytest.mark.parametrize("feature_dim", [1, 2])
-@pytest.mark.parametrize("outcome_dist", ["bernoulli", "exponential", "normal", "studentt"])
+@pytest.mark.parametrize("outcome_dist", DIST_NETS)
 def test_smoke(num_data, feature_dim, outcome_dist):
     x, t, y = generate_data(num_data, feature_dim)
     if outcome_dist == "exponential":
@@ -32,7 +35,7 @@ def test_smoke(num_data, feature_dim, outcome_dist):
 
 
 @pytest.mark.parametrize("feature_dim", [1, 2])
-@pytest.mark.parametrize("outcome_dist", ["bernoulli", "exponential", "normal", "studentt"])
+@pytest.mark.parametrize("outcome_dist", DIST_NETS)
 @pytest.mark.parametrize("jit", [False, True], ids=["python", "jit"])
 def test_serialization(jit, feature_dim, outcome_dist):
     x, t, y = generate_data(num_data=32, feature_dim=feature_dim)
