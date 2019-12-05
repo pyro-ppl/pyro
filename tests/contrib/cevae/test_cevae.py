@@ -20,9 +20,11 @@ def generate_data(num_data, feature_dim):
 
 @pytest.mark.parametrize("num_data", [1, 100, 200])
 @pytest.mark.parametrize("feature_dim", [1, 2])
-@pytest.mark.parametrize("outcome_dist", ["bernoulli", "normal", "studentt"])
+@pytest.mark.parametrize("outcome_dist", ["bernoulli", "exponential", "normal", "studentt"])
 def test_smoke(num_data, feature_dim, outcome_dist):
     x, t, y = generate_data(num_data, feature_dim)
+    if outcome_dist == "exponential":
+        y.clamp_(min=1e-20)
     cevae = CEVAE(feature_dim, outcome_dist)
     cevae.fit(x, t, y, num_epochs=2)
     ite = cevae.ite(x)
@@ -30,10 +32,12 @@ def test_smoke(num_data, feature_dim, outcome_dist):
 
 
 @pytest.mark.parametrize("feature_dim", [1, 2])
-@pytest.mark.parametrize("outcome_dist", ["bernoulli", "normal", "studentt"])
+@pytest.mark.parametrize("outcome_dist", ["bernoulli", "exponential", "normal", "studentt"])
 @pytest.mark.parametrize("jit", [False, True], ids=["python", "jit"])
 def test_serialization(jit, feature_dim, outcome_dist):
     x, t, y = generate_data(num_data=32, feature_dim=feature_dim)
+    if outcome_dist == "exponential":
+        y.clamp_(min=1e-20)
     cevae = CEVAE(feature_dim, outcome_dist=outcome_dist, num_samples=1000, hidden_dim=32)
     cevae.fit(x, t, y, num_epochs=4, batch_size=8)
     pyro.set_rng_seed(0)

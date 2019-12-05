@@ -97,6 +97,34 @@ class BernoulliNet(DistributionNet):
         return dist.Bernoulli(logits=logits)
 
 
+class ExponentialNet(DistributionNet):
+    """
+    :class:`FullyConnected` network outputting a constrained ``rate``.
+
+    This is used to represent a conditional probability distribution of a
+    single Normal random variable conditioned on a ``sizes[0]``-size real
+    value, for example::
+
+        net = ExponentialNet([3, 4])
+        x = torch.randn(3)
+        rate, = net(x)
+        y = net.make_dist(rate).sample()
+    """
+    def __init__(self, sizes):
+        assert len(sizes) >= 1
+        super().__init__()
+        self.fc = FullyConnected(sizes + [1])
+
+    def forward(self, x):
+        scale = nn.functional.softplus(self.fc(x).squeeze(-1)).clamp(min=1e-3, max=1e6)
+        rate = scale.reciprocal()
+        return rate,
+
+    @staticmethod
+    def make_dist(rate):
+        return dist.Exponential(rate)
+
+
 class NormalNet(DistributionNet):
     """
     :class:`FullyConnected` network outputting a constrained ``loc,scale``
@@ -133,13 +161,13 @@ class StudentTNet(DistributionNet):
     triple, with shared ``df > 1``.
 
     This is used to represent a conditional probability distribution of a
-    single Normal random variable conditioned on a ``sizes[0]``-size real
+    single Student's t random variable conditioned on a ``sizes[0]``-size real
     value, for example::
 
-        net = NormalNet([3, 4])
+        net = StudentTNet([3, 4])
         x = torch.randn(3)
-        loc, scale = net(x)
-        y = net.make_dist(loc, scale).sample()
+        df, loc, scale = net(x)
+        y = net.make_dist(df, loc, scale).sample()
     """
     def __init__(self, sizes):
         assert len(sizes) >= 1
@@ -399,8 +427,8 @@ class CEVAE(nn.Module):
     :ivar Model ~CEVAE.model: Generative model.
     :ivar Guide ~CEVAE.guide: Inference model.
     :param int feature_dim: Dimension of the feature space `x`.
-    :param str outcome_dist: One of: "bernoulli", "normal", "studentt".
-        Defaults to "bernoulli".
+    :param str outcome_dist: One of: "bernoulli", "exponential", "normal",
+        "studentt".  Defaults to "bernoulli".
     :param int latent_dim: Dimension of the latent variable `z`.
         Defaults to 20.
     :param int hidden_dim: Dimension of hidden layers of fully connected

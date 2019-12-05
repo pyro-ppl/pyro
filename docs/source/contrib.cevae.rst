@@ -51,7 +51,19 @@ Utilities
     :show-inheritance:
     :member-order: bysource
 
+.. autoclass:: pyro.contrib.cevae.ExponentialNet
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 .. autoclass:: pyro.contrib.cevae.NormalNet
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. autoclass:: pyro.contrib.cevae.StudentTNet
     :members:
     :undoc-members:
     :show-inheritance:
