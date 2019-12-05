@@ -1,7 +1,9 @@
+import math
+
 import pytest
 
 import torch
-from torch.distributions import StudentT
+from torch.distributions import Gamma, MultivariateNormal, StudentT
 
 from pyro.distributions import MultivariateStudentT
 from tests.common import assert_equal
@@ -10,20 +12,28 @@ from tests.common import assert_equal
 @pytest.mark.parametrize("batch_shape", [
     (),
     (3, 2),
-    (1,),
+    (4,),
 ], ids=str)
-# FIXME: what is a proper test for log_prob with dim > 1?
-@pytest.mark.parametrize("dim", [1])
+@pytest.mark.parametrize("dim", [1, 2])
 def test_log_prob(batch_shape, dim):
     loc = torch.randn(batch_shape + (dim,))
     A = torch.randn(batch_shape + (dim, dim + dim))
     scale_tril = A.matmul(A.transpose(-2, -1)).cholesky()
     x = torch.randn(batch_shape + (dim,))
     df = torch.randn(batch_shape).exp() + 2
-
     actual_log_prob = MultivariateStudentT(df, loc, scale_tril).log_prob(x)
-    expected_log_prob = StudentT(df.unsqueeze(-1), loc, scale_tril[..., 0]).log_prob(x).sum(-1)
-    assert_equal(actual_log_prob, expected_log_prob)
+
+    if dim == 1:
+        expected_log_prob = StudentT(df.unsqueeze(-1), loc, scale_tril[..., 0]).log_prob(x).sum(-1)
+        assert_equal(actual_log_prob, expected_log_prob)
+
+    # test the fact MVT(df, loc, scale)(x) = int MVN(loc, scale / m)(x) Gamma(df/2,df/2)(m) dm
+    num_samples = 100000
+    gamma_samples = Gamma(df / 2, df / 2).sample(sample_shape=(num_samples,))
+    mvn_scale_tril = scale_tril / gamma_samples.sqrt().unsqueeze(-1).unsqueeze(-1)
+    mvn = MultivariateNormal(loc, scale_tril=mvn_scale_tril)
+    expected_log_prob = mvn.log_prob(x).logsumexp(0) - math.log(num_samples)
+    assert_equal(actual_log_prob, expected_log_prob, prec=0.01)
 
 
 @pytest.mark.parametrize("df", [3.9, 9.1])
@@ -66,3 +76,31 @@ def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
     normalizer = d.log_prob(z).exp().mean().item() * volume_factor
 
     assert_equal(normalizer, 1.0, prec=prec)
+
+
+@pytest.mark.parametrize("batch_shape", [
+    (),
+    (3, 2),
+    (4,),
+], ids=str)
+def test_mean_var(batch_shape):
+    dim = 2
+    loc = torch.randn(batch_shape + (dim,))
+    A = torch.randn(batch_shape + (dim, dim + dim))
+    scale_tril = A.matmul(A.transpose(-2, -1)).cholesky()
+    x = torch.randn(batch_shape + (dim,))
+    df = torch.randn(batch_shape).exp() + 4
+    num_samples = 100000
+    d = MultivariateStudentT(df, loc, scale_tril)
+    samples = d.sample(sample_shape=(num_samples,))
+    expected_mean = samples.mean(0)
+    expected_variance = samples.var(0)
+    assert_equal(d.mean, expected_mean, prec=0.1)
+    assert_equal(d.variance, expected_variance, prec=0.1)
+
+    assert_equal(MultivariateStudentT(0.5, loc, scale_tril).mean,
+                 torch.full(batch_shape + (dim,), float('nan')))
+    assert_equal(MultivariateStudentT(0.5, loc, scale_tril).variance,
+                 torch.full(batch_shape + (dim,), float('nan')))
+    assert_equal(MultivariateStudentT(1.5, loc, scale_tril).variance,
+                 torch.full(batch_shape + (dim,), float('inf')))
