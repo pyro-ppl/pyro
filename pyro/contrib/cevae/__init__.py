@@ -36,6 +36,10 @@ from pyro.util import torch_isnan
 logger = logging.getLogger(__name__)
 
 
+def _BernoulliLogits(logits):
+    return dist.Bernoulli(logits=logits)
+
+
 class FullyConnected(nn.Sequential):
     """
     Fully connected multi-layer network with ELU activations.
@@ -49,7 +53,24 @@ class FullyConnected(nn.Sequential):
         super().__init__(*layers)
 
 
-class BernoulliNet(nn.Module):
+class DistributionNet(nn.Module):
+    """
+    Base class for distribution nets.
+    """
+    @staticmethod
+    def get_class(dtype):
+        """
+        Get a subclass by a prefix of its name, e.g.::
+
+            assert DistributionNet.get_class("bernoulli") is BernoulliNet
+        """
+        for cls in DistributionNet.__subclasses__():
+            if cls.__name__.lower() == dtype + "net":
+                return cls
+        raise ValueError("dtype not supported: {}".format(dtype))
+
+
+class BernoulliNet(DistributionNet):
     """
     :class:`FullyConnected` network outputting a single ``logits`` value.
 
@@ -59,7 +80,8 @@ class BernoulliNet(nn.Module):
 
         net = BernoulliNet([3, 4])
         z = torch.randn(3)
-        t = dist.Bernoulli(logits=net(z)).sample()
+        logits, = net(z)
+        t = net.make_dist(logits).sample()
     """
     def __init__(self, sizes):
         assert len(sizes) >= 1
@@ -68,10 +90,14 @@ class BernoulliNet(nn.Module):
 
     def forward(self, x):
         logits = self.fc(x).squeeze(-1).clamp(min=-10, max=10)
-        return logits
+        return logits,
+
+    @staticmethod
+    def make_dist(logits):
+        return dist.Bernoulli(logits=logits)
 
 
-class NormalNet(nn.Module):
+class NormalNet(DistributionNet):
     """
     :class:`FullyConnected` network outputting a constrained ``loc,scale``
     pair.
@@ -83,10 +109,10 @@ class NormalNet(nn.Module):
         net = NormalNet([3, 4])
         z = torch.randn(3)
         loc, scale = net(z)
-        x = dist.Normal(loc, scale).sample()
+        x = net.make_dist(loc, scale).sample()
     """
     def __init__(self, sizes):
-        assert len(sizes) >= 2
+        assert len(sizes) >= 1
         super().__init__()
         self.fc = FullyConnected(sizes + [2])
 
@@ -95,6 +121,10 @@ class NormalNet(nn.Module):
         loc = loc_scale[..., 0].clamp(min=-1e2, max=1e2)
         scale = nn.functional.softplus(loc_scale[..., 1]).clamp(min=1e-4, max=1e2)
         return loc, scale
+
+    @staticmethod
+    def make_dist(loc, scale):
+        return dist.Normal(loc, scale)
 
 
 class DiagNormalNet(nn.Module):
@@ -155,7 +185,7 @@ class Model(PyroModule):
     ``p(y|t=0,z)`` and ``p(y|t=1,z)``; this allows highly imbalanced treatment.
 
     :param dict config: A dict specifying ``feature_dim``, ``latent_dim``,
-        ``hidden_dim``, and ``num_layers``.
+        ``hidden_dim``, ``num_layers``, and ``outcome_type``.
     """
     def __init__(self, config):
         self.latent_dim = config["latent_dim"]
@@ -163,10 +193,11 @@ class Model(PyroModule):
         self.x_nn = DiagNormalNet([config["latent_dim"]] +
                                   [config["hidden_dim"]] * config["num_layers"] +
                                   [config["feature_dim"]])
-        self.y0_nn = BernoulliNet([config["latent_dim"]] +
-                                  [config["hidden_dim"]] * config["num_layers"])
-        self.y1_nn = BernoulliNet([config["latent_dim"]] +
-                                  [config["hidden_dim"]] * config["num_layers"])
+        OutcomeNet = DistributionNet.get_class(config["outcome_type"])
+        self.y0_nn = OutcomeNet([config["latent_dim"]] +
+                                [config["hidden_dim"]] * config["num_layers"])
+        self.y1_nn = OutcomeNet([config["latent_dim"]] +
+                                [config["hidden_dim"]] * config["num_layers"])
         self.t_nn = BernoulliNet([config["latent_dim"]])
 
     def forward(self, x, t=None, y=None, size=None):
@@ -179,7 +210,7 @@ class Model(PyroModule):
             y = pyro.sample("y", self.y_dist(t, z), obs=y)
         return y
 
-    def y_mean(self, x, t):
+    def y_mean(self, x, t=None):
         with pyro.plate("data", x.size(0)):
             z = pyro.sample("z", self.z_dist())
             x = pyro.sample("x", self.x_dist(z), obs=x)
@@ -195,13 +226,14 @@ class Model(PyroModule):
 
     def y_dist(self, t, z):
         # Parameters are not shared among t values.
-        logits0 = self.y0_nn(z)
-        logits1 = self.y1_nn(z)
-        logits = torch.where(t.bool(), logits1, logits0)
-        return dist.Bernoulli(logits=logits)
+        params0 = self.y0_nn(z)
+        params1 = self.y1_nn(z)
+        t = t.bool()
+        params = [torch.where(t, p0, p1) for p0, p1 in zip(params0, params1)]
+        return self.y0_nn.make_dist(*params)
 
     def t_dist(self, z):
-        logits = self.t_nn(z)
+        logits, = self.t_nn(z)
         return dist.Bernoulli(logits=logits)
 
 
@@ -220,7 +252,7 @@ class Guide(PyroModule):
     imbalanced treatment.
 
     :param dict config: A dict specifying ``feature_dim``, ``latent_dim``,
-        ``hidden_dim``, and ``num_layers``.
+        ``hidden_dim``, ``num_layers``, and ``outcome_type``.
     """
     def __init__(self, config):
         self.latent_dim = config["latent_dim"]
@@ -228,8 +260,9 @@ class Guide(PyroModule):
         self.t_nn = BernoulliNet([config["feature_dim"]])
         self.y_nn = FullyConnected([config["feature_dim"]] +
                                    [config["hidden_dim"]] * config["num_layers"])
-        self.y0_nn = BernoulliNet([config["hidden_dim"]])
-        self.y1_nn = BernoulliNet([config["hidden_dim"]])
+        OutcomeNet = DistributionNet.get_class(config["outcome_type"])
+        self.y0_nn = OutcomeNet([config["hidden_dim"]])
+        self.y1_nn = OutcomeNet([config["hidden_dim"]])
         self.z0_nn = DiagNormalNet([1 + config["feature_dim"]] +
                                    [config["hidden_dim"]] * config["num_layers"] +
                                    [config["latent_dim"]])
@@ -250,17 +283,18 @@ class Guide(PyroModule):
             pyro.sample("z", self.z_dist(y, t, x))
 
     def t_dist(self, x):
-        logits = self.t_nn(x)
+        logits, = self.t_nn(x)
         return dist.Bernoulli(logits=logits)
 
     def y_dist(self, t, x):
         # The first n-1 layers are identical for all t values.
         hidden = self.y_nn(x)
         # In the final layer params are not shared among t values.
-        logits0 = self.y0_nn(hidden)
-        logits1 = self.y1_nn(hidden)
-        logits = torch.where(t.bool(), logits1, logits0)
-        return dist.Bernoulli(logits=logits)
+        params0 = self.y0_nn(hidden)
+        params1 = self.y1_nn(hidden)
+        t = t.bool()
+        params = [torch.where(t, p0, p1) for p0, p1 in zip(params0, params1)]
+        return self.y0_nn.make_dist(*params)
 
     def z_dist(self, y, t, x):
         # Parameters are not shared among t values.
@@ -333,6 +367,7 @@ class CEVAE(nn.Module):
     :ivar Model ~CEVAE.model: Generative model.
     :ivar Guide ~CEVAE.guide: Inference model.
     :param int feature_dim: Dimension of the feature space `x`.
+    :param str outcome_type: One of: "bernoulli", "normal".
     :param int latent_dim: Dimension of the latent variable `z`.
         Defaults to 20.
     :param int hidden_dim: Dimension of hidden layers of fully connected
@@ -341,14 +376,15 @@ class CEVAE(nn.Module):
     :param int num_samples: Default number of samples for the :meth:`ite`
         method. Defaults to 100.
     """
-    def __init__(self, feature_dim, latent_dim=20, hidden_dim=200, num_layers=3,
-                 num_samples=100):
+    def __init__(self, feature_dim, outcome_type="bernoulli",
+                 latent_dim=20, hidden_dim=200, num_layers=3, num_samples=100):
         config = dict(feature_dim=feature_dim, latent_dim=latent_dim,
                       hidden_dim=hidden_dim, num_layers=num_layers,
                       num_samples=num_samples)
         for name, size in config.items():
             if not (isinstance(size, int) and size > 0):
                 raise ValueError("Expected {} > 0 but got {}".format(name, size))
+        config["outcome_type"] = outcome_type
         self.feature_dim = feature_dim
         self.num_samples = num_samples
 
@@ -435,8 +471,10 @@ class CEVAE(nn.Module):
             with pyro.plate("num_particles", num_samples, dim=-2):
                 with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
                     self.guide(x)
-                y0 = poutine.replay(self.model.y_mean, tr.trace)(x, t=torch.zeros(()))
-                y1 = poutine.replay(self.model.y_mean, tr.trace)(x, t=torch.ones(()))
+                with poutine.do(data=dict(t=torch.zeros(()))):
+                    y0 = poutine.replay(self.model.y_mean, tr.trace)(x)
+                with poutine.do(data=dict(t=torch.ones(()))):
+                    y1 = poutine.replay(self.model.y_mean, tr.trace)(x)
             ite = (y1 - y0).mean(0)
             if not torch._C._get_tracing_state():
                 logger.debug("batch ate = {:0.6g}".format(ite.mean()))

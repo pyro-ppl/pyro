@@ -20,19 +20,21 @@ def generate_data(num_data, feature_dim):
 
 @pytest.mark.parametrize("num_data", [1, 100, 200])
 @pytest.mark.parametrize("feature_dim", [1, 2])
-def test_smoke(num_data, feature_dim):
+@pytest.mark.parametrize("outcome_type", ["bernoulli", "normal"])
+def test_smoke(num_data, feature_dim, outcome_type):
     x, t, y = generate_data(num_data, feature_dim)
-    cevae = CEVAE(feature_dim)
+    cevae = CEVAE(feature_dim, outcome_type)
     cevae.fit(x, t, y, num_epochs=2)
     ite = cevae.ite(x)
     assert ite.shape == (num_data,)
 
 
 @pytest.mark.parametrize("feature_dim", [1, 2])
+@pytest.mark.parametrize("outcome_type", ["bernoulli", "normal"])
 @pytest.mark.parametrize("jit", [False, True], ids=["python", "jit"])
-def test_serialization(feature_dim, jit):
+def test_serialization(jit, feature_dim, outcome_type):
     x, t, y = generate_data(num_data=32, feature_dim=feature_dim)
-    cevae = CEVAE(feature_dim, num_samples=1000)
+    cevae = CEVAE(feature_dim, outcome_type=outcome_type, num_samples=1000, hidden_dim=32)
     cevae.fit(x, t, y, num_epochs=4, batch_size=8)
     pyro.set_rng_seed(0)
     expected_ite = cevae.ite(x)

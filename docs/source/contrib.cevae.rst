@@ -39,13 +39,25 @@ Utilities
     :show-inheritance:
     :member-order: bysource
 
-.. autoclass:: pyro.contrib.cevae.DiagNormalNet
+.. autoclass:: pyro.contrib.cevae.DistributionNet
     :members:
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
 
 .. autoclass:: pyro.contrib.cevae.BernoulliNet
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. autoclass:: pyro.contrib.cevae.NormalNet
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+.. autoclass:: pyro.contrib.cevae.DiagNormalNet
     :members:
     :undoc-members:
     :show-inheritance:
