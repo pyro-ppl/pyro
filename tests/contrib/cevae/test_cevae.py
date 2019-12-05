@@ -1,4 +1,5 @@
 import io
+import warnings
 
 import pytest
 import torch
@@ -28,19 +29,27 @@ def test_smoke(num_data, feature_dim):
 
 
 @pytest.mark.parametrize("feature_dim", [1, 2])
-def test_serialization(feature_dim):
+@pytest.mark.parametrize("jit", [False, True], ids=["python", "jit"])
+def test_serialization(feature_dim, jit):
     x, t, y = generate_data(num_data=32, feature_dim=feature_dim)
     cevae = CEVAE(feature_dim, num_samples=1000)
     cevae.fit(x, t, y, num_epochs=4, batch_size=8)
     pyro.set_rng_seed(0)
     expected_ite = cevae.ite(x)
 
-    # Ignore tracer warnings
-    traced_cevae = cevae.to_script_module()
-    f = io.BytesIO()
-    torch.jit.save(traced_cevae, f)
-    f.seek(0)
-    loaded_cevae = torch.jit.load(f)
+    if jit:
+        traced_cevae = cevae.to_script_module()
+        f = io.BytesIO()
+        torch.jit.save(traced_cevae, f)
+        f.seek(0)
+        loaded_cevae = torch.jit.load(f)
+    else:
+        f = io.BytesIO()
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            torch.save(cevae, f)
+        f.seek(0)
+        loaded_cevae = torch.load(f)
 
     # Check .call() result.
     pyro.set_rng_seed(0)

@@ -31,6 +31,7 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.util import torch_item
 from pyro.nn import PyroModule
 from pyro.optim import ClippedAdam
+from pyro.util import torch_isnan
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,54 @@ class FullyConnected(nn.Sequential):
             layers.append(nn.ELU())
         layers.pop(-1)
         super().__init__(*layers)
+
+
+class BernoulliNet(nn.Module):
+    """
+    :class:`FullyConnected` network outputting a single ``logits`` value.
+
+    This is used to represent a conditional probability distribution of a
+    single Bernoulli random variable conditioned on a ``sizes[0]``-sized real
+    value, for example::
+
+        net = BernoulliNet([3, 4])
+        z = torch.randn(3)
+        t = dist.Bernoulli(logits=net(z)).sample()
+    """
+    def __init__(self, sizes):
+        assert len(sizes) >= 1
+        super().__init__()
+        self.fc = FullyConnected(sizes + [1])
+
+    def forward(self, x):
+        logits = self.fc(x).squeeze(-1).clamp(min=-10, max=10)
+        return logits
+
+
+class NormalNet(nn.Module):
+    """
+    :class:`FullyConnected` network outputting a constrained ``loc,scale``
+    pair.
+
+    This is used to represent a conditional probability distribution of a
+    single Normal random variable conditioned on a ``sizes[0]``-size real
+    value, for example::
+
+        net = NormalNet([3, 4])
+        z = torch.randn(3)
+        loc, scale = net(z)
+        x = dist.Normal(loc, scale).sample()
+    """
+    def __init__(self, sizes):
+        assert len(sizes) >= 2
+        super().__init__()
+        self.fc = FullyConnected(sizes + [2])
+
+    def forward(self, x):
+        loc_scale = self.fc(x)
+        loc = loc_scale[..., 0].clamp(min=-1e2, max=1e2)
+        scale = nn.functional.softplus(loc_scale[..., 1]).clamp(min=1e-4, max=1e2)
+        return loc, scale
 
 
 class DiagNormalNet(nn.Module):
@@ -70,30 +119,25 @@ class DiagNormalNet(nn.Module):
 
     def forward(self, x):
         loc_scale = self.fc(x)
-        loc = loc_scale[..., :self.dim]
-        scale = nn.functional.softplus(loc_scale[..., self.dim:]).clamp(min=1e-10)
+        loc = loc_scale[..., :self.dim].clamp(min=-1e2, max=1e2)
+        scale = nn.functional.softplus(loc_scale[..., self.dim:]).clamp(min=1e-4, max=1e2)
         return loc, scale
 
 
-class BernoulliNet(nn.Module):
+class PreWhitener(nn.Module):
     """
-    :class:`FullyConnected` network outputting a single ``logits`` value.
-
-    This is used to represent a conditional probability distribution of a
-    single Bernoulli random variable conditioned on a ``sizes[0]``-sized real
-    value, for example::
-
-        net = BernoulliNet([3, 4])
-        z = torch.randn(3)
-        t = dist.Bernoulli(logits=net(z)).sample()
+    Data pre-whitener.
     """
-    def __init__(self, sizes):
-        assert len(sizes) >= 1
+    def __init__(self, data):
         super().__init__()
-        self.fc = FullyConnected(sizes + [1])
+        loc = data.mean(0)
+        scale = data.std(0)
+        scale[~(scale > 0)] = 1.
+        self.register_buffer("loc", loc)
+        self.register_buffer("inv_scale", scale.reciprocal())
 
-    def forward(self, x):
-        return self.fc(x).squeeze(-1)
+    def forward(self, data):
+        return (data - self.loc) * self.inv_scale
 
 
 class Model(PyroModule):
@@ -331,9 +375,11 @@ class CEVAE(nn.Module):
         assert x.dim() == 2 and x.size(-1) == self.feature_dim
         assert t.shape == x.shape[:1]
         assert y.shape == y.shape[:1]
+        self.whiten = PreWhitener(x)
 
         dataset = TensorDataset(x, t, y)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        logger.info("Training with {} minibatches per epoch".format(len(dataloader)))
         num_steps = num_epochs * len(dataloader)
         optim = ClippedAdam({"lr": learning_rate,
                              "weight_decay": weight_decay,
@@ -341,11 +387,12 @@ class CEVAE(nn.Module):
         svi = SVI(self.model, self.guide, optim, TraceCausalEffect_ELBO())
         losses = []
         for epoch in range(num_epochs):
-            loss = 0
             for x, t, y in dataloader:
-                loss += svi.step(x, t, y, size=len(dataset)) / len(dataset)
-            logger.info("epoch {: >3d} loss = {:0.6g}".format(epoch, loss / len(dataloader)))
-            losses.append(loss)
+                x = self.whiten(x)
+                loss = svi.step(x, t, y, size=len(dataset)) / len(dataset)
+                logger.debug("step {: >5d} loss = {:0.6g}".format(len(losses), loss))
+                assert not torch_isnan(loss)
+                losses.append(loss)
         return losses
 
     @torch.no_grad()
@@ -371,6 +418,7 @@ class CEVAE(nn.Module):
         if not torch._C._get_tracing_state():
             assert x.dim() == 2 and x.size(-1) == self.feature_dim
 
+        x = self.whiten(x)
         with pyro.plate("num_particles", num_samples, dim=-2):
             with poutine.trace() as tr, poutine.block(hide=["y", "t"]):
                 self.guide(x)
