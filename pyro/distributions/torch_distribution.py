@@ -65,6 +65,19 @@ class TorchDistributionMixin(Distribution):
         """
         return sample_shape + self.batch_shape + self.event_shape
 
+    def expand(self, batch_shape, _instance=None):
+        """
+        Returns a new :class:`ExpandedDistribution` instance with batch
+        dimensions expanded to `batch_shape`.
+
+        :param tuple batch_shape: batch shape to expand to.
+        :param _instance: unused argument for compatibility with
+            :meth:`torch.distributions.Distribution.expand`
+        :return: an instance of `ExpandedDistribution`.
+        :rtype: :class:`ExpandedDistribution`
+        """
+        return ExpandedDistribution(self, batch_shape)
+
     def expand_by(self, sample_shape):
         """
         Expands a distribution by adding ``sample_shape`` to the left side of
@@ -76,9 +89,13 @@ class TorchDistributionMixin(Distribution):
         :param torch.Size sample_shape: The size of the iid batch to be drawn
             from the distribution.
         :return: An expanded version of this distribution.
-        :rtype: :class:`ReshapedDistribution`
+        :rtype: :class:`ExpandedDistribution`
         """
-        return self.expand(torch.Size(sample_shape) + self.batch_shape)
+        try:
+            expanded_dist = self.expand(torch.Size(sample_shape) + self.batch_shape)
+        except NotImplementedError:
+            expanded_dist = TorchDistributionMixin.expand(self, torch.Size(sample_shape) + self.batch_shape)
+        return expanded_dist
 
     def reshape(self, sample_shape=None, extra_event_dims=None):
         raise Exception('''
@@ -200,9 +217,8 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     ``.has_enumerate_support = True``.
     """
     # Provides a default `.expand` method for Pyro distributions which overrides
-    # torch.distributions.Distribution.expand (throws a NotImplementedError)
-    def expand(self, batch_shape, _instance=None):
-        return ReshapedDistribution(self, batch_shape)
+    # torch.distributions.Distribution.expand (throws a NotImplementedError).
+    expand = TorchDistributionMixin.expand
 
 
 class MaskedDistribution(TorchDistribution):
@@ -285,12 +301,12 @@ class MaskedDistribution(TorchDistribution):
         return self.base_dist.variance
 
 
-class ReshapedDistribution(TorchDistribution):
+class ExpandedDistribution(TorchDistribution):
     arg_constraints = {}
 
     def __init__(self, base_dist, batch_shape=torch.Size()):
         self.base_dist = base_dist
-        super(ReshapedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        super(ExpandedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
         # adjust batch shape
         self.expand(batch_shape)
 
@@ -366,8 +382,10 @@ class ReshapedDistribution(TorchDistribution):
         log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
         if self.batch_shape != self.base_dist.batch_shape:
             log_prob = log_prob.expand(shape)
-            score_function = score_function.expand(shape)
-            entropy_term = entropy_term.expand(shape)
+            if isinstance(score_function, torch.Tensor):
+                score_function = score_function.expand(shape)
+            if isinstance(score_function, torch.Tensor):
+                entropy_term = entropy_term.expand(shape)
         return ScoreParts(log_prob, score_function, entropy_term)
 
     def enumerate_support(self, expand=True):
