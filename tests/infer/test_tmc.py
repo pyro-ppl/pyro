@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
-@pytest.mark.parametrize("num_samples", [None, 1000])
+@pytest.mark.parametrize("num_samples", [None, 200])
 @pytest.mark.parametrize("max_plate_nesting", [2, 3])
 @pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
 def test_tmc_categoricals(depth, max_plate_nesting, num_samples, tmc_strategy):
@@ -136,7 +136,7 @@ def test_tmc_normals_chain_iwae(depth, num_samples, max_plate_nesting,
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4])
-@pytest.mark.parametrize("num_samples,expand", [(1100, False)])
+@pytest.mark.parametrize("num_samples,expand", [(200, False)])
 @pytest.mark.parametrize("max_plate_nesting", [0])
 @pytest.mark.parametrize("guide_type", ["prior", "factorized", "nonfactorized"])
 @pytest.mark.parametrize("reparameterized", [False, True])
