@@ -107,9 +107,9 @@ class NormalNet(DistributionNet):
     value, for example::
 
         net = NormalNet([3, 4])
-        z = torch.randn(3)
-        loc, scale = net(z)
-        x = net.make_dist(loc, scale).sample()
+        x = torch.randn(3)
+        loc, scale = net(x)
+        y = net.make_dist(loc, scale).sample()
     """
     def __init__(self, sizes):
         assert len(sizes) >= 1
@@ -118,8 +118,8 @@ class NormalNet(DistributionNet):
 
     def forward(self, x):
         loc_scale = self.fc(x)
-        loc = loc_scale[..., 0].clamp(min=-1e2, max=1e2)
-        scale = nn.functional.softplus(loc_scale[..., 1]).clamp(min=1e-4, max=1e2)
+        loc = loc_scale[..., 0].clamp(min=-1e6, max=1e6)
+        scale = nn.functional.softplus(loc_scale[..., 1]).clamp(min=1e-3, max=1e6)
         return loc, scale
 
     @staticmethod
@@ -368,6 +368,7 @@ class CEVAE(nn.Module):
     :ivar Guide ~CEVAE.guide: Inference model.
     :param int feature_dim: Dimension of the feature space `x`.
     :param str outcome_type: One of: "bernoulli", "normal".
+        Defaults to "bernoulli".
     :param int latent_dim: Dimension of the latent variable `z`.
         Defaults to 20.
     :param int hidden_dim: Dimension of hidden layers of fully connected
