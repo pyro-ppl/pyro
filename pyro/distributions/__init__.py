@@ -14,6 +14,7 @@ from pyro.distributions.hmm import DiscreteHMM, GaussianHMM, GaussianMRF
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJCorrCholesky
 from pyro.distributions.mixture import MaskedMixture
+from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
@@ -55,6 +56,7 @@ __all__ = [
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",
+    "MultivariateStudentT",
     "OMTMultivariateNormal",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
