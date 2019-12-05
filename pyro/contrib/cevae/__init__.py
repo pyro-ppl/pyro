@@ -127,6 +127,38 @@ class NormalNet(DistributionNet):
         return dist.Normal(loc, scale)
 
 
+class StudentTNet(DistributionNet):
+    """
+    :class:`FullyConnected` network outputting a constrained ``df,loc,scale``
+    triple, with shared ``df > 1``.
+
+    This is used to represent a conditional probability distribution of a
+    single Normal random variable conditioned on a ``sizes[0]``-size real
+    value, for example::
+
+        net = NormalNet([3, 4])
+        x = torch.randn(3)
+        loc, scale = net(x)
+        y = net.make_dist(loc, scale).sample()
+    """
+    def __init__(self, sizes):
+        assert len(sizes) >= 1
+        super().__init__()
+        self.fc = FullyConnected(sizes + [2])
+        self.df_unconstrained = nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, x):
+        loc_scale = self.fc(x)
+        loc = loc_scale[..., 0].clamp(min=-1e6, max=1e6)
+        scale = nn.functional.softplus(loc_scale[..., 1]).clamp(min=1e-3, max=1e6)
+        df = nn.functional.softplus(self.df_unconstrained).add(1).expand_as(loc)
+        return df, loc, scale
+
+    @staticmethod
+    def make_dist(df, loc, scale):
+        return dist.StudentT(df, loc, scale)
+
+
 class DiagNormalNet(nn.Module):
     """
     :class:`FullyConnected` network outputting a constrained ``loc,scale``
@@ -185,7 +217,7 @@ class Model(PyroModule):
     ``p(y|t=0,z)`` and ``p(y|t=1,z)``; this allows highly imbalanced treatment.
 
     :param dict config: A dict specifying ``feature_dim``, ``latent_dim``,
-        ``hidden_dim``, ``num_layers``, and ``outcome_type``.
+        ``hidden_dim``, ``num_layers``, and ``outcome_dist``.
     """
     def __init__(self, config):
         self.latent_dim = config["latent_dim"]
@@ -193,7 +225,7 @@ class Model(PyroModule):
         self.x_nn = DiagNormalNet([config["latent_dim"]] +
                                   [config["hidden_dim"]] * config["num_layers"] +
                                   [config["feature_dim"]])
-        OutcomeNet = DistributionNet.get_class(config["outcome_type"])
+        OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
         self.y0_nn = OutcomeNet([config["latent_dim"]] +
                                 [config["hidden_dim"]] * config["num_layers"])
         self.y1_nn = OutcomeNet([config["latent_dim"]] +
@@ -252,7 +284,7 @@ class Guide(PyroModule):
     imbalanced treatment.
 
     :param dict config: A dict specifying ``feature_dim``, ``latent_dim``,
-        ``hidden_dim``, ``num_layers``, and ``outcome_type``.
+        ``hidden_dim``, ``num_layers``, and ``outcome_dist``.
     """
     def __init__(self, config):
         self.latent_dim = config["latent_dim"]
@@ -260,7 +292,7 @@ class Guide(PyroModule):
         self.t_nn = BernoulliNet([config["feature_dim"]])
         self.y_nn = FullyConnected([config["feature_dim"]] +
                                    [config["hidden_dim"]] * config["num_layers"])
-        OutcomeNet = DistributionNet.get_class(config["outcome_type"])
+        OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
         self.y0_nn = OutcomeNet([config["hidden_dim"]])
         self.y1_nn = OutcomeNet([config["hidden_dim"]])
         self.z0_nn = DiagNormalNet([1 + config["feature_dim"]] +
@@ -367,7 +399,7 @@ class CEVAE(nn.Module):
     :ivar Model ~CEVAE.model: Generative model.
     :ivar Guide ~CEVAE.guide: Inference model.
     :param int feature_dim: Dimension of the feature space `x`.
-    :param str outcome_type: One of: "bernoulli", "normal".
+    :param str outcome_dist: One of: "bernoulli", "normal", "studentt".
         Defaults to "bernoulli".
     :param int latent_dim: Dimension of the latent variable `z`.
         Defaults to 20.
@@ -377,7 +409,7 @@ class CEVAE(nn.Module):
     :param int num_samples: Default number of samples for the :meth:`ite`
         method. Defaults to 100.
     """
-    def __init__(self, feature_dim, outcome_type="bernoulli",
+    def __init__(self, feature_dim, outcome_dist="bernoulli",
                  latent_dim=20, hidden_dim=200, num_layers=3, num_samples=100):
         config = dict(feature_dim=feature_dim, latent_dim=latent_dim,
                       hidden_dim=hidden_dim, num_layers=num_layers,
@@ -385,7 +417,7 @@ class CEVAE(nn.Module):
         for name, size in config.items():
             if not (isinstance(size, int) and size > 0):
                 raise ValueError("Expected {} > 0 but got {}".format(name, size))
-        config["outcome_type"] = outcome_type
+        config["outcome_dist"] = outcome_dist
         self.feature_dim = feature_dim
         self.num_samples = num_samples
 
