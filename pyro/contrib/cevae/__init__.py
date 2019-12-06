@@ -498,7 +498,7 @@ class CEVAE(nn.Module):
 
         :param ~torch.Tensor x:
         :param ~torch.Tensor t:
-        :param ~to rch.Tensor y:
+        :param ~torch.Tensor y:
         :param int num_epochs: Number of training epochs. Defaults to 100.
         :param int batch_size: Batch size. Defaults to 100.
         :param float learning_rate: Learning rate. Defaults to 1e-3.
