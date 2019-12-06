@@ -11,12 +11,16 @@ http://docs.pyro.ai/en/latest/contrib.cevae.html
     https://github.com/AMLab-Amsterdam/CEVAE
 """
 import argparse
+import logging
 
 import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.cevae import CEVAE
+
+logging.getLogger("pyro").setLevel(logging.DEBUG)
+logging.getLogger("pyro").handlers[0].setLevel(logging.DEBUG)
 
 
 def generate_data(args):
@@ -38,6 +42,8 @@ def generate_data(args):
 
 def main(args):
     pyro.enable_validation(__debug__)
+    if args.cuda:
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     # Generate synthetic data.
     pyro.set_rng_seed(args.seed)
@@ -79,12 +85,13 @@ if __name__ == "__main__":
     parser.add_argument("--latent-dim", default=20, type=int)
     parser.add_argument("--hidden-dim", default=200, type=int)
     parser.add_argument("--num-layers", default=3, type=int)
-    parser.add_argument("-n", "--num-epochs", default=10, type=int)
+    parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("-b", "--batch-size", default=100, type=int)
     parser.add_argument("-lr", "--learning-rate", default=1e-3, type=float)
     parser.add_argument("-lrd", "--learning-rate-decay", default=0.1, type=float)
     parser.add_argument("--weight-decay", default=1e-4, type=float)
     parser.add_argument("--seed", default=1234567890, type=int)
     parser.add_argument("--jit", action="store_true")
+    parser.add_argument("--cuda", action="store_true")
     args = parser.parse_args()
     main(args)

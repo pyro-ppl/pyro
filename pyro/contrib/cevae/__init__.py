@@ -40,13 +40,19 @@ class FullyConnected(nn.Sequential):
     """
     Fully connected multi-layer network with ELU activations.
     """
-    def __init__(self, sizes):
+    def __init__(self, sizes, final_activation=None):
         layers = []
         for in_size, out_size in zip(sizes, sizes[1:]):
             layers.append(nn.Linear(in_size, out_size))
             layers.append(nn.ELU())
         layers.pop(-1)
+        if final_activation is not None:
+            layers.append(final_activation)
         super().__init__(*layers)
+
+    def append(self, layer):
+        assert isinstance(layer, nn.Module)
+        self.add_module(str(len(self)), layer)
 
 
 class DistributionNet(nn.Module):
@@ -239,7 +245,7 @@ class DiagNormalNet(nn.Module):
     def forward(self, x):
         loc_scale = self.fc(x)
         loc = loc_scale[..., :self.dim].clamp(min=-1e2, max=1e2)
-        scale = nn.functional.softplus(loc_scale[..., self.dim:]).clamp(min=1e-4, max=1e2)
+        scale = nn.functional.softplus(loc_scale[..., self.dim:]).add(1e-3).clamp(max=1e2)
         return loc, scale
 
 
@@ -354,11 +360,13 @@ class Guide(PyroModule):
         # layers are shared for t in {0,1}, but the final layer is split
         # between the two t values.
         self.y_nn = FullyConnected([config["feature_dim"]] +
-                                   [config["hidden_dim"]] * (config["num_layers"] - 1))
+                                   [config["hidden_dim"]] * (config["num_layers"] - 1),
+                                   final_activation=nn.ELU())
         self.y0_nn = OutcomeNet([config["hidden_dim"]])
         self.y1_nn = OutcomeNet([config["hidden_dim"]])
         self.z_nn = FullyConnected([1 + config["feature_dim"]] +
-                                   [config["hidden_dim"]] * (config["num_layers"] - 1))
+                                   [config["hidden_dim"]] * (config["num_layers"] - 1),
+                                   final_activation=nn.ELU())
         self.z0_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
         self.z1_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
 
