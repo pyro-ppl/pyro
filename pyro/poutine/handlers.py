@@ -50,8 +50,6 @@ import functools
 import re
 
 from pyro.poutine import util
-from pyro.poutine.messenger import Messenger
-from pyro.util import get_rng_state, set_rng_seed, set_rng_state
 
 from .block_messenger import BlockMessenger
 from .broadcast_messenger import BroadcastMessenger
@@ -67,38 +65,13 @@ from .plate_messenger import PlateMessenger  # noqa F403
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
+from .seed_messenger import SeedMessenger
 from .trace_messenger import TraceMessenger
 from .uncondition_messenger import UnconditionMessenger
-
-
-class SeedMessenger(Messenger):
-    """
-    Handler to set the random number generator to a pre-defined state by setting its
-    seed. This is the same as calling :func:`pyro.set_rng_seed` before the
-    call to `fn`. This handler has no additional effect on primitive statements on the
-    standard Pyro backend, but it might intercept ``pyro.sample`` calls in other
-    backends. e.g. the NumPy backend.
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls).
-    :param int rng_seed: rng seed.
-    """
-    def __init__(self, rng_seed):
-        assert isinstance(rng_seed, int)
-        self.rng_seed = rng_seed
-        super(SeedMessenger, self).__init__()
-
-    def __enter__(self):
-        self.old_state = get_rng_state()
-        set_rng_seed(self.rng_seed)
-
-    def __exit__(self, type, value, traceback):
-        set_rng_state(self.old_state)
-
 
 ############################################
 # Begin primitive operations
 ############################################
-
 
 _msngrs = [
     BlockMessenger,

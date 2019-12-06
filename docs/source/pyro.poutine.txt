@@ -126,6 +126,14 @@ _______________
     :undoc-members:
     :show-inheritance:
 
+ScaleMessenger
+_______________
+
+.. automodule:: pyro.poutine.scale_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SubsampleMessenger
 _______________
 
