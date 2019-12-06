@@ -111,7 +111,8 @@ for _msngr_cls in _msngrs:
         r'\1_\2', _re1.sub(r'\1_\2', _msngr_cls.__name__.split("Messenger")[0])).lower()
     _handler = _make_handler(_msngr_cls)
     _handler.__module__ = __name__
-    _handler.__doc__ = _msngr_cls.__doc__
+    _handler.__doc__ = """Convenient wrapper of :class:`~pyro.poutine.{}.{}` \n\n""".format(
+        _handler_name + "_messenger", _msngr_cls.__name__) + _msngr_cls.__doc__
     _handler.__name__ = _handler_name
     locals()[_handler_name] = _handler
 

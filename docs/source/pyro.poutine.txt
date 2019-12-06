@@ -63,7 +63,7 @@ _______________
     :show-inheritance:
 
 InferConfigMessenger
-_______________
+____________________
 
 .. automodule:: pyro.poutine.infer_config_messenger
     :members:
@@ -79,7 +79,7 @@ ______________
     :show-inheritance:
 
 MarkovMessenger
-______________
+_______________
 
 .. automodule:: pyro.poutine.markov_messenger
     :members:
@@ -103,7 +103,7 @@ ______________
     :show-inheritance:
 
 ReentrantMessenger
-________________
+___________________
 
 .. automodule:: pyro.poutine.reentrant_messenger
     :members:
@@ -126,16 +126,16 @@ _______________
     :undoc-members:
     :show-inheritance:
 
-ScaleMessenger
+SeedMessenger
 _______________
 
-.. automodule:: pyro.poutine.scale_messenger
+.. automodule:: pyro.poutine.seed_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
 SubsampleMessenger
-_______________
+__________________
 
 .. automodule:: pyro.poutine.subsample_messenger
     :members:
@@ -151,7 +151,7 @@ _______________
     :show-inheritance:
 
 UnconditionMessenger
-_______________
+____________________
 
 .. automodule:: pyro.poutine.uncondition_messenger
     :members:
