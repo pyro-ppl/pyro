@@ -30,7 +30,9 @@ def _compute_dice_factors(model_trace, guide_trace):
 
             log_prob, log_denom = compute_site_dice_factor(site)
             if not is_identically_zero(log_denom):
+                dims = log_prob._pyro_dims
                 log_prob = log_prob - log_denom
+                log_prob._pyro_dims = dims
             if not is_identically_zero(log_prob):
                 log_probs.append(log_prob)
 
@@ -46,7 +48,8 @@ def _compute_tmc_factors(model_trace, guide_trace):
     for name, site in guide_trace.nodes.items():
         if site["type"] != "sample" or site["is_observed"]:
             continue
-        log_factors.append(packed.neg(site["packed"]["log_prob"]))
+        log_proposal = site["packed"]["log_prob"]
+        log_factors.append(packed.neg(log_proposal))
     for name, site in model_trace.nodes.items():
         if site["type"] != "sample":
             continue
@@ -54,8 +57,9 @@ def _compute_tmc_factors(model_trace, guide_trace):
                 not site["is_observed"] and \
                 site["infer"].get("enumerate", None) == "parallel" and \
                 site["infer"].get("num_samples", -1) > 0:
-            # site was sampled from the prior, proposal term cancels log_prob
-            continue
+            # site was sampled from the prior
+            log_proposal = packed.neg(site["packed"]["log_prob"])
+            log_factors.append(log_proposal)
         log_factors.append(site["packed"]["log_prob"])
     return log_factors
 

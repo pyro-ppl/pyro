@@ -7,6 +7,7 @@ from pyro.distributions.transforms.affine_coupling import AffineCoupling, affine
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.householder import Householder, householder
+from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
 from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, LeakyReLUTransform,
                                                                  TanhTransform, NeuralAutoregressive,
                                                                  neural_autoregressive,
@@ -42,6 +43,7 @@ __all__ = [
     'ELUTransform',
     'Householder',
     'LeakyReLUTransform',
+    'LowerCholeskyAffine',
     'NeuralAutoregressive',
     'Permute',
     'Planar',
