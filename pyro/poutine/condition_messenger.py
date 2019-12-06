@@ -4,7 +4,28 @@ from .trace_struct import Trace
 
 class ConditionMessenger(Messenger):
     """
-    Adds values at observe sites to condition on data and override sampling
+    Given a stochastic function with some sample statements
+    and a dictionary of observations at names,
+    change the sample statements at those names into observes
+    with those values.
+
+    Consider the following Pyro program:
+
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+
+    To observe a value for site `z`, we can write
+
+        >>> conditioned_model = pyro.poutine.condition(model, data={"z": torch.tensor(1.)})
+
+    This is equivalent to adding `obs=value` as a keyword argument
+    to `pyro.sample("z", ...)` in `model`.
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :param data: a dict or a :class:`~pyro.poutine.Trace`
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
     def __init__(self, data):
         """

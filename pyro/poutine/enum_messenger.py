@@ -108,7 +108,7 @@ def enumerate_site(msg):
     return value
 
 
-class EnumerateMessenger(Messenger):
+class EnumMessenger(Messenger):
     """
     Enumerates in parallel over discrete sample sites marked
     ``infer={"enumerate": "parallel"}``.
@@ -121,7 +121,7 @@ class EnumerateMessenger(Messenger):
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
-        super(EnumerateMessenger, self).__init__()
+        super(EnumMessenger, self).__init__()
 
     def __enter__(self):
         if self.first_available_dim is not None:
@@ -129,7 +129,7 @@ class EnumerateMessenger(Messenger):
         self._markov_depths = {}  # site name -> depth (nonnegative integer)
         self._param_dims = {}  # site name -> (enum dim -> unique id)
         self._value_dims = {}  # site name -> (enum dim -> unique id)
-        return super(EnumerateMessenger, self).__enter__()
+        return super(EnumMessenger, self).__enter__()
 
     @ignore_jit_warnings()
     def _pyro_sample(self, msg):

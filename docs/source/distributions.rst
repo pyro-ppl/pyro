@@ -175,6 +175,13 @@ MixtureOfDiagNormalsSharedCovariance
     :undoc-members:
     :show-inheritance:
 
+MultivariateStudentT
+--------------------
+.. autoclass:: pyro.distributions.MultivariateStudentT
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 OMTMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.OMTMultivariateNormal

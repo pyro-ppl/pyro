@@ -5,7 +5,7 @@ from queue import LifoQueue
 from pyro import poutine
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine import Trace
-from pyro.poutine.enumerate_messenger import enumerate_site
+from pyro.poutine.enum_messenger import enumerate_site
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, ignore_jit_warnings
 

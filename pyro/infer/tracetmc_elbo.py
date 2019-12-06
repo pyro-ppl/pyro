@@ -11,7 +11,7 @@ from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_dis
 from pyro.infer.util import compute_site_dice_factor, is_validation_enabled, torch_item
 from pyro.ops import packed
 from pyro.ops.contract import einsum
-from pyro.poutine.enumerate_messenger import EnumerateMessenger
+from pyro.poutine.enum_messenger import EnumMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
@@ -155,8 +155,8 @@ class TraceTMC_ELBO(ELBO):
         # Enable parallel enumeration over the vectorized guide and model.
         # The model allocates enumeration dimensions after (to the left of) the guide,
         # accomplished by preserving the _ENUM_ALLOCATOR state after the guide call.
-        guide_enum = EnumerateMessenger(first_available_dim=-1 - self.max_plate_nesting)
-        model_enum = EnumerateMessenger()  # preserve _ENUM_ALLOCATOR state
+        guide_enum = EnumMessenger(first_available_dim=-1 - self.max_plate_nesting)
+        model_enum = EnumMessenger()  # preserve _ENUM_ALLOCATOR state
         guide = guide_enum(guide)
         model = model_enum(model)
 
