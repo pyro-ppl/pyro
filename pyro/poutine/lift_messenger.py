@@ -19,16 +19,16 @@ class LiftMessenger(Messenger):
         ...     s = pyro.param("s", torch.tensor(0.5))
         ...     z = pyro.sample("z", dist.Normal(x, s))
         ...     return z ** 2
-        >>> lifted_model = lift(model, prior={"s": dist.Exponential(0.3)})
+        >>> lifted_model = pyro.poutine.lift(model, prior={"s": dist.Exponential(0.3)})
 
     ``lift`` makes ``param`` statements behave like ``sample`` statements
     using the distributions in ``prior``.  In this example, site `s` will now behave
     as if it was replaced with ``s = pyro.sample("s", dist.Exponential(0.3))``:
 
-        >>> tr = trace(lifted_model).get_trace(0.0)
+        >>> tr = pyro.poutine.trace(lifted_model).get_trace(0.0)
         >>> tr.nodes["s"]["type"] == "sample"
         True
-        >>> tr2 = trace(lifted_model).get_trace(0.0)
+        >>> tr2 = pyro.poutine.trace(lifted_model).get_trace(0.0)
         >>> bool((tr2.nodes["s"]["value"] == tr.nodes["s"]["value"]).all())
         False
 

@@ -17,8 +17,8 @@ class ReplayMessenger(Messenger):
     ``replay`` makes ``sample`` statements behave as if they had sampled the values
     at the corresponding sites in the trace:
 
-        >>> old_trace = trace(model).get_trace(1.0)
-        >>> replayed_model = replay(model, trace=old_trace)
+        >>> old_trace = pyro.poutine.trace(model).get_trace(1.0)
+        >>> replayed_model = pyro.poutine.replay(model, trace=old_trace)
         >>> bool(replayed_model(0.0) == old_trace.nodes["_RETURN"]["value"])
         True
 

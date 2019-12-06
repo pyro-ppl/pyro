@@ -45,7 +45,7 @@ class TraceMessenger(Messenger):
     and use the resulting data structure to compute the log-joint probability
     of all of the sample sites in the execution or extract all parameters.
 
-        >>> trace = trace(model).get_trace(0.0)
+        >>> trace = pyro.poutine.trace(model).get_trace(0.0)
         >>> logp = trace.log_prob_sum()
         >>> params = [trace.nodes[name]["value"].unconstrained() for name in trace.param_nodes]
 

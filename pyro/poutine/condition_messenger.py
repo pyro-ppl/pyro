@@ -18,7 +18,7 @@ class ConditionMessenger(Messenger):
 
     To observe a value for site `z`, we can write
 
-        >>> conditioned_model = condition(model, data={"z": torch.tensor(1.)})
+        >>> conditioned_model = pyro.poutine.condition(model, data={"z": torch.tensor(1.)})
 
     This is equivalent to adding `obs=value` as a keyword argument
     to `pyro.sample("z", ...)` in `model`.

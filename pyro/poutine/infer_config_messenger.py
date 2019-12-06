@@ -3,8 +3,8 @@ from .messenger import Messenger
 
 class InferConfigMessenger(Messenger):
     """
-    Given a callable that contains Pyro primitive calls
-    and a callable taking a trace site and returning a dictionary,
+    Given a callable `fn` that contains Pyro primitive calls
+    and a callable `config_fn` taking a trace site and returning a dictionary,
     updates the value of the infer kwarg at a sample site to config_fn(site).
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)

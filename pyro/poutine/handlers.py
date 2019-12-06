@@ -139,6 +139,7 @@ for _msngr_cls in _msngrs:
     _handler = _make_handler(_msngr_cls)
     _handler.__module__ = __name__
     _handler.__doc__ = _msngr_cls.__doc__
+    _handler.__name__ = _handler_name
     locals()[_handler_name] = _handler
 
 

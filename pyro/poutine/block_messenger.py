@@ -81,8 +81,8 @@ class BlockMessenger(Messenger):
         >>> def fn():
         ...     a = pyro.sample("a", dist.Normal(0., 1.))
         ...     return pyro.sample("b", dist.Normal(a, 1.))
-        >>> fn_inner = trace(fn)
-        >>> fn_outer = trace(block(fn_inner, hide=["a"]))
+        >>> fn_inner = pyro.poutine.trace(fn)
+        >>> fn_outer = pyro.poutine.trace(pyro.poutine.block(fn_inner, hide=["a"]))
         >>> trace_inner = fn_inner.get_trace()
         >>> trace_outer  = fn_outer.get_trace()
         >>> "a" in trace_inner

@@ -20,9 +20,9 @@ class ScaleMessenger(Messenger):
 
     ``scale`` multiplicatively scales the log-probabilities of sample sites:
 
-        >>> scaled_model = scale(model, scale=0.5)
-        >>> scaled_tr = trace(scaled_model).get_trace(0.0)
-        >>> unscaled_tr = trace(model).get_trace(0.0)
+        >>> scaled_model = pyro.poutine.scale(model, scale=0.5)
+        >>> scaled_tr = pyro.poutine.trace(scaled_model).get_trace(0.0)
+        >>> unscaled_tr = pyro.poutine.trace(model).get_trace(0.0)
         >>> bool((scaled_tr.log_prob_sum() == 0.5 * unscaled_tr.log_prob_sum()).all())
         True
 
