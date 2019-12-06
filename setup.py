@@ -78,7 +78,6 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
-        'graphviz>=0.8',
         # numpy is necessary for some functionality of PyTorch
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
