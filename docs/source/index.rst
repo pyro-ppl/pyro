@@ -31,6 +31,7 @@ Pyro Documentation
 
    contrib.autoname
    contrib.bnn
+   contrib.cevae
    contrib.easyguide
    contrib.examples
    contrib.gp
