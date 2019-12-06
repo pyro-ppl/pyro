@@ -85,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--latent-dim", default=20, type=int)
     parser.add_argument("--hidden-dim", default=200, type=int)
     parser.add_argument("--num-layers", default=3, type=int)
-    parser.add_argument("-n", "--num-epochs", default=100, type=int)
+    parser.add_argument("-n", "--num-epochs", default=50, type=int)
     parser.add_argument("-b", "--batch-size", default=100, type=int)
     parser.add_argument("-lr", "--learning-rate", default=1e-3, type=float)
     parser.add_argument("-lrd", "--learning-rate-decay", default=0.1, type=float)

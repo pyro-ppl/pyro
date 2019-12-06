@@ -326,7 +326,7 @@ class Model(PyroModule):
         params0 = self.y0_nn(z)
         params1 = self.y1_nn(z)
         t = t.bool()
-        params = [torch.where(t, p0, p1) for p0, p1 in zip(params0, params1)]
+        params = [torch.where(t, p1, p0) for p0, p1 in zip(params0, params1)]
         return self.y0_nn.make_dist(*params)
 
     def t_dist(self, z):
@@ -393,18 +393,19 @@ class Guide(PyroModule):
         params0 = self.y0_nn(hidden)
         params1 = self.y1_nn(hidden)
         t = t.bool()
-        params = [torch.where(t, p0, p1) for p0, p1 in zip(params0, params1)]
+        params = [torch.where(t, p1, p0) for p0, p1 in zip(params0, params1)]
         return self.y0_nn.make_dist(*params)
 
     def z_dist(self, y, t, x):
-        # Parameters are not shared among t values.
+        # The first n-1 layers are identical for all t values.
         y_x = torch.cat([y.unsqueeze(-1), x], dim=-1)
         hidden = self.z_nn(y_x)
-        loc0, scale0 = self.z0_nn(hidden)
-        loc1, scale1 = self.z1_nn(hidden)
-        loc = torch.where(t.bool().unsqueeze(-1), loc1, loc0)
-        scale = torch.where(t.bool().unsqueeze(-1), scale1, scale0)
-        return dist.Normal(loc, scale).to_event(1)
+        # In the final layer params are not shared among t values.
+        params0 = self.z0_nn(hidden)
+        params1 = self.z1_nn(hidden)
+        t = t.bool().unsqueeze(-1)
+        params = [torch.where(t, p1, p0) for p0, p1 in zip(params0, params1)]
+        return dist.Normal(*params).to_event(1)
 
 
 class TraceCausalEffect_ELBO(Trace_ELBO):
