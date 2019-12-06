@@ -36,10 +36,6 @@ from pyro.util import torch_isnan
 logger = logging.getLogger(__name__)
 
 
-def _BernoulliLogits(logits):
-    return dist.Bernoulli(logits=logits)
-
-
 class FullyConnected(nn.Sequential):
     """
     Fully connected multi-layer network with ELU activations.
@@ -230,6 +226,9 @@ class DiagNormalNet(nn.Module):
         z = torch.randn(3)
         loc, scale = net(z)
         x = dist.Normal(loc, scale).sample()
+
+    This is intended for the latent ``z`` distribution and the prewhitened
+    ``x`` features, and conservatively clips ``loc`` and ``scale`` values.
     """
     def __init__(self, sizes):
         assert len(sizes) >= 2
@@ -250,11 +249,12 @@ class PreWhitener(nn.Module):
     """
     def __init__(self, data):
         super().__init__()
-        loc = data.mean(0)
-        scale = data.std(0)
-        scale[~(scale > 0)] = 1.
-        self.register_buffer("loc", loc)
-        self.register_buffer("inv_scale", scale.reciprocal())
+        with torch.no_grad():
+            loc = data.mean(0)
+            scale = data.std(0)
+            scale[~(scale > 0)] = 1.
+            self.register_buffer("loc", loc)
+            self.register_buffer("inv_scale", scale.reciprocal())
 
     def forward(self, data):
         return (data - self.loc) * self.inv_scale
@@ -284,6 +284,7 @@ class Model(PyroModule):
                                   [config["hidden_dim"]] * config["num_layers"] +
                                   [config["feature_dim"]])
         OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
+        # The y network is split between the two t values.
         self.y0_nn = OutcomeNet([config["latent_dim"]] +
                                 [config["hidden_dim"]] * config["num_layers"])
         self.y1_nn = OutcomeNet([config["latent_dim"]] +
@@ -346,19 +347,20 @@ class Guide(PyroModule):
     """
     def __init__(self, config):
         self.latent_dim = config["latent_dim"]
+        OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
         super().__init__()
         self.t_nn = BernoulliNet([config["feature_dim"]])
+        # The y and z networks both follow an architecture where the first few
+        # layers are shared for t in {0,1}, but the final layer is split
+        # between the two t values.
         self.y_nn = FullyConnected([config["feature_dim"]] +
-                                   [config["hidden_dim"]] * config["num_layers"])
-        OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
+                                   [config["hidden_dim"]] * (config["num_layers"] - 1))
         self.y0_nn = OutcomeNet([config["hidden_dim"]])
         self.y1_nn = OutcomeNet([config["hidden_dim"]])
-        self.z0_nn = DiagNormalNet([1 + config["feature_dim"]] +
-                                   [config["hidden_dim"]] * config["num_layers"] +
-                                   [config["latent_dim"]])
-        self.z1_nn = DiagNormalNet([1 + config["feature_dim"]] +
-                                   [config["hidden_dim"]] * config["num_layers"] +
-                                   [config["latent_dim"]])
+        self.z_nn = FullyConnected([1 + config["feature_dim"]] +
+                                   [config["hidden_dim"]] * (config["num_layers"] - 1))
+        self.z0_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
+        self.z1_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
 
     def forward(self, x, t=None, y=None, size=None):
         if size is None:
@@ -389,8 +391,9 @@ class Guide(PyroModule):
     def z_dist(self, y, t, x):
         # Parameters are not shared among t values.
         y_x = torch.cat([y.unsqueeze(-1), x], dim=-1)
-        loc0, scale0 = self.z0_nn(y_x)
-        loc1, scale1 = self.z1_nn(y_x)
+        hidden = self.z_nn(y_x)
+        loc0, scale0 = self.z0_nn(hidden)
+        loc1, scale1 = self.z1_nn(hidden)
         loc = torch.where(t.bool().unsqueeze(-1), loc1, loc0)
         scale = torch.where(t.bool().unsqueeze(-1), scale1, scale0)
         return dist.Normal(loc, scale).to_event(1)

@@ -60,7 +60,6 @@ def test_serialization(jit, feature_dim, outcome_dist):
         f.seek(0)
         loaded_cevae = torch.load(f)
 
-    # Check .call() result.
     pyro.set_rng_seed(0)
     actual_ite = loaded_cevae.ite(x)
     assert_close(actual_ite, expected_ite, atol=0.1)
