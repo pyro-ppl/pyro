@@ -297,6 +297,13 @@ LeakyReLUTransform
     :undoc-members:
     :show-inheritance:
 
+LowerCholeskyAffine
+-------------------
+.. autoclass:: pyro.distributions.transforms.LowerCholeskyAffine
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
