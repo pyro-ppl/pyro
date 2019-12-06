@@ -95,7 +95,7 @@ def test_mean_var(batch_shape):
     expected_mean = samples.mean(0)
     expected_variance = samples.var(0)
     assert_equal(d.mean, expected_mean, prec=0.1)
-    assert_equal(d.variance, expected_variance, prec=0.1)
+    assert_equal(d.variance, expected_variance, prec=0.2)
 
     assert_equal(MultivariateStudentT(0.5, loc, scale_tril).mean,
                  torch.full(batch_shape + (dim,), float('nan')))
