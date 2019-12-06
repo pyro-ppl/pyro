@@ -101,10 +101,12 @@ class BlockMessenger(Messenger):
     :param expose_fn: function that takes a site and returns True to expose the site
         or False/None to hide it.  If specified, all other parameters are ignored.
         Only specify one of hide_fn or expose_fn, not both.
-    :param hide: list of site names to hide
-    :param expose: list of site names to be exposed while all others hidden
-    :param hide_types: list of site types to be hidden
-    :param expose_types: list of site types to be exposed while all others hidden
+    :param bool hide_all: hide all sites
+    :param bool expose_all: expose all sites normally
+    :param list hide: list of site names to hide
+    :param list expose: list of site names to be exposed while all others hidden
+    :param list hide_types: list of site types to be hidden
+    :param lits expose_types: list of site types to be exposed while all others hidden
     :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
     """
 
