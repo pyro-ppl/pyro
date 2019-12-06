@@ -84,8 +84,8 @@ def _sequential_gaussian_gamma_tensordot(gaussian_gamma):
         contracted = gaussian_gamma_tensordot(x, y, state_dim)
         if time > even_time:
             contracted = GaussianGamma.cat((contracted, gaussian_gamma[..., -1:]), dim=-1)
-        gaussian = contracted
-    return gaussian[..., 0]
+        gaussian_gamma = contracted
+    return gaussian_gamma[..., 0]
 
 
 class DiscreteHMM(TorchDistribution):
@@ -346,6 +346,166 @@ class GaussianHMM(TorchDistribution):
         loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
         return MultivariateNormal(loc, precision_matrix=precision,
                                   validate_args=self._validate_args)
+
+
+class RobustHMM(TorchDistribution):
+    """
+    Hidden Markov Model with the joint distribution of initial state, hidden
+    state, and observed state is a :class:`~pyro.distributions.MultivariateStudentT`
+    distribution along the line of references [2] and [3]. This adapts [1]
+    to parallelize over time to achieve O(log(time)) parallel complexity.
+
+    Recall that to generate a sample `x` from StudentT(df, loc, scale) distribution,
+    first we sample `s` from Gamma(df/2, df/2) distribution, then we generate
+    `x` from `Gaussian(loc, s * precision)`, which we will denote as
+    `condition(StudentT(df, loc, scale) | s)`.
+
+    This RobustHMM class corresponds to the generative model::
+
+        s = Gamma(df/2, df/2).sample()
+        z = condition(initial_distribution | s).sample()
+        x = []
+        for t in range(num_events):
+            z = z @ transition_matrix + condition(transition_dist | s).sample()
+            x.append(z @ observation_matrix + condition(observation_dist | s).sample())
+
+    The event_shape of this distribution includes time on the left::
+
+        event_shape = (num_steps,) + observation_dist.event_shape
+
+    This distribution supports any combination of homogeneous/heterogeneous
+    time dependency of ``transition_dist`` and ``observation_dist``. However,
+    because time is included in this distribution's event_shape, the
+    homogeneous+homogeneous case will have a broadcastable event_shape with
+    ``num_steps = 1``, allowing :meth:`log_prob` to work with arbitrary length
+    data::
+
+        event_shape = (1, obs_dim)  # homogeneous + homogeneous case
+
+    **References:**
+
+    [1] Simo Sarkka, Angel F. Garcia-Fernandez (2019)
+        "Temporal Parallelization of Bayesian Filters and Smoothers"
+        https://arxiv.org/pdf/1905.13002.pdf
+
+    [2] F. J. Giron and J. C. Rojano (1994)
+        "Bayesian Kalman filtering with elliptically contoured errors"
+
+    [3] Filip Tronarp, Toni Karvonen, and Simo Sarkka (2019)
+        "Student's t-filters for noise scale estimation"
+        https://users.aalto.fi/~ssarkka/pub/SPL2019.pdf
+
+    :ivar int hidden_dim: The dimension of the hidden state.
+    :ivar int obs_dim: The dimension of the observed state.
+    :param ~torch.distributions.MultivariateStudentT initial_dist: A distribution
+        over initial states. This should have batch_shape broadcastable to
+        ``self.batch_shape``.  This should have event_shape ``(hidden_dim,)``.
+    :param ~torch.Tensor transition_matrix: A linear transformation of hidden
+        state. This should have shape broadcastable to
+        ``self.batch_shape + (num_steps, hidden_dim, hidden_dim)`` where the
+        rightmost dims are ordered ``(old, new)``.
+    :param ~torch.distributions.MultivariateStudentT transition_dist: A process
+        noise distribution. This should have batch_shape broadcastable to
+        ``self.batch_shape + (num_steps,)``.  This should have event_shape
+        ``(hidden_dim,)``. This should hve the same degree of freedom as `initial_dist`.
+    :param ~torch.Tensor observation_matrix: A linear transformation from hidden
+        to observed state. This should have shape broadcastable to
+        ``self.batch_shape + (num_steps, hidden_dim, obs_dim)``.
+    :param ~torch.distributions.MultivariateStudentT observation_dist: An observation
+        noise distribution. This should have batch_shape broadcastable to
+        ``self.batch_shape + (num_steps,)``.
+        This should have event_shape ``(obs_dim,)``. This should have the same degree
+        of freedom as `initial_dist`.
+    """
+    arg_constraints = {}
+
+    def __init__(self, initial_dist, transition_matrix, transition_dist,
+                 observation_matrix, observation_dist, validate_args=None):
+        assert isinstance(initial_dist, pyro.distributions.MultivariateStudentT)
+        assert isinstance(transition_matrix, torch.Tensor)
+        assert isinstance(transition_dist, pyro.distributions.MultivariateStudentT)
+        assert isinstance(observation_matrix, torch.Tensor)
+        assert isinstance(observation_dist, pyro.distributions.MultivariateStudentT)
+        hidden_dim, obs_dim = observation_matrix.shape[-2:]
+        assert initial_dist.event_shape == (hidden_dim,)
+        assert transition_matrix.shape[-2:] == (hidden_dim, hidden_dim)
+        assert transition_dist.event_shape == (hidden_dim,)
+        assert observation_dist.event_shape == (obs_dim,)
+        shape = broadcast_shape(initial_dist.batch_shape + (1,),
+                                transition_matrix.shape[:-2],
+                                transition_dist.batch_shape,
+                                observation_matrix.shape[:-2],
+                                observation_dist.batch_shape)
+        batch_shape, time_shape = shape[:-1], shape[-1:]
+        event_shape = time_shape + (obs_dim,)
+        super(RobustHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        self.hidden_dim = hidden_dim
+        self.obs_dim = obs_dim
+        self.df = initial_dist.df
+        self._init = mvt_to_gaussian_gamma(initial_dist)
+        self._trans = matrix_and_mvt_to_gaussian_gamma(transition_matrix, transition_dist,
+                                                       skip_multiplier_prior=True)
+        self._obs = matrix_and_mvt_to_gaussian_gamma(observation_matrix, observation_dist,
+                                                     skip_multiplier_prior=True)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(RobustHMM, _instance)
+        batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        new.hidden_dim = self.hidden_dim
+        new.obs_dim = self.obs_dim
+        # We only need to expand one of the inputs, since batch_shape is determined
+        # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
+        # we expand only _init, which is applied only after _sequential_gaussian_tensordot().
+        new._init = self._init.expand(batch_shape)
+        new._trans = self._trans
+        new._obs = self._obs
+        super(RobustHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self.__dict__.get('_validate_args')
+        return new
+
+    def log_prob(self, value):
+        # Combine observation and transition factors.
+        result = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
+
+        # Eliminate time dimension.
+        result = _sequential_gaussian_gamma_tensordot(result.expand(result.batch_shape))
+
+        # Combine initial factor.
+        result = gaussian_gamma_tensordot(self._init, result, dims=self.hidden_dim)
+
+        # Marginalize out final state.
+        result = result.event_logsumexp()
+
+        # Marginalize out multiplier.
+        result result.logsumexp
+        return result
+
+    def filter(self, value):
+        """
+        Compute posterior over final state given a sequence of observations.
+
+        :param ~torch.Tensor value: A sequence of observations.
+        :return: A posterior
+            distribution over latent states at the final time step. ``result``
+            can then be used as ``initial_dist`` in a sequential Pyro model for
+            prediction.
+        :rtype: ~pyro.distributions.MultivariateStudentT
+        """
+        # Combine observation and transition factors.
+        logp = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
+
+        # Eliminate time dimension.
+        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+
+        # Combine initial factor.
+        logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)
+
+        # Convert to a distribution
+        precision = logp.precision
+        loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
+        # TODO: convert precision to scale_tril, double check the logic
+        return MultivariateStudentT(self.df, loc, precision_matrix=precision,
+                                    validate_args=self._validate_args)
 
 
 class GaussianMRF(TorchDistribution):
