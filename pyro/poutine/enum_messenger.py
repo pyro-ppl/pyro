@@ -95,12 +95,13 @@ def enumerate_site(msg):
         # Enumerate over the support of the distribution.
         value = dist.enumerate_support(expand=msg["infer"].get("expand", False))
     elif num_samples > 1 and not msg["infer"].get("expand", False):
-        if msg["infer"].get("tmc", "mixture") == "mixture":
+        tmc_strategy = msg["infer"].get("tmc", "diagonal")
+        if tmc_strategy == "mixture":
             value = _tmc_mixture_sample(msg)
-        elif msg["infer"]["tmc"] == "diagonal":
+        elif tmc_strategy == "diagonal":
             value = _tmc_diagonal_sample(msg)
         else:
-            raise ValueError("{} not a valid TMC strategy".format(msg["infer"]["tmc"]))
+            raise ValueError("{} not a valid TMC strategy".format(tmc_strategy))
     elif num_samples > 1 and msg["infer"]["expand"]:
         # Monte Carlo sample the distribution.
         value = dist(sample_shape=(num_samples,))

@@ -105,7 +105,7 @@ def _config_enumerate(default, expand, num_samples, tmc):
     return partial(_config_fn, default, expand, num_samples, tmc)
 
 
-def config_enumerate(guide=None, default="parallel", expand=False, num_samples=None, tmc="mixture"):
+def config_enumerate(guide=None, default="parallel", expand=False, num_samples=None, tmc="diagonal"):
     """
     Configures enumeration for all relevant sites in a guide. This is mainly
     used in conjunction with :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
