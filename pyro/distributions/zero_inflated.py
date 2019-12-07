@@ -83,9 +83,9 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
     A Zero Inflated Negative Binomial distribution.
 
     :param torch.Tensor gate: probability of extra zeros.
-    :param total_count (float or Tensor): non-negative number of negative Bernoulli trials
-    :param probs (Tensor): Event probabilities of success in the half open interval [0, 1)
-    :param logits (Tensor): Event log-odds for probabilities of success
+    :param total_count (float or torch.Tensor): non-negative number of negative Bernoulli trials.
+    :param probs (torch.Tensor): Event probabilities of success in the half open interval [0, 1).
+    :param logits (torch.Tensor): Event log-odds for probabilities of success.
     """
     support = constraints.nonnegative_integer
 
