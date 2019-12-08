@@ -18,6 +18,7 @@ def _logmatmulexp(x, y):
     return xy + x_shift + y_shift
 
 
+@torch.jit.script
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::

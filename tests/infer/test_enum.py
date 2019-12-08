@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 def _skip_cuda(*args):
     return skipif_param(*args,
                         condition="CUDA_TEST" in os.environ,
-                        reason="https://github.com/uber/pyro/issues/1380")
+                        reason="https://github.com/pyro-ppl/pyro/issues/1380")
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
@@ -437,14 +437,19 @@ def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_sample
     ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,enumerate3,num_samples", [
+    (e1, e2, e3, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for e3 in [None, "sequential", "parallel"]
+    for num_samples in [None, 10000]
+    if num_samples is None or (e1, e2, e3) == ("parallel", "parallel", "parallel")
+])
 @pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
-def test_elbo_berns(method, enumerate1, enumerate2, enumerate3):
+def test_elbo_berns(method, enumerate1, enumerate2, enumerate3, num_samples):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 10000
-    prec = 0.001 if all([enumerate1, enumerate2, enumerate3]) else 0.1
+    prec = 0.001 if all([enumerate1, enumerate2, enumerate3]) and not num_samples else 0.1
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
     def model():
@@ -454,9 +459,9 @@ def test_elbo_berns(method, enumerate1, enumerate2, enumerate3):
 
     def guide():
         q = pyro.param("q")
-        pyro.sample("x1", dist.Bernoulli(q), infer={"enumerate": enumerate1})
-        pyro.sample("x2", dist.Bernoulli(q), infer={"enumerate": enumerate2})
-        pyro.sample("x3", dist.Bernoulli(q), infer={"enumerate": enumerate3})
+        pyro.sample("x1", dist.Bernoulli(q), infer={"enumerate": enumerate1, "num_samples": num_samples})
+        pyro.sample("x2", dist.Bernoulli(q), infer={"enumerate": enumerate2, "num_samples": num_samples})
+        pyro.sample("x3", dist.Bernoulli(q), infer={"enumerate": enumerate3, "num_samples": num_samples})
 
     kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.1, 0.2, 0.3])
     expected_loss = kl.item()
@@ -483,11 +488,12 @@ def test_elbo_berns(method, enumerate1, enumerate2, enumerate3):
     ]))
 
 
+@pytest.mark.parametrize("num_samples", [None, 2000])
 @pytest.mark.parametrize("max_plate_nesting", [0, 1])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
-def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_plate_nesting):
+def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_plate_nesting, num_samples):
     pyro.clear_param_store()
     p1 = torch.tensor([0.6, 0.4])
     p2 = torch.tensor([0.3, 0.3, 0.4])
@@ -502,9 +508,15 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_plate_nesting
         pyro.sample("x3", dist.Categorical(p3))
 
     def guide():
-        pyro.sample("x1", dist.Categorical(pyro.param("q1")), infer={"enumerate": enumerate1})
-        pyro.sample("x2", dist.Categorical(pyro.param("q2")), infer={"enumerate": enumerate2})
-        pyro.sample("x3", dist.Categorical(pyro.param("q3")), infer={"enumerate": enumerate3})
+        pyro.sample("x1", dist.Categorical(pyro.param("q1")),
+                    infer={"enumerate": enumerate1,
+                           "num_samples": num_samples if enumerate1 == "parallel" else None})
+        pyro.sample("x2", dist.Categorical(pyro.param("q2")),
+                    infer={"enumerate": enumerate2,
+                           "num_samples": num_samples if enumerate2 == "parallel" else None})
+        pyro.sample("x3", dist.Categorical(pyro.param("q3")),
+                    infer={"enumerate": enumerate3,
+                           "num_samples": num_samples if enumerate3 == "parallel" else None})
 
     kl = (kl_divergence(dist.Categorical(q1), dist.Categorical(p1)) +
           kl_divergence(dist.Categorical(q2), dist.Categorical(p2)) +
@@ -517,12 +529,12 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_plate_nesting
     actual_loss = elbo.loss_and_grads(model, guide)
     actual_grads = [q1.grad, q2.grad, q3.grad]
 
-    assert_equal(actual_loss, expected_loss, prec=0.001, msg="".join([
+    assert_equal(actual_loss, expected_loss, prec=0.001 if not num_samples else 0.1, msg="".join([
         "\nexpected loss = {}".format(expected_loss),
         "\n  actual loss = {}".format(actual_loss),
     ]))
     for actual_grad, expected_grad in zip(actual_grads, expected_grads):
-        assert_equal(actual_grad, expected_grad, prec=0.001, msg="".join([
+        assert_equal(actual_grad, expected_grad, prec=0.001 if not num_samples else 0.1, msg="".join([
             "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
             "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
         ]))
@@ -574,10 +586,15 @@ def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,num_samples", [
+    (e1, e2, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for num_samples in [None, 10000]
+    if num_samples is None or (e1, e2) == ("parallel", "parallel")
+])
 @pytest.mark.parametrize("plate_dim", [1, 2])
-def test_elbo_plate(plate_dim, enumerate1, enumerate2):
+def test_elbo_plate(plate_dim, enumerate1, enumerate2, num_samples):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2]) else 10000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
@@ -593,10 +610,10 @@ def test_elbo_plate(plate_dim, enumerate1, enumerate2):
         q = pyro.param("q")
         with pyro.plate("particles", num_particles):
             pyro.sample("y", dist.Bernoulli(q).expand_by([num_particles]),
-                        infer={"enumerate": enumerate1})
+                        infer={"enumerate": enumerate1, "num_samples": num_samples})
             with pyro.plate("plate", plate_dim):
                 pyro.sample("z", dist.Bernoulli(q).expand_by([plate_dim, num_particles]),
-                            infer={"enumerate": enumerate2})
+                            infer={"enumerate": enumerate2, "num_samples": num_samples})
 
     kl = (1 + plate_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     expected_loss = kl.item()
@@ -658,13 +675,18 @@ def test_elbo_iplate(plate_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("enumerate4", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,enumerate3,enumerate4,num_samples", [
+    (e1, e2, e3, e4, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for e3 in [None, "sequential", "parallel"]
+    for e4 in [None, "sequential", "parallel"]
+    for num_samples in [None, 10000]
+    if num_samples is None or (e1, e2, e3, e4) == ("parallel",) * 4
+])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
-def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4):
+def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4, num_samples):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3, enumerate4]) else 100000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
@@ -686,13 +708,13 @@ def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerat
         d = dist.Bernoulli(pyro.param("q"))
         context1 = pyro.plate("outer", outer_dim, dim=-1)
         context2 = pyro.plate("inner", inner_dim, dim=-2)
-        pyro.sample("w", d, infer={"enumerate": enumerate1})
+        pyro.sample("w", d, infer={"enumerate": enumerate1, "num_samples": num_samples})
         with context1:
-            pyro.sample("x", d, infer={"enumerate": enumerate2})
+            pyro.sample("x", d, infer={"enumerate": enumerate2, "num_samples": num_samples})
         with context2:
-            pyro.sample("y", d, infer={"enumerate": enumerate3})
+            pyro.sample("y", d, infer={"enumerate": enumerate3, "num_samples": num_samples})
         with context1, context2:
-            pyro.sample("z", d, infer={"enumerate": enumerate4})
+            pyro.sample("z", d, infer={"enumerate": enumerate4, "num_samples": num_samples})
 
     kl_node = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     kl = (1 + outer_dim + inner_dim + outer_dim * inner_dim) * kl_node
@@ -715,12 +737,17 @@ def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerat
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parametrize("enumerate1,enumerate2,enumerate3,num_samples", [
+    (e1, e2, e3, num_samples)
+    for e1 in [None, "sequential", "parallel"]
+    for e2 in [None, "sequential", "parallel"]
+    for e3 in [None, "sequential", "parallel"]
+    for num_samples in [None, 2000]
+    if num_samples is None or (e1, e2, e3) == ("parallel",) * 3
+])
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [3])
-def test_elbo_plate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
+def test_elbo_plate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, num_samples):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 100000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
@@ -738,13 +765,13 @@ def test_elbo_plate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumera
         q = pyro.param("q")
         with pyro.plate("particles", num_particles):
             pyro.sample("x", dist.Bernoulli(q).expand_by([num_particles]),
-                        infer={"enumerate": enumerate1})
+                        infer={"enumerate": enumerate1, "num_samples": num_samples})
             with pyro.plate("outer", outer_dim):
                 pyro.sample("y", dist.Bernoulli(q).expand_by([outer_dim, num_particles]),
-                            infer={"enumerate": enumerate2})
+                            infer={"enumerate": enumerate2, "num_samples": num_samples})
                 for i in pyro.plate("inner", inner_dim):
                     pyro.sample("z_{}".format(i), dist.Bernoulli(q).expand_by([outer_dim, num_particles]),
-                                infer={"enumerate": enumerate3})
+                                infer={"enumerate": enumerate3, "num_samples": num_samples})
 
     kl = (1 + outer_dim * (1 + inner_dim)) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     expected_loss = kl.item()
@@ -2647,7 +2674,7 @@ def test_elbo_hmm_growth():
     ]))
 
 
-@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/pyro-ppl/pyro/issues/1380")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
     elbo = TraceEnum_ELBO(max_plate_nesting=0)

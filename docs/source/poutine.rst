@@ -9,34 +9,7 @@ Handlers
 ---------
 
 .. automodule:: pyro.poutine.handlers
-
-.. autofunction:: pyro.poutine.block
-
-.. autofunction:: pyro.poutine.broadcast
-
-.. autofunction:: pyro.poutine.condition
-
-.. autofunction:: pyro.poutine.do
-
-.. autofunction:: pyro.poutine.enum
-
-.. autofunction:: pyro.poutine.escape
-
-.. autofunction:: pyro.poutine.infer_config
-
-.. autofunction:: pyro.poutine.lift
-
-.. autofunction:: pyro.poutine.markov
-
-.. autofunction:: pyro.poutine.mask
-
-.. autofunction:: pyro.poutine.queue
-
-.. autofunction:: pyro.poutine.replay
-
-.. autofunction:: pyro.poutine.scale
-
-.. autofunction:: pyro.poutine.trace
+    :members:
 
 .. autofunction:: pyro.infer.enum.config_enumerate
 
@@ -47,15 +20,6 @@ Trace
     :members:
     :undoc-members:
     :show-inheritance:
-
-Messengers
------------
-
-Messenger objects contain the implementations of the effects exposed by handlers.
-Advanced users may modify the implementations of messengers behind existing handlers or write new messengers
-that implement new effects and compose correctly with the rest of the library.
-
-.. include:: pyro.poutine.txt
 
 Runtime
 --------
@@ -72,3 +36,12 @@ Utilities
     :members:
     :undoc-members:
     :show-inheritance:
+
+Messengers
+-----------
+
+Messenger objects contain the implementations of the effects exposed by handlers.
+Advanced users may modify the implementations of messengers behind existing handlers or write new messengers
+that implement new effects and compose correctly with the rest of the library.
+
+.. include:: pyro.poutine.txt

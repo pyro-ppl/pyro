@@ -1,32 +1,32 @@
 import torch
-from torch.distributions.transforms import Transform
 from torch.distributions.utils import lazy_property
 from torch.distributions import constraints
+from torch.distributions.transforms import Transform
 
 from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Transform)
-class PermuteTransform(Transform):
+class Permute(Transform):
     """
     A bijection that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
-    This is useful in between :class:`~pyro.distributions.InverseAutoregressiveFlow` transforms to increase the
+    This is useful in between :class:`~pyro.distributions.transforms.AffineAutoregressive` transforms to increase the
     flexibility of the resulting distribution and stabilize learning. Whilst not being an autoregressive transform,
     the log absolute determinate of the Jacobian is easily calculable as 0. Note that reordering the input dimension
-    between two layers of :class:`~pyro.distributions.InverseAutoregressiveFlow` is not equivalent to reordering
-    the dimension inside the MADE networks that those IAFs use; using a PermuteTransform results in a distribution
-    with more flexibility.
+    between two layers of :class:`~pyro.distributions.transforms.AffineAutoregressive` is not equivalent to reordering
+    the dimension inside the MADE networks that those IAFs use; using a :class:`~pyro.distributions.transforms.Permute`
+    transform results in a distribution with more flexibility.
 
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
-    >>> from pyro.distributions import InverseAutoregressiveFlow, PermuteTransform
+    >>> from pyro.distributions.transforms import AffineAutoregressive, Permute
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iaf1 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
-    >>> ff = PermuteTransform(torch.randperm(10, dtype=torch.long))
-    >>> iaf2 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
-    >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
-    >>> iaf_dist.sample()  # doctest: +SKIP
+    >>> iaf1 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
+    >>> ff = Permute(torch.randperm(10, dtype=torch.long))
+    >>> iaf2 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
@@ -41,7 +41,7 @@ class PermuteTransform(Transform):
     volume_preserving = True
 
     def __init__(self, permutation):
-        super(PermuteTransform, self).__init__(cache_size=1)
+        super(Permute, self).__init__(cache_size=1)
 
         self.permutation = permutation
 
@@ -58,8 +58,9 @@ class PermuteTransform(Transform):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
 
         return x[..., self.permutation]
@@ -83,3 +84,21 @@ class PermuteTransform(Transform):
         """
 
         return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
+
+
+def permute(input_dim, permutation=None):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.Permute` object for consistency with other
+    helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param permutation: Torch tensor of integer indices representing permutation. Defaults
+        to a random permutation.
+    :type permutation: torch.LongTensor
+
+    """
+
+    if permutation is None:
+        permutation = torch.randperm(input_dim)
+    return Permute(permutation)

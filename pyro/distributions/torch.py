@@ -1,8 +1,8 @@
 import torch
-from torch.distributions import constraints, kl_divergence, register_kl
+from torch.distributions import constraints
 
-from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.constraints import IndependentConstraint
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
@@ -50,16 +50,6 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
     @_validate_args.setter
     def _validate_args(self, value):
         self.base_dist._validate_args = value
-
-
-@register_kl(Independent, Independent)
-def _kl_independent_independent(p, q):
-    if p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims:
-        raise NotImplementedError
-    kl = kl_divergence(p.base_dist, q.base_dist)
-    if p.reinterpreted_batch_ndims:
-        kl = sum_rightmost(kl, p.reinterpreted_batch_ndims)
-    return kl
 
 
 # Programmatically load all distributions from PyTorch.

@@ -17,11 +17,24 @@ class MarkovMessenger(ReentrantMessenger):
         when branching: if ``keep=True``, neighboring branches at the same
         level can depend on each other; if ``keep=False``, neighboring branches
         are independent (conditioned on their shared ancestors).
+    :param int dim: An optional dimension to use for this independence index.
+        Interface stub, behavior not yet implemented.
+    :param str name: An optional unique name to help inference algorithms match
+        :func:`pyro.markov` sites between models and guides.
+        Interface stub, behavior not yet implemented.
     """
-    def __init__(self, history=1, keep=False):
+    def __init__(self, history=1, keep=False, dim=None, name=None):
         assert history >= 0
         self.history = history
         self.keep = keep
+        self.dim = dim
+        self.name = name
+        if dim is not None:
+            raise NotImplementedError(
+                "vectorized markov not yet implemented, try setting dim to None")
+        if name is not None:
+            raise NotImplementedError(
+                "vectorized markov not yet implemented, try setting name to None")
         self._iterable = None
         self._pos = -1
         self._stack = []
@@ -56,7 +69,7 @@ class MarkovMessenger(ReentrantMessenger):
         # We use a Counter rather than a set here so that sites can correctly
         # go out of scope when any one of their markov contexts exits.
         # This accounting can be done by users of these fields,
-        # e.g. EnumerateMessenger.
+        # e.g. EnumMessenger.
         infer = msg["infer"]
         scope = infer.setdefault("_markov_scope", Counter())  # site name -> markov depth
         for pos in range(max(0, self._pos - self.history), self._pos + 1):

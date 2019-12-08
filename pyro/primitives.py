@@ -1,7 +1,7 @@
 import copy
 import warnings
 from collections import OrderedDict
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from inspect import isclass
 
 import pyro.distributions as dist
@@ -124,6 +124,27 @@ def factor(name, log_factor):
     sample(name, unit_dist, obs=unit_value)
 
 
+def deterministic(name, value, event_dim=None):
+    """
+    EXPERIMENTAL Deterministic statement to add a :class:`~pyro.distributions.Delta`
+    site with name `name` and value `value` to the trace. This is useful when
+    we want to record values which are completely determined by their parents.
+    For example::
+
+        x = sample("x", dist.Normal(0, 1))
+        x2 = deterministic("x2", x ** 2)
+
+    .. note:: The site does not affect the model density. This currently converts
+        to a :func:`sample` statement, but may change in the future.
+
+    :param str name: Name of the site.
+    :param torch.Tensor value: Value of the site.
+    :param int event_dim: Optional event dimension, defaults to `value.ndim`.
+    """
+    event_dim = value.ndim if event_dim is None else event_dim
+    return sample(name, dist.Delta(value, event_dim=event_dim).mask(False), obs=value)
+
+
 class plate(PlateMessenger):
     """
     Construct for conditionally independent sequences of variables.
@@ -243,6 +264,25 @@ class irange(SubsampleMessenger):
         super(irange, self).__init__(*args, **kwargs)
 
 
+@contextmanager
+def plate_stack(prefix, sizes, rightmost_dim=-1):
+    """
+    Create a contiguous stack of :class:`plate` s with dimensions::
+
+        rightmost_dim - len(sizes), ..., rightmost_dim
+
+    :param str prefix: Name prefix for plates.
+    :param iterable sizes: An iterable of plate sizes.
+    :param int rightmost_dim: The rightmost dim, counting from the right.
+    """
+    assert rightmost_dim < 0
+    with ExitStack() as stack:
+        for i, size in enumerate(reversed(sizes)):
+            plate_i = plate("{}_{}".format(prefix, i), size, dim=rightmost_dim - i)
+            stack.enter_context(plate_i)
+        yield
+
+
 def module(name, nn_module, update_module_params=False):
     """
     Takes a torch.nn.Module and registers its parameters with the ParamStore.
@@ -303,12 +343,17 @@ def module(name, nn_module, update_module_params=False):
 
 def random_module(name, nn_module, prior, *args, **kwargs):
     r"""
+    .. warning::
+        The `random_module` primitive is deprecated, and will be removed
+        in a future release. Use :class:`~pyro.nn.PyroModule` instead to
+        to create Bayesian modules from :class:`torch.nn.Module` instances.
+        See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
+        for an example.
+
+
     Places a prior over the parameters of the module `nn_module`.
     Returns a distribution (callable) over `nn.Module`\s, which
     upon calling returns a sampled `nn.Module`.
-
-    See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
-    for an example.
 
     :param name: name of pyro module
     :type name: str
@@ -318,6 +363,10 @@ def random_module(name, nn_module, prior, *args, **kwargs):
                   as keys and respective distributions/stochastic functions as values.
     :returns: a callable which returns a sampled module
     """
+    warnings.warn("The `random_module` primitive is deprecated, and will be removed "
+                  "in a future release. Use `pyro.nn.Module` to create Bayesian "
+                  "modules from `torch.nn.Module` instances.", FutureWarning)
+
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
     lifted_fn = poutine.lift(module, prior=prior)

@@ -43,7 +43,7 @@ class NUTS(HMC):
     by the :class:`~pyro.infer.mcmc.HMC` kernel. Optionally, the NUTS kernel
     also provides the ability to adapt step size during the warmup phase.
 
-    Refer to the `baseball example <https://github.com/uber/pyro/blob/dev/examples/baseball.py>`_
+    Refer to the `baseball example <https://github.com/pyro-ppl/pyro/blob/dev/examples/baseball.py>`_
     to see how to do Bayesian inference in Pyro using NUTS.
 
     **References**
@@ -158,13 +158,14 @@ class NUTS(HMC):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
         r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
+        r_sum = r_sum - (r_left_flat + r_right_flat) / 2
         if self.inverse_mass_matrix.dim() == 2:
-            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
-                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum - r_right_flat) > 0):
+            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum) > 0 and
+                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum) > 0):
                 return False
         else:
-            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
-                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum - r_right_flat) > 0):
+            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum) > 0 and
+                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum) > 0):
                 return False
         return True
 

@@ -2,7 +2,7 @@ import math
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property
+from torch.distributions.utils import broadcast_all, lazy_property
 
 from pyro.distributions.torch import Chi2
 from pyro.distributions.torch_distribution import TorchDistribution
@@ -16,7 +16,8 @@ class MultivariateStudentT(TorchDistribution):
 
     :param ~torch.Tensor df: degrees of freedom
     :param ~torch.Tensor loc: mean of the distribution
-    :param ~torch.Tensor scale_tril: scale of the distribution
+    :param ~torch.Tensor scale_tril: scale of the distribution, which is
+        a lower triangular matrix with positive diagonal entries
     """
     arg_constraints = {'df': constraints.positive,
                        'loc': constraints.real_vector,
@@ -27,9 +28,10 @@ class MultivariateStudentT(TorchDistribution):
     def __init__(self, df, loc, scale_tril, validate_args=None):
         dim = loc.size(-1)
         assert scale_tril.shape[-2:] == (dim, dim)
+        df, = broadcast_all(df)
         batch_shape = broadcast_shape(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
         event_shape = (dim,)
-        self.df = df
+        self.df = df.expand(batch_shape)
         self.loc = loc
         self.scale_tril = scale_tril
         self._chi2 = Chi2(self.df)
@@ -49,7 +51,7 @@ class MultivariateStudentT(TorchDistribution):
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MultivariateStudentT, _instance)
-        batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        batch_shape = torch.Size(batch_shape)
         loc_shape = batch_shape + self.event_shape
         scale_shape = loc_shape + self.event_shape
         new.df = self.df.expand(batch_shape)
@@ -91,6 +93,7 @@ class MultivariateStudentT(TorchDistribution):
 
     @property
     def variance(self):
-        m = self.scale_tril.pow(2).sum(-1) * self.df / (self.df - 2)
-        m[self.df <= 2, :] = float('nan')
+        m = self.scale_tril.pow(2).sum(-1) * (self.df / (self.df - 2)).unsqueeze(-1)
+        m[(self.df <= 2) & (self.df > 1), :] = float('inf')
+        m[self.df <= 1, :] = float('nan')
         return m

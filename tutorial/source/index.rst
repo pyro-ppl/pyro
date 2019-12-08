@@ -52,12 +52,15 @@ Welcome to Pyro Examples and Tutorials!
    RSA-implicature
    RSA-hyperbole
    ekf
+   working_memory
+   elections
 
 .. toctree::
    :maxdepth: 2
    :caption: Code Examples:
 
    capture_recapture
+   cevae
    hmm
    lda
    mcmc

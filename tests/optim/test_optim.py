@@ -131,6 +131,26 @@ def test_autowrap(factory):
     assert instance.pt_optim_constructor.__name__ == factory.__name__
 
 
+@pytest.mark.parametrize('pyro_optim', [optim.Adam, optim.SGD])
+@pytest.mark.parametrize('clip', ['clip_norm', 'clip_value'])
+@pytest.mark.parametrize('value', [1., 3., 5.])
+def test_clip_norm(pyro_optim, clip, value):
+    x1 = torch.tensor(0., requires_grad=True)
+    x2 = torch.tensor(0., requires_grad=True)
+    opt_c = pyro_optim({"lr": 1.}, {clip: value})
+    opt = pyro_optim({"lr": 1.})
+    for step in range(3):
+        x1.backward(Uniform(value, value + 3.).sample())
+        x2.backward(torch.tensor(value))
+        opt_c([x1])
+        opt([x2])
+        assert_equal(x1.grad, torch.tensor(value))
+        assert_equal(x2.grad, torch.tensor(value))
+        assert_equal(x1, x2)
+        opt_c.optim_objs[x1].zero_grad()
+        opt.optim_objs[x2].zero_grad()
+
+
 @pytest.mark.parametrize('clip_norm', [1., 3., 5.])
 def test_clippedadam_clip(clip_norm):
     x1 = torch.tensor(0., requires_grad=True)

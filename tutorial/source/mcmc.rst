@@ -3,7 +3,7 @@ Markov Chain Monte Carlo
 
 `View hmm.py on github`__
 
-.. _github: https://github.com/uber/pyro/blob/dev/examples/eight_schools/mcmc.py
+.. _github: https://github.com/pyro-ppl/pyro/blob/dev/examples/eight_schools/mcmc.py
 
 __ github_
 

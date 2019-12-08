@@ -10,6 +10,12 @@ from pyro.distributions.testing.rejection_exponential import RejectionExponentia
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
 from tests.distributions.dist_fixture import Fixture
 
+
+class FoldedNormal(dist.FoldedDistribution):
+    def __init__(self, loc, scale):
+        super().__init__(dist.Normal(loc, scale))
+
+
 continuous_dists = [
     Fixture(pyro_dist=dist.Uniform,
             scipy_dist=sp.uniform,
@@ -158,6 +164,17 @@ continuous_dists = [
                 ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
+    Fixture(pyro_dist=FoldedNormal,
+            examples=[
+                {'loc': [2.0], 'scale': [4.0],
+                 'test_data': [2.0]},
+                {'loc': [[2.0]], 'scale': [[4.0]],
+                 'test_data': [[2.0]]},
+                {'loc': [[[2.0]]], 'scale': [[[4.0]]],
+                 'test_data': [[[2.0]]]},
+                {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
+                 'test_data': [[2.0, 50.0], [2.0, 50.0]]},
+            ]),
     Fixture(pyro_dist=dist.Dirichlet,
             scipy_dist=sp.dirichlet,
             examples=[
@@ -232,6 +249,16 @@ continuous_dists = [
                      [[1.0000,  0.0000,  0.0000], [-0.3758,  0.9267,  0.0000], [-0.2409,  0.4044,  0.8823]],
                      [[1.0000,  0.0000,  0.0000], [-0.8800,  0.4750,  0.0000], [-0.9493,  0.1546,  0.2737]],
                      [[1.0000,  0.0000,  0.0000], [0.2284,  0.9736,  0.0000], [-0.1283,  0.0451,  0.9907]]]},
+                ]),
+    Fixture(pyro_dist=dist.Stable,
+            examples=[
+                {'stability': [1.5], 'skew': 0.1, 'test_data': [-10.]},
+                {'stability': [1.5], 'skew': 0.1, 'scale': 2.0, 'loc': -2.0, 'test_data': [10.]},
+                ]),
+    Fixture(pyro_dist=dist.MultivariateStudentT,
+            examples=[
+                {'df': 1.5, 'loc': [0.2, 0.3], 'scale_tril': [[0.8, 0.0], [1.3, 0.4]],
+                 'test_data': [-3., 2]},
                 ]),
 ]
 

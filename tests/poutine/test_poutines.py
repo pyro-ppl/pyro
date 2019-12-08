@@ -379,6 +379,7 @@ class LiftHandlerTests(TestCase):
             if name in ('scale2', 'loc2'):
                 assert lifted_tr.nodes[name]["type"] == "param"
 
+    @pytest.mark.filterwarnings('ignore::FutureWarning')
     def test_random_module(self):
         pyro.clear_param_store()
         with pyro.validation_enabled():
@@ -388,6 +389,7 @@ class LiftHandlerTests(TestCase):
                 assert lifted_tr.nodes[name]["type"] == "sample"
                 assert not lifted_tr.nodes[name]["is_observed"]
 
+    @pytest.mark.filterwarnings('ignore::FutureWarning')
     def test_random_module_warn(self):
         pyro.clear_param_store()
         bad_prior = {'foo': None}
@@ -399,6 +401,7 @@ class LiftHandlerTests(TestCase):
             for warning in w:
                 logger.info(warning)
 
+    @pytest.mark.filterwarnings('ignore::FutureWarning')
     def test_random_module_prior_dict(self):
         pyro.clear_param_store()
         lifted_nn = pyro.random_module("name", self.model, prior=self.nn_prior)
@@ -516,11 +519,6 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
             tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is data["latent2"]
 
-    def test_do(self):
-        data = {"latent2": torch.randn(2)}
-        tr3 = poutine.trace(poutine.do(self.model, data=data)).get_trace()
-        assert "latent2" not in tr3
-
     def test_trace_data(self):
         tr1 = poutine.trace(
             poutine.block(self.model, expose_types=["sample"])).get_trace()
@@ -530,13 +528,14 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
             tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is tr1.nodes["latent2"]["value"]
 
-    def test_stack_overwrite_failure(self):
+    def test_stack_overwrite_behavior(self):
         data1 = {"latent2": torch.randn(2)}
         data2 = {"latent2": torch.randn(2)}
-        cm = poutine.condition(poutine.condition(self.model, data=data1),
-                               data=data2)
-        with pytest.raises(AssertionError):
+        with poutine.trace() as tr:
+            cm = poutine.condition(poutine.condition(self.model, data=data1),
+                                   data=data2)
             cm()
+        assert tr.trace.nodes['latent2']['value'] is data2['latent2']
 
     def test_stack_success(self):
         data1 = {"latent1": torch.randn(2)}
@@ -550,23 +549,6 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
         assert tr.nodes["latent2"]["type"] == "sample" and \
             tr.nodes["latent2"]["is_observed"]
         assert tr.nodes["latent2"]["value"] is data2["latent2"]
-
-    def test_do_propagation(self):
-        pyro.clear_param_store()
-
-        def model():
-            z = pyro.sample("z", Normal(10.0 * torch.ones(1), 0.0001 * torch.ones(1)))
-            latent_prob = torch.exp(z) / (torch.exp(z) + torch.ones(1))
-            flip = pyro.sample("flip", Bernoulli(latent_prob))
-            return flip
-
-        sample_from_model = model()
-        z_data = {"z": -10.0 * torch.ones(1)}
-        # under model flip = 1 with high probability; so do indirect DO surgery to make flip = 0
-        sample_from_do_model = poutine.trace(poutine.do(model, data=z_data))()
-
-        assert eq(sample_from_model, torch.ones(1))
-        assert eq(sample_from_do_model, torch.zeros(1))
 
 
 class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
@@ -790,31 +772,6 @@ def test_decorator_interface_queue():
         assert name in tr
 
 
-def test_decorator_interface_do():
-
-    sites = ["x", "y", "z", "_INPUT", "_RETURN"]
-    data = {"x": torch.ones(1)}
-
-    @poutine.do(data=data)
-    def model():
-        p = torch.tensor([0.5])
-        loc = torch.zeros(1)
-        scale = torch.ones(1)
-
-        x = pyro.sample("x", Normal(loc, scale))  # Before the discrete variable.
-        y = pyro.sample("y", Bernoulli(p))
-        z = pyro.sample("z", Normal(loc, scale))  # After the discrete variable.
-        return dict(x=x, y=y, z=z)
-
-    tr = poutine.trace(model).get_trace()
-    for name in sites:
-        if name not in data:
-            assert name in tr
-        else:
-            assert name not in tr
-            assert_equal(tr.nodes["_RETURN"]["value"][name], data[name])
-
-
 def test_method_decorator_interface_condition():
 
     class cls_model(object):
@@ -889,3 +846,19 @@ def test_pickling(wrapper):
     assert tuple(actual_trace) == tuple(expected_trace.nodes)
     assert_close([actual_trace.nodes[site]['value'] for site in actual_trace.stochastic_nodes],
                  [expected_trace.nodes[site]['value'] for site in expected_trace.stochastic_nodes])
+
+
+def test_arg_kwarg_error():
+
+    def model():
+        pyro.param("p", torch.zeros(1, requires_grad=True))
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])),
+                    infer={"enumerate": "parallel"})
+        pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    with pytest.raises(ValueError, match="not callable"):
+        with poutine.mask(False):
+            model()
+
+    with poutine.mask(mask=False):
+        model()

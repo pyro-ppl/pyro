@@ -6,6 +6,7 @@ Primitives
 .. autofunction:: pyro.module
 .. autofunction:: pyro.random_module
 .. autofunction:: pyro.factor
+.. autofunction:: pyro.deterministic
 
 .. autoclass:: pyro.plate
     :members:
@@ -18,3 +19,5 @@ Primitives
 .. autofunction:: pyro.enable_validation
 
 .. autofunction:: pyro.ops.jit.trace
+
+.. autofunction:: pyro.set_rng_seed

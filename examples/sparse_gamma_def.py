@@ -186,7 +186,7 @@ def main(args):
             if e.errno != errno.EEXIST:
                 raise
             pass
-        wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', dataset_path)
+        wget.download('https://d2hg8soec8ck9v.cloudfront.net/datasets/faces_training.csv', dataset_path)
     data = torch.tensor(np.loadtxt(dataset_path, delimiter=',')).float()
 
     sparse_gamma_def = SparseGammaDEF()
@@ -231,7 +231,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.4.1')
+    assert pyro.__version__.startswith('1.1.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1500, type=int, help='number of training epochs')
