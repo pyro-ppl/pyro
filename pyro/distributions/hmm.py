@@ -5,7 +5,6 @@ from pyro.distributions.torch import Categorical, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
-from pyro.ops.studentt import GaussianGamma, gaussian_gamma_tensordot
 
 
 def _logmatmulexp(x, y):
@@ -61,29 +60,6 @@ def _sequential_gaussian_tensordot(gaussian):
         contracted = gaussian_tensordot(x, y, state_dim)
         if time > even_time:
             contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
-        gaussian = contracted
-    return gaussian[..., 0]
-
-
-def _sequential_gaussian_gamma_tensordot(gaussian_gamma):
-    """
-    Integrates a GaussianGamma ``x`` whose rightmost batch dimension is time, computes::
-
-        x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
-    """
-    assert isinstance(gaussian_gamma, GaussianGamma)
-    assert gaussian_gamma.dim() % 2 == 0, "dim is not even"
-    batch_shape = gaussian_gamma.batch_shape[:-1]
-    state_dim = gaussian_gamma.dim() // 2
-    while gaussian_gamma.batch_shape[-1] > 1:
-        time = gaussian_gamma.batch_shape[-1]
-        even_time = time // 2 * 2
-        even_part = gaussian_gamma[..., :even_time]
-        x_y = even_part.reshape(batch_shape + (even_time // 2, 2))
-        x, y = x_y[..., 0], x_y[..., 1]
-        contracted = gaussian_gamma_tensordot(x, y, state_dim)
-        if time > even_time:
-            contracted = GaussianGamma.cat((contracted, gaussian_gamma[..., -1:]), dim=-1)
         gaussian = contracted
     return gaussian[..., 0]
 
