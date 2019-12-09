@@ -277,7 +277,7 @@ class GaussianGamma:
         return Gamma(self.log_normalizer + log_normalizer_tmp, alpha, beta)
 
 
-def mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=False):
+def mvt_to_gaussian_gamma(mvt, return_conditional=False):
     """
     Convert a MultivariateStudentT (MVT) distribution to a GaussianGamma.
 
@@ -287,8 +287,8 @@ def mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=False):
         p(x, s) ~ GaussianGamma(info_vec, precison, df / 2, df / 2)
 
     :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
-    :param bool skip_multiplier_prior: whether to skip the prior of `s`. If True, we return
-        p(x | s). Otherwise, we return p(x, s).
+    :param bool return_conditional: whether to return the conditional or the joint distribution.
+        If True, we return p(x | s). Otherwise, we return p(x, s).
     :return: A GaussianGamma object which is equivalent to the MVT when marginalized out the
         multiplier `s`.
     :rtype: ~pyro.ops.studentt.GaussianGamma
@@ -306,7 +306,7 @@ def mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=False):
     beta = 0.5 * (info_vec * mvt.loc).sum(-1)
     log_normalizer = -0.5 * n * math.log(2 * math.pi) - mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
 
-    if not skip_multiplier_prior:
+    if not return_conditional:
         # reparameterized version of alpha = beta = 0.5 dof
         half_df = 0.5 * mvt.df
         alpha = alpha - 1 + half_df
@@ -315,7 +315,7 @@ def mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=False):
     return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
 
 
-def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, skip_multiplier_prior=False):
+def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, return_conditional=False):
     """
     Convert a noisy affine function to a GaussianGamma. The noisy affine function is defined as::
 
@@ -323,8 +323,8 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, skip_multiplier_prior=False):
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
     :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
-    :param bool skip_multiplier_prior: whether to skip the prior of `s`. If True, we return
-        p(x | s). Otherwise, we return p(x, s).
+    :param bool return_conditional: whether to return the conditional or the joint distribution.
+        If True, we return p(x | s). Otherwise, we return p(x, s).
     :return: A GaussianGamma with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
     :rtype: ~pyro.ops.studentt.GaussianGamma
     """
@@ -336,7 +336,7 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, skip_multiplier_prior=False):
     matrix = matrix.expand(batch_shape + (x_dim, y_dim))
     mvt = mvt.expand(batch_shape)
 
-    y_gaussian_gamma = mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=skip_multiplier_prior)
+    y_gaussian_gamma = mvt_to_gaussian_gamma(mvt, return_conditional=return_conditional)
     P_yy = y_gaussian_gamma.precision
     neg_P_xy = matrix.matmul(P_yy)
     P_xy = -neg_P_xy
