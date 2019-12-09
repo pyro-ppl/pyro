@@ -455,9 +455,9 @@ class RobustHMM(TorchDistribution):
         self.df = initial_dist.df
         self._init = mvt_to_gaussian_gamma(initial_dist)
         self._trans = matrix_and_mvt_to_gaussian_gamma(transition_matrix, transition_dist,
-                                                       skip_multiplier_prior=True)
+                                                       return_conditional=True)
         self._obs = matrix_and_mvt_to_gaussian_gamma(observation_matrix, observation_dist,
-                                                     skip_multiplier_prior=True)
+                                                     return_conditional=True)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(RobustHMM, _instance)
