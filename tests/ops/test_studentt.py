@@ -205,10 +205,10 @@ def test_mvt_to_gaussian_gamma(sample_shape, batch_shape, dim):
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_mvt_to_gaussian_gamma_skip_multiplier_prior(sample_shape, batch_shape, dim):
+def test_mvt_to_gaussian_gamma_return_conditional(sample_shape, batch_shape, dim):
     mvt = random_mvt(batch_shape, dim)
     mvt.scale_tril = (mvt.covariance_matrix + 7 * torch.eye(dim)).cholesky()
-    g = mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=True)
+    g = mvt_to_gaussian_gamma(mvt, return_conditional=True)
     value = mvt.sample(sample_shape)
     s = torch.rand(sample_shape + batch_shape)
 
