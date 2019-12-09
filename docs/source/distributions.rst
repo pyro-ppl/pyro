@@ -210,6 +210,13 @@ Rejector
     :undoc-members:
     :show-inheritance:
 
+RobustHMM
+---------
+.. autoclass:: pyro.distributions.RobustHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SpanningTree
 ------------
 .. autoclass:: pyro.distributions.SpanningTree
@@ -293,6 +300,13 @@ ELUTransform
 LeakyReLUTransform
 ------------------
 .. autoclass:: pyro.distributions.transforms.LeakyReLUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LowerCholeskyAffine
+-------------------
+.. autoclass:: pyro.distributions.transforms.LowerCholeskyAffine
     :members:
     :undoc-members:
     :show-inheritance:

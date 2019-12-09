@@ -1,11 +1,15 @@
+import torch
+
+from pyro.distributions import Categorical
 from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.ops.indexing import Vindex
 from pyro.util import ignore_jit_warnings
 
 from .messenger import Messenger
 from .runtime import _ENUM_ALLOCATOR
 
 
-def _tmc_sample(msg):
+def _tmc_mixture_sample(msg):
     dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
 
     # find batch dims that aren't plate dims
@@ -16,43 +20,69 @@ def _tmc_sample(msg):
     batch_shape = tuple(batch_shape)
 
     # sample a batch
-    sample_shape = (num_samples,) if batch_shape == dist.batch_shape else ()
+    sample_shape = (num_samples,)
     fat_sample = dist(sample_shape=sample_shape)  # TODO thin before sampling
     assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
     assert any(d > 1 for d in fat_sample.shape)
 
-    fat_sample = fat_sample.unsqueeze(0) if not sample_shape else fat_sample
     target_shape = (num_samples,) + batch_shape + dist.event_shape
 
-    # forget particle IDs for all sample_shape dims
+    # if this site has any possible ancestors, sample ancestor indices uniformly
     thin_sample = fat_sample
-    while thin_sample.shape != target_shape:
+    if thin_sample.shape != target_shape:
 
-        for squashed_dim1, squashed_size1 in enumerate(thin_sample.shape):
-            if squashed_size1 > 1 and (target_shape[squashed_dim1] == 1 or squashed_dim1 == 0):
-                break
+        index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
+        squashed_dims = []
+        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
+            if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
+                # uniformly sample one ancestor per upstream particle population
+                ancestor_dist = Categorical(logits=torch.zeros((squashed_size,), device=thin_sample.device))
+                ancestor_index = ancestor_dist.sample(sample_shape=(num_samples,))
+                index[squashed_dim] = ancestor_index
+                squashed_dims.append(squashed_dim)
 
-        for squashed_dim2, squashed_size2 in zip(range(squashed_dim1+1, len(thin_sample.shape)),
-                                                 thin_sample.shape[squashed_dim1+1:]):
-            if squashed_size2 > 1 and target_shape[squashed_dim2] == 1:
-                break
-        else:
-            squashed_dim2 = len(thin_sample.shape)
+        thin_sample = Vindex(thin_sample)[tuple(index)]
+        for squashed_dim in squashed_dims:
+            thin_sample = thin_sample.unsqueeze(squashed_dim)
 
-        thin_sample = thin_sample.transpose(0, squashed_dim1)
+    assert thin_sample.shape == target_shape
+    return thin_sample
 
-        # don't squash plate or event dimensions
-        if squashed_dim2 >= len(target_shape) - len(dist.event_shape) or \
-                thin_sample.shape == target_shape:  # XXX not fully general?
-            continue
 
-        # permute dims to left if necessary
-        thin_sample = thin_sample.transpose(1, squashed_dim2)
+def _tmc_diagonal_sample(msg):
+    dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
 
-        thin_sample = thin_sample.diagonal(dim1=0, dim2=1).unsqueeze(-1)
+    # find batch dims that aren't plate dims
+    batch_shape = [1] * len(dist.batch_shape)
+    for f in msg["cond_indep_stack"]:
+        if f.vectorized:
+            batch_shape[f.dim] = f.size if f.size > 0 else dist.batch_shape[f.dim]
+    batch_shape = tuple(batch_shape)
 
-        # move particles to leftmost dim to mimic output shape of enumerate_support
-        thin_sample = thin_sample.permute((-2, -1,) + tuple(range(0, len(thin_sample.shape) - 2)))
+    # sample a batch
+    sample_shape = (num_samples,)
+    fat_sample = dist(sample_shape=sample_shape)  # TODO thin before sampling
+    assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
+    assert any(d > 1 for d in fat_sample.shape)
+
+    target_shape = (num_samples,) + batch_shape + dist.event_shape
+
+    # if this site has any ancestors, choose ancestors from diagonal approximation
+    thin_sample = fat_sample
+    if thin_sample.shape != target_shape:
+
+        index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
+        squashed_dims = []
+        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
+            if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
+                # diagonal approximation: identify particle indices across populations
+                ancestor_index = torch.arange(squashed_size, device=thin_sample.device)
+                index[squashed_dim] = ancestor_index
+                squashed_dims.append(squashed_dim)
+
+        thin_sample = Vindex(thin_sample)[tuple(index)]
+        for squashed_dim in squashed_dims:
+            thin_sample = thin_sample.unsqueeze(squashed_dim)
 
     assert thin_sample.shape == target_shape
     return thin_sample
@@ -65,15 +95,21 @@ def enumerate_site(msg):
         # Enumerate over the support of the distribution.
         value = dist.enumerate_support(expand=msg["infer"].get("expand", False))
     elif num_samples > 1 and not msg["infer"].get("expand", False):
-        value = _tmc_sample(msg)
-    elif num_samples > 1:
+        tmc_strategy = msg["infer"].get("tmc", "diagonal")
+        if tmc_strategy == "mixture":
+            value = _tmc_mixture_sample(msg)
+        elif tmc_strategy == "diagonal":
+            value = _tmc_diagonal_sample(msg)
+        else:
+            raise ValueError("{} not a valid TMC strategy".format(tmc_strategy))
+    elif num_samples > 1 and msg["infer"]["expand"]:
         # Monte Carlo sample the distribution.
         value = dist(sample_shape=(num_samples,))
     assert value.dim() == 1 + len(dist.batch_shape) + len(dist.event_shape)
     return value
 
 
-class EnumerateMessenger(Messenger):
+class EnumMessenger(Messenger):
     """
     Enumerates in parallel over discrete sample sites marked
     ``infer={"enumerate": "parallel"}``.
@@ -86,7 +122,7 @@ class EnumerateMessenger(Messenger):
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
-        super(EnumerateMessenger, self).__init__()
+        super(EnumMessenger, self).__init__()
 
     def __enter__(self):
         if self.first_available_dim is not None:
@@ -94,7 +130,7 @@ class EnumerateMessenger(Messenger):
         self._markov_depths = {}  # site name -> depth (nonnegative integer)
         self._param_dims = {}  # site name -> (enum dim -> unique id)
         self._value_dims = {}  # site name -> (enum dim -> unique id)
-        return super(EnumerateMessenger, self).__enter__()
+        return super(EnumMessenger, self).__enter__()
 
     @ignore_jit_warnings()
     def _pyro_sample(self, msg):

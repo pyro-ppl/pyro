@@ -1,11 +1,13 @@
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch import Categorical, MultivariateNormal
+from pyro.distributions.multivariate_studentt import MultivariateStudentT
+from pyro.distributions.torch import Categorical, Gamma, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
-from pyro.ops.studentt import GaussianGamma, gaussian_gamma_tensordot
+from pyro.ops.studentt import (GaussianGamma, gaussian_gamma_tensordot, mvt_to_gaussian_gamma,
+                               matrix_and_mvt_to_gaussian_gamma)
 
 
 def _logmatmulexp(x, y):
@@ -348,6 +350,14 @@ class GaussianHMM(TorchDistribution):
                                   validate_args=self._validate_args)
 
 
+def _precision_to_scale_tril(P):
+    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
+    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
+    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
+                               L_inv, upper=False)[0]
+    return L
+
+
 class RobustHMM(TorchDistribution):
     """
     Hidden Markov Model with the joint distribution of initial state, hidden
@@ -355,19 +365,20 @@ class RobustHMM(TorchDistribution):
     distribution along the line of references [2] and [3]. This adapts [1]
     to parallelize over time to achieve O(log(time)) parallel complexity.
 
-    Recall that to generate a sample `x` from StudentT(df, loc, scale) distribution,
-    first we sample `s` from Gamma(df/2, df/2) distribution, then we generate
-    `x` from `Gaussian(loc, s * precision)`, which we will denote as
-    `condition(StudentT(df, loc, scale) | s)`.
+    StudentT distribution can be seen as a scale mixture of gaussians with
+    mixing being a Gamma distribtion. To generate a sample `x` from
+    `StudentT(df, loc, scale)` distribution, first we sample `s` from
+    `Gamma(df/2, df/2)` distribution, then we generate `x` from
+    `Gaussian(loc, precision=s*precision)`.
 
     This RobustHMM class corresponds to the generative model::
 
         s = Gamma(df/2, df/2).sample()
-        z = condition(initial_distribution | s).sample()
+        z = initial_distribution.conditional(s).sample()
         x = []
         for t in range(num_events):
-            z = z @ transition_matrix + condition(transition_dist | s).sample()
-            x.append(z @ observation_matrix + condition(observation_dist | s).sample())
+            z = z @ transition_matrix + transition_dist.conditional(s).sample()
+            x.append(z @ observation_matrix + observation_dist.conditional(s).sample())
 
     The event_shape of this distribution includes time on the left::
 
@@ -397,21 +408,21 @@ class RobustHMM(TorchDistribution):
 
     :ivar int hidden_dim: The dimension of the hidden state.
     :ivar int obs_dim: The dimension of the observed state.
-    :param ~torch.distributions.MultivariateStudentT initial_dist: A distribution
+    :param MultivariateStudentT initial_dist: A distribution
         over initial states. This should have batch_shape broadcastable to
         ``self.batch_shape``.  This should have event_shape ``(hidden_dim,)``.
     :param ~torch.Tensor transition_matrix: A linear transformation of hidden
         state. This should have shape broadcastable to
         ``self.batch_shape + (num_steps, hidden_dim, hidden_dim)`` where the
         rightmost dims are ordered ``(old, new)``.
-    :param ~torch.distributions.MultivariateStudentT transition_dist: A process
+    :param MultivariateStudentT transition_dist: A process
         noise distribution. This should have batch_shape broadcastable to
         ``self.batch_shape + (num_steps,)``.  This should have event_shape
-        ``(hidden_dim,)``. This should hve the same degree of freedom as `initial_dist`.
+        ``(hidden_dim,)``. This should have the same degree of freedom as `initial_dist`.
     :param ~torch.Tensor observation_matrix: A linear transformation from hidden
         to observed state. This should have shape broadcastable to
         ``self.batch_shape + (num_steps, hidden_dim, obs_dim)``.
-    :param ~torch.distributions.MultivariateStudentT observation_dist: An observation
+    :param MultivariateStudentT observation_dist: An observation
         noise distribution. This should have batch_shape broadcastable to
         ``self.batch_shape + (num_steps,)``.
         This should have event_shape ``(obs_dim,)``. This should have the same degree
@@ -421,11 +432,11 @@ class RobustHMM(TorchDistribution):
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None):
-        assert isinstance(initial_dist, pyro.distributions.MultivariateStudentT)
+        assert isinstance(initial_dist, MultivariateStudentT)
         assert isinstance(transition_matrix, torch.Tensor)
-        assert isinstance(transition_dist, pyro.distributions.MultivariateStudentT)
+        assert isinstance(transition_dist, MultivariateStudentT)
         assert isinstance(observation_matrix, torch.Tensor)
-        assert isinstance(observation_dist, pyro.distributions.MultivariateStudentT)
+        assert isinstance(observation_dist, MultivariateStudentT)
         hidden_dim, obs_dim = observation_matrix.shape[-2:]
         assert initial_dist.event_shape == (hidden_dim,)
         assert transition_matrix.shape[-2:] == (hidden_dim, hidden_dim)
@@ -477,19 +488,18 @@ class RobustHMM(TorchDistribution):
         result = result.event_logsumexp()
 
         # Marginalize out multiplier.
-        result result.logsumexp
+        result = result.logsumexp()
         return result
 
     def filter(self, value):
         """
-        Compute posterior over final state given a sequence of observations.
+        Compute posteriors over the multiplier and the final state
+        given a sequence of observations.
 
         :param ~torch.Tensor value: A sequence of observations.
-        :return: A posterior
-            distribution over latent states at the final time step. ``result``
-            can then be used as ``initial_dist`` in a sequential Pyro model for
-            prediction.
-        :rtype: ~pyro.distributions.MultivariateStudentT
+        :return: A pair of posterior distributions over the multiplier and the latent
+            state at the final time step.
+        :rtype: a tuple of ~pyro.distributions.Gamma and MultivariateStudentT
         """
         # Combine observation and transition factors.
         logp = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
@@ -498,14 +508,22 @@ class RobustHMM(TorchDistribution):
         logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
 
         # Combine initial factor.
-        logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)
+        logp = gaussian_gamma_tensordot(self._init, logp, dims=self.hidden_dim)
 
-        # Convert to a distribution
-        precision = logp.precision
-        loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
-        # TODO: convert precision to scale_tril, double check the logic
-        return MultivariateStudentT(self.df, loc, precision_matrix=precision,
-                                    validate_args=self._validate_args)
+        # Posterior of the multiplier
+        alpha = logp.alpha - 0.5 * logp.dim() + 1
+        scale_tril = _precision_to_scale_tril(logp.precision)
+        u_scale_tril = logp.info_vec.matmul(scale_tril)
+        u_Pinv_u = u_scale_tril.pow(2).sum(-1)
+        beta = logp.beta - 0.5 * u_Pinv_u
+        mixing_post = Gamma(alpha, beta, validate_args=self._validate_args)
+
+        # Posterior of the final state
+        loc = u_scale_tril.matmul(scale_tril.transpose(-1, -2))
+        scale_tril = scale_tril * (beta / alpha).sqrt().unsqueeze(-1).unsqueeze(-1)
+        final_state_post = MultivariateStudentT(2 * alpha, loc, scale_tril,
+                                                validate_args=self._validate_args)
+        return mixing_post, final_state_post
 
 
 class GaussianMRF(TorchDistribution):
