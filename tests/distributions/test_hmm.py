@@ -9,7 +9,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.distributions.hmm import (_sequential_gaussian_gamma_tensordot,
                                     _sequential_gaussian_tensordot, _sequential_logmatmulexp)
-                                    
 from pyro.distributions.util import broadcast_shape
 from pyro.infer import TraceEnum_ELBO, config_enumerate
 from pyro.ops.gaussian import gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
