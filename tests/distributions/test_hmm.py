@@ -538,9 +538,12 @@ def test_robust_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, o
     # and then combine these using gaussian_gamma_tensordot().
     T = num_steps
     init = mvt_to_gaussian_gamma(init_dist)
-    trans = matrix_and_mvt_to_gaussian_gamma(trans_mat, trans_dist)
-    obs = matrix_and_mvt_to_gaussian_gamma(obs_mat, obs_mvn)
+    trans = matrix_and_mvt_to_gaussian_gamma(trans_mat, trans_dist,
+                                             return_conditional=True)
+    obs = matrix_and_mvt_to_gaussian_gamma(obs_mat, obs_mvn,
+                                           return_conditional=True)
 
+    print(trans.batch_shape, trans.alpha.shape)
     unrolled_trans = reduce(operator.add, [
         trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim)
         for t in range(T)

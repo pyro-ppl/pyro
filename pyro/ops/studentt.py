@@ -325,7 +325,8 @@ def mvt_to_gaussian_gamma(mvt, return_conditional=False):
     # Note that Gamma(1, 0).log_density is a constant function. In other works, with these values of
     # alpha, beta, we say that there is no prior for `s`. This is similar to Gaussian with zero
     # info_vec and zero precision.
-    alpha = 0.5 * torch.tensor(n, device=info_vec.device, dtype=info_vec.dtype)
+    alpha = torch.full(mvt.batch_shape, n / 2.0,
+                       device=info_vec.device, dtype=info_vec.dtype)
     beta = 0.5 * (info_vec * mvt.loc).sum(-1)
     log_normalizer = -0.5 * n * math.log(2 * math.pi) - mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
 
