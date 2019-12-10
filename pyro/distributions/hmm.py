@@ -350,14 +350,6 @@ class GaussianHMM(TorchDistribution):
                                   validate_args=self._validate_args)
 
 
-def _precision_to_scale_tril(P):
-    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
-    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
-                               L_inv, upper=False)[0]
-    return L
-
-
 class RobustHMM(TorchDistribution):
     """
     Hidden Markov Model with the joint distribution of initial state, hidden
@@ -452,7 +444,7 @@ class RobustHMM(TorchDistribution):
         super(RobustHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
-        self.df = initial_dist.df
+        self._df = initial_dist.df
         self._init = mvt_to_gaussian_gamma(initial_dist)
         self._trans = matrix_and_mvt_to_gaussian_gamma(transition_matrix, transition_dist,
                                                        return_conditional=True)
@@ -464,6 +456,7 @@ class RobustHMM(TorchDistribution):
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
+        new._df = self._df.expand(batch_shape)
         # We only need to expand one of the inputs, since batch_shape is determined
         # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
         # we expand only _init, which is applied only after _sequential_gaussian_tensordot().
@@ -505,25 +498,19 @@ class RobustHMM(TorchDistribution):
         logp = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
-        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+        logp = _sequential_gaussian_gamma_tensordot(logp.expand(logp.batch_shape))
 
         # Combine initial factor.
         logp = gaussian_gamma_tensordot(self._init, logp, dims=self.hidden_dim)
 
         # Posterior of the multiplier
-        alpha = logp.alpha - 0.5 * logp.dim() + 1
-        scale_tril = _precision_to_scale_tril(logp.precision)
-        u_scale_tril = logp.info_vec.matmul(scale_tril)
-        u_Pinv_u = u_scale_tril.pow(2).sum(-1)
-        beta = logp.beta - 0.5 * u_Pinv_u
-        mixing_post = Gamma(alpha, beta, validate_args=self._validate_args)
-
-        # Posterior of the final state
-        loc = u_scale_tril.matmul(scale_tril.transpose(-1, -2))
-        scale_tril = scale_tril * (beta / alpha).sqrt().unsqueeze(-1).unsqueeze(-1)
-        final_state_post = MultivariateStudentT(2 * alpha, loc, scale_tril,
-                                                validate_args=self._validate_args)
-        return mixing_post, final_state_post
+        final_state_post = logp.compound()
+        final_state_post._validate_args = self._validate_args
+        assert isinstance(final_state_post, MultivariateStudentT)
+        alpha = final_state_post.df / 2
+        beta = logp.beta - 0.5 * (final_state_post.loc * logp.info_vec).sum(-1)
+        multiplier_post = Gamma(alpha, beta, validate_args=self._validate_args)
+        return multiplier_post, final_state_post
 
 
 class GaussianMRF(TorchDistribution):
