@@ -13,23 +13,34 @@ class ReparamMessenger(Messenger):
     Reparametrizes each affected sample site into one or more auxiliary sample
     sites followed by a deterministic transformation [1].
 
-    To specify :class:`~pyro.distributions.reparameterize.Reparameterizer` s
-    either configure ``site["infer"]["reparam"] = my_reparameterizer`` for each
-    desired sample site or use :func:`~pyro.poutine.config_enumerate` .
-    Only to sites marked ``site["infer"]["reparam"] = ...`` will be affected.
+    To specify :class:`~pyro.distributions.reparameterize.Reparameterizer` s,
+    either pass a ``config`` dict to the constructor, configure
+    ``site["infer"]["reparam"] = my_reparameterizer`` for each desired sample
+    site, or use :func:`~pyro.poutine.config_enumerate` .
 
     See `available reparameterizers <distributions.html#reparameterizers>`_
 
     .. warning:: Reparameterizers are recursive; take care to avoid infinite
-        loops in your ``@infer_config`` filters.
+        loops in your ``config`` filters.
 
     [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
         "Automatic Reparameterisation of Probabilistic Programs"
         https://arxiv.org/pdf/1906.03028.pdf
+
+    :param dict config: Optional configuration mapping site name to
+        :class:`~pyro.distributions.reparameterize.Reparameterizer` object.
     """
+    def __init__(self, config=None):
+        super().__init__()
+        if config is None:
+            config = {}
+        self.config = config
+
     def _pyro_sample(self, msg):
         if msg["is_observed"]:
             return None
+        if msg["name"] in self.config:
+            msg["infer"]["reparam"] = self.config[msg["name"]]
         reparam = msg["infer"].get("reparam")
         if reparam is None:
             return None

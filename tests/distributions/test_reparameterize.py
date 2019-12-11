@@ -40,12 +40,7 @@ def test_normal(shape, Reparam):
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = normal_probe(value)
 
-    def config_fn(site):
-        if site["name"] == "x" and isinstance(site["fn"], dist.Normal):
-            return {"reparam": Reparam()}
-        return {}
-
-    reparam_model = poutine.reparam(poutine.infer_config(model, config_fn))
+    reparam_model = poutine.reparam(model, {"x": Reparam()})
     value = poutine.trace(reparam_model).get_trace().nodes["x"]["value"]
     actual_probe = normal_probe(value)
     assert_close(actual_probe, expected_probe, atol=0.05)
@@ -85,12 +80,7 @@ def test_stable(shape, Reparam):
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = stable_probe(value)
 
-    def config_fn(site):
-        if site["name"] == "x" and isinstance(site["fn"], dist.Stable):
-            return {"reparam": Reparam()}
-        return {}
-
-    reparam_model = poutine.reparam(poutine.infer_config(model, config_fn))
+    reparam_model = poutine.reparam(model, {"x": Reparam()})
     trace = poutine.trace(reparam_model).get_trace()
     if Reparam is StableReparameterizer:
         trace.compute_log_prob()  # smoke test only

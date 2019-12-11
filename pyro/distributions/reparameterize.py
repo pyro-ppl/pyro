@@ -66,7 +66,7 @@ class TrivialReparameterizer(Reparameterizer):
 class LocScaleReparameterizer(Reparameterizer):
     """
     Generic centering reparameterizer for distributions that are completely
-    spacified by parameters ``loc`` and ``scale``.
+    specified by parameters ``loc`` and ``scale``.
     """
     def get_dists(self, fn):
         loc = torch.zeros_like(fn.loc)

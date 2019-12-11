@@ -736,7 +736,7 @@ def test_reparam_stable():
         with pyro.plate("time2", len(data)):
             y = pyro.sample("y", dist.Stable(stability, obs_skew, scale, z),
                             infer={"reparam": StableReparameterizer()})
-            pyro.sample("z", dist.Poisson(y.abs()), obs=data)
+            pyro.sample("x", dist.Poisson(y.abs()), obs=data)
 
     guide = AutoDelta(model)
     svi = SVI(model, guide, optim.Adam({"lr": 0.01}), Trace_ELBO())
