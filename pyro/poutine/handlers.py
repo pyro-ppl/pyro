@@ -62,6 +62,7 @@ from .lift_messenger import LiftMessenger
 from .markov_messenger import MarkovMessenger
 from .mask_messenger import MaskMessenger
 from .plate_messenger import PlateMessenger  # noqa F403
+from .reparam_messenger import ReparamMessenger
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
@@ -84,6 +85,7 @@ _msngrs = [
     LiftMessenger,
     MarkovMessenger,
     MaskMessenger,
+    ReparamMessenger,
     ReplayMessenger,
     ScaleMessenger,
     SeedMessenger,
