@@ -1,4 +1,7 @@
 from collections import OrderedDict
+
+import torch
+
 from pyro.distributions.delta import Delta
 
 from .messenger import Messenger
@@ -30,8 +33,10 @@ class ReparamMessenger(Messenger):
         reparam = msg["infer"].get("reparam")
         if reparam is None:
             return None
+
         # Create auxiliary sites.
         new_fns = reparam.get_dists(msg["fn"])
+        assert isinstance(new_fns, OrderedDict)
         new_values = OrderedDict()
         for name, fn in new_fns.items():
             new_msg = msg.copy()
@@ -47,6 +52,10 @@ class ReparamMessenger(Messenger):
         # TODO(https://github.com/pyro-ppl/pyro/issues/2214) refactor to
         # use site type "deterministic" when it exists.
         value = reparam.transform_values(msg["fn"], new_values)
+        assert isinstance(value, torch.Tensor)
+        if getattr(msg["fn"], "_validation_enabled", False):
+            # Validate while the original msg["fn"] is known.
+            msg["fn"]._validate_sample(value)
         msg["value"] = value
         msg["fn"] = Delta(value, event_dim=msg["fn"].event_dim).mask(False)
         msg["is_observed"] = True
