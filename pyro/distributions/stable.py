@@ -15,12 +15,8 @@ def _unsafe_standard_stable(alpha, beta, V, W):
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
     # by Nolan [4]. This will fail if alpha is close to 1.
 
-    # Assume auxiliary noise is parameter-free.
-    assert V.shape == W.shape
-    assert not V.requires_grad
-    assert not W.requires_grad
-
     # Differentiably transform noise via parameters.
+    assert V.shape == W.shape
     inv_alpha = alpha.reciprocal()
     b = beta * (math.pi / 2 * alpha).tan()
     v = b.atan() + alpha * V

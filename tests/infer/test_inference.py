@@ -10,11 +10,14 @@ import pyro
 import pyro.contrib.gp.kernels as kernels
 import pyro.distributions as dist
 import pyro.optim as optim
+from pyro import poutine
+from pyro.distributions.stable import StableReparameterizer
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, EnergyDistance, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO,
-                        Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
-                        TraceTailAdaptive_ELBO, ReweightedWakeSleep)
+                        ReweightedWakeSleep, Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO,
+                        TraceMeanField_ELBO, TraceTailAdaptive_ELBO)
+from pyro.infer.autoguide import AutoDelta
 from pyro.infer.util import torch_item
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
@@ -712,3 +715,32 @@ def test_energy_distance_multivariate(prior_scale):
     scale_tril = pyro.param("scale_tril").detach()
     actual_cov = scale_tril @ scale_tril.t()
     assert_close(actual_cov, expected_cov, atol=0.2)
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+def test_reparam_stable():
+    data = dist.Poisson(torch.randn(8).exp()).sample()
+
+    @poutine.reparam()
+    def model():
+        stability = pyro.sample("stability", dist.Uniform(1., 2.))
+        trans_skew = pyro.sample("trans_skew", dist.Uniform(-1., 1.))
+        obs_skew = pyro.sample("obs_skew", dist.Uniform(-1., 1.))
+        scale = pyro.sample("scale", dist.Gamma(3, 1))
+
+        # We use separate plates because the .cumsum() op breaks independence.
+        with pyro.plate("time1", len(data)):
+            dz = pyro.sample("dz", dist.Stable(stability, trans_skew),
+                             infer={"reparam": StableReparameterizer()})
+        z = dz.cumsum(-1)
+        with pyro.plate("time2", len(data)):
+            y = pyro.sample("y", dist.Stable(stability, obs_skew, scale, z),
+                            infer={"reparam": StableReparameterizer()})
+            pyro.sample("z", dist.Poisson(y.abs()), obs=data)
+
+    guide = AutoDelta(model)
+    svi = SVI(model, guide, optim.Adam({"lr": 0.01}), Trace_ELBO())
+    for step in range(100):
+        loss = svi.step()
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}".format(step, loss))

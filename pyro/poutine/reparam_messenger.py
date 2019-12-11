@@ -17,6 +17,9 @@ class ReparamMessenger(Messenger):
 
     See `available reparameterizers <distributions.html#reparameterizers>`_
 
+    .. warning:: Reparameterizers are recursive; take care to avoid infinite
+        loops in your ``@infer_config`` filters.
+
     [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
         "Automatic Reparameterisation of Probabilistic Programs"
         https://arxiv.org/pdf/1906.03028.pdf
@@ -32,10 +35,11 @@ class ReparamMessenger(Messenger):
         new_values = OrderedDict()
         for name, fn in new_fns.items():
             new_msg = msg.copy()
-            new_msg["infer"] = new_msg["infer"].copy()
-            new_msg["infer"]["reparam"] = False
             new_msg["name"] = "{}_{}".format(msg["name"], name)
             new_msg["fn"] = fn
+            new_msg["cond_indep_stack"] = ()
+            new_msg["infer"] = new_msg["infer"].copy()
+            new_msg["infer"]["reparam"] = None
             apply_stack(new_msg)
             new_values[name] = new_msg["value"]
 
