@@ -81,9 +81,15 @@ class Stable(TorchDistribution):
     and :math:`\mu_0` = loc.
 
     This implements a reparametrized sampler :meth:`rsample` , but does not
-    implement :meth:`log_prob` . Use in inference is thus limited to
+    implement :meth:`log_prob` . Inference can be performed using either
     likelihood-free algorithms such as
-    :class:`~pyro.infer.energy_distance.EnergyDistance`.
+    :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
+    via the :func:`~pyro.poutine.handlers.reparam` handler with
+    :class:`~pyro.distributions.stable.StableReparameterizer` e.g.::
+
+        with poutine.reparam():
+            pyro.sample("x", Stable(stability, skew, scale, loc),
+                        infer={"reparam": StableReparameterizer()})
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
@@ -142,9 +148,11 @@ class Stable(TorchDistribution):
 
 class StableReparameterizer(Reparameterizer):
     """
-    Auxiliary variable reparameterizer for :class:`Stable` distributions.
+    Auxiliary variable reparameterizer for
+    :class:`~pyro.distributions.Stable` distributions.
 
-    This introduces two parameter-free samples sites with well-defined
+    This creates a pair of parameter-free auxiliary distributions
+    (``Uniform(-pi/2,pi/2)`` and ``Exponential(1)``) with well-defined
     ``.log_prob()`` methods, thereby permitting use of reparameterized stable
     distributions in likelihood-based inference algorithms.
     """

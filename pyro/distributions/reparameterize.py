@@ -71,7 +71,7 @@ class LocScaleReparameterizer(Reparameterizer):
     def get_dists(self, fn):
         loc = torch.zeros_like(fn.loc)
         scale = torch.ones_like(fn.scale)
-        new_fn = type(fn)(loc, scale)
+        new_fn = type(fn)(loc=loc, scale=scale)
         return OrderedDict([("centered", new_fn)])
 
     def transform_values(self, fn, values):
