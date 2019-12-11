@@ -16,7 +16,7 @@ class ReparamMessenger(Messenger):
     To specify :class:`~pyro.distributions.reparameterize.Reparameterizer` s,
     either pass a ``config`` dict to the constructor, configure
     ``site["infer"]["reparam"] = my_reparameterizer`` for each desired sample
-    site, or use :func:`~pyro.poutine.config_enumerate` .
+    site, or use :func:`~pyro.poutine.infer_config` .
 
     See `available reparameterizers <distributions.html#reparameterizers>`_
 

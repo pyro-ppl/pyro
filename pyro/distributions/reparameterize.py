@@ -21,6 +21,9 @@ class Reparameterizer(ABC):
                              for name, fn in reparam.get_dists(d))
         pyro.deterministic("x", reparam.transform_values(d, values))
 
+    To trigger use in Pyro models use the
+    :func:`~pyro.poutine.handlers.reparam` handler.
+
     [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
         "Automatic Reparameterisation of Probabilistic Programs"
         https://arxiv.org/pdf/1906.03028.pdf
