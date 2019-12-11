@@ -162,7 +162,7 @@ class StableReparameterizer(Reparameterizer):
             ("exponential", Exponential(one)),
         ])
 
-    def reparam_transform_values(self, fn, values):
+    def transform_values(self, fn, values):
         # Differentiably transform.
         x = _standard_stable(fn.stability, fn.skew,
                              values["uniform"], values["exponential"])
