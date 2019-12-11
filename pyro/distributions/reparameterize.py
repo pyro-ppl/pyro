@@ -28,21 +28,28 @@ class Reparameterizer(ABC):
     @abstractmethod
     def get_dists(self, fn):
         """
+        Constructs one or more auxiliary
+        :class:`~pyro.distribution.Distribution` s that will replace ``fn``.
+
         :param ~pyro.distributions.Distribution fn: A base distribution.
         :returns: An OrderedDict mapping name (suffix) to auxiliary distribution.
-        :rtype: OrderedDict
+        :rtype: ~collections.OrderedDict
         """
-        return OrderedDict([("trivial", fn)])
+        raise NotImplementedError
 
     @abstractmethod
     def transform_values(self, fn, values):
         """
+        Deterministically combines samples from the distributions returned by
+        :meth:`get_dists` into a single reparameterized sample from ``fn``.
+
         :param ~pyro.distributions.Distribution fn: A base distribution.
-        :param OrderedDict values:
+        :param ~collections.OrderedDict values: An OrderedDict mapping name (suffix) to
+            sample value drawn from corresponding auxiliary variable.
         :returns: A transformed value.
-        :rtype: Tensor
+        :rtype: ~torch.Tensor
         """
-        return values["trivial"]
+        raise NotImplementedError
 
 
 class TrivialReparameterizer(Reparameterizer):
