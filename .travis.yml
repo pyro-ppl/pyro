@@ -16,6 +16,7 @@ addons:
             - gcc-8
             - g++-8
             - ninja-build
+            - graphviz  # for sphinx docs
 
 cache:
     directories:

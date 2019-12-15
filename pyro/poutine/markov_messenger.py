@@ -69,7 +69,7 @@ class MarkovMessenger(ReentrantMessenger):
         # We use a Counter rather than a set here so that sites can correctly
         # go out of scope when any one of their markov contexts exits.
         # This accounting can be done by users of these fields,
-        # e.g. EnumerateMessenger.
+        # e.g. EnumMessenger.
         infer = msg["infer"]
         scope = infer.setdefault("_markov_scope", Counter())  # site name -> markov depth
         for pos in range(max(0, self._pos - self.history), self._pos + 1):

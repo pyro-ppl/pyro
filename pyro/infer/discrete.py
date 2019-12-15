@@ -9,7 +9,7 @@ from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.ops.contract import contract_tensor_tree
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MapRing, SampleRing
-from pyro.poutine.enumerate_messenger import EnumerateMessenger
+from pyro.poutine.enum_messenger import EnumMessenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import jit_iter
@@ -38,7 +38,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
     # For internal use by infer_discrete.
 
     # Create an enumerated trace.
-    with poutine.block(), EnumerateMessenger(first_available_dim):
+    with poutine.block(), EnumMessenger(first_available_dim):
         enum_trace = poutine.trace(model).get_trace(*args, **kwargs)
     enum_trace = prune_subsample_sites(enum_trace)
     enum_trace.compute_log_prob()
@@ -208,9 +208,9 @@ class TraceEnumSample_ELBO(TraceEnum_ELBO):
                            first_available_dim=-2)(*args, **kwargs)
 
     """
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         model_trace, guide_trace = super(TraceEnumSample_ELBO, self)._get_trace(
-            model, guide, *args, **kwargs)
+            model, guide, args, kwargs)
 
         # Mark all sample sites with require_backward to gather enumerated
         # sites and adjust cond_indep_stack of all sample sites.

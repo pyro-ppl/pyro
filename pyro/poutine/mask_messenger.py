@@ -7,12 +7,13 @@ from .messenger import Messenger
 
 class MaskMessenger(Messenger):
     """
-    This messenger masks sample sites.
+    Given a stochastic function with some batched sample statements and
+    masking tensor, mask out some of the sample statements elementwise.
 
-    This is typically used for masking out parts of tensors.
-
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param torch.BoolTensor mask: a ``{0,1}``-valued masking tensor
         (1 includes a site, 0 excludes a site)
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.MaskMessenger`
     """
     def __init__(self, mask):
         if isinstance(mask, torch.Tensor):

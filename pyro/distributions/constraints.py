@@ -12,7 +12,7 @@ class IndependentConstraint(Constraint):
     independent entries are valid.
 
     :param torch.distributions.constraints.Constraint base_constraint: A base
-        constraint whose entries are incidentally indepenent.
+        constraint whose entries are incidentally independent.
     :param int reinterpreted_batch_ndims: The number of extra event dimensions that will
         be considered dependent.
     """

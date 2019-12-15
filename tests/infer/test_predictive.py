@@ -119,3 +119,30 @@ def test_shapes(parallel):
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape
+
+
+@pytest.mark.parametrize("with_plate", [True, False])
+@pytest.mark.parametrize("event_shape", [(), (2,)])
+def test_deterministic(with_plate, event_shape):
+    def model(y=None):
+        with pyro.util.optional(pyro.plate("plate", 3), with_plate):
+            x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
+            x2 = pyro.deterministic("x2", x ** 2, event_dim=len(event_shape))
+
+        pyro.deterministic("x3", x2)
+        return pyro.sample("obs", dist.Normal(x2, 0.1).to_event(), obs=y)
+
+    y = torch.tensor(4.)
+    guide = AutoDiagonalNormal(model)
+    svi = SVI(model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
+    for i in range(100):
+        svi.step(y)
+
+    actual = Predictive(model, guide=guide, return_sites=["x2", "x3"], num_samples=1000)()
+    x2_batch_shape = (3,) if with_plate else ()
+    assert actual["x2"].shape == (1000,) + x2_batch_shape + event_shape
+    # x3 shape is prepended 1 to match Pyro shape semantics
+    x3_batch_shape = (1, 3) if with_plate else ()
+    assert actual["x3"].shape == (1000,) + x3_batch_shape + event_shape
+    assert_close(actual["x2"].mean(), y, rtol=0.1)
+    assert_close(actual["x3"].mean(), y, rtol=0.1)

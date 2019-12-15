@@ -14,6 +14,7 @@ from pyro.distributions.hmm import DiscreteHMM, GaussianHMM, GaussianMRF
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJCorrCholesky
 from pyro.distributions.mixture import MaskedMixture
+from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
@@ -28,7 +29,8 @@ from pyro.distributions.unit import Unit
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
-from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
+from pyro.distributions.zero_inflated import (ZeroInflatedDistribution, ZeroInflatedPoisson,
+                                              ZeroInflatedNegativeBinomial)
 
 from . import constraints, kl, transforms
 
@@ -54,6 +56,7 @@ __all__ = [
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",
+    "MultivariateStudentT",
     "OMTMultivariateNormal",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
@@ -66,6 +69,8 @@ __all__ = [
     "VonMises",
     "VonMises3D",
     "ZeroInflatedPoisson",
+    "ZeroInflatedNegativeBinomial",
+    "ZeroInflatedDistribution",
     "constraints",
     "enable_validation",
     "is_validation_enabled",

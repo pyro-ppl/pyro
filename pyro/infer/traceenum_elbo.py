@@ -17,7 +17,7 @@ from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
 from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
 from pyro.ops.rings import SampleRing
-from pyro.poutine.enumerate_messenger import EnumerateMessenger
+from pyro.poutine.enum_messenger import EnumMessenger
 from pyro.util import check_traceenum_requirements, ignore_jit_warnings, warn_if_nan
 
 
@@ -286,13 +286,13 @@ class TraceEnum_ELBO(ELBO):
     variables inside that :class:`~pyro.plate`.
     """
 
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         """
         Returns a single trace from the guide, and the model that is run
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, args, kwargs)
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
@@ -313,13 +313,13 @@ class TraceEnum_ELBO(ELBO):
         model_trace.pack_tensors(guide_trace.plate_to_symbol)
         return model_trace, guide_trace
 
-    def _get_traces(self, model, guide, *args, **kwargs):
+    def _get_traces(self, model, guide, args, kwargs):
         """
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
         if self.max_plate_nesting == float('inf'):
-            self._guess_max_plate_nesting(model, guide, *args, **kwargs)
+            self._guess_max_plate_nesting(model, guide, args, kwargs)
         if self.vectorize_particles:
             guide = self._vectorized_num_particles(guide)
             model = self._vectorized_num_particles(model)
@@ -327,8 +327,8 @@ class TraceEnum_ELBO(ELBO):
         # Enable parallel enumeration over the vectorized guide and model.
         # The model allocates enumeration dimensions after (to the left of) the guide,
         # accomplished by preserving the _ENUM_ALLOCATOR state after the guide call.
-        guide_enum = EnumerateMessenger(first_available_dim=-1 - self.max_plate_nesting)
-        model_enum = EnumerateMessenger()  # preserve _ENUM_ALLOCATOR state
+        guide_enum = EnumMessenger(first_available_dim=-1 - self.max_plate_nesting)
+        model_enum = EnumMessenger()  # preserve _ENUM_ALLOCATOR state
         guide = guide_enum(guide)
         model = model_enum(model)
 
@@ -339,7 +339,7 @@ class TraceEnum_ELBO(ELBO):
         for i in range(1 if self.vectorize_particles else self.num_particles):
             q.put(poutine.Trace())
             while not q.empty():
-                yield self._get_trace(model, guide, *args, **kwargs)
+                yield self._get_trace(model, guide, args, kwargs)
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -349,7 +349,7 @@ class TraceEnum_ELBO(ELBO):
         Estimates the ELBO using ``num_particles`` many samples (particles).
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
                 continue
@@ -372,7 +372,7 @@ class TraceEnum_ELBO(ELBO):
         as underlying derivatives have been implemented).
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
                 continue
@@ -396,7 +396,7 @@ class TraceEnum_ELBO(ELBO):
         Performs backward on the ELBO of each particle.
         """
         elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
                 continue
@@ -426,7 +426,7 @@ class TraceEnum_ELBO(ELBO):
         if self.num_particles != 1:
             raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
                                       "compatible with multiple particles.")
-        model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
+        model_trace, guide_trace = next(self._get_traces(model, guide, args, kwargs))
         for site in guide_trace.nodes.values():
             if site["type"] == "sample":
                 if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
@@ -443,7 +443,7 @@ class TraceEnum_ELBO(ELBO):
                                       "compatible with multiple particles.")
         with poutine.block(), warnings.catch_warnings():
             warnings.filterwarnings("ignore", "Found vars in model but not guide")
-            model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
+            model_trace, guide_trace = next(self._get_traces(model, guide, args, kwargs))
 
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
@@ -484,7 +484,7 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
                 kwargs.pop('_guide_id')
                 self = weakself()
                 elbo = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
                     elbo = elbo + _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 
