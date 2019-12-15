@@ -26,7 +26,6 @@ Welcome to Pyro Examples and Tutorials!
    jit
    minipyro
    effect_handlers
-   elections
 
 .. toctree::
    :maxdepth: 2
@@ -54,6 +53,7 @@ Welcome to Pyro Examples and Tutorials!
    RSA-hyperbole
    ekf
    working_memory
+   elections
    dirichlet_process_mixture
 
 .. toctree::
@@ -61,6 +61,7 @@ Welcome to Pyro Examples and Tutorials!
    :caption: Code Examples:
 
    capture_recapture
+   cevae
    hmm
    lda
    mcmc
