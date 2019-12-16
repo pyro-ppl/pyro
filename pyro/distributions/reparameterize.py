@@ -3,6 +3,8 @@ from collections import OrderedDict
 
 import torch
 
+from pyro.distributions.util import is_identically_one, is_identically_zero, is_validation_enabled
+
 
 class Reparameterizer(ABC):
     """
@@ -68,14 +70,53 @@ class TrivialReparameterizer(Reparameterizer):
 
 class LocScaleReparameterizer(Reparameterizer):
     """
-    Generic centering reparameterizer for distributions that are completely
-    specified by parameters ``loc`` and ``scale``.
+    Generic decentering reparameterizer for distributions that are specified by
+    parameters ``loc`` and ``scale`` (and possibly additional
+    ``shape_params``). This can be combined with :func:`pyro.param` to learn a
+    centering transform::
+
+        x_centered = pyro.param("x_centered", 0.5,
+                                constraint=constraints.unit_interval)
+        pyro.sample("x", dist.StudentT(df, loc, scale),
+                    infer={"reparam": LocScaleReparameterizer(x_centered,
+                                                              shape_params=["df"])})
+
+    :param float centered: in ``[0,1]``. If 0 (default), fully decenter the
+        distribution; if 1, preserve the centered distribution unchanged.
+    :param shape_params: list of additional parameter names to copy unchanged from
+        the centered to decentered distribution.
+    :type shape_params: tuple or list
     """
+    def __init__(self, centered=0.0, shape_params=()):
+        assert isinstance(centered, (float, torch.Tensor))
+        assert isinstance(shape_params, (tuple, list))
+        assert all(isinstance(name, str) for name in shape_params)
+        if is_validation_enabled():
+            if isinstance(centered, float):
+                assert 0 <= centered and centered <= 1
+            else:
+                assert (0 <= centered).all()
+                assert (centered <= 1).all()
+        self.centered = centered
+        self.shape_params = shape_params
+
     def get_dists(self, fn):
-        loc = torch.zeros_like(fn.loc)
-        scale = torch.ones_like(fn.scale)
+        if is_identically_one(self.centered):
+            return OrderedDict()
+        if is_identically_zero(self.centered):
+            loc = torch.zeros_like(fn.loc)
+            scale = torch.ones_like(fn.scale)
+        else:
+            loc = fn.loc * self.centered
+            scale = fn.scale ** self.centered
         new_fn = type(fn)(loc=loc, scale=scale)
-        return OrderedDict([("centered", new_fn)])
+        return OrderedDict([("decentered", new_fn)])
 
     def transform_values(self, fn, values):
-        return fn.loc + fn.scale * values["centered"]
+        if is_identically_one(self.centered):
+            return fn
+        elif is_identically_zero(self.centered):
+            return fn.loc + fn.scale * values["decentered"]
+        else:
+            delta = values["decentered"] - self.centered * fn.loc
+            return fn.loc + fn.scale.pow(1 - self.centered) * delta
