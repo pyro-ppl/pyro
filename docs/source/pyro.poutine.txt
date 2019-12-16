@@ -110,6 +110,14 @@ ___________________
     :undoc-members:
     :show-inheritance:
 
+ReparamMessenger
+________________
+
+.. automodule:: pyro.poutine.reparam_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ReplayMessenger
 ________________
 
