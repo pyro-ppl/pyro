@@ -3260,9 +3260,9 @@ def test_multi_dependence_enumeration():
     """
     K = 5
     d = 2
-    N_obs = 100
+    N_obs = 3
 
-    @infer.config_enumerate
+    @config_enumerate
     def model(N=1):
         with pyro.plate('data_plate', N, dim=-2):
             mixing_weights = pyro.param('pi', torch.ones(K) / K, constraint=constraints.simplex)
