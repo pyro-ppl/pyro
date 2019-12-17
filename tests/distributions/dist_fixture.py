@@ -143,11 +143,11 @@ class Fixture(object):
 def tensor_wrap(*args, **kwargs):
     tensor_list, tensor_map = [], {}
     for arg in args:
-        wrapped_arg = torch.tensor(arg) if (isinstance(arg, list) or isinstance(arg, float)) else arg
+        wrapped_arg = torch.tensor(arg) if isinstance(arg, list) else arg
         tensor_list.append(wrapped_arg)
     for k in kwargs:
         kwarg = kwargs[k]
-        wrapped_kwarg = torch.tensor(kwarg) if (isinstance(kwarg, list) or isinstance(kwarg, float)) else kwarg
+        wrapped_kwarg = torch.tensor(kwarg) if isinstance(kwarg, list) else kwarg
         tensor_map[k] = wrapped_kwarg
     if args and not kwargs:
         return tensor_list
