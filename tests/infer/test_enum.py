@@ -3253,8 +3253,8 @@ def test_vectorized_importance(num_samples):
 
 def test_multi_dependence_enumeration():
     """
-    This test verifes whether enumeration works correctly in the case where multiple downstream
-    variables are coupled to the same random discrite variable.
+    This test checks whether enumeration works correctly in the case where multiple downstream
+    variables are coupled to the same random discrete variable.
     This is based on [issue 2223](https://github.com/pyro-ppl/pyro/issues/2223), and should
     pass when it has been resolved
     """
