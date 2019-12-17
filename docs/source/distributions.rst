@@ -175,6 +175,13 @@ MixtureOfDiagNormalsSharedCovariance
     :undoc-members:
     :show-inheritance:
 
+MultivariateStudentT
+--------------------
+.. autoclass:: pyro.distributions.MultivariateStudentT
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 OMTMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.OMTMultivariateNormal
@@ -245,6 +252,20 @@ ZeroInflatedPoisson
     :undoc-members:
     :show-inheritance:
 
+ZeroInflatedNegativeBinomial
+----------------------------
+.. autoclass:: pyro.distributions.ZeroInflatedNegativeBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ZeroInflatedDistribution
+------------------------
+.. autoclass:: pyro.distributions.ZeroInflatedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Transforms
 ~~~~~~~~~~
 
@@ -272,6 +293,13 @@ ELUTransform
 LeakyReLUTransform
 ------------------
 .. autoclass:: pyro.distributions.transforms.LeakyReLUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LowerCholeskyAffine
+-------------------
+.. autoclass:: pyro.distributions.transforms.LowerCholeskyAffine
     :members:
     :undoc-members:
     :show-inheritance:

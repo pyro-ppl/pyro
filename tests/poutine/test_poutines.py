@@ -846,3 +846,19 @@ def test_pickling(wrapper):
     assert tuple(actual_trace) == tuple(expected_trace.nodes)
     assert_close([actual_trace.nodes[site]['value'] for site in actual_trace.stochastic_nodes],
                  [expected_trace.nodes[site]['value'] for site in expected_trace.stochastic_nodes])
+
+
+def test_arg_kwarg_error():
+
+    def model():
+        pyro.param("p", torch.zeros(1, requires_grad=True))
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])),
+                    infer={"enumerate": "parallel"})
+        pyro.sample("b", Bernoulli(torch.tensor([0.5])))
+
+    with pytest.raises(ValueError, match="not callable"):
+        with poutine.mask(False):
+            model()
+
+    with poutine.mask(mask=False):
+        model()

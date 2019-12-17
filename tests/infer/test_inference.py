@@ -1,3 +1,4 @@
+import logging
 import math
 from unittest import TestCase
 
@@ -6,15 +7,18 @@ import torch
 from torch.distributions import constraints
 
 import pyro
+import pyro.contrib.gp.kernels as kernels
 import pyro.distributions as dist
 import pyro.optim as optim
-import pyro.contrib.gp.kernels as kernels
-from pyro.infer.util import torch_item
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO, Trace_MMD)
-from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
+from pyro.infer import (SVI, EnergyDistance, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO,
+                        Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
+                        TraceTailAdaptive_ELBO, ReweightedWakeSleep)
+from pyro.infer.util import torch_item
+from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
+
+logger = logging.getLogger(__name__)
 
 
 def param_mse(name, target):
@@ -64,6 +68,12 @@ class NormalNormalTests(TestCase):
 
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3))
+
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 2500, ReweightedWakeSleep(num_particles=3))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 7500, ReweightedWakeSleep(num_particles=3))
 
     def test_mmd_vectorized(self):
         z_size = self.loc0.shape[0]
@@ -263,6 +273,12 @@ class PoissonGammaTests(TestCase):
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 12500, RenyiELBO(alpha=0.2, num_particles=2))
 
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 12500, ReweightedWakeSleep(num_particles=2))
+
     def test_mmd_vectorized(self):
         z_size = 1
         self.do_fit_prior_test(
@@ -339,10 +355,10 @@ class PoissonGammaTests(TestCase):
                 beta_error = param_mse("beta_q", self.beta0)
                 with torch.no_grad():
                     if k == 0:
-                        avg_loglikelihood, avg_penalty = loss._differentiable_loss_parts(model, guide)
+                        avg_loglikelihood, avg_penalty = loss._differentiable_loss_parts(model, guide, (), {})
                         avg_loglikelihood = torch_item(avg_loglikelihood)
                         avg_penalty = torch_item(avg_penalty)
-                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide)
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide, (), {})
                     avg_loglikelihood = alpha * avg_loglikelihood + (1-alpha) * torch_item(loglikelihood)
                     avg_penalty = alpha * avg_penalty + (1-alpha) * torch_item(penalty)
                 if k % 100 == 0:
@@ -365,6 +381,7 @@ class PoissonGammaTests(TestCase):
     TraceGraph_ELBO,
     TraceEnum_ELBO,
     RenyiELBO,
+    ReweightedWakeSleep
 ])
 @pytest.mark.parametrize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
@@ -398,6 +415,11 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
     if elbo_impl is RenyiELBO:
         elbo = elbo_impl(alpha=0.2, num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
+    elif elbo_impl is ReweightedWakeSleep:
+        if gamma_dist is ShapeAugmentedGamma:
+            pytest.xfail(reason="ShapeAugmentedGamma not suported for ReweightedWakeSleep")
+        else:
+            elbo = elbo_impl(num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     else:
         elbo = elbo_impl(max_plate_nesting=1, strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo)
@@ -459,6 +481,20 @@ class BernoulliBetaTests(TestCase):
     def test_renyi_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
                                                  max_plate_nesting=1))
+
+    def test_rws_reparameterized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_nonreparameterized(self):
+        self.do_elbo_test(False, 5000, ReweightedWakeSleep(num_particles=2))
+
+    def test_rws_reparameterized_vectorized(self):
+        self.do_elbo_test(True, 5000, ReweightedWakeSleep(num_particles=2, vectorize_particles=True,
+                                                          max_plate_nesting=1))
+
+    def test_rws_nonreparameterized_vectorized(self):
+        self.do_elbo_test(False, 5000, ReweightedWakeSleep(num_particles=2, vectorize_particles=True,
+                                                           max_plate_nesting=1))
 
     def test_mmd_vectorized(self):
         z_size = 1
@@ -606,3 +642,73 @@ class SafetyTests(TestCase):
 
         with pytest.raises(RuntimeError):
             svi.step()
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.parametrize("prior_scale", [0, 1e-4])
+def test_energy_distance_univariate(prior_scale):
+
+    def model(data):
+        loc = pyro.sample("loc", dist.Normal(0, 100))
+        scale = pyro.sample("scale", dist.LogNormal(0, 1))
+        with pyro.plate("data", len(data)):
+            pyro.sample("obs", dist.Normal(loc, scale), obs=data)
+
+    def guide(data):
+        loc_loc = pyro.param("loc_loc", torch.tensor(0.))
+        loc_scale = pyro.param("loc_scale", torch.tensor(1.),
+                               constraint=constraints.positive)
+        log_scale_loc = pyro.param("log_scale_loc", torch.tensor(0.))
+        log_scale_scale = pyro.param("log_scale_scale", torch.tensor(1.),
+                                     constraint=constraints.positive)
+        pyro.sample("loc", dist.Normal(loc_loc, loc_scale))
+        pyro.sample("scale", dist.LogNormal(log_scale_loc, log_scale_scale))
+
+    data = 10.0 + torch.randn(8)
+    adam = optim.Adam({"lr": 0.1})
+    loss_fn = EnergyDistance(num_particles=32, prior_scale=prior_scale)
+    svi = SVI(model, guide, adam, loss_fn)
+    for step in range(2001):
+        loss = svi.step(data)
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}, loc = {:0.4g}, scale = {:0.4g}"
+                        .format(step, loss, pyro.param("loc_loc").item(),
+                                pyro.param("log_scale_loc").exp().item()))
+
+    expected_loc = data.mean()
+    expected_scale = data.std()
+    actual_loc = pyro.param("loc_loc").detach()
+    actual_scale = pyro.param("log_scale_loc").exp().detach()
+    assert_close(actual_loc, expected_loc, atol=0.05)
+    assert_close(actual_scale, expected_scale, rtol=0.1 if prior_scale else 0.05)
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.parametrize("prior_scale", [0, 1])
+def test_energy_distance_multivariate(prior_scale):
+
+    def model(data):
+        loc = torch.zeros(2)
+        cov = pyro.sample("cov", dist.Normal(0, 100).expand([2, 2]).to_event(2))
+        with pyro.plate("data", len(data)):
+            pyro.sample("obs", dist.MultivariateNormal(loc, cov), obs=data)
+
+    def guide(data):
+        scale_tril = pyro.param("scale_tril", torch.eye(2),
+                                constraint=constraints.lower_cholesky)
+        pyro.sample("cov", dist.Delta(scale_tril @ scale_tril.t(), event_dim=2))
+
+    cov = torch.tensor([[1, 0.8], [0.8, 1]])
+    data = dist.MultivariateNormal(torch.zeros(2), cov).sample([10])
+    loss_fn = EnergyDistance(num_particles=32, prior_scale=prior_scale)
+    svi = SVI(model, guide, optim.Adam({"lr": 0.1}), loss_fn)
+    for step in range(2001):
+        loss = svi.step(data)
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+    delta = data - data.mean(0)
+    expected_cov = (delta.t() @ delta) / len(data)
+    scale_tril = pyro.param("scale_tril").detach()
+    actual_cov = scale_tril @ scale_tril.t()
+    assert_close(actual_cov, expected_cov, atol=0.2)

@@ -114,5 +114,5 @@ In your PR, please include:
 - Tests
 - Dependencies
 
-Please add the `awaiting review` tag and add any of the core Pyro contributors as reviewers.
-For speculative changes meant for early-stage review, add the `WIP` tag.
+For speculative changes meant for early-stage review, include `[WIP]` in the PR's title. 
+(One of the maintainers will add the `WIP` tag.)

@@ -255,6 +255,11 @@ continuous_dists = [
                 {'stability': [1.5], 'skew': 0.1, 'test_data': [-10.]},
                 {'stability': [1.5], 'skew': 0.1, 'scale': 2.0, 'loc': -2.0, 'test_data': [10.]},
                 ]),
+    Fixture(pyro_dist=dist.MultivariateStudentT,
+            examples=[
+                {'df': 1.5, 'loc': [0.2, 0.3], 'scale_tril': [[0.8, 0.0], [1.3, 0.4]],
+                 'test_data': [-3., 2]},
+                ]),
 ]
 
 discrete_dists = [
