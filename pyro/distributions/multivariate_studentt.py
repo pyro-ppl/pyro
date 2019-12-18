@@ -2,7 +2,7 @@ import math
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all, lazy_property
+from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch import Chi2
 from pyro.distributions.torch_distribution import TorchDistribution
