@@ -204,5 +204,7 @@ def setup(app):
 
 
 # @jpchen's hack to get rtd builder to install latest pytorch
+# See similar line in the install section of .travis.yml
 if 'READTHEDOCS' in os.environ:
-    os.system('pip install torch==1.3.0+cpu -f https://download.pytorch.org/whl/torch_stable.html')
+    os.system('pip install torch==1.3.0+cpu torchvision==0.4.0+cpu '
+              '-f https://download.pytorch.org/whl/torch_stable.html')
