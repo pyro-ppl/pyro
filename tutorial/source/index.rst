@@ -54,6 +54,7 @@ Welcome to Pyro Examples and Tutorials!
    ekf
    working_memory
    elections
+   dirichlet_process_mixture
 
 .. toctree::
    :maxdepth: 2
