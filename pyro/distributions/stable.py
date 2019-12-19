@@ -1,26 +1,24 @@
 import math
+from collections import OrderedDict
 
 import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
+from pyro.distributions.reparameterize import Reparameterizer
+from pyro.distributions.torch import Exponential, Uniform
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
-def _unsafe_standard_stable(shape, alpha, beta):
+def _unsafe_standard_stable(alpha, beta, V, W):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
     # by Nolan [4]. This will fail if alpha is close to 1.
 
-    # Draw parameter-free noise.
-    with torch.no_grad():
-        half_pi = math.pi / 2
-        V = alpha.new_empty(shape).uniform_(-half_pi, half_pi)
-        W = alpha.new_empty(shape).exponential_()
-
     # Differentiably transform noise via parameters.
+    assert V.shape == W.shape
     inv_alpha = alpha.reciprocal()
-    b = beta * (half_pi * alpha).tan()
+    b = beta * (math.pi / 2 * alpha).tan()
     v = b.atan() + alpha * V
     Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
         * ((v - V).cos() / W).pow(inv_alpha - 1)
@@ -35,16 +33,26 @@ def _unsafe_standard_stable(shape, alpha, beta):
 RADIUS = 0.01
 
 
-def _standard_stable(shape, alpha, beta):
+def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
+    """
+    Differentiably transform two random variables::
+
+        aux_uniform ~ Uniform(-pi/2, pi/2)
+        aux_exponential ~ Exponential(1)
+
+    to a standard ``Stable(alpha, beta)`` random variable.
+    """
+    # Determine whether a hole workaround is needed.
     with torch.no_grad():
         hole = 1.
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
-        return _unsafe_standard_stable(shape, alpha, beta)
+        return _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
 
     # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
-    shape_ = shape + (1,)
+    aux_uniform_ = aux_uniform.unsqueeze(-1)
+    aux_exponential_ = aux_exponential.unsqueeze(-1)
     beta_ = beta.unsqueeze(-1)
     alpha_ = alpha.unsqueeze(-1).expand(alpha.shape + (2,)).contiguous()
     with torch.no_grad():
@@ -58,7 +66,7 @@ def _standard_stable(shape, alpha, beta):
         #              2 * RADIUS
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
-    pairs = _unsafe_standard_stable(shape_, alpha_, beta_)
+    pairs = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
     return (pairs * weights).sum(-1)
 
 
@@ -73,9 +81,15 @@ class Stable(TorchDistribution):
     and :math:`\mu_0` = loc.
 
     This implements a reparametrized sampler :meth:`rsample` , but does not
-    implement :meth:`log_prob` . Use in inference is thus limited to
+    implement :meth:`log_prob` . Inference can be performed using either
     likelihood-free algorithms such as
-    :class:`~pyro.infer.energy_distance.EnergyDistance`.
+    :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
+    via the :func:`~pyro.poutine.handlers.reparam` handler with
+    :class:`~pyro.distributions.stable.StableReparameterizer` e.g.::
+
+        with poutine.reparam():
+            pyro.sample("x", Stable(stability, skew, scale, loc),
+                        infer={"reparam": StableReparameterizer()})
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
@@ -120,6 +134,40 @@ class Stable(TorchDistribution):
         raise NotImplementedError("Stable.log_prob() is not implemented")
 
     def rsample(self, sample_shape=torch.Size()):
-        shape = self._extended_shape(sample_shape)
-        x = _standard_stable(shape, self.stability, self.skew)
+        # Draw parameter-free noise.
+        with torch.no_grad():
+            shape = self._extended_shape(sample_shape)
+            new_empty = self.stability.new_empty
+            aux_uniform = new_empty(shape).uniform_(-math.pi / 2, math.pi / 2)
+            aux_exponential = new_empty(shape).exponential_()
+
+        # Differentiably transform.
+        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential)
         return self.loc + self.scale * x
+
+
+class StableReparameterizer(Reparameterizer):
+    """
+    Auxiliary variable reparameterizer for
+    :class:`~pyro.distributions.Stable` distributions.
+
+    This creates a pair of parameter-free auxiliary distributions
+    (``Uniform(-pi/2,pi/2)`` and ``Exponential(1)``) with well-defined
+    ``.log_prob()`` methods, thereby permitting use of reparameterized stable
+    distributions in likelihood-based inference algorithms.
+    """
+    def get_dists(self, fn):
+        # Draw parameter-free noise.
+        proto = fn.stability
+        half_pi = proto.new_full(proto.shape, math.pi / 2)
+        one = proto.new_ones(proto.shape)
+        return OrderedDict([
+            ("uniform", Uniform(-half_pi, half_pi)),
+            ("exponential", Exponential(one)),
+        ])
+
+    def transform_values(self, fn, values):
+        # Differentiably transform.
+        x = _standard_stable(fn.stability, fn.skew,
+                             values["uniform"], values["exponential"])
+        return fn.loc + fn.scale * x

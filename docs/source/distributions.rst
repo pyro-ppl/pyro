@@ -477,3 +477,27 @@ sylvester
 tanh
 ----
 .. autofunction:: pyro.distributions.transforms.tanh
+
+
+Reparameterizers
+~~~~~~~~~~~~~~~~
+
+.. autoclass:: pyro.distributions.reparameterize.Reparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: pyro.distributions.reparameterize.TrivialReparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: pyro.distributions.reparameterize.LocScaleReparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: pyro.distributions.stable.StableReparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:

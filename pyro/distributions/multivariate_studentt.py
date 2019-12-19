@@ -2,7 +2,7 @@ import math
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all, lazy_property
+from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch import Chi2
 from pyro.distributions.torch_distribution import TorchDistribution
@@ -28,7 +28,8 @@ class MultivariateStudentT(TorchDistribution):
     def __init__(self, df, loc, scale_tril, validate_args=None):
         dim = loc.size(-1)
         assert scale_tril.shape[-2:] == (dim, dim)
-        df, = broadcast_all(df)
+        if not isinstance(df, torch.Tensor):
+            df = loc.new_tensor(df)
         batch_shape = broadcast_shape(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
         event_shape = (dim,)
         self.df = df.expand(batch_shape)
