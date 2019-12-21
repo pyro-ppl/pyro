@@ -11,10 +11,10 @@ class Gamma:
     """
     Non-normalized Gamma distribution.
     """
-    def __init__(self, log_normalizer, alpha, beta):
+    def __init__(self, log_normalizer, concentration, rate):
         self.log_normalizer = log_normalizer
-        self.alpha = alpha
-        self.beta = beta
+        self.concentration = concentration
+        self.rate = rate
 
     def log_density(self, s):
         """
@@ -22,26 +22,27 @@ class Gamma:
 
         This is mainly used for testing.
         """
-        return self.log_normalizer + (self.alpha - 1) * s.log() - self.beta * s
+        return self.log_normalizer + (self.concentration - 1) * s.log() - self.rate * s
 
     def logsumexp(self):
         """
         Integrates out the latent variable.
         """
-        return self.log_normalizer + torch.lgamma(self.alpha) - self.alpha * self.beta.log()
+        return self.log_normalizer + torch.lgamma(self.concentration) - \
+            self.concentration * self.rate.log()
 
 
 class GammaGaussian:
     """
     Non-normalized GammaGaussian distribution:
 
-        GammaGaussian(x, s) ~ (alpha + 0.5 * dim - 1) * log(s)
-                              - beta * s - s * 0.5 * info_vec.T @ inv(precision) @ info_vec)
+        GammaGaussian(x, s) ~ (concentration + 0.5 * dim - 1) * log(s)
+                              - rate * s - s * 0.5 * info_vec.T @ inv(precision) @ info_vec)
                               - s * 0.5 * x.T @ precision @ x + s * x.T @ info_vec,
 
     which will be reparameterized as
 
-        GammaGaussian(x, s) =: alpha' * log(s) + s * (-0.5 * x.T @ precision @ x + x.T @ info_vec - beta').
+        GammaGaussian(x, s) =: alpha * log(s) + s * (-0.5 * x.T @ precision @ x + x.T @ info_vec - beta).
 
     The `s` variable plays the role of a mixing variable such that
 
@@ -59,14 +60,14 @@ class GammaGaussian:
         fast and stable.
     :param torch.Tensor precision: precision matrix of this gaussian.
     :param torch.Tensor alpha: reparameterized shape parameter of the marginal Gamma distribution of
-        `s`. The shape parameter Gamma.alpha is reparameterized by:
+        `s`. The shape parameter Gamma.concentration is reparameterized by:
 
-            alpha = Gamma.alpha + 0.5 * dim - 1
+            alpha = Gamma.concentration + 0.5 * dim - 1
 
     :param torch.Tensor beta: reparameterized rate parameter of the marginal Gamma distribution of
-        `s`. The rate parameter Gamma.beta is reparameterized by:
+        `s`. The rate parameter Gamma.rate is reparameterized by:
 
-            beta = Gamma.beta + 0.5 * info_vec.T @ inv(precision) @ info_vec
+            beta = Gamma.rate + 0.5 * info_vec.T @ inv(precision) @ info_vec
     """
     def __init__(self, log_normalizer, info_vec, precision, alpha, beta):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
@@ -271,14 +272,16 @@ class GammaGaussian:
         u_P_u = chol_P_u.pow(2).sum(-1)
         # considering GammaGaussian as a Gaussian with precision = s * precision, info_vec = s * info_vec,
         # marginalize x variable, we get
-        #   logsumexp(s) = alpha' * log(s) - s * beta' + 0.5 n * log(2 pi) + 0.5 s * uPu - 0.5 * log|P| - 0.5 n * log(s)
+        #   logsumexp(s) = alpha * log(s) - s * beta + 0.5 n * log(2 pi) + \
+        #       0.5 s * uPu - 0.5 * log|P| - 0.5 n * log(s)
         # use the original parameterization of Gamma, we get
-        #   logsumexp(s) = (alpha - 1) * log(s) - s * beta + 0.5 n * log(2 pi) - 0.5 * |P|
-        # Note that `(alpha - 1) * log(s) - s * beta` is unnormalized log_prob of Gamma(alpha, beta)
-        alpha = self.alpha - 0.5 * n + 1
-        beta = self.beta - 0.5 * u_P_u
+        #   logsumexp(s) = (concentration - 1) * log(s) - s * rate + 0.5 n * log(2 pi) - 0.5 * |P|
+        # Note that `(concentration - 1) * log(s) - s * rate` is unnormalized log_prob of
+        #   Gamma(concentration, rate)
+        concentration = self.alpha - 0.5 * n + 1
+        rate = self.beta - 0.5 * u_P_u
         log_normalizer_tmp = 0.5 * n * math.log(2 * math.pi) - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-        return Gamma(self.log_normalizer + log_normalizer_tmp, alpha, beta)
+        return Gamma(self.log_normalizer + log_normalizer_tmp, concentration, rate)
 
 
 def gamma_and_mvn_to_gamma_gaussian(gamma, mvn):
@@ -301,7 +304,7 @@ def gamma_and_mvn_to_gamma_gaussian(gamma, mvn):
     precision = mvn.precision_matrix
     info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
 
-    # reparameterized version of alpha, beta in GaussianGamma
+    # reparameterized version of concentration, rate in GaussianGamma
     alpha = gamma.concentration + (0.5 * n - 1)
     beta = gamma.rate + 0.5 * (info_vec * mvn.loc).sum(-1)
     gaussian_logsumexp = 0.5 * n * math.log(2 * math.pi) + \

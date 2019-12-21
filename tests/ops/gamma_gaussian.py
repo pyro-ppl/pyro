@@ -31,9 +31,9 @@ def random_gamma(batch_shape):
     """
     Generate a random Gamma distribution for testing.
     """
-    alpha = torch.randn(batch_shape).exp()
-    beta = torch.randn(batch_shape).exp()
-    return dist.Gamma(alpha, beta)
+    concentration = torch.randn(batch_shape).exp()
+    rate = torch.randn(batch_shape).exp()
+    return dist.Gamma(concentration, rate)
 
 
 def assert_close_gamma_gaussian(actual, expected):

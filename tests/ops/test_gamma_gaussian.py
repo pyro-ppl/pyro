@@ -185,8 +185,8 @@ def test_logsumexp(batch_shape, dim):
     assert_close(actual, expected, atol=0.05, rtol=0.05)
 
 
-@pytest.mark.parametrize("sample_shape", [()], ids=str)
-@pytest.mark.parametrize("batch_shape", [()], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (7,)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_gamma_and_mvn_to_gamma_gaussian(sample_shape, batch_shape, dim):
     gamma = random_gamma(batch_shape)
@@ -200,8 +200,8 @@ def test_gamma_and_mvn_to_gamma_gaussian(sample_shape, batch_shape, dim):
     scaled_prec = mvn.precision_matrix * s.unsqueeze(-1).unsqueeze(-1)
     mvn_log_prob = dist.MultivariateNormal(mvn.loc, precision_matrix=scaled_prec).log_prob(value)
     expected_log_prob = s_log_prob + mvn_log_prob
-    # FIXME: this test is failing...
-    assert_close(actual_log_prob, expected_log_prob, atol=0.2, rtol=0.2)
+    # fixme: test is failing
+    assert_close(actual_log_prob, expected_log_prob)
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
