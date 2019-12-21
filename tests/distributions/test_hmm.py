@@ -7,17 +7,17 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.hmm import (_sequential_gaussian_gamma_tensordot,
+from pyro.distributions.hmm import (_sequential_gamma_gaussian_tensordot,
                                     _sequential_gaussian_tensordot, _sequential_logmatmulexp)
 from pyro.distributions.util import broadcast_shape
 from pyro.infer import TraceEnum_ELBO, config_enumerate
 from pyro.ops.gaussian import gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
-from pyro.ops.studentt import (gaussian_gamma_tensordot, matrix_and_mvt_to_gaussian_gamma,
-                               mvt_to_gaussian_gamma)
+from pyro.ops.gamma_gaussian import (gamma_gaussian_tensordot, matrix_and_mvn_to_gamma_gaussian,
+                                     gamma_and_mvn_to_gamma_gaussian)
 from pyro.ops.indexing import Vindex
 from tests.common import assert_close
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
-from tests.ops.studentt import assert_close_gaussian_gamma, random_gaussian_gamma, random_mvt
+from tests.ops.gamma_gaussian import assert_close_gamma_gaussian, random_gamma, random_gamma_gaussian
 
 
 def check_expand(old_dist, old_data):
@@ -73,17 +73,17 @@ def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
 @pytest.mark.parametrize('num_steps', list(range(1, 20)))
 @pytest.mark.parametrize('state_dim', [1, 2, 3])
 @pytest.mark.parametrize('batch_shape', [(), (5,), (2, 4)], ids=str)
-def test_sequential_gaussian_gamma_tensordot(batch_shape, state_dim, num_steps):
-    g = random_gaussian_gamma(batch_shape + (num_steps,), state_dim + state_dim)
-    actual = _sequential_gaussian_gamma_tensordot(g)
+def test_sequential_gamma_gaussian_tensordot(batch_shape, state_dim, num_steps):
+    g = random_gamma_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
+    actual = _sequential_gamma_gaussian_tensordot(g)
     assert actual.dim() == g.dim()
     assert actual.batch_shape == batch_shape
 
     # Check against hand computation.
     expected = g[..., 0]
     for t in range(1, num_steps):
-        expected = gaussian_gamma_tensordot(expected, g[..., t], state_dim)
-    assert_close_gaussian_gamma(actual, expected)
+        expected = gamma_gaussian_tensordot(expected, g[..., t], state_dim)
+    assert_close_gamma_gaussian(actual, expected)
 
 
 @pytest.mark.parametrize('state_dim', [2, 3])
@@ -476,14 +476,15 @@ def test_gaussian_mrf_log_prob_block_diag(sample_shape, batch_shape, num_steps, 
     ((5,), (), (), (), (6,)),
     ((5,), (5, 6), (5, 6), (5, 6), (5, 6)),
 ], ids=str)
-def test_robust_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
-                          obs_mat_shape, obs_mvn_shape, hidden_dim, obs_dim):
-    init_dist = random_mvt(init_shape, hidden_dim)
+def test_gamma_gaussian_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
+                                  obs_mat_shape, obs_mvn_shape, hidden_dim, obs_dim):
+    init_dist = random_mvn(init_shape, hidden_dim)
     trans_mat = torch.randn(trans_mat_shape + (hidden_dim, hidden_dim))
-    trans_dist = random_mvt(trans_mvn_shape, hidden_dim)
+    trans_dist = random_mvn(trans_mvn_shape, hidden_dim)
     obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
-    obs_dist = random_mvt(obs_mvn_shape, obs_dim)
-    d = dist.RobustHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    obs_dist = random_mvn(obs_mvn_shape, obs_dim)
+    scale_dist = random_gamma(init_shape)
+    d = dist.GammaGaussianHMM(scale_dist, init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     shape = broadcast_shape(init_shape + (1,),
                             trans_mat_shape,
@@ -501,11 +502,11 @@ def test_robust_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
     assert actual.shape == expected_batch_shape
     check_expand(d, data)
 
-    multiplier, final = d.filter(data)
-    assert isinstance(multiplier, dist.Gamma)
-    assert multiplier.batch_shape == d.batch_shape
-    assert multiplier.event_shape == ()
-    assert isinstance(final, dist.MultivariateStudentT)
+    mixing, final = d.filter(data)
+    assert isinstance(mixing, dist.Gamma)
+    assert mixing.batch_shape == d.batch_shape
+    assert mixing.event_shape == ()
+    assert isinstance(final, dist.MultivariateNormal)
     assert final.batch_shape == d.batch_shape
     assert final.event_shape == (hidden_dim,)
 
@@ -515,13 +516,14 @@ def test_robust_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
 @pytest.mark.parametrize('obs_dim', [1, 2])
 @pytest.mark.parametrize('hidden_dim', [1, 2])
 @pytest.mark.parametrize('num_steps', [1, 2, 3, 4])
-def test_robust_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
-    init_dist = random_mvt(batch_shape, hidden_dim)
+def test_gamma_gaussian_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
+    init_dist = random_mvn(batch_shape, hidden_dim)
     trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim))
-    trans_dist = random_mvt(batch_shape + (num_steps,), hidden_dim)
+    trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
     obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim))
-    obs_dist = random_mvt(batch_shape + (num_steps,), obs_dim)
-    d = dist.RobustHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    obs_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
+    scale_dist = random_gamma(batch_shape)
+    d = dist.GammaGaussianHMM(scale_dist, init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
     obs_mvn = obs_dist
     data = obs_dist.sample(sample_shape)
     assert data.shape == sample_shape + d.shape()
@@ -534,15 +536,12 @@ def test_robust_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, o
     #    init | H
     #   trans | H H H H            H = hidden
     #     obs |   H H H O O O      O = observed
-    # and then combine these using gaussian_gamma_tensordot().
+    # and then combine these using gamma_gaussian_tensordot().
     T = num_steps
-    init = mvt_to_gaussian_gamma(init_dist)
-    trans = matrix_and_mvt_to_gaussian_gamma(trans_mat, trans_dist,
-                                             return_conditional=True)
-    obs = matrix_and_mvt_to_gaussian_gamma(obs_mat, obs_mvn,
-                                           return_conditional=True)
+    init = gamma_and_mvn_to_gamma_gaussian(scale_dist, init_dist)
+    trans = matrix_and_mvn_to_gamma_gaussian(trans_mat, trans_dist)
+    obs = matrix_and_mvn_to_gamma_gaussian(obs_mat, obs_mvn)
 
-    print(trans.batch_shape, trans.alpha.shape)
     unrolled_trans = reduce(operator.add, [
         trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim)
         for t in range(T)
@@ -560,8 +559,8 @@ def test_robust_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, o
     assert init.dim() == hidden_dim
     assert unrolled_trans.dim() == (1 + T) * hidden_dim
     assert unrolled_obs.dim() == T * (hidden_dim + obs_dim)
-    logp = gaussian_gamma_tensordot(init, unrolled_trans, hidden_dim)
-    logp = gaussian_gamma_tensordot(logp, unrolled_obs, T * hidden_dim)
+    logp = gamma_gaussian_tensordot(init, unrolled_trans, hidden_dim)
+    logp = gamma_gaussian_tensordot(logp, unrolled_obs, T * hidden_dim)
+    # compute log_prob of the joint student-t distribution
     expected_log_prob = logp.compound().log_prob(unrolled_data)
-    # TODO: fix this failing test
     assert_close(actual_log_prob, expected_log_prob)

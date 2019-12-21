@@ -1,11 +1,11 @@
 import torch
 
 import pyro.distributions as dist
-from pyro.ops.studentt import GaussianGamma
+from pyro.ops.gamma_gaussian import GammaGaussian
 from tests.common import assert_close
 
 
-def random_gaussian_gamma(batch_shape, dim, rank=None):
+def random_gamma_gaussian(batch_shape, dim, rank=None):
     """
     Generate a random Gaussian for testing.
     """
@@ -21,28 +21,24 @@ def random_gaussian_gamma(batch_shape, dim, rank=None):
         info_vec = loc
     alpha = torch.randn(batch_shape).exp() + 0.5 * dim - 1
     beta = torch.randn(batch_shape).exp() + 0.5 * (info_vec * loc).sum(-1)
-    result = GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+    result = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
     assert result.dim() == dim
     assert result.batch_shape == batch_shape
     return result
 
 
-def random_mvt(batch_shape, dim):
+def random_gamma(batch_shape):
     """
-    Generate a random MultivariateNormal distribution for testing.
+    Generate a random Gamma distribution for testing.
     """
-    rank = dim + dim
-    df = torch.randn(batch_shape).exp() + 2
-    loc = torch.randn(batch_shape + (dim,))
-    cov = torch.randn(batch_shape + (dim, rank))
-    cov = cov.matmul(cov.transpose(-1, -2))
-    scale_tril = cov.cholesky()
-    return dist.MultivariateStudentT(df, loc, scale_tril)
+    concentration = torch.randn(batch_shape).exp()
+    rate = torch.randn(batch_shape).exp()
+    return dist.Gamma(concentration, rate)
 
 
-def assert_close_gaussian_gamma(actual, expected):
-    assert isinstance(actual, GaussianGamma)
-    assert isinstance(expected, GaussianGamma)
+def assert_close_gamma_gaussian(actual, expected):
+    assert isinstance(actual, GammaGaussian)
+    assert isinstance(expected, GammaGaussian)
     assert actual.dim() == expected.dim()
     assert actual.batch_shape == expected.batch_shape
     assert_close(actual.log_normalizer, expected.log_normalizer)

@@ -112,6 +112,13 @@ FoldedDistribution
     :undoc-members:
     :show-inheritance:
 
+GammaGaussianHMM
+----------------
+.. autoclass:: pyro.distributions.GammaGaussianHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 GammaPoisson
 ------------
 .. autoclass:: pyro.distributions.GammaPoisson
@@ -206,13 +213,6 @@ RelaxedOneHotCategoricalStraightThrough
 Rejector
 --------
 .. autoclass:: pyro.distributions.Rejector
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-RobustHMM
----------
-.. autoclass:: pyro.distributions.RobustHMM
     :members:
     :undoc-members:
     :show-inheritance:
@@ -484,3 +484,27 @@ sylvester
 tanh
 ----
 .. autofunction:: pyro.distributions.transforms.tanh
+
+
+Reparameterizers
+~~~~~~~~~~~~~~~~
+
+.. autoclass:: pyro.distributions.reparameterize.Reparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: pyro.distributions.reparameterize.TrivialReparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: pyro.distributions.reparameterize.LocScaleReparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: pyro.distributions.stable.StableReparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:

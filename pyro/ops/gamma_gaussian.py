@@ -5,6 +5,7 @@ from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
+from pyro.distributions.torch import MultivariateNormal
 from pyro.distributions.util import broadcast_shape
 
 
@@ -20,10 +21,10 @@ class Gamma:
     """
     Non-normalized Gamma distribution.
     """
-    def __init__(self, log_normalizer, alpha, beta):
+    def __init__(self, log_normalizer, concentration, rate):
         self.log_normalizer = log_normalizer
-        self.alpha = alpha
-        self.beta = beta
+        self.concentration = concentration
+        self.rate = rate
 
     def log_density(self, s):
         """
@@ -31,33 +32,36 @@ class Gamma:
 
         This is mainly used for testing.
         """
-        return self.log_normalizer + (self.alpha - 1) * s.log() - self.beta * s
+        return self.log_normalizer + (self.concentration - 1) * s.log() - self.rate * s
 
     def logsumexp(self):
         """
         Integrates out the latent variable.
         """
-        return self.log_normalizer + torch.lgamma(self.alpha) - self.alpha * self.beta.log()
+        return self.log_normalizer + torch.lgamma(self.concentration) - \
+            self.concentration * self.rate.log()
 
 
-class GaussianGamma:
+class GammaGaussian:
     """
-    Non-normalized GaussianGamma distribution:
+    Non-normalized GammaGaussian distribution:
 
-        GaussianGamma(x, s) ~ (alpha + 0.5 * dim - 1) * log(s)
-                              - beta * s - s * 0.5 * info_vec.T @ inv(precision) @ info_vec)
+        GammaGaussian(x, s) ~ (concentration + 0.5 * dim - 1) * log(s)
+                              - rate * s - s * 0.5 * info_vec.T @ inv(precision) @ info_vec)
                               - s * 0.5 * x.T @ precision @ x + s * x.T @ info_vec,
 
     which will be reparameterized as
 
-        GaussianGamma(x, s) =: alpha' * log(s) + s * (-0.5 * x.T @ precision @ x + x.T @ info_vec - beta').
+        GammaGaussian(x, s) =: alpha * log(s) + s * (-0.5 * x.T @ precision @ x + x.T @ info_vec - beta).
 
-    This represents an arbitrary semidefinite quadratic function, which can be
-    interpreted as a rank-deficient scaled Gaussian distribution. The precision
-    matrix may have zero eigenvalues, thus it may be impossible to work
-    directly with the covariance matrix. The `s` variable plays the role of a multiplier such that
+    The `s` variable plays the role of a mixing variable such that
 
         p(x | s) ~ Gaussian(s * info_vec, s * precision).
+
+    Conditioned on `s`, this represents an arbitrary semidefinite quadratic function,
+    which can be interpreted as a rank-deficient Gaussian distribution.
+    The precision matrix may have zero eigenvalues, thus it may be impossible
+    to work directly with the covariance matrix.
 
     :param torch.Tensor log_normalizer: a normalization constant, which is mainly used to keep
         track of normalization terms during contractions.
@@ -66,14 +70,14 @@ class GaussianGamma:
         fast and stable.
     :param torch.Tensor precision: precision matrix of this gaussian.
     :param torch.Tensor alpha: reparameterized shape parameter of the marginal Gamma distribution of
-        `s`. The shape parameter Gamma.alpha is reparameterized by:
+        `s`. The shape parameter Gamma.concentration is reparameterized by:
 
-            alpha = Gamma.alpha + 0.5 * dim - 1
+            alpha = Gamma.concentration + 0.5 * dim - 1
 
     :param torch.Tensor beta: reparameterized rate parameter of the marginal Gamma distribution of
-        `s`. The rate parameter Gamma.beta is reparameterized by:
+        `s`. The rate parameter Gamma.rate is reparameterized by:
 
-            beta = Gamma.beta + 0.5 * info_vec.T @ inv(precision) @ info_vec
+            beta = Gamma.rate + 0.5 * info_vec.T @ inv(precision) @ info_vec
     """
     def __init__(self, log_normalizer, info_vec, precision, alpha, beta):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
@@ -104,7 +108,7 @@ class GaussianGamma:
         precision = self.precision.expand(batch_shape + (n, n))
         alpha = self.alpha.expand(batch_shape)
         beta = self.beta.expand(batch_shape)
-        return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+        return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
     def reshape(self, batch_shape):
         n = self.dim()
@@ -113,11 +117,11 @@ class GaussianGamma:
         precision = self.precision.reshape(batch_shape + (n, n))
         alpha = self.alpha.reshape(batch_shape)
         beta = self.beta.reshape(batch_shape)
-        return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+        return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
     def __getitem__(self, index):
         """
-        Index into the batch_shape of a GaussianGamma.
+        Index into the batch_shape of a GammaGaussian.
         """
         assert isinstance(index, tuple)
         log_normalizer = self.log_normalizer[index]
@@ -125,18 +129,18 @@ class GaussianGamma:
         precision = self.precision[index + (slice(None), slice(None))]
         alpha = self.alpha[index]
         beta = self.beta[index]
-        return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+        return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
     @staticmethod
     def cat(parts, dim=0):
         """
-        Concatenate a list of GaussianGammas along a given batch dimension.
+        Concatenate a list of GammaGaussians along a given batch dimension.
         """
         if dim < 0:
             dim += len(parts[0].batch_shape)
         args = [torch.cat([getattr(g, attr) for g in parts], dim=dim)
                 for attr in ["log_normalizer", "info_vec", "precision", "alpha", "beta"]]
-        return GaussianGamma(*args)
+        return GammaGaussian(*args)
 
     def event_pad(self, left=0, right=0):
         """
@@ -145,8 +149,11 @@ class GaussianGamma:
         lr = (left, right)
         info_vec = pad(self.info_vec, lr)
         precision = pad(self.precision, lr + lr)
-        # no change for alpha, beta because we are working with reparameterized version
-        return GaussianGamma(self.log_normalizer, info_vec, precision, self.alpha, self.beta)
+        # no change for alpha, beta because we are working with reparameterized version;
+        # otherwise, we need to change alpha (similar for beta) to
+        # keep the term (alpha + 0.5 * dim - 1) * log(s) constant
+        # (note that `dim` has been changed due to padding)
+        return GammaGaussian(self.log_normalizer, info_vec, precision, self.alpha, self.beta)
 
     def event_permute(self, perm):
         """
@@ -156,15 +163,15 @@ class GaussianGamma:
         assert perm.shape == (self.dim(),)
         info_vec = self.info_vec[..., perm]
         precision = self.precision[..., perm][..., perm, :]
-        return GaussianGamma(self.log_normalizer, info_vec, precision, self.alpha, self.beta)
+        return GammaGaussian(self.log_normalizer, info_vec, precision, self.alpha, self.beta)
 
     def __add__(self, other):
         """
-        Adds two GaussianGammas in log-density space.
+        Adds two GammaGaussians in log-density space.
         """
-        assert isinstance(other, GaussianGamma)
+        assert isinstance(other, GammaGaussian)
         assert self.dim() == other.dim()
-        return GaussianGamma(self.log_normalizer + other.log_normalizer,
+        return GammaGaussian(self.log_normalizer + other.log_normalizer,
                              self.info_vec + other.info_vec,
                              self.precision + other.precision,
                              self.alpha + other.alpha,
@@ -172,7 +179,7 @@ class GaussianGamma:
 
     def log_density(self, value, s):
         """
-        Evaluate the log density of this GaussianGamma at a point value::
+        Evaluate the log density of this GammaGaussian at a point value::
 
             alpha * log(s) + s * (-0.5 * value.T @ precision @ value + value.T @ info_vec - beta) + log_normalizer
 
@@ -218,7 +225,7 @@ class GaussianGamma:
         log_normalizer = self.log_normalizer
         alpha = self.alpha
         beta = self.beta + 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - b.mul(info_b).sum(-1)
-        return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+        return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
     def marginalize(self, left=0, right=0):
         """
@@ -232,7 +239,7 @@ class GaussianGamma:
             g.condition(x).event_logsumexp().log_density(s)
               = g.marginalize(left=g.dim() - x.size(-1)).log_density(x, s)
         """
-        # NB: the easiest way to think about this process is to consider GaussianGamma
+        # NB: the easiest way to think about this process is to consider GammaGaussian
         # as a Gaussian with precision and info_vec scaled by `s`.
         if left == 0 and right == 0:
             return self
@@ -263,7 +270,7 @@ class GaussianGamma:
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
                           P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
-        return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+        return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
     def compound(self):
         """
@@ -288,114 +295,120 @@ class GaussianGamma:
         chol_P = self.precision.cholesky()
         chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
-        # considering GaussianGamma as a Gaussian with precision = s * precision, info_vec = s * info_vec,
+        # considering GammaGaussian as a Gaussian with precision = s * precision, info_vec = s * info_vec,
         # marginalize x variable, we get
-        #   logsumexp(s) = alpha' * log(s) - s * beta' + 0.5 n * log(2 pi) + 0.5 s * uPu - 0.5 * log|P| - 0.5 n * log(s)
+        #   logsumexp(s) = alpha * log(s) - s * beta + 0.5 n * log(2 pi) + \
+        #       0.5 s * uPu - 0.5 * log|P| - 0.5 n * log(s)
         # use the original parameterization of Gamma, we get
-        #   logsumexp(s) = (alpha - 1) * log(s) - s * beta + 0.5 n * log(2 pi) - 0.5 * |P|
-        # Note that `(alpha - 1) * log(s) - s * beta` is unnormalized log_prob of Gamma(alpha, beta)
-        alpha = self.alpha - 0.5 * n + 1
-        beta = self.beta - 0.5 * u_P_u
+        #   logsumexp(s) = (concentration - 1) * log(s) - s * rate + 0.5 n * log(2 pi) - 0.5 * |P|
+        # Note that `(concentration - 1) * log(s) - s * rate` is unnormalized log_prob of
+        #   Gamma(concentration, rate)
+        concentration = self.alpha - 0.5 * n + 1
+        rate = self.beta - 0.5 * u_P_u
         log_normalizer_tmp = 0.5 * n * math.log(2 * math.pi) - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-        return Gamma(self.log_normalizer + log_normalizer_tmp, alpha, beta)
+        return Gamma(self.log_normalizer + log_normalizer_tmp, concentration, rate)
 
 
-def mvt_to_gaussian_gamma(mvt, return_conditional=False):
+def gamma_and_mvn_to_gamma_gaussian(gamma, mvn):
     """
-    Convert a MultivariateStudentT (MVT) distribution to a GaussianGamma.
+    Convert a pair of Gamma and Gaussian distributions to a GammaGaussian.
 
-        p(x) ~ MVT(df, info_vec, precision)
         p(x | s) ~ Gaussian(s * info_vec, s * precision)
-        p(s) ~ Gamma(df / 2, df / 2)
-        p(x, s) ~ GaussianGamma(info_vec, precison, df / 2, df / 2)
+        p(s) ~ Gamma(alpha, beta)
+        p(x, s) ~ GammaGaussian(info_vec, precison, alpha, beta)
 
-    :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
-    :param bool return_conditional: whether to return the conditional or the joint distribution.
-        If True, we return p(x | s). Otherwise, we return p(x, s).
-    :return: A GaussianGamma object which is equivalent to the MVT when marginalized out the
-        multiplier `s`.
-    :rtype: ~pyro.ops.studentt.GaussianGamma
+    :param ~pyro.distributions.Gamma gamma: the mixing distribution
+    :param ~pyro.distributions.MultivariateNormal mvn: the conditional distribution
+        when mixing is 1.
+    :return: A GammaGaussian object.
+    :rtype: ~pyro.ops.gaussian_gamma.GammaGaussian
     """
-    n = mvt.loc.size(-1)
-    precision = mvt.precision_matrix
-    info_vec = precision.matmul(mvt.loc.unsqueeze(-1)).squeeze(-1)
+    assert isinstance(gamma, torch.distributions.Gamma)
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    n = mvn.loc.size(-1)
+    precision = mvn.precision_matrix
+    info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
 
-    # First, we model p(x | s).
-    # Here, we use reparameterized versions of alpha = 1, beta = 0
-    # Note that Gamma(1, 0).log_density is a constant function. In other works, with these values of
-    # alpha, beta, we say that there is no prior for `s`. This is similar to Gaussian with zero
-    # info_vec and zero precision.
-    alpha = torch.full(mvt.batch_shape, n / 2.0,
-                       device=info_vec.device, dtype=info_vec.dtype)
-    beta = 0.5 * (info_vec * mvt.loc).sum(-1)
-    log_normalizer = -0.5 * n * math.log(2 * math.pi) - mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-
-    if not return_conditional:
-        # reparameterized version of alpha = beta = 0.5 dof
-        half_df = 0.5 * mvt.df
-        alpha = alpha - 1 + half_df
-        beta = beta + half_df
-        log_normalizer = log_normalizer - Gamma(0., half_df, half_df).logsumexp()
-    return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+    # reparameterized version of concentration, rate in GaussianGamma
+    alpha = gamma.concentration + (0.5 * n - 1)
+    beta = gamma.rate + 0.5 * (info_vec * mvn.loc).sum(-1)
+    gaussian_logsumexp = 0.5 * n * math.log(2 * math.pi) + \
+        mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+    log_normalizer = -Gamma(gaussian_logsumexp, gamma.concentration, gamma.rate).logsumexp()
+    return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
 
-def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, return_conditional=False):
+def scale_mvn(mvn, s):
     """
-    Convert a noisy affine function to a GaussianGamma. The noisy affine function is defined as::
+    Transforms a MVN distribution to another MVN distribution according to
 
-        y = x @ matrix + mvt.sample()
+        scale(mvn(loc, precision), s) := mvn(loc, s * precision).
+    """
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert isinstance(s, torch.Tensor)
+    batch_shape = broadcast_shape(s.shape, mvn.batch_shape)
+    loc = mvn.loc.expand(batch_shape + (-1,))
+    # XXX: we might use mvn._unbroadcasted_scale_tril here
+    scale_tril = mvn.scale_tril / s.sqrt().unsqueeze(-1).unsqueeze(-1)
+    return MultivariateNormal(loc, scale_tril=scale_tril)
+
+
+def matrix_and_mvn_to_gamma_gaussian(matrix, mvn):
+    """
+    Convert a noisy affine function to a GammaGaussian, where the noise precision
+    is scaled by an auxiliary variable `s`. The noisy affine function (conditioned
+    on `s`) is defined as::
+
+        y = x @ matrix + scale(mvn, s).sample()
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
-    :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
-    :param bool return_conditional: whether to return the conditional or the joint distribution.
-        If True, we return p(x | s). Otherwise, we return p(x, s).
-    :return: A GaussianGamma with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
-    :rtype: ~pyro.ops.studentt.GaussianGamma
+    :param ~pyro.distributions.MultivariateNormal mvn: A multivariate normal distribution.
+    :return: A GammaGaussian with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
+    :rtype: ~pyro.ops.gaussian_gamma.GammaGaussian
     """
-    assert isinstance(mvt, MultivariateStudentT)
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
     assert isinstance(matrix, torch.Tensor)
     x_dim, y_dim = matrix.shape[-2:]
-    assert mvt.event_shape == (y_dim,)
-    batch_shape = broadcast_shape(matrix.shape[:-2], mvt.batch_shape)
+    assert mvn.event_shape == (y_dim,)
+    batch_shape = broadcast_shape(matrix.shape[:-2], mvn.batch_shape)
     matrix = matrix.expand(batch_shape + (x_dim, y_dim))
-    mvt = mvt.expand(batch_shape)
+    mvn = mvn.expand(batch_shape)
 
-    y_gaussian_gamma = mvt_to_gaussian_gamma(mvt, return_conditional=return_conditional)
-    P_yy = y_gaussian_gamma.precision
+    P_yy = mvn.precision_matrix
     neg_P_xy = matrix.matmul(P_yy)
     P_xy = -neg_P_xy
     P_yx = P_xy.transpose(-1, -2)
     P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
-    info_y = y_gaussian_gamma.info_vec
+    info_y = P_yy.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
-    log_normalizer = y_gaussian_gamma.log_normalizer
-    alpha = y_gaussian_gamma.alpha
-    beta = y_gaussian_gamma.beta
+    log_normalizer = -0.5 * y_dim * math.log(2 * math.pi) - mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+    beta = 0.5 * (info_y * mvn.loc).sum(-1)
+    alpha = beta.new_full(beta.shape, 0.5 * y_dim)
 
-    result = GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+    result = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
 
 
-def gaussian_gamma_tensordot(x, y, dims=0):
+def gamma_gaussian_tensordot(x, y, dims=0):
     """
-    Computes the integral over two GaussianGammas:
+    Computes the integral over two GammaGaussians:
 
         `(x @ y)((a,c),s) = log(integral(exp(x((a,b),s) + y((b,c),s)), b))`,
 
     where `x` is a gaussian over variables (a,b), `y` is a gaussian over variables
     (b,c), (a,b,c) can each be sets of zero or more variables, and `dims` is the size of b.
 
-    :param x: a GaussianGamma instance
-    :param y: a GaussianGamma instance
+    :param x: a GammaGaussian instance
+    :param y: a GammaGaussian instance
     :param dims: number of variables to contract
     """
-    assert isinstance(x, GaussianGamma)
-    assert isinstance(y, GaussianGamma)
+    assert isinstance(x, GammaGaussian)
+    assert isinstance(y, GammaGaussian)
     na = x.dim() - dims
     nb = dims
     nc = y.dim() - dims

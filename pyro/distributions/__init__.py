@@ -10,7 +10,7 @@ from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.folded import FoldedDistribution
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
-from pyro.distributions.hmm import DiscreteHMM, GaussianHMM, GaussianMRF, RobustHMM
+from pyro.distributions.hmm import DiscreteHMM, GammaGaussianHMM, GaussianHMM, GaussianMRF
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJCorrCholesky
 from pyro.distributions.mixture import MaskedMixture
@@ -32,7 +32,7 @@ from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated import (ZeroInflatedDistribution, ZeroInflatedPoisson,
                                               ZeroInflatedNegativeBinomial)
 
-from . import constraints, kl, transforms
+from . import constraints, kl, reparameterize, transforms
 
 __all__ = [
     "AVFMultivariateNormal",
@@ -47,6 +47,7 @@ __all__ = [
     "Distribution",
     "Empirical",
     "FoldedDistribution",
+    "GammaGaussianHMM",
     "GammaPoisson",
     "GaussianHMM",
     "GaussianMRF",
@@ -61,7 +62,6 @@ __all__ = [
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
-    "RobustHMM",
     "SpanningTree",
     "Stable",
     "TorchDistribution",
@@ -76,6 +76,7 @@ __all__ = [
     "enable_validation",
     "is_validation_enabled",
     "kl",
+    "reparameterize",
     "transforms",
     "validation_enabled",
 ]

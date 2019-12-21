@@ -9,6 +9,7 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions.stable import StableReparameterizer
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, EnergyDistance, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
                         TraceTailAdaptive_ELBO, config_enumerate)
@@ -2058,3 +2059,21 @@ def test_no_log_prob_ok(Elbo):
 
     data = torch.randn(10)
     assert_ok(model, guide, Elbo(), data=data)
+
+
+def test_reparam_stable():
+
+    @poutine.reparam(config={"z": StableReparameterizer()})
+    def model():
+        stability = pyro.sample("stability", dist.Uniform(0., 2.))
+        skew = pyro.sample("skew", dist.Uniform(-1., 1.))
+        y = pyro.sample("z", dist.Stable(stability, skew))
+        pyro.sample("x", dist.Poisson(y.abs()), obs=torch.tensor(1.))
+
+    def guide():
+        pyro.sample("stability", dist.Delta(torch.tensor(1.5)))
+        pyro.sample("skew", dist.Delta(torch.tensor(0.)))
+        pyro.sample("z_uniform", dist.Delta(torch.tensor(0.1)))
+        pyro.sample("z_exponential", dist.Delta(torch.tensor(1.)))
+
+    assert_ok(model, guide, Trace_ELBO())

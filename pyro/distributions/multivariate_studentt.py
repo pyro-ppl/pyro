@@ -2,9 +2,9 @@ import math
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all, lazy_property
+from torch.distributions.utils import lazy_property
 
-from pyro.distributions.torch import Chi2, MultivariateNormal
+from pyro.distributions.torch import Chi2
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
@@ -28,7 +28,8 @@ class MultivariateStudentT(TorchDistribution):
     def __init__(self, df, loc, scale_tril, validate_args=None):
         dim = loc.size(-1)
         assert scale_tril.shape[-2:] == (dim, dim)
-        df, = broadcast_all(df)
+        if not isinstance(df, torch.Tensor):
+            df = loc.new_tensor(df)
         batch_shape = broadcast_shape(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
         event_shape = (dim,)
         self.df = df.expand(batch_shape)
@@ -97,23 +98,3 @@ class MultivariateStudentT(TorchDistribution):
         m[(self.df <= 2) & (self.df > 1), :] = float('inf')
         m[self.df <= 1, :] = float('nan')
         return m
-
-    def conditional(self, latent_value):
-        """
-        Consider this distribution `p(x)` as a scale mixture of Gaussians
-        `p(x | s) = MVN(loc, 1/s * cov)` with the latent `s` being distributed
-        by `Gamma(df/2, df/2)`, this helper method returns the Gaussian `p(x | s)`
-        given `s = latent_value`.
-
-        .. note:: In case the mixing (latent) distribution is
-            `p(s) = Gamma(df/2, df/2 / m)`, where `m` is the mean of `p(s)`,
-            we can also use this method with input `latent_value / m` to
-            return the conditional distribution `p(x | s)`.
-
-        :param torch.Tensor latent_value: a mixing value `s`.
-        :return: The conditional distribution `p(x | s)`
-        :rtype: MultivariateNormal
-        """
-        loc = self.loc
-        scale_tril = self.scale_tril / latent_value.sqrt().unsqueeze(-1).unsqueeze(-1)
-        return MultivariateNormal(loc, scale_tril=scale_tril)
