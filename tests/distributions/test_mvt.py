@@ -3,7 +3,7 @@ import math
 import pytest
 
 import torch
-from torch.distributions import Gamma, StudentT
+from torch.distributions import Gamma, MultivariateNormal, StudentT
 
 from pyro.distributions import MultivariateStudentT
 from tests.common import assert_equal
@@ -21,8 +21,7 @@ def test_log_prob(batch_shape, dim):
     scale_tril = A.matmul(A.transpose(-2, -1)).cholesky()
     x = torch.randn(batch_shape + (dim,))
     df = torch.randn(batch_shape).exp() + 2
-    d = MultivariateStudentT(df, loc, scale_tril)
-    actual_log_prob = d.log_prob(x)
+    actual_log_prob = MultivariateStudentT(df, loc, scale_tril).log_prob(x)
 
     if dim == 1:
         expected_log_prob = StudentT(df.unsqueeze(-1), loc, scale_tril[..., 0]).log_prob(x).sum(-1)
@@ -31,7 +30,8 @@ def test_log_prob(batch_shape, dim):
     # test the fact MVT(df, loc, scale)(x) = int MVN(loc, scale / m)(x) Gamma(df/2,df/2)(m) dm
     num_samples = 100000
     gamma_samples = Gamma(df / 2, df / 2).sample(sample_shape=(num_samples,))
-    mvn = d.conditional(gamma_samples)
+    mvn_scale_tril = scale_tril / gamma_samples.sqrt().unsqueeze(-1).unsqueeze(-1)
+    mvn = MultivariateNormal(loc, scale_tril=mvn_scale_tril)
     expected_log_prob = mvn.log_prob(x).logsumexp(0) - math.log(num_samples)
     assert_equal(actual_log_prob, expected_log_prob, prec=0.01)
 
