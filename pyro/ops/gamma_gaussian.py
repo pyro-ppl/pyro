@@ -309,7 +309,7 @@ def gamma_and_mvn_to_gamma_gaussian(gamma, mvn):
     beta = gamma.rate + 0.5 * (info_vec * mvn.loc).sum(-1)
     gaussian_logsumexp = 0.5 * n * math.log(2 * math.pi) + \
         mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    log_normalizer = -Gamma(gaussian_logsumexp, alpha, beta).logsumexp()
+    log_normalizer = -Gamma(gaussian_logsumexp, gamma.concentration, gamma.rate).logsumexp()
     return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
 

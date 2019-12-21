@@ -28,7 +28,7 @@ def random_mvn(batch_shape, dim):
     rank = dim + dim
     loc = torch.randn(batch_shape + (dim,))
     cov = torch.randn(batch_shape + (dim, rank))
-    cov = cov.matmul(cov.transpose(-1, -2)) + 3 * torch.eye(dim)
+    cov = cov.matmul(cov.transpose(-1, -2))
     return dist.MultivariateNormal(loc, cov)
 
 
