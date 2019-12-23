@@ -4,7 +4,17 @@ import torch
 from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
+from pyro.distributions.multivariate_studentt import MultivariateStudentT
+from pyro.distributions.torch import MultivariateNormal
 from pyro.distributions.util import broadcast_shape
+
+
+def _precision_to_scale_tril(P):
+    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
+    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
+    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
+                               L_inv, upper=False)[0]
+    return L
 
 
 class Gamma:
@@ -262,6 +272,21 @@ class GammaGaussian:
                           P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
         return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
+    def compound(self):
+        """
+        Integrates out the latent multiplier `s`. The result will be a
+        Student-T distribution.
+        """
+        alpha = self.alpha - 0.5 * self.dim() + 1
+        scale_tril = _precision_to_scale_tril(self.precision)
+        scale_tril_t_u = scale_tril.transpose(-1, -2).matmul(self.info_vec.unsqueeze(-1)).squeeze(-1)
+        u_Pinv_u = scale_tril_t_u.pow(2).sum(-1)
+        beta = self.beta - 0.5 * u_Pinv_u
+
+        loc = scale_tril.matmul(scale_tril_t_u.unsqueeze(-1)).squeeze(-1)
+        scale_tril = scale_tril * (beta / alpha).sqrt().unsqueeze(-1).unsqueeze(-1)
+        return MultivariateStudentT(2 * alpha, loc, scale_tril)
+
     def event_logsumexp(self):
         """
         Integrates out all latent state (i.e. operating on event dimensions) of Gaussian component.
@@ -313,13 +338,28 @@ def gamma_and_mvn_to_gamma_gaussian(gamma, mvn):
     return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
 
+def scale_mvn(mvn, s):
+    """
+    Transforms a MVN distribution to another MVN distribution according to
+
+        scale(mvn(loc, precision), s) := mvn(loc, s * precision).
+    """
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert isinstance(s, torch.Tensor)
+    batch_shape = broadcast_shape(s.shape, mvn.batch_shape)
+    loc = mvn.loc.expand(batch_shape + (-1,))
+    # XXX: we might use mvn._unbroadcasted_scale_tril here
+    scale_tril = mvn.scale_tril / s.sqrt().unsqueeze(-1).unsqueeze(-1)
+    return MultivariateNormal(loc, scale_tril=scale_tril)
+
+
 def matrix_and_mvn_to_gamma_gaussian(matrix, mvn):
     """
     Convert a noisy affine function to a GammaGaussian, where the noise precision
     is scaled by an auxiliary variable `s`. The noisy affine function (conditioned
     on `s`) is defined as::
 
-        y = x @ matrix + MVN(mvn.loc, precision=s * mvn.precision).sample()
+        y = x @ matrix + scale(mvn, s).sample()
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
     :param ~pyro.distributions.MultivariateNormal mvn: A multivariate normal distribution.
@@ -345,8 +385,8 @@ def matrix_and_mvn_to_gamma_gaussian(matrix, mvn):
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
     log_normalizer = -0.5 * y_dim * math.log(2 * math.pi) - mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    alpha = matrix.new_tensor(0.5 * y_dim)
     beta = 0.5 * (info_y * mvn.loc).sum(-1)
+    alpha = beta.new_full(beta.shape, 0.5 * y_dim)
 
     result = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
     assert result.batch_shape == batch_shape
