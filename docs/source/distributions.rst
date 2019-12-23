@@ -112,6 +112,13 @@ FoldedDistribution
     :undoc-members:
     :show-inheritance:
 
+GammaGaussianHMM
+----------------
+.. autoclass:: pyro.distributions.GammaGaussianHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 GammaPoisson
 ------------
 .. autoclass:: pyro.distributions.GammaPoisson

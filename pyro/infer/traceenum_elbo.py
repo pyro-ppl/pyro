@@ -98,7 +98,7 @@ def _compute_model_factors(model_trace, guide_trace):
         if site["type"] == "sample":
             if name in guide_trace.nodes:
                 cost_sites.setdefault(ordering[name], []).append(site)
-                non_enum_dims.update(site["packed"]["log_prob"]._pyro_dims)
+                non_enum_dims.update(guide_trace.nodes[name]["packed"]["log_prob"]._pyro_dims)
             elif site["infer"].get("_enumerate_dim") is None:
                 cost_sites.setdefault(ordering[name], []).append(site)
             else:
