@@ -460,33 +460,35 @@ def test_gaussian_mrf_log_prob_block_diag(sample_shape, batch_shape, num_steps, 
 
 @pytest.mark.parametrize('obs_dim', [1, 2])
 @pytest.mark.parametrize('hidden_dim', [1, 3])
-@pytest.mark.parametrize('init_shape,trans_mat_shape,trans_mvn_shape,obs_mat_shape,obs_mvn_shape', [
-    ((), (6,), (), (), ()),
-    ((), (), (6,), (), ()),
-    ((), (), (), (6,), ()),
-    ((), (), (), (), (6,)),
-    ((), (6,), (6,), (6,), (6,)),
-    ((5,), (6,), (), (), ()),
-    ((), (5, 1), (6,), (), ()),
-    ((), (), (5, 1), (6,), ()),
-    ((), (), (), (5, 1), (6,)),
-    ((), (6,), (5, 1), (), ()),
-    ((), (), (6,), (5, 1), ()),
-    ((), (), (), (6,), (5, 1)),
-    ((5,), (), (), (), (6,)),
-    ((5,), (5, 6), (5, 6), (5, 6), (5, 6)),
+@pytest.mark.parametrize('scale_shape,init_shape,trans_mat_shape,trans_mvn_shape,obs_mat_shape,obs_mvn_shape', [
+    ((5,), (), (6,), (), (), ()),
+    ((), (), (6,), (), (), ()),
+    ((), (), (), (6,), (), ()),
+    ((), (), (), (), (6,), ()),
+    ((), (), (), (), (), (6,)),
+    ((), (), (6,), (6,), (6,), (6,)),
+    ((), (5,), (6,), (), (), ()),
+    ((), (), (5, 1), (6,), (), ()),
+    ((), (), (), (5, 1), (6,), ()),
+    ((), (), (), (), (5, 1), (6,)),
+    ((), (), (6,), (5, 1), (), ()),
+    ((), (), (), (6,), (5, 1), ()),
+    ((), (), (), (), (6,), (5, 1)),
+    ((), (5,), (), (), (), (6,)),
+    ((5,), (5,), (5, 6), (5, 6), (5, 6), (5, 6)),
 ], ids=str)
-def test_gamma_gaussian_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
+def test_gamma_gaussian_hmm_shape(scale_shape, init_shape, trans_mat_shape, trans_mvn_shape,
                                   obs_mat_shape, obs_mvn_shape, hidden_dim, obs_dim):
     init_dist = random_mvn(init_shape, hidden_dim)
     trans_mat = torch.randn(trans_mat_shape + (hidden_dim, hidden_dim))
     trans_dist = random_mvn(trans_mvn_shape, hidden_dim)
     obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
     obs_dist = random_mvn(obs_mvn_shape, obs_dim)
-    scale_dist = random_gamma(init_shape)
+    scale_dist = random_gamma(scale_shape)
     d = dist.GammaGaussianHMM(scale_dist, init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
-    shape = broadcast_shape(init_shape + (1,),
+    shape = broadcast_shape(scale_shape + (1,),
+                            init_shape + (1,),
                             trans_mat_shape,
                             trans_mvn_shape,
                             obs_mat_shape,

@@ -430,7 +430,8 @@ class GammaGaussianHMM(TorchDistribution):
         assert transition_matrix.shape[-2:] == (hidden_dim, hidden_dim)
         assert transition_dist.event_shape == (hidden_dim,)
         assert observation_dist.event_shape == (obs_dim,)
-        shape = broadcast_shape(initial_dist.batch_shape + (1,),
+        shape = broadcast_shape(scale_dist.batch_shape + (1,),
+                                initial_dist.batch_shape + (1,),
                                 transition_matrix.shape[:-2],
                                 transition_dist.batch_shape,
                                 observation_matrix.shape[:-2],
