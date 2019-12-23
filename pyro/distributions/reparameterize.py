@@ -3,6 +3,9 @@ from collections import OrderedDict
 
 import torch
 
+from .delta import Delta
+from .util import is_identically_zero
+
 
 class Reparameterizer(ABC):
     """
@@ -54,6 +57,21 @@ class Reparameterizer(ABC):
         """
         raise NotImplementedError
 
+    def get_log_importance(self, fn, values, value):
+        r"""
+        Get log importance weight :math:`log \frac {p(x)}{q(X)}` if any.
+        Defaults to zero.
+        """
+        return 0.0
+
+    def get_value_and_fn(self, fn, values):
+        value = self.transform_values(fn, values)
+        importance = self.get_log_importance(fn, values, value)
+        new_fn = Delta(value, event_dim=fn.event_dim, log_density=importance)
+        if is_identically_zero(importance):
+            new_fn = new_fn.mask(False)
+        return value, new_fn
+
 
 class TrivialReparameterizer(Reparameterizer):
     """
@@ -79,3 +97,38 @@ class LocScaleReparameterizer(Reparameterizer):
 
     def transform_values(self, fn, values):
         return fn.loc + fn.scale * values["centered"]
+
+
+class TransformReparameterizer(Reparameterizer):
+    """
+    Arbitrary transform reparameterizer.
+
+    This can be used to reparameterize wrt an arbitrary bijective
+    :class:`~torch.distributions.transforms.Transform` object, and requires
+    only the forward ``.__call__()`` method and the ``.log_abs_det_jacobian()``
+    transform to be defined, as in [1].
+
+    [1] Hoffman, M. et al. (2019)
+        "NeuTra-lizing Bad Geometry in Hamiltonian Monte Carlo Using Neural Transport"
+        https://arxiv.org/abs/1903.03704
+
+    :param ~pyro.distributions.TorchDistribution base_dist: A base
+        distribution for the auxiliary latent variable.
+    :param ~torch.distributions.transforms.Transform transform: A bijective
+        transform defining forward and log abs det jacobian methods.
+    """
+    def __init__(self, base_dist, transform):
+        super().__init__()
+        self.base_dist = base_dist
+        self.transform = transform
+
+    def get_dists(self, fn):
+        return OrderedDict(base_dist=self.base_dist)
+
+    def transform_values(self, fn, values):
+        return self.transform(values["base_dist"])
+
+    def get_log_importance(self, fn, values, value):
+        z = values["base_dist"]
+        x = value
+        return self.fn.log_prob(x) + self.base_dist.log_abs_det_jacobian(z, x)

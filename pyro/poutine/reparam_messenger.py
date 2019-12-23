@@ -2,8 +2,6 @@ from collections import OrderedDict
 
 import torch
 
-from pyro.distributions.delta import Delta
-
 from .messenger import Messenger
 from .runtime import apply_stack
 
@@ -60,13 +58,11 @@ class ReparamMessenger(Messenger):
             new_values[name] = new_msg["value"]
 
         # Combine auxiliary values via pyro.deterministic().
-        # TODO(https://github.com/pyro-ppl/pyro/issues/2214) refactor to
-        # use site type "deterministic" when it exists.
-        value = reparam.transform_values(msg["fn"], new_values)
+        value, new_fn = reparam.get_value_and_fn(msg["fn"], new_values)
         assert isinstance(value, torch.Tensor)
         if getattr(msg["fn"], "_validation_enabled", False):
             # Validate while the original msg["fn"] is known.
             msg["fn"]._validate_sample(value)
         msg["value"] = value
-        msg["fn"] = Delta(value, event_dim=msg["fn"].event_dim).mask(False)
+        msg["fn"] = new_fn
         msg["is_observed"] = True

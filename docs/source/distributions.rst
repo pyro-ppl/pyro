@@ -504,6 +504,11 @@ Reparameterizers
     :undoc-members:
     :show-inheritance:
 
+.. autoclass:: pyro.distributions.reparameterize.TransformReparameterizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. autoclass:: pyro.distributions.stable.StableReparameterizer
     :members:
     :undoc-members:
