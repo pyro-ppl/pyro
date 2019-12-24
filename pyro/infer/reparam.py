@@ -23,13 +23,13 @@ class NeuTra(Reparameterizer):
 
     def get_dists(self, fn):
         dists = OrderedDict()
-        if not self.x_constrained:
+        if not self.x_constrained:  # on first sample site
             self.posterior = self.guide.get_posterior()
             dists["latent"] = self.posterior
         return dists
 
     def transform_values(self, fn, values):
-        if self.x_constrainend is None:
+        if not self.x_constrainend:  # on first sample site
             x_unconstrained = values["latent"]
             x_constrained = self.guide._unpack_latent(x_unconstrained)
             self.x_constrained = list(reversed(x_constrained)))
@@ -38,6 +38,6 @@ class NeuTra(Reparameterizer):
 
     def get_log_importance(self, fn, values, value):
         log_density = fn.log_prob(value)
-        if values:
+        if values:  # on first sample site
             log_density = log_density - self.posterior.log_prob(values["latent"])
         return log_density
