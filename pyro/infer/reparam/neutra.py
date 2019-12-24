@@ -13,6 +13,10 @@ class NeuTraReparam:
         # ...now use the model in HMC or NUTS...
 
     Note that all sites must share a common ``NeuTra`` instance.
+
+    [1] Hoffman, M. et al. (2019)
+        "NeuTra-lizing Bad Geometry in Hamiltonian Monte Carlo Using Neural Transport"
+        https://arxiv.org/abs/1903.03704
     """
     def __init__(self, guide):
         assert isinstance(guide, AutoContinuous)
@@ -24,8 +28,8 @@ class NeuTraReparam:
         if not self.x_constrained:
             # Sample a shared latent on first sample site.
             posterior = self.guide.get_posterior()
-            latent = pyro.sample("{}_latent".format(name), posterior)
-            log_density = -posterior.log_prob(latent)
+            x_unconstrained = pyro.sample("{}_latent".format(name), posterior)
+            log_density = -posterior.log_prob(x_unconstrained)
             x_constrained = self.guide._unpack_latent(x_unconstrained)
             self.x_constrained = list(reversed(x_constrained))
 

@@ -1,3 +1,6 @@
+import math
+
+import pyro
 import pyro.distributions as dist
 from pyro.distributions.stable import _standard_stable
 
@@ -13,7 +16,7 @@ class StableReparam:
     distributions in likelihood-based inference algorithms.
     """
     def __call__(name, fn, obs):
-        assert isinstance(fn, Stable)
+        assert isinstance(fn, dist.Stable)
         assert obs is None, "stable_reparam does not support observe statements"
 
         # Draw parameter-free noise.

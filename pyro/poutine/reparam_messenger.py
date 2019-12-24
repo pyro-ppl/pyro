@@ -1,11 +1,4 @@
-from collections import OrderedDict
-
-import torch
-
-from pyro.distributions.delta import Delta
-
 from .messenger import Messenger
-from .runtime import apply_stack
 
 
 class ReparamMessenger(Messenger):

@@ -1,4 +1,5 @@
 import torch
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -17,6 +18,10 @@ class LocScaleReparam:
         pyro.sample("x", dist.StudentT(df, loc, scale),
                     infer={"reparam": LocScaleReparameterizer(x_centered,
                                                               shape_params=["df"])})
+
+    [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
+        "Automatic Reparameterisation of Probabilistic Programs"
+        https://arxiv.org/pdf/1906.03028.pdf
 
     :param float centered: optional centered parameter. If None (default) learn
         a per-site centering parameter in ``[0,1]``. If 0, fully decenter the
@@ -63,10 +68,10 @@ class LocScaleReparam:
 
         # Differentiably transform.
         if is_identically_zero(self.centered):
-            value fn.loc + fn.scale * decentered_value
+            value = fn.loc + fn.scale * decentered_value
         else:
             delta = decentered_value - self.centered * fn.loc
-            value fn.loc + fn.scale.pow(1 - self.centered) * delta
+            value = fn.loc + fn.scale.pow(1 - self.centered) * delta
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=fn.event_dim).mask(False)
