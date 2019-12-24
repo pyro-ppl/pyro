@@ -9,11 +9,15 @@ from pyro.distributions.reparameterize import LocScaleReparameterizer
 
 def decenter(fn, match=".*"):
     """
-    Effect for learnable decentering reparameterization.
+    Effect for learnable decentering reparameterization as in [1].
 
     For each matched latent sample site ``x``, this creates a new learnable
     parameter ``x_centered`` and applies a
     :class:`~pyro.distributions.reparameterize.LocScaleReparameterizer` .
+
+    [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
+        "Automatic Reparameterisation of Probabilistic Programs"
+        https://arxiv.org/pdf/1906.03028.pdf
 
     :param str match: A regular expression matching site names. Defaults to all
         latent sample sites.
