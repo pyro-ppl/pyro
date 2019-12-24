@@ -32,7 +32,7 @@ class NeuTra(Reparameterizer):
         if not self.x_constrainend:  # on first sample site
             x_unconstrained = values["latent"]
             x_constrained = self.guide._unpack_latent(x_unconstrained)
-            self.x_constrained = list(reversed(x_constrained)))
+            self.x_constrained = list(reversed(x_constrained))
         site, value = self.x_unconstrained.pop()
         return value
 
