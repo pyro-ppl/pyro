@@ -32,7 +32,7 @@ from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated import (ZeroInflatedDistribution, ZeroInflatedPoisson,
                                               ZeroInflatedNegativeBinomial)
 
-from . import constraints, kl, reparameterize, transforms
+from . import constraints, kl, transforms
 
 __all__ = [
     "AVFMultivariateNormal",
@@ -76,7 +76,6 @@ __all__ = [
     "enable_validation",
     "is_validation_enabled",
     "kl",
-    "reparameterize",
     "transforms",
     "validation_enabled",
 ]

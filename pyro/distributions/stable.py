@@ -5,8 +5,6 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.reparameterize import Reparameterizer
-from pyro.distributions.torch import Exponential, Uniform
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -144,30 +142,3 @@ class Stable(TorchDistribution):
         # Differentiably transform.
         x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential)
         return self.loc + self.scale * x
-
-
-class StableReparameterizer(Reparameterizer):
-    """
-    Auxiliary variable reparameterizer for
-    :class:`~pyro.distributions.Stable` distributions.
-
-    This creates a pair of parameter-free auxiliary distributions
-    (``Uniform(-pi/2,pi/2)`` and ``Exponential(1)``) with well-defined
-    ``.log_prob()`` methods, thereby permitting use of reparameterized stable
-    distributions in likelihood-based inference algorithms.
-    """
-    def get_dists(self, fn):
-        # Draw parameter-free noise.
-        proto = fn.stability
-        half_pi = proto.new_full(proto.shape, math.pi / 2)
-        one = proto.new_ones(proto.shape)
-        return OrderedDict([
-            ("uniform", Uniform(-half_pi, half_pi)),
-            ("exponential", Exponential(one)),
-        ])
-
-    def transform_values(self, fn, values):
-        # Differentiably transform.
-        x = _standard_stable(fn.stability, fn.skew,
-                             values["uniform"], values["exponential"])
-        return fn.loc + fn.scale * x
