@@ -3,7 +3,7 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import is_identically_one, is_identically_zero, is_validation_enabled
+from pyro.distributions.util import is_identically_one, is_validation_enabled
 
 
 class LocScaleReparam:
@@ -37,9 +37,11 @@ class LocScaleReparam:
         if is_validation_enabled():
             if isinstance(centered, float):
                 assert 0 <= centered and centered <= 1
-            else:
+            elif isinstance(centered, torch.Tensor):
                 assert (0 <= centered).all()
                 assert (centered <= 1).all()
+            else:
+                assert centered is None
         self.centered = centered
         self.shape_params = shape_params
 
@@ -50,28 +52,21 @@ class LocScaleReparam:
             return name, fn, obs
 
         # Apply a partial decentering transform.
-        params = {getattr(fn, key) for key in self.shape_params}
-        if is_identically_zero(centered):
-            params["loc"] = torch.zeros_like(fn.loc)
-            params["scale"] = torch.ones_like(fn.scale)
-        else:
-            if self.centered is None:
-                centered = pyro.param("{}_centered",
-                                      lambda: torch.full_like(torch.loc, 0.5),
-                                      constraint=constraints.unit_interval)
-            params["loc"] = fn.loc * centered
-            params["scale"] = fn.scale ** centered
+        params = {key: getattr(fn, key) for key in self.shape_params}
+        if self.centered is None:
+            centered = pyro.param("{}_centered",
+                                  lambda: torch.full_like(fn.loc, 0.5),
+                                  constraint=constraints.unit_interval)
+        params["loc"] = fn.loc * centered
+        params["scale"] = fn.scale ** centered
         decentered_fn = type(fn)(**params)
 
         # Draw decentered noise.
         decentered_value = pyro.sample("{}_decentered".format(name), decentered_fn)
 
         # Differentiably transform.
-        if is_identically_zero(self.centered):
-            value = fn.loc + fn.scale * decentered_value
-        else:
-            delta = decentered_value - self.centered * fn.loc
-            value = fn.loc + fn.scale.pow(1 - self.centered) * delta
+        delta = decentered_value - centered * fn.loc
+        value = fn.loc + fn.scale.pow(1 - centered) * delta
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=fn.event_dim).mask(False)

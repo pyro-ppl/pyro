@@ -1,3 +1,5 @@
+import pyro.distributions as dist
+
 from .messenger import Messenger
 
 
@@ -34,6 +36,8 @@ class ReparamMessenger(Messenger):
         reparam = msg["infer"].get("reparam")
         if reparam is None:
             return
+        if isinstance(msg["fn"], dist.Delta):
+            return  # avoid recursion
 
         new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
         if value is not None:

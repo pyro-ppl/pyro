@@ -15,7 +15,7 @@ class StableReparam:
     ``.log_prob()`` methods, thereby permitting use of reparameterized stable
     distributions in likelihood-based inference algorithms.
     """
-    def __call__(name, fn, obs):
+    def __call__(self, name, fn, obs):
         assert isinstance(fn, dist.Stable)
         assert obs is None, "stable_reparam does not support observe statements"
 

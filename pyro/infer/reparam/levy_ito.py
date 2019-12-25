@@ -28,6 +28,8 @@ class StableHMMReparam:
         self.num_jumps = num_jumps
 
     def __call__(self, name, fn, obs):
+        assert isinstance(fn, dist.StableHMM)
+
         # Sample shocks to initial state.
         init_shocks = pyro.sample("{}_init_shocks".format(name),
                                   dist.Pareto(1, self.stability))
