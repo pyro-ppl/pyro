@@ -1,5 +1,3 @@
-import torch
-from torch.distributions import constraints
 from torch.nn.functional import pad
 
 import pyro

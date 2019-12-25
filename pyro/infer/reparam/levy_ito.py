@@ -9,14 +9,14 @@ def _densify_shocks(length, times, sparse_shocks):
         lb = times.floor().clamp_(min=0, max=length)
         ub = times.ceil().clamp_(min=0, max=length)
         is_degenerate = (lb == ub)
-    lb_weight = ub - time
+    lb_weight = ub - times
     lb_weight.data[is_degenerate] = 0.5
-    ub_weight = time - lb
+    ub_weight = times - lb
     ub_weight.data[is_degenerate] = 0.5
 
-    dense_shocks = sparse_shocks.new_zeros((length + 1,) + shocks.shape[1:])
-    dense_shocks.scatter_add_(0, lb, lb_weights * sparse_shocks)
-    dense_shocks.scatter_add_(0, ub, ub_weights * sparse_shocks)
+    dense_shocks = sparse_shocks.new_zeros((length + 1,) + sparse_shocks.shape[1:])
+    dense_shocks.scatter_add_(0, lb, lb_weight * sparse_shocks)
+    dense_shocks.scatter_add_(0, ub, ub_weight * sparse_shocks)
     return dense_shocks[:-1]
 
 
@@ -54,5 +54,8 @@ class StableHMMReparam:
         obs_dist = dist.Normal(self.obs_dist.scale,
                                self.obs_dist.loc + obs_shocks).to_event(1)
 
-        hmm = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+        trans_mat = torch.eye(init_dist.loc.size(-1),
+                              dtype=init_dist.loc.dtype,
+                              device=init_dist.loc.device)
+        hmm = dist.GaussianHMM(init_dist, trans_mat, trans_dist, fn.obs_mat, obs_dist)
         return hmm, obs
