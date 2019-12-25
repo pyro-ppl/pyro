@@ -37,12 +37,12 @@ class ReparamMessenger(Messenger):
         if reparam is None:
             return
         if isinstance(msg["fn"], dist.Delta):
-            return  # avoid recursion
+            return  # avoid infinite recursion
 
         new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
         if value is not None:
-            if msg["value"] is not None:
-                msg["is_observed"] = None
+            if msg["value"] is None:
+                msg["is_observed"] = True
             msg["value"] = value
             if getattr(msg["fn"], "_validation_enabled", False):
                 # Validate while the original msg["fn"] is known.

@@ -19,8 +19,9 @@ class LocScaleReparam:
         https://arxiv.org/pdf/1906.03028.pdf
 
     :param float centered: optional centered parameter. If None (default) learn
-        a per-site centering parameter in ``[0,1]``. If 0, fully decenter the
-        distribution; if 1, preserve the centered distribution unchanged.
+        a per-site per-element centering parameter in ``[0,1]``. If 0, fully
+        decenter the distribution; if 1, preserve the centered distribution
+        unchanged.
     :param shape_params: list of additional parameter names to copy unchanged from
         the centered to decentered distribution.
     :type shape_params: tuple or list
@@ -50,7 +51,7 @@ class LocScaleReparam:
         params = {key: getattr(fn, key) for key in self.shape_params}
         if self.centered is None:
             centered = pyro.param("{}_centered",
-                                  lambda: torch.full_like(fn.loc, 0.5),
+                                  lambda: fn.loc.new_full(fn.event_shape, 0.5),
                                   constraint=constraints.unit_interval)
         params["loc"] = fn.loc * centered
         params["scale"] = fn.scale ** centered

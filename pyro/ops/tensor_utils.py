@@ -3,6 +3,20 @@ import math
 import torch
 
 
+def inverse_cumsum(seq, dim):
+    """
+    Inverse to the :func:`torch.cumsum` function.
+    """
+    assert isinstance(seq, torch.Tensor) and seq.dim()
+    assert isinstance(dim, int)
+    if dim >= 0:
+        dim -= seq.dim()
+    shift = -1 - dim
+    index = (Ellipsis, slice(None, -1)) + (slice(None),) * shift
+    padding = (0, 0) * shift + (1, 0)
+    return seq - torch.nn.functional.pad(seq[index], padding)
+
+
 def block_diag_embed(mat):
     """
     Takes a tensor of shape (..., B, M, N) and returns a block diagonal tensor

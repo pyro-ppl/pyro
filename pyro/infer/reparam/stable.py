@@ -10,10 +10,12 @@ class StableReparam:
     Auxiliary variable reparameterizer for
     :class:`~pyro.distributions.Stable` distributions.
 
-    This creates a pair of parameter-free auxiliary distributions
+    This is useful in inference of latent :class:`~pyro.distributions.Stable`
+    variables because the :meth:`~pyro.distributions.Stable.log_prob` is not
+    implemented.  This creates a pair of parameter-free auxiliary distributions
     (``Uniform(-pi/2,pi/2)`` and ``Exponential(1)``) with well-defined
     ``.log_prob()`` methods, thereby permitting use of reparameterized stable
-    distributions in likelihood-based inference algorithms.
+    distributions in likelihood-based inference algorithms like SVI and MCMC.
 
     This reparameterization works only for latent variables, not likelihoods.
     """

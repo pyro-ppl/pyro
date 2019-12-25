@@ -1,16 +1,6 @@
-from torch.nn.functional import pad
-
 import pyro
 import pyro.distributions as dist
-
-
-def inverse_cumsum(seq, dim=-1):
-    """
-    Inverse to the :func:`torch.cumsum` function.
-    """
-    if dim != -1:
-        raise NotImplementedError
-    return seq - pad(seq[..., :-1], (1, 0))
+from pyro.ops.tensor_utils import inverse_cumsum
 
 
 class CumsumReparam:
@@ -38,7 +28,7 @@ class CumsumReparam:
                                    .to_event(1)
                                    .mask(False))
         z = z_cumsum[1:] - z_cumsum[:-1]
-        value = inverse_cumsum(z_cumsum)
+        value = inverse_cumsum(z_cumsum, dim=-1)
         pyro.sample("z", my_increment_dist, obs=z)
         # ...observe statements involving z_cumsum...
 
@@ -60,6 +50,6 @@ class CumsumReparam:
                                        .to_event(1)
                                        .mask(False))
 
-        value = inverse_cumsum(value_cumsum)
+        value = inverse_cumsum(value_cumsum, dim=-1)
         new_fn = dist.Delta(value, log_density=fn.log_prob(value), event_dim=1)
         return new_fn, value

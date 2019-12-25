@@ -7,6 +7,10 @@ class TransformReparam:
     Reparameterizer for
     :class:`pyro.distributions.torch.TransformedDistribution` .
 
+    This is useful for transformed distributions with complex,
+    geometry-changing transforms, where the posterior has simple shape in
+    the space of ``base_dist``.
+
     This reparameterization works only for latent variables, not likelihoods.
     """
     def __call__(self, name, fn, obs):

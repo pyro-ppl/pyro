@@ -1,12 +1,32 @@
-import pytest
 import numpy as np
+import pytest
 import torch
 
-from pyro.ops.tensor_utils import block_diag_embed, convolve, repeated_matmul, block_diagonal
-from tests.common import assert_equal, assert_close
-
+from pyro.ops.tensor_utils import block_diag_embed, block_diagonal, convolve, inverse_cumsum, repeated_matmul
+from tests.common import assert_close, assert_equal
 
 pytestmark = pytest.mark.stage('unit')
+
+
+@pytest.mark.parametrize("shape,dim", [
+    ((4,), -1),
+    ((4,), 0),
+    ((3, 4), -2),
+    ((3, 4), -1),
+    ((3, 4), 0),
+    ((3, 4), 1),
+    ((3, 4, 5), -3),
+    ((3, 4, 5), -2),
+    ((3, 4, 5), -1),
+    ((3, 4, 5), 0),
+    ((3, 4, 5), 1),
+    ((3, 4, 5), 2),
+])
+def test_inverse_cumsum(shape, dim):
+    expected = torch.randn(shape)
+    cumsum = expected.cumsum(dim)
+    actual = inverse_cumsum(cumsum, dim)
+    assert_close(actual, expected)
 
 
 @pytest.mark.parametrize('batch_size', [1, 2, 3])
