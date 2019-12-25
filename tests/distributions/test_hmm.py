@@ -566,3 +566,56 @@ def test_gamma_gaussian_hmm_log_prob(sample_shape, batch_shape, num_steps, hidde
     # compute log_prob of the joint student-t distribution
     expected_log_prob = logp.compound().log_prob(unrolled_data)
     assert_close(actual_log_prob, expected_log_prob)
+
+
+def random_stable(stability, skew_scale_loc_shape):
+    skew = dist.Uniform(-1, 1).sample(skew_scale_loc_shape)
+    scale = torch.rand(skew_scale_loc_shape).exp()
+    loc = torch.randn(skew_scale_loc_shape)
+    return dist.Stable(stability, skew, scale, loc)
+
+
+@pytest.mark.parametrize('obs_dim', [1, 2])
+@pytest.mark.parametrize('hidden_dim', [1, 3])
+@pytest.mark.parametrize('init_shape,trans_mat_shape,trans_dist_shape,obs_mat_shape,obs_dist_shape', [
+    ((), (4,), (), (), ()),
+    ((), (), (4,), (), ()),
+    ((), (), (), (4,), ()),
+    ((), (), (), (), (4,)),
+    ((), (4,), (4,), (4,), (4,)),
+    ((5,), (4,), (), (), ()),
+    ((), (5, 1), (4,), (), ()),
+    ((), (), (5, 1), (4,), ()),
+    ((), (), (), (5, 1), (4,)),
+    ((), (4,), (5, 1), (), ()),
+    ((), (), (4,), (5, 1), ()),
+    ((), (), (), (4,), (5, 1)),
+    ((5,), (), (), (), (4,)),
+    ((5,), (5, 4), (5, 4), (5, 4), (5, 4)),
+], ids=str)
+def test_stable_hmm_shape(init_shape, trans_mat_shape, trans_dist_shape,
+                          obs_mat_shape, obs_dist_shape, hidden_dim, obs_dim):
+    stability = dist.Uniform(0, 2).sample()
+    init_dist = random_stable(stability, init_shape + (hidden_dim,)).to_event(1)
+    trans_mat = torch.randn(trans_mat_shape + (hidden_dim, hidden_dim))
+    trans_dist = random_stable(stability, trans_dist_shape + (hidden_dim,)).to_event(1)
+    obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
+    obs_dist = random_stable(stability, obs_dist_shape + (obs_dim,)).to_event(1)
+    d = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+
+    shape = broadcast_shape(init_shape + (1,),
+                            trans_mat_shape,
+                            trans_dist_shape,
+                            obs_mat_shape,
+                            obs_dist_shape)
+    expected_batch_shape, time_shape = shape[:-1], shape[-1:]
+    expected_event_shape = time_shape + (obs_dim,)
+    assert d.batch_shape == expected_batch_shape
+    assert d.event_shape == expected_event_shape
+
+    x = d.rsample()
+    assert x.shape == d.shape()
+    x = d.rsample((6,))
+    assert x.shape == (6,) + d.shape()
+    x = d.expand((6, 5)).rsample()
+    assert x.shape == (6, 5) + d.event_shape
