@@ -14,6 +14,8 @@ class StableReparam:
     (``Uniform(-pi/2,pi/2)`` and ``Exponential(1)``) with well-defined
     ``.log_prob()`` methods, thereby permitting use of reparameterized stable
     distributions in likelihood-based inference algorithms.
+
+    This reparameterization works only for latent variables, not likelihoods.
     """
     def __call__(self, name, fn, obs):
         assert isinstance(fn, dist.Stable)

@@ -8,16 +8,11 @@ from pyro.distributions.util import is_identically_one, is_validation_enabled
 
 class LocScaleReparam:
     """
-    Generic decentering reparameterizer for distributions that are specified by
-    parameters ``loc`` and ``scale`` (and possibly additional
-    ``shape_params``). This can be combined with :func:`pyro.param` to learn a
-    centering transform::
+    Generic decentering reparameterizer [1] for distributions that are
+    specified by parameters ``loc`` and ``scale`` (and possibly additional
+    ``shape_params``).
 
-        x_centered = pyro.param("x_centered", 0.5,
-                                constraint=constraints.unit_interval)
-        pyro.sample("x", dist.StudentT(df, loc, scale),
-                    infer={"reparam": LocScaleReparameterizer(x_centered,
-                                                              shape_params=["df"])})
+    This reparameterization works only for latent variables, not likelihoods.
 
     [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
         "Automatic Reparameterisation of Probabilistic Programs"

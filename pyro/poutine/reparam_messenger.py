@@ -12,7 +12,7 @@ class ReparamMessenger(Messenger):
     constructor, configure ``site["infer"]["reparam"] = my_reparameterizer``
     for each desired sample site, or use :func:`~pyro.poutine.infer_config` .
 
-    See `available reparameterizers <infer.reparam.html>`_
+    See the :mod:`pyro.infer.reparam` module for available reparameterizers.
 
     .. warning:: Reparameterizers are recursive; take care to avoid infinite
         loops in your ``config`` filters.

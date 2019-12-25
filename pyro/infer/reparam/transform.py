@@ -6,6 +6,8 @@ class TransformReparam:
     """
     Reparameterizer for
     :class:`pyro.distributions.torch.TransformedDistribution` .
+
+    This reparameterization works only for latent variables, not likelihoods.
     """
     def __call__(self, name, fn, obs):
         assert isinstance(fn, dist.TransformedDistribution)

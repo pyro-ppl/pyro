@@ -17,6 +17,11 @@ class CumsumReparam:
     """
     Cumsum reparameterization.
 
+    This is useful when a time series is parameterized by increments: the
+    posterior is often poorly conditioned in this representation but
+    well-conditioned on the cumsum of increments. This changes to the
+    cumsum(increments) parameterization.
+
     The following are equivalent models, but (2) and (3) have better geometry.
 
     1. Naive parameterization in terms of increments::
@@ -28,7 +33,7 @@ class CumsumReparam:
     2. Manual reparameterization as a factor graph::
 
         z_cumsum = pyro.sample("z_cumsum",
-                               dist.Cauchy(0, 1)
+                               dist.Normal(0, 1)
                                    .expand([size])
                                    .to_event(1)
                                    .mask(False))
@@ -43,16 +48,14 @@ class CumsumReparam:
         z_cumsum = z.cumsum()
         # ...observe statements involving z_cumsum...
 
-    This is useful when a time series is parameterized by increments: the
-    posterior is often poorly conditioned in this representation but
-    well-conditioned on the cumsum of increments. This changes to the
-    cumsum(increments) parameterization.
+
+    This reparameterization works only for latent variables, not likelihoods.
     """
     def __call__(self, name, fn, obs):
         assert fn.event_dim == 1
         assert obs is None
         value_cumsum = pyro.sample("{}_cumsum".format(name),
-                                   dist.Cauchy(0, 1)
+                                   dist.Normal(0, 1)
                                        .expand(fn.event_shape)
                                        .to_event(1)
                                        .mask(False))

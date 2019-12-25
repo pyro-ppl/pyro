@@ -23,8 +23,16 @@ def _densify_shocks(length, times, sparse_shocks):
 class StableHMMReparam:
     """
     Levy-Ito decomposition of a :class:`~pyro.distributions.hmm.StableHMM` .
+
+    This is useful for training the parameters of a
+    :class:`~pyro.distributions.hmm.StableHMM` distribution, whose
+    ``.log_prob()`` method is undefined.
+
+    :param int num_jumps: Fixed number of jumps in the compound Poisson
+        component of the Levy-Ito decomposition.
     """
     def __init__(self, num_jumps):
+        assert isinstance(num_jumps, int) and num_jumps > 0
         self.num_jumps = num_jumps
 
     def __call__(self, name, fn, obs):
