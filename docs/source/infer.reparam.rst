@@ -27,12 +27,12 @@ Cumsum
 .. automodule:: pyro.infer.reparam.cumsum
     :members:
 
-Levy Stable
------------
+Stable
+------
 .. automodule:: pyro.infer.reparam.stable
     :members:
 
-Levy-Ito Decompositions
------------------------
+Levy-Ito Decomposition
+----------------------
 .. automodule:: pyro.infer.reparam.levy_ito
     :members:
