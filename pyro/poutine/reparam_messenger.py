@@ -22,7 +22,7 @@ class ReparamMessenger(Messenger):
         https://arxiv.org/pdf/1906.03028.pdf
 
     :param dict config: Optional configuration mapping site name to
-        :class:`~pyro.distributions.reparameterize.Reparameterizer` object.
+        reparameterizer.
     """
     def __init__(self, config=None):
         super().__init__()

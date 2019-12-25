@@ -82,11 +82,11 @@ class Stable(TorchDistribution):
     likelihood-free algorithms such as
     :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
     via the :func:`~pyro.poutine.handlers.reparam` handler with
-    :class:`~pyro.distributions.stable.StableReparameterizer` e.g.::
+    :class:`~pyro.infer.reparam.stable.StableReparam` e.g.::
 
         with poutine.reparam():
             pyro.sample("x", Stable(stability, skew, scale, loc),
-                        infer={"reparam": StableReparameterizer()})
+                        infer={"reparam": StableReparam()})
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
