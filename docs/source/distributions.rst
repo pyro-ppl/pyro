@@ -231,6 +231,13 @@ Stable
     :undoc-members:
     :show-inheritance:
 
+StableHMM
+---------
+.. autoclass:: pyro.distributions.StableHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit
