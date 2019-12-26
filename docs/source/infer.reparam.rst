@@ -11,28 +11,34 @@ Loc-Scale Decentering
 ---------------------
 .. automodule:: pyro.infer.reparam.loc_scale
     :members:
+    :member-order: bysource
 
 Transform
 ---------
 .. automodule:: pyro.infer.reparam.transform
     :members:
+    :member-order: bysource
 
 Neural Transport
 ----------------
 .. automodule:: pyro.infer.reparam.neutra
     :members:
+    :member-order: bysource
 
 Cumsum
 ------
 .. automodule:: pyro.infer.reparam.cumsum
     :members:
+    :member-order: bysource
 
 Stable
 ------
 .. automodule:: pyro.infer.reparam.stable
     :members:
+    :member-order: bysource
 
 Levy-Ito Decomposition
 ----------------------
 .. automodule:: pyro.infer.reparam.levy_ito
     :members:
+    :member-order: bysource

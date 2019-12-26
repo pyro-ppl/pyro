@@ -3,6 +3,8 @@ import torch
 import pyro
 import pyro.distributions as dist
 
+from .stable import SymmetricStableReparam
+
 
 def _densify_shocks(length, times, sparse_shocks):
     with torch.no_grad():
@@ -22,48 +24,69 @@ def _densify_shocks(length, times, sparse_shocks):
 
 class StableHMMReparam:
     """
-    Levy-Ito decomposition of a :class:`~pyro.distributions.hmm.StableHMM` .
+    Levy-Ito decomposition of a :class:`~pyro.distributions.StableHMM` whose
+    ``initial_dist`` and ``observation_dist`` are symmetric (but whose
+    ``transition_dist`` may be skewed).
 
     This is useful for training the parameters of a
-    :class:`~pyro.distributions.hmm.StableHMM` distribution, whose
-    ``.log_prob()`` method is undefined.
+    :class:`~pyro.distributions.StableHMM` distribution, whose
+    :meth:`~pyro.distributions.Stable.log_prob` method is undefined.
 
-    :param int num_jumps: Fixed number of jumps in the compound Poisson
-        component of the Levy-Ito decomposition.
+    This introduces auxiliary random variables conditioned on which the
+    remaining process is a :class:`~pyro.distributions.GaussianHMM` .  The
+    initial and observation distributions are reparameterized by
+    :class:`~pyro.infer.reparam.stable.SymmetricStableReparam` . The latent
+    transition process is Levy-Ito decomposed into drift + Brownian motion + a
+    compound Poisson process; we neglect the generalized compensated Poisson
+    process of small shocks, and approximate the compound Poisson process with
+    a fixed ``num_shocks`` over the time interval of interest. As
+    ``num_shocks`` increases, the cutoff on shock size tends to zero and
+    approximation becomes exact.
+
+    :param int num_shocks: Fixed number of shocks in the compound Poisson
+        process component of the Levy-Ito decomposition of latent state.
     """
-    def __init__(self, num_jumps):
-        assert isinstance(num_jumps, int) and num_jumps > 0
-        self.num_jumps = num_jumps
+    def __init__(self, num_shocks):
+        assert isinstance(num_shocks, int) and num_shocks > 0
+        self.num_shocks = num_shocks
 
     def __call__(self, name, fn, obs):
         assert isinstance(fn, dist.StableHMM)
+        hidden_dim = fn.hidden_dim
+        duration = fn.transition_dist.batch_shape[-1]
+        stability = fn.initial_dist.base_dist.stability[..., 0]
 
-        # Sample shocks to initial state.
-        init_shocks = pyro.sample("{}_init_shocks".format(name),
-                                  dist.Pareto(1, self.stability))
-        init_dist = dist.Normal(self.init_dist.scale,
-                                self.init_dist.loc + init_shocks).to_event(1)
-
-        # Sample shocks to latent state.
-        length = self.length
-        shock_times = pyro.sample("{}_trans_shock_times".format(name),
-                                  dist.Uniform(0, length).to_event(2))
-        # FIXME we need both positive and negative shocks.
-        shock_sizes = pyro.sample("{}_trans_shock_sizes".format(name),
-                                  dist.Pareto(1, self.stability).to_event(2))
-        trans_shocks = _densify_shocks(length, shock_times, shock_sizes)
+        # Sample positive and negative shocks to latent state,
+        # independent over each hidden dim.
+        shock_times = pyro.sample("{}_shock_times".format(name),
+                                  dist.Uniform(0, duration)
+                                      .expand([2, self.num_shocks, hidden_dim])
+                                      .to_event(3))
+        shock_sizes = pyro.sample("{}_shock_sizes".format(name),
+                                  dist.Pareto(1, stability.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1))
+                                      .expand([2, self.num_shocks, hidden_dim])
+                                      .to_event(3))
+        pos_shock_times, neg_shock_times = shock_times.unbind(-3)
+        pos_shock_sizes, neg_shock_sizes = shock_sizes.unbind(-3)
+        pos_shocks = _densify_shocks(duration, pos_shock_times, pos_shock_sizes)
+        neg_shocks = _densify_shocks(duration, neg_shock_times, neg_shock_sizes)
+        # FIXME correctly scale pos_shocks and neg_shocks
+        shocks = pos_shocks - neg_shocks
+        # FIXME correct scale and loc
         trans_dist = dist.Normal(self.trans_dist.scale,
-                                 self.trans_dist.loc + trans_shocks).to_event(1)
+                                 self.trans_dist.loc + shocks).to_event(1)
 
-        # Sample shocks to observations.
-        # FIXME we need both positive and negative shocks.
-        obs_shocks = pyro.sample("{}_obs_shocks".format(name),
-                                 dist.Pareto(1, self.stability).to_event(2))
-        obs_dist = dist.Normal(self.obs_dist.scale,
-                               self.obs_dist.loc + obs_shocks).to_event(1)
+        # Reparameterize the initial distribution as conditionally Gaussian.
+        init_dist, _ = SymmetricStableReparam()("{}_init".format(name), fn.initial_dist, None)
+        assert isinstance(init_dist, dist.Independent)
+        assert isinstance(init_dist.base_dist, dist.Normal)
 
-        trans_mat = torch.eye(init_dist.loc.size(-1),
-                              dtype=init_dist.loc.dtype,
-                              device=init_dist.loc.device)
-        hmm = dist.GaussianHMM(init_dist, trans_mat, trans_dist, fn.obs_mat, obs_dist)
+        # Reparameterize the observation distribution as conditionally Gaussian.
+        obs_dist, obs = SymmetricStableReparam()("{}_obs".format(name), fn.observation_dist, obs)
+        assert isinstance(obs_dist, dist.Independent)
+        assert isinstance(obs_dist.base_dist, dist.Normal)
+
+        # Reparameterize the entire HMM as contionally Gaussian.
+        hmm = dist.GaussianHMM(init_dist, fn.trans_mat, trans_dist.to_event(1),
+                               fn.obs_mat, obs_dist)
         return hmm, obs
