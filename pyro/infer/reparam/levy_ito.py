@@ -30,7 +30,7 @@ class StableHMMReparam:
 
     This is useful for training the parameters of a
     :class:`~pyro.distributions.StableHMM` distribution, whose
-    :meth:`~pyro.distributions.Stable.log_prob` method is undefined.
+    :meth:`~pyro.distributions.StableHMM.log_prob` method is undefined.
 
     This introduces auxiliary random variables conditioned on which the
     remaining process is a :class:`~pyro.distributions.GaussianHMM` .  The
