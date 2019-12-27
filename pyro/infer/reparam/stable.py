@@ -26,7 +26,8 @@ class StableReparam(Reparam):
     inference algorithms like SVI and MCMC.
 
     This reparameterization works only for latent variables, not likelihoods.
-    For likelihoods see :class:`SymmetricStableReparam` .
+    For likelihood-compatible reparameterization see
+    :class:`SymmetricStableReparam` .
 
     [1] J.P. Nolan (2017).
         Stable Distributions: Models for Heavy Tailed Data.
@@ -69,7 +70,8 @@ class SymmetricStableReparam(Reparam):
     variable as a totally-skewed (``skew=1``)
     :class:`~pyro.distributions.Stable` mixture of
     :class:`~pyro.distributions.Normal` random variables. See Proposition 3. of
-    [1].
+    [1] (but note we differ since :class:`Stable` uses Nolan's continuous S0
+    parameterization).
 
     [1] Alvaro Cartea and Sam Howison (2009)
         "Option Pricing with Levy-Stable Processes"

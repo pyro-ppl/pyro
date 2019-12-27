@@ -5,7 +5,7 @@ Reparameterizers
 The :mod:`pyro.infer.reparam` module contains reparameterization strategies for
 the :func:`pyro.poutine.handlers.reparam` effect. These are useful for altering
 geometry of a poorly-conditioned parameter space to make the posterior better
-shaped. These are useful in e.g. ``Auto*Normal`` guides and MCMCM.
+shaped. These are useful in e.g. ``Auto*Normal`` guides and MCMC.
 
 Base Class
 ----------
