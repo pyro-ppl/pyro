@@ -2,10 +2,12 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer.autoguide.guides import AutoContinuous
 
+from .reparam import Reparam
 
-class NeuTraReparam:
+
+class NeuTraReparam(Reparam):
     """
-    Neural Transport reparameterizer [1] of multiple latent sites.
+    Neural Transport reparameterizer [1] of multiple latent variables.
 
     This uses a trained :class:`~pyro.infer.autoguide.AutoContinuous`
     guide to alter the geometry of a model, typically for use e.g. in MCMC.
@@ -58,7 +60,7 @@ class NeuTraReparam:
             self.x_constrained = list(reversed(x_constrained))
 
         # Extract a single site's value from the shared latent.
-        site, value = self.x_unconstrained.pop()
+        site, value = self.x_constrained.pop()
         log_density = log_density + fn.log_prob(value)
         new_fn = dist.Delta(value, log_density, event_dim=fn.event_dim)
         return new_fn, value

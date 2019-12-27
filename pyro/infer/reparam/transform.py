@@ -1,11 +1,13 @@
 import pyro
 import pyro.distributions as dist
 
+from .reparam import Reparam
 
-class TransformReparam:
+
+class TransformReparam(Reparam):
     """
     Reparameterizer for
-    :class:`pyro.distributions.torch.TransformedDistribution` .
+    :class:`pyro.distributions.torch.TransformedDistribution` latent variables.
 
     This is useful for transformed distributions with complex,
     geometry-changing transforms, where the posterior has simple shape in
@@ -14,18 +16,16 @@ class TransformReparam:
     This reparameterization works only for latent variables, not likelihoods.
     """
     def __call__(self, name, fn, obs):
+        assert obs is None, "TransformReparam does not support observe statements"
         assert isinstance(fn, dist.TransformedDistribution)
-        assert obs is None
 
         # Draw noise from the base distribution.
-        y = pyro.sample("{}_base".format(name), fn.base_dist)
+        x = pyro.sample("{}_base".format(name), fn.base_dist)
 
         # Differentiably transform.
-        log_density = 0
         for t in fn.transforms:
-            x, y = y, t(y)
-            log_density = log_density + t.log_abs_det_jacobian(x, y)
+            x = t(x)
 
         # Simulate a pyro.deterministic() site.
-        new_fn = dist.Delta(x, log_density, event_dim=fn.event_dim)
-        return new_fn, y
+        new_fn = dist.Delta(x, event_dim=fn.event_dim)
+        return new_fn, x

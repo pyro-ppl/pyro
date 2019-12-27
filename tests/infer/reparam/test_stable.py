@@ -5,7 +5,7 @@ from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.reparam import StableReparam
+from pyro.infer.reparam import StableReparam, SymmetricStableReparam
 from tests.common import assert_close
 
 
@@ -18,9 +18,13 @@ def get_moments(x):
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)])
-def test_stable(shape):
+@pytest.mark.parametrize("Reparam", [StableReparam, SymmetricStableReparam])
+def test_stable(Reparam, shape):
     stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
-    skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
+    if Reparam is SymmetricStableReparam:
+        skew = 0
+    else:
+        skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
     loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
     params = [stability, skew, scale, loc]
@@ -33,7 +37,7 @@ def test_stable(shape):
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = get_moments(value)
 
-    reparam_model = poutine.reparam(model, {"x": StableReparam()})
+    reparam_model = poutine.reparam(model, {"x": Reparam()})
     trace = poutine.trace(reparam_model).get_trace()
     trace.compute_log_prob()  # smoke test only
     value = trace.nodes["x"]["value"]

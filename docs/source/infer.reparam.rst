@@ -7,6 +7,13 @@ the :func:`pyro.poutine.handlers.reparam` effect. These are useful for altering
 geometry of a poorly-conditioned parameter space to make the posterior better
 shaped. These are useful in e.g. ``Auto*Normal`` guides and MCMCM.
 
+Base Class
+----------
+.. automodule:: pyro.infer.reparam.reparam
+    :members:
+    :member-order: bysource
+    :special-members: __call__
+
 Loc-Scale Decentering
 ---------------------
 .. automodule:: pyro.infer.reparam.loc_scale

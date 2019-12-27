@@ -3,6 +3,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 
+from .reparam import Reparam
 from .stable import SymmetricStableReparam
 
 
@@ -22,11 +23,11 @@ def _densify_shocks(length, times, sparse_shocks):
     return dense_shocks[:-1]
 
 
-class StableHMMReparam:
+class StableHMMReparam(Reparam):
     """
-    Levy-Ito decomposition of a :class:`~pyro.distributions.StableHMM` whose
-    ``initial_dist`` and ``observation_dist`` are symmetric (but whose
-    ``transition_dist`` may be skewed).
+    Levy-Ito decomposition of :class:`~pyro.distributions.StableHMM` random
+    variables whose ``initial_dist`` and ``observation_dist`` are symmetric
+    (but whose ``transition_dist`` may be skewed).
 
     This is useful for training the parameters of a
     :class:`~pyro.distributions.StableHMM` distribution, whose
@@ -86,7 +87,7 @@ class StableHMMReparam:
         assert isinstance(obs_dist, dist.Independent)
         assert isinstance(obs_dist.base_dist, dist.Normal)
 
-        # Reparameterize the entire HMM as contionally Gaussian.
+        # Reparameterize the entire HMM as conditionally Gaussian.
         hmm = dist.GaussianHMM(init_dist, fn.trans_mat, trans_dist.to_event(1),
                                fn.obs_mat, obs_dist)
         return hmm, obs

@@ -7,6 +7,11 @@ from torch.distributions.utils import broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
+def _check(x):
+    assert not torch.isnan(x).any()
+    return x
+
+
 def _unsafe_standard_stable(alpha, beta, V, W):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
@@ -19,12 +24,13 @@ def _unsafe_standard_stable(alpha, beta, V, W):
     v = b.atan() + alpha * V
     Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
         * ((v - V).cos() / W).pow(inv_alpha - 1)
+    Z.data[~(Z.data == Z.data)] = 0  # drop occasional NANs
 
     # Convert to Nolan's parametrization S^0 so that samples depend
     # continuously on (alpha,beta), allowing us to interpolate around the hole
     # at alpha=1.
     X = Z - b
-    return X
+    return X, Z
 
 
 RADIUS = 0.01
@@ -44,7 +50,8 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         hole = 1.
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
-        return _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
+        x, _ = _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
+        return x
 
     # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
@@ -63,7 +70,7 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         #              2 * RADIUS
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
-    pairs = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
+    pairs, _ = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
     return (pairs * weights).sum(-1)
 
 
