@@ -28,8 +28,9 @@ class NeuTraReparam(Reparam):
         nuts = NUTS(model)
         # ...now use the model in HMC or NUTS...
 
-    Note that all sites must share a single common :class:`NeuTraReparam` instance,
-    and that the model must have static structure.
+    This reparameterization works only for latent variables, not likelihoods.
+    Note that all sites must share a single common :class:`NeuTraReparam`
+    instance, and that the model must have static structure.
 
     [1] Hoffman, M. et al. (2019)
         "NeuTra-lizing Bad Geometry in Hamiltonian Monte Carlo Using Neural Transport"
@@ -45,6 +46,9 @@ class NeuTraReparam(Reparam):
         self.x_unconstrained = []
 
     def __call__(self, name, fn, obs):
+        if name not in self.guide.prototype_trace.nodes:
+            return fn, obs
+        assert obs is None, "NeuTraReparam does not support observe statements"
         log_density = 0.
         if not self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
@@ -54,7 +58,7 @@ class NeuTraReparam(Reparam):
                                  "TransformedDistributions but got a posterior of type {}"
                                  .format(type(posterior)))
             t = dist.transforms.ComposeTransform(posterior.transforms)
-            z_unconstrained = pyro.sample("{}_latent".format(name),
+            z_unconstrained = pyro.sample("{}_shared_latent".format(name),
                                           posterior.base_dist.mask(False))
 
             # Differentiably transform.
@@ -64,6 +68,7 @@ class NeuTraReparam(Reparam):
 
         # Extract a single site's value from the shared latent.
         site, unconstrained_value = self.x_unconstrained.pop()
+        assert name == site["name"], "model structure changed"
         transform = biject_to(fn.support)
         value = transform(unconstrained_value)
         logdet = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
