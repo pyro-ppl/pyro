@@ -721,7 +721,7 @@ def test_energy_distance_multivariate(prior_scale):
 def test_reparam_stable():
     data = dist.Poisson(torch.randn(8).exp()).sample()
 
-    @poutine.reparam()
+    @poutine.reparam(config={"dz": StableReparam(), "y": StableReparam()})
     def model():
         stability = pyro.sample("stability", dist.Uniform(1., 2.))
         trans_skew = pyro.sample("trans_skew", dist.Uniform(-1., 1.))
@@ -730,12 +730,10 @@ def test_reparam_stable():
 
         # We use separate plates because the .cumsum() op breaks independence.
         with pyro.plate("time1", len(data)):
-            dz = pyro.sample("dz", dist.Stable(stability, trans_skew),
-                             infer={"reparam": StableReparam()})
+            dz = pyro.sample("dz", dist.Stable(stability, trans_skew))
         z = dz.cumsum(-1)
         with pyro.plate("time2", len(data)):
-            y = pyro.sample("y", dist.Stable(stability, obs_skew, scale, z),
-                            infer={"reparam": StableReparam()})
+            y = pyro.sample("y", dist.Stable(stability, obs_skew, scale, z))
             pyro.sample("x", dist.Poisson(y.abs()), obs=data)
 
     guide = AutoDelta(model)

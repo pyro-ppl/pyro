@@ -1,5 +1,3 @@
-import pyro.distributions as dist
-
 from .messenger import Messenger
 
 
@@ -8,36 +6,37 @@ class ReparamMessenger(Messenger):
     Reparametrizes each affected sample site into one or more auxiliary sample
     sites followed by a deterministic transformation [1].
 
-    To specify reparameterizers, either pass a ``config`` dict to the
-    constructor, configure ``site["infer"]["reparam"] = my_reparameterizer``
-    for each desired sample site, or use :func:`~pyro.poutine.infer_config` .
-
-    See the :mod:`pyro.infer.reparam` module for available reparameterizers.
-
-    .. warning:: Reparameterizers are recursive; take care to avoid infinite
-        loops in your ``config`` filters.
+    To specify reparameterizers, pass a ``config`` dict or callable to the
+    constructor.  See the :mod:`pyro.infer.reparam` module for available
+    reparameterizers.
 
     [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
         "Automatic Reparameterisation of Probabilistic Programs"
         https://arxiv.org/pdf/1906.03028.pdf
 
-    :param dict config: Optional configuration mapping site name to
-        reparameterizer.
+    :param config: Configuration, either a dict mapping site name to
+        :class:~pyro.infer.reparam.reparam.Reparameterizer` ,
+        or a function mapping site to :class:~pyro.infer.reparam.reparam.Reparameterizer` or None.
+    :type config: dict or callable
     """
-    def __init__(self, config=None):
+    def __init__(self, config):
         super().__init__()
-        if config is None:
-            config = {}
+        assert isinstance(config, dict) or callable(config)
         self.config = config
 
     def _pyro_sample(self, msg):
-        if msg["name"] in self.config:
-            msg["infer"]["reparam"] = self.config[msg["name"]]
-        reparam = msg["infer"].get("reparam")
+        if isinstance(self.config, dict):
+            reparam = self.config.get(msg["name"])
+        else:
+            reparam = self.config(msg)
         if reparam is None:
             return
-        if isinstance(msg["fn"], dist.Delta):
-            return  # avoid infinite recursion
+
+        # avoid recursion
+        already_applied = msg["infer"].setdefault("_reparam", [])
+        if self in already_applied:
+            return
+        already_applied.append(self)
 
         new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
         if value is not None:

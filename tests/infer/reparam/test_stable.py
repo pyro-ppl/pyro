@@ -4,6 +4,7 @@ from torch.autograd import grad
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions.torch_distribution import MaskedDistribution
 from pyro import poutine
 from pyro.infer.reparam import StableReparam, SymmetricStableReparam
 from tests.common import assert_close
@@ -35,7 +36,8 @@ def test_stable(shape):
 
     reparam_model = poutine.reparam(model, {"x": StableReparam()})
     trace = poutine.trace(reparam_model).get_trace()
-    assert isinstance(trace.nodes["x"]["fn"], dist.Delta)
+    assert isinstance(trace.nodes["x"]["fn"], MaskedDistribution)
+    assert isinstance(trace.nodes["x"]["fn"].base_dist, dist.Delta)
     trace.compute_log_prob()  # smoke test only
     value = trace.nodes["x"]["value"]
     actual_moments = get_moments(value)
