@@ -17,14 +17,10 @@ def get_moments(x):
     return (x - points).abs().mean(1)
 
 
-@pytest.mark.parametrize("shape", [(), (4,), (3, 2)])
-@pytest.mark.parametrize("Reparam", [StableReparam, SymmetricStableReparam])
-def test_stable(Reparam, shape):
+@pytest.mark.parametrize("shape", [(), (4,), (2, 3)])
+def test_stable(shape):
     stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
-    if Reparam is SymmetricStableReparam:
-        skew = 0
-    else:
-        skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
+    skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
     loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
     params = [stability, skew, scale, loc]
@@ -32,22 +28,54 @@ def test_stable(Reparam, shape):
     def model():
         with pyro.plate_stack("plates", shape):
             with pyro.plate("particles", 100000):
-                pyro.sample("x", dist.Stable(stability, skew, scale, loc))
+                return pyro.sample("x", dist.Stable(stability, skew, scale, loc))
 
-    value = poutine.trace(model).get_trace().nodes["x"]["value"]
-    expected_probe = get_moments(value)
+    value = model()
+    expected_moments = get_moments(value)
 
-    reparam_model = poutine.reparam(model, {"x": Reparam()})
+    reparam_model = poutine.reparam(model, {"x": StableReparam()})
     trace = poutine.trace(reparam_model).get_trace()
+    assert isinstance(trace.nodes["x"]["fn"], dist.Delta)
     trace.compute_log_prob()  # smoke test only
     value = trace.nodes["x"]["value"]
-    actual_probe = get_moments(value)
-    assert_close(actual_probe, expected_probe, atol=0.05)
+    actual_moments = get_moments(value)
+    assert_close(actual_moments, expected_moments, atol=0.05)
 
-    for actual_m, expected_m in zip(actual_probe, expected_probe):
+    for actual_m, expected_m in zip(actual_moments, expected_moments):
         expected_grads = grad(expected_m.sum(), params, retain_graph=True)
         actual_grads = grad(actual_m.sum(), params, retain_graph=True)
         assert_close(actual_grads[0], expected_grads[0], atol=0.2)
         assert_close(actual_grads[1], expected_grads[1], atol=0.1)
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
         assert_close(actual_grads[3], expected_grads[3], atol=0.1)
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (2, 3)])
+def test_symmetric_stable(shape):
+    stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
+    scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    params = [stability, scale, loc]
+
+    def model():
+        with pyro.plate_stack("plates", shape):
+            with pyro.plate("particles", 100000):
+                return pyro.sample("x", dist.Stable(stability, 0, scale, loc))
+
+    value = model()
+    expected_moments = get_moments(value)
+
+    reparam_model = poutine.reparam(model, {"x": SymmetricStableReparam()})
+    trace = poutine.trace(reparam_model).get_trace()
+    assert isinstance(trace.nodes["x"]["fn"], dist.Normal)
+    trace.compute_log_prob()  # smoke test only
+    value = trace.nodes["x"]["value"]
+    actual_moments = get_moments(value)
+    assert_close(actual_moments, expected_moments, atol=0.05)
+
+    for actual_m, expected_m in zip(actual_moments, expected_moments):
+        expected_grads = grad(expected_m.sum(), params, retain_graph=True)
+        actual_grads = grad(actual_m.sum(), params, retain_graph=True)
+        assert_close(actual_grads[0], expected_grads[0], atol=0.2)
+        assert_close(actual_grads[1], expected_grads[1], atol=0.1)
+        assert_close(actual_grads[2], expected_grads[2], atol=0.1)

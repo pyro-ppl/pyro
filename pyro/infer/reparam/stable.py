@@ -133,16 +133,15 @@ class StableHMMReparam(Reparam):
     :class:`~pyro.distributions.StableHMM` distribution, whose
     :meth:`~pyro.distributions.StableHMM.log_prob` method is undefined.
 
-    This introduces auxiliary random variables conditioned on which the
-    remaining process is a :class:`~pyro.distributions.GaussianHMM` .  The
-    initial and observation distributions are reparameterized by
+    This introduces auxiliary random variables conditioned on which the process
+    becomes a :class:`~pyro.distributions.GaussianHMM` . The initial and
+    observation distributions are reparameterized by
     :class:`SymmetricStableReparam` . The latent transition process is Levy-Ito
     decomposed into drift + Brownian motion + a compound Poisson process (see
     [1] section 1.2.6). We neglect the generalized compensated Poisson process
     of small shocks, and approximate the compound Poisson process with a fixed
     ``num_shocks`` over the time interval of interest. As ``num_shocks``
-    increases, the cutoff on shock size tends to zero and approximation becomes
-    exact.
+    increases, the shock size cutoffs tend to zero and approximation improves.
 
     [1] Andreas E. Kyprianou (2013)
         "Fluctuations of Levy Processes with Applications"
@@ -150,7 +149,7 @@ class StableHMMReparam(Reparam):
 
     :param int num_shocks: Fixed number of shocks to approximate the compound
         Poisson process component of the Levy-Ito decomposition of latent
-        state. This automatically determines the minimum shock size cutoff.
+        state. This automatically determines the minimum shock size cutoffs.
     """
     def __init__(self, num_shocks):
         assert isinstance(num_shocks, int) and num_shocks > 0
