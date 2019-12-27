@@ -1,3 +1,5 @@
+from torch.distributions import transform_to
+
 import pyro
 import pyro.distributions as dist
 from pyro.infer.autoguide.guides import AutoContinuous
@@ -25,7 +27,8 @@ class NeuTraReparam(Reparam):
         nuts = NUTS(model)
         # ...now use the model in HMC or NUTS...
 
-    Note that all sites must share a single common :class:`NeuTraReparam` instance.
+    Note that all sites must share a single common :class:`NeuTraReparam` instance,
+    and that the model must have static structure.
 
     [1] Hoffman, M. et al. (2019)
         "NeuTra-lizing Bad Geometry in Hamiltonian Monte Carlo Using Neural Transport"
@@ -56,11 +59,12 @@ class NeuTraReparam(Reparam):
             # Differentiably transform.
             x_unconstrained = t(z_unconstrained)
             log_density = t.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
-            x_constrained = self.guide._unpack_latent(x_unconstrained)
-            self.x_constrained = list(reversed(x_constrained))
+            self.x_constrained = [transform_to(site["fn"].support)(value)
+                                  for site, value in self.guide._unpack_latent(x_unconstrained)]
+            self.x_constrained.reverse()
 
         # Extract a single site's value from the shared latent.
-        site, value = self.x_constrained.pop()
+        value = self.x_constrained.pop()
         log_density = log_density + fn.log_prob(value)
         new_fn = dist.Delta(value, log_density, event_dim=fn.event_dim)
         return new_fn, value

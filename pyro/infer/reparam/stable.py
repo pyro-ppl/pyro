@@ -45,7 +45,7 @@ class StableReparam(Reparam):
         u = pyro.sample("{}_uniform".format(name),
                         self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
         e = pyro.sample("{}_exponential".format(name),
-                        self._wrao(dist.Exponential(one), event_dim))
+                        self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform.
         x = _standard_stable(fn.stability, fn.skew, u, e)
@@ -68,7 +68,7 @@ class SymmetricStableReparam(Reparam):
 
     This reparameterizes a symmetric :class:`~pyro.distributions.Stable` random
     variable as a totally-skewed (``skew=1``)
-    :class:`~pyro.distributions.Stable` mixture of
+    :class:`~pyro.distributions.Stable` scale mixture of
     :class:`~pyro.distributions.Normal` random variables. See Proposition 3. of
     [1] (but note we differ since :class:`Stable` uses Nolan's continuous S0
     parameterization).
