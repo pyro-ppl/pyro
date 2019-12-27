@@ -1,7 +1,8 @@
-from torch.distributions import transform_to
+from torch.distributions import biject_to
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions.util import sum_rightmost
 from pyro.infer.autoguide.guides import AutoContinuous
 
 from .reparam import Reparam
@@ -41,11 +42,11 @@ class NeuTraReparam(Reparam):
             raise TypeError("NeuTraReparam expected an AutoContinuous guide, but got {}"
                             .format(type(guide)))
         self.guide
-        self.x_constrained = []
+        self.x_unconstrained = []
 
     def __call__(self, name, fn, obs):
         log_density = 0.
-        if not self.x_constrained:  # On first sample site.
+        if not self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
             posterior = self.guide.get_posterior()
             if not isinstance(posterior, dist.TransformedDistribution):
@@ -59,12 +60,14 @@ class NeuTraReparam(Reparam):
             # Differentiably transform.
             x_unconstrained = t(z_unconstrained)
             log_density = t.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
-            self.x_constrained = [transform_to(site["fn"].support)(value)
-                                  for site, value in self.guide._unpack_latent(x_unconstrained)]
-            self.x_constrained.reverse()
+            self.x_unconstrained = list(reversed(self.guide._unpack_latent(x_unconstrained)))
 
         # Extract a single site's value from the shared latent.
-        value = self.x_constrained.pop()
-        log_density = log_density + fn.log_prob(value)
+        site, unconstrained_value = self.x_unconstrained.pop()
+        transform = biject_to(fn.support)
+        value = transform(unconstrained_value)
+        logdet = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+        logdet = sum_rightmost(logdet, logdet.dim() - value.dim() + fn.event_dim)
+        log_density = log_density + fn.log_prob(value) + logdet
         new_fn = dist.Delta(value, log_density, event_dim=fn.event_dim)
         return new_fn, value
