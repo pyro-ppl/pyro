@@ -548,8 +548,9 @@ class StableHMM(TorchDistribution):
 
     This implements a reparameterized :meth:`rsample` method but does not
     implement a :meth:`log_prob` method. Inference can be performed using
-    likelihood-free algorithms such as
-    :class:`~pyro.infer.energy_distance.EnergyDistance` .
+    either reparameterization with
+    :class:`~pyro.infer.reparam.stable.StableHMMReparam` or likelihood-free
+    algorithms such as :class:`~pyro.infer.energy_distance.EnergyDistance` .
 
     The event_shape of this distribution includes time on the left::
 

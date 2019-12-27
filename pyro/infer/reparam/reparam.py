@@ -11,9 +11,8 @@ class Reparam(ABC):
     def __call__(self, name, fn, obs):
         """
         :param str name: A sample site name.
-        :type fn: ~pyro.distributions.torch.TorchDistribution
-        :param obs: Optional observed value.
-        :type obs: NoneType or Tensor
+        :param ~pyro.distributions.TorchDistribution fn: A distribution.
+        :param ~torch.Tensor obs: Observed value or None.
         :return: A pair (``new_fn``, ``value``).
         """
         return fn, obs

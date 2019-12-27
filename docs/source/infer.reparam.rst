@@ -5,12 +5,12 @@ Reparameterizers
 The :mod:`pyro.infer.reparam` module contains reparameterization strategies for
 the :func:`pyro.poutine.handlers.reparam` effect. These are useful for altering
 geometry of a poorly-conditioned parameter space to make the posterior better
-shaped. These are useful in e.g. ``Auto*Normal`` guides and MCMC.
+shaped. These can be used with a variety of inference algorithms, e.g.
+``Auto*Normal`` guides and MCMC.
 
-Base Class
-----------
 .. automodule:: pyro.infer.reparam.reparam
     :members:
+    :undoc-members:
     :member-order: bysource
     :special-members: __call__
 
@@ -18,28 +18,34 @@ Loc-Scale Decentering
 ---------------------
 .. automodule:: pyro.infer.reparam.loc_scale
     :members:
+    :undoc-members:
     :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
 
-Transform
----------
+Transformed Distributions
+-------------------------
 .. automodule:: pyro.infer.reparam.transform
     :members:
+    :undoc-members:
     :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
+Stable Distributions
+--------------------
+.. automodule:: pyro.infer.reparam.stable
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
 
 Neural Transport
 ----------------
 .. automodule:: pyro.infer.reparam.neutra
     :members:
+    :undoc-members:
     :member-order: bysource
-
-Stable
-------
-.. automodule:: pyro.infer.reparam.stable
-    :members:
-    :member-order: bysource
-
-Levy-Ito Decomposition
-----------------------
-.. automodule:: pyro.infer.reparam.levy_ito
-    :members:
-    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
