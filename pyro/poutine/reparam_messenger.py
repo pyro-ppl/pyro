@@ -15,8 +15,9 @@ class ReparamMessenger(Messenger):
         https://arxiv.org/pdf/1906.03028.pdf
 
     :param config: Configuration, either a dict mapping site name to
-        :class:~pyro.infer.reparam.reparam.Reparameterizer` ,
-        or a function mapping site to :class:~pyro.infer.reparam.reparam.Reparameterizer` or None.
+        :class:`~pyro.infer.reparam.reparam.Reparameterizer` ,
+        or a function mapping site to
+        :class:`~pyro.infer.reparam.reparam.Reparameterizer` or None.
     :type config: dict or callable
     """
     def __init__(self, config):
@@ -31,12 +32,6 @@ class ReparamMessenger(Messenger):
             reparam = self.config(msg)
         if reparam is None:
             return
-
-        # avoid recursion
-        already_applied = msg["infer"].setdefault("_reparam", [])
-        if self in already_applied:
-            return
-        already_applied.append(self)
 
         new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
         if value is not None:
