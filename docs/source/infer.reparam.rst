@@ -25,12 +25,6 @@ Neural Transport
     :members:
     :member-order: bysource
 
-Cumsum
-------
-.. automodule:: pyro.infer.reparam.cumsum
-    :members:
-    :member-order: bysource
-
 Stable
 ------
 .. automodule:: pyro.infer.reparam.stable
