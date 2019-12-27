@@ -27,19 +27,6 @@ def test_shape(sample_shape, batch_shape):
     x.sum().backward()
 
 
-@pytest.mark.parametrize("skew", [-1, 1, None])
-def test_support(skew):
-    batch_shape = (1000,)
-    stability = torch.empty(batch_shape).uniform_(0, 2).requires_grad_()
-    if skew is None:
-        skew = torch.empty(batch_shape).uniform_(-1, 1).requires_grad_()
-    scale = torch.randn(batch_shape).exp().requires_grad_()
-    loc = torch.randn(batch_shape).requires_grad_()
-    d = dist.Stable(stability, skew, scale, loc)
-    x = d.sample()
-    assert d.support.check(x).all(), x
-
-
 @pytest.mark.parametrize("beta", [-1.0, -0.5, 0.0, 0.5, 1.0])
 @pytest.mark.parametrize("alpha", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
 def test_sample(alpha, beta):
