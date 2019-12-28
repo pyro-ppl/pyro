@@ -102,14 +102,14 @@ class SymmetricStableReparam(Reparam):
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
         # Construct a scaled Gaussian.
-        new_fn = dist.Normal(fn.loc, scale)
+        new_fn = self._wrap(dist.Normal(fn.loc, scale), event_dim)
         return new_fn, obs
 
 
 def _densify_shocks(length, times, sparse_shocks):
     with torch.no_grad():
-        lb = times.floor().clamp_(min=0, max=length)
-        ub = times.ceil().clamp_(min=0, max=length)
+        lb = times.floor().long().clamp_(min=0, max=length)
+        ub = times.ceil().long().clamp_(min=0, max=length)
         is_degenerate = (lb == ub)
     lb_weight = ub - times
     lb_weight.data[is_degenerate] = 0.5
@@ -178,8 +178,9 @@ class StableHMMReparam(Reparam):
         # FIXME correctly scale pos_shocks and neg_shocks
         shocks = pos_shocks - neg_shocks
         # FIXME correct scale and loc
-        trans_dist = dist.Normal(self.trans_dist.scale,
-                                 self.trans_dist.loc + shocks).to_event(1)
+        trans_dist = fn.transition_dist.base_dist
+        trans_dist = dist.Normal(trans_dist.loc + shocks,
+                                 trans_dist.scale).to_event(1)
 
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist, _ = SymmetricStableReparam()("{}_init".format(name), fn.initial_dist, None)
@@ -192,6 +193,6 @@ class StableHMMReparam(Reparam):
         assert isinstance(obs_dist.base_dist, dist.Normal)
 
         # Reparameterize the entire HMM as conditionally Gaussian.
-        hmm = dist.GaussianHMM(init_dist, fn.trans_mat, trans_dist.to_event(1),
-                               fn.obs_mat, obs_dist)
+        hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
+                               fn.observation_matrix, obs_dist)
         return hmm, obs

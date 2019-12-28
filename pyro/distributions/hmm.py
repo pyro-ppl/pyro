@@ -288,9 +288,13 @@ class GaussianHMM(TorchDistribution):
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None):
-        assert isinstance(initial_dist, torch.distributions.MultivariateNormal)
+        assert (isinstance(initial_dist, torch.distributions.MultivariateNormal) or
+                (isinstance(initial_dist, torch.distributions.Independent) and
+                 isinstance(initial_dist.base_dist, torch.distributions.Normal)))
         assert isinstance(transition_matrix, torch.Tensor)
-        assert isinstance(transition_dist, torch.distributions.MultivariateNormal)
+        assert (isinstance(transition_dist, torch.distributions.MultivariateNormal) or
+                (isinstance(transition_dist, torch.distributions.Independent) and
+                 isinstance(transition_dist.base_dist, torch.distributions.Normal)))
         assert isinstance(observation_matrix, torch.Tensor)
         assert (isinstance(observation_dist, torch.distributions.MultivariateNormal) or
                 (isinstance(observation_dist, torch.distributions.Independent) and

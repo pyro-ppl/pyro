@@ -258,13 +258,24 @@ def mvn_to_gaussian(mvn):
     :return: An equivalent Gaussian object.
     :rtype: ~pyro.ops.gaussian.Gaussian
     """
-    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert (isinstance(mvn, torch.distributions.MultivariateNormal) or
+            (isinstance(mvn, torch.distributions.Independent) and
+             isinstance(mvn.base_dist, torch.distributions.Normal)))
+    if isinstance(mvn, torch.distributions.Independent):
+        mvn = mvn.base_dist
+        precision_diag = mvn.scale.pow(-2)
+        precision = precision_diag.diag_embed()
+        info_vec = mvn.loc * precision_diag
+        scale_diag = mvn.scale
+    else:
+        precision = mvn.precision_matrix
+        info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
+        scale_diag = mvn.scale_tril.diagonal(dim1=-2, dim2=-1)
+
     n = mvn.loc.size(-1)
-    precision = mvn.precision_matrix
-    info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
     log_normalizer = (-0.5 * n * math.log(2 * math.pi) +
                       -0.5 * (info_vec * mvn.loc).sum(-1) -
-                      mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+                      scale_diag.log().sum(-1))
     return Gaussian(log_normalizer, info_vec, precision)
 
 
