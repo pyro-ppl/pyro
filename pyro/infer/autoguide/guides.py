@@ -421,13 +421,9 @@ class AutoContinuous(AutoGuide):
         batch_shape = latent.shape[:-1]  # for plates outside of _setup_prototype, e.g. parallel particles
         pos = 0
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            constrained_shape = site["value"].shape
             unconstrained_shape = self._unconstrained_shapes[name]
             size = _product(unconstrained_shape)
-            event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
-            unconstrained_shape = broadcast_shape(unconstrained_shape,
-                                                  batch_shape + (1,) * event_dim)
-            unconstrained_value = latent[..., pos:pos + size].view(unconstrained_shape)
+            unconstrained_value = latent[..., pos:pos + size].view(batch_shape + unconstrained_shape)
             yield site, unconstrained_value
             pos += size
         if not torch._C._get_tracing_state():

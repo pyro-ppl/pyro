@@ -449,12 +449,16 @@ def test_empty_model_error():
 
 def test_unpack_latent():
     def model():
-        return pyro.sample('x', dist.LKJCorrCholesky(2, torch.tensor(1.)))
+        with pyro.plate('N', 5):
+            return pyro.sample('x', dist.LKJCorrCholesky(2, torch.tensor(1.)))
 
     guide = AutoDiagonalNormal(model)
     assert guide()['x'].shape == model().shape
     latent = guide.sample_latent()
-    assert list(guide._unpack_latent(latent))[0][1].shape == (1,)
+    assert list(guide._unpack_latent(latent))[0][1].shape == (5, 1)
+    with pyro.plate('N', 100):
+        batched_latent = guide.sample_latent()
+    assert list(guide._unpack_latent(batched_latent))[0][1].shape == (100, 5, 1)
 
 
 @pytest.mark.parametrize("auto_class", [
