@@ -88,7 +88,7 @@ def test_symmetric_stable(shape):
 @pytest.mark.parametrize("hidden_dim", [1, 3])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
 def test_stable_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
-    num_shocks = 3
+    num_jumps = 3
     stability = dist.Uniform(0, 2).sample(batch_shape)
 
     def random_stable(shape, skew=None):
@@ -111,7 +111,7 @@ def test_stable_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
 
     data = model()
     with poutine.trace() as tr:
-        with poutine.reparam(config={"x": StableHMMReparam(num_shocks)}):
+        with poutine.reparam(config={"x": StableHMMReparam(num_jumps)}):
             model(data)
     assert isinstance(tr.trace.nodes["x"]["fn"], dist.GaussianHMM)
     tr.trace.compute_log_prob()  # smoke test only

@@ -106,7 +106,7 @@ class SymmetricStableReparam(Reparam):
         return new_fn, obs
 
 
-def _densify_shocks(length, times, sparse_shocks):
+def _densify_jumps(length, times, sparse_jumps):
     with torch.no_grad():
         lb = times.floor().long().clamp_(min=0, max=length)
         ub = times.ceil().long().clamp_(min=0, max=length)
@@ -116,10 +116,10 @@ def _densify_shocks(length, times, sparse_shocks):
     ub_weight = times - lb
     ub_weight.data[is_degenerate] = 0.5
 
-    dense_shocks = sparse_shocks.new_zeros((length + 1,) + sparse_shocks.shape[1:])
-    dense_shocks.scatter_add_(0, lb, lb_weight * sparse_shocks)
-    dense_shocks.scatter_add_(0, ub, ub_weight * sparse_shocks)
-    return dense_shocks[:-1]
+    dense_jumps = sparse_jumps.new_zeros((length + 1,) + sparse_jumps.shape[1:])
+    dense_jumps.scatter_add_(0, lb, lb_weight * sparse_jumps)
+    dense_jumps.scatter_add_(0, ub, ub_weight * sparse_jumps)
+    return dense_jumps[:-1]
 
 
 class StableHMMReparam(Reparam):
@@ -139,21 +139,21 @@ class StableHMMReparam(Reparam):
     :class:`SymmetricStableReparam` . The latent transition process is Levy-Ito
     decomposed into drift + Brownian motion + a compound Poisson process (see
     [1] section 1.2.6). We neglect the generalized compensated Poisson process
-    of small shocks, and approximate the compound Poisson process with a fixed
-    ``num_shocks`` over the time interval of interest. As ``num_shocks``
-    increases, the shock size cutoffs tend to zero and approximation improves.
+    of small jumps, and approximate the compound Poisson process with a fixed
+    ``num_jumps`` over the time interval of interest. As ``num_jumps``
+    increases, the jump size cutoffs tend to zero and approximation improves.
 
     [1] Andreas E. Kyprianou (2013)
         "Fluctuations of Levy Processes with Applications"
         https://people.bath.ac.uk/ak257/book2e/book2e.pdf
 
-    :param int num_shocks: Fixed number of shocks to approximate the compound
+    :param int num_jumps: Fixed number of jumps to approximate the compound
         Poisson process component of the Levy-Ito decomposition of latent
-        state. This automatically determines the minimum shock size cutoffs.
+        state. This automatically determines the minimum jump size cutoffs.
     """
-    def __init__(self, num_shocks):
-        assert isinstance(num_shocks, int) and num_shocks > 0
-        self.num_shocks = num_shocks
+    def __init__(self, num_jumps):
+        assert isinstance(num_jumps, int) and num_jumps > 0
+        self.num_jumps = num_jumps
 
     def __call__(self, name, fn, obs):
         assert isinstance(fn, dist.StableHMM)
@@ -161,25 +161,25 @@ class StableHMMReparam(Reparam):
         duration = fn.transition_dist.batch_shape[-1]
         stability = fn.initial_dist.base_dist.stability[..., 0]
 
-        # Sample positive and negative shocks to latent state,
+        # Sample positive and negative jumps to latent state,
         # independent over each hidden dim.
-        shock_times = pyro.sample("{}_shock_times".format(name),
-                                  dist.Uniform(0, duration)
-                                      .expand([2, self.num_shocks, hidden_dim])
-                                      .to_event(3))
-        shock_sizes = pyro.sample("{}_shock_sizes".format(name),
-                                  dist.Pareto(1, stability.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1))
-                                      .expand([2, self.num_shocks, hidden_dim])
-                                      .to_event(3))
-        pos_shock_times, neg_shock_times = shock_times.unbind(-3)
-        pos_shock_sizes, neg_shock_sizes = shock_sizes.unbind(-3)
-        pos_shocks = _densify_shocks(duration, pos_shock_times, pos_shock_sizes)
-        neg_shocks = _densify_shocks(duration, neg_shock_times, neg_shock_sizes)
-        # FIXME correctly scale pos_shocks and neg_shocks
-        shocks = pos_shocks - neg_shocks
+        jump_times = pyro.sample("{}_jump_times".format(name),
+                                 dist.Uniform(0, duration)
+                                     .expand([2, self.num_jumps, hidden_dim])
+                                     .to_event(3))
+        jump_sizes = pyro.sample("{}_jump_sizes".format(name),
+                                 dist.Pareto(1, stability.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1))
+                                     .expand([2, self.num_jumps, hidden_dim])
+                                     .to_event(3))
+        pos_jump_times, neg_jump_times = jump_times.unbind(-3)
+        pos_jump_sizes, neg_jump_sizes = jump_sizes.unbind(-3)
+        pos_jumps = _densify_jumps(duration, pos_jump_times, pos_jump_sizes)
+        neg_jumps = _densify_jumps(duration, neg_jump_times, neg_jump_sizes)
+        # FIXME correctly scale pos_jumps and neg_jumps
+        jumps = pos_jumps - neg_jumps
         # FIXME correct scale and loc
         trans_dist = fn.transition_dist.base_dist
-        trans_dist = dist.Normal(trans_dist.loc + shocks,
+        trans_dist = dist.Normal(trans_dist.loc + jumps,
                                  trans_dist.scale).to_event(1)
 
         # Reparameterize the initial distribution as conditionally Gaussian.
