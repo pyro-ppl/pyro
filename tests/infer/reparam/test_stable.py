@@ -13,9 +13,9 @@ from tests.common import assert_close
 # Test helper to extract a few absolute moments from samples.
 # This uses abs moments because Stable variance is infinite.
 def get_moments(x):
-    points = torch.tensor([-4., -2, -1., -0.5, 0., 0.5, 1., 2, 4.])
+    points = torch.tensor([-4., -1., 0., 1., 4.])
     points = points.reshape((-1,) + (1,) * x.dim())
-    return (x - points).abs().mean(1)
+    return torch.cat([x.mean(0, keepdim=True), (x - points).abs().mean(1)])
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
@@ -61,7 +61,7 @@ def test_symmetric_stable(shape):
 
     def model():
         with pyro.plate_stack("plates", shape):
-            with pyro.plate("particles", 100000):
+            with pyro.plate("particles", 200000):
                 return pyro.sample("x", dist.Stable(stability, 0, scale, loc))
 
     value = model()
