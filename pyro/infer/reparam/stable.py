@@ -75,7 +75,7 @@ class SymmetricStableReparam(Reparam):
 
     [1] Alvaro Cartea and Sam Howison (2009)
         "Option Pricing with Levy-Stable Processes"
-        https://people.maths.ox.ac.uk/~howison/papers/levy.pdf
+        https://pdfs.semanticscholar.org/4d66/c91b136b2a38117dd16c2693679f5341c616.pdf
     """
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
