@@ -43,7 +43,8 @@ class StudentT:
         fast and stable.
     :param torch.Tensor precision: precision matrix of this gaussian.
     :param torch.Tensor df: degree of freedom.
-    :param torch.Tensor rank: rank of the precision matrix.
+    :param torch.Tensor rank: rank of the precision matrix. This is useful when we want to
+        pad this instance.
     """
     def __init__(self, log_normalizer, info_vec, precision, df, rank):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
@@ -211,11 +212,9 @@ class StudentT:
 
         and for data ``x``:
 
-            g.condition(x).event_logsumexp().log_density(s)
-              = g.marginalize(left=g.dim() - x.size(-1)).log_density(x, s)
+            g.condition(x).event_logsumexp()
+              = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
         """
-        # NB: the easiest way to think about this process is to consider GammaGaussian
-        # as a Gaussian with precision and info_vec scaled by `s`.
         if left == 0 and right == 0:
             return self
         if left > 0 and right > 0:
@@ -242,12 +241,10 @@ class StudentT:
 
         df = self.df
         rank = self.rank - n_b
-        # TODO: rescale precision, info_vec
-        # beta = self.beta - 0.5 * b_tmp.squeeze(-1).pow(2).sum(-1)
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
                           P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
-        return GammaGaussian(log_normalizer, info_vec, precision, self.df, beta)
+        return GammaGaussian(log_normalizer, info_vec, precision, df, rank)
 
     def event_logsumexp(self):
         """

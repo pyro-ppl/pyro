@@ -279,15 +279,15 @@ class GammaGaussian:
         Integrates out the latent multiplier `s`. The result will be a
         Student-T distribution.
         """
-        alpha = self.alpha - 0.5 * self.dim() + 1
+        concentration = self.alpha - 0.5 * self.dim() + 1
         scale_tril = _precision_to_scale_tril(self.precision)
         scale_tril_t_u = scale_tril.transpose(-1, -2).matmul(self.info_vec.unsqueeze(-1)).squeeze(-1)
         u_Pinv_u = scale_tril_t_u.pow(2).sum(-1)
-        beta = self.beta - 0.5 * u_Pinv_u
+        rate = self.beta - 0.5 * u_Pinv_u
 
         loc = scale_tril.matmul(scale_tril_t_u.unsqueeze(-1)).squeeze(-1)
-        scale_tril = scale_tril * (beta / alpha).sqrt().unsqueeze(-1).unsqueeze(-1)
-        return MultivariateStudentT(2 * alpha, loc, scale_tril)
+        scale_tril = scale_tril * (rate / concentration).sqrt().unsqueeze(-1).unsqueeze(-1)
+        return MultivariateStudentT(2 * concentration, loc, scale_tril)
 
     def event_logsumexp(self):
         """
