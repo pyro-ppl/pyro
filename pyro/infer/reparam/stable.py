@@ -98,7 +98,7 @@ class SymmetricStableReparam(Reparam):
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
         _, z = _unsafe_standard_stable(fn.stability / 2, 1, u, e)
         assert (z >= 0).all()
-        scale = fn.scale / (0.5 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(1 / fn.stability) * z.sqrt()
+        scale = fn.scale * (2 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(1 / fn.stability) * z.sqrt()
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
         # Construct a scaled Gaussian.
@@ -106,20 +106,22 @@ class SymmetricStableReparam(Reparam):
         return new_fn, obs
 
 
-def _densify_jumps(length, times, sparse_jumps):
+def _densify_jumps(duration, times, sparse_jumps):
     with torch.no_grad():
-        lb = times.floor().long().clamp_(min=0, max=length)
-        ub = times.ceil().long().clamp_(min=0, max=length)
+        lb = times.floor().long().clamp_(min=0, max=duration)
+        ub = times.ceil().long().clamp_(min=0, max=duration)
         is_degenerate = (lb == ub)
     lb_weight = ub - times
     lb_weight.data[is_degenerate] = 0.5
     ub_weight = times - lb
     ub_weight.data[is_degenerate] = 0.5
 
-    dense_jumps = sparse_jumps.new_zeros((length + 1,) + sparse_jumps.shape[1:])
-    dense_jumps.scatter_add_(0, lb, lb_weight * sparse_jumps)
-    dense_jumps.scatter_add_(0, ub, ub_weight * sparse_jumps)
-    return dense_jumps[:-1]
+    shape = list(sparse_jumps.shape)
+    shape[-2] = duration + 1
+    dense_jumps = sparse_jumps.new_zeros(torch.Size(shape))
+    dense_jumps.scatter_add_(-2, lb, lb_weight * sparse_jumps)
+    dense_jumps.scatter_add_(-2, ub, ub_weight * sparse_jumps)
+    return dense_jumps[..., :-1, :]
 
 
 class StableHMMReparam(Reparam):
@@ -177,6 +179,9 @@ class StableHMMReparam(Reparam):
         neg_jumps = _densify_jumps(duration, neg_jump_times, neg_jump_sizes)
         # FIXME correctly scale pos_jumps and neg_jumps
         jumps = pos_jumps - neg_jumps
+        if __debug__:
+            expected_shape = fn.batch_shape + (duration, hidden_dim)
+            assert jumps.shape[-len(expected_shape):] == expected_shape
         # FIXME correct scale and loc
         trans_dist = fn.transition_dist.base_dist
         trans_dist = dist.Normal(trans_dist.loc + jumps,
@@ -188,9 +193,11 @@ class StableHMMReparam(Reparam):
         assert isinstance(init_dist.base_dist, dist.Normal)
 
         # Reparameterize the observation distribution as conditionally Gaussian.
-        obs_dist, obs = SymmetricStableReparam()("{}_obs".format(name), fn.observation_dist, obs)
+        obs_dist = fn.observation_dist.base_dist
+        obs_dist, obs = SymmetricStableReparam()("{}_obs".format(name), obs_dist.to_event(2), obs)
         assert isinstance(obs_dist, dist.Independent)
         assert isinstance(obs_dist.base_dist, dist.Normal)
+        obs_dist = obs_dist.base_dist.to_event(1)
 
         # Reparameterize the entire HMM as conditionally Gaussian.
         hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
