@@ -196,12 +196,19 @@ class StudentT:
         info_vec = info_a - P_ab.matmul(b.unsqueeze(-1)).squeeze(-1)
         precision = P_aa
 
+        # TODO: verify that we don't need to update log_normalizer
         log_normalizer = self.log_normalizer
         df = self.df + value.size(-1)
         rank = self.rank - value.size(-1)
-        # TODO: rescale info_vec, precision
-        # beta = self.beta + 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - b.mul(info_b).sum(-1)
-        return GammaGaussian(log_normalizer, info_vec, precision, df, rank)
+        # rescale info_vec, precision
+        chol_P = P_bb.cholesky()
+        chol_P_u = info_b.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
+        u_P_u = chol_P_u.pow(2).sum(-1)
+        scale_numerator = df
+        scale_denumerator = self.df + P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - \
+            2 * b.mul(info_b).sum(-1) + u_P_u
+        scale = scale_numerator / scale_denumerator
+        return GammaGaussian(log_normalizer, scale * info_vec, scale * precision, df, rank)
 
     def marginalize(self, left=0, right=0):
         """
@@ -244,7 +251,7 @@ class StudentT:
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
                           P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
-        return GammaGaussian(log_normalizer, info_vec, precision, df, rank)
+        return StudentT(log_normalizer, info_vec, precision, df, rank)
 
     def event_logsumexp(self):
         """
