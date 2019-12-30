@@ -20,6 +20,8 @@ def _precision_to_scale_tril(P):
 class Gamma:
     """
     Non-normalized Gamma distribution.
+
+        Gamma(concentration, rate) ~ (concentration - 1) * log(s) - rate * s
     """
     def __init__(self, log_normalizer, concentration, rate):
         self.log_normalizer = log_normalizer
