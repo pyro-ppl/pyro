@@ -279,6 +279,13 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     assert actual.shape == expected_batch_shape
     check_expand(d, data)
 
+    x = d.rsample()
+    assert x.shape == d.shape()
+    x = d.rsample((6,))
+    assert x.shape == (6,) + d.shape()
+    x = d.expand((6, 5)).rsample()
+    assert x.shape == (6, 5) + d.event_shape
+
     final = d.filter(data)
     assert isinstance(final, dist.MultivariateNormal)
     assert final.batch_shape == d.batch_shape
@@ -291,7 +298,7 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
 @pytest.mark.parametrize('hidden_dim', [1, 2])
 @pytest.mark.parametrize('num_steps', [1, 2, 3, 4])
 @pytest.mark.parametrize("diag", [False, True], ids=["full", "diag"])
-def test_gaussian_hmm_log_prob(diag, sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
+def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim))
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
@@ -344,6 +351,27 @@ def test_gaussian_hmm_log_prob(diag, sample_shape, batch_shape, num_steps, hidde
     logp = gaussian_tensordot(logp, unrolled_obs, T * hidden_dim)
     expected_log_prob = logp.log_density(unrolled_data)
     assert_close(actual_log_prob, expected_log_prob)
+
+    # Test mean and covariance.
+    if batch_shape or sample_shape:
+        return
+    with torch.no_grad():
+        num_samples = 100000
+        samples = d.sample([num_samples]).reshape(num_samples, T * obs_dim)
+        actual_mean = samples.mean(0)
+        delta = samples - actual_mean
+        actual_cov = (delta.unsqueeze(-1) * delta.unsqueeze(-2)).mean(0)
+        actual_scale = actual_cov.diagonal(dim1=-2, dim2=-1).sqrt()
+        actual_corr = actual_cov / (actual_scale.unsqueeze(-1) * actual_scale.unsqueeze(-2))
+
+        expected_cov = logp.precision.cholesky().cholesky_inverse()
+        expected_mean = expected_cov.matmul(logp.info_vec.unsqueeze(-1)).squeeze(-1)
+        expected_scale = expected_cov.diagonal(dim1=-2, dim2=-1).sqrt()
+        expected_corr = expected_cov / (expected_scale.unsqueeze(-1) * expected_scale.unsqueeze(-2))
+
+        assert_close(actual_mean, expected_mean, atol=0.02, rtol=0.02)
+        assert_close(actual_scale, expected_scale, atol=0.02, rtol=0.02)
+        assert_close(actual_corr, expected_corr, atol=0.01)
 
 
 @pytest.mark.parametrize('obs_dim', [1, 2, 3])
