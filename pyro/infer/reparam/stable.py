@@ -98,7 +98,7 @@ class SymmetricStableReparam(Reparam):
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
         _, z = _unsafe_standard_stable(fn.stability / 2, 1, u, e)
         assert (z >= 0).all()
-        scale = z.sqrt() * fn.scale / (0.5 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(2 / fn.stability)
+        scale = fn.scale / (0.5 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(1 / fn.stability) * z.sqrt()
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
         # Construct a scaled Gaussian.

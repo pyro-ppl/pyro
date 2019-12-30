@@ -54,7 +54,7 @@ def test_stable(shape):
 
 @pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
 def test_symmetric_stable(shape):
-    stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
+    stability = torch.empty(shape).uniform_(1.6, 1.9).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
     loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
     params = [stability, scale, loc]
