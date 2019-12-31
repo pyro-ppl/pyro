@@ -214,7 +214,8 @@ class StudentT:
         assert isinstance(value, torch.Tensor)
         assert value.size(-1) <= self.info_vec.size(-1)
 
-        n = self.dim() - value.size(-1)
+        n_b = value.size(-1)
+        n = self.dim() - n_b
         info_a = self.info_vec[..., :n]
         info_b = self.info_vec[..., n:]
         P_aa = self.precision[..., :n, :n]
@@ -225,10 +226,8 @@ class StudentT:
         info_vec = info_a - P_ab.matmul(b.unsqueeze(-1)).squeeze(-1)
         precision = P_aa
 
-        # TODO: verify that we don't need to update log_normalizer
-        log_normalizer = self.log_normalizer
-        df = self.df + value.size(-1)
-        rank = self.rank - value.size(-1)
+        df = self.df + n_b
+        rank = self.rank - n_b
         # rescale info_vec, precision
         chol_P = P_bb.cholesky()
         chol_P_u = info_b.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
@@ -237,11 +236,20 @@ class StudentT:
         scale_denumerator = self.df + P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - \
             2 * b.mul(info_b).sum(-1) + u_P_u
         scale = scale_numerator / scale_denumerator
-        return StudentT(log_normalizer,
-                        scale.unsqueeze(-1) * info_vec,
-                        scale.unsqueeze(-1).unsqueeze(-1) * precision,
-                        df,
-                        rank)
+        info_vec = scale.unsqueeze(-1) * info_vec
+        precision = scale.unsqueeze(-1).unsqueeze(-1) * precision
+
+        half_df = 0.5 * self.df
+        half_new_df = 0.5 * df
+        abc = P_bb - P_ab.transpose(-2, -1).matmul(P_aa.inverse()).matmul(P_ab)
+        # compute unnormalized p(b)
+
+        log_normalizer = self.log_normalizer + 0.5 * n_b * math.log(2 * math.pi) - \
+            abc.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1) + \
+            0.5 * rank * scale.log() + \
+            Gamma(0., half_df, half_df).logsumexp() - \
+            Gamma(0., half_new_df, half_new_df).logsumexp()
+        return StudentT(log_normalizer, info_vec, precision, df, rank)
 
     def marginalize(self, left=0, right=0):
         """

@@ -167,14 +167,44 @@ def test_marginalize_condition(sample_shape, batch_shape, left, right):
                  st.condition(x).event_logsumexp())
 
 
+@pytest.mark.parametrize("left", [1, 2, 3])
+@pytest.mark.parametrize("right", [1, 2, 3])
+def test_condition_against_theory(left, right):
+    # Ref: http://users.isy.liu.se/en/rt/roth/student.pdf section 5
+    dim = left + right
+    mvt = random_mvt((), dim)
+    mvt.scale_tril = torch.arange(1., dim + 1).diag() * 0.5
+    st = mvt_to_studentt(mvt)
+    value = torch.randn((dim,))
+    right_value = value[left:]
+    conditioned = st.condition(right_value)
+
+    sigma = mvt.covariance_matrix
+    sigma22 = sigma[left:, left:]
+    sigma22_inv = sigma22.inverse()
+    sigma22_inv_x2_minus_mu2 = sigma22_inv.matmul((right_value - mvt.loc[left:]).unsqueeze(-1)).squeeze(-1)
+    mu1_2 = mvt.loc[:left] + sigma[:left, left:].matmul(sigma22_inv_x2_minus_mu2)
+    cond_sigma = sigma[:left, :left] - sigma[:left, left:].matmul(sigma22_inv).matmul(sigma[left:, :left])
+    cond_coef = (mvt.df + sigma22_inv_x2_minus_mu2.mul(right_value - mvt.loc[left:]).sum(-1)) / (mvt.df + right)
+    scale_tril = (cond_coef.unsqueeze(-1).unsqueeze(-1) * cond_sigma).cholesky()
+    expected_cond_mvt = dist.MultivariateStudentT(mvt.df + right, mu1_2, scale_tril)
+    expected_cond_st = mvt_to_studentt(expected_cond_mvt)
+    # p(a | b) = p(a, b) / p(b)
+    p_b = dist.MultivariateStudentT(mvt.df, mvt.loc[left:], sigma22.cholesky()).log_prob(right_value)
+    # expected_cond_st.log_normalizer += p_b
+    assert_close_studentt(conditioned, expected_cond_st)
+
+
 @pytest.mark.parametrize("sample_shape", [()], ids=str)
 @pytest.mark.parametrize("batch_shape", [()], ids=str)
 @pytest.mark.parametrize("left", [1])
 @pytest.mark.parametrize("right", [1])
 def test_condition(sample_shape, batch_shape, left, right):
     dim = left + right
-    st = random_studentt(batch_shape, dim)
-    st.precision += torch.eye(dim) * 0.1
+    mvt = random_mvt(batch_shape, dim)
+    st = mvt_to_studentt(mvt)
+    #st = random_studentt(batch_shape, dim)
+    #st.precision += torch.eye(dim) * 0.1
     value = torch.randn(sample_shape + (1,) * len(batch_shape) + (dim,))
     left_value, right_value = value[..., :left], value[..., left:]
 
