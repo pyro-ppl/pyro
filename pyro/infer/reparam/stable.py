@@ -179,9 +179,7 @@ class StableHMMReparam(Reparam):
         neg_jumps = _densify_jumps(duration, neg_jump_times, neg_jump_sizes)
         # FIXME correctly scale pos_jumps and neg_jumps
         jumps = pos_jumps - neg_jumps
-        if __debug__:
-            expected_shape = fn.batch_shape + (duration, hidden_dim)
-            assert jumps.shape[-len(expected_shape):] == expected_shape
+        assert jumps.shape[-2:] == (duration, hidden_dim)
         # FIXME correct scale and loc
         trans_dist = fn.transition_dist.base_dist
         trans_dist = dist.Normal(trans_dist.loc + jumps,
