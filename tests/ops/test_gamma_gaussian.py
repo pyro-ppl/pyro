@@ -13,8 +13,7 @@ from pyro.ops.gamma_gaussian import (
     gamma_and_mvn_to_gamma_gaussian,
 )
 from tests.common import assert_close
-from tests.ops.gamma_gaussian import assert_close_gamma_gaussian, random_gamma, random_gamma_gaussian
-from tests.ops.gaussian import random_mvn
+from tests.ops.random import assert_close_gamma_gaussian, random_gamma, random_gamma_gaussian, random_mvn
 
 
 @pytest.mark.parametrize("extra_shape", [(), (4,), (3, 2)], ids=str)

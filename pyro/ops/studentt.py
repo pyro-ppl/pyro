@@ -25,17 +25,25 @@ def _absolute_central_moment_matching(st, new_df):
     # and match the corresponding moments of two distributions.
     half_df = 0.5 * st.df
     half_new_df = 0.5 * new_df
-    s = st.df / new_df * torch.exp(2 * (
-        torch.lgamma(half_df - 0.5) - torch.lgamma(half_df)
-        - torch.lgamma(half_new_df - 0.5) + torch.lgamma(half_new_df)))
+    s = new_df / st.df * torch.exp(2 * (
+        torch.lgamma(half_new_df - 0.5) - torch.lgamma(half_new_df)
+        - torch.lgamma(half_df - 0.5) + torch.lgamma(half_df)))
     # adjust log_normalizer
-    log_normalizer = st.log_normalizer + Gamma(half_df, half_df) - \
-        Gamma(half_new_df, half_new_df) - 0.5 * st.rank * s.log()
+    log_normalizer = st.log_normalizer + Gamma(0., half_df, half_df).logsumexp() - \
+        Gamma(0., half_new_df, half_new_df).logsumexp() - 0.5 * st.rank * s.log()
     return StudentT(log_normalizer,
-                    st.info_vec * s,
-                    st.precision * s,
+                    st.info_vec * s.unsqueeze(-1),
+                    st.precision * s.unsqueeze(-1).unsqueeze(-1),
                     new_df.expand(st.batch_shape),
                     st.rank)
+
+
+def _precision_to_scale_tril(P):
+    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
+    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
+    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
+                               L_inv, upper=False)[0]
+    return L
 
 
 class StudentT:
@@ -89,7 +97,7 @@ class StudentT:
                                self.info_vec.shape[:-1],
                                self.precision.shape[:-2],
                                self.df.shape,
-                               self.d_eff.shape)
+                               self.rank.shape)
 
     def expand(self, batch_shape):
         n = self.dim()
@@ -106,7 +114,7 @@ class StudentT:
         info_vec = self.info_vec.reshape(batch_shape + (n,))
         precision = self.precision.reshape(batch_shape + (n, n))
         df = self.df.reshape(batch_shape)
-        rank = self.d_eff.reshape(batch_shape)
+        rank = self.rank.reshape(batch_shape)
         return StudentT(log_normalizer, info_vec, precision, df, rank)
 
     def __getitem__(self, index):
@@ -118,13 +126,13 @@ class StudentT:
         info_vec = self.info_vec[index + (slice(None),)]
         precision = self.precision[index + (slice(None), slice(None))]
         df = self.df[index]
-        rank = self.df[index]
+        rank = self.rank[index]
         return StudentT(log_normalizer, info_vec, precision, df, rank)
 
     @staticmethod
     def cat(parts, dim=0):
         """
-        Concatenate a list of GammaGaussians along a given batch dimension.
+        Concatenate a list of StudentTs along a given batch dimension.
         """
         if dim < 0:
             dim += len(parts[0].batch_shape)
@@ -158,12 +166,11 @@ class StudentT:
         """
         assert isinstance(other, StudentT)
         assert self.dim() == other.dim()
-        assert self.rank == other.rank
         new_df = torch.min(self.df, other.df)
         self_st = _absolute_central_moment_matching(self, new_df)
         other_st = _absolute_central_moment_matching(other, new_df)
-        # TODO: deal with the rank???
-        rank = torch.max(self.rank, other.rank)
+        # TODO: revive rank mechanism
+        rank = self.rank + other.rank
         return StudentT(self_st.log_normalizer + other_st.log_normalizer,
                         self_st.info_vec + other_st.info_vec,
                         self_st.precision + other_st.precision,
@@ -230,7 +237,11 @@ class StudentT:
         scale_denumerator = self.df + P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - \
             2 * b.mul(info_b).sum(-1) + u_P_u
         scale = scale_numerator / scale_denumerator
-        return StudentT(log_normalizer, scale * info_vec, scale * precision, df, rank)
+        return StudentT(log_normalizer,
+                        scale.unsqueeze(-1) * info_vec,
+                        scale.unsqueeze(-1).unsqueeze(-1) * precision,
+                        df,
+                        rank)
 
     def marginalize(self, left=0, right=0):
         """
@@ -283,13 +294,11 @@ class StudentT:
         # x variable first, then integrate s variable later.
         # Consider GammaGaussian as a Gaussian with precision = s * precision, info_vec = s * info_vec,
         # marginalize x variable, we get
-        #   logsumexp(s) = (0.5 * df + 0.5 * rank - 1) * log(s) - 0.5 * df * s + 0.5 n * log(2 pi) + \
-        #       0.5 s * uPu - 0.5 * log|P| - 0.5 n * log(s)
+        #   logsumexp(s) = (0.5 * df + 0.5 * rank - 1) * log(s) - 0.5 * df * s
+        #       + 0.5 n * log(2 pi) - 0.5 * log|P| - 0.5 n * log(s)
         chol_P = self.precision.cholesky()
-        chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
-        u_P_u = chol_P_u.pow(2).sum(-1)
         concentration = 0.5 * self.df
-        rate = concentration - 0.5 * u_P_u
+        rate = concentration
         log_normalizer = self.log_normalizer + 0.5 * self.rank * math.log(2 * math.pi)
         log_normalizer = log_normalizer - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
         return Gamma(log_normalizer, concentration, rate).logsumexp()
