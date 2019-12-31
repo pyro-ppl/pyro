@@ -23,8 +23,7 @@ class NeuTraReparam(Reparam):
 
         # Step 2. Use trained guide in NeuTra MCMC
         neutra = NeuTraReparam(guide)
-        model = poutine.infer_config(lambda _: {"reparam": neutra})
-        model = poutine.reparam(model)
+        model = poutine.reparam(model, config=lambda _: neutra)
         nuts = NUTS(model)
         # ...now use the model in HMC or NUTS...
 
