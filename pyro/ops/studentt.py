@@ -4,15 +4,38 @@ import torch
 from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
+import pyro
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import Gamma
 
 
-def absolute_central_moment_matching(st, new_df):
+def _absolute_central_moment_matching(st, new_df):
     """
     Approximates a StudentT by another one with different degree of freedom.
     """
-    
+    # Ref: Moments of Student's t-distribution: A Unified Approach,
+    # J. Lars Kirkby, Dang Nguyen, Duy Nguyen https://arxiv.org/abs/1912.01607
+    # We want to find s such that
+    #   St(df, m, P) ~ St(new_df, m', P')
+    # Matching the mean gives us m' = m.
+    # We need to find s such that P' := sP
+    # i.e. St(df, 0, I) ~ St(new_df, 0, sI)
+    # Given a moment with order k1, k2,... such that sum(k_i) = 1,
+    # we will use the absolute moment formula in Theorem 3 of the above reference
+    # and match the corresponding moments of two distributions.
+    half_df = 0.5 * st.df
+    half_new_df = 0.5 * new_df
+    s = st.df / new_df * torch.exp(2 * (
+        torch.lgamma(half_df - 0.5) - torch.lgamma(half_df)
+        - torch.lgamma(half_new_df - 0.5) + torch.lgamma(half_new_df)))
+    # adjust log_normalizer
+    log_normalizer = st.log_normalizer + Gamma(half_df, half_df) - \
+        Gamma(half_new_df, half_new_df) - 0.5 * st.rank * s.log()
+    return StudentT(log_normalizer,
+                    st.info_vec * s,
+                    st.precision * s,
+                    new_df.expand(st.batch_shape),
+                    st.rank)
 
 
 class StudentT:
@@ -32,19 +55,19 @@ class StudentT:
         p(x | s) ~ Gaussian(s * info_vec, s * precision).
 
     Conditioned on `s`, this represents an arbitrary semidefinite quadratic function,
-    which can be interpreted as a rank-deficient Gaussian distribution.
+    which can be interpreted as a rank-deficient StudentT distribution.
     The precision matrix may have zero eigenvalues, thus it may be impossible
     to work directly with the covariance matrix.
 
     :param torch.Tensor log_normalizer: a normalization constant, which is mainly used to keep
         track of normalization terms during contractions.
     :param torch.Tensor info_vec: information vector, which is a scaled version of the mean
-        ``info_vec = precision @ mean``. We use this represention to make gaussian contraction
+        ``info_vec = precision @ mean``. We use this represention to make student-t contraction
         fast and stable.
-    :param torch.Tensor precision: precision matrix of this gaussian.
+    :param torch.Tensor precision: precision matrix of this student-t.
     :param torch.Tensor df: degree of freedom.
     :param torch.Tensor rank: rank of the precision matrix. This is useful when we want to
-        pad this instance.
+        pad this instance or to represent an affine noisy function.
     """
     def __init__(self, log_normalizer, info_vec, precision, df, rank):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
@@ -136,15 +159,15 @@ class StudentT:
         assert isinstance(other, StudentT)
         assert self.dim() == other.dim()
         assert self.rank == other.rank
-        df = torch.min(self.df, other.df)
-        self_st = absolute_central_moment_matching(self, df)
-        other_st = absolute_central_moment_matching(other, df)
+        new_df = torch.min(self.df, other.df)
+        self_st = _absolute_central_moment_matching(self, new_df)
+        other_st = _absolute_central_moment_matching(other, new_df)
         # TODO: deal with the rank???
         rank = torch.max(self.rank, other.rank)
         return StudentT(self_st.log_normalizer + other_st.log_normalizer,
                         self_st.info_vec + other_st.info_vec,
                         self_st.precision + other_st.precision,
-                        df,
+                        new_df,
                         rank)
 
     def log_density(self, value):
@@ -162,7 +185,6 @@ class StudentT:
             chol_P = self.precision.cholesky()
             chol_P_solve_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
             u_Pinv_u = chol_P_solve_u.pow(2).sum(-1)
-            u_x = (value * self.info_vec).sum(-1)
             P_x = self.precision.matmul(value.unsqueeze(-1)).squeeze(-1)
             rate = rate + 0.5 * u_Pinv_u + ((0.5 * P_x - self.info_vec) * value).sum(-1)
         return Gamma(log_normalizer, concentration, rate).logsumexp()
@@ -180,7 +202,7 @@ class StudentT:
 
             left = x[..., :n]
             right = x[..., n:]
-            g.log_density(x, s) == g.condition(right).log_density(left, s)
+            g.log_density(x) == g.condition(right).log_density(left)
         """
         assert isinstance(value, torch.Tensor)
         assert value.size(-1) <= self.info_vec.size(-1)
@@ -208,7 +230,7 @@ class StudentT:
         scale_denumerator = self.df + P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - \
             2 * b.mul(info_b).sum(-1) + u_P_u
         scale = scale_numerator / scale_denumerator
-        return GammaGaussian(log_normalizer, scale * info_vec, scale * precision, df, rank)
+        return StudentT(log_normalizer, scale * info_vec, scale * precision, df, rank)
 
     def marginalize(self, left=0, right=0):
         """
@@ -266,54 +288,69 @@ class StudentT:
         chol_P = self.precision.cholesky()
         chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
-        concentration = self.alpha + 0.5 * (self.rank - self.dim())
-        rate = 0.5 * df - 0.5 * u_P_u
-        log_normalizer = self.log_normalizer + 0.5 * n * math.log(2 * math.pi)
+        concentration = 0.5 * self.df
+        rate = concentration - 0.5 * u_P_u
+        log_normalizer = self.log_normalizer + 0.5 * self.rank * math.log(2 * math.pi)
         log_normalizer = log_normalizer - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
         return Gamma(log_normalizer, concentration, rate).logsumexp()
 
 
 def mvt_to_studentt(mvt):
-    pass
+    """
+    Convert a MultivariateStudentT distribution to a StudentT.
+
+    :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
+    :return: An equivalent StudentT object.
+    :rtype: ~pyro.ops.studentt.StudentT
+    """
+    assert isinstance(mvt, pyro.distributions.MultivariateStudentT)
+    n = mvt.loc.size(-1)
+    precision = mvt.precision_matrix
+    info_vec = precision.matmul(mvt.loc.unsqueeze(-1)).squeeze(-1)
+    df = mvt.df
+    rank = df.new_full(df.shape, n)
+    gaussian_logsumexp = 0.5 * n * math.log(2 * math.pi) + \
+        mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+    half_df = 0.5 * df
+    log_normalizer = -Gamma(gaussian_logsumexp, half_df, half_df).logsumexp()
+    return StudentT(log_normalizer, info_vec, precision, df, rank)
 
 
 def matrix_and_mvt_to_studentt(matrix, mvt):
     """
-    Convert a noisy affine function to a GammaGaussian, where the noise precision
-    is scaled by an auxiliary variable `s`. The noisy affine function (conditioned
-    on `s`) is defined as::
+    Convert a noisy affine function to a StudentT.
 
-        y = x @ matrix + MVN(mvn.loc, precision=s * mvn.precision).sample()
+        y = x @ matrix + mvt.sample()
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
-    :param ~pyro.distributions.MultivariateNormal mvn: A multivariate normal distribution.
-    :return: A GammaGaussian with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
-    :rtype: ~pyro.ops.gaussian_gamma.GammaGaussian
+    :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
+    :return: A StudentT with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
+    :rtype: ~pyro.ops.studentt.StudentT
     """
-    # TODO: ...
-    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert isinstance(mvt, pyro.distributions.MultivariateStudentT)
     assert isinstance(matrix, torch.Tensor)
     x_dim, y_dim = matrix.shape[-2:]
-    assert mvn.event_shape == (y_dim,)
-    batch_shape = broadcast_shape(matrix.shape[:-2], mvn.batch_shape)
+    assert mvt.event_shape == (y_dim,)
+    batch_shape = broadcast_shape(matrix.shape[:-2], mvt.batch_shape)
     matrix = matrix.expand(batch_shape + (x_dim, y_dim))
-    mvn = mvn.expand(batch_shape)
+    mvt = mvt.expand(batch_shape)
 
-    P_yy = mvn.precision_matrix
+    y_studentt = mvt_to_studentt(mvt)
+    P_yy = y_studentt.precision
     neg_P_xy = matrix.matmul(P_yy)
     P_xy = -neg_P_xy
     P_yx = P_xy.transpose(-1, -2)
     P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
-    info_y = P_yy.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
+    info_y = y_studentt.info_vec
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
-    log_normalizer = -0.5 * y_dim * math.log(2 * math.pi) - mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    alpha = matrix.new_tensor(0.5 * y_dim)
-    beta = 0.5 * (info_y * mvn.loc).sum(-1)
+    log_normalizer = y_studentt.log_normalizer
+    df = y_studentt.df
+    rank = y_studentt.rank
 
-    result = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
+    result = StudentT(log_normalizer, info_vec, precision, df, rank)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
@@ -321,19 +358,19 @@ def matrix_and_mvt_to_studentt(matrix, mvt):
 
 def studentt_tensordot(x, y, dims=0):
     """
-    Computes the integral over two GammaGaussians:
+    Computes the integral over two StudentT:
 
-        `(x @ y)((a,c),s) = log(integral(exp(x((a,b),s) + y((b,c),s)), b))`,
+        `(x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), b))`,
 
-    where `x` is a gaussian over variables (a,b), `y` is a gaussian over variables
+    where `x` is a student-t over variables (a,b), `y` is a student-t over variables
     (b,c), (a,b,c) can each be sets of zero or more variables, and `dims` is the size of b.
 
-    :param x: a GammaGaussian instance
-    :param y: a GammaGaussian instance
+    :param x: a StudentT instance
+    :param y: a StudentT instance
     :param dims: number of variables to contract
     """
-    assert isinstance(x, GammaGaussian)
-    assert isinstance(y, GammaGaussian)
+    assert isinstance(x, StudentT)
+    assert isinstance(y, StudentT)
     na = x.dim() - dims
     nb = dims
     nc = y.dim() - dims
