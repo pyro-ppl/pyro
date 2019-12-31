@@ -249,6 +249,13 @@ class AffineNormal:
                           - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
+    def to_gaussian(self):
+        mvn = torch.distributions.MultivariateNormal(self.loc, scale_tril=self.scale.diag_embed())
+        return matrix_and_mvn_to_gaussian(self.matrix, mvn)
+
+    def __add__(self, other):
+        return self.to_gaussian() + other
+
 
 def mvn_to_gaussian(mvn):
     """

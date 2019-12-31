@@ -126,73 +126,37 @@ def _densify_jumps(duration, times, sparse_jumps):
 
 class StableHMMReparam(Reparam):
     """
-    Approximate Levy-Ito decomposition of
+    Auxiliary variable reparameterizer for symmetric
     :class:`~pyro.distributions.StableHMM` random variables whose
-    ``initial_dist`` and ``observation_dist`` are symmetric (but whose
-    ``transition_dist`` may be skewed).
+    ``initial_dist``, ``transition_dist``, and ``observation_dist`` are
+    symmetric.
 
     This is useful for training the parameters of a
     :class:`~pyro.distributions.StableHMM` distribution, whose
     :meth:`~pyro.distributions.StableHMM.log_prob` method is undefined.
 
     This introduces auxiliary random variables conditioned on which the process
-    becomes a :class:`~pyro.distributions.GaussianHMM` . The initial and
-    observation distributions are reparameterized by
-    :class:`SymmetricStableReparam` . The latent transition process is Levy-Ito
-    decomposed into drift + Brownian motion + a compound Poisson process (see
-    [1] section 1.2.6). We neglect the generalized compensated Poisson process
-    of small jumps, and approximate the compound Poisson process with a fixed
-    ``num_jumps`` over the time interval of interest. As ``num_jumps``
-    increases, the jump size cutoffs tend to zero and approximation improves.
-
-    [1] Andreas E. Kyprianou (2013)
-        "Fluctuations of Levy Processes with Applications"
-        https://people.bath.ac.uk/ak257/book2e/book2e.pdf
-
-    :param int num_jumps: Fixed number of jumps to approximate the compound
-        Poisson process component of the Levy-Ito decomposition of latent
-        state. This automatically determines the minimum jump size cutoffs.
+    becomes a :class:`~pyro.distributions.GaussianHMM` . The component
+    distributions are reparameterized by :class:`SymmetricStableReparam` .
     """
-    def __init__(self, num_jumps):
-        assert isinstance(num_jumps, int) and num_jumps > 0
-        self.num_jumps = num_jumps
-
     def __call__(self, name, fn, obs):
         assert isinstance(fn, dist.StableHMM)
-        hidden_dim = fn.hidden_dim
-        duration = fn.transition_dist.batch_shape[-1]
-        stability = fn.initial_dist.base_dist.stability[..., 0]
-
-        # Sample positive and negative jumps to latent state,
-        # independent over each hidden dim.
-        jump_times = pyro.sample("{}_jump_times".format(name),
-                                 dist.Uniform(0, duration)
-                                     .expand([2, self.num_jumps, hidden_dim])
-                                     .to_event(3))
-        jump_sizes = pyro.sample("{}_jump_sizes".format(name),
-                                 dist.Pareto(1, stability.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1))
-                                     .expand([2, self.num_jumps, hidden_dim])
-                                     .to_event(3))
-        pos_jump_times, neg_jump_times = jump_times.unbind(-3)
-        pos_jump_sizes, neg_jump_sizes = jump_sizes.unbind(-3)
-        pos_jumps = _densify_jumps(duration, pos_jump_times, pos_jump_sizes)
-        neg_jumps = _densify_jumps(duration, neg_jump_times, neg_jump_sizes)
-        # FIXME correctly scale pos_jumps and neg_jumps
-        jumps = pos_jumps - neg_jumps
-        assert jumps.shape[-2:] == (duration, hidden_dim)
-        # FIXME correct scale and loc
-        trans_dist = fn.transition_dist.base_dist
-        trans_dist = dist.Normal(trans_dist.loc + jumps,
-                                 trans_dist.scale).to_event(1)
 
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist, _ = SymmetricStableReparam()("{}_init".format(name), fn.initial_dist, None)
         assert isinstance(init_dist, dist.Independent)
         assert isinstance(init_dist.base_dist, dist.Normal)
 
+        # Reparameterize the transition distribution as conditionally Gaussian.
+        trans_dist, _ = SymmetricStableReparam()("{}_trans".format(name),
+                                                 fn.transition_dist.to_event(1), None)
+        assert isinstance(trans_dist, dist.Independent)
+        assert isinstance(trans_dist.base_dist, dist.Normal)
+        trans_dist = trans_dist.base_dist.to_event(1)
+
         # Reparameterize the observation distribution as conditionally Gaussian.
-        obs_dist = fn.observation_dist.base_dist
-        obs_dist, obs = SymmetricStableReparam()("{}_obs".format(name), obs_dist.to_event(2), obs)
+        obs_dist, obs = SymmetricStableReparam()("{}_obs".format(name),
+                                                 fn.observation_dist.to_event(1), obs)
         assert isinstance(obs_dist, dist.Independent)
         assert isinstance(obs_dist.base_dist, dist.Normal)
         obs_dist = obs_dist.base_dist.to_event(1)

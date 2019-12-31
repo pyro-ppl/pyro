@@ -682,6 +682,7 @@ class StableHMM(TorchDistribution):
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(StableHMM, _instance)
+        batch_shape = torch.Size(batch_shape)
         time_shape = self.transition_dist.batch_shape[-1:]
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
