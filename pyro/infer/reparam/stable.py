@@ -106,24 +106,6 @@ class SymmetricStableReparam(Reparam):
         return new_fn, obs
 
 
-def _densify_jumps(duration, times, sparse_jumps):
-    with torch.no_grad():
-        lb = times.floor().long().clamp_(min=0, max=duration)
-        ub = times.ceil().long().clamp_(min=0, max=duration)
-        is_degenerate = (lb == ub)
-    lb_weight = ub - times
-    lb_weight.data[is_degenerate] = 0.5
-    ub_weight = times - lb
-    ub_weight.data[is_degenerate] = 0.5
-
-    shape = list(sparse_jumps.shape)
-    shape[-2] = duration + 1
-    dense_jumps = sparse_jumps.new_zeros(torch.Size(shape))
-    dense_jumps.scatter_add_(-2, lb, lb_weight * sparse_jumps)
-    dense_jumps.scatter_add_(-2, ub, ub_weight * sparse_jumps)
-    return dense_jumps[..., :-1, :]
-
-
 class StableHMMReparam(Reparam):
     """
     Auxiliary variable reparameterizer for symmetric

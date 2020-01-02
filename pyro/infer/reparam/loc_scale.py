@@ -43,7 +43,7 @@ class LocScaleReparam(Reparam):
         self.shape_params = shape_params
 
     def __call__(self, name, fn, obs):
-        assert obs is None, "LocScaleReparam does nont support observe statements"
+        assert obs is None, "LocScaleReparam does not support observe statements"
         centered = self.centered
         if is_identically_one(centered):
             return name, fn, obs

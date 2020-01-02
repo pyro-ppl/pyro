@@ -59,6 +59,7 @@ class NeuTraReparam(Reparam):
         log_density = 0.
         if not self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
+            # TODO(fehiepsi) Consider adding a method to extract transform from an Auto*Normal(posterior).
             posterior = self.guide.get_posterior()
             if not isinstance(posterior, dist.TransformedDistribution):
                 raise ValueError("NeuTraReparam only supports guides whose posteriors are "
@@ -78,7 +79,7 @@ class NeuTraReparam(Reparam):
         assert name == site["name"], "model structure changed"
         transform = biject_to(fn.support)
         value = transform(unconstrained_value)
-        logdet = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+        logdet = transform.log_abs_det_jacobian(unconstrained_value, value)
         logdet = sum_rightmost(logdet, logdet.dim() - value.dim() + fn.event_dim)
         log_density = log_density + fn.log_prob(value) + logdet
         new_fn = dist.Delta(value, log_density, event_dim=fn.event_dim)
