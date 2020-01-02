@@ -1,38 +1,45 @@
 import torch
 from torch.distributions.utils import lazy_property
+from torch.nn.functional import pad
 
 import pyro
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import Gamma, GammaGaussian, gamma_and_mvn_to_gamma_gaussian
 
 
-def _absolute_central_moment_matching(st, new_df):
+def _absolute_central_moment_matching(st, new_alpha):
     """
     Approximates a StudentT by another one with different degree of freedom.
     """
     # Ref: Moments of Student's t-distribution: A Unified Approach,
     # J. Lars Kirkby, Dang Nguyen, Duy Nguyen https://arxiv.org/abs/1912.01607
     # We want to find s such that
-    #   St(df, m, P) ~ St(new_df, m', P')
+    #   St(df, m, P) ~ St(new_df, m', sP)
     # Matching the mean gives us m' = m.
-    # We need to find s such that P' := sP
     # i.e. St(df, 0, I) ~ St(new_df, 0, sI)
     # Given a moment with order k1, k2,... such that sum(k_i) = 1,
     # we will use the absolute moment formula in Theorem 3 of the above reference
     # and match the corresponding moments of two distributions.
-    half_df = 0.5 * st.df
-    half_new_df = 0.5 * new_df
-    s = new_df / st.df * torch.exp(2 * (
+    half_df = st.joint.alpha - 0.5 * st.dim()
+    half_new_df = new_alpha - 0.5 * st.dim()
+    s = half_new_df / half_df * torch.exp(2 * (
         torch.lgamma(half_new_df - 0.5) - torch.lgamma(half_new_df)
         - torch.lgamma(half_df - 0.5) + torch.lgamma(half_df)))
+
+    # Given s, we need to adjust beta, info_vec, precision accordingly
+    # We know that (see GammaGaussian.compound() method) the precision of
+    #   StudentT(alpha, beta, info_vec, precision)
+    # is concentration / rate * precision.
+    # So we want to find rate', s' such that
+    #   concentration' / rate' * s' = concentration / rate * s
+    # Replace rate = beta + uPu
+    beta = st.joint.beta
+    info_vec = st.joint.info_vec * s.unsqueeze(-1)
+    precision = st.joint.precision * s.unsqueeze(-1).unsqueeze(-1)
     # adjust log_normalizer
     log_normalizer = st.log_normalizer + Gamma(0., half_df, half_df).logsumexp() - \
         Gamma(0., half_new_df, half_new_df).logsumexp() - 0.5 * st.rank * s.log()
-    return StudentT(log_normalizer,
-                    st.info_vec * s.unsqueeze(-1),
-                    st.precision * s.unsqueeze(-1).unsqueeze(-1),
-                    new_df.expand(st.batch_shape),
-                    st.rank)
+    return StudentT(log_normalizer, info_vec, precision, new_alpha, beta)
 
 
 def _precision_to_scale_tril(P):
@@ -72,13 +79,18 @@ class StudentT(GammaGaussian):
     :param torch.Tensor precision: precision matrix of the joint GammaGaussian.
     :param torch.Tensor alpha: alpha parameter of the joint GammaGaussian.
     :param torch.Tensor beta: beta parameter of the joint GammaGaussian.
+    :param torch.Tensor mask: a boolean tensor to keep track of the rank of precision matrix.
     """
-    def __init__(self, log_normalizer, info_vec, precision, alpha, beta):
+    def __init__(self, log_normalizer, info_vec, precision, alpha, beta, mask=None):
         self.joint = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
+        if mask is None:
+            self.mask = (info_vec == info_vec)
+        else:
+            self.mask = mask
 
     @staticmethod
-    def from_joint(joint):
-        return StudentT(joint.log_normalizer, joint.info_vec, joint.precision, joint.alpha, joint.beta)
+    def from_joint(joint, mask=None):
+        return StudentT(joint.log_normalizer, joint.info_vec, joint.precision, joint.alpha, joint.beta, mask)
 
     def dim(self):
         return self.joint.dim()
@@ -88,35 +100,43 @@ class StudentT(GammaGaussian):
         return self.joint.batch_shape
 
     def expand(self, batch_shape):
-        return StudentT.from_joint(self.joint.expand(batch_shape))
+        mask = self.mask.expand(batch_shape + (-1,))
+        return StudentT.from_joint(self.joint.expand(batch_shape), mask)
 
     def reshape(self, batch_shape):
-        return StudentT.from_joint(self.joint.reshape(batch_shape))
+        mask = self.mask.reshape(batch_shape + (-1,))
+        return StudentT.from_joint(self.joint.reshape(batch_shape), mask)
 
     def __getitem__(self, index):
         """
         Index into the batch_shape of a StudentT.
         """
-        return StudentT.from_joint(self.joint.__getitem__(index))
+        mask = self.mask[index + (slice(None),)]
+        return StudentT.from_joint(self.joint.__getitem__(index), mask)
 
     @staticmethod
     def cat(parts, dim=0):
         """
         Concatenate a list of StudentTs along a given batch dimension.
         """
-        return StudentT.from_joint(GammaGaussian.cat([part.joint for part in parts], dim))
+        if dim < 0:
+            dim += len(parts[0].batch_shape)
+        mask = torch.cat([g.mask for g in parts], dim=dim)
+        return StudentT.from_joint(GammaGaussian.cat([part.joint for part in parts], dim), mask)
 
     def event_pad(self, left=0, right=0):
         """
         Pad along event dimension.
         """
-        return StudentT.from_joint(self.joint.event_pad(left, right))
+        mask = pad(self.mask, (left, right))
+        return StudentT.from_joint(self.joint.event_pad(left, right), mask)
 
     def event_permute(self, perm):
         """
         Permute along event dimension.
         """
-        return StudentT.from_joint(self.joint.event_permute(perm))
+        mask = self.mask[..., perm]
+        return StudentT.from_joint(self.joint.event_permute(perm), mask)
 
     def __add__(self, other):
         """
@@ -124,10 +144,18 @@ class StudentT(GammaGaussian):
         """
         assert isinstance(other, StudentT)
         assert self.dim() == other.dim()
-        new_df = torch.min(self.df, other.df)
-        self_st = _absolute_central_moment_matching(self, new_df)
-        other_st = _absolute_central_moment_matching(other, new_df)
-        return StudentT.from_joint(self_st.joint + other_st.joint)
+        # assert the uncorrelation
+        assert not (self.mask & other.mask).any()
+        # preserve the tail of the joint
+        new_alpha = torch.min(self.joint.alpha, other.joint.alpha)
+        # use moment matching to approximate a student-t by another one with different df
+        self_st = _absolute_central_moment_matching(self, new_alpha)
+        other_st = _absolute_central_moment_matching(other, new_alpha)
+        # approximate two independent student-ts with the same df by a joint student-t
+        mask = self.mask | other.mask
+        # TODO: we can't simply take the sum here, alpha, beta, log_normalizer need to be
+        # adjusted accordingly.
+        return StudentT.from_joint(self_st.joint + other_st.joint, mask)
 
     def log_density(self, value):
         """
@@ -160,7 +188,9 @@ class StudentT(GammaGaussian):
             right = x[..., n:]
             g.log_density(x) == g.condition(right).log_density(left)
         """
-        return StudentT.from_joint(self.joint.condition(value))
+        n = self.dim() - value.size(-1)
+        mask = self.mask[..., :n]
+        return StudentT.from_joint(self.joint.condition(value), mask)
 
     def marginalize(self, left=0, right=0):
         """
@@ -174,7 +204,16 @@ class StudentT(GammaGaussian):
             g.condition(x).event_logsumexp()
               = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
         """
-        return StudentT.from_joint(self.joint.marginalize(left, right))
+        if left > 0:
+            assert self.mask[..., :left].all()
+            mask = self.mask[..., left:]
+
+        if right > 0:
+            right_idx = self.dim() - right
+            assert self.mask[..., right_idx:].all()
+            mask = self.mask[..., :right_idx]
+
+        return StudentT.from_joint(self.joint.marginalize(left, right), mask)
 
     def event_logsumexp(self):
         """
@@ -186,6 +225,7 @@ class StudentT(GammaGaussian):
         """
         Returns the corresponding MultivariateStudentT distribution, ignores log normalizer.
         """
+        assert self.mask.all()
         return self.joint.compound()
 
 
@@ -238,7 +278,8 @@ def matrix_and_mvt_to_studentt(matrix, mvt):
     alpha = y_studentt.joint.alpha
     beta = y_studentt.joint.beta
 
-    result = StudentT(log_normalizer, info_vec, precision, alpha, beta)
+    mask = torch.cat([info_x != info_x, info_y == info_y], -1)
+    result = StudentT(log_normalizer, info_vec, precision, alpha, beta, mask)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
