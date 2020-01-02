@@ -2,17 +2,22 @@ import math
 
 import pytest
 import torch
-from torch.nn.functional import pad
 
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.studentt import StudentT, studentt_tensordot, matrix_and_mvt_to_studentt, mvt_to_studentt, _absolute_central_moment_matching
+from pyro.ops.studentt import (
+    StudentT,
+    studentt_tensordot,
+    matrix_and_mvt_to_studentt,
+    mvt_to_studentt,
+    _absolute_central_moment_matching,
+)
 from tests.common import assert_close
 from tests.ops.random import assert_close_studentt, random_studentt, random_mvt
 
 
 @pytest.mark.parametrize("extra_shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("log_normalizer_shape,info_vec_shape,precision_shape,df_shape,rank_shape", [
+@pytest.mark.parametrize("log_normalizer_shape,info_vec_shape,precision_shape,alpha_shape,beta_shape", [
     ((), (), (), (), ()),
     ((5,), (), (), (), ()),
     ((), (5,), (), (), ()),
@@ -22,18 +27,18 @@ from tests.ops.random import assert_close_studentt, random_studentt, random_mvt
     ((3, 1, 1), (1, 4, 1), (1, 1, 5), (3, 4, 1), (1, 4, 5)),
 ], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_expand(extra_shape, log_normalizer_shape, info_vec_shape, precision_shape, df_shape, rank_shape, dim):
+def test_expand(extra_shape, log_normalizer_shape, info_vec_shape, precision_shape, alpha_shape, beta_shape, dim):
     rank = dim + dim
     log_normalizer = torch.randn(log_normalizer_shape)
     info_vec = torch.randn(info_vec_shape + (dim,))
     precision = torch.randn(precision_shape + (dim, rank))
     precision = precision.matmul(precision.transpose(-1, -2))
-    df = torch.randn(df_shape).exp()
-    rank = df.new_full(rank_shape, dim)
-    studentt = StudentT(log_normalizer, info_vec, precision, df, rank)
+    alpha = torch.randn(alpha_shape).exp()
+    beta = torch.randn(beta_shape).exp()
+    studentt = StudentT(log_normalizer, info_vec, precision, alpha, beta)
 
     expected_shape = extra_shape + broadcast_shape(
-        log_normalizer_shape, info_vec_shape, precision_shape, df_shape, rank_shape)
+        log_normalizer_shape, info_vec_shape, precision_shape, alpha_shape, beta_shape)
     actual = studentt.expand(expected_shape)
     assert actual.batch_shape == expected_shape
 
@@ -92,45 +97,10 @@ def test_pad(shape, left, right, dim):
     assert padded.batch_shape == expected.batch_shape
     assert padded.dim() == left + expected.dim() + right
     mid = slice(left, padded.dim() - right)
-    assert_close(padded.info_vec[..., mid], expected.info_vec)
-    assert_close(padded.precision[..., mid, mid], expected.precision)
-    assert_close(padded.df, expected.df)
-    assert_close(padded.rank, expected.rank)
-
-
-@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("dim", [1, 2, 3])
-def test_moment_matching(shape, dim):
-    x = random_studentt(shape, dim)
-    x.df += 1  # make sure that df > 1
-    new_df = x.df  # torch.rand(shape) * (x.df - 1) + 1
-    y = _absolute_central_moment_matching(x, new_df)
-    # assert y is a normalized density
-    assert_close(y.event_logsumexp(), torch.ones(shape))
-    x_cov = x.precision.inverse()
-    y_cov = y.precision.inverse()
-    x_loc = x_cov.matmul(x.info_vec.unsqueeze(-1)).squeeze(-1)
-    y_loc = y_cov.matmul(y.info_vec.unsqueeze(-1)).squeeze(-1)
-    assert_close(x_loc, y_loc)
-    x_scale_tril = x_cov.cholesky()
-    y_scale_tril = y_cov.cholesky()
-    n = 100000
-    x_samples = dist.MultivariateStudentT(x.df, x_loc, x_scale_tril).sample(torch.Size([n]))
-    y_samples = dist.MultivariateStudentT(y.df, y_loc, y_scale_tril).sample(torch.Size([n]))
-    absolute_mm_x = (x_samples - x_loc).abs().pow(1 / dim).sum(-1).mean(0)
-    absolute_mm_y = (y_samples - y_loc).abs().pow(1 / dim).sum(-1).mean(0)
-    # FIXME: test is failing??
-    assert_close(absolute_mm_x, absolute_mm_y, 0.5)
-
-
-@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("dim", [1, 2, 3])
-def test_nonexact_add(shape, dim):
-    x = random_studentt(shape, dim)
-    y = random_studentt(shape, dim)
-    value = torch.randn(dim)
-    # FIXME: add a proper test
-    assert_close(x.nonexact_add(y).log_density(value), x.log_density(value) + y.log_density(value))
+    assert_close(padded.joint.info_vec[..., mid], expected.joint.info_vec)
+    assert_close(padded.joint.precision[..., mid, mid], expected.joint.precision)
+    assert_close(padded.joint.alpha, expected.joint.alpha)
+    assert_close(padded.joint.beta, expected.joint.beta)
 
 
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
@@ -169,11 +139,10 @@ def test_marginalize_condition(sample_shape, batch_shape, left, right):
 
 @pytest.mark.parametrize("left", [1, 2, 3])
 @pytest.mark.parametrize("right", [1, 2, 3])
-def test_condition_against_theory(left, right):
+def test_conditional_mvt(left, right):
     # Ref: http://users.isy.liu.se/en/rt/roth/student.pdf section 5
     dim = left + right
     mvt = random_mvt((), dim)
-    mvt.scale_tril = torch.arange(1., dim + 1).diag() * 0.5
     st = mvt_to_studentt(mvt)
     value = torch.randn((dim,))
     right_value = value[left:]
@@ -191,20 +160,18 @@ def test_condition_against_theory(left, right):
     expected_cond_st = mvt_to_studentt(expected_cond_mvt)
     # p(a | b) = p(a, b) / p(b)
     p_b = dist.MultivariateStudentT(mvt.df, mvt.loc[left:], sigma22.cholesky()).log_prob(right_value)
-    # expected_cond_st.log_normalizer += p_b
+    expected_cond_st.joint.log_normalizer += p_b
     assert_close_studentt(conditioned, expected_cond_st)
 
 
-@pytest.mark.parametrize("sample_shape", [()], ids=str)
-@pytest.mark.parametrize("batch_shape", [()], ids=str)
-@pytest.mark.parametrize("left", [1])
-@pytest.mark.parametrize("right", [1])
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("left", [1, 2, 3])
+@pytest.mark.parametrize("right", [1, 2, 3])
 def test_condition(sample_shape, batch_shape, left, right):
     dim = left + right
-    mvt = random_mvt(batch_shape, dim)
-    st = mvt_to_studentt(mvt)
-    #st = random_studentt(batch_shape, dim)
-    #st.precision += torch.eye(dim) * 0.1
+    st = random_studentt(batch_shape, dim)
+    st.joint.precision += torch.eye(dim) * 0.1
     value = torch.randn(sample_shape + (1,) * len(batch_shape) + (dim,))
     left_value, right_value = value[..., :left], value[..., left:]
 
@@ -221,9 +188,11 @@ def test_condition(sample_shape, batch_shape, left, right):
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
     st = random_studentt(batch_shape, dim)
-    st.df += 4  # force df > 4: not so heavy tail
-    st.info_vec *= 0.1  # approximately centered
-    st.precision += torch.eye(dim) * 0.1
+    # force df > 4: not so heavy tail
+    st.joint.alpha += 2
+    st.joint.beta += 2
+    st.joint.info_vec *= 0.1  # approximately centered
+    st.joint.precision += torch.eye(dim) * 0.1
 
     num_samples = 200000
     scale = 20
@@ -249,35 +218,51 @@ def test_mvt_to_studentt(sample_shape, batch_shape, dim):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("x_dim", [1, 2, 3])
 @pytest.mark.parametrize("y_dim", [1, 2, 3])
-def test_matrix_and_mvn_to_gaussian(sample_shape, batch_shape, x_dim, y_dim):
+def test_matrix_and_mvt_to_studentt(sample_shape, batch_shape, x_dim, y_dim):
     matrix = torch.randn(batch_shape + (x_dim, y_dim))
-    y_mvn = random_mvn(batch_shape, y_dim)
-    xy_mvn = random_mvn(batch_shape, x_dim + y_dim)
-    gaussian = matrix_and_mvn_to_gaussian(matrix, y_mvn) + mvn_to_gaussian(xy_mvn)
+    y_mvt = random_mvt(batch_shape, y_dim)
+    st = matrix_and_mvt_to_studentt(matrix, y_mvt)
     xy = torch.randn(sample_shape + (1,) * len(batch_shape) + (x_dim + y_dim,))
     x, y = xy[..., :x_dim], xy[..., x_dim:]
     y_pred = x.unsqueeze(-2).matmul(matrix).squeeze(-2)
-    actual_log_prob = gaussian.log_density(xy)
-    expected_log_prob = xy_mvn.log_prob(xy) + y_mvn.log_prob(y - y_pred)
+    actual_log_prob = st.log_density(xy)
+    expected_log_prob = y_mvt.log_prob(y - y_pred)
     assert_close(actual_log_prob, expected_log_prob)
 
 
-@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
-@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("x_dim", [1, 2, 3])
-@pytest.mark.parametrize("y_dim", [1, 2, 3])
-def test_matrix_and_mvn_to_gaussian_2(sample_shape, batch_shape, x_dim, y_dim):
-    matrix = torch.randn(batch_shape + (x_dim, y_dim))
-    y_mvn = random_mvn(batch_shape, y_dim)
-    x_mvn = random_mvn(batch_shape, x_dim)
-    Mx_cov = matrix.transpose(-2, -1).matmul(x_mvn.covariance_matrix).matmul(matrix)
-    Mx_loc = matrix.transpose(-2, -1).matmul(x_mvn.loc.unsqueeze(-1)).squeeze(-1)
-    mvn = dist.MultivariateNormal(Mx_loc + y_mvn.loc, Mx_cov + y_mvn.covariance_matrix)
-    expected = mvn_to_gaussian(mvn)
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_moment_matching(shape, dim):
+    x = random_studentt(shape, dim)
+    x.df += 1  # make sure that df > 1
+    new_df = x.df  # torch.rand(shape) * (x.df - 1) + 1
+    y = _absolute_central_moment_matching(x, new_df)
+    # assert y is a normalized density
+    assert_close(y.event_logsumexp(), torch.ones(shape))
+    x_cov = x.precision.inverse()
+    y_cov = y.precision.inverse()
+    x_loc = x_cov.matmul(x.info_vec.unsqueeze(-1)).squeeze(-1)
+    y_loc = y_cov.matmul(y.info_vec.unsqueeze(-1)).squeeze(-1)
+    assert_close(x_loc, y_loc)
+    x_scale_tril = x_cov.cholesky()
+    y_scale_tril = y_cov.cholesky()
+    n = 100000
+    x_samples = dist.MultivariateStudentT(x.df, x_loc, x_scale_tril).sample(torch.Size([n]))
+    y_samples = dist.MultivariateStudentT(y.df, y_loc, y_scale_tril).sample(torch.Size([n]))
+    absolute_mm_x = (x_samples - x_loc).abs().pow(1 / dim).sum(-1).mean(0)
+    absolute_mm_y = (y_samples - y_loc).abs().pow(1 / dim).sum(-1).mean(0)
+    # FIXME: test is failing??
+    assert_close(absolute_mm_x, absolute_mm_y, 0.5)
 
-    actual = gaussian_tensordot(mvn_to_gaussian(x_mvn),
-                                matrix_and_mvn_to_gaussian(matrix, y_mvn), dims=x_dim)
-    assert_close_gaussian(expected, actual)
+
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_add(shape, dim):
+    x = random_studentt(shape, dim)
+    y = random_studentt(shape, dim)
+    value = torch.randn(dim)
+    # FIXME: add a proper test
+    assert_close((x + y).log_density(value), x.log_density(value) + y.log_density(value))
 
 
 @pytest.mark.parametrize("x_batch_shape,y_batch_shape", [
@@ -300,53 +285,20 @@ def test_matrix_and_mvn_to_gaussian_2(sample_shape, batch_shape, x_dim, y_dim):
 @pytest.mark.parametrize("x_rank,y_rank", [
     (1, 1), (4, 1), (1, 4), (4, 4)
 ], ids=str)
-def test_gaussian_tensordot(dot_dims,
+def test_studentt_tensordot(dot_dims,
                             x_batch_shape, x_dim, x_rank,
                             y_batch_shape, y_dim, y_rank):
     x_rank = min(x_rank, x_dim)
     y_rank = min(y_rank, y_dim)
-    x = random_gaussian(x_batch_shape, x_dim, x_rank)
-    y = random_gaussian(y_batch_shape, y_dim, y_rank)
+    x = random_studentt(x_batch_shape, x_dim, x_rank)
+    y = random_studentt(y_batch_shape, y_dim, y_rank)
     na = x_dim - dot_dims
     nb = dot_dims
-    nc = y_dim - dot_dims
     try:
-        torch.cholesky(x.precision[..., na:, na:] + y.precision[..., :nb, :nb])
+        torch.cholesky(x.joint.precision[..., na:, na:] + y.joint.precision[..., :nb, :nb])
     except RuntimeError:
-        pytest.skip("Cannot marginalize the common variables of two Gaussians.")
+        pytest.skip("Cannot marginalize the common variables of two StudentTs.")
 
-    z = gaussian_tensordot(x, y, dot_dims)
+    z = studentt_tensordot(x, y, dot_dims)
     assert z.dim() == x_dim + y_dim - 2 * dot_dims
-
-    # We make these precision matrices positive definite to test the math
-    x.precision = x.precision + 1e-1 * torch.eye(x.dim())
-    y.precision = y.precision + 1e-1 * torch.eye(y.dim())
-    z = gaussian_tensordot(x, y, dot_dims)
-    # compare against broadcasting, adding, and marginalizing
-    precision = pad(x.precision, (0, nc, 0, nc)) + pad(y.precision, (na, 0, na, 0))
-    info_vec = pad(x.info_vec, (0, nc)) + pad(y.info_vec, (na, 0))
-    covariance = torch.inverse(precision)
-    loc = covariance.matmul(info_vec.unsqueeze(-1)).squeeze(-1) if info_vec.size(-1) > 0 else info_vec
-    z_covariance = torch.inverse(z.precision)
-    z_loc = z_covariance.matmul(z.info_vec.view(z.info_vec.shape + (int(z.dim() > 0),))).sum(-1)
-    assert_close(loc[..., :na], z_loc[..., :na])
-    assert_close(loc[..., x_dim:], z_loc[..., na:])
-    assert_close(covariance[..., :na, :na], z_covariance[..., :na, :na])
-    assert_close(covariance[..., :na, x_dim:], z_covariance[..., :na, na:])
-    assert_close(covariance[..., x_dim:, :na], z_covariance[..., na:, :na])
-    assert_close(covariance[..., x_dim:, x_dim:], z_covariance[..., na:, na:])
-
-    # Assume a = c = 0, integrate out b
-    # FIXME: this might be not a stable way to compute integral
-    num_samples = 200000
-    scale = 20
-    # generate samples in [-10, 10]
-    value_b = torch.rand((num_samples,) + z.batch_shape + (nb,)) * scale - scale / 2
-    value_x = pad(value_b, (na, 0))
-    value_y = pad(value_b, (0, nc))
-    expect = torch.logsumexp(x.log_density(value_x) + y.log_density(value_y), dim=0)
-    expect += math.log(scale ** nb / num_samples)
-    actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)))
-    # TODO(fehiepsi): find some condition to make this test stable, so we can compare large value
-    # log densities.
-    assert_close(actual.clamp(max=10.), expect.clamp(max=10.), atol=0.1, rtol=0.1)
+    # FIXME: can we add some else tests?

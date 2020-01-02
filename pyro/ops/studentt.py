@@ -1,12 +1,9 @@
-import math
-
 import torch
 from torch.distributions.utils import lazy_property
-from torch.nn.functional import pad
 
 import pyro
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.gamma_gaussian import Gamma
+from pyro.ops.gamma_gaussian import Gamma, GammaGaussian, gamma_and_mvn_to_gamma_gaussian
 
 
 def _absolute_central_moment_matching(st, new_df):
@@ -46,17 +43,17 @@ def _precision_to_scale_tril(P):
     return L
 
 
-class StudentT:
+class StudentT(GammaGaussian):
     """
     Non-normalized StudentT distribution:
 
-        StudentT(x) ~ Integral(p(x, s), s)
+        StudentT(x) ~ Integral(p(x, s), s),
 
     where
 
-        p(x, s) = (0.5 * df + 0.5 * rank - 1) * log(s) - 0.5 * df * s
-                  - s * 0.5 * info_vec.T @ inv(precision) @ info_vec
-                  - s * 0.5 * x.T @ precision @ x + s * x.T @ info_vec.
+        p(x, s) = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta).
+
+    Note that different StudentT instances can have the same log density.
 
     The `s` variable plays the role of a mixing variable such that
 
@@ -72,95 +69,56 @@ class StudentT:
     :param torch.Tensor info_vec: information vector, which is a scaled version of the mean
         ``info_vec = precision @ mean``. We use this represention to make student-t contraction
         fast and stable.
-    :param torch.Tensor precision: precision matrix of this student-t.
-    :param torch.Tensor df: degree of freedom.
-    :param torch.Tensor rank: rank of the precision matrix. This is useful when we want to
-        pad this instance or to represent an affine noisy function.
+    :param torch.Tensor precision: precision matrix of the joint GammaGaussian.
+    :param torch.Tensor alpha: alpha parameter of the joint GammaGaussian.
+    :param torch.Tensor beta: beta parameter of the joint GammaGaussian.
     """
-    def __init__(self, log_normalizer, info_vec, precision, df, rank):
-        # NB: using info_vec instead of mean to deal with rank-deficient problem
-        assert info_vec.dim() >= 1
-        assert precision.dim() >= 2
-        assert precision.shape[-2:] == info_vec.shape[-1:] * 2
-        self.log_normalizer = log_normalizer
-        self.info_vec = info_vec
-        self.precision = precision
-        self.df = df
-        self.rank = rank
+    def __init__(self, log_normalizer, info_vec, precision, alpha, beta):
+        self.joint = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
+
+    @staticmethod
+    def from_joint(joint):
+        return StudentT(joint.log_normalizer, joint.info_vec, joint.precision, joint.alpha, joint.beta)
 
     def dim(self):
-        return self.info_vec.size(-1)
+        return self.joint.dim()
 
     @lazy_property
     def batch_shape(self):
-        return broadcast_shape(self.log_normalizer.shape,
-                               self.info_vec.shape[:-1],
-                               self.precision.shape[:-2],
-                               self.df.shape,
-                               self.rank.shape)
+        return self.joint.batch_shape
 
     def expand(self, batch_shape):
-        n = self.dim()
-        log_normalizer = self.log_normalizer.expand(batch_shape)
-        info_vec = self.info_vec.expand(batch_shape + (n,))
-        precision = self.precision.expand(batch_shape + (n, n))
-        df = self.df.expand(batch_shape)
-        rank = self.rank.expand(batch_shape)
-        return StudentT(log_normalizer, info_vec, precision, df, rank)
+        return StudentT.from_joint(self.joint.expand(batch_shape))
 
     def reshape(self, batch_shape):
-        n = self.dim()
-        log_normalizer = self.log_normalizer.reshape(batch_shape)
-        info_vec = self.info_vec.reshape(batch_shape + (n,))
-        precision = self.precision.reshape(batch_shape + (n, n))
-        df = self.df.reshape(batch_shape)
-        rank = self.rank.reshape(batch_shape)
-        return StudentT(log_normalizer, info_vec, precision, df, rank)
+        return StudentT.from_joint(self.joint.reshape(batch_shape))
 
     def __getitem__(self, index):
         """
-        Index into the batch_shape of a GammaGaussian.
+        Index into the batch_shape of a StudentT.
         """
-        assert isinstance(index, tuple)
-        log_normalizer = self.log_normalizer[index]
-        info_vec = self.info_vec[index + (slice(None),)]
-        precision = self.precision[index + (slice(None), slice(None))]
-        df = self.df[index]
-        rank = self.rank[index]
-        return StudentT(log_normalizer, info_vec, precision, df, rank)
+        return StudentT.from_joint(self.joint.__getitem__(index))
 
     @staticmethod
     def cat(parts, dim=0):
         """
         Concatenate a list of StudentTs along a given batch dimension.
         """
-        if dim < 0:
-            dim += len(parts[0].batch_shape)
-        args = [torch.cat([getattr(g, attr) for g in parts], dim=dim)
-                for attr in ["log_normalizer", "info_vec", "precision", "df", "rank"]]
-        return StudentT(*args)
+        return StudentT.from_joint(GammaGaussian.cat([part.joint for part in parts], dim))
 
     def event_pad(self, left=0, right=0):
         """
         Pad along event dimension.
         """
-        lr = (left, right)
-        info_vec = pad(self.info_vec, lr)
-        precision = pad(self.precision, lr + lr)
-        # by keeping the same rank, we obtain the same StudentT instance
-        return StudentT(self.log_normalizer, info_vec, precision, self.df, self.rank)
+        return StudentT.from_joint(self.joint.event_pad(left, right))
 
     def event_permute(self, perm):
         """
         Permute along event dimension.
         """
-        assert isinstance(perm, torch.Tensor)
-        assert perm.shape == (self.dim(),)
-        info_vec = self.info_vec[..., perm]
-        precision = self.precision[..., perm][..., perm, :]
-        return StudentT(self.log_normalizer, info_vec, precision, self.df, self.rank)
+        return StudentT.from_joint(self.joint.event_permute(perm))
 
-    def nonexact_add(self, other):
+    def __add__(self, other):
         """
         Approximates the sum of two StudentT in log-density space.
         """
@@ -169,13 +127,7 @@ class StudentT:
         new_df = torch.min(self.df, other.df)
         self_st = _absolute_central_moment_matching(self, new_df)
         other_st = _absolute_central_moment_matching(other, new_df)
-        # TODO: revive rank mechanism
-        rank = self.rank + other.rank
-        return StudentT(self_st.log_normalizer + other_st.log_normalizer,
-                        self_st.info_vec + other_st.info_vec,
-                        self_st.precision + other_st.precision,
-                        new_df,
-                        rank)
+        return StudentT.from_joint(self_st.joint + other_st.joint)
 
     def log_density(self, value):
         """
@@ -184,16 +136,13 @@ class StudentT:
         This is mainly used for testing.
         """
         batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
-        log_normalizer = self.log_normalizer.expand(batch_shape)
+        log_normalizer = self.joint.log_normalizer.expand(batch_shape)
         # compute posterior of mixing variable, then marginalize it
-        rate = 0.5 * self.df
-        concentration = rate + 0.5 * self.rank
+        concentration = self.joint.alpha + 1
+        rate = self.joint.beta
         if value.size(-1) > 0:  # nondegenerate case
-            chol_P = self.precision.cholesky()
-            chol_P_solve_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
-            u_Pinv_u = chol_P_solve_u.pow(2).sum(-1)
-            P_x = self.precision.matmul(value.unsqueeze(-1)).squeeze(-1)
-            rate = rate + 0.5 * u_Pinv_u + ((0.5 * P_x - self.info_vec) * value).sum(-1)
+            P_x = self.joint.precision.matmul(value.unsqueeze(-1)).squeeze(-1)
+            rate = rate + ((0.5 * P_x - self.joint.info_vec) * value).sum(-1)
         return Gamma(log_normalizer, concentration, rate).logsumexp()
 
     def condition(self, value):
@@ -211,45 +160,7 @@ class StudentT:
             right = x[..., n:]
             g.log_density(x) == g.condition(right).log_density(left)
         """
-        assert isinstance(value, torch.Tensor)
-        assert value.size(-1) <= self.info_vec.size(-1)
-
-        n_b = value.size(-1)
-        n = self.dim() - n_b
-        info_a = self.info_vec[..., :n]
-        info_b = self.info_vec[..., n:]
-        P_aa = self.precision[..., :n, :n]
-        P_ab = self.precision[..., :n, n:]
-        P_bb = self.precision[..., n:, n:]
-        b = value
-
-        info_vec = info_a - P_ab.matmul(b.unsqueeze(-1)).squeeze(-1)
-        precision = P_aa
-
-        df = self.df + n_b
-        rank = self.rank - n_b
-        # rescale info_vec, precision
-        chol_P = P_bb.cholesky()
-        chol_P_u = info_b.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
-        u_P_u = chol_P_u.pow(2).sum(-1)
-        scale_numerator = df
-        scale_denumerator = self.df + P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - \
-            2 * b.mul(info_b).sum(-1) + u_P_u
-        scale = scale_numerator / scale_denumerator
-        info_vec = scale.unsqueeze(-1) * info_vec
-        precision = scale.unsqueeze(-1).unsqueeze(-1) * precision
-
-        half_df = 0.5 * self.df
-        half_new_df = 0.5 * df
-        abc = P_bb - P_ab.transpose(-2, -1).matmul(P_aa.inverse()).matmul(P_ab)
-        # compute unnormalized p(b)
-
-        log_normalizer = self.log_normalizer + 0.5 * n_b * math.log(2 * math.pi) - \
-            abc.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1) + \
-            0.5 * rank * scale.log() + \
-            Gamma(0., half_df, half_df).logsumexp() - \
-            Gamma(0., half_new_df, half_new_df).logsumexp()
-        return StudentT(log_normalizer, info_vec, precision, df, rank)
+        return StudentT.from_joint(self.joint.condition(value))
 
     def marginalize(self, left=0, right=0):
         """
@@ -263,53 +174,19 @@ class StudentT:
             g.condition(x).event_logsumexp()
               = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
         """
-        if left == 0 and right == 0:
-            return self
-        if left > 0 and right > 0:
-            raise NotImplementedError
-        n = self.dim()
-        n_b = left + right
-        a = slice(left, n - right)  # preserved
-        b = slice(None, left) if left else slice(n - right, None)
-
-        P_aa = self.precision[..., a, a]
-        P_ba = self.precision[..., b, a]
-        P_bb = self.precision[..., b, b]
-        P_b = P_bb.cholesky()
-        P_a = P_ba.triangular_solve(P_b, upper=False).solution
-        P_at = P_a.transpose(-1, -2)
-        precision = P_aa - P_at.matmul(P_a)
-
-        info_a = self.info_vec[..., a]
-        info_b = self.info_vec[..., b]
-        b_tmp = info_b.unsqueeze(-1).triangular_solve(P_b, upper=False).solution
-        info_vec = info_a
-        if n_b < n:
-            info_vec = info_vec - P_at.matmul(b_tmp).squeeze(-1)
-
-        df = self.df
-        rank = self.rank - n_b
-        log_normalizer = (self.log_normalizer +
-                          0.5 * n_b * math.log(2 * math.pi) -
-                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
-        return StudentT(log_normalizer, info_vec, precision, df, rank)
+        return StudentT.from_joint(self.joint.marginalize(left, right))
 
     def event_logsumexp(self):
         """
         Integrates out all latent state (i.e. operating on event dimensions).
         """
-        # It is easier to work with GammaGaussian representation, where we can integrate
-        # x variable first, then integrate s variable later.
-        # Consider GammaGaussian as a Gaussian with precision = s * precision, info_vec = s * info_vec,
-        # marginalize x variable, we get
-        #   logsumexp(s) = (0.5 * df + 0.5 * rank - 1) * log(s) - 0.5 * df * s
-        #       + 0.5 n * log(2 pi) - 0.5 * log|P| - 0.5 n * log(s)
-        chol_P = self.precision.cholesky()
-        concentration = 0.5 * self.df
-        rate = concentration
-        log_normalizer = self.log_normalizer + 0.5 * self.rank * math.log(2 * math.pi)
-        log_normalizer = log_normalizer - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-        return Gamma(log_normalizer, concentration, rate).logsumexp()
+        return self.joint.event_logsumexp().logsumexp()
+
+    def to_mvt(self):
+        """
+        Returns the corresponding MultivariateStudentT distribution, ignores log normalizer.
+        """
+        return self.joint.compound()
 
 
 def mvt_to_studentt(mvt):
@@ -321,16 +198,10 @@ def mvt_to_studentt(mvt):
     :rtype: ~pyro.ops.studentt.StudentT
     """
     assert isinstance(mvt, pyro.distributions.MultivariateStudentT)
-    n = mvt.loc.size(-1)
-    precision = mvt.precision_matrix
-    info_vec = precision.matmul(mvt.loc.unsqueeze(-1)).squeeze(-1)
-    df = mvt.df
-    rank = df.new_full(df.shape, n)
-    gaussian_logsumexp = 0.5 * n * math.log(2 * math.pi) + \
-        mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    half_df = 0.5 * df
-    log_normalizer = -Gamma(gaussian_logsumexp, half_df, half_df).logsumexp()
-    return StudentT(log_normalizer, info_vec, precision, df, rank)
+    half_df = 0.5 * mvt.df
+    gamma = pyro.distributions.Gamma(half_df, half_df)
+    mvn = pyro.distributions.MultivariateNormal(mvt.loc, scale_tril=mvt.scale_tril)
+    return StudentT.from_joint(gamma_and_mvn_to_gamma_gaussian(gamma, mvn))
 
 
 def matrix_and_mvt_to_studentt(matrix, mvt):
@@ -353,21 +224,21 @@ def matrix_and_mvt_to_studentt(matrix, mvt):
     mvt = mvt.expand(batch_shape)
 
     y_studentt = mvt_to_studentt(mvt)
-    P_yy = y_studentt.precision
+    P_yy = y_studentt.joint.precision
     neg_P_xy = matrix.matmul(P_yy)
     P_xy = -neg_P_xy
     P_yx = P_xy.transpose(-1, -2)
     P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
-    info_y = y_studentt.info_vec
+    info_y = y_studentt.joint.info_vec
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
-    log_normalizer = y_studentt.log_normalizer
-    df = y_studentt.df
-    rank = y_studentt.rank
+    log_normalizer = y_studentt.joint.log_normalizer
+    alpha = y_studentt.joint.alpha
+    beta = y_studentt.joint.beta
 
-    result = StudentT(log_normalizer, info_vec, precision, df, rank)
+    result = StudentT(log_normalizer, info_vec, precision, alpha, beta)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
@@ -395,9 +266,9 @@ def studentt_tensordot(x, y, dims=0):
     assert nb >= 0
     assert nc >= 0
 
-    device = x.info_vec.device
+    device = x.joint.info_vec.device
     perm = torch.cat([
         torch.arange(na, device=device),
         torch.arange(x.dim(), x.dim() + nc, device=device),
         torch.arange(na, x.dim(), device=device)])
-    return (x.event_pad(right=nc).nonexact_add(y.event_pad(left=na))).event_permute(perm).marginalize(right=nb)
+    return (x.event_pad(right=nc) + y.event_pad(left=na)).event_permute(perm).marginalize(right=nb)

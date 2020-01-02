@@ -93,12 +93,17 @@ def random_studentt(batch_shape, dim, rank=None):
     if rank is None:
         rank = dim + dim
     log_normalizer = torch.randn(batch_shape)
-    info_vec = torch.randn(batch_shape + (dim,))
+    loc = torch.randn(batch_shape + (dim,))
     samples = torch.randn(batch_shape + (dim, rank))
     precision = torch.matmul(samples, samples.transpose(-2, -1))
+    if dim > 0:
+        info_vec = precision.matmul(loc.unsqueeze(-1)).squeeze(-1)
+    else:
+        info_vec = loc
     df = torch.randn(batch_shape).exp()
-    rank = df.new_full(batch_shape, dim)
-    result = StudentT(log_normalizer, info_vec, precision, df, rank)
+    alpha = 0.5 * df + 0.5 * dim - 1
+    beta = 0.5 * df + 0.5 * (info_vec * loc).sum(-1)
+    result = StudentT(log_normalizer, info_vec, precision, alpha, beta)
     assert result.dim() == dim
     assert result.batch_shape == batch_shape
     return result
@@ -121,8 +126,11 @@ def assert_close_studentt(actual, expected):
     assert isinstance(expected, StudentT)
     assert actual.dim() == expected.dim()
     assert actual.batch_shape == expected.batch_shape
-    assert_close(actual.log_normalizer, expected.log_normalizer)
-    assert_close(actual.info_vec, expected.info_vec)
-    assert_close(actual.precision, expected.precision)
-    assert_close(actual.df, expected.df)
-    assert_close(actual.rank, expected.rank)
+    actual_mvt = actual.to_mvt()
+    expected_mvt = expected.to_mvt()
+    assert_close(actual_mvt.df, actual_mvt.df)
+    assert_close(actual_mvt.loc, expected_mvt.loc)
+    assert_close(actual_mvt.scale_tril, expected_mvt.scale_tril)
+    # test log_normalizer
+    empty_tensor = torch.zeros((0,))
+    assert_close(actual.log_density(empty_tensor), expected.log_density(empty_tensor))
