@@ -8,6 +8,7 @@ from scipy.stats import kstest, levy_stable
 
 import pyro.distributions as dist
 import pyro.distributions.stable
+from tests.common import assert_close
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)])
@@ -62,3 +63,13 @@ def test_sample(alpha, beta):
 
     stat, pvalue = kstest(sampler, cdf, N=num_samples)
     assert pvalue > 0.1, pvalue
+
+
+@pytest.mark.parametrize("loc", [0, 1, -1, 2, 2])
+@pytest.mark.parametrize("scale", [0.5, 1, 2])
+def test_normal(loc, scale):
+    num_samples = 100000
+    expected = dist.Normal(loc, scale).sample([num_samples])
+    actual = dist.Stable(2, 0, scale * 0.5 ** 0.5, loc).sample([num_samples])
+    assert_close(actual.mean(), expected.mean(), atol=0.01)
+    assert_close(actual.std(), expected.std(), atol=0.01)

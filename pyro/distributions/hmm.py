@@ -289,9 +289,13 @@ class GaussianHMM(TorchDistribution):
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None):
-        assert isinstance(initial_dist, torch.distributions.MultivariateNormal)
+        assert (isinstance(initial_dist, torch.distributions.MultivariateNormal) or
+                (isinstance(initial_dist, torch.distributions.Independent) and
+                 isinstance(initial_dist.base_dist, torch.distributions.Normal)))
         assert isinstance(transition_matrix, torch.Tensor)
-        assert isinstance(transition_dist, torch.distributions.MultivariateNormal)
+        assert (isinstance(transition_dist, torch.distributions.MultivariateNormal) or
+                (isinstance(transition_dist, torch.distributions.Independent) and
+                 isinstance(transition_dist.base_dist, torch.distributions.Normal)))
         assert isinstance(observation_matrix, torch.Tensor)
         assert (isinstance(observation_dist, torch.distributions.MultivariateNormal) or
                 (isinstance(observation_dist, torch.distributions.Independent) and
@@ -578,8 +582,9 @@ class StableHMM(TorchDistribution):
 
     This implements a reparameterized :meth:`rsample` method but does not
     implement a :meth:`log_prob` method. Inference can be performed using
-    likelihood-free algorithms such as
-    :class:`~pyro.infer.energy_distance.EnergyDistance` .
+    either reparameterization with
+    :class:`~pyro.infer.reparam.stable.StableHMMReparam` or likelihood-free
+    algorithms such as :class:`~pyro.infer.energy_distance.EnergyDistance` .
 
     The event_shape of this distribution includes time on the left::
 
@@ -677,6 +682,7 @@ class StableHMM(TorchDistribution):
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(StableHMM, _instance)
+        batch_shape = torch.Size(batch_shape)
         time_shape = self.transition_dist.batch_shape[-1:]
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim

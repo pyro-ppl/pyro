@@ -1,13 +1,15 @@
 import math
-from collections import OrderedDict
 
 import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.reparameterize import Reparameterizer
-from pyro.distributions.torch import Exponential, Uniform
 from pyro.distributions.torch_distribution import TorchDistribution
+
+
+def _check(x):
+    assert not torch.isnan(x).any()
+    return x
 
 
 def _unsafe_standard_stable(alpha, beta, V, W):
@@ -22,12 +24,13 @@ def _unsafe_standard_stable(alpha, beta, V, W):
     v = b.atan() + alpha * V
     Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
         * ((v - V).cos() / W).pow(inv_alpha - 1)
+    Z.data[~(Z.data == Z.data)] = 0  # drop occasional NANs
 
     # Convert to Nolan's parametrization S^0 so that samples depend
     # continuously on (alpha,beta), allowing us to interpolate around the hole
     # at alpha=1.
     X = Z - b
-    return X
+    return X, Z
 
 
 RADIUS = 0.01
@@ -47,7 +50,8 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         hole = 1.
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
-        return _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
+        x, _ = _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
+        return x
 
     # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
@@ -66,7 +70,7 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         #              2 * RADIUS
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
-    pairs = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
+    pairs, _ = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
     return (pairs * weights).sum(-1)
 
 
@@ -85,11 +89,11 @@ class Stable(TorchDistribution):
     likelihood-free algorithms such as
     :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
     via the :func:`~pyro.poutine.handlers.reparam` handler with
-    :class:`~pyro.distributions.stable.StableReparameterizer` e.g.::
+    :class:`~pyro.infer.reparam.stable.StableReparam` e.g.::
 
         with poutine.reparam():
             pyro.sample("x", Stable(stability, skew, scale, loc),
-                        infer={"reparam": StableReparameterizer()})
+                        infer={"reparam": StableReparam()})
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
@@ -144,30 +148,3 @@ class Stable(TorchDistribution):
         # Differentiably transform.
         x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential)
         return self.loc + self.scale * x
-
-
-class StableReparameterizer(Reparameterizer):
-    """
-    Auxiliary variable reparameterizer for
-    :class:`~pyro.distributions.Stable` distributions.
-
-    This creates a pair of parameter-free auxiliary distributions
-    (``Uniform(-pi/2,pi/2)`` and ``Exponential(1)``) with well-defined
-    ``.log_prob()`` methods, thereby permitting use of reparameterized stable
-    distributions in likelihood-based inference algorithms.
-    """
-    def get_dists(self, fn):
-        # Draw parameter-free noise.
-        proto = fn.stability
-        half_pi = proto.new_full(proto.shape, math.pi / 2)
-        one = proto.new_ones(proto.shape)
-        return OrderedDict([
-            ("uniform", Uniform(-half_pi, half_pi)),
-            ("exponential", Exponential(one)),
-        ])
-
-    def transform_values(self, fn, values):
-        # Differentiably transform.
-        x = _standard_stable(fn.stability, fn.skew,
-                             values["uniform"], values["exponential"])
-        return fn.loc + fn.scale * x
