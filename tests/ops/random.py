@@ -86,7 +86,7 @@ def assert_close_gamma_gaussian(actual, expected):
     assert_close(actual.beta, expected.beta)
 
 
-def random_studentt(batch_shape, dim, rank=None):
+def random_studentt(batch_shape, dim, rank=None, df_min=0.):
     """
     Generate a random StudentT for testing.
     """
@@ -100,7 +100,7 @@ def random_studentt(batch_shape, dim, rank=None):
         info_vec = precision.matmul(loc.unsqueeze(-1)).squeeze(-1)
     else:
         info_vec = loc
-    df = torch.randn(batch_shape).exp()
+    df = torch.randn(batch_shape).exp() + df_min
     alpha = 0.5 * df + 0.5 * dim - 1
     beta = 0.5 * df + 0.5 * (info_vec * loc).sum(-1)
     result = StudentT(log_normalizer, info_vec, precision, alpha, beta)
@@ -109,7 +109,7 @@ def random_studentt(batch_shape, dim, rank=None):
     return result
 
 
-def random_mvt(batch_shape, dim):
+def random_mvt(batch_shape, dim, df_min=0.):
     """
     Generate a random MultivariateNormal distribution for testing.
     """
@@ -117,7 +117,7 @@ def random_mvt(batch_shape, dim):
     loc = torch.randn(batch_shape + (dim,))
     cov = torch.randn(batch_shape + (dim, rank))
     cov = cov.matmul(cov.transpose(-1, -2))
-    df = torch.randn(batch_shape).exp()
+    df = torch.randn(batch_shape).exp() + df_min
     return dist.MultivariateStudentT(df, loc, cov.cholesky())
 
 

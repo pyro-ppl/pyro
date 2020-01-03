@@ -7,9 +7,10 @@ from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import Gamma, GammaGaussian, gamma_and_mvn_to_gamma_gaussian
 
 
-def _absolute_central_moment_matching(st, new_alpha):
+def _moment_matching(st, new_df, order=1):
     """
-    Approximates a StudentT by another one with different degree of freedom.
+    Approximates a StudentT by another one with different degree of freedom
+    using absolute central moment matching.
     """
     # Ref: Moments of Student's t-distribution: A Unified Approach,
     # J. Lars Kirkby, Dang Nguyen, Duy Nguyen https://arxiv.org/abs/1912.01607
@@ -20,34 +21,35 @@ def _absolute_central_moment_matching(st, new_alpha):
     # Given a moment with order k1, k2,... such that sum(k_i) = 1,
     # we will use the absolute moment formula in Theorem 3 of the above reference
     # and match the corresponding moments of two distributions.
-    half_df = st.joint.alpha - 0.5 * st.dim()
-    half_new_df = new_alpha - 0.5 * st.dim()
-    s = half_new_df / half_df * torch.exp(2 * (
-        torch.lgamma(half_new_df - 0.5) - torch.lgamma(half_new_df)
-        - torch.lgamma(half_df - 0.5) + torch.lgamma(half_df)))
-
-    # Given s, we need to adjust beta, info_vec, precision accordingly
+    #
+    # Given s, we need to adjust beta, info_vec, precision for moment matching.
+    # We will use the results of moment matching to take the sum of two uncorrelated student-t,
+    # so it is better to have new rate = new concentration = new_df / 2.
     # We know that (see GammaGaussian.compound() method) the precision of
     #   StudentT(alpha, beta, info_vec, precision)
-    # is concentration / rate * precision.
-    # So we want to find rate', s' such that
-    #   concentration' / rate' * s' = concentration / rate * s
-    # Replace rate = beta + uPu
-    beta = st.joint.beta
+    # is concentration / rate * precision, where rate = beta - 0.5 uPu.
+    # So we want to find P' = s'P such that
+    #   s' = concentration / rate * s.
+    assert (order < new_df).all()
+    half_mask_sum = 0.5 * st.mask.sum()
+    concentration = st.joint.alpha - half_mask_sum + 1
+    new_concentration = 0.5 * new_df
+    new_alpha = new_concentration + half_mask_sum - 1
+    chol_P = st.joint.precision[..., st.mask, :][..., st.mask].cholesky()
+    chol_P_u = st.joint.info_vec[..., st.mask].unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
+    half_u_P_u = 0.5 * chol_P_u.pow(2).sum(-1)
+    rate = st.joint.beta - half_u_P_u
+    half_order = 0.5 * order
+    s = (new_concentration / rate) * torch.exp((
+        torch.lgamma(new_concentration - half_order) - torch.lgamma(new_concentration)
+        - torch.lgamma(concentration - half_order) + torch.lgamma(concentration)) / half_order)
+    new_beta = new_concentration + s * half_u_P_u
+    # adjust log_normalizer
     info_vec = st.joint.info_vec * s.unsqueeze(-1)
     precision = st.joint.precision * s.unsqueeze(-1).unsqueeze(-1)
-    # adjust log_normalizer
-    log_normalizer = st.log_normalizer + Gamma(0., half_df, half_df).logsumexp() - \
-        Gamma(0., half_new_df, half_new_df).logsumexp() - 0.5 * st.rank * s.log()
-    return StudentT(log_normalizer, info_vec, precision, new_alpha, beta)
-
-
-def _precision_to_scale_tril(P):
-    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
-    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
-                               L_inv, upper=False)[0]
-    return L
+    log_normalizer = st.joint.log_normalizer + Gamma(0., concentration, rate).logsumexp() - \
+        Gamma(0., new_concentration, new_concentration).logsumexp() + half_mask_sum * s.log()
+    return StudentT(log_normalizer, info_vec, precision, new_alpha, new_beta, st.mask)
 
 
 class StudentT(GammaGaussian):
@@ -79,13 +81,14 @@ class StudentT(GammaGaussian):
     :param torch.Tensor precision: precision matrix of the joint GammaGaussian.
     :param torch.Tensor alpha: alpha parameter of the joint GammaGaussian.
     :param torch.Tensor beta: beta parameter of the joint GammaGaussian.
-    :param torch.Tensor mask: a boolean tensor to keep track of the rank of precision matrix.
+    :param torch.Tensor mask: a 1D boolean tensor to keep track of the rank of precision matrix.
     """
     def __init__(self, log_normalizer, info_vec, precision, alpha, beta, mask=None):
         self.joint = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
         if mask is None:
-            self.mask = (info_vec == info_vec)
+            self.mask = info_vec.new_full(info_vec.shape[-1:], True, dtype=torch.bool)
         else:
+            assert mask.dim() == 1
             self.mask = mask
 
     @staticmethod
@@ -100,28 +103,25 @@ class StudentT(GammaGaussian):
         return self.joint.batch_shape
 
     def expand(self, batch_shape):
-        mask = self.mask.expand(batch_shape + (-1,))
-        return StudentT.from_joint(self.joint.expand(batch_shape), mask)
+        return StudentT.from_joint(self.joint.expand(batch_shape), self.mask)
 
     def reshape(self, batch_shape):
-        mask = self.mask.reshape(batch_shape + (-1,))
-        return StudentT.from_joint(self.joint.reshape(batch_shape), mask)
+        return StudentT.from_joint(self.joint.reshape(batch_shape), self.mask)
 
     def __getitem__(self, index):
         """
         Index into the batch_shape of a StudentT.
         """
-        mask = self.mask[index + (slice(None),)]
-        return StudentT.from_joint(self.joint.__getitem__(index), mask)
+        return StudentT.from_joint(self.joint.__getitem__(index), self.mask)
 
     @staticmethod
     def cat(parts, dim=0):
         """
         Concatenate a list of StudentTs along a given batch dimension.
         """
-        if dim < 0:
-            dim += len(parts[0].batch_shape)
-        mask = torch.cat([g.mask for g in parts], dim=dim)
+        mask = parts[0].mask
+        for part in parts[1:]:
+            assert (mask == part.mask).all()
         return StudentT.from_joint(GammaGaussian.cat([part.joint for part in parts], dim), mask)
 
     def event_pad(self, left=0, right=0):
@@ -135,7 +135,7 @@ class StudentT(GammaGaussian):
         """
         Permute along event dimension.
         """
-        mask = self.mask[..., perm]
+        mask = self.mask[perm]
         return StudentT.from_joint(self.joint.event_permute(perm), mask)
 
     def __add__(self, other):
@@ -147,15 +147,22 @@ class StudentT(GammaGaussian):
         # assert the uncorrelation
         assert not (self.mask & other.mask).any()
         # preserve the tail of the joint
-        new_alpha = torch.min(self.joint.alpha, other.joint.alpha)
+        self_concentration = self.joint.alpha - (0.5 * self.mask.sum() - 1)
+        other_concentration = other.joint.alpha - (0.5 * other.mask.sum() - 1)
+        concentration = torch.min(self_concentration, other_concentration)
+        df = 2 * concentration
         # use moment matching to approximate a student-t by another one with different df
-        self_st = _absolute_central_moment_matching(self, new_alpha)
-        other_st = _absolute_central_moment_matching(other, new_alpha)
-        # approximate two independent student-ts with the same df by a joint student-t
+        self_st = _moment_matching(self, df, 1)
+        other_st = _moment_matching(other, df, 1)
+        # approximate two uncorrelated student-ts with the same df by a joint student-t
         mask = self.mask | other.mask
-        # TODO: we can't simply take the sum here, alpha, beta, log_normalizer need to be
-        # adjusted accordingly.
-        return StudentT.from_joint(self_st.joint + other_st.joint, mask)
+        log_normalizer = self_st.joint.log_normalizer + other_st.joint.log_normalizer + \
+            Gamma(0., concentration, concentration).logsumexp()
+        alpha = concentration + 0.5 * mask.sum() - 1
+        beta = self_st.joint.beta + other_st.joint.beta - concentration
+        info_vec = self_st.joint.info_vec + other_st.joint.info_vec
+        precision = self_st.joint.precision + other_st.joint.precision
+        return StudentT(log_normalizer, info_vec, precision, alpha, beta, mask)
 
     def log_density(self, value):
         """
@@ -189,7 +196,7 @@ class StudentT(GammaGaussian):
             g.log_density(x) == g.condition(right).log_density(left)
         """
         n = self.dim() - value.size(-1)
-        mask = self.mask[..., :n]
+        mask = self.mask[:n]
         return StudentT.from_joint(self.joint.condition(value), mask)
 
     def marginalize(self, left=0, right=0):
@@ -205,20 +212,21 @@ class StudentT(GammaGaussian):
               = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
         """
         if left > 0:
-            assert self.mask[..., :left].all()
-            mask = self.mask[..., left:]
-
-        if right > 0:
+            assert self.mask[:left].all()
+            mask = self.mask[left:]
+        elif right > 0:
             right_idx = self.dim() - right
-            assert self.mask[..., right_idx:].all()
-            mask = self.mask[..., :right_idx]
-
+            assert self.mask[right_idx:].all()
+            mask = self.mask[:right_idx]
+        else:
+            mask = self.mask
         return StudentT.from_joint(self.joint.marginalize(left, right), mask)
 
     def event_logsumexp(self):
         """
         Integrates out all latent state (i.e. operating on event dimensions).
         """
+        assert self.mask.all()
         return self.joint.event_logsumexp().logsumexp()
 
     def to_mvt(self):
@@ -278,7 +286,8 @@ def matrix_and_mvt_to_studentt(matrix, mvt):
     alpha = y_studentt.joint.alpha
     beta = y_studentt.joint.beta
 
-    mask = torch.cat([info_x != info_x, info_y == info_y], -1)
+    mask = torch.cat([info_vec.new_full(info_x.shape[-1:], True, dtype=torch.bool),
+                      info_vec.new_full(info_y.shape[-1:], True, dtype=torch.bool)], -1)
     result = StudentT(log_normalizer, info_vec, precision, alpha, beta, mask)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim

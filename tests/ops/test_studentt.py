@@ -10,7 +10,7 @@ from pyro.ops.studentt import (
     studentt_tensordot,
     matrix_and_mvt_to_studentt,
     mvt_to_studentt,
-    _absolute_central_moment_matching,
+    _moment_matching,
 )
 from tests.common import assert_close
 from tests.ops.random import assert_close_studentt, random_studentt, random_mvt
@@ -187,10 +187,8 @@ def test_condition(sample_shape, batch_shape, left, right):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
-    st = random_studentt(batch_shape, dim)
-    # force df > 4: not so heavy tail
-    st.joint.alpha += 2
-    st.joint.beta += 2
+    # force df > 2: not so heavy tail
+    st = random_studentt(batch_shape, dim, df_min=2.)
     st.joint.info_vec *= 0.1  # approximately centered
     st.joint.precision += torch.eye(dim) * 0.1
 
@@ -199,7 +197,7 @@ def test_logsumexp(batch_shape, dim):
     samples = torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale - scale / 2
     expected = st.log_density(samples).logsumexp(0) + math.log(scale ** dim / num_samples)
     actual = st.event_logsumexp()
-    assert_close(actual, expected, atol=0.05, rtol=0.05)
+    assert_close(actual, expected, atol=0.06, rtol=0.06)
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
@@ -232,37 +230,45 @@ def test_matrix_and_mvt_to_studentt(sample_shape, batch_shape, x_dim, y_dim):
 
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_moment_matching(shape, dim):
-    x = random_studentt(shape, dim)
-    x.df += 1  # make sure that df > 1
-    new_df = x.df  # torch.rand(shape) * (x.df - 1) + 1
-    y = _absolute_central_moment_matching(x, new_df)
+@pytest.mark.parametrize("order", [1, 2])
+def test_moment_matching(shape, dim, order):
+    x_mvt = random_mvt(shape, dim, df_min=order + 3)
+    x = mvt_to_studentt(x_mvt)
+    new_df = torch.randn(shape).exp() + order + 1
+    y = _moment_matching(x, new_df, order)
     # assert y is a normalized density
-    assert_close(y.event_logsumexp(), torch.ones(shape))
-    x_cov = x.precision.inverse()
-    y_cov = y.precision.inverse()
-    x_loc = x_cov.matmul(x.info_vec.unsqueeze(-1)).squeeze(-1)
-    y_loc = y_cov.matmul(y.info_vec.unsqueeze(-1)).squeeze(-1)
-    assert_close(x_loc, y_loc)
-    x_scale_tril = x_cov.cholesky()
-    y_scale_tril = y_cov.cholesky()
+    assert_close(y.event_logsumexp(), torch.zeros(shape))
+    y_mvt = y.to_mvt()
+    assert_close(x_mvt.loc, y_mvt.loc)
     n = 100000
-    x_samples = dist.MultivariateStudentT(x.df, x_loc, x_scale_tril).sample(torch.Size([n]))
-    y_samples = dist.MultivariateStudentT(y.df, y_loc, y_scale_tril).sample(torch.Size([n]))
-    absolute_mm_x = (x_samples - x_loc).abs().pow(1 / dim).sum(-1).mean(0)
-    absolute_mm_y = (y_samples - y_loc).abs().pow(1 / dim).sum(-1).mean(0)
-    # FIXME: test is failing??
+    x_samples = x_mvt.sample(torch.Size([n]))
+    y_samples = y_mvt.sample(torch.Size([n]))
+    absolute_mm_x = (x_samples - x_mvt.loc).abs().pow(order / dim).sum(-1).mean(0)
+    absolute_mm_y = (y_samples - y_mvt.loc).abs().pow(order / dim).sum(-1).mean(0)
     assert_close(absolute_mm_x, absolute_mm_y, 0.5)
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_add(shape, dim):
-    x = random_studentt(shape, dim)
-    y = random_studentt(shape, dim)
-    value = torch.randn(dim)
-    # FIXME: add a proper test
-    assert_close((x + y).log_density(value), x.log_density(value) + y.log_density(value))
+    x_mvt = random_mvt(shape, dim, df_min=4)
+    x = mvt_to_studentt(x_mvt)
+    y_mvt = random_mvt(shape, dim, df_min=2)
+    y = mvt_to_studentt(y_mvt)
+    xy = x.event_pad(right=dim) + y.event_pad(left=dim)
+    # assert xy is a normalized density
+    assert_close(xy.event_logsumexp(), torch.zeros(shape))
+    # assert tail is preserved
+    xy_mvt = xy.to_mvt()
+    assert_close(xy_mvt.df, torch.min(x_mvt.df, y_mvt.df))
+    # assert moment matching
+    assert_close(xy_mvt.loc, torch.cat([x_mvt.loc, y_mvt.loc], -1))
+    n = 100000
+    x_samples0 = x_mvt.sample(torch.Size([n]))
+    x_samples1 = xy.marginalize(right=dim).to_mvt().sample(torch.Size([n]))
+    absolute_mm_0 = (x_samples0 - x_mvt.loc).abs().pow(1 / dim).sum(-1).mean(0)
+    absolute_mm_1 = (x_samples1 - x_mvt.loc).abs().pow(1 / dim).sum(-1).mean(0)
+    assert_close(absolute_mm_0, absolute_mm_1, 0.2)
 
 
 @pytest.mark.parametrize("x_batch_shape,y_batch_shape", [
@@ -290,15 +296,13 @@ def test_studentt_tensordot(dot_dims,
                             y_batch_shape, y_dim, y_rank):
     x_rank = min(x_rank, x_dim)
     y_rank = min(y_rank, y_dim)
-    x = random_studentt(x_batch_shape, x_dim, x_rank)
-    y = random_studentt(y_batch_shape, y_dim, y_rank)
-    na = x_dim - dot_dims
-    nb = dot_dims
+    x = random_studentt(x_batch_shape, x_dim, x_rank, df_min=1.)
+    y = random_studentt(y_batch_shape, y_dim, y_rank, df_min=1.)
+    y.mask[:dot_dims].fill_(False)
     try:
-        torch.cholesky(x.joint.precision[..., na:, na:] + y.joint.precision[..., :nb, :nb])
+        z = studentt_tensordot(x, y, dot_dims)
     except RuntimeError:
         pytest.skip("Cannot marginalize the common variables of two StudentTs.")
 
-    z = studentt_tensordot(x, y, dot_dims)
+    assert z.batch_shape == broadcast_shape(x_batch_shape, y_batch_shape)
     assert z.dim() == x_dim + y_dim - 2 * dot_dims
-    # FIXME: can we add some else tests?
