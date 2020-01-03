@@ -245,17 +245,18 @@ def test_moment_matching(shape, dim, order):
     y_samples = y_mvt.sample(torch.Size([n]))
     absolute_mm_x = (x_samples - x_mvt.loc).abs().pow(order / dim).sum(-1).mean(0)
     absolute_mm_y = (y_samples - y_mvt.loc).abs().pow(order / dim).sum(-1).mean(0)
-    assert_close(absolute_mm_x, absolute_mm_y, 0.5)
+    assert_close(absolute_mm_x, absolute_mm_y, atol=0.3 * order)
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_add(shape, dim):
-    x_mvt = random_mvt(shape, dim, df_min=4)
+@pytest.mark.parametrize("order", [1, 2])
+def test_add(shape, dim, order):
+    x_mvt = random_mvt(shape, dim, df_min=order + 3)
     x = mvt_to_studentt(x_mvt)
-    y_mvt = random_mvt(shape, dim, df_min=2)
+    y_mvt = random_mvt(shape, dim, df_min=order + 1)
     y = mvt_to_studentt(y_mvt)
-    xy = x.event_pad(right=dim) + y.event_pad(left=dim)
+    xy = x.event_pad(right=dim).add(y.event_pad(left=dim), order)
     # assert xy is a normalized density
     assert_close(xy.event_logsumexp(), torch.zeros(shape))
     # assert tail is preserved
@@ -266,9 +267,9 @@ def test_add(shape, dim):
     n = 100000
     x_samples0 = x_mvt.sample(torch.Size([n]))
     x_samples1 = xy.marginalize(right=dim).to_mvt().sample(torch.Size([n]))
-    absolute_mm_0 = (x_samples0 - x_mvt.loc).abs().pow(1 / dim).sum(-1).mean(0)
-    absolute_mm_1 = (x_samples1 - x_mvt.loc).abs().pow(1 / dim).sum(-1).mean(0)
-    assert_close(absolute_mm_0, absolute_mm_1, 0.2)
+    absolute_mm_0 = (x_samples0 - x_mvt.loc).abs().pow(order / dim).sum(-1).mean(0)
+    absolute_mm_1 = (x_samples1 - x_mvt.loc).abs().pow(order / dim).sum(-1).mean(0)
+    assert_close(absolute_mm_0, absolute_mm_1, atol=0.3 * order)
 
 
 @pytest.mark.parametrize("x_batch_shape,y_batch_shape", [
@@ -306,3 +307,34 @@ def test_studentt_tensordot(dot_dims,
 
     assert z.batch_shape == broadcast_shape(x_batch_shape, y_batch_shape)
     assert z.dim() == x_dim + y_dim - 2 * dot_dims
+
+
+@pytest.mark.parametrize("x_dim", [1, 2, 3])
+@pytest.mark.parametrize("y_dim", [1, 2, 3])
+def test_filter_prediction(x_dim, y_dim):
+    # y = x @ M + e, where y is the latent variable of the next time step
+    x_mvt = random_mvt((), x_dim, df_min=1.)
+    matrix = torch.randn((x_dim, y_dim))
+    e_mvt = random_mvt((), y_dim, df_min=1.)
+    x = mvt_to_studentt(x_mvt)
+    e = mvt_to_studentt(e_mvt)
+    xe = studentt_tensordot(x, e)
+    xe_mvt = xe.to_mvt()
+    matrix_ext = torch.eye(x_dim + y_dim)
+    matrix_ext[x_dim:, :x_dim] = matrix.transpose(-2, -1)
+    expected_df = xe_mvt.df
+    expected_loc = matrix_ext.matmul(xe_mvt.loc.unsqueeze(-1)).squeeze(-1)
+    expected_scale_tril = matrix_ext.matmul(xe_mvt.scale_tril)
+
+    y = matrix_and_mvt_to_studentt(matrix, e_mvt)
+    xy = x.event_pad(right=y_dim) + y
+    xy_mvt = xy.to_mvt()
+    assert_close(xy_mvt.df, expected_df)
+    assert_close(xy_mvt.loc, expected_loc)
+    assert_close(xy_mvt.scale_tril, expected_scale_tril)
+
+
+@pytest.mark.parametrize("x_dim", [1, 2, 3])
+@pytest.mark.parametrize("y_dim", [1, 2, 3])
+def test_filter_update(x_dim, y_dim):
+    pass

@@ -35,9 +35,13 @@ def _moment_matching(st, new_df, order=1):
     concentration = st.joint.alpha - half_mask_sum + 1
     new_concentration = 0.5 * new_df
     new_alpha = new_concentration + half_mask_sum - 1
-    chol_P = st.joint.precision[..., st.mask, :][..., st.mask].cholesky()
-    chol_P_u = st.joint.info_vec[..., st.mask].unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
-    half_u_P_u = 0.5 * chol_P_u.pow(2).sum(-1)
+    if half_mask_sum > 0:
+        chol_P = st.joint.precision[..., st.mask, :][..., st.mask].cholesky()
+        chol_P_u = st.joint.info_vec[..., st.mask].unsqueeze(-1).triangular_solve(
+            chol_P, upper=False).solution.squeeze(-1)
+        half_u_P_u = 0.5 * chol_P_u.pow(2).sum(-1)
+    else:
+        half_u_P_u = 0.
     rate = st.joint.beta - half_u_P_u
     half_order = 0.5 * order
     s = (new_concentration / rate) * torch.exp((
@@ -138,7 +142,7 @@ class StudentT(GammaGaussian):
         mask = self.mask[perm]
         return StudentT.from_joint(self.joint.event_permute(perm), mask)
 
-    def __add__(self, other):
+    def add(self, other, order=1.):
         """
         Approximates the sum of two StudentT in log-density space.
         """
@@ -152,8 +156,8 @@ class StudentT(GammaGaussian):
         concentration = torch.min(self_concentration, other_concentration)
         df = 2 * concentration
         # use moment matching to approximate a student-t by another one with different df
-        self_st = _moment_matching(self, df, 1)
-        other_st = _moment_matching(other, df, 1)
+        self_st = _moment_matching(self, df, order)
+        other_st = _moment_matching(other, df, order)
         # approximate two uncorrelated student-ts with the same df by a joint student-t
         mask = self.mask | other.mask
         log_normalizer = self_st.joint.log_normalizer + other_st.joint.log_normalizer + \
@@ -163,6 +167,9 @@ class StudentT(GammaGaussian):
         info_vec = self_st.joint.info_vec + other_st.joint.info_vec
         precision = self_st.joint.precision + other_st.joint.precision
         return StudentT(log_normalizer, info_vec, precision, alpha, beta, mask)
+
+    def __add__(self, other):
+        return self.add(other)
 
     def log_density(self, value):
         """
@@ -286,7 +293,7 @@ def matrix_and_mvt_to_studentt(matrix, mvt):
     alpha = y_studentt.joint.alpha
     beta = y_studentt.joint.beta
 
-    mask = torch.cat([info_vec.new_full(info_x.shape[-1:], True, dtype=torch.bool),
+    mask = torch.cat([info_vec.new_full(info_x.shape[-1:], False, dtype=torch.bool),
                       info_vec.new_full(info_y.shape[-1:], True, dtype=torch.bool)], -1)
     result = StudentT(log_normalizer, info_vec, precision, alpha, beta, mask)
     assert result.batch_shape == batch_shape
@@ -294,7 +301,7 @@ def matrix_and_mvt_to_studentt(matrix, mvt):
     return result
 
 
-def studentt_tensordot(x, y, dims=0):
+def studentt_tensordot(x, y, dims=0, order=1.):
     """
     Computes the integral over two StudentT:
 
@@ -306,6 +313,7 @@ def studentt_tensordot(x, y, dims=0):
     :param x: a StudentT instance
     :param y: a StudentT instance
     :param dims: number of variables to contract
+    :param float order: order of moment matching
     """
     assert isinstance(x, StudentT)
     assert isinstance(y, StudentT)
@@ -321,4 +329,4 @@ def studentt_tensordot(x, y, dims=0):
         torch.arange(na, device=device),
         torch.arange(x.dim(), x.dim() + nc, device=device),
         torch.arange(na, x.dim(), device=device)])
-    return (x.event_pad(right=nc) + y.event_pad(left=na)).event_permute(perm).marginalize(right=nb)
+    return x.event_pad(right=nc).add(y.event_pad(left=na), order).event_permute(perm).marginalize(right=nb)
