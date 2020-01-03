@@ -68,7 +68,7 @@ class StudentT(GammaGaussian):
 
     Note that different StudentT instances can have the same log density:
 
-        StudentT(l, i, P, a, b) = StudentT(l + (a + 1) log(t), i * t, p * t, a, b * t)
+        StudentT(l, i, P, a, b) = StudentT(l + (a + 1) log(t), i * t, P * t, a, b * t)
 
     for all t > 0.
 
