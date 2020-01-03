@@ -66,7 +66,11 @@ class StudentT(GammaGaussian):
 
         p(x, s) = GammaGaussian(log_normalizer, info_vec, precision, alpha, beta).
 
-    Note that different StudentT instances can have the same log density.
+    Note that different StudentT instances can have the same log density:
+
+        StudentT(l, i, P, a, b) = StudentT(l + (a + 1) log(t), i * t, p * t, a, b * t)
+
+    for all t > 0.
 
     The `s` variable plays the role of a mixing variable such that
 
@@ -97,6 +101,7 @@ class StudentT(GammaGaussian):
 
     @staticmethod
     def from_joint(joint, mask=None):
+        assert isinstance(joint, GammaGaussian)
         return StudentT(joint.log_normalizer, joint.info_vec, joint.precision, joint.alpha, joint.beta, mask)
 
     def dim(self):
@@ -218,6 +223,7 @@ class StudentT(GammaGaussian):
             g.condition(x).event_logsumexp()
               = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
         """
+        assert left == 0 or right == 0
         if left > 0:
             assert self.mask[:left].all()
             mask = self.mask[left:]

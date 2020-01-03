@@ -125,7 +125,7 @@ def test_marginalize(batch_shape, left, right):
                  st.event_logsumexp())
 
 
-@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("left", [1, 2, 3])
 @pytest.mark.parametrize("right", [1, 2, 3])
@@ -164,7 +164,7 @@ def test_conditional_mvt(left, right):
     assert_close_studentt(conditioned, expected_cond_st)
 
 
-@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("left", [1, 2, 3])
 @pytest.mark.parametrize("right", [1, 2, 3])
@@ -228,16 +228,29 @@ def test_matrix_and_mvt_to_studentt(sample_shape, batch_shape, x_dim, y_dim):
     assert_close(actual_log_prob, expected_log_prob)
 
 
-@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_studentt_multiple_representation(batch_shape, dim):
+    x = random_studentt(batch_shape, dim)
+    t = torch.randn(batch_shape).exp()
+    y = StudentT(x.joint.log_normalizer + (x.joint.alpha + 1) * t.log(),
+                 x.joint.info_vec * t.unsqueeze(-1),
+                 x.joint.precision * t.unsqueeze(-1).unsqueeze(-1),
+                 x.joint.alpha,
+                 x.joint.beta * t)
+    assert_close_studentt(y, x)
+
+
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 @pytest.mark.parametrize("order", [1, 2])
-def test_moment_matching(shape, dim, order):
-    x_mvt = random_mvt(shape, dim, df_min=order + 3)
+def test_moment_matching(batch_shape, dim, order):
+    x_mvt = random_mvt(batch_shape, dim, df_min=order + 3)
     x = mvt_to_studentt(x_mvt)
-    new_df = torch.randn(shape).exp() + order + 1
+    new_df = torch.randn(batch_shape).exp() + order + 1
     y = _moment_matching(x, new_df, order)
     # assert y is a normalized density
-    assert_close(y.event_logsumexp(), torch.zeros(shape))
+    assert_close(y.event_logsumexp(), torch.zeros(batch_shape))
     y_mvt = y.to_mvt()
     assert_close(x_mvt.loc, y_mvt.loc)
     n = 100000
@@ -248,17 +261,17 @@ def test_moment_matching(shape, dim, order):
     assert_close(absolute_mm_x, absolute_mm_y, atol=0.3 * order)
 
 
-@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 @pytest.mark.parametrize("order", [1, 2])
-def test_add(shape, dim, order):
-    x_mvt = random_mvt(shape, dim, df_min=order + 3)
+def test_add(batch_shape, dim, order):
+    x_mvt = random_mvt(batch_shape, dim, df_min=order + 3)
     x = mvt_to_studentt(x_mvt)
-    y_mvt = random_mvt(shape, dim, df_min=order + 1)
+    y_mvt = random_mvt(batch_shape, dim, df_min=order + 1)
     y = mvt_to_studentt(y_mvt)
     xy = x.event_pad(right=dim).add(y.event_pad(left=dim), order)
     # assert xy is a normalized density
-    assert_close(xy.event_logsumexp(), torch.zeros(shape))
+    assert_close(xy.event_logsumexp(), torch.zeros(batch_shape))
     # assert tail is preserved
     xy_mvt = xy.to_mvt()
     assert_close(xy_mvt.df, torch.min(x_mvt.df, y_mvt.df))
@@ -309,32 +322,30 @@ def test_studentt_tensordot(dot_dims,
     assert z.dim() == x_dim + y_dim - 2 * dot_dims
 
 
+@pytest.mark.parametrize("sample_shape", [()], ids=str)
+@pytest.mark.parametrize("batch_shape", [()], ids=str)
 @pytest.mark.parametrize("x_dim", [1, 2, 3])
 @pytest.mark.parametrize("y_dim", [1, 2, 3])
-def test_filter_prediction(x_dim, y_dim):
-    # y = x @ M + e, where y is the latent variable of the next time step
-    x_mvt = random_mvt((), x_dim, df_min=1.)
+@pytest.mark.parametrize("order", [1, 2])
+def test_filtering(sample_shape, batch_shape, x_dim, y_dim, order):
+    # y = x @ M + e
+    x_mvt = random_mvt(batch_shape, x_dim, df_min=order)
     matrix = torch.randn((x_dim, y_dim))
-    e_mvt = random_mvt((), y_dim, df_min=1.)
+    e_mvt = random_mvt(batch_shape, y_dim, df_min=order)
     x = mvt_to_studentt(x_mvt)
     e = mvt_to_studentt(e_mvt)
-    xe = studentt_tensordot(x, e)
+    # Formulas 36, 37 of https://arxiv.org/abs/1703.02428
+    xe = studentt_tensordot(x, e, order=order)
     xe_mvt = xe.to_mvt()
     matrix_ext = torch.eye(x_dim + y_dim)
     matrix_ext[x_dim:, :x_dim] = matrix.transpose(-2, -1)
-    expected_df = xe_mvt.df
-    expected_loc = matrix_ext.matmul(xe_mvt.loc.unsqueeze(-1)).squeeze(-1)
-    expected_scale_tril = matrix_ext.matmul(xe_mvt.scale_tril)
+    expected = mvt_to_studentt(dist.MultivariateStudentT(
+        xe_mvt.df,
+        matrix_ext.matmul(xe_mvt.loc.unsqueeze(-1)).squeeze(-1),
+        matrix_ext.matmul(xe_mvt.scale_tril),
+    ))
 
+    # test prediction
     y = matrix_and_mvt_to_studentt(matrix, e_mvt)
-    xy = x.event_pad(right=y_dim) + y
-    xy_mvt = xy.to_mvt()
-    assert_close(xy_mvt.df, expected_df)
-    assert_close(xy_mvt.loc, expected_loc)
-    assert_close(xy_mvt.scale_tril, expected_scale_tril)
-
-
-@pytest.mark.parametrize("x_dim", [1, 2, 3])
-@pytest.mark.parametrize("y_dim", [1, 2, 3])
-def test_filter_update(x_dim, y_dim):
-    pass
+    xy = x.event_pad(right=y_dim).add(y, order)
+    assert_close_studentt(xy, expected)
