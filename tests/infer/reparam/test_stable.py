@@ -7,6 +7,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
 from pyro.infer.reparam import StableHMMReparam, StableReparam, SymmetricStableReparam
+from pyro.util import warn_if_nan
 from tests.common import assert_close
 
 
@@ -156,3 +157,43 @@ def test_stable_hmm_distribution(stability, duration, hidden_dim, obs_dim):
     assert_close(actual_loc, expected_loc, atol=0.02, rtol=0.05)
     assert_close(actual_scale, expected_scale, atol=0.02, rtol=0.05)
     assert_close(actual_corr, expected_corr, atol=0.01)
+
+
+def test_stable_nan():
+    sample_shape = [100000]
+    stability = dist.Uniform(0, 2).sample(sample_shape).requires_grad_(True)
+    warn_if_nan(stability, "stability")
+    skew = dist.Uniform(-1, 1).sample(sample_shape).requires_grad_(True)
+    warn_if_nan(skew, "skew")
+    scale = dist.LogNormal(0, 1).sample(sample_shape).requires_grad_(True)
+    warn_if_nan(scale, "scale")
+    loc = dist.Normal(0, 1).sample(sample_shape).requires_grad_(True)
+    warn_if_nan(loc, "loc")
+
+    with poutine.trace() as tr:
+        with poutine.reparam(config={"x": StableReparam()}):
+            x = pyro.sample("x", dist.Stable(stability, skew, scale, loc))
+    for name, site in tr.trace.nodes.items():
+        if site["type"] == "sample":
+            warn_if_nan(site["value"], name)
+
+    x.abs().sum().backward()
+
+
+def test_symmetric_stable_nan():
+    sample_shape = [100000]
+    stability = dist.Uniform(0, 2).sample(sample_shape).requires_grad_(True)
+    warn_if_nan(stability, "stability")
+    scale = dist.LogNormal(0, 1).sample(sample_shape).requires_grad_(True)
+    warn_if_nan(scale, "scale")
+    loc = dist.Normal(0, 1).sample(sample_shape).requires_grad_(True)
+    warn_if_nan(loc, "loc")
+
+    with poutine.trace() as tr:
+        with poutine.reparam(config={"x": SymmetricStableReparam()}):
+            x = pyro.sample("x", dist.Stable(stability, 0., scale, loc))
+    for name, site in tr.trace.nodes.items():
+        if site["type"] == "sample":
+            warn_if_nan(site["value"], name)
+
+    x.abs().sum().backward()
