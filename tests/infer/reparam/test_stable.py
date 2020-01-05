@@ -180,7 +180,8 @@ def test_stable_nan():
     x.abs().sum().backward()
 
 
-def test_symmetric_stable_nan():
+@pytest.mark.parametrize("observed", [False, True], ids=["latent", "observed"])
+def test_symmetric_stable_nan(observed):
     sample_shape = [100000]
     stability = dist.Uniform(0, 2).sample(sample_shape).requires_grad_(True)
     warn_if_nan(stability, "stability")
@@ -188,12 +189,15 @@ def test_symmetric_stable_nan():
     warn_if_nan(scale, "scale")
     loc = dist.Normal(0, 1).sample(sample_shape).requires_grad_(True)
     warn_if_nan(loc, "loc")
+    data = torch.tensor(0.) if observed else None
 
     with poutine.trace() as tr:
         with poutine.reparam(config={"x": SymmetricStableReparam()}):
-            x = pyro.sample("x", dist.Stable(stability, 0., scale, loc))
+            x = pyro.sample("x", dist.Stable(stability, 0., scale, loc),
+                            obs=data)
     for name, site in tr.trace.nodes.items():
         if site["type"] == "sample":
             warn_if_nan(site["value"], name)
 
-    x.abs().sum().backward()
+    loss = tr.trace.log_prob_sum() if observed else x.abs().sum()
+    loss.backward()
