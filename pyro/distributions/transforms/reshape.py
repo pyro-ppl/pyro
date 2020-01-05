@@ -1,5 +1,4 @@
 import torch
-from torch.distributions.utils import lazy_property
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
@@ -11,11 +10,9 @@ class ReshapeEvent(Transform):
     """
     A bijection that reshapes the inputs into an arbitrary-size Tensor. The primary intended use of this transform
     is to allow interoperatability between transforms on 1D vector random variables and 2D image random variables.
-    
-    In conjunction with `GlowFlow`, this can be used
-    to apply `nn.Conv2d` to any supported distribution.
 
-    Note that a general reshape transform is not possible, since we cannot mix batch and event dimensions.
+    Note that this transform may convert batch dimensions into event dimensions, depending on the input/output shapes.
+    The event dimension of the output of this transformation will be the length of the to_event_shape argument.
 
     Example usage:
     >>> import torch
@@ -27,26 +24,31 @@ class ReshapeEvent(Transform):
     >>> glow_dist.sample(torch.Size([1])).shape  # doctest: +SKIP
         torch.Size([1, 3, 32, 32])
 
-    :param shape: the desired shape of y, for the bijection x=>y.
+    :param from_event_shape: the shape of the rightmost dimensions of x to reshape, for the bijection x=>y.
+    :type shape: list
+    :param to_event_shape: the desired shape of the rightmost dimensions of y.
     :type shape: list
 
     """
 
+    domain = constraints.real
     codomain = constraints.real
     bijective = True
-    #event_dim = 1
     volume_preserving = True
 
     def __init__(self, from_event_shape, to_event_shape):
         super(ReshapeEvent, self).__init__(cache_size=1)
 
-        # Convert to tuple or list, or torch.Size?
-        self.from_event_shape = from_event_shape
-        self.to_event_shape = to_event_shape
-        
-        # TODO: Check that event_dim is correct here!
-        self.event_dim = len(to_event_shape)
+        self.from_event_shape = torch.Size(from_event_shape)
+        self.to_event_shape = torch.Size(to_event_shape)
         self.from_event_dim = len(from_event_shape)
+        self.event_dim = len(to_event_shape)
+
+        # Check that dimensions haven't been introduced or removed
+        if torch.tensor(self.from_event_shape).sum() != torch.tensor(self.to_event_shape).sum():
+            raise ValueError(
+                "There is a mismatch between the input shape {} and the output shape {}!".format(
+                    from_event_shape, to_event_shape))
 
     def _call(self, x):
         """
@@ -79,5 +81,4 @@ class ReshapeEvent(Transform):
         vector of zeros works.
         """
 
-        # TODO: Check that size is correct! Is it from_event_shape or to_event_shape?
-        return torch.zeros(x.size()[:-self.from_event_shape], dtype=x.dtype, layout=x.layout, device=x.device)
+        return torch.zeros(x.size()[:-self.from_event_dim], dtype=x.dtype, layout=x.layout, device=x.device)

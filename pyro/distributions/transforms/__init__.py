@@ -6,7 +6,8 @@ from pyro.distributions.transforms.affine_autoregressive import AffineAutoregres
 from pyro.distributions.transforms.affine_coupling import AffineCoupling, affine_coupling
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
-from pyro.distributions.transforms.generalized_channel_permute import GeneralizedChannelPermute, generalized_channel_permute
+from pyro.distributions.transforms.generalized_channel_permute import (GeneralizedChannelPermute,
+                                                                       generalized_channel_permute)
 from pyro.distributions.transforms.householder import Householder, householder
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
 from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, LeakyReLUTransform,
@@ -17,6 +18,7 @@ from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.planar import Planar, ConditionalPlanar, planar, conditional_planar
 from pyro.distributions.transforms.radial import Radial, radial
+from pyro.distributions.transforms.reshape import ReshapeEvent
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
@@ -51,6 +53,7 @@ __all__ = [
     'Planar',
     'Polynomial',
     'Radial',
+    'ReshapeEvent',
     'Sylvester',
     'TanhTransform',
     'affine_autoregressive',

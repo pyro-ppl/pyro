@@ -1,10 +1,10 @@
 import torch
-from torch.distributions.utils import lazy_property
 from torch.distributions import constraints
 import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.torch_transform import TransformModule
+
 
 @copy_docs_from(TransformModule)
 class GeneralizedChannelPermute(TransformModule):
@@ -78,9 +78,6 @@ class GeneralizedChannelPermute(TransformModule):
         L = self.LU.tril()
         L.diagonal(dim1=-2, dim2=-1).fill_(1)
 
-        # NOTE: Would this be a better way to extract L? Would need to apply device/type of torch.ones
-        #L = torch.tril(self.LU, diagonal = -1) + torch.diag(torch.ones(self.channels))
-
         # Perform the 2D convolution, using the weight
         filters = (self.permutation @ L @ U)[..., None, None]
         y = F.conv2d(x, filters)
@@ -95,10 +92,14 @@ class GeneralizedChannelPermute(TransformModule):
         Inverts y => x.
         """
 
-        # NOTE: The following lines are equivalent to these two.
-        # Using Tensor.inverse() would be the numerically unstable, however.
-        #filters = (self.permutation @ L @ U).inverse()[..., None, None]
-        #x = F.conv2d(y, filters)
+        """
+        NOTE: This method is equivalent to the following two lines. Using Tensor.inverse() would be
+        numerically unstable, however.
+
+        filters = (self.permutation @ L @ U).inverse()[..., None, None]
+        x = F.conv2d(y, filters)
+
+        """
 
         # Do a matrix vector product over the channel dimension
         # in order to apply inverse permutation matrix
@@ -113,7 +114,7 @@ class GeneralizedChannelPermute(TransformModule):
 
         # Solve Ux = (PL)^-1y
         x, _ = torch.triangular_solve(Ux, U)
-    
+
         # Unflatten x
         return x.view_as(y)
 
@@ -128,7 +129,7 @@ class GeneralizedChannelPermute(TransformModule):
         h, w = x.shape[-2:]
         log_det = h * w * torch.log(torch.abs(torch.diag(self.LU))).sum()
 
-        return log_det*torch.ones(x.size()[:-3], dtype=x.dtype, layout=x.layout, device=x.device)
+        return log_det * torch.ones(x.size()[:-3], dtype=x.dtype, layout=x.layout, device=x.device)
 
 
 def generalized_channel_permute(input_dim, **kwargs):
