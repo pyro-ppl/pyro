@@ -161,7 +161,7 @@ def test_stable_hmm_distribution(stability, duration, hidden_dim, obs_dim):
 
 def test_stable_nan():
     sample_shape = [100000]
-    stability = dist.Uniform(0, 2).sample(sample_shape).requires_grad_(True)
+    stability = dist.Uniform(0.1, 2).sample(sample_shape).requires_grad_(True)
     warn_if_nan(stability, "stability")
     skew = dist.Uniform(-1, 1).sample(sample_shape).requires_grad_(True)
     warn_if_nan(skew, "skew")
@@ -183,7 +183,7 @@ def test_stable_nan():
 @pytest.mark.parametrize("observed", [False, True], ids=["latent", "observed"])
 def test_symmetric_stable_nan(observed):
     sample_shape = [100000]
-    stability = dist.Uniform(0, 2).sample(sample_shape).requires_grad_(True)
+    stability = dist.Uniform(0.1, 2).sample(sample_shape).requires_grad_(True)
     warn_if_nan(stability, "stability")
     scale = dist.LogNormal(0, 1).sample(sample_shape).requires_grad_(True)
     warn_if_nan(scale, "scale")
