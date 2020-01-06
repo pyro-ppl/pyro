@@ -182,13 +182,25 @@ class TransformTests(TestCase):
         for input_dim in [2, 5, 10]:
             self._test_inverse([input_dim], T.tanh())
 
-    def test_1x1_inv_inverses(self):
+    def test_1x1_inv_conv(self):
         for shape in [(3, 16, 16), (1, 3, 32, 32), (10, 9, 64, 64)]:
             self._test_inverse(shape, T.generalized_channel_permute(channels=shape[-3]))
-
-    def test_1x1_inv_conv_shapes(self):
-        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
             self._test_shape(shape, T.generalized_channel_permute(channels=shape[-3]))
+
+    def test_1x1_inv_conv_jacobian(self):
+        for width_dim in [2, 4, 6]:
+            # Do a bit of a hack until we merge in Reshape transform
+            class Flatten(T.GeneralizedChannelPermute):
+                event_dim = 1
+
+                def _call(self, x):
+                    return super(Flatten, self)._call(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+
+                def _inverse(self, x):
+                    return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+
+            input_dim = (width_dim**2)*3
+            self._test_jacobian(input_dim, Flatten())
 
     def test_householder_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
