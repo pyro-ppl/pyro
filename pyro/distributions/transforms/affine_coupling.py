@@ -106,7 +106,7 @@ class AffineCoupling(TransformModule):
         """
         y1, y2 = y[..., :self.split_dim], y[..., self.split_dim:]
         x1 = y1
-        mean, log_scale = self.arn(x1)
+        mean, log_scale = self.hypernet(x1)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
 
