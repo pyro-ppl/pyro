@@ -1,13 +1,14 @@
 import torch
 from torch.distributions import constraints
-from torch.distributions.distribution import Distribution
 from torch.distributions.transforms import Transform
 from torch.distributions.utils import _sum_rightmost
 
+from pyro.distributions.torch_distribution import TorchDistribution
 
-class TransformedDistribution(Distribution):
+
+class TransformedDistribution(TorchDistribution):
     r"""
-    Extension of the Distribution class, which applies a sequence of Transforms
+    Extension of the TorchDistribution class, which applies a sequence of Transforms
     to a base distribution.  Let f be the composition of transforms applied::
 
         X ~ BaseDistribution
