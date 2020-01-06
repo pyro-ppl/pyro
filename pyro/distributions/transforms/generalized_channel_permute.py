@@ -156,9 +156,8 @@ def generalized_channel_permute(**kwargs):
     A helper function to create a :class:`~pyro.distributions.transforms.GeneralizedChannelPermute` object for
     consistency with other helpers.
 
-    :param channel: Torch tensor of integer indices representing permutation. Defaults
-        to a random permutation.
-    :type permutation: torch.LongTensor
+    :param channels: Number of channel dimensions in the input.
+    :type channels: int
 
     """
 
