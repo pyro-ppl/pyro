@@ -15,29 +15,20 @@ class TransformedDistribution(Distribution):
         log p(Y) = log p(X) + log |det (dX/dY)|
 
     Note that the ``.event_shape`` of a :class:`TransformedDistribution` is the
-    maximum shape of its base distribution and its transforms, since transforms
-    can introduce correlations among events.
+    maximum shape of its base distribution and its transforms - possibly allowing
+    for reshaping - since transforms can introduce correlations among events.
 
-    An example for the usage of :class:`TransformedDistribution` would be::
+    Example usage:
+    >>> # Building a Logistic Distribution
+    >>> # X ~ Uniform(0, 1)
+    >>> # f = a + b * logit(X)
+    >>> # Y ~ f(X) ~ Logistic(a, b)
+    >>> base_distribution = Uniform(0, 1)
+    >>> transforms = [SigmoidTransform().inv, AffineTransform(loc=a, scale=b)]
+    >>> logistic = TransformedDistribution(base_distribution, transforms)
 
-        # Building a Logistic Distribution
-        # X ~ Uniform(0, 1)
-        # f = a + b * logit(X)
-        # Y ~ f(X) ~ Logistic(a, b)
-        base_distribution = Uniform(0, 1)
-        transforms = [SigmoidTransform().inv, AffineTransform(loc=a, scale=b)]
-        logistic = TransformedDistribution(base_distribution, transforms)
-
-    For more examples, please look at the implementations of
-
-    :class:`~torch.distributions.gumbel.Gumbel`,
-    :class:`~torch.distributions.half_cauchy.HalfCauchy`,
-    :class:`~torch.distributions.half_normal.HalfNormal`,
-    :class:`~torch.distributions.log_normal.LogNormal`,
-    :class:`~torch.distributions.pareto.Pareto`,
-    :class:`~torch.distributions.weibull.Weibull`,
-    :class:`~torch.distributions.relaxed_bernoulli.RelaxedBernoulli` and
-    :class:`~torch.distributions.relaxed_categorical.RelaxedOneHotCategorical`
+    More examples of constructing distributions from transforms can be found in
+    `torch.distributions` and `pyro.distributions`.
 
     """
     arg_constraints = {}
@@ -103,11 +94,11 @@ class TransformedDistribution(Distribution):
         event_shape = shape[batch_dims:]
         super(TransformedDistribution, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
-    # TODO: What is the purpose of expand()?
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(TransformedDistribution, _instance)
         batch_shape = torch.Size(batch_shape)
-        base_dist_batch_shape = batch_shape + self.base_dist.batch_shape[len(self.batch_shape):]
+        batch_dims = len(self.base_shape) - self.event_dim
+        base_dist_batch_shape = batch_shape + self.base_dist.batch_shape[batch_dims:]
         new.base_dist = self.base_dist.expand(base_dist_batch_shape)
         new.transforms = self.transforms
         super(TransformedDistribution, new).__init__(batch_shape, self.event_shape, validate_args=False)

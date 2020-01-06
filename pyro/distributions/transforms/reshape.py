@@ -8,21 +8,22 @@ from pyro.distributions.util import copy_docs_from
 @copy_docs_from(Transform)
 class ReshapeEvent(Transform):
     """
-    A bijection that reshapes the inputs into an arbitrary-size Tensor. The primary intended use of this transform
+    A bijection that reshapes the input into an arbitrary-size Tensor. The primary intended use of this transform
     is to allow interoperatability between transforms on 1D vector random variables and 2D image random variables.
 
     Note that this transform may convert batch dimensions into event dimensions, depending on the input/output shapes.
-    The event dimension of the output of this transformation will be the length of the to_event_shape argument.
+    The event shape of the output of this transformation will be the length of the `to_event_shape` argument.
 
     Example usage:
-    >>> import torch
     >>> c = 3 # assume 3 x 32 x 32 RGB inputs
     >>> base_dist = dist.Normal(torch.zeros(c*32*32), torch.ones(c*32*32))
-    >>> glow = GlowFlow(torch.nn.Conv2d(c,c,1))
-    >>> pyro.module("my_glow", glow)  # doctest: +SKIP
-    >>> glow_dist = dist.TransformedDistribution(base_dist, [ReshapeTransform([32,32,c]),glow])
-    >>> glow_dist.sample(torch.Size([1])).shape  # doctest: +SKIP
+    >>> pyro.module("flow", flow)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [ReshapeEvent([c*32*32], [32,32,c])])
+    >>> flow_dist.sample(torch.Size([1])).shape  # doctest: +SKIP
         torch.Size([1, 3, 32, 32])
+
+    Note that in the example above, the base distribution has batch shape `[3072]` and event shape `[]`, whereas
+    the flow distribution has batch shape `[]` and event shape `[3,32,32]`.
 
     :param from_event_shape: the shape of the rightmost dimensions of x to reshape, for the bijection x=>y.
     :type shape: list
@@ -75,10 +76,8 @@ class ReshapeEvent(Transform):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log Jacobian, i.e. log(abs([dy_0/dx_0, ..., dy_{N-1}/dx_{N-1}])).
-        Note that this type of transform is not autoregressive, so the log Jacobian is not the sum of the previous
-        expression. However, it turns out it's always 0 (since the determinant is -1 or +1), and so returning a
-        vector of zeros works.
+        Calculates the log absolute value of the determinant of the Jacobian, which for a volume preserving
+        transform is always 0.
         """
 
         return torch.zeros(x.size()[:-self.from_event_dim], dtype=x.dtype, layout=x.layout, device=x.device)
