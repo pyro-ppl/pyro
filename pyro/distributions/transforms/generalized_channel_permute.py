@@ -9,15 +9,15 @@ from pyro.distributions.torch_transform import TransformModule
 @copy_docs_from(TransformModule)
 class GeneralizedChannelPermute(TransformModule):
     """
-    A bijection that generalizes a permutation on the channels of a 2D image in `[C,H,W]` format. Specifically this
-    transform performs the operation,
+    A bijection that generalizes a permutation on the channels of a batch of 2D image in `[...,C,H,W]` format.
+    Specifically this transform performs the operation,
 
         :math:`\\mathbf{y} = \\mathtext{\\ttfamily torch.nn.functional.conv2d}(\\mathbf{x}, W)`
- 
+
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and
     :math:`W\\sim C\\times C\\times 1\\times 1` is the filter matrix for a 1x1 convolution with :math:`C` input and
     output channels.
-    
+
     Ignoring the final two dimensions, :math:`W` is restricted to be the matrix product,
 
         :math:`W = PLU`
@@ -27,27 +27,32 @@ class GeneralizedChannelPermute(TransformModule):
     :math:`W` is initialized to a random orthogonal matrix. Then, :math:`P` is fixed and the learnable parameters set
     to :math:`L,U`.
 
-    This operation was introduced in  and is also known as 1x1 invertible convolution. It corresponds to the class
-    `tfp.bijectors.MatvecLU` of TensorFlow Probability.
+    The input :math:`\\mathbf{x}` and output :math:`\\mathbf{y}` both have shape `[...,C,H,W]`, where `C` is the number
+    of channels set at initialization.
+
+    This operation was introduced in [1] for Glow normalizing flow, and is also known as 1x1 invertible convolution.
+    It appears in other notable work such as [2,3], and corresponds to the class `tfp.bijectors.MatvecLU` of TensorFlow
+    Probability.
 
     Example usage:
 
-    >>> from pyro.nn import AutoRegressiveNN
-    >>> from pyro.distributions.transforms import AffineAutoregressive, Permute
-    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iaf1 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
-    >>> ff = Permute(torch.randperm(10, dtype=torch.long))
-    >>> iaf2 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
+    >>> channels = 3
+    >>> base_dist = dist.Normal(torch.zeros(channels, 32, 32), torch.ones(channels, 32, 32))
+    >>> inv_conv = GeneralizedChannelPermute(channels=channels)
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [inv_conv])
     >>> flow_dist.sample()  # doctest: +SKIP
-        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
-                0.1389, -0.4629,  0.0986])
 
-    :param permutation: a permutation ordering that is applied to the inputs.
-    :type permutation: torch.LongTensor
+    :param channels: Number of channel dimensions in the input.
+    :type channels: int
 
     1. Glow: Generative Flow with Invertible 1x1 Convolutions. [arXiv:1807.03039]
-    Diederik P. Kingma, Prafulla Dhariwal.  
+    Diederik P. Kingma, Prafulla Dhariwal.
+
+    2. WaveGlow: A Flow-based Generative Network for Speech Synthesis. [arXiv:1811.00002]
+    Ryan Prenger, Rafael Valle, Bryan Catanzaro.
+
+    3. Neural Spline Flows. [arXiv:1906.04032]
+    Conor Durkan, Artur Bekasov, Iain Murray, George Papamakarios.
 
     """
 
@@ -93,9 +98,9 @@ class GeneralizedChannelPermute(TransformModule):
 
         # Perform the 2D convolution, using the weight
         filters = (self.permutation @ L @ U)[..., None, None]
-        y = F.conv2d(x, filters)
+        y = F.conv2d(x.view(-1, *x.shape[-3:]), filters)
 
-        return y
+        return y.view_as(x)
 
     def _inverse(self, y):
         """
@@ -142,14 +147,12 @@ class GeneralizedChannelPermute(TransformModule):
         return log_det * torch.ones(x.size()[:-3], dtype=x.dtype, layout=x.layout, device=x.device)
 
 
-def generalized_channel_permute(input_dim, **kwargs):
+def generalized_channel_permute(**kwargs):
     """
-    A helper function to create a :class:`~pyro.distributions.transforms.Permute` object for consistency with other
-    helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.GeneralizedChannelPermute` object for
+    consistency with other helpers.
 
-    :param input_dim: Dimension of input variable
-    :type input_dim: int
-    :param permutation: Torch tensor of integer indices representing permutation. Defaults
+    :param channel: Torch tensor of integer indices representing permutation. Defaults
         to a random permutation.
     :type permutation: torch.LongTensor
 

@@ -182,6 +182,10 @@ class TransformTests(TestCase):
         for input_dim in [2, 5, 10]:
             self._test_inverse(input_dim, T.tanh())
 
+    def test_1x1_inv_conv_shapes(self):
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
+            self._test_shape(shape, T.generalized_channel_permute(channels=shape[-3]))
+
     def test_householder_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             input_dim = shape[-1]
