@@ -1,0 +1,158 @@
+import torch
+from torch.distributions import constraints
+import torch.nn.functional as F
+
+from pyro.distributions.util import copy_docs_from
+from pyro.distributions.torch_transform import TransformModule
+
+
+@copy_docs_from(TransformModule)
+class GeneralizedChannelPermute(TransformModule):
+    """
+    A bijection that generalizes a permutation on the channels of a 2D image in `[C,H,W]` format. Specifically this
+    transform performs the operation,
+
+        :math:`\\mathbf{y} = \\mathtext{\\ttfamily torch.nn.functional.conv2d}(\\mathbf{x}, W)`
+ 
+    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and
+    :math:`W\\sim C\\times C\\times 1\\times 1` is the filter matrix for a 1x1 convolution with :math:`C` input and
+    output channels.
+    
+    Ignoring the final two dimensions, :math:`W` is restricted to be the matrix product,
+
+        :math:`W = PLU`
+
+    where :math:`P\\sim C\\times C` is a permutation matrix on the channel dimensions, :math:`L\\sim C\\times C` is a
+    lower triangular matrix with ones on the diagonal, and :math:`U\\sim C\\times C` is an upper triangular matrix.
+    :math:`W` is initialized to a random orthogonal matrix. Then, :math:`P` is fixed and the learnable parameters set
+    to :math:`L,U`.
+
+    This operation was introduced in  and is also known as 1x1 invertible convolution. It corresponds to the class
+    `tfp.bijectors.MatvecLU` of TensorFlow Probability.
+
+    Example usage:
+
+    >>> from pyro.nn import AutoRegressiveNN
+    >>> from pyro.distributions.transforms import AffineAutoregressive, Permute
+    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
+    >>> iaf1 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
+    >>> ff = Permute(torch.randperm(10, dtype=torch.long))
+    >>> iaf2 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
+    >>> flow_dist.sample()  # doctest: +SKIP
+        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
+                0.1389, -0.4629,  0.0986])
+
+    :param permutation: a permutation ordering that is applied to the inputs.
+    :type permutation: torch.LongTensor
+
+    1. Glow: Generative Flow with Invertible 1x1 Convolutions. [arXiv:1807.03039]
+    Diederik P. Kingma, Prafulla Dhariwal.  
+
+    """
+
+    domain = constraints.real
+    codomain = constraints.real
+    bijective = True
+    event_dim = 3
+
+    def __init__(self, channels=3):
+        super(GeneralizedChannelPermute, self).__init__(cache_size=1)
+        self.channels = channels
+
+        # Sample a random orthogonal matrix
+        W, _ = torch.qr(torch.randn(channels, channels))
+
+        # Construct the partially pivoted LU-form and the pivots
+        LU, pivots = W.lu()
+
+        # Convert the pivots into the permutation matrix
+        P, _, _ = torch.lu_unpack(LU, pivots)
+
+        # We register the permutation matrix so that the model can be serialized
+        self.register_buffer('permutation', P)
+
+        # NOTE: For this implementation I have chosen to store the parameters densely, rather than
+        # storing L, U, and s separately
+        self.LU = torch.nn.Parameter(LU)
+
+    def _call(self, x):
+        """
+        :param x: the input into the bijection
+        :type x: torch.Tensor
+
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
+        """
+
+        # Extract the lower and upper matrices from the packed LU matrix
+        U = self.LU.triu()
+        L = self.LU.tril()
+        L.diagonal(dim1=-2, dim2=-1).fill_(1)
+
+        # Perform the 2D convolution, using the weight
+        filters = (self.permutation @ L @ U)[..., None, None]
+        y = F.conv2d(x, filters)
+
+        return y
+
+    def _inverse(self, y):
+        """
+        :param y: the output of the bijection
+        :type y: torch.Tensor
+
+        Inverts y => x.
+        """
+
+        """
+        NOTE: This method is equivalent to the following two lines. Using Tensor.inverse() would be
+        numerically unstable, however.
+
+        filters = (self.permutation @ L @ U).inverse()[..., None, None]
+        x = F.conv2d(y, filters)
+
+        """
+
+        # Do a matrix vector product over the channel dimension
+        # in order to apply inverse permutation matrix
+        y_flat = y.flatten(start_dim=-2)
+        LUx = (y_flat.unsqueeze(-3) * self.permutation.T.unsqueeze(-1)).sum(-3)
+
+        # Solve L(Ux) = P^1y
+        U = torch.triu(self.LU)
+        L = self.LU.tril()
+        L.diagonal(dim1=-2, dim2=-1).fill_(1)
+        Ux, _ = torch.triangular_solve(LUx, L, upper=False)
+
+        # Solve Ux = (PL)^-1y
+        x, _ = torch.triangular_solve(Ux, U)
+
+        # Unflatten x
+        return x.view_as(y)
+
+    def log_abs_det_jacobian(self, x, y):
+        """
+        Calculates the elementwise determinant of the log Jacobian, i.e. log(abs(det(dy/dx))).
+        """
+
+        h, w = x.shape[-2:]
+        log_det = h * w * torch.log(torch.abs(torch.diag(self.LU))).sum()
+
+        return log_det * torch.ones(x.size()[:-3], dtype=x.dtype, layout=x.layout, device=x.device)
+
+
+def generalized_channel_permute(input_dim, **kwargs):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.Permute` object for consistency with other
+    helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param permutation: Torch tensor of integer indices representing permutation. Defaults
+        to a random permutation.
+    :type permutation: torch.LongTensor
+
+    """
+
+    return GeneralizedChannelPermute(**kwargs)
