@@ -62,8 +62,8 @@ class TransformTests(TestCase):
             assert diag_sum == float(input_dim)
             assert lower_sum == float(0.0)
 
-    def _test_inverse(self, input_dim, transform):
-        base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    def _test_inverse(self, shape, transform):
+        base_dist = dist.Normal(torch.zeros(*shape), torch.ones(*shape))
 
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
@@ -129,7 +129,7 @@ class TransformTests(TestCase):
 
     def test_householder_inverses(self):
         for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.householder(input_dim, count_transforms=2))
+            self._test_inverse([input_dim], T.householder(input_dim, count_transforms=2))
 
     def test_lower_cholesky_affine(self):
         for input_dim in [2, 3]:
@@ -137,7 +137,7 @@ class TransformTests(TestCase):
             scale_tril = torch.randn(input_dim).exp().diag() + 0.03 * torch.randn(input_dim, input_dim)
             scale_tril = scale_tril.tril(0)
             transform = T.LowerCholeskyAffine(loc, scale_tril)
-            self._test_inverse(input_dim, transform)
+            self._test_inverse([input_dim], transform)
             self._test_jacobian(input_dim, transform)
             for shape in [(3,), (3, 4)]:
                 self._test_shape(shape + (input_dim,), transform)
@@ -147,7 +147,7 @@ class TransformTests(TestCase):
             transform = T.batchnorm(input_dim)
             transform._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
             transform.eval()
-            self._test_inverse(input_dim, transform)
+            self._test_inverse([input_dim], transform)
 
     def test_radial_jacobians(self):
         for input_dim in [2, 5, 10]:
@@ -160,7 +160,7 @@ class TransformTests(TestCase):
     def test_affine_autoregressive_inverses(self):
         for stable in [True, False]:
             for input_dim in [2, 5, 10]:
-                self._test_inverse(input_dim, T.affine_autoregressive(input_dim, stable=stable))
+                self._test_inverse([input_dim], T.affine_autoregressive(input_dim, stable=stable))
 
     def test_affine_coupling_jacobians(self):
         for input_dim in [2, 5, 10]:
@@ -168,19 +168,23 @@ class TransformTests(TestCase):
 
     def test_permute_inverses(self):
         for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.permute(input_dim))
+            self._test_inverse([input_dim], T.permute(input_dim))
 
     def test_elu_inverses(self):
         for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.elu())
+            self._test_inverse([input_dim], T.elu())
 
     def test_leaky_relu_inverses(self):
         for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.leaky_relu())
+            self._test_inverse([input_dim], T.leaky_relu())
 
     def test_tanh_inverses(self):
         for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.tanh())
+            self._test_inverse([input_dim], T.tanh())
+
+    def test_1x1_inv_inverses(self):
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (10, 9, 64, 64)]:
+            self._test_inverse(shape, T.generalized_channel_permute(channels=shape[-3]))
 
     def test_1x1_inv_conv_shapes(self):
         for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:

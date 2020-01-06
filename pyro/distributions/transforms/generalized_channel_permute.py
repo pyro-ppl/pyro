@@ -114,15 +114,19 @@ class GeneralizedChannelPermute(TransformModule):
         NOTE: This method is equivalent to the following two lines. Using Tensor.inverse() would be
         numerically unstable, however.
 
+        U = self.LU.triu()
+        L = self.LU.tril()
+        L.diagonal(dim1=-2, dim2=-1).fill_(1)
         filters = (self.permutation @ L @ U).inverse()[..., None, None]
-        x = F.conv2d(y, filters)
+        x = F.conv2d(y.view(-1, *y.shape[-3:]), filters)
+        return x.view_as(y)
 
         """
 
         # Do a matrix vector product over the channel dimension
         # in order to apply inverse permutation matrix
         y_flat = y.flatten(start_dim=-2)
-        LUx = (y_flat.unsqueeze(-3) * self.permutation.T.unsqueeze(-1)).sum(-3)
+        LUx = (y_flat.unsqueeze(-3) * self.permutation.T.unsqueeze(-1)).sum(-2)
 
         # Solve L(Ux) = P^1y
         U = torch.triu(self.LU)
