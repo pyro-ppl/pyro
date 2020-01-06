@@ -16,12 +16,12 @@ class Reshape(Transform):
     The event shape of the output of this transformation will be the length of the `to_event_shape` argument.
 
     Example usage:
+
     >>> c = 3 # assume 3 x 32 x 32 RGB inputs
     >>> base_dist = dist.Normal(torch.zeros(c*32*32), torch.ones(c*32*32))
     >>> pyro.module("flow", flow)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [ReshapeEvent([c*32*32], [32,32,c])])
     >>> flow_dist.sample(torch.Size([1])).shape  # doctest: +SKIP
-        torch.Size([1, 3, 32, 32])
 
     Note that in the example above, the base distribution has batch shape `[3072]` and event shape `[]`, whereas
     the flow distribution has batch shape `[]` and event shape `[3,32,32]`.

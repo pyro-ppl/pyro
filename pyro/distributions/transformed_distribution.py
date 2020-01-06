@@ -19,6 +19,7 @@ class TransformedDistribution(Distribution):
     for reshaping - since transforms can introduce correlations among events.
 
     Example usage:
+
     >>> # Building a Logistic Distribution
     >>> # X ~ Uniform(0, 1)
     >>> # f = a + b * logit(X)

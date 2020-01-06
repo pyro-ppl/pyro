@@ -238,6 +238,13 @@ StableHMM
     :undoc-members:
     :show-inheritance:
 
+TransformedDistribution
+-----------------------
+.. autoclass:: pyro.distributions.TransformedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit
@@ -321,6 +328,13 @@ LowerCholeskyAffine
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Reshape
+-------
+.. autoclass:: pyro.distributions.transforms.Reshape
     :members:
     :undoc-members:
     :show-inheritance:
