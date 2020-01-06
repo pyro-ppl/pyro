@@ -26,6 +26,7 @@ class TransformedDistribution(Distribution):
     >>> # Y ~ f(X) ~ Logistic(a, b)
     >>> import pyro.distributions.transforms as T
     >>> base_distribution = dist.Uniform(0, 1)
+    >>> a,b = 1., 2.
     >>> transforms = [T.SigmoidTransform().inv, T.AffineTransform(loc=a, scale=b)]
     >>> logistic = TransformedDistribution(base_distribution, transforms)
 
