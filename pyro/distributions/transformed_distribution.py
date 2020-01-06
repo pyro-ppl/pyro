@@ -24,7 +24,7 @@ class TransformedDistribution(Distribution):
     >>> # X ~ Uniform(0, 1)
     >>> # f = a + b * logit(X)
     >>> # Y ~ f(X) ~ Logistic(a, b)
-    >>> base_distribution = Uniform(0, 1)
+    >>> base_distribution = dist.Uniform(0, 1)
     >>> transforms = [SigmoidTransform().inv, AffineTransform(loc=a, scale=b)]
     >>> logistic = TransformedDistribution(base_distribution, transforms)
 

@@ -13,14 +13,14 @@ class Reshape(Transform):
     variables.
 
     Note that this transform may convert batch dimensions into event dimensions, depending on the input/output shapes.
-    The event shape of the output of this transformation will be the length of the `to_event_shape` argument.
+    The event dim of the output of this transformation will be the length of the `to_event_shape` argument.
 
     Example usage:
 
     >>> c = 3 # assume 3 x 32 x 32 RGB inputs
     >>> base_dist = dist.Normal(torch.zeros(c*32*32), torch.ones(c*32*32))
     >>> pyro.module("flow", flow)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [ReshapeEvent([c*32*32], [32,32,c])])
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [Reshape([c*32*32], [32,32,c])])
     >>> flow_dist.sample(torch.Size([1])).shape  # doctest: +SKIP
 
     Note that in the example above, the base distribution has batch shape `[3072]` and event shape `[]`, whereas
