@@ -131,6 +131,10 @@ class TransformTests(TestCase):
         for input_dim in [2, 5, 10]:
             self._test_inverse(input_dim, T.householder(input_dim, count_transforms=2))
 
+    def test_affine_coupling_inverses(self):
+        for input_dim in [2, 5, 10]:
+            self._test_inverse(input_dim, T.affine_coupling(input_dim))
+
     def test_lower_cholesky_affine(self):
         for input_dim in [2, 3]:
             loc = torch.randn(input_dim)
