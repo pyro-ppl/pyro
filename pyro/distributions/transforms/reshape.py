@@ -6,10 +6,11 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Transform)
-class ReshapeEvent(Transform):
+class Reshape(Transform):
     """
-    A bijection that reshapes the input into an arbitrary-size Tensor. The primary intended use of this transform
-    is to allow interoperatability between transforms on 1D vector random variables and 2D image random variables.
+    A bijection that reshapes the event of the input into an arbitrary-size Tensor. The primary intended use of this
+    transform is to allow interoperatability between transforms on 1D vector random variables and 2D image random
+    variables.
 
     Note that this transform may convert batch dimensions into event dimensions, depending on the input/output shapes.
     The event shape of the output of this transformation will be the length of the `to_event_shape` argument.
@@ -38,7 +39,7 @@ class ReshapeEvent(Transform):
     volume_preserving = True
 
     def __init__(self, from_event_shape, to_event_shape):
-        super(ReshapeEvent, self).__init__(cache_size=1)
+        super(Reshape, self).__init__(cache_size=1)
 
         self.from_event_shape = torch.Size(from_event_shape)
         self.to_event_shape = torch.Size(to_event_shape)
@@ -46,7 +47,7 @@ class ReshapeEvent(Transform):
         self.event_dim = len(to_event_shape)
 
         # Check that dimensions haven't been introduced or removed
-        if torch.tensor(self.from_event_shape).sum() != torch.tensor(self.to_event_shape).sum():
+        if torch.tensor(self.from_event_shape).prod() != torch.tensor(self.to_event_shape).prod():
             raise ValueError(
                 "There is a mismatch between the input shape {} and the output shape {}!".format(
                     from_event_shape, to_event_shape))
@@ -80,4 +81,4 @@ class ReshapeEvent(Transform):
         transform is always 0.
         """
 
-        return torch.zeros(x.size()[:-self.from_event_dim], dtype=x.dtype, layout=x.layout, device=x.device)
+        return torch.zeros(y.size()[:-self.event_dim], dtype=x.dtype, layout=x.layout, device=x.device)

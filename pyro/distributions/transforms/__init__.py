@@ -16,7 +16,7 @@ from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.planar import Planar, ConditionalPlanar, planar, conditional_planar
 from pyro.distributions.transforms.radial import Radial, radial
-from pyro.distributions.transforms.reshape import ReshapeEvent
+from pyro.distributions.transforms.reshape import Reshape
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
@@ -50,7 +50,7 @@ __all__ = [
     'Planar',
     'Polynomial',
     'Radial',
-    'ReshapeEvent',
+    'Reshape',
     'Sylvester',
     'TanhTransform',
     'affine_autoregressive',

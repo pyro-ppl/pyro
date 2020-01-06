@@ -82,7 +82,7 @@ class TransformedDistribution(Distribution):
                 raise ValueError("Event dimension exceeds size of the base distribution shape!")
 
             # Check that dimensions haven't been introduced or removed
-            if torch.tensor(self.base_shape).sum() != torch.tensor(x.size()).sum():
+            if torch.tensor(self.base_shape).prod() != torch.tensor(x.size()).prod():
                 raise ValueError(
                     "There is a mismatch between the base input shape {} and the output shape {} \
                         of the Transform!".format(self.base_shape, x.size()))
@@ -143,15 +143,21 @@ class TransformedDistribution(Distribution):
         Scores the sample by inverting the transform(s) and computing the score
         using the score of the base distribution and the log abs det jacobian.
         """
+        # Number of sample dimensions, which is only known at run-time (i.e. not an intrisic property of a
+        # distribution). This uses max since value may broadcast on its leftmost dimension
+        sample_dims = max(0, len(value.shape) - len(self.batch_shape) - len(self.event_shape))
+
+        # Apply transforms in reverse to get sample from base distribution
         log_prob = 0.0
         y = value
-        for transform in reversed(self.transforms):
+        for idx, transform in enumerate(reversed(self.transforms)):
             x = transform.inv(y)
 
             # We would normally sum out the rightmost dimensions due to the discrepancy between the output
             # event_shape and the event_shape of the input to the transform. But we have to correct by a
             # term due to potential reshapes!
-            sum_dims = self.event_dim + len(self.base_shape) - len(x.size()) - transform.event_dim
+            contracted_dims = len(self.base_shape) - len(y.size()) + sample_dims
+            sum_dims = self.event_dim - (transform.event_dim + contracted_dims)
             log_prob = log_prob - _sum_rightmost(transform.log_abs_det_jacobian(x, y), sum_dims)
             y = x
 
