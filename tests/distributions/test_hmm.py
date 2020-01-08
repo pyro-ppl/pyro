@@ -16,8 +16,14 @@ from pyro.ops.gamma_gaussian import (gamma_gaussian_tensordot, matrix_and_mvn_to
                                      gamma_and_mvn_to_gamma_gaussian)
 from pyro.ops.indexing import Vindex
 from tests.common import assert_close
-from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
-from tests.ops.gamma_gaussian import assert_close_gamma_gaussian, random_gamma, random_gamma_gaussian
+from tests.ops.random import (
+    assert_close_gamma_gaussian,
+    assert_close_gaussian,
+    random_gamma,
+    random_gamma_gaussian,
+    random_gaussian,
+    random_mvn,
+)
 
 
 def check_expand(old_dist, old_data):

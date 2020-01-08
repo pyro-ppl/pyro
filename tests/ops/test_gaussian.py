@@ -8,7 +8,7 @@ import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gaussian import AffineNormal, Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
 from tests.common import assert_close
-from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
+from tests.ops.random import assert_close_gaussian, random_gaussian, random_mvn
 
 
 @pytest.mark.parametrize("extra_shape", [(), (4,), (3, 2)], ids=str)
