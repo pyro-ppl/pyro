@@ -1,3 +1,5 @@
+import collections
+import numbers
 import queue
 import warnings
 
@@ -11,16 +13,35 @@ from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_dis
 from pyro.infer.util import compute_site_dice_factor, is_validation_enabled, torch_item
 from pyro.ops import packed
 from pyro.ops.contract import einsum
+from pyro.ops.einsum.adjoint import require_backward
 from pyro.poutine.enum_messenger import EnumMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
-def _compute_dice_factors(model_trace, guide_trace):
+def _packed_add(x, y):
+    if isinstance(x, numbers.Number):
+        x = torch.tensor(float(x))
+    if isinstance(y, numbers.Number):
+        y = torch.tensor(float(y))
+    xdims = getattr(x, "_pyro_dims", "")
+    ydims = getattr(y, "_pyro_dims", "")
+    assert xdims or ydims
+    if xdims and ydims:
+        assert frozenset(xdims) == frozenset(ydims)
+    result, = einsum(xdims + "," + ydims + "->" + xdims, x, y, plates="",
+                     backend="pyro.ops.einsum.torch_log", modulo_total=True)
+    result._pyro_dims = xdims
+    return result
+
+
+def _compute_tmc_factors(model_trace, guide_trace):
     """
-    compute per-site DiCE log-factors for non-reparameterized proposal sites
-    this logic is adapted from pyro.infer.util.Dice.__init__
+    compute per-site log-factors for all observed and unobserved variables
+    log-factors are log(p / q) for unobserved sites and log(p) for observed sites
     """
-    log_probs = []
+    log_factors = collections.defaultdict(lambda: 0)
+
+    # dice factors
     for role, trace in zip(("model", "guide"), (model_trace, guide_trace)):
         for name, site in trace.nodes.items():
             if site["type"] != "sample" or site["is_observed"]:
@@ -30,26 +51,18 @@ def _compute_dice_factors(model_trace, guide_trace):
 
             log_prob, log_denom = compute_site_dice_factor(site)
             if not is_identically_zero(log_denom):
-                dims = log_prob._pyro_dims
-                log_prob = log_prob - log_denom
-                log_prob._pyro_dims = dims
+                log_prob = _packed_add(log_prob, packed.neg(log_denom))
             if not is_identically_zero(log_prob):
-                log_probs.append(log_prob)
+                log_factors[name] = log_prob
 
-    return log_probs
-
-
-def _compute_tmc_factors(model_trace, guide_trace):
-    """
-    compute per-site log-factors for all observed and unobserved variables
-    log-factors are log(p / q) for unobserved sites and log(p) for observed sites
-    """
-    log_factors = []
+    # proposal factors
     for name, site in guide_trace.nodes.items():
         if site["type"] != "sample" or site["is_observed"]:
             continue
-        log_proposal = site["packed"]["log_prob"]
-        log_factors.append(packed.neg(log_proposal))
+        log_prob = site["packed"]["log_prob"]
+        log_factors[name] = _packed_add(log_factors[name], packed.neg(log_prob))
+
+    # likelihood and prior factors
     for name, site in model_trace.nodes.items():
         if site["type"] != "sample":
             continue
@@ -58,9 +71,12 @@ def _compute_tmc_factors(model_trace, guide_trace):
                 site["infer"].get("enumerate", None) == "parallel" and \
                 site["infer"].get("num_samples", -1) > 0:
             # site was sampled from the prior
-            log_proposal = packed.neg(site["packed"]["log_prob"])
-            log_factors.append(log_proposal)
-        log_factors.append(site["packed"]["log_prob"])
+            log_prob = site["packed"]["log_prob"]
+            log_factors[name] = _packed_add(log_factors[name], packed.neg(log_prob))
+        # prior or likelihood terms
+        log_prob = site["packed"]["log_prob"]
+        log_factors[name] = _packed_add(log_factors[name], log_prob)
+
     return log_factors
 
 
@@ -71,16 +87,15 @@ def _compute_tmc_estimate(model_trace, guide_trace):
     """
     # factors
     log_factors = _compute_tmc_factors(model_trace, guide_trace)
-    log_factors += _compute_dice_factors(model_trace, guide_trace)
 
     if not log_factors:
         return 0.
 
     # loss
-    eqn = ",".join([f._pyro_dims for f in log_factors]) + "->"
+    eqn = ",".join([f._pyro_dims for f in log_factors.values()]) + "->"
     plates = "".join(frozenset().union(list(model_trace.plate_to_symbol.values()),
                                        list(guide_trace.plate_to_symbol.values())))
-    tmc, = einsum(eqn, *log_factors, plates=plates,
+    tmc, = einsum(eqn, *list(log_factors.values()), plates=plates,
                   backend="pyro.ops.einsum.torch_log",
                   modulo_total=False)
     return tmc
@@ -206,3 +221,54 @@ class TraceTMC_ELBO(ELBO):
             return torch_item(loss)
         loss.backward()
         return loss.item()
+
+
+def _compute_tmc_wake_phi(model_trace, guide_trace):
+    """computes a self-normalized estimate of KL(P || Q)"""
+
+    # importance weight factors
+    log_factors = _compute_tmc_factors(model_trace, guide_trace)
+
+    if not log_factors:
+        return 0.
+
+    # prepare factors to receive their marginals
+    for name, f in log_factors.items():
+        require_backward(f)
+
+    # compute forward loss for local normalizing constants
+    eqn = ",".join([f._pyro_dims for f in log_factors.values()]) + "->"
+    plates = "".join(frozenset().union(list(model_trace.plate_to_symbol.values()),
+                                       list(guide_trace.plate_to_symbol.values())))
+    tmc, = einsum(eqn, *list(log_factors.values()), plates=plates,
+                  backend="pyro.ops.einsum.torch_marginal",
+                  modulo_total=False)
+
+    # backpropagate (only once, because we need fully self-normalized probs)
+    tmc._pyro_backward()
+
+    # compute final expected cost using the results of backpropagation
+    expected_cost = 0.
+    for name, f in log_factors.items():
+        log_prob = f._pyro_backward_result
+
+        # TODO use plates here if possible?
+        log_z_local = einsum(
+            log_prob._pyro_dims + "->" + guide_trace.nodes[name]["infer"]["_enumerate_symbol"],
+            log_prob, plates="", backend="pyro.ops.einsum.torch_log")
+        log_z_local._pyro_dims = guide_trace.nodes[name]["infer"]["_enumerate_symbol"]
+
+        # TODO use plates here if possible?
+        local_cost = einsum(
+            log_prob._pyro_dims + "," + log_z_local._pyro_dims + "->" + log_prob._pyro_dims,
+            log_prob, packed.neg(log_z_local),
+            plates="", backend="pyro.ops.einsum.torch_log")
+        local_cost._pyro_dims = log_prob._pyro_dims
+
+        # TODO use plates here if possible?
+        # computes (log_prob.exp() * cost).sum()
+        expected_cost = expected_cost + einsum(
+            log_prob._pyro_dims + "," + local_cost._pyro_dims + "->",
+            log_prob.exp(), local_cost, plates="", backend="pyro.ops.einsum.torch")
+
+    return expected_cost
