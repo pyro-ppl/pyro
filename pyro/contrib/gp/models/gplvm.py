@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
 from pyro.nn.module import PyroSample, pyro_method
