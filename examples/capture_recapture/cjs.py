@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 We show how to implement several variants of the Cormack-Jolly-Seber (CJS)
 [4, 5, 6] model used in ecology to analyze animal capture-recapture data.

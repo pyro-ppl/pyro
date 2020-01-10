@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 from torch.distributions.constraints import *  # noqa F403
 from torch.distributions.constraints import Constraint
 from torch.distributions.constraints import __all__ as torch_constraints

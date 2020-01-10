@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Data loader logic with two main responsibilities:
 (i)  download raw data and process; this logic is initiated upon import

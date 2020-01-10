@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This example demonstrates how to use the Causal Effect Variational Autoencoder
 [1] implemented in pyro.contrib.cevae.CEVAE, documented at

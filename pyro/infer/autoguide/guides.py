@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 The :mod:`pyro.infer.autoguide` module provides algorithms to automatically
 generate guides from simple models, for use in :class:`~pyro.infer.svi.SVI`.

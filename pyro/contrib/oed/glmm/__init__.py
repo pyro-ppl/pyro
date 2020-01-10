@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 .. warning :: This module will eventually be deprecated in favor of `brmp <https://github.com/pyro-ppl/brmp/>`_
 

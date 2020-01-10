@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This example implements amortized Latent Dirichlet Allocation [1],
 demonstrating how to marginalize out discrete assignment variables in a Pyro

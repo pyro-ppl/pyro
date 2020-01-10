@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 An implementation of a Deep Markov Model in Pyro based on reference [1].
 This is essentially the DKS variant outlined in the paper. The primary difference

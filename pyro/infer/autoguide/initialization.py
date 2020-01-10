@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 r"""
 The pyro.infer.autoguide.initialization module contains initialization functions for
 automatic guides.

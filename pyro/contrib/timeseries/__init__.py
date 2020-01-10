@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 The :mod:`pyro.contrib.timeseries` module provides a collection of Bayesian time series
 models useful for forecasting applications.

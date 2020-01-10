@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 The ``pyro.contrib.named`` module is a thin syntactic layer on top of Pyro.  It
 allows Pyro models to be written to look like programs with operating on Python

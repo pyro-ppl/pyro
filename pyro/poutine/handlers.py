@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Poutine is a library of composable effect handlers for recording and modifying the
 behavior of Pyro programs. These lower-level ingredients simplify the implementation

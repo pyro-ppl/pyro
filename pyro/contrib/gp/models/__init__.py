@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.contrib.gp.models.gplvm import GPLVM
 from pyro.contrib.gp.models.gpr import GPRegression
 from pyro.contrib.gp.models.model import GPModel

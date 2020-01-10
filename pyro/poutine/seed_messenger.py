@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.util import get_rng_state, set_rng_seed, set_rng_state
 
 from .messenger import Messenger

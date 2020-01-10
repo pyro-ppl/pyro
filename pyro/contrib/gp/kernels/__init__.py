@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.contrib.gp.kernels.brownian import Brownian
 from pyro.contrib.gp.kernels.coregionalize import Coregionalize
 from pyro.contrib.gp.kernels.dot_product import DotProduct, Linear, Polynomial
