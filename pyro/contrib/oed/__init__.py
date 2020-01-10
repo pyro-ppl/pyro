@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tasks such as choosing the next question to ask in a psychology study, designing an election polling

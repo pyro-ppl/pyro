@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2020 Contributors to the Pyro project.
+# Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
 from torch.distributions.constraints import *  # noqa F403
