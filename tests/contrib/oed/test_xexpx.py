@@ -1,13 +1,6 @@
 # Copyright (c) 2017-2020 Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Oct 30 10:52:27 2018
-
-@author: charlinelelan
-"""
 import pytest
 import torch
 
