@@ -1,4 +1,4 @@
-# Copyright Contributors to the Pyro project.
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tasks such as choosing the next question to ask in a psychology study, designing an election polling

@@ -12,7 +12,7 @@ file_types = [
 ]
 
 for basename, comment in file_types:
-    copyright_line = comment.format("Copyright Contributors to the Pyro project.\n")
+    copyright_line = comment.format("Copyright (c) 2017-2019 Uber Technologies, Inc.\n")
     # See https://spdx.org/ids-how
     spdx_line = comment.format("SPDX-License-Identifier: Apache-2.0\n")
 

@@ -1,4 +1,4 @@
-# Copyright Contributors to the Pyro project.
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 # This implementation is adapted in part from https://github.com/nicola-decao/BNAF under the MIT license.
