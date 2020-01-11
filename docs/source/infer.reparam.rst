@@ -32,6 +32,15 @@ Transformed Distributions
     :special-members: __call__
     :show-inheritance:
 
+Discrete Cosine Transform
+-------------------------
+.. automodule:: pyro.infer.reparam.discrete_cosine
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Stable Distributions
 --------------------
 .. automodule:: pyro.infer.reparam.stable

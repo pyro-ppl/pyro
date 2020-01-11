@@ -85,6 +85,26 @@ def convolve(signal, kernel, mode='full'):
     return result[..., start_idx: start_idx + truncate]
 
 
+def dct_ii(x):
+    """
+    Discrete cosine transform of type II.
+    This is the inverse of :func:`idct_ii` .
+
+    :param Tensor x:
+    """
+    raise NotImplementedError("TODO")
+
+
+def idct_ii(y):
+    """
+    Inverse discrete cosine transform of type II.
+    This is the inverse of :func:`dct_ii` .
+
+    :param Tensor y:
+    """
+    raise NotImplementedError("TODO")
+
+
 def repeated_matmul(M, n):
     """
     Takes a batch of matrices `M` as input and returns the stacked result of doing the
