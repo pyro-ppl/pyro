@@ -13,6 +13,15 @@ class DiscreteCosineReparam(Reparam):
     Discrete Cosine reparamterizer, using a
     :class:`~pyro.distributions.transforms.DiscreteCosineTransform` .
 
+    This is useful for sequential models where coupling along a time-like axis
+    (e.g. a banded precision matrix) introduces long-range correlation. This
+    reparameterizes to a frequency-domain represetation where posterior
+    covariance should be closer to diagonal, thereby improving the accuracy of
+    diagonal guides in SVI and improving the effectiveness of a diagonal mass
+    matrix in HMC.
+
+    This reparameterization works only for latent variables, not likelihoods.
+
     :param int dim: Dimension along which to transform. Must be negative.
         This is an absolute dim counting from the right.
     """
@@ -29,7 +38,7 @@ class DiscreteCosineReparam(Reparam):
                             dist.TransformedDistribution(fn.base_dist, transform))
 
         # Differentiably transform.
-        x = transform.inv(x_dct)
+        x = transform.inv(x_dct)  # should be free due to transform cache
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(x, event_dim=fn.event_dim)

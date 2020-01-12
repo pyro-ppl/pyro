@@ -47,5 +47,5 @@ class DiscreteCosineTransform(Transform):
             x = x.transpose(dim, -1)
         return x
 
-    def _log_abs_det_jacobian(self, x, y):
+    def log_abs_det_jacobian(self, x, y):
         return x.new_zeros((1,) * self.event_dim)
