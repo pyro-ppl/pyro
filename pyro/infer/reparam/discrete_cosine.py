@@ -31,11 +31,13 @@ class DiscreteCosineReparam(Reparam):
 
     def __call__(self, name, fn, obs):
         assert obs is None, "TransformReparam does not support observe statements"
+        assert fn.event_dim >= -self.dim, ("Cannot transform along batch dimension; "
+                                           "try converting a batch dimension to an event dimension")
 
         # Draw noise from the base distribution.
         transform = DiscreteCosineTransform(dim=self.dim, cache_size=1)
         x_dct = pyro.sample("{}_dct".format(name),
-                            dist.TransformedDistribution(fn.base_dist, transform))
+                            dist.TransformedDistribution(fn, transform))
 
         # Differentiably transform.
         x = transform.inv(x_dct)  # should be free due to transform cache
