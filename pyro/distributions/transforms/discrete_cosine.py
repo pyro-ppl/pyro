@@ -4,8 +4,6 @@
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
-from pyro.ops.tensor_utils import dct_ii, idct_ii
-
 
 class DiscreteCosineTransform(Transform):
     """
@@ -30,19 +28,21 @@ class DiscreteCosineTransform(Transform):
         return type(self) == type(other) and self.event_dim == other.event_dim
 
     def _call(self, x):
+        import torch_dct
         dim = -self.event_dim
         if dim != -1:
             x = x.transpose(dim, -1)
-        y = dct_ii(x)
+        y = torch_dct.dct(x, norm="ortho")
         if dim != -1:
             y = y.transpose(dim, -1)
         return y
 
     def _inverse(self, y):
+        import torch_dct
         dim = -self.event_dim
         if dim != -1:
             y = y.transpose(dim, -1)
-        x = idct_ii(y)
+        x = torch_dct.idct(y, norm="ortho")
         if dim != -1:
             x = x.transpose(dim, -1)
         return x
