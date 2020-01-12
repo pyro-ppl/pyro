@@ -43,7 +43,10 @@ def test_normal(shape, dim):
     expected_probe = get_moments(value)
 
     reparam_model = poutine.reparam(model, {"x": DiscreteCosineReparam(dim=dim)})
-    value = poutine.trace(reparam_model).get_trace().nodes["x"]["value"]
+    trace = poutine.trace(reparam_model).get_trace()
+    assert isinstance(trace.nodes["x_dct"]["fn"], dist.TransformedDistribution)
+    assert isinstance(trace.nodes["x"]["fn"], dist.Delta)
+    value = trace.nodes["x"]["value"]
     actual_probe = get_moments(value)
     assert_close(actual_probe, expected_probe, atol=0.1)
 
