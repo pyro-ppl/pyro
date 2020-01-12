@@ -9,15 +9,14 @@ class DiscreteCosineTransform(Transform):
     """
     Discrete Cosine Transform of type-II.
 
-    This uses :func:`~pyro.ops.tensor_utils.dct_ii` and
-    :func:`~pyro.ops.tensor_utils.idct_ii` internally.
+    This uses the https://github.com/zh217/torch-dct library to compute
+    orthonormal dct and inverse dct transforms. The jacobian is 1.
 
     :param int dim: Dimension along which to transform. Must be negative.
     """
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    sign = +1  # TODO verify this
 
     def __init__(self, dim=-1, cache_size=0):
         assert isinstance(dim, int) and dim < 0
