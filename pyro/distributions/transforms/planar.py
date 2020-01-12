@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -14,6 +17,11 @@ from pyro.nn import DenseNN
 
 @copy_docs_from(Transform)
 class ConditionedPlanar(Transform):
+    domain = constraints.real
+    codomain = constraints.real
+    bijective = True
+    event_dim = 1
+
     def __init__(self, bias=None, u=None, w=None):
         super(ConditionedPlanar, self).__init__(cache_size=1)
         self.bias = bias

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from .handlers import (block, broadcast, condition, do, enum, escape, infer_config, lift, markov, mask, queue, reparam,
                        replay, scale, seed, trace, uncondition)
 from .runtime import NonlocalExit

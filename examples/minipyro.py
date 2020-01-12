@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This example demonstrates the functionality of `pyro.contrib.minipyro`,
 which is a minimal implementation of the Pyro Probabilistic Programming

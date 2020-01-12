@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """Tasks such as choosing the next question to ask in a psychology study, designing an election polling
 strategy, and deciding which compounds to synthesize and test in biological sciences are all fundamentally asking the
 same question: how do we design an experiment to maximize the information gathered?  Pyro is designed to support

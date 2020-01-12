@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior, TracePredictive
 from pyro.infer.csis import CSIS
 from pyro.infer.discrete import infer_discrete

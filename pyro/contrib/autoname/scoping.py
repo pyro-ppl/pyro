@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ``pyro.contrib.autoname.scoping`` contains the implementation of
 :func:`pyro.contrib.autoname.scope`, a tool for automatically appending

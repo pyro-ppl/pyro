@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import subprocess
 import sys
@@ -84,6 +87,7 @@ setup(
         'opt_einsum>=2.3.2',
         'pyro-api>=0.1.1',
         'torch>=1.3.0',
+        'torch-dct==0.1.5',
         'tqdm>=4.36',
     ],
     extras_require={
@@ -114,7 +118,7 @@ setup(
     },
     python_requires='>=3.5',
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
-    license='MIT License',
+    license='Apache 2.0',
     classifiers=[
         'Intended Audience :: Developers',
         'Intended Audience :: Education',
