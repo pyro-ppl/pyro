@@ -11,8 +11,9 @@ class DiscreteCosineTransform(Transform):
     """
     Discrete Cosine Transform of type-II.
 
-    This uses the https://github.com/zh217/torch-dct library to compute
-    orthonormal dct and inverse dct transforms. The jacobian is 1.
+    This uses :func:`~pyro.ops.tensor_utils.dct` and
+    :func:`~pyro.ops.tensor_utils.idct` to compute
+    orthonormal DCT and inverse DCT transforms. The jacobian is 1.
 
     :param int dim: Dimension along which to transform. Must be negative.
     """
