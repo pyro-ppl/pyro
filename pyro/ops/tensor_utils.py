@@ -135,7 +135,7 @@ def dct(x):
     # Step 2
     Y = torch.rfft(y, 1, onesided=False)
     # Step 3
-    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1))
+    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
     coef = torch.stack([coef_real[:-1], -coef_real[1:].flip(-1)], dim=-1)
     X = _real_of_complex_mul(coef, Y)
     # orthogonalize
@@ -148,7 +148,7 @@ def idct(x):
     Inverse discrete cosine transform of type II, scaled to be orthonormal.
 
     This is the inverse of :func:`dct_ii` , and is equivalent to
-    :func:`scipy.fftpack.dct` with ``norm="ortho"``.
+    :func:`scipy.fftpack.idct` with ``norm="ortho"``.
 
     :param Tensor x: The input signal
     :rtype: Tensor
@@ -167,9 +167,9 @@ def idct(x):
     X = torch.stack([x, xi], dim=-1)
     coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1))
     coef = torch.stack([coef_real[:-1], coef_real[1:].flip(-1)], dim=-1)
-    Y = _complex_mul(coef, X)
+    half_size = N // 2 + 1
+    Y = _complex_mul(coef[..., :half_size, :], X[..., :half_size, :])
     # Step 2
-    y = torch.irfft(Y, 1, onesided=False)
+    y = torch.irfft(Y, 1, onesided=True, signal_sizes=(N,))
     # Step 3
-    # FIXME: something is wrong here
     return torch.stack([y, y.flip(-1)], axis=-1).reshape(x.shape[:-1] + (-1,))[..., :N]
