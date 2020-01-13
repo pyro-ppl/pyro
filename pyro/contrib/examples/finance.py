@@ -11,7 +11,7 @@ from pyro.contrib.examples.util import get_data_directory
 DATA = get_data_directory(__file__)
 
 # https://finance.yahoo.com/quote/%5EGSPC/history/
-CACHE_URL = "https://fritzo.org/media/snp500.csv.bz2"
+CACHE_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/snp500.csv.bz2"
 
 
 def load_snp500():
