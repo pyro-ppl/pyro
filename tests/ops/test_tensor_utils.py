@@ -78,7 +78,7 @@ def test_repeated_matmul(size, n):
         serial_result = torch.matmul(serial_result, M)
 
 
-@pytest.mark.parametrize('shape', [(3, 4), (5,)])
+@pytest.mark.parametrize('shape', [(3, 4), (5,), (2, 1, 6)])
 def test_dct(shape):
     x = torch.randn(shape)
     actual = dct(x)
@@ -86,7 +86,7 @@ def test_dct(shape):
     assert_close(actual, expected)
 
 
-@pytest.mark.parametrize('shape', [(3, 4), (5,)])
+@pytest.mark.parametrize('shape', [(3, 4), (5,), (2, 1, 6)])
 def test_idct(shape):
     x = torch.randn(shape)
     actual = idct(x)
