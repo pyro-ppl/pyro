@@ -138,17 +138,17 @@ def idct(x):
     N = x.size(-1)
     scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
     x = x * scale
-    # Step 1, solve X = cos(k) * Yr - sin(k) * Yi
+    # Step 1, solve X = cos(k) * Yr + sin(k) * Yi
     # We know that Y[1:] is conjugate to Y[:0:-1], hence
     # X[:0:-1] = sin(k) * Yr[1:] + cos(k) * Yi[1:]
     # So Yr[1:] = cos(k) * X[1:] + sin(k) * X[:0:-1]
-    # and Yi[1:] = -sin(k) * X[1:] + cos(k) * X[:0:-1]
+    # and Yi[1:] = sin(k) * X[1:] - cos(k) * X[:0:-1]
     # In addition, Yi[0] = 0, Yr[0] = X[0]
-    # In other words, Y = complex_mul(e^-ik, X + i[0, X[:0:-1]])
-    xi = torch.nn.functional.pad(x[..., 1:], (0, 1)).flip(-1)
+    # In other words, Y = complex_mul(e^ik, X - i[0, X[:0:-1]])
+    xi = torch.nn.functional.pad(-x[..., 1:], (0, 1)).flip(-1)
     X = torch.stack([x, xi], dim=-1)
     coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1))
-    coef = torch.stack([coef_real[:-1], -coef_real[1:].flip(-1)], dim=-1)
+    coef = torch.stack([coef_real[:-1], coef_real[1:].flip(-1)], dim=-1)
     Y = _complex_mul(coef, X)
     # Step 2
     y = torch.irfft(Y, 1, onesided=False)
