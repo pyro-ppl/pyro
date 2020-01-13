@@ -148,7 +148,7 @@ def idct(x):
     Inverse discrete cosine transform of type II, scaled to be orthonormal.
 
     This is the inverse of :func:`dct_ii` , and is equivalent to
-    :func:`scipy.fftpack.dct` with ``norm="ortho"``.
+    :func:`scipy.fftpack.idct` with ``norm="ortho"``.
 
     :param Tensor x: The input signal
     :rtype: Tensor
