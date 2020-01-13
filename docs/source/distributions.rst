@@ -332,6 +332,13 @@ TanhTransform
     :undoc-members:
     :show-inheritance:
 
+DiscreteCosineTransform
+-----------------------
+.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TransformModules
 ~~~~~~~~~~~~~~~~
 
