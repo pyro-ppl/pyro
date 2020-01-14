@@ -251,11 +251,11 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
         if model_trace.nodes[name]['is_observed']:
             continue
 
-        # posterior marginal log(p(x, pa(x)))
-        # XXX need to normalize this locally?
+        # unnormalized posterior marginal log(p(x, pa(x)))
         log_prob = f._pyro_backward_result
         log_prob._pyro_dims = f._pyro_dims
 
+        # self-normalize
         # TODO exploit any zero-expectation terms implied by plates in local normalization
         log_z_local = packed.logsumexp(log_prob)
         log_prob = packed.add(log_prob, packed.neg(log_z_local))
