@@ -193,3 +193,31 @@ def rename_equation(equation, *operands):
               for input_, operand in zip(inputs, operands)
               for old, new in zip(input_, operand._pyro_dims)}
     return ''.join(rename.get(s, s) for s in equation)
+
+
+def sum(x, sum_dims=None):
+    """
+    Packed summation.
+    """
+    if isinstance(x, torch.Tensor):
+        sum_dims = x._pyro_dims if sum_dims is None else sum_dims
+        dims = ''.join(sorted(set(d for d in x._pyro_dims if d not in sum_dims)))
+        equation = x._pyro_dims + '->' + dims
+        result = opt_einsum.contract(equation, x, backend='torch')
+        result._pyro_dims = dims
+        return result
+    return x
+
+
+def logsumexp(x, sum_dims=None):
+    """
+    Packed log-sum-exp summation.
+    """
+    if isinstance(x, torch.Tensor):
+        sum_dims = x._pyro_dims if sum_dims is None else sum_dims
+        dims = ''.join(sorted(set(d for d in x._pyro_dims if d not in sum_dims)))
+        equation = x._pyro_dims + '->' + dims
+        result = opt_einsum.contract(equation, x, backend='pyro.ops.einsum.torch_log')
+        result._pyro_dims = dims
+        return result
+    return x

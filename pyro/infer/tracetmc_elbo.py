@@ -256,6 +256,9 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
         log_prob = f._pyro_backward_result
         log_prob._pyro_dims = f._pyro_dims
 
+        log_z_local = packed.logsumexp(log_prob)
+        log_prob = packed.add(log_prob, packed.neg(log_z_local))
+
         # log q
         local_cost = packed.neg(guide_trace.nodes[name]["packed"]["log_prob"])
         expected_cost = expected_cost + packed.mul(packed.exp(log_prob), local_cost).sum()
@@ -299,16 +302,15 @@ def _compute_tmc_klpq(model_trace, guide_trace):
         log_prob = f._pyro_backward_result
         log_prob._pyro_dims = f._pyro_dims
 
+        log_z_local = packed.logsumexp(log_prob)
+        log_prob = packed.add(log_prob, packed.neg(log_z_local))
+
         # logq
         local_cost = packed.neg(guide_trace.nodes[name]["packed"]["log_prob"])
 
         # log(p(pa(x))) = log(p(x, pa(x))).logsumexp(x)
-        var_dim = guide_trace.nodes[name]["infer"]["_enumerate_symbol"]
-        log_z_local = einsum(
-            log_prob._pyro_dims + "->" + var_dim,
-            log_prob, plates="", backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
-        log_z_local._pyro_dims = var_dim
-        logp = packed.add(log_prob, packed.neg(log_z_local))
+        log_z_cond = packed.logsumexp(log_prob, guide_trace.nodes[name]["infer"]["_enumerate_symbol"])
+        logp = packed.add(log_prob, packed.neg(log_z_cond))
 
         # log(p(x | pa(x))) = log( p(x, pa(x)) / p(pa(x)) )
         # local_cost = log( p(x | pa(x)) / q(x | pa(x)) )
