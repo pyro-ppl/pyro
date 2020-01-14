@@ -325,10 +325,13 @@ def _compute_tmc_klpq(model_trace, guide_trace):
             log_prob, plates="", backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
         log_z_local._pyro_dims = var_dim
 
-        # local cost: log(p(x | pa(x))) = log( p(x, pa(x)) / p(pa(x)) )
+        # log(p(x | pa(x))) = log( p(x, pa(x)) / p(pa(x)) )
+        # local_cost = log( p(x | pa(x)) / q(x | pa(x)) )
+        log_q = guide_trace.nodes[name]["packed"]["log_prob"]
         local_cost = einsum(
-            log_prob._pyro_dims + "," + log_z_local._pyro_dims + "->" + log_prob._pyro_dims,
-            log_prob, packed.neg(log_z_local),
+            ",".join([log_prob._pyro_dims, log_z_local._pyro_dims, log_q._pyro_dims]) + \
+                "->" + log_prob._pyro_dims,
+            log_prob, packed.neg(log_z_local), packed.neg(log_q),
             plates="", backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
         local_cost._pyro_dims = log_prob._pyro_dims
 
