@@ -572,8 +572,7 @@ class StableHMM(TorchDistribution):
     r"""
     Hidden Markov Model with linear dynamics and observations and
     :class:`~pyro.distributions.Stable` noise for initial, transition, and
-    observation distributions. The stability parameter :math:`\alpha` must be
-    shared among all distributions (but can differ among elements of a batch).
+    observation distributions.
 
     This corresponds to the generative model::
 
@@ -588,6 +587,9 @@ class StableHMM(TorchDistribution):
     either reparameterization with
     :class:`~pyro.infer.reparam.stable.StableHMMReparam` or likelihood-free
     algorithms such as :class:`~pyro.infer.energy_distance.EnergyDistance` .
+    Note that while stable processes generally require a common shared
+    stability parameter :math:`\alpha` , this distribution and the above
+    inference algorithms allow heterogeneous stability parameters.
 
     The event_shape of this distribution includes time on the left::
 
@@ -651,16 +653,6 @@ class StableHMM(TorchDistribution):
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
-
-        if self._validate_args:
-            initial_stability = initial_dist.base_dist.stability[..., :1]
-            assert (initial_stability == initial_dist.base_dist.stability).all()
-            transition_stability = transition_dist.base_dist.stability[..., :1]
-            assert (transition_stability == transition_dist.base_dist.stability).all()
-            assert (transition_stability == initial_stability.unsqueeze(-2)).all()
-            observation_stability = observation_dist.base_dist.stability[..., :1]
-            assert (observation_stability == observation_dist.base_dist.stability).all()
-            assert (observation_stability == initial_stability.unsqueeze(-2)).all()
 
         if initial_dist.batch_shape != batch_shape:
             initial_dist = initial_dist.expand(batch_shape)

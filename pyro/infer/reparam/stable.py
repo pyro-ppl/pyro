@@ -13,7 +13,7 @@ from pyro.infer.util import is_validation_enabled
 from .reparam import Reparam
 
 
-class StableReparam(Reparam):
+class LatentStableReparam(Reparam):
     """
     Auxiliary variable reparameterizer for
     :class:`~pyro.distributions.Stable` latent variables.
@@ -39,7 +39,7 @@ class StableReparam(Reparam):
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable)
-        assert obs is None, "StableReparam does not support observe statements"
+        assert obs is None, "LatentStableReparam does not support observe statements"
 
         # Draw parameter-free noise.
         proto = fn.stability
@@ -99,7 +99,7 @@ class SymmetricStableReparam(Reparam):
                         self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
-        _, z = _unsafe_standard_stable(fn.stability / 2, 1, u, e)
+        z, _ = _unsafe_standard_stable(fn.stability / 2, 1, u, e)
         assert (z >= 0).all()
         scale = fn.scale * (2 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(1 / fn.stability) * z.sqrt()
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)

@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
-from pyro.infer.reparam import StableHMMReparam, StableReparam, SymmetricStableReparam
+from pyro.infer.reparam import StableHMMReparam, LatentStableReparam, SymmetricStableReparam
 from tests.common import assert_close
 
 
@@ -37,7 +37,7 @@ def test_stable(shape):
     value = model()
     expected_moments = get_moments(value)
 
-    reparam_model = poutine.reparam(model, {"x": StableReparam()})
+    reparam_model = poutine.reparam(model, {"x": LatentStableReparam()})
     trace = poutine.trace(reparam_model).get_trace()
     assert isinstance(trace.nodes["x"]["fn"], MaskedDistribution)
     assert isinstance(trace.nodes["x"]["fn"].base_dist, dist.Delta)

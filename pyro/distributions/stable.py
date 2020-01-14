@@ -27,13 +27,12 @@ def _unsafe_standard_stable(alpha, beta, V, W):
     v = b.atan() + alpha * V
     Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
         * ((v - V).cos() / W).pow(inv_alpha - 1)
-    Z.data[~(Z.data == Z.data)] = 0  # drop occasional NANs
+    Z.data[Z.data != Z.data] = 0  # drop occasional NANs
 
-    # Convert to Nolan's parametrization S^0 so that samples depend
-    # continuously on (alpha,beta), allowing us to interpolate around the hole
-    # at alpha=1.
-    X = Z - b
-    return X, Z
+    # Return both the standard Zolotarev parameterization Z and the shift b to
+    # convert to Nolan's parametrization S^0 where samples depend continuously
+    # on (alpha,beta), allowing interpolate around the hole at alpha=1.
+    return Z, b  # Nolan's parameterization is Z - b
 
 
 RADIUS = 0.01
@@ -53,8 +52,8 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         hole = 1.
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
-        x, _ = _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
-        return x
+        z, shift = _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
+        return z - shift
 
     # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
@@ -73,7 +72,8 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         #              2 * RADIUS
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
-    pairs, _ = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
+    z, shift = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
+    pairs = z - shift
     return (pairs * weights).sum(-1)
 
 
@@ -92,11 +92,11 @@ class Stable(TorchDistribution):
     likelihood-free algorithms such as
     :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
     via the :func:`~pyro.poutine.handlers.reparam` handler with
-    :class:`~pyro.infer.reparam.stable.StableReparam` e.g.::
+    :class:`~pyro.infer.reparam.stable.LatentStableReparam` e.g.::
 
         with poutine.reparam():
             pyro.sample("x", Stable(stability, skew, scale, loc),
-                        infer={"reparam": StableReparam()})
+                        infer={"reparam": LatentStableReparam()})
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
