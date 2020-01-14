@@ -1,5 +1,6 @@
 import math
 
+import opt_einsum
 import torch
 
 from pyro.distributions.util import is_identically_one
@@ -105,10 +106,28 @@ def mul(lhs, rhs):
     if isinstance(lhs, torch.Tensor) and isinstance(rhs, torch.Tensor):
         dims = ''.join(sorted(set(lhs._pyro_dims + rhs._pyro_dims)))
         equation = lhs._pyro_dims + ',' + rhs._pyro_dims + '->' + dims
-        result = torch.einsum(equation, lhs, rhs, backend='torch')
+        result = opt_einsum.contract(equation, lhs, rhs, backend='torch')
         result._pyro_dims = dims
         return result
     result = lhs * rhs
+    if isinstance(lhs, torch.Tensor):
+        result._pyro_dims = lhs._pyro_dims
+    elif isinstance(rhs, torch.Tensor):
+        result._pyro_dims = rhs._pyro_dims
+    return result
+
+
+def add(lhs, rhs):
+    """
+    Packed broadcasted addition.
+    """
+    if isinstance(lhs, torch.Tensor) and isinstance(rhs, torch.Tensor):
+        dims = ''.join(sorted(set(lhs._pyro_dims + rhs._pyro_dims)))
+        equation = lhs._pyro_dims + ',' + rhs._pyro_dims + '->' + dims
+        result = opt_einsum.contract(equation, lhs, rhs, backend='pyro.ops.einsum.torch_log')
+        result._pyro_dims = dims
+        return result
+    result = lhs + rhs
     if isinstance(lhs, torch.Tensor):
         result._pyro_dims = lhs._pyro_dims
     elif isinstance(rhs, torch.Tensor):

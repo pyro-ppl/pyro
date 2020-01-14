@@ -1,5 +1,4 @@
 import collections
-import numbers
 import queue
 import warnings
 
@@ -16,21 +15,6 @@ from pyro.ops.contract import einsum
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.poutine.enum_messenger import EnumMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
-
-
-def _packed_add(x, y):
-    if isinstance(x, numbers.Number):
-        x = torch.tensor(float(x))
-    if isinstance(y, numbers.Number):
-        y = torch.tensor(float(y))
-    xdims = getattr(x, "_pyro_dims", "")
-    ydims = getattr(y, "_pyro_dims", "")
-    assert xdims or ydims
-    out_dims = xdims if len(xdims) >= len(ydims) else ydims
-    result = einsum(xdims + "," + ydims + "->" + out_dims, x, y, plates="",
-                    backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
-    result._pyro_dims = out_dims
-    return result
 
 
 def _compute_tmc_factors(model_trace, guide_trace):
@@ -50,7 +34,7 @@ def _compute_tmc_factors(model_trace, guide_trace):
 
             log_prob, log_denom = compute_site_dice_factor(site)
             if not is_identically_zero(log_denom):
-                log_prob = _packed_add(log_prob, packed.neg(log_denom))
+                log_prob = packed.add(log_prob, packed.neg(log_denom))
             if not is_identically_zero(log_prob):
                 log_factors[name] = log_prob
 
@@ -59,7 +43,7 @@ def _compute_tmc_factors(model_trace, guide_trace):
         if site["type"] != "sample" or site["is_observed"]:
             continue
         log_prob = site["packed"]["log_prob"]
-        log_factors[name] = _packed_add(log_factors[name], packed.neg(log_prob))
+        log_factors[name] = packed.add(log_factors[name], packed.neg(log_prob))
 
     # likelihood and prior factors
     for name, site in model_trace.nodes.items():
@@ -71,10 +55,10 @@ def _compute_tmc_factors(model_trace, guide_trace):
                 site["infer"].get("num_samples", -1) > 0:
             # site was sampled from the prior
             log_prob = site["packed"]["log_prob"]
-            log_factors[name] = _packed_add(log_factors[name], packed.neg(log_prob))
+            log_factors[name] = packed.add(log_factors[name], packed.neg(log_prob))
         # prior or likelihood terms
         log_prob = site["packed"]["log_prob"]
-        log_factors[name] = _packed_add(log_factors[name], log_prob)
+        log_factors[name] = packed.add(log_factors[name], log_prob)
 
     return log_factors
 
@@ -272,13 +256,8 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
         log_prob._pyro_dims = f._pyro_dims
 
         # log q
-        local_cost = guide_trace.nodes[name]["packed"]["log_prob"]
-
-        # (log_prob.exp() * cost).sum()
-        expected_cost = expected_cost + einsum(
-            log_prob._pyro_dims + "," + local_cost._pyro_dims + "->",
-            log_prob.exp(), local_cost, plates="", backend="torch",
-            modulo_total=True)[0]
+        local_cost = packed.neg(guide_trace.nodes[name]["packed"]["log_prob"])
+        expected_cost = expected_cost + packed.mul(packed.exp(log_prob), local_cost).sum()
 
     return expected_cost
 
@@ -328,18 +307,11 @@ def _compute_tmc_klpq(model_trace, guide_trace):
         # log(p(x | pa(x))) = log( p(x, pa(x)) / p(pa(x)) )
         # local_cost = log( p(x | pa(x)) / q(x | pa(x)) )
         log_q = guide_trace.nodes[name]["packed"]["log_prob"]
-        local_cost = einsum(
-            ",".join([log_prob._pyro_dims, log_z_local._pyro_dims, log_q._pyro_dims]) + \
-                "->" + log_prob._pyro_dims,
-            log_prob, packed.neg(log_z_local), packed.neg(log_q),
-            plates="", backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
+        local_cost = packed.add(packed.add(packed.neg(log_z_local), packed.neg(log_q)), log_prob)
         local_cost._pyro_dims = log_prob._pyro_dims
 
         # (log_prob.exp() * cost).sum()
         # (p(x, pa(x)) * log(p(x | pa(x))).sum(x, pa(x))
-        expected_cost = expected_cost + einsum(
-            log_prob._pyro_dims + "," + local_cost._pyro_dims + "->",
-            log_prob.exp(), local_cost, plates="", backend="torch",
-            modulo_total=True)[0]
+        expected_cost = expected_cost + packed.mul(packed.exp(log_prob), local_cost).sum()
 
     return expected_cost
