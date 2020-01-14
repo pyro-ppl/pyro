@@ -26,11 +26,10 @@ def _packed_add(x, y):
     xdims = getattr(x, "_pyro_dims", "")
     ydims = getattr(y, "_pyro_dims", "")
     assert xdims or ydims
-    if xdims and ydims:
-        assert frozenset(xdims) == frozenset(ydims)
-    result, = einsum(xdims + "," + ydims + "->" + xdims, x, y, plates="",
+    out_dims = xdims if len(xdims) >= len(ydims) else ydims
+    result, = einsum(xdims + "," + ydims + "->" + out_dims, x, y, plates="",
                      backend="pyro.ops.einsum.torch_log", modulo_total=True)
-    result._pyro_dims = xdims
+    result._pyro_dims = out_dims
     return result
 
 
