@@ -15,7 +15,7 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, EnergyDistance, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
                         TraceTailAdaptive_ELBO, config_enumerate)
-from pyro.infer.reparam import StableReparam
+from pyro.infer.reparam import LatentStableReparam
 from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
@@ -2066,7 +2066,7 @@ def test_no_log_prob_ok(Elbo):
 
 def test_reparam_stable():
 
-    @poutine.reparam(config={"z": StableReparam()})
+    @poutine.reparam(config={"z": LatentStableReparam()})
     def model():
         stability = pyro.sample("stability", dist.Uniform(0., 2.))
         skew = pyro.sample("skew", dist.Uniform(-1., 1.))
