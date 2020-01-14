@@ -233,8 +233,8 @@ def test_tmc_normals_wake_phi_smoke(depth, num_samples, max_plate_nesting, expan
     tmc_guide = config_enumerate(
         guide, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
 
-    # smoke test...
-    actual_loss = (-tmc.wake_phi_loss(tmc_model, tmc_guide, reparameterized)).exp()
+    # smoke test
+    actual_loss = tmc.wake_phi_loss(tmc_model, tmc_guide, reparameterized)
     actual_grads = grad(actual_loss, qs)
     assert not torch.isnan(actual_loss).any()
     for g in actual_grads:

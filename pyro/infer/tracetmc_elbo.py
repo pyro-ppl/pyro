@@ -252,6 +252,7 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
             continue
 
         # posterior marginal log(p(x, pa(x)))
+        # XXX need to normalize this locally?
         log_prob = f._pyro_backward_result
         log_prob._pyro_dims = f._pyro_dims
 
@@ -294,8 +295,12 @@ def _compute_tmc_klpq(model_trace, guide_trace):
             continue
 
         # posterior marginal log(p(x, pa(x)))
+        # XXX need to normalize this locally?
         log_prob = f._pyro_backward_result
         log_prob._pyro_dims = f._pyro_dims
+
+        # logq
+        local_cost = packed.neg(guide_trace.nodes[name]["packed"]["log_prob"])
 
         # log(p(pa(x))) = log(p(x, pa(x))).logsumexp(x)
         var_dim = guide_trace.nodes[name]["infer"]["_enumerate_symbol"]
@@ -303,12 +308,11 @@ def _compute_tmc_klpq(model_trace, guide_trace):
             log_prob._pyro_dims + "->" + var_dim,
             log_prob, plates="", backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
         log_z_local._pyro_dims = var_dim
+        logp = packed.add(log_prob, packed.neg(log_z_local))
 
         # log(p(x | pa(x))) = log( p(x, pa(x)) / p(pa(x)) )
         # local_cost = log( p(x | pa(x)) / q(x | pa(x)) )
-        log_q = guide_trace.nodes[name]["packed"]["log_prob"]
-        local_cost = packed.add(packed.add(packed.neg(log_z_local), packed.neg(log_q)), log_prob)
-        local_cost._pyro_dims = log_prob._pyro_dims
+        local_cost = packed.add(local_cost, logp)
 
         # (log_prob.exp() * cost).sum()
         # (p(x, pa(x)) * log(p(x | pa(x))).sum(x, pa(x))
