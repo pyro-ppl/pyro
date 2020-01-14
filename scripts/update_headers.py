@@ -32,21 +32,29 @@ for basename, comment in file_types:
             continue
 
         # Ensure first few line are copyright notices.
+        changed = False
         lineno = 0
         if not lines[lineno].startswith(comment.format("Copyright")):
             lines.insert(lineno, copyright_line)
+            changed = True
         lineno += 1
         while lines[lineno].startswith(comment.format("Copyright")):
             lineno += 1
+            changed = True
 
         # Ensure next line is an SPDX short identifier.
         if not lines[lineno].startswith(comment.format("SPDX-License-Identifier")):
             lines.insert(lineno, spdx_line)
+            changed = True
         lineno += 1
 
         # Ensure next line is blank.
         if not lines[lineno].isspace():
             lines.insert(lineno, "\n")
+            changed = True
+
+        if not changed:
+            continue
 
         with open(filename, "w") as f:
             f.write("".join(lines))
