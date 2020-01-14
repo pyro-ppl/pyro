@@ -192,3 +192,50 @@ def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expan
             "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
             "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
         ]))
+
+
+@pytest.mark.parametrize("depth", [1, 2, 3, 4])
+@pytest.mark.parametrize("num_samples,expand", [(200, False)])
+@pytest.mark.parametrize("max_plate_nesting", [0])
+@pytest.mark.parametrize("guide_type", ["factorized", "nonfactorized"])
+@pytest.mark.parametrize("reparameterized", [False, True])
+@pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
+def test_tmc_normals_wake_phi_smoke(depth, num_samples, max_plate_nesting, expand,
+                                    guide_type, reparameterized, tmc_strategy):
+    q2 = pyro.param("q2", torch.tensor(0.5, requires_grad=True))
+    qs = (q2.unconstrained(),)
+
+    def model(reparameterized):
+        Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+        x = pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1. / depth)))
+        for i in range(1, depth):
+            x = pyro.sample("x{}".format(i), Normal(x, math.sqrt(1. / depth)))
+        pyro.sample("y", Normal(x, 1.), obs=torch.tensor(float(1)))
+
+    def factorized_guide(reparameterized):
+        Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+        pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1. / depth)))
+        for i in range(1, depth):
+            pyro.sample("x{}".format(i), Normal(0., math.sqrt(float(i+1) / depth)))
+
+    def nonfactorized_guide(reparameterized):
+        Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+        x = pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1. / depth)))
+        for i in range(1, depth):
+            x = pyro.sample("x{}".format(i), Normal(x, math.sqrt(1. / depth)))
+
+    tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
+    tmc_model = config_enumerate(
+        model, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
+    guide = factorized_guide if guide_type == "factorized" else \
+        nonfactorized_guide if guide_type == "nonfactorized" else \
+        lambda *args: None
+    tmc_guide = config_enumerate(
+        guide, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
+
+    # smoke test...
+    actual_loss = (-tmc.wake_phi_loss(tmc_model, tmc_guide, reparameterized)).exp()
+    actual_grads = grad(actual_loss, qs)
+    assert not torch.isnan(actual_loss).any()
+    for g in actual_grads:
+        assert not torch.isnan(g).any()

@@ -27,8 +27,8 @@ def _packed_add(x, y):
     ydims = getattr(y, "_pyro_dims", "")
     assert xdims or ydims
     out_dims = xdims if len(xdims) >= len(ydims) else ydims
-    result, = einsum(xdims + "," + ydims + "->" + out_dims, x, y, plates="",
-                     backend="pyro.ops.einsum.torch_log", modulo_total=True)
+    result = einsum(xdims + "," + ydims + "->" + out_dims, x, y, plates="",
+                    backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
     result._pyro_dims = out_dims
     return result
 
@@ -221,8 +221,69 @@ class TraceTMC_ELBO(ELBO):
         loss.backward()
         return loss.item()
 
+    def wake_phi_loss(self, model, guide, *args, **kwargs):
+        loss = 0.0
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
+            loss_particle = _compute_tmc_wake_phi(model_trace, guide_trace)
+            if is_identically_zero(loss_particle):
+                continue
+
+            loss = loss + loss_particle
+        loss = loss / self.num_particles
+
+        warn_if_nan(loss, "loss")
+        return loss
+
 
 def _compute_tmc_wake_phi(model_trace, guide_trace):
+    """computes a TMC wake-phi loss"""
+
+    # importance weight factors
+    log_factors = _compute_tmc_factors(model_trace, guide_trace)
+
+    if not log_factors:
+        return 0.
+
+    # prepare factors to receive their marginals
+    for name, f in log_factors.items():
+        if not model_trace.nodes[name]['is_observed']:
+            require_backward(f)
+
+    # compute forward loss for local normalizing constants
+    eqn = ",".join([f._pyro_dims for f in log_factors.values()]) + "->"
+    plates = "".join(frozenset().union(list(model_trace.plate_to_symbol.values()),
+                                       list(guide_trace.plate_to_symbol.values())))
+    with torch.no_grad():
+        tmc = einsum(eqn, *list(log_factors.values()), plates=plates,
+                     backend="pyro.ops.einsum.torch_marginal",
+                     modulo_total=False)[0]
+
+        # backpropagate (only once, because we need fully self-normalized probs)
+        tmc._pyro_backward()
+
+    # compute final expected cost using the results of backpropagation
+    expected_cost = 0.
+    for name, f in log_factors.items():
+        if model_trace.nodes[name]['is_observed']:
+            continue
+
+        # posterior marginal log(p(x, pa(x)))
+        log_prob = f._pyro_backward_result
+        log_prob._pyro_dims = f._pyro_dims
+
+        # log q
+        local_cost = guide_trace.nodes[name]["packed"]["log_prob"]
+
+        # (log_prob.exp() * cost).sum()
+        expected_cost = expected_cost + einsum(
+            log_prob._pyro_dims + "," + local_cost._pyro_dims + "->",
+            log_prob.exp(), local_cost, plates="", backend="torch",
+            modulo_total=True)[0]
+
+    return expected_cost
+
+
+def _compute_tmc_klpq(model_trace, guide_trace):
     """computes a self-normalized estimate of KL(P || Q)"""
 
     # importance weight factors
@@ -233,15 +294,16 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
 
     # prepare factors to receive their marginals
     for name, f in log_factors.items():
-        require_backward(f)
+        if not model_trace.nodes[name]['is_observed']:
+            require_backward(f)
 
     # compute forward loss for local normalizing constants
     eqn = ",".join([f._pyro_dims for f in log_factors.values()]) + "->"
     plates = "".join(frozenset().union(list(model_trace.plate_to_symbol.values()),
                                        list(guide_trace.plate_to_symbol.values())))
-    tmc, = einsum(eqn, *list(log_factors.values()), plates=plates,
-                  backend="pyro.ops.einsum.torch_marginal",
-                  modulo_total=False)
+    tmc = einsum(eqn, *list(log_factors.values()), plates=plates,
+                 backend="pyro.ops.einsum.torch_marginal",
+                 modulo_total=False)[0]
 
     # backpropagate (only once, because we need fully self-normalized probs)
     tmc._pyro_backward()
@@ -249,25 +311,32 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
     # compute final expected cost using the results of backpropagation
     expected_cost = 0.
     for name, f in log_factors.items():
+        if model_trace.nodes[name]['is_observed']:
+            continue
+
+        # posterior marginal log(p(x, pa(x)))
         log_prob = f._pyro_backward_result
+        log_prob._pyro_dims = f._pyro_dims
 
-        # TODO use plates here if possible?
+        # log(p(pa(x))) = log(p(x, pa(x))).logsumexp(x)
+        var_dim = guide_trace.nodes[name]["infer"]["_enumerate_symbol"]
         log_z_local = einsum(
-            log_prob._pyro_dims + "->" + guide_trace.nodes[name]["infer"]["_enumerate_symbol"],
-            log_prob, plates="", backend="pyro.ops.einsum.torch_log")
-        log_z_local._pyro_dims = guide_trace.nodes[name]["infer"]["_enumerate_symbol"]
+            log_prob._pyro_dims + "->" + var_dim,
+            log_prob, plates="", backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
+        log_z_local._pyro_dims = var_dim
 
-        # TODO use plates here if possible?
+        # local cost: log(p(x | pa(x))) = log( p(x, pa(x)) / p(pa(x)) )
         local_cost = einsum(
             log_prob._pyro_dims + "," + log_z_local._pyro_dims + "->" + log_prob._pyro_dims,
             log_prob, packed.neg(log_z_local),
-            plates="", backend="pyro.ops.einsum.torch_log")
+            plates="", backend="pyro.ops.einsum.torch_log", modulo_total=True)[0]
         local_cost._pyro_dims = log_prob._pyro_dims
 
-        # TODO use plates here if possible?
-        # computes (log_prob.exp() * cost).sum()
+        # (log_prob.exp() * cost).sum()
+        # (p(x, pa(x)) * log(p(x | pa(x))).sum(x, pa(x))
         expected_cost = expected_cost + einsum(
             log_prob._pyro_dims + "," + local_cost._pyro_dims + "->",
-            log_prob.exp(), local_cost, plates="", backend="pyro.ops.einsum.torch")
+            log_prob.exp(), local_cost, plates="", backend="torch",
+            modulo_total=True)[0]
 
     return expected_cost
