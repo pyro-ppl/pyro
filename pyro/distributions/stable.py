@@ -31,7 +31,7 @@ def _unsafe_standard_stable(alpha, beta, V, W):
 
     # Return both the standard Zolotarev parameterization Z and the shift b to
     # convert to Nolan's parametrization S^0 where samples depend continuously
-    # on (alpha,beta), allowing interpolate around the hole at alpha=1.
+    # on (alpha,beta), allowing interpolation around the hole at alpha=1.
     return Z, b  # Nolan's parameterization is Z - b
 
 
