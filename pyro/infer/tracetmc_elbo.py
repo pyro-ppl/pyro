@@ -265,6 +265,6 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
 
         # log q
         local_cost = packed.neg(guide_trace.nodes[name]["packed"]["log_prob"])
-        expected_cost = expected_cost + packed.mul(packed.exp(log_prob), local_cost).sum()
+        expected_cost = expected_cost + packed.sum(packed.mul(packed.exp(log_prob), local_cost))
 
     return expected_cost
