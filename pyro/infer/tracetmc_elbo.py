@@ -256,68 +256,12 @@ def _compute_tmc_wake_phi(model_trace, guide_trace):
         log_prob = f._pyro_backward_result
         log_prob._pyro_dims = f._pyro_dims
 
+        # TODO exploit any zero-expectation terms implied by plates in local normalization
         log_z_local = packed.logsumexp(log_prob)
         log_prob = packed.add(log_prob, packed.neg(log_z_local))
 
         # log q
         local_cost = packed.neg(guide_trace.nodes[name]["packed"]["log_prob"])
-        expected_cost = expected_cost + packed.mul(packed.exp(log_prob), local_cost).sum()
-
-    return expected_cost
-
-
-def _compute_tmc_klpq(model_trace, guide_trace):
-    """computes a self-normalized estimate of KL(P || Q)"""
-
-    # importance weight factors
-    log_factors = _compute_tmc_factors(model_trace, guide_trace)
-
-    if not log_factors:
-        return 0.
-
-    # prepare factors to receive their marginals
-    for name, f in log_factors.items():
-        if not model_trace.nodes[name]['is_observed']:
-            require_backward(f)
-
-    # compute forward loss for local normalizing constants
-    eqn = ",".join([f._pyro_dims for f in log_factors.values()]) + "->"
-    plates = "".join(frozenset().union(list(model_trace.plate_to_symbol.values()),
-                                       list(guide_trace.plate_to_symbol.values())))
-    tmc = einsum(eqn, *list(log_factors.values()), plates=plates,
-                 backend="pyro.ops.einsum.torch_marginal",
-                 modulo_total=False)[0]
-
-    # backpropagate (only once, because we need fully self-normalized probs)
-    tmc._pyro_backward()
-
-    # compute final expected cost using the results of backpropagation
-    expected_cost = 0.
-    for name, f in log_factors.items():
-        if model_trace.nodes[name]['is_observed']:
-            continue
-
-        # posterior marginal log(p(x, pa(x)))
-        # XXX need to normalize this locally?
-        log_prob = f._pyro_backward_result
-        log_prob._pyro_dims = f._pyro_dims
-
-        log_z_local = packed.logsumexp(log_prob)
-        log_prob = packed.add(log_prob, packed.neg(log_z_local))
-
-        # logq
-        local_cost = packed.neg(guide_trace.nodes[name]["packed"]["log_prob"])
-
-        # log(p(pa(x))) = log(p(x, pa(x))).logsumexp(x)
-        log_z_cond = packed.logsumexp(log_prob, guide_trace.nodes[name]["infer"]["_enumerate_symbol"])
-        logp = packed.add(log_prob, packed.neg(log_z_cond))
-
-        # log(p(x | pa(x))) = log( p(x, pa(x)) / p(pa(x)) )
-        # local_cost = log( p(x | pa(x)) / q(x | pa(x)) )
-        local_cost = packed.add(local_cost, logp)
-
-        # (log_prob.exp() * cost).sum()
-        # (p(x, pa(x)) * log(p(x | pa(x))).sum(x, pa(x))
         expected_cost = expected_cost + packed.mul(packed.exp(log_prob), local_cost).sum()
 
     return expected_cost
