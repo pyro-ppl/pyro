@@ -1,3 +1,5 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyro
 from pyro.infer.tracegraph_elbo import TraceGraph_ELBO

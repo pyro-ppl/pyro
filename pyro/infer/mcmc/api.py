@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This module offers a modified interface for MCMC inference with the following objectives:
   - making MCMC independent of Pyro specific trace data structure, to facilitate

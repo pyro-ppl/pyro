@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.optim.lr_scheduler import PyroLRScheduler
 from pyro.optim.optim import AdagradRMSProp, ClippedAdam, PyroOptim
 from pyro.optim.pytorch_optimizers import __all__ as pytorch_optims

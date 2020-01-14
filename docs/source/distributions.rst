@@ -231,6 +231,13 @@ Stable
     :undoc-members:
     :show-inheritance:
 
+StableHMM
+---------
+.. autoclass:: pyro.distributions.StableHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit
@@ -321,6 +328,13 @@ Permute
 TanhTransform
 -------------
 .. autoclass:: pyro.distributions.transforms.TanhTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+DiscreteCosineTransform
+-----------------------
+.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -484,27 +498,3 @@ sylvester
 tanh
 ----
 .. autofunction:: pyro.distributions.transforms.tanh
-
-
-Reparameterizers
-~~~~~~~~~~~~~~~~
-
-.. autoclass:: pyro.distributions.reparameterize.Reparameterizer
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. autoclass:: pyro.distributions.reparameterize.TrivialReparameterizer
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. autoclass:: pyro.distributions.reparameterize.LocScaleReparameterizer
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. autoclass:: pyro.distributions.stable.StableReparameterizer
-    :members:
-    :undoc-members:
-    :show-inheritance:

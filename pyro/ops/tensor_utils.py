@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -107,3 +110,66 @@ def repeated_matmul(M, n):
         result = torch.stack([result, doubled]).reshape(-1, *result.shape[1:])
 
     return result[0:n]
+
+
+def _real_of_complex_mul(a, b):
+    ar, ai = a.unbind(-1)
+    br, bi = b.unbind(-1)
+    return ar * br - ai * bi
+
+
+def dct(x):
+    """
+    Discrete cosine transform of type II, scaled to be orthonormal.
+
+    This is the inverse of :func:`idct_ii` , and is equivalent to
+    :func:`scipy.fftpack.dct` with ``norm="ortho"``.
+
+    :param Tensor x:
+    :rtype: Tensor
+    """
+    # Ref: http://fourier.eng.hmc.edu/e161/lectures/dct/node2.html
+    N = x.size(-1)
+    # Step 1
+    y = torch.cat([x[..., ::2], x[..., 1::2].flip(-1)], dim=-1)
+    # Step 2
+    Y = torch.rfft(y, 1, onesided=False)
+    # Step 3
+    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
+    coef = torch.stack([coef_real[:-1], -coef_real[1:].flip(-1)], dim=-1)
+    X = _real_of_complex_mul(coef, Y)
+    # orthogonalize
+    scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
+    return X / scale
+
+
+def idct(x):
+    """
+    Inverse discrete cosine transform of type II, scaled to be orthonormal.
+
+    This is the inverse of :func:`dct_ii` , and is equivalent to
+    :func:`scipy.fftpack.idct` with ``norm="ortho"``.
+
+    :param Tensor x: The input signal
+    :rtype: Tensor
+    """
+    N = x.size(-1)
+    scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
+    x = x * scale
+    # Step 1, solve X = cos(k) * Yr + sin(k) * Yi
+    # We know that Y[1:] is conjugate to Y[:0:-1], hence
+    # X[:0:-1] = sin(k) * Yr[1:] + cos(k) * Yi[1:]
+    # So Yr[1:] = cos(k) * X[1:] + sin(k) * X[:0:-1]
+    # and Yi[1:] = sin(k) * X[1:] - cos(k) * X[:0:-1]
+    # In addition, Yi[0] = 0, Yr[0] = X[0]
+    # In other words, Y = complex_mul(e^ik, X - i[0, X[:0:-1]])
+    xi = torch.nn.functional.pad(-x[..., 1:], (0, 1)).flip(-1)
+    X = torch.stack([x, xi], dim=-1)
+    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1))
+    coef = torch.stack([coef_real[:-1], coef_real[1:].flip(-1)], dim=-1)
+    half_size = N // 2 + 1
+    Y = _complex_mul(coef[..., :half_size, :], X[..., :half_size, :])
+    # Step 2
+    y = torch.irfft(Y, 1, onesided=True, signal_sizes=(N,))
+    # Step 3
+    return torch.stack([y, y.flip(-1)], axis=-1).reshape(x.shape[:-1] + (-1,))[..., :N]

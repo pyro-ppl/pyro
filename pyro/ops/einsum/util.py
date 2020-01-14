@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0 AND MIT
+
 EINSUM_SYMBOLS_BASE = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 
@@ -9,6 +12,7 @@ class Tensordot(object):
         self.einsum = einsum
 
     # Copyright (c) 2014 Daniel Smith
+    # SPDX-License-Identifier: MIT
     # This function is copied and adapted from:
     # https://github.com/dgasmith/opt_einsum/blob/a6dd686/opt_einsum/backends/torch.py
     def __call__(self, x, y, axes=2):

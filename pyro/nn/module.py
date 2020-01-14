@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Pyro includes an experimental class :class:`~pyro.nn.module.PyroModule`, a
 subclass of :class:`torch.nn.Module`, whose attributes can be modified by Pyro

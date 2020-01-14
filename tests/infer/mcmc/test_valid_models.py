@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 import pickle
 
@@ -7,11 +10,11 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.stable import StableReparameterizer
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator, initialize_model
+from pyro.infer.reparam import LatentStableReparam
 from pyro.poutine.subsample_messenger import _Subsample
 from tests.common import assert_close, assert_equal, xfail_param
 
@@ -378,7 +381,7 @@ def test_potential_fn_pickling(jit):
 ])
 def test_reparam_stable(kernel, kwargs):
 
-    @poutine.reparam(config={"z": StableReparameterizer()})
+    @poutine.reparam(config={"z": LatentStableReparam()})
     def model():
         stability = pyro.sample("stability", dist.Uniform(0., 2.))
         skew = pyro.sample("skew", dist.Uniform(-1., 1.))

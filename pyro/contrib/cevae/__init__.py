@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This module implements the Causal Effect Variational Autoencoder [1], which
 demonstrates a number of innovations including:
