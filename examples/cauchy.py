@@ -8,7 +8,7 @@ import torch.distributions.constraints as constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import TraceTMC_ELBO, config_enumerate
+from pyro.infer import TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
 from pyro.ops.ssm_gp import MaternKernel
 from pyro.contrib.timeseries import IndependentMaternGP
 from pyro.nn.module import clear
@@ -91,6 +91,10 @@ def tmc_run(args, ys):
     if args.train == "iwae":
         model_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
         svi_model = pyro.infer.SVI(tmc_model, tmc_guide, model_optim, tmc.differentiable_loss)
+    elif args.train == "elbo":
+        model_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_model = pyro.infer.SVI(tmc_model, tmc_guide, model_optim,
+                                   TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss)
     elif args.train == "rws":
         model_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
         svi_model = pyro.infer.SVI(tmc_model, poutine.block(tmc_guide, hide_types=["param"]), model_optim,
@@ -98,10 +102,35 @@ def tmc_run(args, ys):
         guide_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
         svi_guide = pyro.infer.SVI(poutine.block(tmc_model, hide_types=["param"]), tmc_guide, guide_optim,
                                    tmc.wake_phi_loss)
-    elif args.train == "model":  # no guide updates
+    elif args.train == "model-iwae":  # no guide updates
         model_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
         svi_model = pyro.infer.SVI(tmc_model, poutine.block(tmc_guide, hide_types=["param"]), model_optim,
                                    tmc.differentiable_loss)
+    elif args.train == "model-elbo":  # no guide updates
+        model_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_model = pyro.infer.SVI(tmc_model, poutine.block(tmc_guide, hide_types=["param"]), model_optim,
+                                   TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss)
+    elif args.train == "guide-rws":  # no model updates
+        model_optim = pyro.optim.ClippedAdam({'lr': 0.0, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_model = pyro.infer.SVI(tmc_model, poutine.block(tmc_guide, hide_types=["param"]), model_optim,
+                                   tmc.differentiable_loss)
+        guide_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_guide = pyro.infer.SVI(poutine.block(tmc_model, hide_types=["param"]), tmc_guide, guide_optim,
+                                   tmc.wake_phi_loss)
+    elif args.train == "guide-iwae":  # no model updates
+        model_optim = pyro.optim.ClippedAdam({'lr': 0.0, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_model = pyro.infer.SVI(tmc_model, poutine.block(tmc_guide, hide_types=["param"]), model_optim,
+                                   tmc.differentiable_loss)
+        guide_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_guide = pyro.infer.SVI(poutine.block(tmc_model, hide_types=["param"]), tmc_guide, guide_optim,
+                                   tmc.differentiable_loss)
+    elif args.train == "guide-elbo":  # no model updates
+        model_optim = pyro.optim.ClippedAdam({'lr': 0.0, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_model = pyro.infer.SVI(tmc_model, poutine.block(tmc_guide, hide_types=["param"]), model_optim,
+                                   TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss)
+        guide_optim = pyro.optim.ClippedAdam({'lr': 0.001, 'betas': (0.90, 0.999), 'clip_norm': 1.0})
+        svi_guide = pyro.infer.SVI(poutine.block(tmc_model, hide_types=["param"]), tmc_guide, guide_optim,
+                                   TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss)
     else:
         raise ValueError
 
