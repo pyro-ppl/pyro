@@ -54,8 +54,10 @@ def test_parameterized():
         assert "Linear.{}".format(p) in guide_trace.nodes
 
     assert isinstance(guide_trace.nodes["Linear.b"]["fn"], dist.Delta)
-    assert isinstance(guide_trace.nodes["Linear.c"]["fn"].base_dist, dist.Normal)
-    assert isinstance(guide_trace.nodes["Linear.d"]["fn"].base_dist, dist.MultivariateNormal)
+    c_dist = guide_trace.nodes["Linear.c"]["fn"]
+    assert isinstance(getattr(c_dist, "base_dist", c_dist), dist.Normal)
+    d_dist = guide_trace.nodes["Linear.d"]["fn"]
+    assert isinstance(getattr(d_dist, "base_dist", d_dist), dist.MultivariateNormal)
 
 
 def test_nested_parameterized():
