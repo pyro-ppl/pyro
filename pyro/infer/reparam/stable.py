@@ -176,7 +176,7 @@ class StableReparam(Reparam):
         # Differentiably transform.
         a = fn.stability
         z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
-        t = _standard_stable(a, fn.skew.sign(), tu, te, coords="S")
+        t = _standard_stable(a, 1, tu, te, coords="S") * fn.skew.sign()
         a_inv = a.reciprocal()
         skew_abs = fn.skew.abs()
         t_scale = skew_abs.pow(a_inv)
