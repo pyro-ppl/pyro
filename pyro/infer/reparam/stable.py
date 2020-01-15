@@ -13,7 +13,7 @@ from pyro.infer.util import is_validation_enabled
 from .reparam import Reparam
 
 
-class StableReparam(Reparam):
+class LatentStableReparam(Reparam):
     """
     Auxiliary variable reparameterizer for
     :class:`~pyro.distributions.Stable` latent variables.
@@ -39,7 +39,7 @@ class StableReparam(Reparam):
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable)
-        assert obs is None, "StableReparam does not support observe statements"
+        assert obs is None, "LatentStableReparam does not support observe statements"
 
         # Draw parameter-free noise.
         proto = fn.stability
@@ -99,7 +99,7 @@ class SymmetricStableReparam(Reparam):
                         self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
-        _, z = _unsafe_standard_stable(fn.stability / 2, 1, u, e)
+        z, _ = _unsafe_standard_stable(fn.stability / 2, 1, u, e)
         assert (z >= 0).all()
         scale = fn.scale * (2 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(1 / fn.stability) * z.sqrt()
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
@@ -112,20 +112,20 @@ class SymmetricStableReparam(Reparam):
 class StableHMMReparam(Reparam):
     """
     Auxiliary variable reparameterizer for symmetric
-    :class:`~pyro.distributions.StableHMM` random variables whose
+    :class:`~pyro.distributions.LinearHMM` random variables whose
     ``initial_dist``, ``transition_dist``, and ``observation_dist`` are
     symmetric.
 
     This is useful for training the parameters of a
-    :class:`~pyro.distributions.StableHMM` distribution, whose
-    :meth:`~pyro.distributions.StableHMM.log_prob` method is undefined.
+    :class:`~pyro.distributions.LinearHMM` distribution, whose
+    :meth:`~pyro.distributions.LinearHMM.log_prob` method is undefined.
 
     This introduces auxiliary random variables conditioned on which the process
     becomes a :class:`~pyro.distributions.GaussianHMM` . The component
     distributions are reparameterized by :class:`SymmetricStableReparam` .
     """
     def __call__(self, name, fn, obs):
-        assert isinstance(fn, dist.StableHMM)
+        assert isinstance(fn, dist.LinearHMM)
 
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist, _ = SymmetricStableReparam()("{}_init".format(name), fn.initial_dist, None)

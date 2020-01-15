@@ -17,6 +17,9 @@ apidoc: FORCE
 lint: FORCE
 	flake8
 
+license: FORCE
+	python scripts/update_headers.py
+
 scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py

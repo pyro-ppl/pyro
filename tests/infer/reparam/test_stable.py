@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
-from pyro.infer.reparam import StableHMMReparam, StableReparam, SymmetricStableReparam
+from pyro.infer.reparam import StableHMMReparam, LatentStableReparam, SymmetricStableReparam
 from tests.common import assert_close
 
 
@@ -37,7 +37,7 @@ def test_stable(shape):
     value = model()
     expected_moments = get_moments(value)
 
-    reparam_model = poutine.reparam(model, {"x": StableReparam()})
+    reparam_model = poutine.reparam(model, {"x": LatentStableReparam()})
     trace = poutine.trace(reparam_model).get_trace()
     assert isinstance(trace.nodes["x"]["fn"], MaskedDistribution)
     assert isinstance(trace.nodes["x"]["fn"].base_dist, dist.Delta)
@@ -109,7 +109,7 @@ def test_stable_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
     obs_mat = torch.randn(batch_shape + (duration, hidden_dim, obs_dim))
     obs_dist = random_stable(batch_shape + (duration, obs_dim),
                              stability.unsqueeze(-1).unsqueeze(-1), skew=0).to_event(1)
-    hmm = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     def model(data=None):
         with pyro.plate_stack("plates", batch_shape):
@@ -145,7 +145,7 @@ def test_stable_hmm_distribution(stability, duration, hidden_dim, obs_dim):
     trans_dist = random_stable((duration, hidden_dim), stability, skew=0).to_event(1)
     obs_mat = torch.randn(duration, hidden_dim, obs_dim)
     obs_dist = random_stable((duration, obs_dim), stability, skew=0).to_event(1)
-    hmm = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     num_samples = 200000
     expected_samples = hmm.sample([num_samples]).reshape(num_samples, duration * obs_dim)
