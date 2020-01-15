@@ -42,7 +42,7 @@ class SimpleTimeSeriesModel:
         return z
 
 
-class SimpleTimeSeriesGuide:
+class FactorizedTimeSeriesGuide:
     def __init__(self, model):
         self.model = model
 
@@ -61,9 +61,33 @@ class SimpleTimeSeriesGuide:
         return pyro.sample("z_{}".format(self.t), dist.Normal(loc, scale).to_event(1))
 
 
+class NonFactorizedTimeSeriesGuide:
+    def __init__(self, model):
+        self.model = model
+
+    def init(self):
+        self.t = 0
+        scale = pyro.param("scale_{}".format(self.t), 0.5 * torch.ones(self.model.kernel.state_dim),
+                           constraint=constraints.positive)
+        loc = pyro.param("loc_{}".format(self.t), torch.zeros(self.model.kernel.state_dim))
+        return pyro.sample("z_0", dist.Normal(loc, scale).to_event(1))
+
+    def step(self, z_prev, y=None):
+        self.t += 1
+        loc = pyro.param("loc_{}".format(self.t), torch.zeros((self.model.kernel.state_dim)))
+        scale = pyro.param("scale_{}".format(self.t), 0.5 * torch.ones(self.model.kernel.state_dim),
+                           constraint=constraints.positive)
+        return pyro.sample("z_{}".format(self.t), dist.Normal(z_prev - loc, scale).to_event(1))
+
+
 def tmc_run(args, ys):
     model = SimpleTimeSeriesModel()
-    guide = SimpleTimeSeriesGuide(model)
+    if args.proposal == "factorized":
+        guide = FactorizedTimeSeriesGuide(model)
+    elif args.proposal == "nonfactorized":
+        guide = NonFactorizedTimeSeriesGuide(model)
+    else:
+        raise ValueError
 
     tmc = TraceTMC_ELBO(max_plate_nesting=0)
 
@@ -174,6 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("-K", "--num-particles", default=50, type=int)
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--tmc-strategy", default="diagonal", type=str)
+    parser.add_argument("--proposal", default="factorized", type=str)
     parser.add_argument("--train", default="exact", type=str)
     args = parser.parse_args()
     main(args)
