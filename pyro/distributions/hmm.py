@@ -5,7 +5,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.torch import Categorical, Gamma, MultivariateNormal
+from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
@@ -585,7 +585,11 @@ class LinearHMM(TorchDistribution):
         x = []
         for t in range(num_events):
             z = z @ transition_matrix + transition_dist.sample()
-            x.append(z @ observation_matrix + observation_dist.sample())
+            y = z @ observation_matrix + obs_base_dist.sample()
+            x.append(obs_transform(y))
+
+    where ``observation_dist`` is split into ``obs_base_dist`` and an optional
+    ``obs_transform`` (defaulting to the identity).
 
     This implements a reparameterized :meth:`rsample` method but does not
     implement a :meth:`log_prob` method. Derived classes may implement
@@ -671,6 +675,19 @@ class LinearHMM(TorchDistribution):
         if observation_dist.batch_shape != batch_shape + time_shape:
             observation_dist = observation_dist.expand(batch_shape + time_shape)
 
+        # Extract observation transforms.
+        transforms = []
+        while True:
+            if isinstance(observation_dist, torch.distributions.Independent):
+                observation_dist = observation_dist.base_dist
+            elif isinstance(observation_dist, torch.distributions.TransformedDistribution):
+                transforms = observation_dist.transforms + transforms
+                observation_dist = observation_dist.base_dist
+            else:
+                break
+        if not observation_dist.event_shape:
+            observation_dist = Independent(observation_dist, 1)
+
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self.initial_dist = initial_dist
@@ -678,6 +695,7 @@ class LinearHMM(TorchDistribution):
         self.transition_dist = transition_dist
         self.observation_matrix = observation_matrix
         self.observation_dist = observation_dist
+        self.transforms = transforms
 
     @property
     def support(self):
@@ -696,6 +714,7 @@ class LinearHMM(TorchDistribution):
         new.observation_matrix = self.observation_matrix.expand(
             batch_shape + time_shape + (self.hidden_dim, self.obs_dim))
         new.observation_dist = self.observation_dist.expand(batch_shape + time_shape)
+        new.transforms = self.transforms
         super(LinearHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new
@@ -708,7 +727,10 @@ class LinearHMM(TorchDistribution):
         trans = self.transition_dist.rsample(sample_shape)
         obs = self.observation_dist.rsample(sample_shape)
         z = _linear_integrate(init, self.transition_matrix, trans)
-        return (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
+        x = (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
+        for t in self.transforms:
+            x = t(x)
+        return x
 
 
 class GaussianMRF(TorchDistribution):

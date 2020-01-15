@@ -3,7 +3,7 @@
 
 from abc import ABC, abstractmethod
 
-import pyro.distributions as dist
+import torch
 
 
 class Reparam(ABC):
@@ -25,7 +25,7 @@ class Reparam(ABC):
         Unwrap Independent distributions.
         """
         event_dim = fn.event_dim
-        while isinstance(fn, dist.Independent):
+        while isinstance(fn, torch.distributions.Independent):
             fn = fn.base_dist
         return fn, event_dim
 
