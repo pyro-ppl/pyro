@@ -10,12 +10,7 @@ from torch.distributions.utils import broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
-def _check(x):
-    assert not torch.isnan(x).any()
-    return x
-
-
-def _unsafe_standard_stable(alpha, beta, V, W):
+def _unsafe_standard_stable(alpha, beta, V, W, coords):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
     # by Nolan [4]. This will fail if alpha is close to 1.
@@ -29,16 +24,21 @@ def _unsafe_standard_stable(alpha, beta, V, W):
         * ((v - V).cos() / W).pow(inv_alpha - 1)
     Z.data[Z.data != Z.data] = 0  # drop occasional NANs
 
-    # Return both the standard Zolotarev parameterization Z and the shift b to
-    # convert to Nolan's parametrization S^0 where samples depend continuously
-    # on (alpha,beta), allowing interpolation around the hole at alpha=1.
-    return Z, b  # Nolan's parameterization is Z - b
+    # Optionally convert to Nolan's parametrization S^0 where samples depend
+    # continuously on (alpha,beta), allowing interpolation around the hole at
+    # alpha=1.
+    if coords == "S0":
+        return Z - b
+    elif coords == "S":
+        return Z
+    else:
+        raise ValueError("Unknown coords: {}".format(coords))
 
 
 RADIUS = 0.01
 
 
-def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
+def _standard_stable(alpha, beta, aux_uniform, aux_exponential, coords):
     """
     Differentiably transform two random variables::
 
@@ -52,8 +52,7 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         hole = 1.
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
-        z, shift = _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential)
-        return z - shift
+        return _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential, coords=coords)
 
     # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
@@ -72,8 +71,7 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential):
         #              2 * RADIUS
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
-    z, shift = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_)
-    pairs = z - shift
+    pairs = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_, coords=coords)
     return (pairs * weights).sum(-1)
 
 
@@ -149,5 +147,5 @@ class Stable(TorchDistribution):
             aux_exponential = new_empty(shape).exponential_()
 
         # Differentiably transform.
-        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential)
+        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential, coords="S0")
         return self.loc + self.scale * x

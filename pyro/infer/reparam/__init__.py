@@ -4,15 +4,15 @@
 from .discrete_cosine import DiscreteCosineReparam
 from .loc_scale import LocScaleReparam
 from .neutra import NeuTraReparam
-from .stable import StableHMMReparam, LatentStableReparam, SymmetricStableReparam
+from .stable import LatentStableReparam, StableReparam, SymmetricStableReparam
 from .transform import TransformReparam
 
 __all__ = [
     "DiscreteCosineReparam",
+    "LatentStableReparam",
     "LocScaleReparam",
     "NeuTraReparam",
-    "StableHMMReparam",
-    "LatentStableReparam",
+    "StableReparam",
     "SymmetricStableReparam",
     "TransformReparam",
 ]
