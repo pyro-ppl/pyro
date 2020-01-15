@@ -112,20 +112,20 @@ class SymmetricStableReparam(Reparam):
 class StableHMMReparam(Reparam):
     """
     Auxiliary variable reparameterizer for symmetric
-    :class:`~pyro.distributions.StableHMM` random variables whose
+    :class:`~pyro.distributions.LinearHMM` random variables whose
     ``initial_dist``, ``transition_dist``, and ``observation_dist`` are
     symmetric.
 
     This is useful for training the parameters of a
-    :class:`~pyro.distributions.StableHMM` distribution, whose
-    :meth:`~pyro.distributions.StableHMM.log_prob` method is undefined.
+    :class:`~pyro.distributions.LinearHMM` distribution, whose
+    :meth:`~pyro.distributions.LinearHMM.log_prob` method is undefined.
 
     This introduces auxiliary random variables conditioned on which the process
     becomes a :class:`~pyro.distributions.GaussianHMM` . The component
     distributions are reparameterized by :class:`SymmetricStableReparam` .
     """
     def __call__(self, name, fn, obs):
-        assert isinstance(fn, dist.StableHMM)
+        assert isinstance(fn, dist.LinearHMM)
 
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist, _ = SymmetricStableReparam()("{}_init".format(name), fn.initial_dist, None)

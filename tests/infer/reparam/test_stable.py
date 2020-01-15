@@ -109,7 +109,7 @@ def test_stable_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
     obs_mat = torch.randn(batch_shape + (duration, hidden_dim, obs_dim))
     obs_dist = random_stable(batch_shape + (duration, obs_dim),
                              stability.unsqueeze(-1).unsqueeze(-1), skew=0).to_event(1)
-    hmm = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     def model(data=None):
         with pyro.plate_stack("plates", batch_shape):
@@ -145,7 +145,7 @@ def test_stable_hmm_distribution(stability, duration, hidden_dim, obs_dim):
     trans_dist = random_stable((duration, hidden_dim), stability, skew=0).to_event(1)
     obs_mat = torch.randn(duration, hidden_dim, obs_dim)
     obs_dist = random_stable((duration, obs_dim), stability, skew=0).to_event(1)
-    hmm = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     num_samples = 200000
     expected_samples = hmm.sample([num_samples]).reshape(num_samples, duration * obs_dim)

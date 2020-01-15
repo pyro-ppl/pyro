@@ -632,7 +632,59 @@ def test_stable_hmm_shape(init_shape, trans_mat_shape, trans_dist_shape,
     trans_dist = random_stable(stability, trans_dist_shape + (hidden_dim,)).to_event(1)
     obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
     obs_dist = random_stable(stability, obs_dist_shape + (obs_dim,)).to_event(1)
-    d = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    d = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+
+    shape = broadcast_shape(init_shape + (1,),
+                            trans_mat_shape,
+                            trans_dist_shape,
+                            obs_mat_shape,
+                            obs_dist_shape)
+    expected_batch_shape, time_shape = shape[:-1], shape[-1:]
+    expected_event_shape = time_shape + (obs_dim,)
+    assert d.batch_shape == expected_batch_shape
+    assert d.event_shape == expected_event_shape
+
+    x = d.rsample()
+    assert x.shape == d.shape()
+    x = d.rsample((6,))
+    assert x.shape == (6,) + d.shape()
+    x = d.expand((6, 5)).rsample()
+    assert x.shape == (6, 5) + d.event_shape
+
+
+def random_studentt(shape):
+    df = torch.rand(shape).exp()
+    loc = torch.randn(shape)
+    scale = torch.rand(shape).exp()
+    return dist.StudentT(df, loc, scale)
+
+
+@pytest.mark.parametrize('obs_dim', [1, 2])
+@pytest.mark.parametrize('hidden_dim', [1, 3])
+@pytest.mark.parametrize('init_shape,trans_mat_shape,trans_dist_shape,obs_mat_shape,obs_dist_shape', [
+    ((), (4,), (), (), ()),
+    ((), (), (4,), (), ()),
+    ((), (), (), (4,), ()),
+    ((), (), (), (), (4,)),
+    ((), (4,), (4,), (4,), (4,)),
+    ((5,), (4,), (), (), ()),
+    ((), (5, 1), (4,), (), ()),
+    ((), (), (5, 1), (4,), ()),
+    ((), (), (), (5, 1), (4,)),
+    ((), (4,), (5, 1), (), ()),
+    ((), (), (4,), (5, 1), ()),
+    ((), (), (), (4,), (5, 1)),
+    ((5,), (), (), (), (4,)),
+    ((5,), (5, 4), (5, 4), (5, 4), (5, 4)),
+], ids=str)
+def test_studentt_hmm_shape(init_shape, trans_mat_shape, trans_dist_shape,
+                            obs_mat_shape, obs_dist_shape, hidden_dim, obs_dim):
+    init_dist = random_studentt(init_shape + (hidden_dim,)).to_event(1)
+    trans_mat = torch.randn(trans_mat_shape + (hidden_dim, hidden_dim))
+    trans_dist = random_studentt(trans_dist_shape + (hidden_dim,)).to_event(1)
+    obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
+    obs_dist = random_studentt(obs_dist_shape + (obs_dim,)).to_event(1)
+    d = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     shape = broadcast_shape(init_shape + (1,),
                             trans_mat_shape,
