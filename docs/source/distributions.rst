@@ -154,6 +154,13 @@ InverseGamma
     :undoc-members:
     :show-inheritance:
 
+LinearHMM
+---------
+.. autoclass:: pyro.distributions.LinearHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LKJCorrCholesky
 ---------------
 .. autoclass:: pyro.distributions.LKJCorrCholesky
@@ -227,13 +234,6 @@ SpanningTree
 Stable
 ------
 .. autoclass:: pyro.distributions.Stable
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-StableHMM
----------
-.. autoclass:: pyro.distributions.StableHMM
     :members:
     :undoc-members:
     :show-inheritance:

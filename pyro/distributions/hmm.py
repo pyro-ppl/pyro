@@ -5,7 +5,6 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.stable import Stable
 from pyro.distributions.torch import Categorical, Gamma, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
@@ -568,11 +567,17 @@ class GammaGaussianHMM(TorchDistribution):
         return scale_post, mvn
 
 
-class StableHMM(TorchDistribution):
+class LinearHMM(TorchDistribution):
     r"""
-    Hidden Markov Model with linear dynamics and observations and
-    :class:`~pyro.distributions.Stable` noise for initial, transition, and
-    observation distributions.
+    Hidden Markov Model with linear dynamics and observations and arbitrary
+    noise for initial, transition, and observation distributions.  Each of
+    those distributions can be e.g.
+    `:class:`~pyro.distributions.MultivariateNormal` or
+    `:class:`~pyro.distributions.Independent` of
+    `:class:`~pyro.distributions.Normal`,
+    `:class:`~pyro.distributions.StudentT`, or `~pyro.distributions.Stable` .
+    Additionally the observation distribution may be constrained, e.g.
+    `~pyro.distributions.LogNormal`
 
     This corresponds to the generative model::
 
@@ -583,13 +588,16 @@ class StableHMM(TorchDistribution):
             x.append(z @ observation_matrix + observation_dist.sample())
 
     This implements a reparameterized :meth:`rsample` method but does not
-    implement a :meth:`log_prob` method. Inference can be performed using
-    either reparameterization with
-    :class:`~pyro.infer.reparam.stable.StableHMMReparam` or likelihood-free
-    algorithms such as :class:`~pyro.infer.energy_distance.EnergyDistance` .
-    Note that while stable processes generally require a common shared
-    stability parameter :math:`\alpha` , this distribution and the above
-    inference algorithms allow heterogeneous stability parameters.
+    implement a :meth:`log_prob` method. Derived classes may implement
+    :meth:`log_prob` .
+
+    Inference without :meth:`log_prob` can be performed using either
+    reparameterization with :class:`~pyro.infer.reparam.hmm.LinearHMMReparam`
+    or likelihood-free algorithms such as
+    :class:`~pyro.infer.energy_distance.EnergyDistance` .  Note that while
+    stable processes generally require a common shared stability parameter
+    :math:`\alpha` , this distribution and the above inference algorithms allow
+    heterogeneous stability parameters.
 
     The event_shape of this distribution includes time on the left::
 
@@ -602,43 +610,38 @@ class StableHMM(TorchDistribution):
 
     :ivar int hidden_dim: The dimension of the hidden state.
     :ivar int obs_dim: The dimension of the observed state.
-    :param initial_dist: An ``Independent(Stable,1)`` distribution over initial
-        states. This should have batch_shape broadcastable to
-        ``self.batch_shape``.  This should have event_shape ``(hidden_dim,)``.
+    :param initial_dist: A distribution over initial states. This should have
+        batch_shape broadcastable to ``self.batch_shape``.  This should have
+        event_shape ``(hidden_dim,)``.
     :param ~torch.Tensor transition_matrix: A linear transformation of hidden
-        state. This should have shape broadcastable to
-        ``self.batch_shape + (num_steps, hidden_dim, hidden_dim)`` where the
-        rightmost dims are ordered ``(old, new)``.
-    :param transition_dist: An ``Independent(Stable,1)`` distribution over
-        process noise. This should have batch_shape broadcastable to
-        ``self.batch_shape + (num_steps,)``.  This should have event_shape
-        ``(hidden_dim,)``.
+        state. This should have shape broadcastable to ``self.batch_shape +
+        (num_steps, hidden_dim, hidden_dim)`` where the rightmost dims are
+        ordered ``(old, new)``.
+    :param transition_dist: A distribution over process noise. This should have
+        batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.  This
+        should have event_shape ``(hidden_dim,)``.
     :param ~torch.Tensor observation_matrix: A linear transformation from hidden
         to observed state. This should have shape broadcastable to
         ``self.batch_shape + (num_steps, hidden_dim, obs_dim)``.
-    :param observation_dist: An ``Independent(Stable,1)`` observation noise
-        distribution. This should have batch_shape broadcastable to
-        ``self.batch_shape + (num_steps,)``.
-        This should have event_shape ``(obs_dim,)``.
+    :param observation_dist: A observation noise distribution. This should have
+        batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.  This
+        should have event_shape ``(obs_dim,)``.
     """
     arg_constraints = {}
     has_rsample = True
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None):
-        assert (isinstance(initial_dist, torch.distributions.Independent) and
-                initial_dist.reinterpreted_batch_ndims == 1 and
-                isinstance(initial_dist.base_dist, Stable))
+        assert initial_dist.has_rsample
+        assert initial_dist.event_dim == 1
         assert (isinstance(transition_matrix, torch.Tensor) and
                 transition_matrix.dim() >= 2)
-        assert (isinstance(transition_dist, torch.distributions.Independent) and
-                initial_dist.reinterpreted_batch_ndims == 1 and
-                isinstance(transition_dist.base_dist, Stable))
+        assert transition_dist.has_rsample
+        assert transition_dist.event_dim == 1
         assert (isinstance(observation_matrix, torch.Tensor) and
                 observation_matrix.dim() >= 2)
-        assert (isinstance(observation_dist, torch.distributions.Independent) and
-                initial_dist.reinterpreted_batch_ndims == 1 and
-                isinstance(observation_dist.base_dist, Stable))
+        assert observation_dist.has_rsample
+        assert observation_dist.event_dim == 1
 
         hidden_dim, obs_dim = observation_matrix.shape[-2:]
         assert initial_dist.event_shape == (hidden_dim,)
@@ -654,6 +657,7 @@ class StableHMM(TorchDistribution):
         event_shape = time_shape + (obs_dim,)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
+        # Expand eagerly.
         if initial_dist.batch_shape != batch_shape:
             initial_dist = initial_dist.expand(batch_shape)
         if transition_matrix.shape[:-2] != batch_shape + time_shape:
@@ -675,8 +679,12 @@ class StableHMM(TorchDistribution):
         self.observation_matrix = observation_matrix
         self.observation_dist = observation_dist
 
+    @property
+    def support(self):
+        return self.observation_dist.support
+
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(StableHMM, _instance)
+        new = self._get_checked_instance(LinearHMM, _instance)
         batch_shape = torch.Size(batch_shape)
         time_shape = self.transition_dist.batch_shape[-1:]
         new.hidden_dim = self.hidden_dim
@@ -688,12 +696,12 @@ class StableHMM(TorchDistribution):
         new.observation_matrix = self.observation_matrix.expand(
             batch_shape + time_shape + (self.hidden_dim, self.obs_dim))
         new.observation_dist = self.observation_dist.expand(batch_shape + time_shape)
-        super(StableHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        super(LinearHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new
 
     def log_prob(self, value):
-        raise NotImplementedError("StableHMM.log_prob() is not implemented")
+        raise NotImplementedError("LinearHMM.log_prob() is not implemented")
 
     def rsample(self, sample_shape=torch.Size()):
         init = self.initial_dist.rsample(sample_shape)
