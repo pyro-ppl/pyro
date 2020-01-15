@@ -99,13 +99,14 @@ class SymmetricStableReparam(Reparam):
                         self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
-        z = _unsafe_standard_stable(fn.stability / 2, 1, u, e, coords="S")
+        a = fn.stability
+        z = _unsafe_standard_stable(a / 2, 1, u, e, coords="S")
         assert (z >= 0).all()
-        scale = fn.scale * (2 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(1 / fn.stability) * z.sqrt()
+        scale = fn.scale * (math.pi / 4 * a).cos().pow(a.reciprocal()) * z.sqrt()
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
-        # Construct a scaled Gaussian.
-        new_fn = self._wrap(dist.Normal(fn.loc, scale), event_dim)
+        # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
+        new_fn = self._wrap(dist.Normal(fn.loc, scale * (2 ** 0.5)), event_dim)
         return new_fn, obs
 
 
@@ -146,28 +147,23 @@ class StableReparam(Reparam):
         #
         # To derive the parameters of S and T, we solve the equations
         #
-        #   S.stability = a      T.stability = a
-        #   S.skew = 0           T.skew = sgn(b)
-        #   S.loc = 0            T.loc = 0
+        #   T.stability = a            S.stability = a
+        #   T.skew = sgn(b)            S.skew = 0
+        #   T.loc = 0                  S.loc = 0
         #
-        #   s = 1 = (S.scale**a + T.scale**a)**(1/a)
+        #   s = (S.scale**a + T.scale**a)**(1/a) = 1       # by step 1.
         #
         #       S.skew * S.scale**a + T.skew * T.scale**a
         #   b = ----------------------------------------- = sgn(b) * T.scale**a
         #                S.scale**a + T.scale**a
-        # whence
+        # yielding
         #
-        #  T.scale = |b| ** (1/a)
-        #  S.scale = (1 - |b|) ** (1/a)
-        a = fn.stability
-        a_inv = a.reciprocal()
-        skew_abs = fn.skew.abs()
-        t_scale = skew_abs.pow(a_inv)
-        s_scale = (1 - skew_abs).pow(a_inv)
+        #   T.scale = |b| ** (1/a)     S.scale = (1 - |b|) ** (1/a)
 
         # Draw parameter-free noise.
-        half_pi = a.new_full(a.shape, math.pi / 2)
-        one = a.new_ones(a.shape)
+        proto = fn.stability
+        half_pi = proto.new_full(proto.shape, math.pi / 2)
+        one = proto.new_ones(proto.shape)
         zu = pyro.sample("{}_z_uniform".format(name),
                          self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
         ze = pyro.sample("{}_z_exponential".format(name),
@@ -176,15 +172,19 @@ class StableReparam(Reparam):
                          self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
         te = pyro.sample("{}_t_exponential".format(name),
                          self._wrap(dist.Exponential(one), event_dim))
-        z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
-        t = _standard_stable(a, fn.skew.sign(), tu, te, coords="S")
 
         # Differentiably transform.
-        scale = fn.scale * (2 ** 0.5)
-        loc = scale * (t * t_scale - fn.skew * (math.pi / 2 * a).tan())
-        scale = scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
+        a = fn.stability
+        z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
+        t = _standard_stable(a, fn.skew.sign(), tu, te, coords="S")
+        a_inv = a.reciprocal()
+        skew_abs = fn.skew.abs()
+        t_scale = skew_abs.pow(a_inv)
+        s_scale = (1 - skew_abs).pow(a_inv)
+        loc = fn.loc + fn.scale * (t * t_scale - fn.skew * (math.pi / 2 * a).tan())
+        scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
-        # Construct a scaled Gaussian.
-        new_fn = self._wrap(dist.Normal(loc, scale), event_dim)
+        # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
+        new_fn = self._wrap(dist.Normal(loc, scale * (2 ** 0.5)), event_dim)
         return new_fn, obs
