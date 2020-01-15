@@ -180,8 +180,9 @@ class StableReparam(Reparam):
         t = _standard_stable(a, fn.skew.sign(), tu, te, coords="S")
 
         # Differentiably transform.
-        loc = t * t_scale - fn.scale * fn.skew * (math.pi / 2 * a).tan()
-        scale = fn.scale * s_scale * z.sqrt() * (2 ** 0.5) * (math.pi / 4 * a).cos().pow(a_inv)
+        scale = fn.scale * (2 ** 0.5)
+        loc = scale * (t * t_scale - fn.skew * (math.pi / 2 * a).tan())
+        scale = scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
         # Construct a scaled Gaussian.

@@ -10,11 +10,6 @@ from torch.distributions.utils import broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
-def _check(x):
-    assert not torch.isnan(x).any()
-    return x
-
-
 def _unsafe_standard_stable(alpha, beta, V, W, coords):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
