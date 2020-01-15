@@ -72,7 +72,7 @@ def tmc_run(args, ys):
         for y in pyro.markov(ys):
             z = model.step(z, y)
 
-    @config_enumerate(default="parallel", num_samples=args.num_particles, expand=False, tmc=args.tmc_strategy)
+    @config_enumerate(default="parallel", num_samples=args.num_particles, expand=False)
     def tmc_guide(ys):
         z = guide.init()
         for y in pyro.markov(ys):
@@ -173,7 +173,6 @@ if __name__ == "__main__":
     parser.add_argument("-T", "--num-timesteps", default=10, type=int)
     parser.add_argument("-K", "--num-particles", default=50, type=int)
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--tmc-strategy", default="diagonal", type=str)
     parser.add_argument("--train", default="exact", type=str)
     args = parser.parse_args()
     main(args)
