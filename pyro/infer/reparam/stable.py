@@ -125,11 +125,6 @@ class StableReparam(Reparam):
     variable is sampled as in :class:`LatentStableReparam` , and the symmetric
     variable is decomposed as in :class:`SymmetricStableReparam` .
 
-    .. warning::
-        This reparameterizer is numerically unstable near ``stability=1``.
-        When validation is enabled this will raise a ``ValueError`` if
-        stability is close to 1.
-
     [1] V. M. Zolotarev (1986)
         "One-dimensional stable distributions"
     """
@@ -137,9 +132,6 @@ class StableReparam(Reparam):
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable)
-        if is_validation_enabled():
-            if (fn.stability - 1).abs().lt(0.01).any():
-                raise ValueError("StableReparam found stability near 1")
 
         # Strategy: Let X ~ S0(a,b,s,m) be the stable variable of interest.
         # 1. WLOG scale and shift so s=1 and m=0, additionally shifting to convert
@@ -187,13 +179,42 @@ class StableReparam(Reparam):
         t = _standard_stable(a, one, tu, te, coords="S0")
         a_inv = a.reciprocal()
         skew_abs = fn.skew.abs()
-        t_scale = skew_abs.pow(a_inv) * fn.skew.sign()
+        t_scale = skew_abs.pow(a_inv)
         s_scale = (1 - skew_abs).pow(a_inv)
-        # FIXME The following line is discontinuous at a=1.
-        loc = fn.loc + fn.scale * (t * t_scale + (t_scale - fn.skew) * torch.tan(math.pi / 2 * a))
+        shift = _safe_shift(a, skew_abs, t_scale)
+        loc = fn.loc + fn.scale * fn.skew.sign() * (t * t_scale + shift)
         scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
         # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
         new_fn = self._wrap(dist.Normal(loc, scale * (2 ** 0.5)), event_dim)
         return new_fn, obs
+
+
+def _unsafe_shift(a, skew_abs, t_scale):
+    # At a=1 the lhs has a root and the rhs has an asymptote.
+    return (t_scale - skew_abs) * (math.pi / 2 * a).tan()
+
+
+def _safe_shift(a, skew_abs, t_scale):
+    radius = 0.005
+    hole = 1.0
+    with torch.no_grad():
+        near_hole = (a - hole).abs() <= radius
+    if not near_hole.any():
+        return _unsafe_shift(a, skew_abs, t_scale)
+
+    # Avoid the hole at a=1 by interpolating between points on either side.
+    a_ = a.unsqueeze(-1).expand(a.shape + (2,)).contiguous()
+    with torch.no_grad():
+        lb, ub = a_.data.unbind(-1)
+        lb[near_hole] = hole - radius
+        ub[near_hole] = hole + radius
+        # We don't need to backprop through weights, since we've pretended
+        # a_ is reparametrized, even though we've clamped some values.
+        weights = (a_ - a.unsqueeze(-1)).abs_().mul_(-1 / (2 * radius)).add_(1)
+        weights[~near_hole] = 0.5
+    skew_abs_ = skew_abs.unsqueeze(-1)
+    t_scale_ = skew_abs_.pow(a_.reciprocal())
+    pairs = _unsafe_shift(a_, skew_abs_, t_scale_)
+    return (pairs * weights).sum(-1)

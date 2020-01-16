@@ -95,10 +95,10 @@ def test_symmetric_stable(shape):
 @pytest.mark.parametrize("stability", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
 @pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
 def test_distribution(stability, skew, Reparam):
-    if Reparam is SymmetricStableReparam and skew != 0 or stability == 2:
+    if Reparam is SymmetricStableReparam and (skew != 0 or stability == 2):
         pytest.skip()
-    if Reparam is StableReparam and stability == 1.0:
-        pytest.xfail(reason="numerical instability")
+    if stability == 2 and skew in (-1, 1):
+        pytest.skip()
 
     def model():
         with pyro.plate("particles", 20000):
