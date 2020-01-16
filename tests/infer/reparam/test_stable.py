@@ -97,8 +97,6 @@ def test_symmetric_stable(shape):
 def test_distribution(stability, skew, Reparam):
     if Reparam is SymmetricStableReparam and skew != 0 or stability == 2:
         pytest.skip()
-    if Reparam is StableReparam and stability == 1.0:
-        pytest.xfail(reason="numerical instability")
 
     def model():
         with pyro.plate("particles", 20000):
