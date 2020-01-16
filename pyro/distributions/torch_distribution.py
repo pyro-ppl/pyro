@@ -131,14 +131,27 @@ class TorchDistributionMixin(Distribution):
             >>> [d3.batch_shape, d3.event_shape]
             [torch.Size([]), torch.Size([2, 3, 4, 5])]
 
-        :param int reinterpreted_batch_ndims: The number of batch dimensions
-            to reinterpret as event dimensions.
+        :param int reinterpreted_batch_ndims: The number of batch dimensions to
+            reinterpret as event dimensions. May be negative to remove
+            dimensions from an :class:`pyro.distributions.torch.Independent` .
+            If None, convert all dimensions to event dimensions.
         :return: A reshaped version of this distribution.
         :rtype: :class:`pyro.distributions.torch.Independent`
         """
         if reinterpreted_batch_ndims is None:
             reinterpreted_batch_ndims = len(self.batch_shape)
-        return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
+
+        # Deconstruct Independent distributions.
+        base_dist = self
+        while isinstance(base_dist, torch.distributions.Independent):
+            reinterpreted_batch_ndims += base_dist.reinterpreted_batch_ndims
+            base_dist = base_dist.base_dist
+
+        if reinterpreted_batch_ndims == 0:
+            return base_dist
+        if reinterpreted_batch_ndims < 0:
+            raise ValueError("Cannot remove event dimensions from {}".format(type(self)))
+        return pyro.distributions.torch.Independent(base_dist, reinterpreted_batch_ndims)
 
     def independent(self, reinterpreted_batch_ndims=None):
         warnings.warn("independent is deprecated; use to_event instead", DeprecationWarning)
