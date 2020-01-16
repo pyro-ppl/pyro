@@ -53,6 +53,10 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential, coords):
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
         return _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential, coords=coords)
+    if coords == "S":
+        # S coords are discontinuous, so interpolate instead in S0 coords.
+        Z = _standard_stable(alpha, beta, aux_uniform, aux_exponential, "S0")
+        return torch.where(alpha == 1, Z, Z + beta * (math.pi / 2 * alpha).tan())
 
     # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
@@ -83,18 +87,21 @@ class Stable(TorchDistribution):
     required for continuity and differentiability. This corresponds to the
     notation :math:`S^0_\alpha(\beta,\sigma,\mu_0)` of [1], where
     :math:`\alpha` = stability, :math:`\beta` = skew, :math:`\sigma` = scale,
-    and :math:`\mu_0` = loc.
+    and :math:`\mu_0` = loc. To instead use the S parameterization as in scipy,
+    pass ``coords="S"``, but BEWARE this is discontinuous at ``stability=1``
+    and has poor geometry for inference.
 
     This implements a reparametrized sampler :meth:`rsample` , but does not
     implement :meth:`log_prob` . Inference can be performed using either
     likelihood-free algorithms such as
     :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
-    via the :func:`~pyro.poutine.handlers.reparam` handler with
-    :class:`~pyro.infer.reparam.stable.LatentStableReparam` e.g.::
+    via the :func:`~pyro.poutine.handlers.reparam` handler with one of the
+    reparameterizers :class:`~pyro.infer.reparam.stable.LatentStableReparam` ,
+    :class:`~pyro.infer.reparam.stable.SymmetricStableReparam` , or
+    :class:`~pyro.infer.reparam.stable.StableReparam` e.g.::
 
-        with poutine.reparam():
-            pyro.sample("x", Stable(stability, skew, scale, loc),
-                        infer={"reparam": LatentStableReparam()})
+        with poutine.reparam(config={"x": StableReparam()}):
+            pyro.sample("x", Stable(stability, skew, scale, loc))
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
@@ -111,8 +118,11 @@ class Stable(TorchDistribution):
     :param Tensor stability: Levy stability parameter :math:`\alpha\in(0,2]` .
     :param Tensor skew: Skewness :math:`\beta\in[-1,1]` .
     :param Tensor scale: Scale :math:`\sigma > 0` . Defaults to 1.
-    :param Tensor loc: Location :math:`\mu_0` in Nolan's parametrization [2].
+    :param Tensor loc: Location :math:`\mu_0` when using Nolan's S0
+        parametrization [2], or :math:`\mu` when using the S parameterization.
         Defaults to 0.
+    :param str coords: Either "S0" (default) to use Nolan's continuous S0
+        parametrization, or "S" to use the discontinuous parameterization.
     """
     has_rsample = True
     arg_constraints = {"stability": constraints.interval(0, 2),  # half-open (0, 2]
@@ -121,9 +131,11 @@ class Stable(TorchDistribution):
                        "loc": constraints.real}
     support = constraints.real
 
-    def __init__(self, stability, skew, scale=1.0, loc=0.0, validate_args=None):
+    def __init__(self, stability, skew, scale=1.0, loc=0.0, coords="S0", validate_args=None):
+        assert coords in ("S", "S0"), coords
         self.stability, self.skew, self.scale, self.loc = broadcast_all(
             stability, skew, scale, loc)
+        self.coords = coords
         super().__init__(self.loc.shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
@@ -131,6 +143,7 @@ class Stable(TorchDistribution):
         batch_shape = torch.Size(batch_shape)
         for name in self.arg_constraints:
             setattr(new, name, getattr(self, name).expand(batch_shape))
+        new.coords = self.coords
         super(Stable, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
@@ -147,5 +160,5 @@ class Stable(TorchDistribution):
             aux_exponential = new_empty(shape).exponential_()
 
         # Differentiably transform.
-        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential, coords="S0")
+        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential, coords=self.coords)
         return self.loc + self.scale * x

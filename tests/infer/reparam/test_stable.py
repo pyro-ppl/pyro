@@ -3,6 +3,7 @@
 
 import pytest
 import torch
+from scipy.stats import ks_2samp
 from torch.autograd import grad
 
 import pyro
@@ -88,3 +89,22 @@ def test_symmetric_stable(shape):
         assert_close(actual_grads[0], expected_grads[0], atol=0.2)
         assert_close(actual_grads[1], expected_grads[1], atol=0.1)
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
+
+
+@pytest.mark.parametrize("skew", [-1.0, -0.5, 0.0, 0.5, 1.0])
+@pytest.mark.parametrize("stability", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
+def test_distribution(stability, skew, Reparam):
+    if Reparam is SymmetricStableReparam and skew != 0 or stability == 2:
+        pytest.skip()
+    if Reparam is StableReparam and stability == 1.0:
+        pytest.xfail(reason="numerical instability")
+
+    def model():
+        with pyro.plate("particles", 20000):
+            return pyro.sample("x", dist.Stable(stability, skew))
+
+    expected = model()
+    with poutine.reparam(config={"x": Reparam()}):
+        actual = model()
+    assert ks_2samp(expected, actual).pvalue > 0.05
