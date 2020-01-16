@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.reparam import LinearHMMReparam, SymmetricStableReparam
+from pyro.infer.reparam import LinearHMMReparam, StableReparam, SymmetricStableReparam
 from tests.common import assert_close
 from tests.ops.gaussian import random_mvn
 
@@ -51,9 +51,9 @@ def test_transformed_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("hidden_dim", [1, 3])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
-def test_stable_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
+@pytest.mark.parametrize("skew", [0, None], ids=["symmetric", "skewed"])
+def test_stable_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
     stability = dist.Uniform(0.5, 2).sample(batch_shape)
-    skew = 0
 
     init_dist = random_stable(batch_shape + (hidden_dim,),
                               stability.unsqueeze(-1), skew=skew).to_event(1)
@@ -70,7 +70,7 @@ def test_stable_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
             return pyro.sample("x", hmm, obs=data)
 
     data = model()
-    rep = SymmetricStableReparam()
+    rep = SymmetricStableReparam() if skew == 0 else StableReparam()
     with poutine.trace() as tr:
         with poutine.reparam(config={"x": LinearHMMReparam(rep, rep, rep)}):
             model(data)
@@ -94,8 +94,8 @@ def get_hmm_moments(samples):
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("hidden_dim", [1, 2])
 @pytest.mark.parametrize("stability", [1.9, 1.6])
-def test_stable_hmm_distribution(stability, duration, hidden_dim, obs_dim):
-    skew = 0
+@pytest.mark.parametrize("skew", [0, None], ids=["symmetric", "skewed"])
+def test_stable_hmm_distribution(stability, skew, duration, hidden_dim, obs_dim):
     init_dist = random_stable((hidden_dim,), stability, skew=skew).to_event(1)
     trans_mat = torch.randn(duration, hidden_dim, hidden_dim)
     trans_dist = random_stable((duration, hidden_dim), stability, skew=skew).to_event(1)
@@ -107,12 +107,12 @@ def test_stable_hmm_distribution(stability, duration, hidden_dim, obs_dim):
     expected_samples = hmm.sample([num_samples]).reshape(num_samples, duration * obs_dim)
     expected_loc, expected_scale, expected_corr = get_hmm_moments(expected_samples)
 
-    rep = SymmetricStableReparam()
+    rep = SymmetricStableReparam() if skew == 0 else StableReparam()
     with pyro.plate("samples", num_samples):
         with poutine.reparam(config={"x": LinearHMMReparam(rep, rep, rep)}):
             actual_samples = pyro.sample("x", hmm).reshape(num_samples, duration * obs_dim)
     actual_loc, actual_scale, actual_corr = get_hmm_moments(actual_samples)
 
-    assert_close(actual_loc, expected_loc, atol=0.02, rtol=0.05)
-    assert_close(actual_scale, expected_scale, atol=0.02, rtol=0.05)
+    assert_close(actual_loc, expected_loc, atol=0.05, rtol=0.05)
+    assert_close(actual_scale, expected_scale, atol=0.05, rtol=0.05)
     assert_close(actual_corr, expected_corr, atol=0.01)

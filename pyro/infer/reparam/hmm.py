@@ -25,6 +25,7 @@ class LinearHMMReparam(Reparam):
     perform inference in the presence of non-Gaussian factors such as
     :meth:`~pyro.distributions.Stable`, :meth:`~pyro.distributions.StudentT` or
     :meth:`~pyro.distributions.LogNormal` , configure with
+    :class:`~pyro.infer.reparam.stable.StableReparam` ,
     :class:`~pyro.infer.reparam.stable.SymmetricStableReparam` , etc.  component
     reparameterizers for ``init``, ``trans``, and ``scale``. For example::
 
@@ -34,11 +35,11 @@ class LinearHMMReparam(Reparam):
             trans_dist=MultivariateNormal(torch.zeros(2), torch.eye(2)),
             obs_matrix=torch.eye(2),
             obs_dist=TransformedDistribution(
-                Stable(1.5,0,1.0).expand([2]).to_event(1),
+                Stable(1.5,-0.5,1.0).expand([2]).to_event(1),
                 ExpTransform()))
 
         rep = LinearHMMReparam(init=SymmetricStableReparam(),
-                               obs=SymmetricStableReparam())
+                               obs=StableReparam())
 
         with poutine.reparam(config={"hmm": rep}):
             pyro.sample("hmm", hmm, obs=data)
