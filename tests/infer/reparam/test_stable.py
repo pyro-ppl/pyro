@@ -3,13 +3,14 @@
 
 import pytest
 import torch
+from scipy.stats import ks_2samp
 from torch.autograd import grad
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
-from pyro.infer.reparam import LatentStableReparam, SymmetricStableReparam
+from pyro.infer.reparam import LatentStableReparam, StableReparam, SymmetricStableReparam
 from tests.common import assert_close
 
 
@@ -22,7 +23,8 @@ def get_moments(x):
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
-def test_stable(shape):
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, StableReparam])
+def test_stable(Reparam, shape):
     stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
     skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
@@ -37,10 +39,13 @@ def test_stable(shape):
     value = model()
     expected_moments = get_moments(value)
 
-    reparam_model = poutine.reparam(model, {"x": LatentStableReparam()})
+    reparam_model = poutine.reparam(model, {"x": Reparam()})
     trace = poutine.trace(reparam_model).get_trace()
-    assert isinstance(trace.nodes["x"]["fn"], MaskedDistribution)
-    assert isinstance(trace.nodes["x"]["fn"].base_dist, dist.Delta)
+    if Reparam is LatentStableReparam:
+        assert isinstance(trace.nodes["x"]["fn"], MaskedDistribution)
+        assert isinstance(trace.nodes["x"]["fn"].base_dist, dist.Delta)
+    else:
+        assert isinstance(trace.nodes["x"]["fn"], dist.Normal)
     trace.compute_log_prob()  # smoke test only
     value = trace.nodes["x"]["value"]
     actual_moments = get_moments(value)
@@ -84,3 +89,22 @@ def test_symmetric_stable(shape):
         assert_close(actual_grads[0], expected_grads[0], atol=0.2)
         assert_close(actual_grads[1], expected_grads[1], atol=0.1)
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
+
+
+@pytest.mark.parametrize("skew", [-1.0, -0.5, 0.0, 0.5, 1.0])
+@pytest.mark.parametrize("stability", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
+def test_distribution(stability, skew, Reparam):
+    if Reparam is SymmetricStableReparam and (skew != 0 or stability == 2):
+        pytest.skip()
+    if stability == 2 and skew in (-1, 1):
+        pytest.skip()
+
+    def model():
+        with pyro.plate("particles", 20000):
+            return pyro.sample("x", dist.Stable(stability, skew))
+
+    expected = model()
+    with poutine.reparam(config={"x": Reparam()}):
+        actual = model()
+    assert ks_2samp(expected, actual).pvalue > 0.05
