@@ -125,6 +125,11 @@ class StableReparam(Reparam):
     variable is sampled as in :class:`LatentStableReparam` , and the symmetric
     variable is decomposed as in :class:`SymmetricStableReparam` .
 
+    .. warning::
+        This reparameterizer is numerically unstable near ``stability=1``.
+        When validation is enabled this will raise a ``ValueError`` if
+        stability is close to 1.
+
     [1] V. M. Zolotarev (1986)
         "One-dimensional stable distributions"
     """
@@ -132,6 +137,9 @@ class StableReparam(Reparam):
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable)
+        if is_validation_enabled():
+            if (fn.stability - 1).abs().lt(0.01).any():
+                raise ValueError("StableReparam found stability near 1")
 
         # Strategy: Let X ~ S0(a,b,s,m) be the stable variable of interest.
         # 1. WLOG scale and shift so s=1 and m=0, additionally shifting to convert
@@ -176,12 +184,13 @@ class StableReparam(Reparam):
         # Differentiably transform.
         a = fn.stability
         z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
-        t = _standard_stable(a, one, tu, te, coords="S") * fn.skew.sign()
+        t = _standard_stable(a, one, tu, te, coords="S")
         a_inv = a.reciprocal()
         skew_abs = fn.skew.abs()
-        t_scale = skew_abs.pow(a_inv)
+        t_scale = skew_abs.pow(a_inv) * fn.skew.sign()
         s_scale = (1 - skew_abs).pow(a_inv)
-        loc = fn.loc + fn.scale * (t * t_scale - fn.skew * (math.pi / 2 * a).tan())
+        # FIXME The following line is discontinuous at a=1.
+        loc = fn.loc + fn.scale * (t * t_scale - fn.skew * torch.tan(math.pi / 2 * a))
         scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 

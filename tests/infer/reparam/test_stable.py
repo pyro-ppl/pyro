@@ -97,10 +97,11 @@ def test_symmetric_stable(shape):
 def test_distribution(stability, skew, Reparam):
     if Reparam is SymmetricStableReparam and skew != 0 or stability == 2:
         pytest.skip()
-    num_samples = 20000
+    if Reparam is StableReparam and stability == 1.0:
+        pytest.xfail(reason="numerical instability")
 
     def model():
-        with pyro.plate("particles", num_samples):
+        with pyro.plate("particles", 20000):
             return pyro.sample("x", dist.Stable(stability, skew))
 
     expected = model()

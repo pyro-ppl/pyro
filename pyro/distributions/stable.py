@@ -22,7 +22,8 @@ def _unsafe_standard_stable(alpha, beta, V, W, coords):
     # Differentiably transform noise via parameters.
     assert V.shape == W.shape
     inv_alpha = alpha.reciprocal()
-    b = beta * (math.pi / 2 * alpha).tan()
+    tan_half_pi_alpha = (math.pi / 2 * alpha).tan()
+    b = beta * tan_half_pi_alpha
     v = b.atan() + alpha * V
     Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
         * ((v - V).cos() / W).pow(inv_alpha - 1)
@@ -35,6 +36,8 @@ def _unsafe_standard_stable(alpha, beta, V, W, coords):
         return Z - b
     elif coords == "S":
         return Z
+    elif coords == "SA":
+        return Z - beta.sign() * beta.abs().pow(inv_alpha) * tan_half_pi_alpha
     else:
         raise ValueError("Unknown coords: {}".format(coords))
 
@@ -57,6 +60,10 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential, coords):
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
         return _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential, coords=coords)
+    if coords == "S":
+        # S coords are discontinuous, so interpolate instead in S0 coords.
+        Z = _standard_stable(alpha, beta, aux_uniform, aux_exponential, "S0")
+        return torch.where(alpha == 1, Z, Z + beta * (math.pi / 2 * alpha).tan())
 
     # Avoid the hole at alpha=1 by interpolating between pairs
     # of points at hole-RADIUS and hole+RADIUS.
@@ -76,7 +83,6 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential, coords):
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
     pairs = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_, coords=coords)
-    print("DEBUG pairs = {}".format(pairs))
     return (pairs * weights).sum(-1)
 
 
@@ -126,9 +132,11 @@ class Stable(TorchDistribution):
                        "loc": constraints.real}
     support = constraints.real
 
-    def __init__(self, stability, skew, scale=1.0, loc=0.0, validate_args=None):
+    def __init__(self, stability, skew, scale=1.0, loc=0.0, coords="S0", validate_args=None):
+        assert coords in ("S", "S0"), coords
         self.stability, self.skew, self.scale, self.loc = broadcast_all(
             stability, skew, scale, loc)
+        self.coords = coords
         super().__init__(self.loc.shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
@@ -136,6 +144,7 @@ class Stable(TorchDistribution):
         batch_shape = torch.Size(batch_shape)
         for name in self.arg_constraints:
             setattr(new, name, getattr(self, name).expand(batch_shape))
+        new.coords = self.coords
         super(Stable, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
@@ -152,5 +161,5 @@ class Stable(TorchDistribution):
             aux_exponential = new_empty(shape).exponential_()
 
         # Differentiably transform.
-        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential, coords="S0")
+        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential, coords=self.coords)
         return self.loc + self.scale * x
