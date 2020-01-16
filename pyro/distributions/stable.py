@@ -10,6 +10,10 @@ from torch.distributions.utils import broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
+def _atanh(x):
+    return 0.5 * (x.log1p() - (-x).log1p())
+
+
 def _unsafe_standard_stable(alpha, beta, V, W, coords):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
@@ -72,6 +76,7 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential, coords):
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
     pairs = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_, coords=coords)
+    print("DEBUG pairs = {}".format(pairs))
     return (pairs * weights).sum(-1)
 
 

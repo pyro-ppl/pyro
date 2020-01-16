@@ -68,7 +68,11 @@ def test_sample(alpha, beta):
 
 
 @pytest.mark.parametrize("beta", [-1.0, -0.5, 0.0, 0.5, 1.0])
-@pytest.mark.parametrize("alpha", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
+@pytest.mark.parametrize("alpha", [
+    0.1, 0.4, 0.8, 0.99,
+    0.999999, 1.000001,  # scipy sampler is buggy very close to 1
+    1.01, 1.3, 1.7, 2.0,
+])
 def test_sample_2(alpha, beta):
     num_samples = 10000
 
