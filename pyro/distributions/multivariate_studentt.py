@@ -50,8 +50,7 @@ class MultivariateStudentT(TorchDistribution):
     @lazy_property
     def precision_matrix(self):
         identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
-        scale_inv = identity.triangular_solve(self.scale_tril, upper=False).solution.transpose(-1, -2)
-        return torch.matmul(scale_inv.transpose(-1, -2), scale_inv)
+        return torch.cholesky_solve(identity, self.scale_tril)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MultivariateStudentT, _instance)
