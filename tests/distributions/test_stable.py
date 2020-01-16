@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import torch
 from scipy.integrate.quadpack import IntegrationWarning
-from scipy.stats import kstest, levy_stable
+from scipy.stats import ks_2samp, kstest, levy_stable
 
 import pyro.distributions as dist
 import pyro.distributions.stable
@@ -64,8 +64,31 @@ def test_sample(alpha, beta):
             pytest.xfail(reason="scipy.stats.levy_stable.cdf is unstable")
         return result
 
-    stat, pvalue = kstest(sampler, cdf, N=num_samples)
-    assert pvalue > 0.1, pvalue
+    assert kstest(sampler, cdf, N=num_samples).pvalue > 0.1
+
+
+@pytest.mark.parametrize("beta", [-1.0, -0.5, 0.0, 0.5, 1.0])
+@pytest.mark.parametrize("alpha", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
+def test_sample_2(alpha, beta):
+    num_samples = 10000
+
+    d = dist.Stable(alpha, beta)
+    # Temporarily increase radius to test hole-patching logic.
+    # Scipy doesn't handle values of alpha very close to 1.
+    try:
+        old = pyro.distributions.stable.RADIUS
+        pyro.distributions.stable.RADIUS = 0.02
+        actual = d.sample([num_samples])
+    finally:
+        pyro.distributions.stable.RADIUS = old
+    actual = d.sample([num_samples])
+    # Convert from Nolan's parametrization S^0 to scipy parametrization S.
+    if alpha != 1:
+        actual += beta * np.tan(np.pi / 2 * alpha)
+
+    expected = levy_stable.rvs(alpha, beta, size=num_samples)
+
+    assert ks_2samp(expected, actual).pvalue > 0.05
 
 
 @pytest.mark.parametrize("loc", [0, 1, -1, 2, 2])
