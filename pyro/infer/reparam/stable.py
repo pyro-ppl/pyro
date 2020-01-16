@@ -38,7 +38,7 @@ class LatentStableReparam(Reparam):
     """
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable)
+        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
         assert obs is None, "LatentStableReparam does not support observe statements"
 
         # Draw parameter-free noise.
@@ -82,7 +82,7 @@ class SymmetricStableReparam(Reparam):
     """
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable)
+        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
         if is_validation_enabled():
             if not (fn.skew == 0).all():
                 raise ValueError("SymmetricStableReparam found nonzero skew")
@@ -131,7 +131,7 @@ class StableReparam(Reparam):
 
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable)
+        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
 
         # Strategy: Let X ~ S0(a,b,s,m) be the stable variable of interest.
         # 1. WLOG scale and shift so s=1 and m=0, additionally shifting to convert
