@@ -184,13 +184,13 @@ class StableReparam(Reparam):
         # Differentiably transform.
         a = fn.stability
         z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
-        t = _standard_stable(a, one, tu, te, coords="S")
+        t = _standard_stable(a, one, tu, te, coords="S0")
         a_inv = a.reciprocal()
         skew_abs = fn.skew.abs()
         t_scale = skew_abs.pow(a_inv) * fn.skew.sign()
         s_scale = (1 - skew_abs).pow(a_inv)
         # FIXME The following line is discontinuous at a=1.
-        loc = fn.loc + fn.scale * (t * t_scale - fn.skew * torch.tan(math.pi / 2 * a))
+        loc = fn.loc + fn.scale * (t * t_scale + (t_scale - fn.skew) * torch.tan(math.pi / 2 * a))
         scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
