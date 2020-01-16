@@ -10,10 +10,6 @@ from torch.distributions.utils import broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
-def _atanh(x):
-    return 0.5 * (x.log1p() - (-x).log1p())
-
-
 def _unsafe_standard_stable(alpha, beta, V, W, coords):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
@@ -22,8 +18,7 @@ def _unsafe_standard_stable(alpha, beta, V, W, coords):
     # Differentiably transform noise via parameters.
     assert V.shape == W.shape
     inv_alpha = alpha.reciprocal()
-    tan_half_pi_alpha = (math.pi / 2 * alpha).tan()
-    b = beta * tan_half_pi_alpha
+    b = beta * (math.pi / 2 * alpha).tan()
     v = b.atan() + alpha * V
     Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
         * ((v - V).cos() / W).pow(inv_alpha - 1)
@@ -36,8 +31,6 @@ def _unsafe_standard_stable(alpha, beta, V, W, coords):
         return Z - b
     elif coords == "S":
         return Z
-    elif coords == "SA":
-        return Z - beta.sign() * beta.abs().pow(inv_alpha) * tan_half_pi_alpha
     else:
         raise ValueError("Unknown coords: {}".format(coords))
 
@@ -94,18 +87,21 @@ class Stable(TorchDistribution):
     required for continuity and differentiability. This corresponds to the
     notation :math:`S^0_\alpha(\beta,\sigma,\mu_0)` of [1], where
     :math:`\alpha` = stability, :math:`\beta` = skew, :math:`\sigma` = scale,
-    and :math:`\mu_0` = loc.
+    and :math:`\mu_0` = loc. To instead use the S parameterization as in scipy,
+    pass ``coords="S"``, but BEWARE this is discontinuous at ``stability=1``
+    and has poor geometry for inference.
 
     This implements a reparametrized sampler :meth:`rsample` , but does not
     implement :meth:`log_prob` . Inference can be performed using either
     likelihood-free algorithms such as
     :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
-    via the :func:`~pyro.poutine.handlers.reparam` handler with
-    :class:`~pyro.infer.reparam.stable.LatentStableReparam` e.g.::
+    via the :func:`~pyro.poutine.handlers.reparam` handler with one of the
+    reparameterizers :class:`~pyro.infer.reparam.stable.LatentStableReparam` ,
+    :class:`~pyro.infer.reparam.stable.SymmetricStableReparam` , or
+    :class:`~pyro.infer.reparam.stable.StableReparam` e.g.::
 
-        with poutine.reparam():
-            pyro.sample("x", Stable(stability, skew, scale, loc),
-                        infer={"reparam": LatentStableReparam()})
+        with poutine.reparam(config={"x": StableReparam()}):
+            pyro.sample("x", Stable(stability, skew, scale, loc))
 
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
@@ -122,8 +118,11 @@ class Stable(TorchDistribution):
     :param Tensor stability: Levy stability parameter :math:`\alpha\in(0,2]` .
     :param Tensor skew: Skewness :math:`\beta\in[-1,1]` .
     :param Tensor scale: Scale :math:`\sigma > 0` . Defaults to 1.
-    :param Tensor loc: Location :math:`\mu_0` in Nolan's parametrization [2].
+    :param Tensor loc: Location :math:`\mu_0` when using Nolan's S0
+        parametrization [2], or :math:`\mu` when using the S parameterization.
         Defaults to 0.
+    :param str coords: Either "S0" (default) to use Nolan's continuous S0
+        parametrization, or "S" to use the discontinuous parameterization.
     """
     has_rsample = True
     arg_constraints = {"stability": constraints.interval(0, 2),  # half-open (0, 2]
