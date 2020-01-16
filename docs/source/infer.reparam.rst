@@ -41,6 +41,15 @@ Discrete Cosine Transform
     :special-members: __call__
     :show-inheritance:
 
+StudentT Distributions
+----------------------
+.. automodule:: pyro.infer.reparam.studentt
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Stable Distributions
 --------------------
 .. automodule:: pyro.infer.reparam.stable
