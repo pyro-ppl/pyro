@@ -50,6 +50,15 @@ Stable Distributions
     :special-members: __call__
     :show-inheritance:
 
+Hidden Markov Models
+--------------------
+.. automodule:: pyro.infer.reparam.hmm
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Neural Transport
 ----------------
 .. automodule:: pyro.infer.reparam.neutra
