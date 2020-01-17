@@ -61,7 +61,7 @@ def main(args):
     mcmc.summary()
     vanilla_samples = mcmc.get_samples()['x'].detach().numpy()
 
-    adam = optim.Adam({'lr': 1e-3})
+    adam = optim.Adam({'lr': 1e-2})
     guide = AutoIAFNormal(dual_moon_model, num_flows=args.num_flows, hidden_dim=args.num_hidden)
     svi = SVI(dual_moon_model, guide, adam, Trace_ELBO())
     logging.info("Training  AutoIAFNormal guide...")
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     parser.add_argument('--num-warmup', nargs='?', default=1000, type=int)
     parser.add_argument('--num-flows', nargs='?', default=2, type=int)
     parser.add_argument('--num-hidden', nargs='?', default=10, type=int)
-    parser.add_argument('--num-iters', nargs='?', default=6000, type=int)
+    parser.add_argument('--num-iters', nargs='?', default=8000, type=int)
     args = parser.parse_args()
 
     main(args)
