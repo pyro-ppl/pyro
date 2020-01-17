@@ -12,6 +12,41 @@ from pyro.distributions import MultivariateStudentT
 from tests.common import assert_equal
 
 
+def random_mvt(df_shape, loc_shape, cov_shape, dim):
+    """
+    Generate a random MultivariateStudentT distribution for testing.
+    """
+    rank = dim + dim
+    df = torch.rand(df_shape).exp()
+    loc = torch.randn(loc_shape + (dim,))
+    cov = torch.randn(cov_shape + (dim, rank))
+    cov = cov.matmul(cov.transpose(-1, -2))
+    return MultivariateStudentT(df, loc, cov.cholesky())
+
+
+@pytest.mark.parametrize('df_shape', [
+    (), (2,), (3, 2),
+])
+@pytest.mark.parametrize('loc_shape', [
+    (), (2,), (3, 2),
+])
+@pytest.mark.parametrize('cov_shape', [
+    (), (2,), (3, 2),
+])
+@pytest.mark.parametrize('dim', [
+    1, 3, 5,
+])
+def test_shape(df_shape, loc_shape, cov_shape, dim):
+    mvt = random_mvt(df_shape, loc_shape, cov_shape, dim)
+    assert mvt.df.shape == mvt.batch_shape
+    assert mvt.loc.shape == mvt.batch_shape + mvt.event_shape
+    assert mvt.covariance_matrix.shape == mvt.batch_shape + mvt.event_shape * 2
+    assert mvt.scale_tril.shape == mvt.covariance_matrix.shape
+    assert mvt.precision_matrix.shape == mvt.covariance_matrix.shape
+
+    assert_equal(mvt.precision_matrix, mvt.covariance_matrix.inverse())
+
+
 @pytest.mark.parametrize("batch_shape", [
     (),
     (3, 2),
