@@ -38,6 +38,7 @@ def random_mvt(df_shape, loc_shape, cov_shape, dim):
 ])
 def test_shape(df_shape, loc_shape, cov_shape, dim):
     mvt = random_mvt(df_shape, loc_shape, cov_shape, dim)
+    mvt._unbroadcasted_scale_tril.requires_grad_()
     assert mvt.df.shape == mvt.batch_shape
     assert mvt.loc.shape == mvt.batch_shape + mvt.event_shape
     assert mvt.covariance_matrix.shape == mvt.batch_shape + mvt.event_shape * 2
@@ -45,6 +46,9 @@ def test_shape(df_shape, loc_shape, cov_shape, dim):
     assert mvt.precision_matrix.shape == mvt.covariance_matrix.shape
 
     assert_equal(mvt.precision_matrix, mvt.covariance_matrix.inverse())
+
+    # smoke test for precision backward
+    mvt.precision_matrix.sum().backward()
 
 
 @pytest.mark.parametrize("batch_shape", [

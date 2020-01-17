@@ -30,9 +30,13 @@ def random_mvn(loc_shape, cov_shape, dim):
 ])
 def test_shape(loc_shape, cov_shape, dim):
     mvn = random_mvn(loc_shape, cov_shape, dim)
+    mvn._unbroadcasted_scale_tril.requires_grad_()
     assert mvn.loc.shape == mvn.batch_shape + mvn.event_shape
     assert mvn.covariance_matrix.shape == mvn.batch_shape + mvn.event_shape * 2
     assert mvn.scale_tril.shape == mvn.covariance_matrix.shape
     assert mvn.precision_matrix.shape == mvn.covariance_matrix.shape
 
     assert_equal(mvn.precision_matrix, mvn.covariance_matrix.inverse())
+
+    # smoke test for precision backward
+    mvn.precision_matrix.sum().backward()
