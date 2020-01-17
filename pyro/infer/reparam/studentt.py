@@ -27,11 +27,11 @@ class StudentTReparam(Reparam):
 
         # Draw a sample that depends only on df.
         half_df = fn.df * 0.5
-        precision = pyro.sample("{}_precision".format(name),
-                                self._wrap(dist.Gamma(half_df, half_df), event_dim))
+        gamma = pyro.sample("{}_gamma".format(name),
+                            self._wrap(dist.Gamma(half_df, half_df), event_dim))
 
         # Construct a scaled Normal.
         loc = fn.loc
-        scale = fn.scale * precision.rsqrt()
+        scale = fn.scale * gamma.rsqrt()
         new_fn = self._wrap(dist.Normal(loc, scale), event_dim)
         return new_fn, obs
