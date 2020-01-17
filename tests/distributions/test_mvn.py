@@ -38,5 +38,4 @@ def test_shape(loc_shape, cov_shape, dim):
     assert_equal(mvn.precision_matrix, mvn.covariance_matrix.inverse())
 
     # smoke test for precision/log_prob backward
-    mvn.precision_matrix.sum().backward(retain_graph=True)
-    mvn.log_prob(torch.zeros(dim)).sum().backward()
+    (mvn.precision_matrix.sum() + mvn.log_prob(torch.zeros(dim)).sum()).backward()

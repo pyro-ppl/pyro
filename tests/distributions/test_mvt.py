@@ -48,8 +48,7 @@ def test_shape(df_shape, loc_shape, cov_shape, dim):
     assert_equal(mvt.precision_matrix, mvt.covariance_matrix.inverse())
 
     # smoke test for precision/log_prob backward
-    mvt.precision_matrix.sum().backward(retain_graph=True)
-    mvt.log_prob(torch.zeros(dim)).sum().backward()
+    (mvt.precision_matrix.sum() + mvt.log_prob(torch.zeros(dim)).sum()).backward()
 
 
 @pytest.mark.parametrize("batch_shape", [
