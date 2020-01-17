@@ -17,11 +17,12 @@ def random_mvt(df_shape, loc_shape, cov_shape, dim):
     Generate a random MultivariateStudentT distribution for testing.
     """
     rank = dim + dim
-    df = torch.rand(df_shape).exp()
-    loc = torch.randn(loc_shape + (dim,))
-    cov = torch.randn(cov_shape + (dim, rank))
+    df = torch.rand(df_shape, requires_grad=True).exp()
+    loc = torch.randn(loc_shape + (dim,), requires_grad=True)
+    cov = torch.randn(cov_shape + (dim, rank), requires_grad=True)
     cov = cov.matmul(cov.transpose(-1, -2))
-    return MultivariateStudentT(df, loc, cov.cholesky())
+    scale_tril = cov.cholesky()
+    return MultivariateStudentT(df, loc, scale_tril)
 
 
 @pytest.mark.parametrize('df_shape', [
@@ -38,7 +39,6 @@ def random_mvt(df_shape, loc_shape, cov_shape, dim):
 ])
 def test_shape(df_shape, loc_shape, cov_shape, dim):
     mvt = random_mvt(df_shape, loc_shape, cov_shape, dim)
-    mvt._unbroadcasted_scale_tril.requires_grad_()
     assert mvt.df.shape == mvt.batch_shape
     assert mvt.loc.shape == mvt.batch_shape + mvt.event_shape
     assert mvt.covariance_matrix.shape == mvt.batch_shape + mvt.event_shape * 2
@@ -47,8 +47,9 @@ def test_shape(df_shape, loc_shape, cov_shape, dim):
 
     assert_equal(mvt.precision_matrix, mvt.covariance_matrix.inverse())
 
-    # smoke test for precision backward
-    mvt.precision_matrix.sum().backward()
+    # smoke test for precision/log_prob backward
+    mvt.precision_matrix.sum().backward(retain_graph=True)
+    mvt.log_prob(torch.zeros(dim)).sum().backward()
 
 
 @pytest.mark.parametrize("batch_shape", [

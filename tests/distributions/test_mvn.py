@@ -13,8 +13,8 @@ def random_mvn(loc_shape, cov_shape, dim):
     Generate a random MultivariateNormal distribution for testing.
     """
     rank = dim + dim
-    loc = torch.randn(loc_shape + (dim,))
-    cov = torch.randn(cov_shape + (dim, rank))
+    loc = torch.randn(loc_shape + (dim,), requires_grad=True)
+    cov = torch.randn(cov_shape + (dim, rank), requires_grad=True)
     cov = cov.matmul(cov.transpose(-1, -2))
     return MultivariateNormal(loc, cov)
 
@@ -30,7 +30,6 @@ def random_mvn(loc_shape, cov_shape, dim):
 ])
 def test_shape(loc_shape, cov_shape, dim):
     mvn = random_mvn(loc_shape, cov_shape, dim)
-    mvn._unbroadcasted_scale_tril.requires_grad_()
     assert mvn.loc.shape == mvn.batch_shape + mvn.event_shape
     assert mvn.covariance_matrix.shape == mvn.batch_shape + mvn.event_shape * 2
     assert mvn.scale_tril.shape == mvn.covariance_matrix.shape
@@ -38,5 +37,6 @@ def test_shape(loc_shape, cov_shape, dim):
 
     assert_equal(mvn.precision_matrix, mvn.covariance_matrix.inverse())
 
-    # smoke test for precision backward
-    mvn.precision_matrix.sum().backward()
+    # smoke test for precision/log_prob backward
+    mvn.precision_matrix.sum().backward(retain_graph=True)
+    mvn.log_prob(torch.zeros(dim)).sum().backward()
