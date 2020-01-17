@@ -9,6 +9,7 @@ examples/*/results
 examples/*/raw
 examples/dmm/*.pkl
 examples/*.csv
+examples/*.pdf
 examples/mixed_hmm/*csv
 pyro/contrib/examples/processed
 pyro/contrib/examples/results

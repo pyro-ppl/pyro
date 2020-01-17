@@ -674,7 +674,8 @@ class AutoIAFNormal(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     """
 
-    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median):
+    def __init__(self, model, num_flows=1, hidden_dim=None, init_loc_fn=init_to_median):
+        self.num_flows = num_flows
         self.hidden_dim = hidden_dim
         self.arn = None
         super().__init__(model, init_loc_fn=init_loc_fn)
@@ -689,7 +690,8 @@ class AutoIAFNormal(AutoContinuous):
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
         if self.arn is None:
-            self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
+            hidden_dims = [self.hidden_dim for _ in range(self.num_flows)]
+            self.arn = AutoRegressiveNN(self.latent_dim, hidden_dims)
 
         iaf = transforms.AffineAutoregressive(self.arn)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
