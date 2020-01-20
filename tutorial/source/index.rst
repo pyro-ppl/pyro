@@ -70,6 +70,7 @@ Welcome to Pyro Examples and Tutorials!
    dkl
    einsum
    smcfilter
+   timeseries
 
 
 Indices and tables
