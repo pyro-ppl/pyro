@@ -385,9 +385,11 @@ class MCMC(object):
         # If transforms is not explicitly provided, infer automatically using
         # model args, kwargs.
         if self.transforms is None:
-            if hasattr(self.kernel, 'transforms'):  # If the kernel has transforms
-                if self.kernel.transforms is not None:  # and they are not None
-                    self.transforms = self.kernel.transforms # then use the kernels transforms
+            if hasattr(self.kernel, 'transforms'):
+                # Use kernel transforms if not `None`
+                if self.kernel.transforms is not None:  
+                    self.transforms = self.kernel.transforms 
+                # Set default value
                 else:
                     self.transforms = {}
             elif self.kernel.model:  # else if the kernel doesn't define transforms, try using the model
