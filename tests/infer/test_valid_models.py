@@ -197,6 +197,47 @@ def test_variable_clash_in_guide_error(Elbo):
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
+@pytest.mark.parametrize("has_rsample", [False, True, 0, 1, 0.9])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
+def test_set_has_rsample_ok(has_rsample, Elbo):
+
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1))
+        loc = (z * 100).clamp(min=0, max=1)  # sparse gradients
+        pyro.sample("x", dist.Normal(loc, 1), obs=torch.tensor(0.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        pyro.sample("z", dist.Normal(loc, 1).has_rsample_(has_rsample))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+    elif Elbo is TraceTMC_ELBO:
+        guide = config_enumerate(guide, num_samples=2)
+
+    assert_ok(model, guide, Elbo(strict_enumeration_warning=False))
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
+def test_not_has_rsample_ok(Elbo):
+
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1))
+        p = z.round().clamp(min=0.2, max=0.8)  # discontinuous
+        pyro.sample("x", dist.Bernoulli(p), obs=torch.tensor(0.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        pyro.sample("z", dist.Normal(loc, 1).has_rsample_(False))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+    elif Elbo is TraceTMC_ELBO:
+        guide = config_enumerate(guide, num_samples=2)
+
+    assert_ok(model, guide, Elbo(strict_enumeration_warning=False))
+
+
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_iplate_ok(subsample_size, Elbo):

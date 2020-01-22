@@ -83,6 +83,10 @@ class Distribution(object, metaclass=ABCMeta):
         distributions should override this method to compute correct
         `.score_function` and `.entropy_term` parts.
 
+        Setting ``.has_rsample`` on a distribution instance will determine
+        whether inference engines use reparameterized samplers or the score
+        function estimator.
+
         :param torch.Tensor x: A single value or batch of values.
         :return: A `ScoreParts` object containing parts of the ELBO estimator.
         :rtype: ScoreParts
@@ -112,3 +116,21 @@ class Distribution(object, metaclass=ABCMeta):
         :rtype: iterator
         """
         raise NotImplementedError("Support not implemented for {}".format(type(self)))
+
+    def has_rsample_(self, value):
+        """
+        Force reparameterized or detached sampling on a single distribution
+        instance. This sets the ``.has_rsample`` attribute in-place.
+
+        This is useful to instruct inference algorithms to avoid
+        reparameterized gradients for variables that discontinuously determine
+        downstream control flow.
+
+        :param bool value: Whether samples be pathwise differentiable.
+        :return: self
+        :rtype: Distribution
+        """
+        if not (value is True or value is False):
+            raise ValueError("Expected value in {False,True}, actual {}".format(value))
+        self.has_rsample = value
+        return self
