@@ -101,16 +101,16 @@ class MaskedMixture(TorchDistribution):
             return type(self)(mask, component0, component1)
 
     def sample(self, sample_shape=torch.Size()):
-        mask = self.mask.expand(sample_shape + self.batch_shape) if sample_shape else self.mask
-        mask = mask.reshape(mask.shape + (1,) * len(self.event_shape))
+        mask = self.mask.reshape(self.mask.shape + (1,) * self.event_dim)
+        mask = mask.expand(sample_shape + self.shape())
         result = torch.where(mask,
                              self.component1.sample(sample_shape),
                              self.component0.sample(sample_shape))
         return result
 
     def rsample(self, sample_shape=torch.Size()):
-        mask = self.mask.expand(sample_shape + self.batch_shape) if sample_shape else self.mask
-        mask = mask.reshape(mask.shape + (1,) * len(self.event_shape))
+        mask = self.mask.reshape(self.mask.shape + (1,) * self.event_dim)
+        mask = mask.expand(sample_shape + self.shape())
         result = torch.where(mask,
                              self.component1.rsample(sample_shape),
                              self.component0.rsample(sample_shape))
