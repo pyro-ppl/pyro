@@ -84,8 +84,8 @@ class Distribution(object, metaclass=ABCMeta):
         `.score_function` and `.entropy_term` parts.
 
         Setting ``.has_rsample`` on a distribution instance will determine
-        whether inference engines use reparameterized samplers or the score
-        function estimator.
+        whether inference engines like :class:`~pyro.infer.svi.SVI` use
+        reparameterized samplers or the score function estimator.
 
         :param torch.Tensor x: A single value or batch of values.
         :return: A `ScoreParts` object containing parts of the ELBO estimator.
@@ -126,7 +126,7 @@ class Distribution(object, metaclass=ABCMeta):
         reparameterized gradients for variables that discontinuously determine
         downstream control flow.
 
-        :param bool value: Whether samples be pathwise differentiable.
+        :param bool value: Whether samples will be pathwise differentiable.
         :return: self
         :rtype: Distribution
         """

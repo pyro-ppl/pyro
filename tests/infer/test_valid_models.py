@@ -201,6 +201,9 @@ def test_variable_clash_in_guide_error(Elbo):
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_set_has_rsample_ok(has_rsample, Elbo):
 
+    # This model has sparse gradients, so users may want to disable
+    # reparametrized sampling to reduce variance of gradient estimates.
+    # However both versions should be correct, i.e. with or without has_rsample.
     def model():
         z = pyro.sample("z", dist.Normal(0, 1))
         loc = (z * 100).clamp(min=0, max=1)  # sparse gradients
