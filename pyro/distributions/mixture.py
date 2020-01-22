@@ -101,15 +101,19 @@ class MaskedMixture(TorchDistribution):
             return type(self)(mask, component0, component1)
 
     def sample(self, sample_shape=torch.Size()):
-        mask = self.mask.expand(sample_shape + self.batch_shape) if sample_shape else self.mask
-        result = self.component0.sample(sample_shape)
-        result[mask] = self.component1.sample(sample_shape)[mask]
+        mask = self.mask.reshape(self.mask.shape + (1,) * self.event_dim)
+        mask = mask.expand(sample_shape + self.shape())
+        result = torch.where(mask,
+                             self.component1.sample(sample_shape),
+                             self.component0.sample(sample_shape))
         return result
 
     def rsample(self, sample_shape=torch.Size()):
-        mask = self.mask.expand(sample_shape + self.batch_shape) if sample_shape else self.mask
-        result = self.component0.rsample(sample_shape)
-        result[mask] = self.component1.rsample(sample_shape)[mask]
+        mask = self.mask.reshape(self.mask.shape + (1,) * self.event_dim)
+        mask = mask.expand(sample_shape + self.shape())
+        result = torch.where(mask,
+                             self.component1.rsample(sample_shape),
+                             self.component0.rsample(sample_shape))
         return result
 
     def log_prob(self, value):
@@ -122,8 +126,9 @@ class MaskedMixture(TorchDistribution):
         mask = self.mask
         if mask.shape != mask_shape:
             mask = mask.expand(mask_shape)
-        result = self.component0.log_prob(value)
-        result[mask] = self.component1.log_prob(value)[mask]
+        result = torch.where(mask,
+                             self.component1.log_prob(value),
+                             self.component0.log_prob(value))
         return result
 
     @lazy_property
