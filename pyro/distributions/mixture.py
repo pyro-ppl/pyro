@@ -102,6 +102,7 @@ class MaskedMixture(TorchDistribution):
 
     def sample(self, sample_shape=torch.Size()):
         mask = self.mask.expand(sample_shape + self.batch_shape) if sample_shape else self.mask
+        mask = mask.reshape(mask.shape + (1,) * len(self.event_shape))
         result = torch.where(mask,
                              self.component1.sample(sample_shape),
                              self.component0.sample(sample_shape))
