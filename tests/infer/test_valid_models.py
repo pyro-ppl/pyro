@@ -197,7 +197,7 @@ def test_variable_clash_in_guide_error(Elbo):
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
-@pytest.mark.parametrize("has_rsample", [False, True, 0, 1, 0.9])
+@pytest.mark.parametrize("has_rsample", [False, True])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_set_has_rsample_ok(has_rsample, Elbo):
 
