@@ -68,7 +68,7 @@ class NeuTraReparam(Reparam):
                 raise ValueError("NeuTraReparam only supports guides whose posteriors are "
                                  "TransformedDistributions but got a posterior of type {}"
                                  .format(type(posterior)))
-            self.transform = dist.transforms.ComposeTransform(posterior.transforms)
+            self.transform = self.guide.transform
             z_unconstrained = pyro.sample("{}_shared_latent".format(name),
                                           posterior.base_dist.mask(False))
 

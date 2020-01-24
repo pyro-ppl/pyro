@@ -24,7 +24,7 @@ def test_neals_funnel_smoke():
     for _ in range(1000):
         svi.step()
 
-    neutra = NeuTraReparam(guide)
+    neutra = NeuTraReparam(guide.requires_grad_(False))
     model = neutra.reparam(model)
     nuts = NUTS(model)
     mcmc = MCMC(nuts, num_samples=50, warmup_steps=50)

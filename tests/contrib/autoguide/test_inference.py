@@ -11,7 +11,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.infer.autoguide import (AutoDiagonalNormal, AutoLaplaceApproximation,
+from pyro.infer.autoguide import (AutoDiagonalNormal, AutoIAFNormal, AutoLaplaceApproximation,
                                   AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO
 from tests.common import assert_equal
@@ -142,7 +142,7 @@ def test_auto_transform(auto_class):
                  msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoIAFNormal, AutoMultivariateNormal,
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
 @pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_dirichlet(auto_class, Elbo):
@@ -164,7 +164,11 @@ def test_auto_dirichlet(auto_class, Elbo):
         assert np.isfinite(loss), loss
 
     expected_mean = posterior / posterior.sum()
-    actual_mean = biject_to(constraints.simplex)(guide.loc)
+    if auto_class == AutoIAFNormal:
+        loc = guide.transform(torch.zeros(guide.latent_dim))
+    else:
+        loc = guide.loc
+    actual_mean = biject_to(constraints.simplex)(loc)
     assert_equal(actual_mean, expected_mean, prec=0.2, msg=''.join([
         '\nexpected {}'.format(expected_mean.detach().cpu().numpy()),
         '\n  actual {}'.format(actual_mean.detach().cpu().numpy())]))
