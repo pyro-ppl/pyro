@@ -252,7 +252,6 @@ class MaskedDistribution(TorchDistribution):
     arg_constraints = {}
 
     def __init__(self, base_dist, mask):
-        self.base_dist = base_dist
         if isinstance(mask, bool):
             self._mask = mask
         else:
@@ -262,6 +261,7 @@ class MaskedDistribution(TorchDistribution):
             if base_dist.batch_shape != batch_shape:
                 base_dist = base_dist.expand(batch_shape)
             self._mask = mask.bool()
+        self.base_dist = base_dist
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
 
 
