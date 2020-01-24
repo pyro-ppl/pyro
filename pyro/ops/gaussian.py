@@ -125,6 +125,17 @@ class Gaussian:
         result = (value * result).sum(-1)
         return result + self.log_normalizer
 
+    def rsample(self, sample_shape=torch.Size()):
+        """
+        Reparameterized sampler.
+        """
+        P_chol = self.precision.cholesky()
+        loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
+        shape = sample_shape + self.batch_shape + (self.dim(), 1)
+        noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
+        noise = noise.triangular_solve(P_chol, upper=False, transpose=True).solution.squeeze(-1)
+        return loc + noise
+
     def condition(self, value):
         """
         Condition this Gaussian on a trailing subset of its state.
