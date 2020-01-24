@@ -256,11 +256,14 @@ class MaskedDistribution(TorchDistribution):
         if isinstance(mask, bool):
             self._mask = mask
         else:
-            if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
-                raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
-                                 "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
+            batch_shape = broadcast_shape(mask.shape, base_dist.batch_shape)
+            if mask.shape != batch_shape:
+                mask = mask.expand(batch_shape)
+            if base_dist.batch_shape != batch_shape:
+                base_dist = base_dist.expand(batch_shape)
             self._mask = mask.bool()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MaskedDistribution, _instance)
