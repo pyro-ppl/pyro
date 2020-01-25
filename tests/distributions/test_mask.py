@@ -6,6 +6,7 @@ import torch
 from torch import tensor
 from torch.distributions import kl_divergence
 
+from pyro.distributions.util import broadcast_shape
 from pyro.distributions.torch import Bernoulli, Normal
 from pyro.distributions.util import scale_and_mask
 from tests.common import assert_equal
@@ -72,19 +73,20 @@ def test_mask_type(mask):
         assert_equal(a, e)
 
 
-@pytest.mark.parametrize('batch_shape,mask_shape', [
-    ([], [1]),
-    ([], [2]),
-    ([1], [2]),
-    ([2], [3]),
-    ([2], [1, 1]),
-    ([2, 1], [2]),
-])
-def test_mask_invalid_shape(batch_shape, mask_shape):
-    dist = Bernoulli(0.1).expand_by(batch_shape)
-    mask = checker_mask(mask_shape)
-    with pytest.raises(ValueError):
-        dist.mask(mask)
+@pytest.mark.parametrize("event_shape", [(), (4,)])
+@pytest.mark.parametrize("dist_shape", [(), (3,), (2, 1), (2, 3)])
+@pytest.mark.parametrize("mask_shape", [(), (3,), (2, 1), (2, 3)])
+def test_broadcast(event_shape, dist_shape, mask_shape):
+    mask = torch.empty(torch.Size(mask_shape)).bernoulli_(0.5).bool()
+    base_dist = Normal(torch.zeros(dist_shape + event_shape), 1.)
+    base_dist = base_dist.to_event(len(event_shape))
+    assert base_dist.batch_shape == dist_shape
+    assert base_dist.event_shape == event_shape
+
+    d = base_dist.mask(mask)
+    d_shape = broadcast_shape(mask.shape, base_dist.batch_shape)
+    assert d.batch_shape == d_shape
+    assert d.event_shape == event_shape
 
 
 def test_kl_divergence():
