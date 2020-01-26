@@ -3,7 +3,6 @@
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
@@ -111,7 +110,7 @@ def _sequential_gaussian_filter_sample(init, trans, sample_shape):
 
     # Forward filter, similar to _sequential_gaussian_tensordot().
     tape = []
-    shape = trans.batch_shape[:-1]  # trans may be smaller than init, for efficiency
+    shape = trans.batch_shape[:-1]  # Note trans may be unbroadcasted.
     gaussian = trans
     while gaussian.batch_shape[-1] > 1:
         time = gaussian.batch_shape[-1]
@@ -485,12 +484,16 @@ class GaussianHMM(TorchDistribution):
         new = self._get_checked_instance(GaussianHMM)
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
-        batch_shape = broadcast_shape(self.batch_shape, likelihood.batch_shape[:-1])
-        new._init = self._init if batch_shape == self.batch_shape else self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs + mvn_to_gaussian(likelihood).event_pad(left=self.hidden_dim)
 
-        super(GaussianHMM, new).__init__(self.batch_shape, self.event_shape, validate_args=False)
+        # To save computation in _sequential_gaussian_tensordot(), we expand
+        # only _init, which is applied only after
+        # _sequential_gaussian_tensordot().
+        batch_shape = torch.Size(broadcast_shape(self.batch_shape, likelihood.batch_shape[:-1]))
+        new._init = self._init if batch_shape == self.batch_shape else self._init.expand(batch_shape)
+
+        super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new
 
