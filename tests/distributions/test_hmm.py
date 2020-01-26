@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 import operator
 from functools import reduce
 
@@ -21,6 +22,8 @@ from pyro.ops.indexing import Vindex
 from tests.common import assert_close
 from tests.ops.gamma_gaussian import assert_close_gamma_gaussian, random_gamma, random_gamma_gaussian
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
+
+logger = logging.getLogger(__name__)
 
 
 def check_expand(old_dist, old_data):
@@ -329,6 +332,7 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
     obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim))
     obs_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
+    like_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
@@ -349,11 +353,13 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     #    init | H
     #   trans | H H H H            H = hidden
     #     obs |   H H H O O O      O = observed
+    #    like |         O O O
     # and then combine these using gaussian_tensordot().
     T = num_steps
     init = mvn_to_gaussian(init_dist)
     trans = matrix_and_mvn_to_gaussian(trans_mat, trans_dist)
     obs = matrix_and_mvn_to_gaussian(obs_mat, obs_mvn)
+    like = mvn_to_gaussian(like_dist)
 
     unrolled_trans = reduce(operator.add, [
         trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim)
@@ -361,6 +367,10 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     ])
     unrolled_obs = reduce(operator.add, [
         obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim())
+        for t in range(T)
+    ])
+    unrolled_like = reduce(operator.add, [
+        like[..., t].event_pad(left=t * obs_dim, right=(T - t - 1) * obs_dim)
         for t in range(T)
     ])
     # Permute obs from HOHOHO to HHHOOO.
@@ -377,26 +387,31 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     expected_log_prob = logp.log_density(unrolled_data)
     assert_close(actual_log_prob, expected_log_prob)
 
-    # Test mean and covariance.
     if batch_shape or sample_shape:
         return
-    with torch.no_grad():
-        num_samples = 100000
-        samples = d.sample([num_samples]).reshape(num_samples, T * obs_dim)
-        actual_mean = samples.mean(0)
-        delta = samples - actual_mean
-        actual_cov = (delta.unsqueeze(-1) * delta.unsqueeze(-2)).mean(0)
-        actual_scale = actual_cov.diagonal(dim1=-2, dim2=-1).sqrt()
-        actual_corr = actual_cov / (actual_scale.unsqueeze(-1) * actual_scale.unsqueeze(-2))
 
-        expected_cov = logp.precision.cholesky().cholesky_inverse()
-        expected_mean = expected_cov.matmul(logp.info_vec.unsqueeze(-1)).squeeze(-1)
-        expected_scale = expected_cov.diagonal(dim1=-2, dim2=-1).sqrt()
-        expected_corr = expected_cov / (expected_scale.unsqueeze(-1) * expected_scale.unsqueeze(-2))
+    # Test mean and covariance.
+    prior = "prior", d, logp
+    posterior = "posterior", d.posterior(like_dist), logp + unrolled_like
+    for name, d, g in [prior, posterior]:
+        logging.info("testing {} moments".format(name))
+        with torch.no_grad():
+            num_samples = 100000
+            samples = d.sample([num_samples]).reshape(num_samples, T * obs_dim)
+            actual_mean = samples.mean(0)
+            delta = samples - actual_mean
+            actual_cov = (delta.unsqueeze(-1) * delta.unsqueeze(-2)).mean(0)
+            actual_std = actual_cov.diagonal(dim1=-2, dim2=-1).sqrt()
+            actual_corr = actual_cov / (actual_std.unsqueeze(-1) * actual_std.unsqueeze(-2))
 
-        assert_close(actual_mean, expected_mean, atol=0.02, rtol=0.02)
-        assert_close(actual_scale, expected_scale, atol=0.02, rtol=0.02)
-        assert_close(actual_corr, expected_corr, atol=0.01)
+            expected_cov = g.precision.cholesky().cholesky_inverse()
+            expected_mean = expected_cov.matmul(g.info_vec.unsqueeze(-1)).squeeze(-1)
+            expected_std = expected_cov.diagonal(dim1=-2, dim2=-1).sqrt()
+            expected_corr = expected_cov / (expected_std.unsqueeze(-1) * expected_std.unsqueeze(-2))
+
+            assert_close(actual_mean, expected_mean, atol=0.05, rtol=0.02)
+            assert_close(actual_std, expected_std, atol=0.05, rtol=0.02)
+            assert_close(actual_corr, expected_corr, atol=0.01)
 
 
 @pytest.mark.parametrize('obs_dim', [1, 2, 3])
