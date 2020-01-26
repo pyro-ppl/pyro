@@ -8,6 +8,7 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
+from tests.common import assert_equal
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -286,3 +287,27 @@ class TransformTests(TestCase):
     def test_dct_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, T.DiscreteCosineTransform())
+
+
+@pytest.mark.parametrize('transform', [
+    T.ExpTransform(cache_size=1),
+    T.affine_autoregressive(input_dim=2),
+    T.block_autoregressive(input_dim=2),
+])
+def test_transform_backward(transform):
+    x = torch.tensor([1., 2.], requires_grad=True)
+    transforms = (transform,) if isinstance(transform, T.BlockAutoregressive) else (transform, transform.inv)
+    for t in transforms:
+        y1 = t(x)
+        y2 = t(x)
+        # cache works as expected
+        assert y1 is y2
+        y1_grad = torch.autograd.grad(y1.sum(), x)
+        y2 = t(x)
+        # assert cache cleared after call to backward
+        # second grad call should not throw:
+        # "RuntimeError: Trying to backward through the graph a second time"
+        assert y1 is not y2
+        y2_grad = torch.autograd.grad(y2.sum(), x)
+        assert_equal(y1, y2)
+        assert_equal(y1_grad, y2_grad)

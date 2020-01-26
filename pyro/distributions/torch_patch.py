@@ -33,6 +33,49 @@ def patch_dependency(target, root_module=torch):
     return decorator
 
 
+# See: tests.distributions.transforms.test_transforms.py::test_transform_backward
+# TODO: should be moved to PyTorch if this is a reasonable pattern
+@patch_dependency('torch.distributions.transforms.Transform.__call__')
+def _Transform__call__(self, x):
+    if self._cache_size == 0:
+        return self._call(x)
+    x_old, y_old = self._cached_x_y
+    if x is x_old:
+        return y_old
+    y = self._call(x)
+
+    if self._cache_size > 0:
+        # unset cached value after call to backward
+        def _hook(_):
+            self._cached_x_y = None, None
+
+        y.register_hook(_hook)
+    self._cached_x_y = x, y
+    return y
+
+
+@patch_dependency('torch.distributions.transforms.Transform._inv_call')
+def _Transform_inv_call(self, y):
+    """
+    Inverts the transform `y => x`.
+    """
+    if self._cache_size == 0:
+        return self._inverse(y)
+    x_old, y_old = self._cached_x_y
+    if y is y_old:
+        return x_old
+    x = self._inverse(y)
+
+    if self._cache_size > 0:
+        # unset cached value after call to backward
+        def _hook(_):
+            self._cached_x_y = None, None
+
+        x.register_hook(_hook)
+    self._cached_x_y = x, y
+    return x
+
+
 # TODO: Move upstream to allow for pickle serialization of transforms
 @patch_dependency('torch.distributions.transforms.Transform.__getstate__')
 def _Transform__getstate__(self):
