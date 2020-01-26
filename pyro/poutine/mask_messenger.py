@@ -3,6 +3,7 @@
 
 import torch
 
+from pyro.distributions.torch_distribution import MaskedDistribution
 from pyro.util import ignore_jit_warnings
 
 from .messenger import Messenger
