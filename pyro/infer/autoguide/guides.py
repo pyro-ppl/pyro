@@ -660,17 +660,18 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoNormalizingFlow(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
-    distribution transformed via one of the normalizing flows in
-    :mod:`~pyro.distributions.transforms`to construct a guide over the entire
+    distribution transformed via a sequence of bijective transforms
+    (:mod:`~pyro.distributions.transforms`) to construct a guide over the entire
     latent space. The guide does not depend on the model's ``*args, **kwargs``.
 
     Usage::
 
-        guide = AutoNormalizingFlow(model, 2, affine_autoregressive)
+        guide = AutoNormalizingFlow(model, affine_autoregressive, num_transforms=2)
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
-    :param num_flows: number of normalizing flows
+    :param num_transforms: number of times the transform from `init_transform_fn`
+        is repeated.
     :param init_transform_fn: a callable which when provided with the latent
         dimension and additional keyword arguments (`init_transform_kwargs`)
         returns an instance of
@@ -681,12 +682,12 @@ class AutoNormalizingFlow(AutoContinuous):
         `init_transform_fn`.
     """
 
-    def __init__(self, model, num_flows, init_transform_fn, init_loc_fn=init_to_median,
-                 **init_transform_kwargs):
-        self.num_flows = num_flows
-        self.transform = None
+    def __init__(self, model, init_transform_fn, init_loc_fn=init_to_median,
+                 num_transforms=1, **init_transform_kwargs):
         self._init_transform_fn = init_transform_fn
         self._init_transform_kwargs = init_transform_kwargs
+        self.transform = None
+        self.num_transforms = num_transforms
         super().__init__(model, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
@@ -694,11 +695,9 @@ class AutoNormalizingFlow(AutoContinuous):
         Returns a diagonal Normal posterior distribution transformed by
         :class:`~pyro.distributions.torch_tranform.TransformModule`.
         """
-        if self.latent_dim == 1:
-            raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.transform is None:
             ts = []
-            for _ in range(self.num_flows):
+            for _ in range(self.num_transforms):
                 ts.append(self._init_transform_fn(self.latent_dim, **self._init_transform_kwargs))
             self.transform = ComposeTransformModule(ts)
         flow_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), self.transform)
@@ -721,11 +720,13 @@ class AutoIAFNormal(AutoNormalizingFlow):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+    :param num_transforms: number of instances of
+        :class:`~pyro.distributions.transforms.AffineAutoregressive` applied in series.
     """
 
-    def __init__(self, model, num_flows=1, hidden_dim=None, init_loc_fn=init_to_median):
-        super().__init__(model, num_flows=num_flows, init_transform_fn=affine_autoregressive,
-                         init_loc_fn=init_loc_fn, hidden_dims=hidden_dim)
+    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median, num_transforms=1):
+        super().__init__(model, init_transform_fn=affine_autoregressive, init_loc_fn=init_loc_fn,
+                         hidden_dims=hidden_dim, num_transforms=num_transforms)
 
 
 class AutoLaplaceApproximation(AutoContinuous):

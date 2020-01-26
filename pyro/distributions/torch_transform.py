@@ -21,8 +21,8 @@ class ComposeTransformModule(torch.distributions.ComposeTransform, torch.nn.Modu
     """
     This allows us to use a list of `TransformModule` in the same way as
     :class:`~torch.distributions.transform.ComposeTransform`. This is needed
-    so that transform parameters are automatically  registered by Pyro's param
-    store when used in `~pyro.nn.module.PyroModule` instances.
+    so that transform parameters are automatically registered by Pyro's param
+    store when used in :class:`~pyro.nn.module.PyroModule` instances.
     """
     def __init__(self, parts):
         super(ComposeTransformModule, self).__init__(parts)
