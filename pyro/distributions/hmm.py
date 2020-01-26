@@ -90,27 +90,34 @@ def _sequential_gaussian_tensordot(gaussian):
     return gaussian[..., 0]
 
 
-def _sequential_gaussian_filter_sample(gaussian, sample_shape):
+def _is_subshape(x, y):
+    return broadcast_shape(x, y) == y
+
+
+def _sequential_gaussian_filter_sample(init, trans, sample_shape):
     """
     Draws a reparameterized sample from a Markov product of Gaussians via
-    parallel-scan forward filter backward sample.
+    parallel-scan forward-filter backward-sample.
     """
-    assert isinstance(gaussian, Gaussian)
-    assert gaussian.dim() % 2 == 0, "dim is not even"
-    batch_shape = gaussian.batch_shape[:-1]
-    state_dim = gaussian.dim() // 2
-    device = gaussian.precision.device
+    assert isinstance(init, Gaussian)
+    assert isinstance(trans, Gaussian)
+    assert trans.dim() == 2 * init.dim()
+    assert _is_subshape(trans.batch_shape[:-1], init.batch_shape)
+    state_dim = trans.dim() // 2
+    device = trans.precision.device
     perm = torch.cat([torch.arange(1 * state_dim, 2 * state_dim, device=device),
                       torch.arange(0 * state_dim, 1 * state_dim, device=device),
                       torch.arange(2 * state_dim, 3 * state_dim, device=device)])
 
     # Forward filter, similar to _sequential_gaussian_tensordot().
     tape = []
+    shape = trans.batch_shape[:-1]  # trans may be smaller than init, for efficiency
+    gaussian = trans
     while gaussian.batch_shape[-1] > 1:
         time = gaussian.batch_shape[-1]
         even_time = time // 2 * 2
         even_part = gaussian[..., :even_time]
-        x_y = even_part.reshape(batch_shape + (even_time // 2, 2))
+        x_y = even_part.reshape(shape + (even_time // 2, 2))
         x, y = x_y[..., 0], x_y[..., 1]
         x = x.event_pad(right=state_dim)
         y = y.event_pad(left=state_dim)
@@ -120,45 +127,43 @@ def _sequential_gaussian_filter_sample(gaussian, sample_shape):
         if time > even_time:
             contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
         gaussian = contracted
+    gaussian = gaussian[..., 0] + init.event_pad(right=state_dim)
 
     # Backward sample.
-    shape = sample_shape + batch_shape
+    shape = sample_shape + init.batch_shape
     result = gaussian.rsample(sample_shape).reshape(shape + (2, state_dim))
     for joint in reversed(tape):
-        # The following comments show two example computations, one EVEN, one ODD.
+        # The following comments demonstrate two example computations, one
+        # EVEN, one ODD.  Ignoring sample_shape and batch_shape, let each zn be
+        # a single sampled event of shape (state_dim,).
         if joint.batch_shape[-1] == result.size(-2) - 1:  # EVEN case.
-            # result = [x0, x2, x4]
-            cond = result.unsqueeze(-2).expand(shape + (-1, 2, state_dim))
-            # [[x0, x0], [x2, x2], [x4, x4]]
-            cond = cond.reshape(shape + (-1, state_dim))
-            # [x0, x0, x2, x2, x4, x4]
-            cond = cond[..., 1:-1, :]  # [x0, x2, x2, x4]
-            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [x0x2, x2x4]
-            sample = joint.condition(cond).rsample()  # [x1, x3]
-            sample = torch.nn.functional.pad(sample, (0, 0, 0, 1))  # [x1, x3, 0]
+            # Suppose e.g. result = [z0, z2, z4]
+            cond = result.repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2, z4, z4]
+            cond = cond[..., 1:-1, :]  # [z0, z2, z2, z4]
+            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2, z2z4]
+            sample = joint.condition(cond).rsample()  # [z1, z3]
+            sample = torch.nn.functional.pad(sample, (0, 0, 0, 1))  # [z1, z3, 0]
             result = torch.stack([
-                result,  # [x0, x2, x4]
-                sample,  # [x1, x3, 0]
-            ], dim=-2)  # [[x0, x1], [x2, x3], [x4, 0]]
-            result = result.reshape(shape + (-1, state_dim))  # [x0, x1, x2, x3, x4, 0]
-            result = result[..., :-1, :]  # [x0, x1, x2, x3, x4]
+                result,  # [z0, z2, z4]
+                sample,  # [z1, z3, 0]
+            ], dim=-2)  # [[z0, z1], [z2, z3], [z4, 0]]
+            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3, z4, 0]
+            result = result[..., :-1, :]  # [z0, z1, z2, z3, z4]
         else:  # ODD case.
             assert joint.batch_shape[-1] == result.size(-2) - 2
-            # result = [x0, x2, x3]
-            cond = result[..., :-1, :].unsqueeze(-2).expand(shape + (-1, 2, state_dim))
-            # [[x0, x0], [x2, x2]]
-            cond = cond.reshape(shape + (-1, state_dim))  # [x0, x0, x2, x2]
-            cond = cond[..., 1:-1, :]  # [x0, x2]
-            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [x0x2]
-            sample = joint.condition(cond).rsample()  # [x1]
-            sample = torch.cat([sample, result[..., -1:, :]], dim=-2)  # [x1, x3]
+            # Suppose e.g. result = [z0, z2, z3]
+            cond = result[..., :-1, :].repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2]
+            cond = cond[..., 1:-1, :]  # [z0, z2]
+            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2]
+            sample = joint.condition(cond).rsample()  # [z1]
+            sample = torch.cat([sample, result[..., -1:, :]], dim=-2)  # [z1, z3]
             result = torch.stack([
-                result[..., :-1, :],  # [x0, x2]
-                sample,  # [x1, x3]
-            ], dim=-2)  # [[x0, x1], [x2, x3]]
-            result = result.reshape(shape + (-1, state_dim))  # [x0, x1, x2, x3]
+                result[..., :-1, :],  # [z0, z2]
+                sample,  # [z1, z3]
+            ], dim=-2)  # [[z0, z1], [z2, z3]]
+            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3]
 
-    return result
+    return result[..., 1:, :]  # [z1, z2, z3, ...]
 
 
 def _sequential_gamma_gaussian_tensordot(gamma_gaussian):
@@ -475,10 +480,14 @@ class GaussianHMM(TorchDistribution):
         return (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
 
     def _rsample_from_gaussians(self, sample_shape=torch.Size()):
+        obs_dim = self.obs_dim
+        hidden_dim = self.hidden_dim
         obs = self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
-        trans = self._trans
-        init = self._init
-        return _sequential_gaussian_filter_sample(init, trans + obs, sample_shape)
+        z = _sequential_gaussian_filter_sample(self._init, self._trans + obs, sample_shape)
+        perm = torch.cat([torch.arange(hidden_dim, hidden_dim + obs_dim, device=z.device),
+                          torch.arange(hidden_dim, device=z.device)])
+        x = self._obs.event_permute(perm).condition(z).rsample()
+        return x
 
     def filter(self, value):
         """
@@ -508,7 +517,7 @@ class GaussianHMM(TorchDistribution):
 
     def posterior(self, likelihood):
         """
-        Create a new GaussianHMM incorporating likelihood information.
+        Create a new :class:`GaussianHMM` incorporating likelihood information.
 
         This is useful for generating posterior samples using :meth:`rsample` .
 
@@ -527,7 +536,7 @@ class GaussianHMM(TorchDistribution):
         new.obs_dim = self.obs_dim
         new._init = self._init
         new._trans = self._trans
-        new._obs = self._obs + mvn_to_gaussian(likelihood)
+        new._obs = self._obs + mvn_to_gaussian(likelihood).event_pad(left=self.hidden_dim)
         # Intentionally omit distribution attributes.
         assert not new._is_prior
 
