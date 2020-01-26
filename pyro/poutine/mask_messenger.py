@@ -32,10 +32,10 @@ class MaskMessenger(Messenger):
         self.mask = mask
 
     def _process_message(self, msg):
-        if msg["done"] or msg["type"] != "sample": # not sure if conditions are right here
+        if msg["done"] or msg["type"] != "sample":
             return None
 
 
-        msg["mask"] = self.mask if msg["mask"] is None else self.mask & msg["mask"] # possibly eliminate msg["mask"] ??
+        msg["mask"] = self.mask if msg["mask"] is None else self.mask & msg["mask"]
         msg["fn"] = MaskedDistribution(msg["fn"], msg["mask"])
         return None
