@@ -242,7 +242,6 @@ class AffineNormal:
     """
     def __init__(self, matrix, loc, scale):
         assert loc.shape == scale.shape
-        x_dim, y_dim = matrix.shape[-2:]
         self.matrix = matrix
         self.loc = loc
         self.scale = scale
@@ -267,8 +266,14 @@ class AffineNormal:
         mvn = torch.distributions.MultivariateNormal(self.loc, scale_tril=self.scale.diag_embed())
         return matrix_and_mvn_to_gaussian(self.matrix, mvn)
 
+    def event_permute(self, perm):
+        return self.to_gaussian().event_permute(perm)
+
     def __add__(self, other):
         return self.to_gaussian() + other
+
+    def marginalize(self, left=0, right=0):
+        return self.to_gaussian().marginalize(left, right)
 
 
 def mvn_to_gaussian(mvn):

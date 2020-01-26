@@ -392,57 +392,25 @@ class GaussianHMM(TorchDistribution):
         event_shape = time_shape + (obs_dim,)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
-        # Note GaussianHMMs can be represented in two forms: either by distribution
-        # attributes (as when initially constructed) or by Gaussian attributtes (as
-        # when constructed by .posterior().
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
-        self.initial_dist = initial_dist
-        self.transition_matrix = transition_matrix
-        self.transition_dist = transition_dist
-        self.observation_matrix = observation_matrix
-        self.observation_dist = observation_dist
-        assert self._is_prior
-
-    @property
-    def _is_prior(self):
-        return hasattr(self, "observation_dist")
-
-    @lazy_property
-    def _init(self):
-        # To save computation in _sequential_gaussian_tensordot(), we expand
-        # only _init, which is applied only after
-        # _sequential_gaussian_tensordot().
-        return mvn_to_gaussian(self.initial_dist).expand(self.batch_shape)
-
-    @lazy_property
-    def _trans(self):
-        return matrix_and_mvn_to_gaussian(self.transition_matrix, self.transition_dist)
-
-    @lazy_property
-    def _obs(self):
-        return matrix_and_mvn_to_gaussian(self.observation_matrix, self.observation_dist)
+        self._init = mvn_to_gaussian(initial_dist).expand(batch_shape)
+        self._trans = matrix_and_mvn_to_gaussian(transition_matrix, transition_dist)
+        self._obs = matrix_and_mvn_to_gaussian(observation_matrix, observation_dist)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianHMM, _instance)
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
+        new._obs = self._obs
+        new._trans = self._trans
 
-        if self._is_prior:
-            # Copy only the distribution attributes of a prior GaussianHMM.
-            new.initial_dist = self.initial_dist
-            new.transition_matrix = self.transition_matrix
-            new.transition_dist = self.transition_dist
-            new.observation_matrix = self.observation_matrix
-            new.observation_dist = self.observation_dist
-        else:
-            # Copy only the Gaussian attributes of a posterior GaussianHMM.
-            new._init = self._init.expand(batch_shape)
-            new._obs = self._obs
-            new._trans = self._trans
-
-        # Expand lazily.
+        # To save computation in _sequential_gaussian_tensordot(), we expand
+        # only _init, which is applied only after
+        # _sequential_gaussian_tensordot().
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        new._init = self._init.expand(batch_shape)
+
         super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new
@@ -462,24 +430,7 @@ class GaussianHMM(TorchDistribution):
         return result
 
     def rsample(self, sample_shape=torch.Size()):
-        if self._is_prior:
-            # Sample from a prior using distribution attributes.
-            return self._rsample_from_distributions(sample_shape)
-        else:
-            # Sample from a posterior using updated gaussian attributes.
-            return self._rsample_from_gaussians(sample_shape)
-
-    def _rsample_from_distributions(self, sample_shape=torch.Size()):
-        batch_shape = self.batch_shape
-        time_shape = self.event_shape[:1]
-        init = self.initial_dist.expand(batch_shape).rsample(sample_shape)
-        trans = self.transition_dist.expand(batch_shape + time_shape).rsample(sample_shape)
-        obs = self.observation_dist.expand(batch_shape + time_shape).rsample(sample_shape)
-        mat = self.transition_matrix.expand(batch_shape + time_shape + (self.hidden_dim, self.hidden_dim))
-        z = _linear_integrate(init, mat, trans)
-        return (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
-
-    def _rsample_from_gaussians(self, sample_shape=torch.Size()):
+        sample_shape = torch.Size(sample_shape)
         obs_dim = self.obs_dim
         hidden_dim = self.hidden_dim
         obs = self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
@@ -534,13 +485,11 @@ class GaussianHMM(TorchDistribution):
         new = self._get_checked_instance(GaussianHMM)
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
-        new._init = self._init
+        batch_shape = broadcast_shape(self.batch_shape, likelihood.batch_shape[:-1])
+        new._init = self._init if batch_shape == self.batch_shape else self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs + mvn_to_gaussian(likelihood).event_pad(left=self.hidden_dim)
-        # Intentionally omit distribution attributes.
-        assert not new._is_prior
 
-        # Expand lazily.
         super(GaussianHMM, new).__init__(self.batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new

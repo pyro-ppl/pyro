@@ -323,20 +323,16 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
 @pytest.mark.parametrize('hidden_dim', [1, 2])
 @pytest.mark.parametrize('num_steps', [1, 2, 3, 4])
 @pytest.mark.parametrize("diag", [False, True], ids=["full", "diag"])
-@pytest.mark.parametrize("prior", [True, False], ids=["prior", "posterior"])
-def test_gaussian_hmm_distribution(prior, diag, sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
+def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim))
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
     obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim))
     obs_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
-    likelihood = dist.Normal(obs_dist.loc, 1e8).to_event(1)
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
     d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
-    if not prior:
-        d = d.posterior(likelihood)
     if diag:
         obs_mvn = dist.MultivariateNormal(obs_dist.base_dist.loc,
                                           scale_tril=obs_dist.base_dist.scale.diag_embed())
