@@ -90,6 +90,76 @@ def _sequential_gaussian_tensordot(gaussian):
     return gaussian[..., 0]
 
 
+def _sequential_gaussian_filter_sample(gaussian):
+    """
+    Draws a reparameterized sample from a Markov product of Gaussians via
+    parallel-scan forward filter backward sample.
+    """
+    assert isinstance(gaussian, Gaussian)
+    assert gaussian.dim() % 2 == 0, "dim is not even"
+    batch_shape = gaussian.batch_shape[:-1]
+    state_dim = gaussian.dim() // 2
+    device = gaussian.precision.device
+    perm = torch.cat([torch.arange(1 * state_dim, 2 * state_dim, device=device),
+                      torch.arange(0 * state_dim, 1 * state_dim, device=device),
+                      torch.arange(2 * state_dim, 3 * state_dim, device=device)])
+
+    # Forward filter, similar to _sequential_gaussian_tensordot().
+    tape = []
+    while gaussian.batch_shape[-1] > 1:
+        time = gaussian.batch_shape[-1]
+        even_time = time // 2 * 2
+        even_part = gaussian[..., :even_time]
+        x_y = even_part.reshape(batch_shape + (even_time // 2, 2))
+        x, y = x_y[..., 0], x_y[..., 1]
+        x = x.event_pad(right=state_dim)
+        y = y.event_pad(left=state_dim)
+        joint = (x + y).event_permute(perm)
+        tape.append(joint)
+        contracted = joint.marginalize(left=state_dim)
+        if time > even_time:
+            contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
+        gaussian = contracted
+
+    # Backward sample.
+    result = gaussian.rsample().reshape(batch_shape + (2, state_dim))
+    for joint in reversed(tape):
+        # The following comments show two example computations, one EVEN, one ODD.
+        if joint.batch_shape[-1] == result.size(-2) - 1:  # EVEN case.
+            # result = [x0, x2, x4]
+            cond = result.unsqueeze(-2).expand(batch_shape + (-1, 2, state_dim))
+            # [[x0, x0], [x2, x2], [x4, x4]]
+            cond = cond.reshape(batch_shape + (-1, state_dim))
+            # [x0, x0, x2, x2, x4, x4]
+            cond = cond[..., 1:-1, :]  # [x0, x2, x2, x4]
+            cond = cond.reshape(batch_shape + (-1, 2 * state_dim))  # [x0x2, x2x4]
+            sample = joint.condition(cond).rsample()  # [x1, x3]
+            sample = torch.nn.functional.pad(sample, (0, 0, 0, 1))  # [x1, x3, 0]
+            result = torch.stack([
+                result,  # [x0, x2, x4]
+                sample,  # [x1, x3, 0]
+            ], dim=-2)  # [[x0, x1], [x2, x3], [x4, 0]]
+            result = result.reshape(batch_shape + (-1, state_dim))  # [x0, x1, x2, x3, x4, 0]
+            result = result[..., :-1, :]  # [x0, x1, x2, x3, x4]
+        else:  # ODD case.
+            assert joint.batch_shape[-1] == result.size(-2) - 2
+            # result = [x0, x2, x3]
+            cond = result[..., :-1, :].unsqueeze(-2).expand(batch_shape + (-1, 2, state_dim))
+            # [[x0, x0], [x2, x2]]
+            cond = cond.reshape(batch_shape + (-1, state_dim))  # [x0, x0, x2, x2]
+            cond = cond[..., 1:-1, :]  # [x0, x2]
+            cond = cond.reshape(batch_shape + (-1, 2 * state_dim))  # [x0x2]
+            sample = joint.condition(cond).rsample()  # [x1]
+            sample = torch.cat([sample, result[..., -1:, :]], dim=-2)  # [x1, x3]
+            result = torch.stack([
+                result[..., :-1, :],  # [x0, x2]
+                sample,  # [x1, x3]
+            ], dim=-2)  # [[x0, x1], [x2, x3]]
+            result = result.reshape(batch_shape + (-1, state_dim))  # [x0, x1, x2, x3]
+
+    return result
+
+
 def _sequential_gamma_gaussian_tensordot(gamma_gaussian):
     """
     Integrates a GammaGaussian ``x`` whose rightmost batch dimension is time, computes::
@@ -404,6 +474,12 @@ class GaussianHMM(TorchDistribution):
         loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
         return MultivariateNormal(loc, precision_matrix=precision,
                                   validate_args=self._validate_args)
+
+    def poseterior(self, likelihood):
+        assert (isinstance(likelihood, torch.distributions.MultivariateNormal) or
+                (isinstance(likelihood, torch.distributions.Independent) and
+                 isinstance(likelihood.base_dist, torch.distributions.Normal)))
+        raise NotImplementedError("TODO")
 
 
 class GammaGaussianHMM(TorchDistribution):

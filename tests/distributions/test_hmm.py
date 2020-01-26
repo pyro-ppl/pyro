@@ -295,6 +295,15 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     assert final.event_shape == (hidden_dim,)
 
 
+@pytest.mark.parametrize('num_steps', list(range(1, 20)))
+@pytest.mark.parametrize('state_dim', [3])
+@pytest.mark.parametrize('batch_shape', [()], ids=str)
+def test_gaussian_filter_sample(batch_shape, state_dim, num_steps):
+    g = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
+    from pyro.distributions.hmm import _sequential_gaussian_filter_sample
+    _sequential_gaussian_filter_sample(g)
+
+
 @pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)
 @pytest.mark.parametrize('batch_shape', [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize('obs_dim', [1, 2])
