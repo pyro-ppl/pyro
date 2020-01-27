@@ -133,7 +133,7 @@ class LinearRing(Ring):
     _backend = 'torch'
 
     def __init__(self, cache=None, dim_to_size=None):
-        super(LinearRing, self).__init__(cache=cache)
+        super().__init__(cache=cache)
         self._dim_to_size = {} if dim_to_size is None else dim_to_size
 
     def sumproduct(self, terms, dims):
@@ -184,7 +184,7 @@ class LogRing(Ring):
     _backend = 'pyro.ops.einsum.torch_log'
 
     def __init__(self, cache=None, dim_to_size=None):
-        super(LogRing, self).__init__(cache=cache)
+        super().__init__(cache=cache)
         self._dim_to_size = {} if dim_to_size is None else dim_to_size
 
     def sumproduct(self, terms, dims):
@@ -256,7 +256,7 @@ class MapRing(LogRing):
     _backend = 'pyro.ops.einsum.torch_map'
 
     def product(self, term, ordinal):
-        result = super(MapRing, self).product(term, ordinal)
+        result = super().product(term, ordinal)
         if hasattr(term, '_pyro_backward'):
             result._pyro_backward = _SampleProductBackward(self, term, ordinal)
         return result
@@ -269,7 +269,7 @@ class SampleRing(LogRing):
     _backend = 'pyro.ops.einsum.torch_sample'
 
     def product(self, term, ordinal):
-        result = super(SampleRing, self).product(term, ordinal)
+        result = super().product(term, ordinal)
         if hasattr(term, '_pyro_backward'):
             result._pyro_backward = _SampleProductBackward(self, term, ordinal)
         return result
@@ -309,7 +309,7 @@ class MarginalRing(LogRing):
     _backend = 'pyro.ops.einsum.torch_marginal'
 
     def product(self, term, ordinal):
-        result = super(MarginalRing, self).product(term, ordinal)
+        result = super().product(term, ordinal)
         if hasattr(term, '_pyro_backward'):
             result._pyro_backward = _MarginalProductBackward(self, term, ordinal, result)
         return result

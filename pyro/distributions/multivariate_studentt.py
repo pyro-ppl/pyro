@@ -39,7 +39,7 @@ class MultivariateStudentT(TorchDistribution):
         self.loc = loc.expand(batch_shape + event_shape)
         self._unbroadcasted_scale_tril = scale_tril
         self._chi2 = Chi2(self.df)
-        super(MultivariateStudentT, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @lazy_property
     def scale_tril(self):

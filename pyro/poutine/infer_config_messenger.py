@@ -21,7 +21,7 @@ class InferConfigMessenger(Messenger):
         Constructor. Doesn't do much, just stores the stochastic function
         and the config_fn.
         """
-        super(InferConfigMessenger, self).__init__()
+        super().__init__()
         self.config_fn = config_fn
 
     def _pyro_sample(self, msg):

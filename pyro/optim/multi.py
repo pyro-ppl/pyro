@@ -90,7 +90,7 @@ class TorchMultiOptimizer(PyroMultiOptimizer):
     """
     def __init__(self, optim_constructor, optim_args):
         optim = PyroOptim(optim_constructor, optim_args)
-        super(TorchMultiOptimizer, self).__init__(optim)
+        super().__init__(optim)
 
 
 class MixedMultiOptimizer(MultiOptimizer):

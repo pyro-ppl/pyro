@@ -69,7 +69,7 @@ class MixtureOfDiagNormals(TorchDistribution):
         self.dim = locs.size(-1)
         self.categorical = Categorical(logits=component_logits)
         self.probs = self.categorical.probs
-        super(MixtureOfDiagNormals, self).__init__(batch_shape=torch.Size(batch_shape),
+        super().__init__(batch_shape=torch.Size(batch_shape),
                                                    event_shape=torch.Size((self.dim,)))
 
     def expand(self, batch_shape, _instance=None):

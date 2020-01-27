@@ -37,7 +37,7 @@ class DenseNN(nn.Module):
             hidden_dims,
             param_dims=[1, 1],
             nonlinearity=nn.ReLU()):
-        super(DenseNN, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims

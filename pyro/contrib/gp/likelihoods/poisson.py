@@ -21,7 +21,7 @@ class Poisson(Likelihood):
     :param callable response_function: A mapping to positive real numbers.
     """
     def __init__(self, response_function=None):
-        super(Poisson, self).__init__()
+        super().__init__()
         self.response_function = torch.exp if response_function is None else response_function
 
     def forward(self, f_loc, f_var, y=None):

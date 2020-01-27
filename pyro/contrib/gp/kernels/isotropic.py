@@ -29,7 +29,7 @@ class Isotropy(Kernel):
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Isotropy, self).__init__(input_dim, active_dims)
+        super().__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)
@@ -78,7 +78,7 @@ class RBF(Isotropy):
     .. note:: This kernel also has name `Squared Exponential` in literature.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(RBF, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -100,7 +100,7 @@ class RationalQuadratic(Isotropy):
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, scale_mixture=None,
                  active_dims=None):
-        super(RationalQuadratic, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
         if scale_mixture is None:
             scale_mixture = torch.tensor(1.)
@@ -121,7 +121,7 @@ class Exponential(Isotropy):
         :math:`k(x, z) = \sigma^2\exp\left(-\frac{|x-z|}{l}\right).`
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Exponential, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -139,7 +139,7 @@ class Matern32(Isotropy):
         \exp\left(-\sqrt{3} \times \frac{|x-z|}{l}\right).`
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Matern32, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -158,7 +158,7 @@ class Matern52(Isotropy):
         \frac{|x-z|^2}{l^2}\right)\exp\left(-\sqrt{5} \times \frac{|x-z|}{l}\right).`
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Matern52, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:

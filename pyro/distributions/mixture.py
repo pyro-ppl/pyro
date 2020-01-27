@@ -74,7 +74,7 @@ class MaskedMixture(TorchDistribution):
         self.mask = mask
         self.component0 = component0
         self.component1 = component1
-        super(MaskedMixture, self).__init__(batch_shape, component0.event_shape, validate_args)
+        super().__init__(batch_shape, component0.event_shape, validate_args)
 
         # We need to disable _validate_sample on each component since samples are only valid on the
         # component from which they are drawn. Instead we perform validation using a MaskedConstraint.
@@ -93,7 +93,7 @@ class MaskedMixture(TorchDistribution):
 
     def expand(self, batch_shape):
         try:
-            return super(MaskedMixture, self).expand(batch_shape)
+            return super().expand(batch_shape)
         except NotImplementedError:
             mask = self.mask.expand(batch_shape)
             component0 = self.component0.expand(batch_shape)

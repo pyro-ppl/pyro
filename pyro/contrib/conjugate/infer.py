@@ -125,7 +125,7 @@ class UncollapseConjugateMessenger(Messenger):
         Stores trace in an attribute.
         """
         self.trace = trace
-        super(UncollapseConjugateMessenger, self).__init__()
+        super().__init__()
 
     def _pyro_sample(self, msg):
         is_collapsible = getattr(msg["fn"], "collapsible", False)

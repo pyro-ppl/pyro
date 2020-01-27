@@ -86,7 +86,7 @@ class ReweightedWakeSleep(ELBO):
         assert(num_particles > 1), \
             "Reweighted Wake Sleep needs to be run with more than one particle"
 
-        super(ReweightedWakeSleep, self).__init__(num_particles=num_particles,
+        super().__init__(num_particles=num_particles,
                                                   max_plate_nesting=max_plate_nesting,
                                                   vectorize_particles=vectorize_particles,
                                                   strict_enumeration_warning=strict_enumeration_warning)

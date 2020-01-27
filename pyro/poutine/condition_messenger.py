@@ -37,7 +37,7 @@ class ConditionMessenger(Messenger):
         Constructor. Doesn't do much, just stores the stochastic function
         and the data to condition on.
         """
-        super(ConditionMessenger, self).__init__()
+        super().__init__()
         self.data = data
 
     def _pyro_sample(self, msg):

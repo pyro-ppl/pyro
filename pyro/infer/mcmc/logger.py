@@ -218,7 +218,7 @@ class MetadataFilter(logging.Filter):
     """
     def __init__(self, logger_id):
         self.logger_id = logger_id
-        super(MetadataFilter, self).__init__()
+        super().__init__()
 
     def filter(self, record):
         record.logger_id = self.logger_id

@@ -110,7 +110,7 @@ class MultiFrameTensor(dict):
         summed = downstream_cost.sum_to(target_site["cond_indep_stack"])
     """
     def __init__(self, *items):
-        super(MultiFrameTensor, self).__init__()
+        super().__init__()
         self.add(*items)
 
     def add(self, *items):

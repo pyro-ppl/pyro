@@ -131,7 +131,7 @@ class NUTS(HMC):
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8,
                  max_tree_depth=10):
-        super(NUTS, self).__init__(model,
+        super().__init__(model,
                                    potential_fn,
                                    step_size,
                                    adapt_step_size=adapt_step_size,

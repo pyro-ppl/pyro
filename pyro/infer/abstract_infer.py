@@ -40,7 +40,7 @@ class EmpiricalMarginal(Empirical):
         self._weights_buffer = defaultdict(list)
         self._populate_traces(trace_posterior, sites)
         samples, weights = self._get_samples_and_weights()
-        super(EmpiricalMarginal, self).__init__(samples,
+        super().__init__(samples,
                                                 weights,
                                                 validate_args=validate_args)
 
@@ -295,7 +295,7 @@ class TracePredictive(TracePosterior):
         self.posterior = posterior
         self.num_samples = num_samples
         self.keep_sites = keep_sites
-        super(TracePredictive, self).__init__()
+        super().__init__()
         warnings.warn('The `TracePredictive` class is deprecated and will be removed '
                       'in a future release. Use the `pyro.infer.Predictive` class instead.',
                       FutureWarning)

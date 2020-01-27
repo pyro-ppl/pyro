@@ -68,7 +68,7 @@ class Messenger(object):
 # and returns a dictionary containing that data to the user.
 class trace(Messenger):
     def __enter__(self):
-        super(trace, self).__enter__()
+        super().__enter__()
         self.trace = OrderedDict()
         return self.trace
 
@@ -92,7 +92,7 @@ class trace(Messenger):
 class replay(Messenger):
     def __init__(self, fn, guide_trace):
         self.guide_trace = guide_trace
-        super(replay, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if msg["name"] in self.guide_trace:
@@ -105,7 +105,7 @@ class replay(Messenger):
 class block(Messenger):
     def __init__(self, fn=None, hide_fn=lambda msg: True):
         self.hide_fn = hide_fn
-        super(block, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if self.hide_fn(msg):
@@ -116,7 +116,7 @@ class block(Messenger):
 class seed(Messenger):
     def __init__(self, fn=None, rng_seed=None):
         self.rng_seed = rng_seed
-        super(seed, self).__init__(fn)
+        super().__init__(fn)
 
     def __enter__(self):
         self.old_state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
@@ -143,7 +143,7 @@ class PlateMessenger(Messenger):
         assert dim < 0
         self.size = size
         self.dim = dim
-        super(PlateMessenger, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if msg["type"] == "sample":

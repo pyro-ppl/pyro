@@ -60,7 +60,7 @@ class Empirical(TorchDistribution):
         self._aggregation_dim = log_weights.dim() - 1
         event_shape = sample_shape[len(weight_shape):]
         self._categorical = Categorical(logits=self._log_weights)
-        super(TorchDistribution, self).__init__(batch_shape=weight_shape[:-1],
+        super().__init__(batch_shape=weight_shape[:-1],
                                                 event_shape=event_shape,
                                                 validate_args=validate_args)
 

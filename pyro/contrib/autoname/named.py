@@ -78,32 +78,32 @@ class Object(object):
         result in silent errors.
     """
     def __init__(self, name):
-        super(Object, self).__setattr__("_name", name)
-        super(Object, self).__setattr__("_is_placeholder", True)
+        super().__setattr__("_name", name)
+        super().__setattr__("_is_placeholder", True)
 
     def __str__(self):
-        return super(Object, self).__getattribute__("_name")
+        return super().__getattribute__("_name")
 
     def __getattribute__(self, key):
         try:
-            return super(Object, self).__getattribute__(key)
+            return super().__getattribute__(key)
         except AttributeError:
             name = "{}.{}".format(self, key)
             value = Object(name)
             super(Object, value).__setattr__(
-                "_set_value", lambda value: super(Object, self).__setattr__(key, value))
-            super(Object, self).__setattr__(key, value)
-            super(Object, self).__setattr__("_is_placeholder", False)
+                "_set_value", lambda value: super().__setattr__(key, value))
+            super().__setattr__(key, value)
+            super().__setattr__("_is_placeholder", False)
             return value
 
     def __setattr__(self, key, value):
         if isinstance(value, (List, Dict)):
             value._set_name("{}.{}".format(self, key))
         if hasattr(self, key):
-            old = super(Object, self).__getattribute__(key)
+            old = super().__getattribute__(key)
             if not isinstance(old, Object) or not old._is_placeholder:
                 raise RuntimeError("Cannot overwrite {}.{}".format(self, key))
-        super(Object, self).__setattr__(key, value)
+        super().__setattr__(key, value)
 
     @functools.wraps(pyro.sample)
     def sample_(self, fn, *args, **kwargs):
@@ -177,7 +177,7 @@ class List(list):
         old = self[pos]
         if not isinstance(old, Object) or not old._is_placeholder:
             raise RuntimeError("Cannot overwrite {}".format(name))
-        super(List, self).__setitem__(pos, value)
+        super().__setitem__(pos, value)
 
 
 class Dict(dict):
@@ -212,24 +212,24 @@ class Dict(dict):
 
     def __getitem__(self, key):
         try:
-            return super(Dict, self).__getitem__(key)
+            return super().__getitem__(key)
         except KeyError:
             if self._name is None:
                 raise RuntimeError("Cannot access an unnamed named.Dict")
             value = Object("{}[{!r}]".format(self._name, key))
             super(Object, value).__setattr__(
                 "_set_value", lambda value: self.__setitem__(key, value))
-            super(Dict, self).__setitem__(key, value)
+            super().__setitem__(key, value)
             return value
 
     def __setitem__(self, key, value):
         name = "{}[{!r}]".format(self._name, key)
         if key in self:
-            old = super(Dict, self).__getitem__(key)
+            old = super().__getitem__(key)
             if not isinstance(old, Object) or not old._is_placeholder:
                 raise RuntimeError("Cannot overwrite {}".format(name))
         if isinstance(value, Object):
             raise RuntimeError("Cannot store named.Object {} in named.Dict {}".format(value, self._name))
         elif isinstance(value, (List, Dict)):
             value._set_name(name)
-        super(Dict, self).__setitem__(key, value)
+        super().__setitem__(key, value)

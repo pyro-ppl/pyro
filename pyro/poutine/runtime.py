@@ -131,7 +131,7 @@ class NonlocalExit(Exception):
         :param site: message at a pyro site constructor.
             Just stores the input site.
         """
-        super(NonlocalExit, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.site = site
 
     def reset_stack(self):

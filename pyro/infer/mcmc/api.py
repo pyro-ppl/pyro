@@ -148,7 +148,7 @@ class _UnarySampler(object):
         self.logger = None
         self.disable_progbar = disable_progbar
         self.hook = hook
-        super(_UnarySampler, self).__init__()
+        super().__init__()
 
     def terminate(self, *args, **kwargs):
         pass
