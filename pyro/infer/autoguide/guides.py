@@ -670,24 +670,17 @@ class AutoNormalizingFlow(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
-    :param num_transforms: number of times the transform from `init_transform_fn`
-        is repeated.
     :param init_transform_fn: a callable which when provided with the latent
-        dimension and additional keyword arguments (`init_transform_kwargs`)
-        returns an instance of
+        dimension returns an instance of
         :class:`~pyro.distributions.torch_tranform.TransformModule`.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param init_tranform_kwargs: other keyword arguments taken by
-        `init_transform_fn`.
+
     """
 
-    def __init__(self, model, init_transform_fn, init_loc_fn=init_to_median,
-                 num_transforms=1, **init_transform_kwargs):
+    def __init__(self, model, init_transform_fn, init_loc_fn=init_to_median):
         self._init_transform_fn = init_transform_fn
-        self._init_transform_kwargs = init_transform_kwargs
         self.transform = None
-        self.num_transforms = num_transforms
         super().__init__(model, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
@@ -696,10 +689,7 @@ class AutoNormalizingFlow(AutoContinuous):
         :class:`~pyro.distributions.torch_tranform.TransformModule`.
         """
         if self.transform is None:
-            ts = []
-            for _ in range(self.num_transforms):
-                ts.append(self._init_transform_fn(self.latent_dim, **self._init_transform_kwargs))
-            self.transform = ComposeTransformModule(ts)
+            self.transform = self._init_transform_fn(self.latent_dim)
         flow_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), self.transform)
         return flow_dist
 
@@ -720,13 +710,20 @@ class AutoIAFNormal(AutoNormalizingFlow):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param num_transforms: number of instances of
-        :class:`~pyro.distributions.transforms.AffineAutoregressive` applied in series.
+    :param init_transform_fn: a callable which when provided with the latent
+        dimension returns an instance of
+        :class:`~pyro.distributions.torch_tranform.TransformModule`.
     """
 
-    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median, num_transforms=1):
-        super().__init__(model, init_transform_fn=affine_autoregressive, init_loc_fn=init_loc_fn,
-                         hidden_dims=hidden_dim, num_transforms=num_transforms)
+    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median, init_transform_fn=None):
+        if not init_transform_fn:
+            def make_transform(x):
+                return affine_autoregressive(x, hidden_dims=hidden_dim)
+        else:
+            make_transform = init_transform_fn
+        super().__init__(model,
+                         init_transform_fn=make_transform,
+                         init_loc_fn=init_loc_fn)
 
 
 class AutoLaplaceApproximation(AutoContinuous):

@@ -5,6 +5,7 @@ from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
 
+from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms.affine_autoregressive import AffineAutoregressive, affine_autoregressive
 from pyro.distributions.transforms.affine_coupling import AffineCoupling, affine_coupling
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
@@ -37,11 +38,17 @@ def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
 
 
+def make_transforms(base_fn, *args, repeats=1, **kwargs):
+    assert isinstance(repeats, int) and repeats >= 1
+    return ComposeTransformModule([base_fn(*args, **kwargs) for _ in range(repeats)])
+
+
 __all__ = [
     'AffineAutoregressive',
     'AffineCoupling',
     'BatchNorm',
     'BlockAutoregressive',
+    'ComposeTransformModule',
     'ConditionalPlanar',
     'CorrLCholeskyTransform',
     'DiscreteCosineTransform',

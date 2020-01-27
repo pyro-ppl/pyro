@@ -83,7 +83,7 @@ def potential_grad(potential_fn, z):
         else:
             raise e
 
-    grads = grad(potential_energy, z_nodes)
+    grads = grad(potential_energy, z_nodes, retain_graph=True)
     for node in z_nodes:
         node.requires_grad_(False)
     return dict(zip(z_keys, grads)), potential_energy.detach()
