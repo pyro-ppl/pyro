@@ -45,7 +45,7 @@ def Obj(name):
                tall=flip(name + "_tall", 0.5))
 
 
-class Meaning(object):
+class Meaning:
     def sem(self, world):
         raise NotImplementedError
 

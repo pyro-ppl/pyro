@@ -125,7 +125,7 @@ class TraceMessenger(Messenger):
         self.trace.add_node(msg["name"], **msg.copy())
 
 
-class TraceHandler(object):
+class TraceHandler:
     """
     Execution trace poutine.
 

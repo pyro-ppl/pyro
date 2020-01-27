@@ -168,7 +168,7 @@ def compute_site_dice_factor(site):
     return log_prob, log_denom
 
 
-class Dice(object):
+class Dice:
     """
     An implementation of the DiCE operator compatible with Pyro features.
 

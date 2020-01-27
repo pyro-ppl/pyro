@@ -10,7 +10,7 @@ from pyro.optim.clipped_adam import ClippedAdam as pt_ClippedAdam
 from pyro.params import module_from_param_with_module_name, user_param_name
 
 
-class PyroOptim(object):
+class PyroOptim:
     """
     A wrapper for torch.optim.Optimizer objects that helps with managing dynamically generated parameters.
 

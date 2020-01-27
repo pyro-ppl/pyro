@@ -12,7 +12,7 @@ _PYRO_STACK = []
 _PYRO_PARAM_STORE = ParamStoreDict()
 
 
-class _DimAllocator(object):
+class _DimAllocator:
     """
     Dimension allocator for internal use by :class:`plate`.
     There is a single global instance.
@@ -63,7 +63,7 @@ class _DimAllocator(object):
 _DIM_ALLOCATOR = _DimAllocator()
 
 
-class _EnumAllocator(object):
+class _EnumAllocator:
     """
     Dimension allocator for internal use by :func:`~pyro.poutine.markov`.
     There is a single global instance.

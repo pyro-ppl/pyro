@@ -22,7 +22,7 @@ class _bound_partial(partial):
         return partial(self.func, instance)
 
 
-class Messenger(object):
+class Messenger:
     """
     Context manager class that modifies behavior
     and adds side effects to stochastic functions

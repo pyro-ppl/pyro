@@ -7,7 +7,7 @@ from pyro.ops.newton import newton_step
 from pyro.optim.optim import PyroOptim
 
 
-class MultiOptimizer(object):
+class MultiOptimizer:
     """
     Base class of optimizers that make use of higher-order derivatives.
 

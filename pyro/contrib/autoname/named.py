@@ -54,7 +54,7 @@ import functools
 import pyro
 
 
-class Object(object):
+class Object:
     """
     Object to hold immutable latent state.
 

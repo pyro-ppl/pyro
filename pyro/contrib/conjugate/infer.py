@@ -54,7 +54,7 @@ def _compound(base, parent):
     return _make_cls(base, {}, {"parent": parent})
 
 
-class BetaBinomialPair(object):
+class BetaBinomialPair:
     def __init__(self):
         self._latent = None
         self._conditional = None
@@ -86,7 +86,7 @@ class BetaBinomialPair(object):
                                                          total_count=self._conditional.total_count)
 
 
-class GammaPoissonPair(object):
+class GammaPoissonPair:
     def __init__(self):
         self._latent = None
         self._conditional = None

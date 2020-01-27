@@ -777,7 +777,7 @@ def test_decorator_interface_queue():
 
 def test_method_decorator_interface_condition():
 
-    class cls_model(object):
+    class cls_model:
 
         @poutine.condition(data={"b": torch.tensor(1.)})
         def model(self, p):

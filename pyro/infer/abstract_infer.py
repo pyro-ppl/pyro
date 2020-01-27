@@ -97,7 +97,7 @@ class EmpiricalMarginal(Empirical):
             self._add_sample(value, log_weight=log_weight, chain_id=chain_id)
 
 
-class Marginals(object):
+class Marginals:
     """
     Holds the marginal distribution over one or more sites from the ``TracePosterior``'s
     model. This is a convenience container class, which can be extended by ``TracePosterior``

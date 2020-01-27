@@ -42,7 +42,7 @@ DIAGNOSTIC_MSG = "DIAGNOSTICS"
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
-class ProgressBar(object):
+class ProgressBar:
     """
     Initialize progress bars using :class:`~tqdm.tqdm`.
 

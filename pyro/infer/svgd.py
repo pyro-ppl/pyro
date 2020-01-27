@@ -187,7 +187,7 @@ class IMQSteinKernel(SteinKernel):
         self._bandwidth_factor = bandwidth_factor
 
 
-class SVGD(object):
+class SVGD:
     """
     A basic implementation of Stein Variational Gradient Descent as described in reference [1].
 
