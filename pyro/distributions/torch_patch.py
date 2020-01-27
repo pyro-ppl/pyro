@@ -44,10 +44,14 @@ def _Transform__call__(self, x):
         return y_old
     y = self._call(x)
 
-    if self._cache_size > 0:
-        # unset cached value after call to backward
+    if self._cache_size > 0 and x.requires_grad:
+        weakself = weakref.ref(self)
+
+        # hook to unset cached value after call to backward
         def _hook(_):
-            self._cached_x_y = None, None
+            self = weakself()
+            if self is not None:
+                self._cached_x_y = None, None
 
         y.register_hook(_hook)
     self._cached_x_y = x, y
@@ -66,10 +70,14 @@ def _Transform_inv_call(self, y):
         return x_old
     x = self._inverse(y)
 
-    if self._cache_size > 0:
-        # unset cached value after call to backward
+    if self._cache_size > 0 and y.requires_grad:
+        weakself = weakref.ref(self)
+
+        # hook to unset cached value after call to backward
         def _hook(_):
-            self._cached_x_y = None, None
+            self = weakself()
+            if self is not None:
+                self._cached_x_y = None, None
 
         x.register_hook(_hook)
     self._cached_x_y = x, y
