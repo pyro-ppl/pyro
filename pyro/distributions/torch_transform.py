@@ -14,4 +14,4 @@ class TransformModule(torch.distributions.Transform, torch.nn.Module):
         super().__init__(*args, **kwargs)
 
     def __hash__(self):
-        return super().__hash__()
+        return super(torch.nn.Module, self).__hash__()

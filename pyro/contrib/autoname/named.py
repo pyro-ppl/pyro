@@ -91,7 +91,7 @@ class Object:
             name = "{}.{}".format(self, key)
             value = Object(name)
             super(Object, value).__setattr__(
-                "_set_value", lambda value: super().__setattr__(key, value))
+                "_set_value", lambda value: super(Object, self).__setattr__(key, value))
             super().__setattr__(key, value)
             super().__setattr__("_is_placeholder", False)
             return value
