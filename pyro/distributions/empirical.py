@@ -61,8 +61,8 @@ class Empirical(TorchDistribution):
         event_shape = sample_shape[len(weight_shape):]
         self._categorical = Categorical(logits=self._log_weights)
         super().__init__(batch_shape=weight_shape[:-1],
-                                                event_shape=event_shape,
-                                                validate_args=validate_args)
+                         event_shape=event_shape,
+                         validate_args=validate_args)
 
     @property
     def sample_size(self):

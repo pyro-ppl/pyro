@@ -66,9 +66,9 @@ class RenyiELBO(ELBO):
                              "for the case alpha = 1.")
         self.alpha = alpha
         super().__init__(num_particles=num_particles,
-                                        max_plate_nesting=max_plate_nesting,
-                                        vectorize_particles=vectorize_particles,
-                                        strict_enumeration_warning=strict_enumeration_warning)
+                         max_plate_nesting=max_plate_nesting,
+                         vectorize_particles=vectorize_particles,
+                         strict_enumeration_warning=strict_enumeration_warning)
 
     def _get_trace(self, model, guide, args, kwargs):
         """

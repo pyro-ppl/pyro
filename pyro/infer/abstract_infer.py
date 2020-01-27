@@ -40,9 +40,7 @@ class EmpiricalMarginal(Empirical):
         self._weights_buffer = defaultdict(list)
         self._populate_traces(trace_posterior, sites)
         samples, weights = self._get_samples_and_weights()
-        super().__init__(samples,
-                                                weights,
-                                                validate_args=validate_args)
+        super().__init__(samples, weights, validate_args=validate_args)
 
     def _get_samples_and_weights(self):
         """

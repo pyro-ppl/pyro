@@ -70,7 +70,7 @@ class MixtureOfDiagNormals(TorchDistribution):
         self.categorical = Categorical(logits=component_logits)
         self.probs = self.categorical.probs
         super().__init__(batch_shape=torch.Size(batch_shape),
-                                                   event_shape=torch.Size((self.dim,)))
+                         event_shape=torch.Size((self.dim,)))
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MixtureOfDiagNormals, _instance)
