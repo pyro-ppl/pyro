@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
@@ -25,7 +28,7 @@ class OMTMultivariateNormal(MultivariateNormal):
             raise ValueError("OMTMultivariateNormal loc must be 1-dimensional")
         if scale_tril.dim() != 2:
             raise ValueError("OMTMultivariateNormal scale_tril must be 2-dimensional")
-        super(OMTMultivariateNormal, self).__init__(loc, scale_tril=scale_tril)
+        super().__init__(loc, scale_tril=scale_tril)
 
     def rsample(self, sample_shape=torch.Size()):
         return _OMTMVNSample.apply(self.loc, self.scale_tril, sample_shape + self.loc.shape)

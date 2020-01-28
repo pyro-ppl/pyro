@@ -1,9 +1,12 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch.nn.functional as F
 
 import pyro
 import pyro.distributions as dist
 
-from .likelihood import Likelihood
+from pyro.contrib.gp.likelihoods.likelihood import Likelihood
 
 
 def _softmax(x):
@@ -24,7 +27,7 @@ class MultiClass(Likelihood):
         likelihood.
     """
     def __init__(self, num_classes, response_function=None):
-        super(MultiClass, self).__init__()
+        super().__init__()
         self.num_classes = num_classes
         self.response_function = _softmax if response_function is None else response_function
 
@@ -57,9 +60,11 @@ class MultiClass(Likelihood):
             raise ValueError("Number of Gaussian processes should be equal to the "
                              "number of classes. Expected {} but got {}."
                              .format(self.num_classes, f_swap.size(-1)))
-        f_res = self.response_function(f_swap)
-
-        y_dist = dist.Categorical(f_res)
+        if self.response_function is _softmax:
+            y_dist = dist.Categorical(logits=f_swap)
+        else:
+            f_res = self.response_function(f_swap)
+            y_dist = dist.Categorical(f_res)
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f_res.dim() + 1]).to_event(y.dim())
-        return pyro.sample("y", y_dist, obs=y)
+            y_dist = y_dist.expand_by(y.shape[:-f.dim() + 1]).to_event(y.dim())
+        return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)

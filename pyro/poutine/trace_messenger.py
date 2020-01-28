@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import sys
 
 from .messenger import Messenger
@@ -31,14 +34,28 @@ def identify_dense_edges(trace):
 
 class TraceMessenger(Messenger):
     """
-    Execution trace messenger.
+    Return a handler that records the inputs and outputs of primitive calls
+    and their dependencies.
 
-    A TraceMessenger records the input and output to every Pyro primitive
-    and stores them as a site in a Trace().
-    This should, in theory, be sufficient information for every inference algorithm
-    (along with the implicit computational graph in the Variables?)
+    Consider the following Pyro program:
 
-    We can also use this for visualization.
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+
+    We can record its execution using ``trace``
+    and use the resulting data structure to compute the log-joint probability
+    of all of the sample sites in the execution or extract all parameters.
+
+        >>> trace = pyro.poutine.trace(model).get_trace(0.0)
+        >>> logp = trace.log_prob_sum()
+        >>> params = [trace.nodes[name]["value"].unconstrained() for name in trace.param_nodes]
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :param graph_type: string that specifies the kind of graph to construct
+    :param param_only: if true, only records params and not samples
+    :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
     """
 
     def __init__(self, graph_type=None, param_only=None):
@@ -47,7 +64,7 @@ class TraceMessenger(Messenger):
             to construct (currently only "flat" or "dense" supported)
         :param param_only: boolean that specifies whether to record sample sites
         """
-        super(TraceMessenger, self).__init__()
+        super().__init__()
         if graph_type is None:
             graph_type = "flat"
         if param_only is None:
@@ -59,7 +76,7 @@ class TraceMessenger(Messenger):
 
     def __enter__(self):
         self.trace = Trace(graph_type=self.graph_type)
-        return super(TraceMessenger, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         """
@@ -72,7 +89,7 @@ class TraceMessenger(Messenger):
                     self.trace.remove_node(node["name"])
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
-        return super(TraceMessenger, self).__exit__(*args, **kwargs)
+        return super().__exit__(*args, **kwargs)
 
     def __call__(self, fn):
         """
@@ -98,7 +115,7 @@ class TraceMessenger(Messenger):
                         args=self.trace.nodes["_INPUT"]["args"],
                         kwargs=self.trace.nodes["_INPUT"]["kwargs"])
         self.trace = tr
-        super(TraceMessenger, self)._reset()
+        super()._reset()
 
     def _pyro_post_sample(self, msg):
         if not self.param_only:
@@ -108,7 +125,7 @@ class TraceMessenger(Messenger):
         self.trace.add_node(msg["name"], **msg.copy())
 
 
-class TraceHandler(object):
+class TraceHandler:
     """
     Execution trace poutine.
 

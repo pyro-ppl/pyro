@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -21,7 +24,7 @@ class DynamicModel(nn.Module, metaclass=ABCMeta):
         self._dimension = dimension
         self._dimension_pv = dimension_pv
         self._num_process_noise_parameters = num_process_noise_parameters
-        super(DynamicModel, self).__init__()
+        super().__init__()
 
     @property
     def dimension(self):
@@ -149,7 +152,7 @@ class Ncp(DifferentiableDynamicModel):
     '''
     def __init__(self, dimension, sv2):
         dimension_pv = 2 * dimension
-        super(Ncp, self).__init__(dimension, dimension_pv, num_process_noise_parameters=1)
+        super().__init__(dimension, dimension_pv, num_process_noise_parameters=1)
         if not isinstance(sv2, torch.Tensor):
             sv2 = torch.tensor(sv2)
         self.sv2 = Parameter(sv2)
@@ -234,7 +237,7 @@ class Ncv(DifferentiableDynamicModel):
     '''
     def __init__(self, dimension, sa2):
         dimension_pv = dimension
-        super(Ncv, self).__init__(dimension, dimension_pv, num_process_noise_parameters=1)
+        super().__init__(dimension, dimension_pv, num_process_noise_parameters=1)
         if not isinstance(sa2, torch.Tensor):
             sa2 = torch.tensor(sa2)
         self.sa2 = Parameter(sa2)

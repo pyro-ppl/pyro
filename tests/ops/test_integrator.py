@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 from collections import namedtuple
 
@@ -41,7 +44,7 @@ def register_model(init_args):
         prec=1e-4
     )
 ])
-class HarmonicOscillator(object):
+class HarmonicOscillator:
     inverse_mass_matrix = torch.tensor([1.])
 
     @staticmethod
@@ -64,7 +67,7 @@ class HarmonicOscillator(object):
         prec=5.0e-3
     )
 ])
-class CircularPlanetaryMotion(object):
+class CircularPlanetaryMotion:
     inverse_mass_matrix = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
 
     @staticmethod
@@ -88,7 +91,7 @@ class CircularPlanetaryMotion(object):
         prec=1.0e-4
     )
 ])
-class QuarticOscillator(object):
+class QuarticOscillator:
     inverse_mass_matrix = torch.tensor([[1.]])
 
     @staticmethod

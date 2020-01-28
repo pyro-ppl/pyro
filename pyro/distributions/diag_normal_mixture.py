@@ -1,3 +1,5 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 import math
 
@@ -67,8 +69,8 @@ class MixtureOfDiagNormals(TorchDistribution):
         self.dim = locs.size(-1)
         self.categorical = Categorical(logits=component_logits)
         self.probs = self.categorical.probs
-        super(MixtureOfDiagNormals, self).__init__(batch_shape=torch.Size(batch_shape),
-                                                   event_shape=torch.Size((self.dim,)))
+        super().__init__(batch_shape=torch.Size(batch_shape),
+                         event_shape=torch.Size((self.dim,)))
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MixtureOfDiagNormals, _instance)
@@ -88,9 +90,9 @@ class MixtureOfDiagNormals(TorchDistribution):
         epsilon = (value.unsqueeze(-2) - self.locs) / self.coord_scale  # L B K D
         eps_sqr = 0.5 * torch.pow(epsilon, 2.0).sum(-1)  # L B K
         eps_sqr_min = torch.min(eps_sqr, -1)[0]  # L B K
-        coord_scale_prod = self.coord_scale.log().sum(-1).exp()  # B K
-        result = self.probs * torch.exp(-eps_sqr + eps_sqr_min.unsqueeze(-1)) / coord_scale_prod  # L B K
-        result = torch.log(result.sum(-1))  # L B
+        coord_scale_prod_log_sum = self.coord_scale.log().sum(-1)  # B K
+        result = self.categorical.logits + (-eps_sqr + eps_sqr_min.unsqueeze(-1)) - coord_scale_prod_log_sum  # L B K
+        result = torch.logsumexp(result, dim=-1)  # L B
         result = result - 0.5 * math.log(2.0 * math.pi) * float(self.dim)
         result = result - eps_sqr_min
         return result

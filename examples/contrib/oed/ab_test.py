@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import argparse
 from functools import partial
 import torch
@@ -9,7 +12,7 @@ from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_eig
 import pyro.contrib.gp as gp
-from pyro.contrib.glmm import (
+from pyro.contrib.oed.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
 )
 
@@ -112,7 +115,7 @@ def main(num_vi_steps, num_bo_steps, seed):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.4.0')
+    assert pyro.__version__.startswith('1.2.1')
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)

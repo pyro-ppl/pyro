@@ -30,6 +30,22 @@ ___________________
     :undoc-members:
     :show-inheritance:
 
+DoMessenger
+___________________
+
+.. automodule:: pyro.poutine.do_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+EnumMessenger
+________________
+
+.. automodule:: pyro.poutine.enum_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EscapeMessenger
 ________________
 
@@ -46,10 +62,58 @@ _______________
     :undoc-members:
     :show-inheritance:
 
+InferConfigMessenger
+____________________
+
+.. automodule:: pyro.poutine.infer_config_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LiftMessenger
 ______________
 
 .. automodule:: pyro.poutine.lift_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MarkovMessenger
+_______________
+
+.. automodule:: pyro.poutine.markov_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MaskMessenger
+______________
+
+.. automodule:: pyro.poutine.mask_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PlateMessenger
+______________
+
+.. automodule:: pyro.poutine.plate_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ReentrantMessenger
+___________________
+
+.. automodule:: pyro.poutine.reentrant_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ReparamMessenger
+________________
+
+.. automodule:: pyro.poutine.reparam_messenger
     :members:
     :undoc-members:
     :show-inheritance:
@@ -70,10 +134,34 @@ _______________
     :undoc-members:
     :show-inheritance:
 
+SeedMessenger
+_______________
+
+.. automodule:: pyro.poutine.seed_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SubsampleMessenger
+__________________
+
+.. automodule:: pyro.poutine.subsample_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TraceMessenger
 _______________
 
 .. automodule:: pyro.poutine.trace_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+UnconditionMessenger
+____________________
+
+.. automodule:: pyro.poutine.uncondition_messenger
     :members:
     :undoc-members:
     :show-inheritance:

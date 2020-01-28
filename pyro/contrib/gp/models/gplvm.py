@@ -1,7 +1,9 @@
-from torch.nn import Parameter
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
+from pyro.nn.module import PyroSample, pyro_method
 
 
 class GPLVM(Parameterized):
@@ -54,22 +56,24 @@ class GPLVM(Parameterized):
         variational parameter ``X_loc``.
     """
     def __init__(self, base_model):
-        super(GPLVM, self).__init__()
+        super().__init__()
         if base_model.X.dim() != 2:
             raise ValueError("GPLVM model only works with 2D latent X, but got "
                              "X.dim() = {}.".format(base_model.X.dim()))
         self.base_model = base_model
 
-        self.X = Parameter(self.base_model.X)
-        self.set_prior("X", dist.Normal(self.X.new_zeros(self.X.shape), 1.).to_event())
+        self.X = PyroSample(dist.Normal(base_model.X.new_zeros(base_model.X.shape), 1.).to_event())
         self.autoguide("X", dist.Normal)
+        self.X_loc.data = base_model.X
 
+    @pyro_method
     def model(self):
         self.mode = "model"
         # X is sampled from prior will be put into base_model
         self.base_model.set_data(self.X, self.base_model.y)
         self.base_model.model()
 
+    @pyro_method
     def guide(self):
         self.mode = "guide"
         # X is sampled from guide will be put into base_model

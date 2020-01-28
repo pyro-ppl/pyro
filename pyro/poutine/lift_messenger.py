@@ -1,7 +1,10 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import warnings
 
 from pyro import params
-from pyro.distributions import Distribution
+from pyro.distributions.distribution import Distribution
 from pyro.poutine.util import is_validation_enabled
 
 from .messenger import Messenger
@@ -9,12 +12,32 @@ from .messenger import Messenger
 
 class LiftMessenger(Messenger):
     """
-    Messenger which "lifts" parameters to random samples.
-    Given a stochastic function with param calls and a prior,
-    creates a stochastic function where all param calls are
-    replaced by sampling from prior.
-
+    Given a stochastic function with param calls and a prior distribution,
+    create a stochastic function where all param calls are replaced by sampling from prior.
     Prior should be a callable or a dict of names to callables.
+
+    Consider the following Pyro program:
+
+        >>> def model(x):
+        ...     s = pyro.param("s", torch.tensor(0.5))
+        ...     z = pyro.sample("z", dist.Normal(x, s))
+        ...     return z ** 2
+        >>> lifted_model = pyro.poutine.lift(model, prior={"s": dist.Exponential(0.3)})
+
+    ``lift`` makes ``param`` statements behave like ``sample`` statements
+    using the distributions in ``prior``.  In this example, site `s` will now behave
+    as if it was replaced with ``s = pyro.sample("s", dist.Exponential(0.3))``:
+
+        >>> tr = pyro.poutine.trace(lifted_model).get_trace(0.0)
+        >>> tr.nodes["s"]["type"] == "sample"
+        True
+        >>> tr2 = pyro.poutine.trace(lifted_model).get_trace(0.0)
+        >>> bool((tr2.nodes["s"]["value"] == tr.nodes["s"]["value"]).all())
+        False
+
+    :param fn: function whose parameters will be lifted to random values
+    :param prior: prior function in the form of a Distribution or a dict of stochastic fns
+    :returns: ``fn`` decorated with a :class:`~pyro.poutine.lift_messenger.LiftMessenger`
     """
 
     def __init__(self, prior):
@@ -24,7 +47,7 @@ class LiftMessenger(Messenger):
 
         Constructor
         """
-        super(LiftMessenger, self).__init__()
+        super().__init__()
         self.prior = prior
         self._samples_cache = {}
 
@@ -33,7 +56,7 @@ class LiftMessenger(Messenger):
         if is_validation_enabled() and isinstance(self.prior, dict):
             self._param_hits = set()
             self._param_misses = set()
-        return super(LiftMessenger, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         self._samples_cache = {}
@@ -44,7 +67,7 @@ class LiftMessenger(Messenger):
                     "pyro.module prior did not find params ['{}']. "
                     "Did you instead mean one of ['{}']?"
                     .format("', '".join(extra), "', '".join(self._param_misses)))
-        return super(LiftMessenger, self).__exit__(*args, **kwargs)
+        return super().__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
         return None

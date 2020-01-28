@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import itertools
 
 import pytest
@@ -32,14 +35,16 @@ from tests.common import assert_equal
     'ab,bc,cd->bc',
     'a,a,ab,b,b,b,b->a',
 ])
-def test_einsum(equation, min_size):
+@pytest.mark.parametrize('infinite', [False, True], ids=['finite', 'infinite'])
+def test_einsum(equation, min_size, infinite):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
     symbols = sorted(set(equation) - set(',->'))
     sizes = dict(zip(symbols, itertools.count(min_size)))
     shapes = [torch.Size(tuple(sizes[dim] for dim in dims))
               for dims in inputs]
-    operands = [torch.randn(shape) for shape in shapes]
+    operands = [torch.full(shape, -float('inf')) if infinite else torch.randn(shape)
+                for shape in shapes]
 
     expected = contract(equation, *(torch_exp(x) for x in operands), backend='torch').log()
     actual = contract(equation, *operands, backend='pyro.ops.einsum.torch_log')

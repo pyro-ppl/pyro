@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import warnings
 import weakref
 
@@ -60,9 +63,9 @@ class TraceMeanField_ELBO(Trace_ELBO):
     condition is always satisfied if the model and guide have identical
     dependency structures.
     """
-    def _get_trace(self, model, guide, *args, **kwargs):
-        model_trace, guide_trace = super(TraceMeanField_ELBO, self)._get_trace(
-            model, guide, *args, **kwargs)
+    def _get_trace(self, model, guide, args, kwargs):
+        model_trace, guide_trace = super()._get_trace(
+            model, guide, args, kwargs)
         if is_validation_enabled():
             _check_mean_field_requirement(model_trace, guide_trace)
         return model_trace, guide_trace
@@ -75,7 +78,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         loss = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             loss_particle, _ = self._differentiable_loss_particle(model_trace, guide_trace)
             loss = loss + loss_particle / self.num_particles
 
@@ -98,8 +101,12 @@ class TraceMeanField_ELBO(Trace_ELBO):
                     try:
                         kl_qp = kl_divergence(guide_site["fn"], model_site["fn"])
                         kl_qp = scale_and_mask(kl_qp, scale=guide_site["scale"], mask=guide_site["mask"])
-                        assert kl_qp.shape == guide_site["fn"].batch_shape
-                        elbo_particle = elbo_particle - kl_qp.sum()
+                        if torch.is_tensor(kl_qp):
+                            assert kl_qp.shape == guide_site["fn"].batch_shape
+                            kl_qp_sum = kl_qp.sum()
+                        else:
+                            kl_qp_sum = kl_qp * torch.Size(guide_site["fn"].batch_shape).numel()
+                        elbo_particle = elbo_particle - kl_qp_sum
                     except NotImplementedError:
                         entropy_term = guide_site["score_parts"].entropy_term
                         elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
@@ -146,7 +153,7 @@ class JitTraceMeanField_ELBO(TraceMeanField_ELBO):
                 kwargs.pop('_pyro_guide_id')
                 self = weakself()
                 loss = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
                     _, loss_particle = self._differentiable_loss_particle(model_trace, guide_trace)
                     loss = loss + loss_particle / self.num_particles
                 return loss

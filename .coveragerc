@@ -1,4 +1,7 @@
 [report]
+omit =
+    pyro/docutil.py
+    pyro/logger.py
 exclude_lines =
     pragma: no cover
     def backward

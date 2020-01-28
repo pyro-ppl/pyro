@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import weakref
 
 import numpy as np
@@ -99,7 +102,7 @@ def test_sum_leftmost():
 
 def test_weakmethod():
 
-    class Foo(object):
+    class Foo:
         def __init__(self, state):
             self.state = state
             self.method = self._method

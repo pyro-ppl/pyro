@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import OrderedDict
 import sys
 
@@ -10,7 +13,7 @@ from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
 
-class Trace(object):
+class Trace:
     """
     Graph data structure denoting the relationships amongst different pyro primitives
     in the execution trace.
@@ -251,6 +254,14 @@ class Trace(object):
                 if is_validation_enabled():
                     warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
                     warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
+
+    def detach_(self):
+        """
+        Detach values (in-place) at each sample site of the trace.
+        """
+        for _, site in self.nodes.items():
+            if site["type"] == "sample":
+                site["value"] = site["value"].detach()
 
     @property
     def observation_nodes(self):

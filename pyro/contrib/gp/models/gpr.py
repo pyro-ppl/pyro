@@ -1,12 +1,15 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.distributions as torchdist
-from torch.nn import Parameter
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
+from pyro.nn.module import PyroParam, pyro_method
 from pyro.util import warn_if_nan
 
 
@@ -63,13 +66,12 @@ class GPRegression(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
-        super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter)
+        super().__init__(X, y, kernel, mean_function, jitter)
 
         noise = self.X.new_tensor(1.) if noise is None else noise
-        self.noise = Parameter(noise)
-        self.set_constraint("noise", torchdist.constraints.positive)
+        self.noise = PyroParam(noise, constraints.positive)
 
-    @autoname.scope(prefix="GPR")
+    @pyro_method
     def model(self):
         self.set_mode("model")
 
@@ -84,15 +86,16 @@ class GPRegression(GPModel):
             f_var = Lff.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
-            return pyro.sample("y",
+            return pyro.sample(self._pyro_get_fullname("y"),
                                dist.MultivariateNormal(f_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
                                    .to_event(self.y.dim() - 1),
                                obs=self.y)
 
-    @autoname.scope(prefix="GPR")
+    @pyro_method
     def guide(self):
         self.set_mode("guide")
+        self._load_pyro_samples()
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""

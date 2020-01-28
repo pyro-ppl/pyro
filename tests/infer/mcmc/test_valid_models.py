@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 import pickle
 
@@ -8,11 +11,12 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
-from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc import HMC, NUTS
-from pyro.infer.mcmc.util import TraceTreeEvaluator, TraceEinsumEvaluator, initialize_model
+from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator, initialize_model
+from pyro.infer.reparam import LatentStableReparam
 from pyro.poutine.subsample_messenger import _Subsample
-from tests.common import assert_equal, xfail_param, assert_close
+from tests.common import assert_close, assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -369,3 +373,20 @@ def test_potential_fn_pickling(jit):
                                              skip_jit_warnings=True)
     test_data = {'p_latent': torch.tensor([0.2, 0.6])}
     assert_close(pickle.loads(pickle.dumps(potential_fn))(test_data), potential_fn(test_data))
+
+
+@pytest.mark.parametrize("kernel, kwargs", [
+    (HMC, {"adapt_step_size": True, "num_steps": 3}),
+    (NUTS, {"adapt_step_size": True}),
+])
+def test_reparam_stable(kernel, kwargs):
+
+    @poutine.reparam(config={"z": LatentStableReparam()})
+    def model():
+        stability = pyro.sample("stability", dist.Uniform(0., 2.))
+        skew = pyro.sample("skew", dist.Uniform(-1., 1.))
+        y = pyro.sample("z", dist.Stable(stability, skew))
+        pyro.sample("x", dist.Poisson(y.abs()), obs=torch.tensor(1.))
+
+    mcmc_kernel = kernel(model, max_plate_nesting=0, **kwargs)
+    assert_ok(mcmc_kernel)

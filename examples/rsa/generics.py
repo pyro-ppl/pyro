@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Interpreting generic statements with RSA models of pragmatics.
 
@@ -16,7 +19,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from search_inference import factor, HashingMarginal, memoize, Search
+from search_inference import HashingMarginal, memoize, Search
 
 torch.set_default_dtype(torch.float64)  # double precision for numerical stability
 
@@ -91,7 +94,7 @@ def meaning(utterance, state, threshold):
 def listener0(utterance, threshold, prior):
     state = pyro.sample("state", prior)
     m = meaning(utterance, state, threshold)
-    factor("listener0_true", 0. if m else -99999.)
+    pyro.factor("listener0_true", 0. if m else -99999.)
     return state
 
 
@@ -154,7 +157,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.4.0')
+    assert pyro.__version__.startswith('1.2.1')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=10, type=int)
     args = parser.parse_args()

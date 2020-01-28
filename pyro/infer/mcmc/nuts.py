@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import namedtuple
 
 import torch
@@ -43,7 +46,7 @@ class NUTS(HMC):
     by the :class:`~pyro.infer.mcmc.HMC` kernel. Optionally, the NUTS kernel
     also provides the ability to adapt step size during the warmup phase.
 
-    Refer to the `baseball example <https://github.com/uber/pyro/blob/dev/examples/baseball.py>`_
+    Refer to the `baseball example <https://github.com/pyro-ppl/pyro/blob/dev/examples/baseball.py>`_
     to see how to do Bayesian inference in Pyro using NUTS.
 
     **References**
@@ -128,18 +131,18 @@ class NUTS(HMC):
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8,
                  max_tree_depth=10):
-        super(NUTS, self).__init__(model,
-                                   potential_fn,
-                                   step_size,
-                                   adapt_step_size=adapt_step_size,
-                                   adapt_mass_matrix=adapt_mass_matrix,
-                                   full_mass=full_mass,
-                                   transforms=transforms,
-                                   max_plate_nesting=max_plate_nesting,
-                                   jit_compile=jit_compile,
-                                   jit_options=jit_options,
-                                   ignore_jit_warnings=ignore_jit_warnings,
-                                   target_accept_prob=target_accept_prob)
+        super().__init__(model,
+                         potential_fn,
+                         step_size,
+                         adapt_step_size=adapt_step_size,
+                         adapt_mass_matrix=adapt_mass_matrix,
+                         full_mass=full_mass,
+                         transforms=transforms,
+                         max_plate_nesting=max_plate_nesting,
+                         jit_compile=jit_compile,
+                         jit_options=jit_options,
+                         ignore_jit_warnings=ignore_jit_warnings,
+                         target_accept_prob=target_accept_prob)
         self.use_multinomial_sampling = use_multinomial_sampling
         self._max_tree_depth = max_tree_depth
         # There are three conditions to stop doubling process:
@@ -158,13 +161,14 @@ class NUTS(HMC):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
         r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
+        r_sum = r_sum - (r_left_flat + r_right_flat) / 2
         if self.inverse_mass_matrix.dim() == 2:
-            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
-                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum - r_right_flat) > 0):
+            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum) > 0 and
+                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum) > 0):
                 return False
         else:
-            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
-                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum - r_right_flat) > 0):
+            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum) > 0 and
+                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum) > 0):
                 return False
         return True
 

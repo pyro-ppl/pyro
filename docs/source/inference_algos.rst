@@ -51,6 +51,12 @@ ELBO
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.infer.tracetmc_elbo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Importance
 ----------
 
@@ -58,6 +64,16 @@ Importance
     :members:
     :undoc-members:
     :show-inheritance:
+
+
+Reweighted Wake-Sleep
+---------------------
+
+.. automodule:: pyro.infer.rws
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 Sequential Monte Carlo
 ----------------------
@@ -75,6 +91,16 @@ Stein Methods
     :undoc-members:
     :show-inheritance:
 
+Likelihood free methods
+-----------------------
+
+.. automodule:: pyro.infer.energy_distance
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
+
 Discrete Inference
 ------------------
 
@@ -85,6 +111,11 @@ Discrete Inference
 
 Inference Utilities
 -------------------
+
+.. automodule:: pyro.infer.predictive
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 .. automodule:: pyro.infer.abstract_infer
     :members:

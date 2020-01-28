@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 
@@ -38,8 +41,7 @@ class EKFDistribution(TorchDistribution):
         assert not x0.shape[-1] % 2, 'position and velocity vectors must be the same dimension'
         batch_shape = x0.shape[:-1]
         event_shape = (time_steps, x0.shape[-1] // 2)
-        super(EKFDistribution, self).__init__(batch_shape, event_shape,
-                                              validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def rsample(self, sample_shape=torch.Size()):
         raise NotImplementedError('TODO: implement forward filter backward sample')

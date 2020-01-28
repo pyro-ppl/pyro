@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from .messenger import Messenger
 
 
@@ -7,7 +10,7 @@ class UnconditionMessenger(Messenger):
     distribution, ignoring observations.
     """
     def __init__(self):
-        super(UnconditionMessenger, self).__init__()
+        super().__init__()
 
     def _pyro_sample(self, msg):
         """
@@ -19,6 +22,7 @@ class UnconditionMessenger(Messenger):
         if msg["is_observed"]:
             msg["is_observed"] = False
             msg["infer"]["was_observed"] = True
+            msg["infer"]["obs"] = msg["value"]
             msg["value"] = None
             msg["done"] = False
         return None

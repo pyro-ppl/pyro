@@ -1,9 +1,12 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from unittest import TestCase
 
 import pytest
 import torch
 
-from pyro.nn import AutoRegressiveNN
+from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
 from pyro.nn.auto_reg_nn import create_mask
 
 pytestmark = pytest.mark.init(rng_seed=123)
@@ -13,20 +16,28 @@ class AutoRegressiveNNTests(TestCase):
     def setUp(self):
         self.epsilon = 1.0e-3
 
-    def _test_jacobian(self, input_dim, hidden_dim, param_dim):
+    def _test_jacobian(self, input_dim, observed_dim, hidden_dim, param_dim):
         jacobian = torch.zeros(input_dim, input_dim)
-        arn = AutoRegressiveNN(input_dim, [hidden_dim], param_dims=[param_dim])
+        if observed_dim > 0:
+            arn = ConditionalAutoRegressiveNN(input_dim, observed_dim, [hidden_dim], param_dims=[param_dim])
+        else:
+            arn = AutoRegressiveNN(input_dim, [hidden_dim], param_dims=[param_dim])
 
         def nonzero(x):
             return torch.sign(torch.abs(x))
 
+        x = torch.randn(1, input_dim)
+        y = torch.randn(1, observed_dim)
+
         for output_index in range(param_dim):
             for j in range(input_dim):
                 for k in range(input_dim):
-                    x = torch.randn(1, input_dim)
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
-                    delta = (arn(x + 0.5 * epsilon_vector) - arn(x - 0.5 * epsilon_vector)) / self.epsilon
+                    if observed_dim > 0:
+                        delta = (arn(x + 0.5 * epsilon_vector, y) - arn(x - 0.5 * epsilon_vector, y)) / self.epsilon
+                    else:
+                        delta = (arn(x + 0.5 * epsilon_vector) - arn(x - 0.5 * epsilon_vector)) / self.epsilon
                     jacobian[j, k] = float(delta[0, output_index, k])
 
             permutation = arn.get_permutation()
@@ -80,8 +91,9 @@ class AutoRegressiveNNTests(TestCase):
                 assert (torch.tensor(list(sorted(skip_connections)), dtype=torch.long) == correct).all()
 
     def test_jacobians(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_jacobian(input_dim, 3 * input_dim + 1, 2)
+        for observed_dim in [0, 5]:
+            for input_dim in [2, 3, 5, 7, 9, 11]:
+                self._test_jacobian(input_dim, observed_dim, 3 * input_dim + 1, 2)
 
     def test_masks(self):
         for input_dim in [1, 3, 5]:

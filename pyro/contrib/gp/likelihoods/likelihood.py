@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.contrib.gp.parameterized import Parameterized
 
 
@@ -9,7 +12,7 @@ class Likelihood(Parameterized):
     takes an input :math:`f` and returns a sample :math:`y`.
     """
     def __init__(self):
-        super(Likelihood, self).__init__()
+        super().__init__()
 
     def forward(self, f_loc, f_var, y=None):
         """

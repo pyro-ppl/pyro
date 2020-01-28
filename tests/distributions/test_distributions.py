@@ -1,9 +1,13 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy as np
 import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -61,7 +65,7 @@ def test_score_errors_event_dim_mismatch(dist):
         if len(d.event_shape) > 0:
             if dist.get_test_distribution_name() == 'MultivariateNormal':
                 pytest.skip('MultivariateNormal does not do shape validation in log_prob.')
-            if dist.get_test_distribution_name() == 'LowRankMultivariateNormal':
+            elif dist.get_test_distribution_name() == 'LowRankMultivariateNormal':
                 pytest.skip('LowRankMultivariateNormal does not do shape validation in log_prob.')
             with pytest.raises((ValueError, RuntimeError)):
                 d.log_prob(test_data_wrong_dims)
@@ -143,25 +147,33 @@ def check_sample_shapes(small, large):
 def test_expand_by(dist, sample_shape, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        with xfail_if_not_implemented():
-            large = small.expand_by(shape_type(sample_shape))
-            assert large.batch_shape == sample_shape + small.batch_shape
-            check_sample_shapes(small, large)
+        large = small.expand_by(shape_type(sample_shape))
+        assert large.batch_shape == sample_shape + small.batch_shape
+        if dist.get_test_distribution_name() == 'Stable':
+            pytest.skip('Stable does not implement a log_prob method.')
+        check_sample_shapes(small, large)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (2,), (2, 3)])
 @pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
-def test_expand_new_dim(dist, sample_shape, shape_type):
+@pytest.mark.parametrize('default', [False, True])
+def test_expand_new_dim(dist, sample_shape, shape_type, default):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        with xfail_if_not_implemented():
-            large = small.expand(shape_type(sample_shape + small.batch_shape))
-            assert large.batch_shape == sample_shape + small.batch_shape
-            check_sample_shapes(small, large)
+        if default:
+            large = TorchDistribution.expand(small, shape_type(sample_shape + small.batch_shape))
+        else:
+            with xfail_if_not_implemented():
+                large = small.expand(shape_type(sample_shape + small.batch_shape))
+        assert large.batch_shape == sample_shape + small.batch_shape
+        if dist.get_test_distribution_name() == 'Stable':
+            pytest.skip('Stable does not implement a log_prob method.')
+        check_sample_shapes(small, large)
 
 
 @pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
-def test_expand_existing_dim(dist, shape_type):
+@pytest.mark.parametrize('default', [False, True])
+def test_expand_existing_dim(dist, shape_type, default):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
         for dim, size in enumerate(small.batch_shape):
@@ -170,26 +182,36 @@ def test_expand_existing_dim(dist, shape_type):
             batch_shape = list(small.batch_shape)
             batch_shape[dim] = 5
             batch_shape = torch.Size(batch_shape)
-            with xfail_if_not_implemented():
-                large = small.expand(shape_type(batch_shape))
-                assert large.batch_shape == batch_shape
-                check_sample_shapes(small, large)
+            if default:
+                large = TorchDistribution.expand(small, shape_type(batch_shape))
+            else:
+                with xfail_if_not_implemented():
+                    large = small.expand(shape_type(batch_shape))
+            assert large.batch_shape == batch_shape
+            if dist.get_test_distribution_name() == 'Stable':
+                pytest.skip('Stable does not implement a log_prob method.')
+            check_sample_shapes(small, large)
 
 
 @pytest.mark.parametrize("sample_shapes", [
     [(2, 1), (2, 3)],
     [(2, 1, 1), (2, 1, 3), (2, 5, 3)],
 ])
-def test_subsequent_expands_ok(dist, sample_shapes):
+@pytest.mark.parametrize('default', [False, True])
+def test_subsequent_expands_ok(dist, sample_shapes, default):
     for idx in range(dist.get_num_test_data()):
         d = dist.pyro_dist(**dist.get_dist_params(idx))
         original_batch_shape = d.batch_shape
         for shape in sample_shapes:
             proposed_batch_shape = torch.Size(shape) + original_batch_shape
-            with xfail_if_not_implemented():
-                n = d.expand(proposed_batch_shape)
+            if default:
+                n = TorchDistribution.expand(d, proposed_batch_shape)
+            else:
+                with xfail_if_not_implemented():
+                    n = d.expand(proposed_batch_shape)
             assert n.batch_shape == proposed_batch_shape
-            check_sample_shapes(d, n)
+            with xfail_if_not_implemented():
+                check_sample_shapes(d, n)
             d = n
 
 
@@ -198,17 +220,21 @@ def test_subsequent_expands_ok(dist, sample_shapes):
     [(2, 4), (2, 2, 1)],
     [(1, 2, 1), (2, 1)],
 ])
-def test_expand_error(dist, initial_shape, proposed_shape):
+@pytest.mark.parametrize("default", [False, True])
+def test_expand_error(dist, initial_shape, proposed_shape, default):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        with xfail_if_not_implemented():
-            large = small.expand(torch.Size(initial_shape) + small.batch_shape)
-            proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-            if dist.get_test_distribution_name() == 'LKJCorrCholesky':
-                pytest.skip('LKJCorrCholesky can expand to a shape not' +
-                            'broadcastable with its original batch_shape.')
-            with pytest.raises(RuntimeError):
-                large.expand(proposed_batch_shape)
+        if default:
+            large = TorchDistribution.expand(small, initial_shape + small.batch_shape)
+        else:
+            with xfail_if_not_implemented():
+                large = small.expand(torch.Size(initial_shape) + small.batch_shape)
+        proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
+        if dist.get_test_distribution_name() == 'LKJCorrCholesky':
+            pytest.skip('LKJCorrCholesky can expand to a shape not' +
+                        'broadcastable with its original batch_shape.')
+        with pytest.raises((RuntimeError, ValueError)):
+            large.expand(proposed_batch_shape)
 
 
 @pytest.mark.parametrize("extra_event_dims,expand_shape", [
@@ -217,11 +243,15 @@ def test_expand_error(dist, initial_shape, proposed_shape):
     (1, [5, 4, 3, 2]),
     (2, [5, 4, 3]),
 ])
-def test_expand_reshaped_distribution(extra_event_dims, expand_shape):
+@pytest.mark.parametrize('default', [False, True])
+def test_expand_reshaped_distribution(extra_event_dims, expand_shape, default):
     probs = torch.ones(1, 6) / 6
     d = dist.OneHotCategorical(probs)
-    reshaped_dist = d.expand_by([4, 1, 1]).to_event(extra_event_dims)
     full_shape = torch.Size([4, 1, 1, 1, 6])
+    if default:
+        reshaped_dist = TorchDistribution.expand(d, [4, 1, 1, 1]).to_event(extra_event_dims)
+    else:
+        reshaped_dist = d.expand_by([4, 1, 1]).to_event(extra_event_dims)
     cut = 4 - extra_event_dims
     batch_shape, event_shape = full_shape[:cut], full_shape[cut:]
     assert reshaped_dist.batch_shape == batch_shape
@@ -231,9 +261,9 @@ def test_expand_reshaped_distribution(extra_event_dims, expand_shape):
     assert large.event_shape == torch.Size(event_shape)
 
     # Throws error when batch shape cannot be broadcasted
-    with pytest.raises(RuntimeError):
+    with pytest.raises((RuntimeError, ValueError)):
         reshaped_dist.expand(expand_shape + [3])
 
     # Throws error when trying to shrink existing batch shape
-    with pytest.raises(RuntimeError):
+    with pytest.raises((RuntimeError, ValueError)):
         large.expand(expand_shape[1:])

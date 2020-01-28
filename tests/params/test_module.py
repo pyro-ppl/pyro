@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 import torch
 import torch.nn as nn
@@ -11,7 +14,7 @@ import pyro.optim
 class outest(nn.Module):
 
     def __init__(self):
-        super(outest, self).__init__()
+        super().__init__()
         self.l0 = outer()
         self.l1 = nn.Linear(2, 2)
         self.l2 = inner()
@@ -23,7 +26,7 @@ class outest(nn.Module):
 class outer(torch.nn.Module):
 
     def __init__(self):
-        super(outer, self).__init__()
+        super().__init__()
         self.l0 = inner()
         self.l1 = nn.Linear(2, 2)
 
@@ -34,7 +37,7 @@ class outer(torch.nn.Module):
 class inner(torch.nn.Module):
 
     def __init__(self):
-        super(inner, self).__init__()
+        super().__init__()
         self.l0 = nn.Linear(2, 2)
         self.l1 = nn.ReLU()
 
@@ -63,7 +66,7 @@ def test_module_nn(nn_module):
 def test_param_no_grad(nn_module):
     class net(torch.nn.Module):
         def __init__(self):
-            super(net, self).__init__()
+            super().__init__()
             self.x = Parameter(torch.zeros(1))
             self.y = Parameter(torch.zeros(1), requires_grad=False)
 
@@ -86,6 +89,7 @@ def test_module_sequential(nn_module):
 
 
 @pytest.mark.parametrize("nn_module", [outest, outer])
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_random_module(nn_module):
     pyro.clear_param_store()
     nn_module = nn_module()

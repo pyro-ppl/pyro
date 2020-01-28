@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 import torch
 
@@ -123,7 +126,7 @@ def test_weighted_sample_coherence(event_shape, dtype):
 @pytest.mark.parametrize("event_shape", [[], [1], [2, 3]])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
 def test_weighted_mean_var(event_shape, dtype, batch_shape):
-    data = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
+    data = [(1, 0.5), (0, 1.5), (1, 0.5), (0, 1.5)]
     samples, weights = [], []
     for sample, weight in data:
         samples.append(sample * torch.ones(event_shape, dtype=dtype))

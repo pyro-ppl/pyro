@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
@@ -5,10 +8,10 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
+from pyro.nn.module import PyroParam, pyro_method
 
 
 class VariationalSparseGP(GPModel):
@@ -77,7 +80,7 @@ class VariationalSparseGP(GPModel):
     """
     def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
                  latent_shape=None, num_data=None, whiten=False, jitter=1e-6):
-        super(VariationalSparseGP, self).__init__(X, y, kernel, mean_function, jitter)
+        super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
         self.Xu = Parameter(Xu)
@@ -91,14 +94,13 @@ class VariationalSparseGP(GPModel):
 
         identity = eye_like(self.Xu, M)
         u_scale_tril = identity.repeat(self.latent_shape + (1, 1))
-        self.u_scale_tril = Parameter(u_scale_tril)
-        self.set_constraint("u_scale_tril", constraints.lower_cholesky)
+        self.u_scale_tril = PyroParam(u_scale_tril, constraints.lower_cholesky)
 
         self.num_data = num_data if num_data is not None else self.X.size(0)
         self.whiten = whiten
         self._sample_latent = True
 
-    @autoname.scope(prefix="VSGP")
+    @pyro_method
     def model(self):
         self.set_mode("model")
 
@@ -110,11 +112,11 @@ class VariationalSparseGP(GPModel):
         zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:
             identity = eye_like(self.Xu, M)
-            pyro.sample("u",
+            pyro.sample(self._pyro_get_fullname("u"),
                         dist.MultivariateNormal(zero_loc, scale_tril=identity)
                             .to_event(zero_loc.dim() - 1))
         else:
-            pyro.sample("u",
+            pyro.sample(self._pyro_get_fullname("u"),
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
                             .to_event(zero_loc.dim() - 1))
 
@@ -125,14 +127,17 @@ class VariationalSparseGP(GPModel):
         if self.y is None:
             return f_loc, f_var
         else:
+            # we would like to load likelihood's parameters outside poutine.scale context
+            self.likelihood._load_pyro_samples()
             with poutine.scale(scale=self.num_data / self.X.size(0)):
                 return self.likelihood(f_loc, f_var, self.y)
 
-    @autoname.scope(prefix="VSGP")
+    @pyro_method
     def guide(self):
         self.set_mode("guide")
+        self._load_pyro_samples()
 
-        pyro.sample("u",
+        pyro.sample(self._pyro_get_fullname("u"),
                     dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril)
                         .to_event(self.u_loc.dim()-1))
 

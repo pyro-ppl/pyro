@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Data loader logic with two main responsibilities:
 (i)  download raw data and process; this logic is initiated upon import
@@ -28,19 +31,19 @@ from pyro.contrib.examples.util import get_data_directory
 dset = namedtuple("dset", ["name", "url", "filename"])
 
 JSB_CHORALES = dset("jsb_chorales",
-                    "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/jsb_chorales.pickle",
+                    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/jsb_chorales.pickle",
                     "jsb_chorales.pkl")
 
 PIANO_MIDI = dset("piano_midi",
-                  "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/piano_midi.pickle",
+                  "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/piano_midi.pickle",
                   "piano_midi.pkl")
 
 MUSE_DATA = dset("muse_data",
-                 "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/muse_data.pickle",
+                 "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/muse_data.pickle",
                  "muse_data.pkl")
 
 NOTTINGHAM = dset("nottingham",
-                  "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/nottingham.pickle",
+                  "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/nottingham.pickle",
                   "nottingham.pkl")
 
 

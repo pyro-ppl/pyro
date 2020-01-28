@@ -1,12 +1,18 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+import io
+import warnings
+
 import pytest
 import torch
 from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.autoguide.initialization import init_to_mean, init_to_median
-from pyro.contrib.easyguide import easy_guide
+from pyro.contrib.easyguide import EasyGuide, easy_guide
 from pyro.infer import SVI, Trace_ELBO
+from pyro.infer.autoguide.initialization import init_to_mean, init_to_median
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
 
@@ -61,6 +67,35 @@ def test_delta_smoke(init_fn):
         guide.init = init_fn
 
     check_guide(guide)
+
+
+class PickleGuide(EasyGuide):
+    def __init__(self, model):
+        super().__init__(model)
+        self.init = init_to_median
+
+    def guide(self, batch, subsample, full_size):
+        self.map_estimate("drift")
+        with self.plate("data", full_size, subsample=subsample):
+            self.group(match="state_[0-9]*").map_estimate()
+
+
+def test_serialize():
+    guide = PickleGuide(model)
+    check_guide(guide)
+
+    # Work around https://github.com/pytorch/pytorch/issues/27972
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        f = io.BytesIO()
+        torch.save(guide, f)
+        f.seek(0)
+        actual = torch.load(f)
+
+    assert type(actual) == type(guide)
+    assert dir(actual) == dir(guide)
+    check_guide(guide)
+    check_guide(actual)
 
 
 @pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])

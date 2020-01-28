@@ -1,8 +1,11 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
-from torch.nn import Parameter
 
-from .kernel import Kernel
+from pyro.contrib.gp.kernels.kernel import Kernel
+from pyro.nn.module import PyroParam
 
 
 def _torch_sqrt(x, eps=1e-12):
@@ -26,15 +29,13 @@ class Isotropy(Kernel):
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Isotropy, self).__init__(input_dim, active_dims)
+        super().__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
-        self.variance = Parameter(variance)
-        self.set_constraint("variance", constraints.positive)
+        self.variance = PyroParam(variance, constraints.positive)
 
         lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
-        self.lengthscale = Parameter(lengthscale)
-        self.set_constraint("lengthscale", constraints.positive)
+        self.lengthscale = PyroParam(lengthscale, constraints.positive)
 
     def _square_scaled_dist(self, X, Z=None):
         r"""
@@ -77,7 +78,7 @@ class RBF(Isotropy):
     .. note:: This kernel also has name `Squared Exponential` in literature.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(RBF, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -99,12 +100,11 @@ class RationalQuadratic(Isotropy):
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, scale_mixture=None,
                  active_dims=None):
-        super(RationalQuadratic, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
         if scale_mixture is None:
             scale_mixture = torch.tensor(1.)
-        self.scale_mixture = Parameter(scale_mixture)
-        self.set_constraint("scale_mixture", constraints.positive)
+        self.scale_mixture = PyroParam(scale_mixture, constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -121,7 +121,7 @@ class Exponential(Isotropy):
         :math:`k(x, z) = \sigma^2\exp\left(-\frac{|x-z|}{l}\right).`
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Exponential, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -139,7 +139,7 @@ class Matern32(Isotropy):
         \exp\left(-\sqrt{3} \times \frac{|x-z|}{l}\right).`
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Matern32, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -158,7 +158,7 @@ class Matern52(Isotropy):
         \frac{|x-z|^2}{l^2}\right)\exp\left(-\sqrt{5} \times \frac{|x-z|}{l}\right).`
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
-        super(Matern52, self).__init__(input_dim, variance, lengthscale, active_dims)
+        super().__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:

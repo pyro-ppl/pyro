@@ -1,23 +1,32 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import weakref
 from abc import ABCMeta, abstractmethod
+from contextlib import ExitStack
 
 import torch
-from contextlib import ExitStack
 from torch.distributions import biject_to
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
-from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.distributions.util import broadcast_shape, sum_rightmost
+from pyro.infer.autoguide.initialization import InitMessenger
+from pyro.nn.module import PyroModule, PyroParam
 from pyro.poutine.util import prune_subsample_sites
 
 
-class EasyGuide(object, metaclass=ABCMeta):
+class _EasyGuideMeta(type(PyroModule), ABCMeta):
+    pass
+
+
+class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
     """
-    Base class for "easy guides".
+    Base class for "easy guides", which are more flexible than
+    :class:`~pyro.infer.AutoGuide` s, but are easier to write than raw Pyro guides.
 
     Derived classes should define a :meth:`guide` method. This :meth:`guide`
     method can combine ordinary guide statements (e.g. ``pyro.sample`` and
@@ -34,11 +43,17 @@ class EasyGuide(object, metaclass=ABCMeta):
     :param callable model: A Pyro model.
     """
     def __init__(self, model):
-        self.model = model
+        super().__init__()
+        self._pyro_name = type(self).__name__
+        self._model = (model,)
         self.prototype_trace = None
         self.frames = {}
         self.groups = {}
         self.plates = {}
+
+    @property
+    def model(self):
+        return self._model[0]
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -73,7 +88,7 @@ class EasyGuide(object, metaclass=ABCMeta):
         """
         return site["fn"]()
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         """
         Runs the guide. This is typically used by inference algorithms.
         """
@@ -121,28 +136,29 @@ class EasyGuide(object, metaclass=ABCMeta):
         """
         site = self.prototype_trace.nodes[name]
         fn = site["fn"]
-        param_name = "auto_{}".format(name)
-        init_value = None
-        if param_name not in pyro.get_param_store():
+        event_dim = fn.event_dim
+        init_needed = not hasattr(self, name)
+        if init_needed:
             init_value = site["value"].detach()
         with ExitStack() as stack:
             for frame in site["cond_indep_stack"]:
                 plate = self.plate(frame.name)
                 if plate not in runtime._PYRO_STACK:
                     stack.enter_context(plate)
-                elif init_value is not None and plate.subsample_size < plate.size:
+                elif init_needed and plate.subsample_size < plate.size:
                     # Repeat the init_value to full size.
-                    dim = plate.dim - fn.event_dim
+                    dim = plate.dim - event_dim
                     assert init_value.size(dim) == plate.subsample_size
                     ind = torch.arange(plate.size, device=init_value.device)
                     ind = ind % plate.subsample_size
                     init_value = init_value.index_select(dim, ind)
-            value = pyro.param(param_name, init_value,
-                               constraint=fn.support, event_dim=fn.event_dim)
-            return pyro.sample(name, dist.Delta(value, event_dim=fn.event_dim))
+            if init_needed:
+                setattr(self, name, PyroParam(init_value, fn.support, event_dim))
+            value = getattr(self, name)
+            return pyro.sample(name, dist.Delta(value, event_dim=event_dim))
 
 
-class Group(object):
+class Group:
     """
     An autoguide helper to match a group of model sites.
 
@@ -190,6 +206,15 @@ class Group(object):
             self._site_batch_shapes[site["name"]] = site_batch_shape
             self._site_sizes[site["name"]] = site_batch_shape.numel() * site_event_numel
         self.event_shape = torch.Size([sum(self._site_sizes.values())])
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_guide'] = state['_guide']()  # weakref -> ref
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._guide = weakref.ref(self._guide)  # ref -> weakref
 
     @property
     def guide(self):
@@ -274,6 +299,9 @@ def easy_guide(model):
             def guide(self, foo, bar):
                 return my_guide(foo, bar)
         guide = Guide(model)
+
+    Note ``@easy_guide`` wrappers cannot be pickled; to build a guide that can
+    be pickled, instead subclass from :class:`EasyGuide`.
 
     :param callable model: a Pyro model.
     """

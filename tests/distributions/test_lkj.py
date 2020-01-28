@@ -1,9 +1,15 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+import math
+
 import pytest
 import torch
-import math
-from torch.distributions import biject_to, transform_to, TransformedDistribution, Beta, AffineTransform
-from pyro.distributions.lkj import (corr_cholesky_constraint, CorrLCholeskyTransform, LKJCorrCholesky)
-from tests.common import assert_tensors_equal, assert_equal
+from torch.distributions import AffineTransform, Beta, TransformedDistribution, biject_to, transform_to
+
+from pyro.distributions import constraints, transforms
+from pyro.distributions.lkj import LKJCorrCholesky
+from tests.common import assert_equal, assert_tensors_equal
 
 
 @pytest.mark.parametrize("value_shape", [(1, 1), (3, 3), (5, 5)])
@@ -12,7 +18,7 @@ def test_constraint(value_shape):
     value.diagonal(dim1=-2, dim2=-1).exp_()
     value = value / value.norm(2, dim=-1, keepdim=True)
 
-    assert (corr_cholesky_constraint.check(value) == 1).all()
+    assert (constraints.corr_cholesky_constraint.check(value) == 1).all()
 
 
 def _autograd_log_det(ys, x):
@@ -23,7 +29,7 @@ def _autograd_log_det(ys, x):
 
 @pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
 def test_unconstrained_to_corr_cholesky_transform(y_shape):
-    transform = CorrLCholeskyTransform()
+    transform = transforms.CorrLCholeskyTransform()
     y = torch.empty(y_shape).uniform_(-4, 4).requires_grad_()
     x = transform(y)
 
@@ -56,7 +62,7 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
 @pytest.mark.parametrize("x_shape", [(1,), (3, 1), (6,), (1, 6), (5, 6)])
 @pytest.mark.parametrize("mapping", [biject_to, transform_to])
 def test_corr_cholesky_transform(x_shape, mapping):
-    transform = mapping(corr_cholesky_constraint)
+    transform = mapping(constraints.corr_cholesky_constraint)
     x = torch.randn(x_shape, requires_grad=True).clamp(-2, 2)
     y = transform(x)
 

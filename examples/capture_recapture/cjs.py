@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 We show how to implement several variants of the Cormack-Jolly-Seber (CJS)
 [4, 5, 6] model used in ecology to analyze animal capture-recapture data.
@@ -37,7 +40,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.autoguide import AutoDiagonalNormal
-from pyro.infer import SVI, TraceEnum_ELBO
+from pyro.infer import SVI, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.optim import Adam
 
 
@@ -262,10 +265,17 @@ def main(args):
     guide = AutoDiagonalNormal(poutine.block(model, expose_fn=expose_fn))
 
     # since we enumerate the discrete random variables,
-    # we need to use TraceEnum_ELBO.
-    elbo = TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
+    # we need to use TraceEnum_ELBO or TraceTMC_ELBO.
     optim = Adam({'lr': args.learning_rate})
-    svi = SVI(model, guide, optim, elbo)
+    if args.tmc:
+        elbo = TraceTMC_ELBO(max_plate_nesting=1)
+        tmc_model = poutine.infer_config(
+            model,
+            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
+        svi = SVI(tmc_model, guide, optim, elbo)
+    else:
+        elbo = TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
+        svi = SVI(model, guide, optim, elbo)
 
     losses = []
 
@@ -290,5 +300,11 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dataset", default="dipper", type=str)
     parser.add_argument("-n", "--num-steps", default=400, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
+    parser.add_argument("--tmc", action='store_true',
+                        help="Use Tensor Monte Carlo instead of exact enumeration "
+                             "to estimate the marginal likelihood. You probably don't want to do this, "
+                             "except to see that TMC makes Monte Carlo gradient estimation feasible "
+                             "even with very large numbers of non-reparametrized variables.")
+    parser.add_argument("--tmc-num-samples", default=10, type=int)
     args = parser.parse_args()
     main(args)

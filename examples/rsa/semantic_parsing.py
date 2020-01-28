@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Combining models of RSA pragmatics and CCG-based compositional semantics.
 
@@ -12,7 +15,7 @@ import collections
 import pyro
 import pyro.distributions as dist
 
-from search_inference import HashingMarginal, BestFirstSearch, factor, memoize
+from search_inference import HashingMarginal, BestFirstSearch, memoize
 
 torch.set_default_dtype(torch.float64)
 
@@ -42,7 +45,7 @@ def Obj(name):
                tall=flip(name + "_tall", 0.5))
 
 
-class Meaning(object):
+class Meaning:
     def sem(self, world):
         raise NotImplementedError
 
@@ -184,10 +187,10 @@ def world_prior(num_objs, meaning_fn):
     for i in range(num_objs):
         world.append(Obj("obj_{}".format(i)))
         new_factor = heuristic(meaning_fn(world))
-        factor("factor_{}".format(i), new_factor - prev_factor)
+        pyro.factor("factor_{}".format(i), new_factor - prev_factor)
         prev_factor = new_factor
 
-    factor("factor_{}".format(num_objs), prev_factor * -1)
+    pyro.factor("factor_{}".format(num_objs), prev_factor * -1)
     return tuple(world)
 
 
@@ -276,7 +279,7 @@ def meaning(utterance):
 def literal_listener(utterance):
     m = meaning(utterance)
     world = world_prior(2, m)
-    factor("world_constraint", heuristic(m(world)) * 1000)
+    pyro.factor("world_constraint", heuristic(m(world)) * 1000)
     return world
 
 
@@ -306,7 +309,7 @@ def rsa_listener(utterance, qud):
 def literal_listener_raw(utterance, qud):
     m = meaning(utterance)
     world = world_prior(3, m)
-    factor("world_constraint", heuristic(m(world)) * 1000)
+    pyro.factor("world_constraint", heuristic(m(world)) * 1000)
     return qud(world)
 
 
@@ -337,7 +340,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.4.0')
+    assert pyro.__version__.startswith('1.2.1')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=10, type=int)
     args = parser.parse_args()

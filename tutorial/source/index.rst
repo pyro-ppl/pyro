@@ -37,6 +37,7 @@ Welcome to Pyro Examples and Tutorials!
    dmm
    air
    ss-vae
+   stable
 
 .. toctree::
    :maxdepth: 2
@@ -52,12 +53,16 @@ Welcome to Pyro Examples and Tutorials!
    RSA-implicature
    RSA-hyperbole
    ekf
+   working_memory
+   elections
+   dirichlet_process_mixture
 
 .. toctree::
    :maxdepth: 2
    :caption: Code Examples:
 
    capture_recapture
+   cevae
    hmm
    lda
    mcmc
@@ -65,6 +70,7 @@ Welcome to Pyro Examples and Tutorials!
    dkl
    einsum
    smcfilter
+   timeseries
 
 
 Indices and tables

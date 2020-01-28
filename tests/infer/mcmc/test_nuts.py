@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 import os
 from collections import namedtuple
@@ -182,9 +185,7 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     assert_equal(samples["p_latent"].mean(0), true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
-    pytest.mark.skipif("CUDA_TEST" in os.environ, reason="FIXME: Too small step size with CUDA on JIT.")
-])], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 @pytest.mark.parametrize("use_multinomial_sampling", [True, False])
 def test_gamma_normal(jit, use_multinomial_sampling):
     def model(data):
@@ -224,9 +225,7 @@ def test_dirichlet_categorical(jit):
     assert_equal(posterior.mean(0), true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
-    pytest.mark.skipif("CUDA_TEST" in os.environ, reason="FIXME: Too small step size with CUDA on JIT.")
-])], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_beta(jit):
     def model(data):
         alpha_prior = pyro.sample('alpha', dist.Gamma(concentration=1., rate=1.))
@@ -313,8 +312,10 @@ def test_gaussian_hmm(num_steps):
         guide = AutoDelta(poutine.block(model, expose_fn=lambda msg: not msg["name"].startswith("x") and
                                         not msg["name"].startswith("y")))
         elbo = TraceEnum_ELBO(max_plate_nesting=1)
-        svi = SVI(model, guide, optim.Adam({"lr": .01}), elbo, num_steps=100).run(data)
-        return svi.exec_traces[-1]
+        svi = SVI(model, guide, optim.Adam({"lr": .01}), elbo)
+        for _ in range(100):
+            svi.step(data)
+        return poutine.trace(guide).get_trace(data)
 
     def _generate_data():
         transition_probs = torch.rand(dim, dim)

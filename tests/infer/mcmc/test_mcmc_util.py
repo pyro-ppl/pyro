@@ -1,12 +1,16 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.infer import Predictive
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
-from pyro.infer.mcmc.util import initialize_model, predictive
-from pyro.util import ignore_experimental_warning, optional
+from pyro.infer.mcmc.util import initialize_model
+from pyro.util import optional
 from tests.common import assert_close
 
 
@@ -37,15 +41,15 @@ def test_predictive(num_samples, parallel):
                 warmup_steps=100)
     mcmc.run(data)
     samples = mcmc.get_samples()
-    with ignore_experimental_warning():
-        with optional(pytest.warns(UserWarning), num_samples not in (None, 100)):
-            predictive_samples = predictive(model, samples,
-                                            num_samples=num_samples,
-                                            return_sites=["beta", "obs"],
-                                            parallel=parallel)
+    with optional(pytest.warns(UserWarning), num_samples not in (None, 100)):
+        predictive = Predictive(model, samples,
+                                num_samples=num_samples,
+                                return_sites=["beta", "obs"],
+                                parallel=parallel)
+        predictive_samples = predictive()
 
     # check shapes
-    assert predictive_samples["beta"].shape == (100, 5)
+    assert predictive_samples["beta"].shape == (100, 1, 5)
     assert predictive_samples["obs"].shape == (100, 1000, 5)
 
     # check sample mean

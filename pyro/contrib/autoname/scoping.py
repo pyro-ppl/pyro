@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ``pyro.contrib.autoname.scoping`` contains the implementation of
 :func:`pyro.contrib.autoname.scope`, a tool for automatically appending
@@ -15,7 +18,7 @@ class NameCountMessenger(Messenger):
     """
     def __enter__(self):
         self._names = set()
-        return super(NameCountMessenger, self).__enter__()
+        return super().__enter__()
 
     def _increment_name(self, name, label):
         while (name, label) in self._names:
@@ -45,7 +48,7 @@ class ScopeMessenger(Messenger):
     ``ScopeMessenger`` is the implementation of :func:`pyro.contrib.autoname.scope`
     """
     def __init__(self, prefix=None, inner=None):
-        super(ScopeMessenger, self).__init__()
+        super().__init__()
         self.prefix = prefix
         self.inner = inner
 
@@ -63,7 +66,7 @@ class ScopeMessenger(Messenger):
             # so that the same mechanism that adds counters to sample names
             # can be used to add a counter to a scope name
             self.prefix = self._collect_scope(self.prefix)
-        return super(ScopeMessenger, self).__enter__()
+        return super().__enter__()
 
     def __call__(self, fn):
         if self.prefix is None:

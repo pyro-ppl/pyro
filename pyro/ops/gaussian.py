@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -121,6 +124,17 @@ class Gaussian:
         result = result + self.info_vec
         result = (value * result).sum(-1)
         return result + self.log_normalizer
+
+    def rsample(self, sample_shape=torch.Size()):
+        """
+        Reparameterized sampler.
+        """
+        P_chol = self.precision.cholesky()
+        loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
+        shape = sample_shape + self.batch_shape + (self.dim(), 1)
+        noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
+        noise = noise.triangular_solve(P_chol, upper=False, transpose=True).solution.squeeze(-1)
+        return loc + noise
 
     def condition(self, value):
         """
@@ -249,22 +263,40 @@ class AffineNormal:
                           - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
+    def to_gaussian(self):
+        mvn = torch.distributions.MultivariateNormal(self.loc, scale_tril=self.scale.diag_embed())
+        return matrix_and_mvn_to_gaussian(self.matrix, mvn)
+
+    def __add__(self, other):
+        return self.to_gaussian() + other
+
 
 def mvn_to_gaussian(mvn):
     """
-    Convert a MultivaiateNormal distribution to a Gaussian.
+    Convert a MultivariateNormal distribution to a Gaussian.
 
     :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
     :return: An equivalent Gaussian object.
     :rtype: ~pyro.ops.gaussian.Gaussian
     """
-    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert (isinstance(mvn, torch.distributions.MultivariateNormal) or
+            (isinstance(mvn, torch.distributions.Independent) and
+             isinstance(mvn.base_dist, torch.distributions.Normal)))
+    if isinstance(mvn, torch.distributions.Independent):
+        mvn = mvn.base_dist
+        precision_diag = mvn.scale.pow(-2)
+        precision = precision_diag.diag_embed()
+        info_vec = mvn.loc * precision_diag
+        scale_diag = mvn.scale
+    else:
+        precision = mvn.precision_matrix
+        info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
+        scale_diag = mvn.scale_tril.diagonal(dim1=-2, dim2=-1)
+
     n = mvn.loc.size(-1)
-    precision = mvn.precision_matrix
-    info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
     log_normalizer = (-0.5 * n * math.log(2 * math.pi) +
                       -0.5 * (info_vec * mvn.loc).sum(-1) -
-                      mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+                      scale_diag.log().sum(-1))
     return Gaussian(log_normalizer, info_vec, precision)
 
 

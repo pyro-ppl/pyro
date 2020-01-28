@@ -34,6 +34,15 @@ Newton Optimizers
     :show-inheritance:
     :member-order: bysource
 
+Tensor Utilities
+----------------
+
+.. automodule:: pyro.ops.tensor_utils
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Tensor Indexing
 ---------------
 
@@ -70,6 +79,16 @@ Statistical Utilities
 ---------------------
 
 .. automodule:: pyro.ops.stats
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+ 
+State Space Model and GP Utilities
+----------------------------------
+
+.. automodule:: pyro.ops.ssm_gp
     :members:
     :undoc-members:
     :show-inheritance:

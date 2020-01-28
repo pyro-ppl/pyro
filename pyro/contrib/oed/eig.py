@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import math
 import warnings
@@ -44,7 +47,7 @@ def laplace_eig(model, design, observation_labels, target_labels, guide, loss, o
     :param dict prior_entropy_kwargs: parameters for estimating the prior entropy: `num_prior_samples` indicating the
         number of samples for a MC estimate of prior entropy, and `mean_field` indicating if an analytic form for
         a mean-field prior should be tried.
-    :return: EIG estimate
+    :return: EIG estimate, optionally includes full optimization history
     :rtype: torch.Tensor
     """
 
@@ -83,7 +86,10 @@ def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, los
         conditioned_model = pyro.condition(model, data=y_dict)
         # Here just using SVI to run the MAP optimization
         guide.train()
-        SVI(conditioned_model, guide=guide, loss=loss, optim=optim, num_steps=num_steps, num_samples=1).run(design)
+        svi = SVI(conditioned_model, guide=guide, loss=loss, optim=optim)
+        with poutine.block():
+            for _ in range(num_steps):
+                svi.step(design)
         # Recover the entropy
         with poutine.block():
             final_loss = loss(conditioned_model, guide, design)
@@ -105,7 +111,10 @@ def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, los
 # Deprecated
 def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None,
            eig=True, **prior_entropy_kwargs):
-    """Estimates the expected information gain (EIG) using variational inference (VI).
+    """.. deprecated:: 0.4.1
+        Use `posterior_eig` instead.
+
+    Estimates the expected information gain (EIG) using variational inference (VI).
 
     The APE is defined as
 
@@ -142,8 +151,8 @@ def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_p
     :param dict prior_entropy_kwargs: parameters for estimating the prior entropy: `num_prior_samples` indicating the
         number of samples for a MC estimate of prior entropy, and `mean_field` indicating if an analytic form for
         a mean-field prior should be tried.
-    :return: EIG estimate
-    :rtype: `torch.Tensor`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor
 
     """
 
@@ -159,13 +168,17 @@ def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_p
 
 
 def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None):
+    svi_num_steps = vi_parameters.pop('num_steps')
 
     def posterior_entropy(y_dist, design):
         # Important that y_dist is sampled *within* the function
         y = pyro.sample("conditioning_y", y_dist)
         y_dict = {label: y[i, ...] for i, label in enumerate(observation_labels)}
         conditioned_model = pyro.condition(model, data=y_dict)
-        SVI(conditioned_model, **vi_parameters).run(design)
+        svi = SVI(conditioned_model, **vi_parameters)
+        with poutine.block():
+            for _ in range(svi_num_steps):
+                svi.step(design)
         # Recover the entropy
         with poutine.block():
             guide = vi_parameters["guide"]
@@ -185,8 +198,7 @@ def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_
 
 def nmc_eig(model, design, observation_labels, target_labels=None,
             N=100, M=10, M_prime=None, independent_priors=False):
-    """
-   Nested Monte Carlo estimate of the expected information
+    """Nested Monte Carlo estimate of the expected information
     gain (EIG). The estimate is, when there are not any random effects,
 
     .. math::
@@ -194,7 +206,8 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
         \\frac{1}{N}\\sum_{n=1}^N \\log p(y_n | \\theta_n, d) -
         \\frac{1}{N}\\sum_{n=1}^N \\log \\left(\\frac{1}{M}\\sum_{m=1}^M p(y_n | \\theta_m, d)\\right)
 
-    The estimate is, in the presence of random effects,
+    where :math:`\\theta_n, y_n \\sim p(\\theta, y | d)` and :math:`\\theta_m \\sim p(\\theta)`.
+    The estimate in the presence of random effects is
 
     .. math::
 
@@ -203,6 +216,9 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
         \\frac{1}{N}\\sum_{n=1}^N \\log \\left(\\frac{1}{M}\\sum_{m=1}^{M}
         p(y_n | \\theta_m, \\widetilde{\\theta}_{m}, d)\\right)
 
+    where :math:`\\widetilde{\\theta}` are the random effects with
+    :math:`\\widetilde{\\theta}_{nm} \\sim p(\\widetilde{\\theta}|\\theta=\\theta_n)` and
+    :math:`\\theta_m,\\widetilde{\\theta}_m \\sim p(\\theta,\\widetilde{\\theta})`.
     The latter form is used when `M_prime != None`.
 
     :param function model: A pyro model accepting `design` as only argument.
@@ -219,8 +235,8 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
     :param bool independent_priors: Only used when `M_prime` is not `None`. Indicates whether the prior distributions
         for the target variables and the nuisance variables are independent. In this case, it is not necessary to
         sample the targets conditional on the nuisance variables.
-    :return: EIG estimate
-    :rtype: `torch.Tensor`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor
     """
 
     if isinstance(observation_labels, str):  # list of strings instead of strings
@@ -300,18 +316,18 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
     :param list target_labels: A subset of the sample sites over which the posterior
         entropy is to be measured.
     :param int num_samples: Number of samples per iteration.
-    :param int num_steps: Number of optimisation steps.
+    :param int num_steps: Number of optimization steps.
     :param function or torch.nn.Module T: optimisable function `T` for use in the
         Donsker-Varadhan loss function.
     :param pyro.optim.Optim optim: Optimiser to use.
     :param bool return_history: If `True`, also returns a tensor giving the loss function
-        at each step of the optimisation.
+        at each step of the optimization.
     :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: EIG estimate, optionally includes full optimisatio history
-    :rtype: `torch.Tensor` or `tuple`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor or tuple
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -327,16 +343,15 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
                   *args, **kwargs):
     """
     Posterior estimate of expected information gain (EIG) computed from the average posterior entropy (APE)
-    using `EIG = prior entropy - APE`. See [1] for full details.
+    using :math:`EIG(d) = H[p(\\theta)] - APE(d)`. See [1] for full details.
 
     The posterior representation of APE is
 
-        :math:`sup_{q}E_{p(y, \\theta | d)}[\\log q(\\theta | y, d)]`
+        :math:`\\sup_{q}\\ E_{p(y, \\theta | d)}[\\log q(\\theta | y, d)]`
 
     where :math:`q` is any distribution on :math:`\\theta`.
 
-    This method optimises the loss over a given guide family `guide`
-    representing :math:`q`.
+    This method optimises the loss over a given `guide` family representing :math:`q`.
 
     [1] Foster, Adam, et al. "Variational Bayesian Optimal Experimental Design." arXiv preprint arXiv:1903.05480 (2019).
 
@@ -349,13 +364,13 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
     :param list target_labels: A subset of the sample sites over which the posterior
         entropy is to be measured.
     :param int num_samples: Number of samples per iteration.
-    :param int num_steps: Number of optimisation steps.
+    :param int num_steps: Number of optimization steps.
     :param function guide: guide family for use in the (implicit) posterior estimation.
         The parameters of `guide` are optimised to maximise the posterior
         objective.
     :param pyro.optim.Optim optim: Optimiser to use.
     :param bool return_history: If `True`, also returns a tensor giving the loss function
-        at each step of the optimisation.
+        at each step of the optimization.
     :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
@@ -366,8 +381,8 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
     :param dict prior_entropy_kwargs: parameters for estimating the prior entropy: `num_prior_samples` indicating the
         number of samples for a MC estimate of prior entropy, and `mean_field` indicating if an analytic form for
         a mean-field prior should be tried.
-    :return: EIG estimate, optionally includes full optimisation history
-    :rtype: `torch.Tensor` or `tuple`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor or tuple
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -396,11 +411,11 @@ def marginal_eig(model, design, observation_labels, target_labels,
 
     The marginal representation of EIG is
 
-        :math:`inf_{q}E_{p(y, \\theta | d)}\\left[\\log \\frac{p(y | \\theta, d)}{q(y | d)} \\right]`
+        :math:`\\inf_{q}\\ E_{p(y, \\theta | d)}\\left[\\log \\frac{p(y | \\theta, d)}{q(y | d)} \\right]`
 
-    where :math:`q` is any distribution on :math:`y`.
+    where :math:`q` is any distribution on :math:`y`. A variational family for :math:`q` is specified in the `guide`.
 
-    .. warning :: this method does **not** estimate the correct quantity in the presence of random effects.
+    .. warning :: This method does **not** estimate the correct quantity in the presence of random effects.
 
     [1] Foster, Adam, et al. "Variational Bayesian Optimal Experimental Design." arXiv preprint arXiv:1903.05480 (2019).
 
@@ -413,18 +428,18 @@ def marginal_eig(model, design, observation_labels, target_labels,
     :param list target_labels: A subset of the sample sites over which the posterior
         entropy is to be measured.
     :param int num_samples: Number of samples per iteration.
-    :param int num_steps: Number of optimisation steps.
+    :param int num_steps: Number of optimization steps.
     :param function guide: guide family for use in the marginal estimation.
         The parameters of `guide` are optimised to maximise the log-likelihood objective.
     :param pyro.optim.Optim optim: Optimiser to use.
     :param bool return_history: If `True`, also returns a tensor giving the loss function
-        at each step of the optimisation.
+        at each step of the optimization.
     :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: EIG estimate, optionally includes full optimisation history
-    :rtype: `torch.Tensor` or `tuple`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor or tuple
     """
 
     if isinstance(observation_labels, str):
@@ -453,20 +468,20 @@ def marginal_likelihood_eig(model, design, observation_labels, target_labels,
     :param list target_labels: A subset of the sample sites over which the posterior
         entropy is to be measured.
     :param int num_samples: Number of samples per iteration.
-    :param int num_steps: Number of optimisation steps.
+    :param int num_steps: Number of optimization steps.
     :param function marginal_guide: guide family for use in the marginal estimation.
         The parameters of `guide` are optimised to maximise the log-likelihood objective.
     :param function cond_guide: guide family for use in the likelihood (conditional) estimation.
         The parameters of `guide` are optimised to maximise the log-likelihood objective.
     :param pyro.optim.Optim optim: Optimiser to use.
     :param bool return_history: If `True`, also returns a tensor giving the loss function
-        at each step of the optimisation.
+        at each step of the optimization.
     :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: EIG estimate, optionally includes full optimisation history
-    :rtype: `torch.Tensor` or `tuple`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor or tuple
     """
 
     if isinstance(observation_labels, str):
@@ -498,18 +513,18 @@ def lfire_eig(model, design, observation_labels, target_labels,
     :param int num_y_samples: Number of samples to take in :math:`y` for each :math:`\\theta`.
     :param: int num_theta_samples: Number of initial samples in :math:`\\theta` to take. The likelihood ratio
                                    is estimated by LFIRE for each sample.
-    :param int num_steps: Number of optimisation steps.
+    :param int num_steps: Number of optimization steps.
     :param function classifier: a Pytorch or Pyro classifier used to distinguish between samples of :math:`y` under
                                 :math:`p(y|d)` and samples under :math:`p(y|\\theta,d)` for some :math:`\\theta`.
     :param pyro.optim.Optim optim: Optimiser to use.
     :param bool return_history: If `True`, also returns a tensor giving the loss function
-        at each step of the optimisation.
+        at each step of the optimization.
     :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: EIG estimate, optionally includes full optimisation history
-    :rtype: `torch.Tensor` or `tuple`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor or tuple
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -549,6 +564,8 @@ def vnmc_eig(model, design, observation_labels, target_labels,
     As :math:`N \\to \\infty` this is an upper bound on EIG. We minimise this upper bound by stochastic gradient
     descent.
 
+    .. warning :: This method cannot be used in the presence of random effects.
+
     [1] Foster, Adam, et al. "Variational Bayesian Optimal Experimental Design." arXiv preprint arXiv:1903.05480 (2019).
 
     :param function model: A pyro model accepting `design` as only argument.
@@ -560,18 +577,18 @@ def vnmc_eig(model, design, observation_labels, target_labels,
     :param list target_labels: A subset of the sample sites over which the posterior
         entropy is to be measured.
     :param tuple num_samples: Number of (:math:`N, M`) samples per iteration.
-    :param int num_steps: Number of optimisation steps.
+    :param int num_steps: Number of optimization steps.
     :param function guide: guide family for use in the posterior estimation.
         The parameters of `guide` are optimised to minimise the VNMC upper bound.
     :param pyro.optim.Optim optim: Optimiser to use.
     :param bool return_history: If `True`, also returns a tensor giving the loss function
-        at each step of the optimisation.
+        at each step of the optimization.
     :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
         `design`.
     :param tuple final_num_samples: The number of (:math:`N, M`) samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: EIG estimate, optionally includes full optimisation history
-    :rtype: `torch.Tensor` or `tuple`
+    :return: EIG estimate, optionally includes full optimization history
+    :rtype: torch.Tensor or tuple
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -605,6 +622,10 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         if return_history:
             history.append(loss)
         optim(params)
+        try:
+            optim.step()
+        except AttributeError:
+            pass
 
     _, loss = loss_fn(final_design, final_num_samples, evaluation=True)
     if return_history:
@@ -875,7 +896,7 @@ class _EwmaLogFn(torch.autograd.Function):
 _ewma_log_fn = _EwmaLogFn.apply
 
 
-class EwmaLog(object):
+class EwmaLog:
     """Logarithm function with exponentially weighted moving average
     for gradients.
 

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 from functools import partial
 
@@ -12,7 +15,7 @@ from pyro.infer.mcmc.api import MCMC, _UnarySampler, _MultiSampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
 from pyro.util import optional
-from tests.common import skipif_param, assert_close
+from tests.common import assert_close
 
 
 class PriorKernel(MCMCKernel):
@@ -25,10 +28,17 @@ class PriorKernel(MCMCKernel):
         self.data = None
         self._initial_params = None
         self._prototype_trace = None
+        self.transforms = None
 
     def setup(self, warmup_steps, data):
         self.data = data
-        self._prototype_trace = poutine.trace(self.model).get_trace(data)
+        init_params, potential_fn, transforms, model_trace = initialize_model(self.model,
+                                                                              model_args=(data,))
+        if self._initial_params is None:
+            self._initial_params = init_params
+        if self.transforms is None:
+            self.transforms = transforms
+        self._prototype_trace = model_trace
 
     def diagnostics(self):
         return {'dummy_key': 'dummy_value'}
@@ -66,25 +76,30 @@ def normal_normal_model(data):
 @pytest.mark.parametrize('num_draws', [None, 1800, 2200])
 @pytest.mark.parametrize('group_by_chain', [False, True])
 @pytest.mark.parametrize('num_chains', [1, 2])
+@pytest.mark.filterwarnings("ignore:num_chains")
 def test_mcmc_interface(num_draws, group_by_chain, num_chains):
     num_samples = 2000
     data = torch.tensor([1.0])
-    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,))
+    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,),
+                                                        num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100,
-                initial_params=initial_params, transforms=transforms)
+    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100, num_chains=num_chains,
+                mp_context="spawn", initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
     samples = mcmc.get_samples(num_draws, group_by_chain=group_by_chain)
     # test sample shape
     expected_samples = num_draws if num_draws is not None else num_samples
     if group_by_chain:
-        expected_shape = (mcmc.num_chains, expected_samples, 1) if mcmc.num_chains > 1 else (expected_samples, 1)
+        expected_shape = (mcmc.num_chains, expected_samples, 1)
+    elif num_draws is not None:
+        # FIXME: what is the expected behavior of num_draw is not None and group_by_chain=False?
+        expected_shape = (expected_samples, 1)
     else:
         expected_shape = (mcmc.num_chains * expected_samples, 1)
     assert samples['y'].shape == expected_shape
 
     # test sample stats
-    if group_by_chain and mcmc.num_chains > 1:
+    if group_by_chain:
         samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
     sample_mean = samples['y'].mean()
     sample_std = samples['y'].std()
@@ -98,21 +113,25 @@ def test_mcmc_interface(num_draws, group_by_chain, num_chains):
     (2, 2),
     (2, 3),
 ])
-def test_num_chains(num_chains, cpu_count, monkeypatch):
+@pytest.mark.parametrize("default_init_params", [True, False])
+def test_num_chains(num_chains, cpu_count, default_init_params,
+                    monkeypatch):
     monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda: cpu_count)
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model,
                                                         model_args=(data,),
                                                         num_chains=num_chains)
+    if default_init_params:
+        initial_params = None
     kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
-    mp_context = "spawn" if "CUDA_TEST" in os.environ else None
+    mp_context = "spawn"
     with optional(pytest.warns(UserWarning), available_cpu < num_chains):
         mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
                     initial_params=initial_params, transforms=transforms, mp_context=mp_context)
     mcmc.run(data)
-    assert mcmc.num_chains == min(num_chains, available_cpu)
-    if mcmc.num_chains == 1:
+    assert mcmc.num_chains == num_chains
+    if mcmc.num_chains == 1 or available_cpu < num_chains:
         assert isinstance(mcmc.sampler, _UnarySampler)
     else:
         assert isinstance(mcmc.sampler, _MultiSampler)
@@ -134,8 +153,9 @@ def _hook(iters, kernel, samples, stage, i):
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
+    2
 ])
+@pytest.mark.filterwarnings("ignore:num_chains")
 def test_null_model_with_hook(kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
     initial_params, potential_fn, transforms, _ = initialize_model(model,
@@ -153,25 +173,60 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
     samples = mcmc.get_samples()
     assert samples == {}
     if num_chains == 1:
-        expected = [("warmup", i) for i in range(num_warmup)] + [("sample", i) for i in range(num_samples)]
+        expected = [("Warmup", i) for i in range(num_warmup)] + [("Sample", i) for i in range(num_samples)]
         assert iters == expected
 
 
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
+    2
 ])
+@pytest.mark.filterwarnings("ignore:num_chains")
 def test_mcmc_diagnostics(num_chains):
     data = torch.tensor([2.0]).repeat(3)
     initial_params, _, transforms, _ = initialize_model(normal_normal_model,
                                                         model_args=(data,),
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
+    mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains, mp_context="spawn",
                 initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
+    if not torch.backends.mkl.is_available():
+        pytest.skip()
     diagnostics = mcmc.diagnostics()
     assert diagnostics["y"]["n_eff"].shape == data.shape
     assert diagnostics["y"]["r_hat"].shape == data.shape
     assert diagnostics["dummy_key"] == {'chain {}'.format(i): 'dummy_value'
                                         for i in range(num_chains)}
+
+
+@pytest.mark.filterwarnings("ignore:num_chains")
+def test_sequential_consistent(monkeypatch):
+    # test if there is no stuff left from the previous chain
+    monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda: 1)
+
+    class FirstKernel(NUTS):
+        def setup(self, warmup_steps, *args, **kwargs):
+            self._chain_id = 0 if '_chain_id' not in self.__dict__ else 1
+            pyro.set_rng_seed(self._chain_id)
+            super().setup(warmup_steps, *args, **kwargs)
+
+    class SecondKernel(NUTS):
+        def setup(self, warmup_steps, *args, **kwargs):
+            self._chain_id = 1 if '_chain_id' not in self.__dict__ else 0
+            pyro.set_rng_seed(self._chain_id)
+            super().setup(warmup_steps, *args, **kwargs)
+
+    data = torch.tensor([1.0])
+    kernel = FirstKernel(normal_normal_model)
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
+    mcmc.run(data)
+    samples1 = mcmc.get_samples(group_by_chain=True)
+
+    kernel = SecondKernel(normal_normal_model)
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
+    mcmc.run(data)
+    samples2 = mcmc.get_samples(group_by_chain=True)
+
+    assert_close(samples1["y"][0], samples2["y"][1])
+    assert_close(samples1["y"][1], samples2["y"][0])

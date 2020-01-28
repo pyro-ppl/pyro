@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.nn as nn
 
@@ -10,9 +13,9 @@ class DenseNN(nn.Module):
     Example usage:
 
     >>> input_dim = 10
-    >>> observed_dim = 5
-    >>> z = torch.rand(100, observed_dim)
-    >>> hypernet = DenseNN(observed_dim, [50], param_dims=[1, input_dim, input_dim])
+    >>> context_dim = 5
+    >>> z = torch.rand(100, context_dim)
+    >>> hypernet = DenseNN(context_dim, [50], param_dims=[1, input_dim, input_dim])
     >>> a, b, c = hypernet(z)  # parameters of size (100, 1), (100, 10), (100, 10)
 
     :param input_dim: the dimensionality of the input
@@ -34,7 +37,7 @@ class DenseNN(nn.Module):
             hidden_dims,
             param_dims=[1, 1],
             nonlinearity=nn.ReLU()):
-        super(DenseNN, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.contrib.gp.likelihoods.binary import Binary
 from pyro.contrib.gp.likelihoods.gaussian import Gaussian
 from pyro.contrib.gp.likelihoods.likelihood import Likelihood

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
@@ -8,7 +11,7 @@ from torch.nn.functional import softplus
 # z_what.
 class Encoder(nn.Module):
     def __init__(self, x_size, h_sizes, z_size, non_linear_layer):
-        super(Encoder, self).__init__()
+        super().__init__()
         self.z_size = z_size
         output_size = 2 * z_size
         self.mlp = MLP(x_size, h_sizes + [output_size], non_linear_layer)
@@ -21,7 +24,7 @@ class Encoder(nn.Module):
 # Takes a latent code, z_what, to pixel intensities.
 class Decoder(nn.Module):
     def __init__(self, x_size, h_sizes, z_size, bias, use_sigmoid, non_linear_layer):
-        super(Decoder, self).__init__()
+        super().__init__()
         self.bias = bias
         self.use_sigmoid = use_sigmoid
         self.mlp = MLP(z_size, h_sizes + [x_size], non_linear_layer)
@@ -40,7 +43,7 @@ class Decoder(nn.Module):
 # etc.
 class MLP(nn.Module):
     def __init__(self, in_size, out_sizes, non_linear_layer, output_non_linearity=False):
-        super(MLP, self).__init__()
+        super().__init__()
         assert len(out_sizes) >= 1
         layers = []
         in_sizes = [in_size] + out_sizes[0:-1]
@@ -61,7 +64,7 @@ class MLP(nn.Module):
 # distributions over z_where and z_pres.
 class Predict(nn.Module):
     def __init__(self, input_size, h_sizes, z_pres_size, z_where_size, non_linear_layer):
-        super(Predict, self).__init__()
+        super().__init__()
         self.z_pres_size = z_pres_size
         self.z_where_size = z_where_size
         output_size = z_pres_size + 2 * z_where_size
@@ -77,7 +80,7 @@ class Predict(nn.Module):
 
 class Identity(nn.Module):
     def __init__(self):
-        super(Identity, self).__init__()
+        super().__init__()
 
     def forward(self, x):
         return x

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Mini Pyro
 ---------
@@ -11,6 +14,7 @@ module.
 An accompanying example that makes use of this implementation can be
 found at examples/minipyro.py.
 """
+import random
 import warnings
 import weakref
 from collections import OrderedDict
@@ -35,7 +39,7 @@ def get_param_store():
 
 
 # The base effect handler class (called Messenger here for consistency with Pyro).
-class Messenger(object):
+class Messenger:
     def __init__(self, fn=None):
         self.fn = fn
 
@@ -64,7 +68,7 @@ class Messenger(object):
 # and returns a dictionary containing that data to the user.
 class trace(Messenger):
     def __enter__(self):
-        super(trace, self).__enter__()
+        super().__enter__()
         self.trace = OrderedDict()
         return self.trace
 
@@ -88,7 +92,7 @@ class trace(Messenger):
 class replay(Messenger):
     def __init__(self, fn, guide_trace):
         self.guide_trace = guide_trace
-        super(replay, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if msg["name"] in self.guide_trace:
@@ -101,11 +105,36 @@ class replay(Messenger):
 class block(Messenger):
     def __init__(self, fn=None, hide_fn=lambda msg: True):
         self.hide_fn = hide_fn
-        super(block, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if self.hide_fn(msg):
             msg["stop"] = True
+
+
+# seed is used to fix the RNG state when calling a model.
+class seed(Messenger):
+    def __init__(self, fn=None, rng_seed=None):
+        self.rng_seed = rng_seed
+        super().__init__(fn)
+
+    def __enter__(self):
+        self.old_state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
+        torch.manual_seed(self.rng_seed)
+        random.seed(self.rng_seed)
+        try:
+            import numpy as np
+            np.random.seed(self.rng_seed)
+            self.old_state['numpy'] = np.random.get_state()
+        except ImportError:
+            pass
+
+    def __exit__(self, type, value, traceback):
+        torch.set_rng_state(self.old_state['torch'])
+        random.setstate(self.old_state['random'])
+        if 'numpy' in self.old_state:
+            import numpy as np
+            np.random.set_state(self.old_state['numpy'])
 
 
 # This limited implementation of PlateMessenger only implements broadcasting.
@@ -114,7 +143,7 @@ class PlateMessenger(Messenger):
         assert dim < 0
         self.size = size
         self.dim = dim
-        super(PlateMessenger, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if msg["type"] == "sample":
@@ -150,18 +179,20 @@ def apply_stack(msg):
 
 # sample is an effectful version of Distribution.sample(...)
 # When any effect handlers are active, it constructs an initial message and calls apply_stack.
-def sample(name, fn, obs=None):
+def sample(name, fn, *args, **kwargs):
+    obs = kwargs.pop('obs', None)
 
     # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
-        return fn()
+        return fn(*args, **kwargs)
 
     # Otherwise, we initialize a message...
     initial_msg = {
         "type": "sample",
         "name": name,
         "fn": fn,
-        "args": (),
+        "args": args,
+        "kwargs": kwargs,
         "value": obs,
     }
 
@@ -172,7 +203,9 @@ def sample(name, fn, obs=None):
 
 # param is an effectful version of PARAM_STORE.setdefault that also handles constraints.
 # When any effect handlers are active, it constructs an initial message and calls apply_stack.
-def param(name, init_value=None, constraint=torch.distributions.constraints.real):
+def param(name, init_value=None, constraint=torch.distributions.constraints.real, event_dim=None):
+    if event_dim is not None:
+        raise NotImplementedError("minipyro.plate does not support the event_dim arg")
 
     def fn(init_value, constraint):
         if name in PARAM_STORE:
@@ -210,14 +243,16 @@ def param(name, init_value=None, constraint=torch.distributions.constraints.real
 
 
 # boilerplate to match the syntax of actual pyro.plate:
-def plate(name, size, dim):
+def plate(name, size, dim=None):
+    if dim is None:
+        raise NotImplementedError("minipyro.plate requires a dim arg")
     return PlateMessenger(fn=None, size=size, dim=dim)
 
 
 # This is a thin wrapper around the `torch.optim.Adam` class that
 # dynamically generates optimizers for dynamically generated parameters.
 # See http://docs.pyro.ai/en/0.3.1/optimization.html
-class Adam(object):
+class Adam:
     def __init__(self, optim_args):
         self.optim_args = optim_args
         # Each parameter will get its own optimizer, which we keep track
@@ -242,7 +277,7 @@ class Adam(object):
 # This is a unified interface for stochastic variational inference in Pyro.
 # The actual construction of the loss is taken care of by `loss`.
 # See http://docs.pyro.ai/en/0.3.1/inference_algos.html
-class SVI(object):
+class SVI:
     def __init__(self, model, guide, optim, loss):
         self.model = model
         self.guide = guide
@@ -315,7 +350,7 @@ def Trace_ELBO(**kwargs):
 # This is a Jit wrapper around elbo() that (1) delays tracing until the first
 # invocation, and (2) registers pyro.param() statements with torch.jit.trace.
 # This version does not support variable number of args or non-tensor kwargs.
-class JitTrace_ELBO(object):
+class JitTrace_ELBO:
     def __init__(self, **kwargs):
         self.ignore_jit_warnings = kwargs.pop("ignore_jit_warnings", False)
         self._compiled = None

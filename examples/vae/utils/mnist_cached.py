@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import errno
 import os
 from functools import reduce
@@ -129,7 +132,7 @@ class MNISTCached(MNIST):
     test_size = 10000
 
     def __init__(self, mode, sup_num, use_cuda=True, *args, **kwargs):
-        super(MNISTCached, self).__init__(train=mode in ["sup", "unsup", "valid"], *args, **kwargs)
+        super().__init__(train=mode in ["sup", "unsup", "valid"], *args, **kwargs)
 
         # transformations on MNIST data (normalization and one-hot conversion for labels)
         def transform(x):

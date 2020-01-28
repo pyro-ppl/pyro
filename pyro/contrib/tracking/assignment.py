@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import itertools
 import math
 import numbers
@@ -21,7 +24,7 @@ def _exp(value):
     return value.exp()
 
 
-class MarginalAssignment(object):
+class MarginalAssignment:
     """
     Computes marginal data associations between objects and detections.
 
@@ -72,7 +75,7 @@ class MarginalAssignment(object):
         self.exists_dist = dist.Bernoulli(logits=exists)
 
 
-class MarginalAssignmentSparse(object):
+class MarginalAssignmentSparse:
     """
     A cheap sparse version of :class:`MarginalAssignment`.
 
@@ -125,7 +128,7 @@ class MarginalAssignmentSparse(object):
         self.exists_dist = dist.Bernoulli(logits=exists)
 
 
-class MarginalAssignmentPersistent(object):
+class MarginalAssignmentPersistent:
     """
     This computes marginal distributions of a multi-frame multi-object
     data association problem with an unknown number of persistent objects.

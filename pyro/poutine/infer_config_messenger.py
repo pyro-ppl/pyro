@@ -1,9 +1,18 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from .messenger import Messenger
 
 
 class InferConfigMessenger(Messenger):
     """
-    Modifies contents of the infer kwarg at sample sites
+    Given a callable `fn` that contains Pyro primitive calls
+    and a callable `config_fn` taking a trace site and returning a dictionary,
+    updates the value of the infer kwarg at a sample site to config_fn(site).
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :param config_fn: a callable taking a site and returning an infer dict
+    :returns: stochastic function decorated with :class:`~pyro.poutine.infer_config_messenger.InferConfigMessenger`
     """
     def __init__(self, config_fn):
         """
@@ -12,7 +21,7 @@ class InferConfigMessenger(Messenger):
         Constructor. Doesn't do much, just stores the stochastic function
         and the config_fn.
         """
-        super(InferConfigMessenger, self).__init__()
+        super().__init__()
         self.config_fn = config_fn
 
     def _pyro_sample(self, msg):

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import numbers
 import warnings
 from abc import ABCMeta, abstractmethod
@@ -37,9 +40,7 @@ class EmpiricalMarginal(Empirical):
         self._weights_buffer = defaultdict(list)
         self._populate_traces(trace_posterior, sites)
         samples, weights = self._get_samples_and_weights()
-        super(EmpiricalMarginal, self).__init__(samples,
-                                                weights,
-                                                validate_args=validate_args)
+        super().__init__(samples, weights, validate_args=validate_args)
 
     def _get_samples_and_weights(self):
         """
@@ -96,7 +97,7 @@ class EmpiricalMarginal(Empirical):
             self._add_sample(value, log_weight=log_weight, chain_id=chain_id)
 
 
-class Marginals(object):
+class Marginals:
     """
     Holds the marginal distribution over one or more sites from the ``TracePosterior``'s
     model. This is a convenience container class, which can be extended by ``TracePosterior``
@@ -273,6 +274,10 @@ class TracePosterior(object, metaclass=ABCMeta):
 
 class TracePredictive(TracePosterior):
     """
+    .. warning::
+        This class is deprecated and will be removed in a future release.
+        Use the :class:`~pyro.infer.predictive.Predictive` class instead.
+
     Generates and holds traces from the posterior predictive distribution,
     given model execution traces from the approximate posterior. This is
     achieved by constraining latent sites to randomly sampled parameter
@@ -288,10 +293,10 @@ class TracePredictive(TracePosterior):
         self.posterior = posterior
         self.num_samples = num_samples
         self.keep_sites = keep_sites
-        super(TracePredictive, self).__init__()
-        warnings.warn('This class will be deprecated in the next release. For MCMC, '
-                      'please use the `pyro.infer.mcmc.util.predictive` function '
-                      'instead.', PendingDeprecationWarning)
+        super().__init__()
+        warnings.warn('The `TracePredictive` class is deprecated and will be removed '
+                      'in a future release. Use the `pyro.infer.Predictive` class instead.',
+                      FutureWarning)
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:

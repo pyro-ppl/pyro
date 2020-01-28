@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 import warnings
 from abc import ABCMeta, abstractmethod
@@ -39,7 +42,7 @@ class ELBO(object, metaclass=ABCMeta):
         tracer. When this is True, all :class:`torch.jit.TracerWarning` will
         be ignored. Defaults to False.
     :param bool jit_options: Optional dict of options to pass to
-        :func:`torch.jit.trace` , e.g. ``{"optimize": False}``.
+        :func:`torch.jit.trace` , e.g. ``{"check_trace": True}``.
     :param bool retain_graph: Whether to retain autograd graph during an SVI
         step. Defaults to None (False).
     :param float tail_adaptive_beta: Exponent beta with ``-1.0 <= beta < 0.0`` for
@@ -79,7 +82,7 @@ class ELBO(object, metaclass=ABCMeta):
         self.jit_options = jit_options
         self.tail_adaptive_beta = tail_adaptive_beta
 
-    def _guess_max_plate_nesting(self, model, guide, *args, **kwargs):
+    def _guess_max_plate_nesting(self, model, guide, args, kwargs):
         """
         Guesses max_plate_nesting by running the (model,guide) pair once
         without enumeration. This optimistically assumes static model
@@ -135,7 +138,7 @@ class ELBO(object, metaclass=ABCMeta):
 
         return wrapped_fn
 
-    def _get_vectorized_trace(self, model, guide, *args, **kwargs):
+    def _get_vectorized_trace(self, model, guide, args, kwargs):
         """
         Wraps the model and guide to vectorize ELBO computation over
         ``num_particles``, and returns a single trace from the wrapped model
@@ -143,25 +146,25 @@ class ELBO(object, metaclass=ABCMeta):
         """
         return self._get_trace(self._vectorized_num_particles(model),
                                self._vectorized_num_particles(guide),
-                               *args, **kwargs)
+                               args, kwargs)
 
     @abstractmethod
-    def _get_trace(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, args, kwargs):
         """
         Returns a single trace from the guide, and the model that is run
         against it.
         """
         raise NotImplementedError
 
-    def _get_traces(self, model, guide, *args, **kwargs):
+    def _get_traces(self, model, guide, args, kwargs):
         """
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
         if self.vectorize_particles:
             if self.max_plate_nesting == float('inf'):
-                self._guess_max_plate_nesting(model, guide, *args, **kwargs)
-            yield self._get_vectorized_trace(model, guide, *args, **kwargs)
+                self._guess_max_plate_nesting(model, guide, args, kwargs)
+            yield self._get_vectorized_trace(model, guide, args, kwargs)
         else:
             for i in range(self.num_particles):
-                yield self._get_trace(model, guide, *args, **kwargs)
+                yield self._get_trace(model, guide, args, kwargs)

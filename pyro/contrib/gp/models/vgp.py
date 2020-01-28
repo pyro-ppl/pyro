@@ -1,13 +1,16 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
+from pyro.nn.module import PyroParam, pyro_method
 
 
 class VariationalGP(GPModel):
@@ -58,7 +61,7 @@ class VariationalGP(GPModel):
     """
     def __init__(self, X, y, kernel, likelihood, mean_function=None,
                  latent_shape=None, whiten=False, jitter=1e-6):
-        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter)
+        super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
 
@@ -71,13 +74,12 @@ class VariationalGP(GPModel):
 
         identity = eye_like(self.X, N)
         f_scale_tril = identity.repeat(self.latent_shape + (1, 1))
-        self.f_scale_tril = Parameter(f_scale_tril)
-        self.set_constraint("f_scale_tril", constraints.lower_cholesky)
+        self.f_scale_tril = PyroParam(f_scale_tril, constraints.lower_cholesky)
 
         self.whiten = whiten
         self._sample_latent = True
 
-    @autoname.scope(prefix="VGP")
+    @pyro_method
     def model(self):
         self.set_mode("model")
 
@@ -89,13 +91,13 @@ class VariationalGP(GPModel):
         zero_loc = self.X.new_zeros(self.f_loc.shape)
         if self.whiten:
             identity = eye_like(self.X, N)
-            pyro.sample("f",
+            pyro.sample(self._pyro_get_fullname("f"),
                         dist.MultivariateNormal(zero_loc, scale_tril=identity)
                             .to_event(zero_loc.dim() - 1))
             f_scale_tril = Lff.matmul(self.f_scale_tril)
             f_loc = Lff.matmul(self.f_loc.unsqueeze(-1)).squeeze(-1)
         else:
-            pyro.sample("f",
+            pyro.sample(self._pyro_get_fullname("f"),
                         dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                             .to_event(zero_loc.dim() - 1))
             f_scale_tril = self.f_scale_tril
@@ -108,11 +110,12 @@ class VariationalGP(GPModel):
         else:
             return self.likelihood(f_loc, f_var, self.y)
 
-    @autoname.scope(prefix="VGP")
+    @pyro_method
     def guide(self):
         self.set_mode("guide")
+        self._load_pyro_samples()
 
-        pyro.sample("f",
+        pyro.sample(self._pyro_get_fullname("f"),
                     dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
                         .to_event(self.f_loc.dim()-1))
 

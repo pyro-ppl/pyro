@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import functools
 import numbers
 import weakref
@@ -61,7 +64,7 @@ def weakmethod(fn):
     In the following example, functional behavior is the same with and without
     the ``@weakmethod`` decorator, but decoration avoids a reference cycle::
 
-        class Foo(object):
+        class Foo:
             def __init__(self):
                 self.callback = self._callback
             @weakmethod
@@ -224,10 +227,7 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
         return tensor
     if mask is None:
         return tensor * scale
-    tensor, mask = broadcast_all(tensor, mask)
-    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
-    tensor.masked_fill_(mask == 0, 0.)
-    return tensor
+    return torch.where(mask, tensor * scale, tensor.new_zeros(()))
 
 
 def scalar_like(prototype, fill_value):

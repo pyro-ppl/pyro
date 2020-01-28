@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions.utils import lazy_property
 
@@ -5,7 +8,7 @@ import pyro.distributions as dist
 from pyro.distributions.util import eye_like
 
 
-class EKFState(object):
+class EKFState:
     '''
     State-Centric EKF (Extended Kalman Filter) for use with either an NCP
     (Nearly-Constant Position) or NCV (Nearly-Constant Velocity) target dynamic

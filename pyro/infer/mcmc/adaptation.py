@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 import torch
 from collections import namedtuple
@@ -10,7 +13,7 @@ from pyro.ops.welford import WelfordCovariance
 adapt_window = namedtuple("adapt_window", ["start", "end"])
 
 
-class WarmupAdapter(object):
+class WarmupAdapter:
     r"""
     Adapts tunable parameters, namely step size and mass matrix, during the
     warmup phase. This class provides lookup properties to read the latest
@@ -29,6 +32,7 @@ class WarmupAdapter(object):
         self.target_accept_prob = target_accept_prob
         self.is_diag_mass = is_diag_mass
         self.step_size = 1 if step_size is None else step_size
+        self._init_step_size = self.step_size
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()
@@ -45,7 +49,6 @@ class WarmupAdapter(object):
         self._adapt_start_buffer = 75  # from Stan
         self._adapt_end_buffer = 50  # from Stan
         self._adapt_initial_window = 25  # from Stan
-        self._current_window = 0  # starting window index
 
         # configured later on setup
         self._warmup_steps = None
@@ -130,17 +133,20 @@ class WarmupAdapter(object):
             mass matrix is changed.
         """
         self._warmup_steps = warmup_steps
-        if initial_step_size is not None:
-            self.step_size = initial_step_size
+        self.step_size = initial_step_size if initial_step_size is not None else self._init_step_size
         if find_reasonable_step_size_fn is not None:
             self._find_reasonable_step_size = find_reasonable_step_size_fn
-        if inv_mass_matrix is not None:
-            self.inverse_mass_matrix = inv_mass_matrix
+        self.inverse_mass_matrix = inv_mass_matrix
         if self.inverse_mass_matrix is None or self.step_size is None:
             raise ValueError("Incomplete configuration - step size and inverse mass matrix "
                              "need to be initialized.")
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
+        self._current_window = 0  # starting window index
+        if self.adapt_step_size:
+            self._step_size_adapt_scheme.reset()
+        if self.adapt_mass_matrix:
+            self._mass_matrix_adapt_scheme.reset()
 
     def step(self, t, z, accept_prob):
         r"""

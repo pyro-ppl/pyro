@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import argparse
 import logging
 
@@ -7,8 +10,7 @@ import data
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer.mcmc import NUTS
-from pyro.infer.mcmc.api import MCMC
+from pyro.infer import MCMC, NUTS
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 pyro.enable_validation(__debug__)
@@ -30,7 +32,7 @@ def conditioned_model(model, sigma, y):
 
 
 def main(args):
-    nuts_kernel = NUTS(conditioned_model, jit_compile=args.jit,)
+    nuts_kernel = NUTS(conditioned_model, jit_compile=args.jit)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps,
@@ -40,7 +42,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.4.0')
+    assert pyro.__version__.startswith('1.2.1')
     parser = argparse.ArgumentParser(description='Eight Schools MCMC')
     parser.add_argument('--num-samples', type=int, default=1000,
                         help='number of MCMC samples (default: 1000)')

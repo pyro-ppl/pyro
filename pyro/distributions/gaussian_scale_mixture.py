@@ -1,3 +1,5 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 import math
 
@@ -67,7 +69,7 @@ class GaussianScaleMixture(TorchDistribution):
         self.component_scale = component_scale
         self.coeffs = self._compute_coeffs()
         self.categorical = Categorical(logits=component_logits)
-        super(GaussianScaleMixture, self).__init__(event_shape=(self.dim,))
+        super().__init__(event_shape=(self.dim,))
 
     def _compute_coeffs(self):
         """
@@ -80,15 +82,15 @@ class GaussianScaleMixture(TorchDistribution):
         return coeffs
 
     def log_prob(self, value):
-        # TODO: use torch.logsumexp once it's in PyTorch release
         assert value.dim() == 1 and value.size(0) == self.dim
         epsilon_sqr = torch.pow(value / self.coord_scale, 2.0).sum()
-        component_scale_power = torch.pow(self.component_scale, -self.dim)
-        result = component_scale_power * self.categorical.probs * \
-            torch.exp(-0.5 * epsilon_sqr / torch.pow(self.component_scale, 2.0))  # K
-        result = torch.log(result.sum())
+        component_scale_log_power = self.component_scale.log() * -self.dim
+        # logits in Categorical is already normalized
+        result = torch.logsumexp(
+            component_scale_log_power + self.categorical.logits +
+            -0.5 * epsilon_sqr / torch.pow(self.component_scale, 2.0), dim=-1)  # K
         result -= 0.5 * math.log(2.0 * math.pi) * float(self.dim)
-        result -= torch.log(self.coord_scale).sum()
+        result -= self.coord_scale.log().sum()
         return result
 
     def rsample(self, sample_shape=torch.Size()):

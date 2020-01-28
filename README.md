@@ -8,6 +8,7 @@
 [![codecov.io](https://codecov.io/github/pyro-ppl/pyro/branch/dev/graph/badge.svg)](https://codecov.io/github/pyro-ppl/pyro)
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
 [![Documentation Status](https://readthedocs.org/projects/pyro-ppl/badge/?version=dev)](http://pyro-ppl.readthedocs.io/en/stable/?badge=dev)
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/3056/badge)](https://bestpractices.coreinfrastructure.org/projects/3056)
 
 [Getting Started](http://pyro.ai/examples) |
 [Documentation](http://docs.pyro.ai/) |
@@ -21,7 +22,7 @@ Pyro is a flexible, scalable deep probabilistic programming library built on PyT
 - **Minimal**: Pyro is agile and maintainable. It is implemented with a small core of powerful, composable abstractions.
 - **Flexible**: Pyro aims for automation when you want it, control when you need it. This is accomplished through high-level abstractions to express generative and inference models, while allowing experts easy-access to customize inference.
 
-Pyro is in a beta release.  It is developed and maintained by [Uber AI Labs](http://uber.ai) and community contributors.
+Pyro is developed and maintained by [Uber AI Labs](http://uber.ai) and community contributors.
 For more information, check out our [blog post](http://eng.uber.com/pyro).
 
 ## Installing
@@ -82,12 +83,22 @@ Refer to the instructions [here](docker/README.md).
 ## Citation
 If you use Pyro, please consider citing:
 ```
-@article{bingham2018pyro,
-  author = {Bingham, Eli and Chen, Jonathan P. and Jankowiak, Martin and Obermeyer, Fritz and
-            Pradhan, Neeraj and Karaletsos, Theofanis and Singh, Rohit and Szerlip, Paul and
-            Horsfall, Paul and Goodman, Noah D.},
-  title = {{Pyro: Deep Universal Probabilistic Programming}},
-  journal = {arXiv preprint arXiv:1810.09538},
-  year = {2018}
+@article{bingham2019pyro,
+  author    = {Eli Bingham and
+               Jonathan P. Chen and
+               Martin Jankowiak and
+               Fritz Obermeyer and
+               Neeraj Pradhan and
+               Theofanis Karaletsos and
+               Rohit Singh and
+               Paul A. Szerlip and
+               Paul Horsfall and
+               Noah D. Goodman},
+  title     = {Pyro: Deep Universal Probabilistic Programming},
+  journal   = {J. Mach. Learn. Res.},
+  volume    = {20},
+  pages     = {28:1--28:6},
+  year      = {2019},
+  url       = {http://jmlr.org/papers/v20/18-403.html}
 }
 ```

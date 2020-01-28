@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions.utils import broadcast_all
 
@@ -13,7 +16,7 @@ class RejectionExponential(Rejector):
         self.rate, self.factor = broadcast_all(rate, factor)
         propose = Exponential(self.factor * self.rate)
         log_scale = self.factor.log()
-        super(RejectionExponential, self).__init__(propose, self.log_prob_accept, log_scale)
+        super().__init__(propose, self.log_prob_accept, log_scale)
 
     @weakmethod
     def log_prob_accept(self, x):

@@ -1,10 +1,13 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
 
-from pyro.infer import SVGD, RBFSteinKernel
+from pyro.infer import SVGD, RBFSteinKernel, IMQSteinKernel
 from pyro.optim import Adam
 from pyro.infer.autoguide.utils import _product
 
@@ -16,13 +19,14 @@ from tests.common import assert_equal
                                          dist.LogNormal(torch.tensor(-1.0), torch.tensor(0.7)),
                                          dist.Beta(torch.tensor([0.3]), torch.tensor([0.7])).to_event(1)])
 @pytest.mark.parametrize("mode", ["univariate", "multivariate"])
-def test_mean_variance(latent_dist, mode, verbose=True):
+@pytest.mark.parametrize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
+def test_mean_variance(latent_dist, mode, stein_kernel, verbose=True):
     pyro.clear_param_store()
 
     def model():
         pyro.sample("z", latent_dist)
 
-    kernel = RBFSteinKernel()
+    kernel = stein_kernel()
     adam = Adam({"lr": 0.05})
     svgd = SVGD(model, kernel, adam, 200, 0, mode=mode)
 
@@ -55,7 +59,8 @@ def test_mean_variance(latent_dist, mode, verbose=True):
 
 
 @pytest.mark.parametrize("shape", [(1, 1), (2, 1, 3), (4, 2), (1, 2, 1, 3)])
-def test_shapes(shape):
+@pytest.mark.parametrize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
+def test_shapes(shape, stein_kernel):
     pyro.clear_param_store()
     shape1, shape2 = (5,) + shape, shape + (6,)
 
@@ -68,7 +73,7 @@ def test_shapes(shape):
         pyro.sample("z2", dist.Normal(mean_init2, 1.0e-8).to_event(len(shape2)))
 
     num_particles = 7
-    svgd = SVGD(model, RBFSteinKernel(), Adam({"lr": 0.0}), num_particles, 0)
+    svgd = SVGD(model, stein_kernel(), Adam({"lr": 0.0}), num_particles, 0)
 
     for step in range(2):
         svgd.step()
@@ -83,7 +88,8 @@ def test_shapes(shape):
 
 
 @pytest.mark.parametrize("mode", ["univariate", "multivariate"])
-def test_conjugate(mode, verbose=False):
+@pytest.mark.parametrize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
+def test_conjugate(mode, stein_kernel, verbose=False):
     data = torch.tensor([1.0, 2.0, 3.0, 3.0, 5.0]).unsqueeze(-1).expand(5, 3)
     alpha0 = torch.tensor([1.0, 1.8, 2.3])
     beta0 = torch.tensor([2.3, 1.5, 1.2])
@@ -97,13 +103,13 @@ def test_conjugate(mode, verbose=False):
             with pyro.plate("data", data.size(0)):
                 pyro.sample("obs", dist.Poisson(latent), obs=data)
 
-    kernel = RBFSteinKernel()
+    kernel = stein_kernel()
     adam = Adam({"lr": 0.05})
     svgd = SVGD(model, kernel, adam, 200, 2, mode=mode)
 
     bandwidth_start = 1.0
     bandwidth_end = 5.0
-    n_steps = 301
+    n_steps = 451
 
     for step in range(n_steps):
         kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
@@ -120,6 +126,6 @@ def test_conjugate(mode, verbose=False):
         print("[var]: actual, expected = ", final_particles.var(0).data.numpy(),
               posterior_dist.variance.data.numpy())
 
-    assert_equal(final_particles.mean(0)[0], posterior_dist.mean, prec=0.01)
+    assert_equal(final_particles.mean(0)[0], posterior_dist.mean, prec=0.02)
     prec = 0.05 if mode == 'multivariate' else 0.02
     assert_equal(final_particles.var(0)[0], posterior_dist.variance, prec=prec)

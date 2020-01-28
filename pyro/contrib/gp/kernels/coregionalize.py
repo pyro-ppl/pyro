@@ -1,8 +1,12 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
 
-from .kernel import Kernel
+from pyro.contrib.gp.kernels.kernel import Kernel
+from pyro.nn.module import PyroParam
 
 
 class Coregionalize(Kernel):
@@ -42,7 +46,7 @@ class Coregionalize(Kernel):
     """
 
     def __init__(self, input_dim, rank=None, components=None, diagonal=None, active_dims=None):
-        super(Coregionalize, self).__init__(input_dim, active_dims)
+        super().__init__(input_dim, active_dims)
 
         # Add a low-rank kernel with expected value torch.eye(input_dim, input_dim) / 2.
         if components is None:
@@ -61,8 +65,7 @@ class Coregionalize(Kernel):
         if diagonal.shape != (input_dim,):
             raise ValueError("Expected diagonal.shape == ({},), actual {}"
                              .format(input_dim, diagonal.shape))
-        self.diagonal = Parameter(diagonal)
-        self.set_constraint("diagonal", constraints.positive)
+        self.diagonal = PyroParam(diagonal, constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         X = self._slice_input(X)

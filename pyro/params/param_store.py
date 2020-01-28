@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import warnings
 import weakref
@@ -6,7 +9,7 @@ import torch
 from torch.distributions import constraints, transform_to
 
 
-class ParamStoreDict(object):
+class ParamStoreDict:
     """
     Global store for parameters in Pyro. This is basically a key-value store.
     The typical user interacts with the ParamStore primarily through the

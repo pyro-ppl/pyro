@@ -1,8 +1,30 @@
-Neural Network
-==============
+Neural Networks
+===============
 
 The module `pyro.nn` provides implementations of neural network modules
-that are useful in the context of deep probabilistic programming. None
-of these modules is really part of the core language.
+that are useful in the context of deep probabilistic programming.
 
-.. include:: pyro.nn.txt
+Pyro Modules
+------------
+
+.. automodule:: pyro.nn.module
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
+AutoRegressiveNN
+----------------
+
+.. autoclass:: pyro.nn.auto_reg_nn.AutoRegressiveNN
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalAutoRegressiveNN
+---------------------------
+
+.. autoclass:: pyro.nn.auto_reg_nn.ConditionalAutoRegressiveNN
+    :members:
+    :undoc-members:
+    :show-inheritance:

@@ -102,17 +102,21 @@ To get more details on the potential sources of slowdown, use the `cProfile` too
 
 ```sh
 python -m profiler.distributions --dist bernoulli --tool cprofile
-
 ```
 
 # Submitting
 
 For larger changes, please open an issue for discussion before submitting a pull request.
+For relevant design questions to consider, see past
+[design documents](https://github.com/pyro-ppl/pyro/wiki/Design-Docs).
+
 In your PR, please include:
 - Changes made
 - Links to related issues/PRs
 - Tests
 - Dependencies
 
-Please add the `awaiting review` tag and add any of the core Pyro contributors as reviewers.
-For speculative changes meant for early-stage review, add the `WIP` tag.
+If you add new files, please run `make license` to automatically add copyright headers.
+
+For speculative changes meant for early-stage review, include `[WIP]` in the PR's title. 
+(One of the maintainers will add the `WIP` tag.)

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import warnings
 
 import pytest
@@ -5,7 +8,7 @@ import torch
 from torch.distributions import constraints
 
 from pyro.generic import distributions as dist
-from pyro.generic import infer, optim, pyro, pyro_backend
+from pyro.generic import infer, ops, optim, pyro, pyro_backend
 from tests.common import assert_close, xfail_param
 
 # This file tests a variety of model,guide pairs with valid and invalid structure.
@@ -78,7 +81,7 @@ def test_generate_data_plate(backend):
     with pyro_backend(backend):
         data = model().data
         assert data.shape == (num_points,)
-        mean = data.sum().item() / num_points
+        mean = float(ops.sum(data)) / num_points
         assert 1.9 <= mean <= 2.1
 
 
@@ -185,13 +188,13 @@ def test_constraints(backend, jit):
 
     def model():
         locs = pyro.param("locs", torch.randn(3), constraint=constraints.real)
-        scales = pyro.param("scales", torch.randn(3).exp(), constraint=constraints.positive)
+        scales = pyro.param("scales", ops.exp(torch.randn(3)), constraint=constraints.positive)
         p = torch.tensor([0.5, 0.3, 0.2])
         x = pyro.sample("x", dist.Categorical(p))
         pyro.sample("obs", dist.Normal(locs[x], scales[x]), obs=data)
 
     def guide():
-        q = pyro.param("q", torch.randn(3).exp(), constraint=constraints.simplex)
+        q = pyro.param("q", ops.exp(torch.randn(3)), constraint=constraints.simplex)
         pyro.sample("x", dist.Categorical(q))
 
     with pyro_backend(backend):

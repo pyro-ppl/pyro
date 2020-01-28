@@ -1,9 +1,12 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 import pyro
 import pyro.distributions as dist
 
-from .likelihood import Likelihood
+from pyro.contrib.gp.likelihoods.likelihood import Likelihood
 
 
 class Poisson(Likelihood):
@@ -18,7 +21,7 @@ class Poisson(Likelihood):
     :param callable response_function: A mapping to positive real numbers.
     """
     def __init__(self, response_function=None):
-        super(Poisson, self).__init__()
+        super().__init__()
         self.response_function = torch.exp if response_function is None else response_function
 
     def forward(self, f_loc, f_var, y=None):
@@ -44,4 +47,4 @@ class Poisson(Likelihood):
         y_dist = dist.Poisson(f_res)
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f_res.dim()]).to_event(y.dim())
-        return pyro.sample("y", y_dist, obs=y)
+        return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)

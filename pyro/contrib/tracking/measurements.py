@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -111,7 +114,7 @@ class PositionMeasurement(DifferentiableMeasurement):
     :param time: time of measurement.
     '''
     def __init__(self, mean, cov, time=None, frame_num=None):
-        super(PositionMeasurement, self).__init__(mean, cov, time=time, frame_num=frame_num)
+        super().__init__(mean, cov, time=time, frame_num=frame_num)
         self._jacobian = torch.cat([
             eye_like(mean, self.dimension),
             torch.zeros(self.dimension, self.dimension, dtype=mean.dtype, device=mean.device)], dim=1)

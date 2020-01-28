@@ -7,4 +7,11 @@ via the Pyro primitive `pyro.param`. Parameters play a central role in stochasti
 where they are used to represent point estimates for the parameters in parameterized families of 
 models and guides.
 
-.. include:: pyro.params.txt
+ParamStore
+----------
+
+.. automodule:: pyro.params.param_store
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource

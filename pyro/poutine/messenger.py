@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from functools import partial
 
 from .runtime import _PYRO_STACK
@@ -19,7 +22,7 @@ class _bound_partial(partial):
         return partial(self.func, instance)
 
 
-class Messenger(object):
+class Messenger:
     """
     Context manager class that modifies behavior
     and adds side effects to stochastic functions
@@ -50,7 +53,7 @@ class Messenger(object):
 
         Can be overloaded to add any additional per-call setup functionality,
         but the derived class must always push itself onto the stack, usually
-        by calling super(Derived, self).__enter__().
+        by calling super().__enter__().
 
         Derived versions cannot be overridden to take arguments
         and must always return self.
@@ -87,7 +90,7 @@ class Messenger(object):
 
         Can be overloaded by derived classes to add any other per-call teardown functionality,
         but the stack must always be popped by the derived class,
-        usually by calling super(Derived, self).__exit__(*args).
+        usually by calling super().__exit__(*args).
 
         Derived versions cannot be overridden to take other arguments,
         and must always return None or False.

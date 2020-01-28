@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 import logging
 import os
@@ -39,7 +42,7 @@ DIAGNOSTIC_MSG = "DIAGNOSTICS"
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
-class ProgressBar(object):
+class ProgressBar:
     """
     Initialize progress bars using :class:`~tqdm.tqdm`.
 
@@ -58,9 +61,7 @@ class ProgressBar(object):
         # Disable progress bar in "CI"
         # (see https://github.com/travis-ci/travis-ci/issues/1337).
         disable = disable or "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
-        bar_format = None
-        if not ipython_env:
-            bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
+        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
         pbar_cls = tqdm_nb if num_bars > 1 and ipython_env else tqdm
         self.progress_bars = []
         for i in range(num_bars):
@@ -217,7 +218,7 @@ class MetadataFilter(logging.Filter):
     """
     def __init__(self, logger_id):
         self.logger_id = logger_id
-        super(MetadataFilter, self).__init__()
+        super().__init__()
 
     def filter(self, record):
         record.logger_id = self.logger_id

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import numbers
 
 import torch
@@ -48,7 +51,7 @@ class BetaBinomial(TorchDistribution):
             concentration1, concentration0, total_count)
         self._beta = Beta(concentration1, concentration0)
         self.total_count = total_count
-        super(BetaBinomial, self).__init__(self._beta._batch_shape, validate_args=validate_args)
+        super().__init__(self._beta._batch_shape, validate_args=validate_args)
 
     @property
     def concentration1(self):
@@ -126,7 +129,7 @@ class DirichletMultinomial(TorchDistribution):
         self._dirichlet = Dirichlet(concentration)
         self.total_count = total_count
         self.is_sparse = is_sparse
-        super(DirichletMultinomial, self).__init__(
+        super().__init__(
             self._dirichlet._batch_shape, self._dirichlet.event_shape, validate_args=validate_args)
 
     @property
@@ -194,7 +197,7 @@ class GammaPoisson(TorchDistribution):
     def __init__(self, concentration, rate, validate_args=None):
         concentration, rate = broadcast_all(concentration, rate)
         self._gamma = Gamma(concentration, rate)
-        super(GammaPoisson, self).__init__(self._gamma._batch_shape, validate_args=validate_args)
+        super().__init__(self._gamma._batch_shape, validate_args=validate_args)
 
     @property
     def concentration(self):

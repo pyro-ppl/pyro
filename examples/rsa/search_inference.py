@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Inference algorithms and utilities used in the RSA example models.
 
@@ -10,7 +13,6 @@ import torch
 import queue
 import functools
 
-import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.abstract_infer import TracePosterior
@@ -21,15 +23,6 @@ def memoize(fn=None, **kwargs):
     if fn is None:
         return lambda _fn: memoize(_fn, **kwargs)
     return functools.lru_cache(**kwargs)(fn)
-
-
-def factor(name, value):
-    """
-    Like factor in webPPL, adds a scalar weight to the log-probability of the trace
-    """
-    value = value if torch.is_tensor(value) else torch.tensor(value)
-    d = dist.Bernoulli(logits=value)
-    pyro.sample(name, d, obs=torch.ones(value.size()))
 
 
 class HashingMarginal(dist.Distribution):
@@ -51,7 +44,7 @@ class HashingMarginal(dist.Distribution):
             "sites must be either '_RETURN' or list"
 
         self.sites = sites
-        super(HashingMarginal, self).__init__()
+        super().__init__()
         self.trace_dist = trace_dist
 
     has_enumerate_support = True
@@ -146,7 +139,7 @@ class Search(TracePosterior):
     def __init__(self, model, max_tries=int(1e6), **kwargs):
         self.model = model
         self.max_tries = max_tries
-        super(Search, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def _traces(self, *args, **kwargs):
         q = queue.Queue()
@@ -204,7 +197,7 @@ class BestFirstSearch(TracePosterior):
             num_samples = 100
         self.num_samples = num_samples
         self.model = model
-        super(BestFirstSearch, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def _traces(self, *args, **kwargs):
         q = queue.PriorityQueue()

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -83,7 +86,7 @@ class VonMises(TorchDistribution):
         rho = (tau - (2 * tau).sqrt()) / (2 * self.concentration)
         self._proposal_r = (1 + rho ** 2) / (2 * rho)
 
-        super(VonMises, self).__init__(batch_shape, event_shape, validate_args)
+        super().__init__(batch_shape, event_shape, validate_args)
 
     def log_prob(self, value):
         log_prob = self.concentration * torch.cos(value - self.loc)
@@ -114,7 +117,7 @@ class VonMises(TorchDistribution):
 
     def expand(self, batch_shape):
         try:
-            return super(VonMises, self).expand(batch_shape)
+            return super().expand(batch_shape)
         except NotImplementedError:
             validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape)
