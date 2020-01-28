@@ -4,7 +4,7 @@
 EINSUM_SYMBOLS_BASE = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 
-class Tensordot(object):
+class Tensordot:
     """
     Creates a tensordot implementation from an einsum implementation.
     """

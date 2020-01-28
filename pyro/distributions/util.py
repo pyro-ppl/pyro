@@ -64,7 +64,7 @@ def weakmethod(fn):
     In the following example, functional behavior is the same with and without
     the ``@weakmethod`` decorator, but decoration avoids a reference cycle::
 
-        class Foo(object):
+        class Foo:
             def __init__(self):
                 self.callback = self._callback
             @weakmethod

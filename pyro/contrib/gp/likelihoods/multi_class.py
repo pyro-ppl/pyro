@@ -27,7 +27,7 @@ class MultiClass(Likelihood):
         likelihood.
     """
     def __init__(self, num_classes, response_function=None):
-        super(MultiClass, self).__init__()
+        super().__init__()
         self.num_classes = num_classes
         self.response_function = _softmax if response_function is None else response_function
 

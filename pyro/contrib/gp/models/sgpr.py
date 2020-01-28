@@ -95,7 +95,7 @@ class SparseGPRegression(GPModel):
     :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6):
-        super(SparseGPRegression, self).__init__(X, y, kernel, mean_function, jitter)
+        super().__init__(X, y, kernel, mean_function, jitter)
 
         self.Xu = Parameter(Xu)
 

@@ -12,7 +12,7 @@ class Likelihood(Parameterized):
     takes an input :math:`f` and returns a sample :math:`y`.
     """
     def __init__(self):
-        super(Likelihood, self).__init__()
+        super().__init__()
 
     def forward(self, f_loc, f_var, y=None):
         """

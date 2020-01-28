@@ -11,11 +11,11 @@ class PlateMessenger(SubsampleMessenger):
     combines shape inference, independence annotation, and subsampling
     """
     def _process_message(self, msg):
-        super(PlateMessenger, self)._process_message(msg)
+        super()._process_message(msg)
         return BroadcastMessenger._pyro_sample(msg)
 
     def __enter__(self):
-        super(PlateMessenger, self).__enter__()
+        super().__enter__()
         if self._vectorized and self._indices is not None:
             return self.indices
         return None

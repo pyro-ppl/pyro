@@ -4,7 +4,7 @@
 import torch
 
 
-class WelfordCovariance(object):
+class WelfordCovariance:
     """
     Implements Welford's online scheme for estimating (co)variance (see :math:`[1]`).
     Useful for adapting diagonal and dense mass structures for HMC.

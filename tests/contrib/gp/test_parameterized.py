@@ -15,7 +15,7 @@ from tests.common import assert_equal
 def test_parameterized():
     class Linear(Parameterized):
         def __init__(self):
-            super(Linear, self).__init__()
+            super().__init__()
             self._pyro_name = "Linear"
             self.a = PyroParam(torch.tensor(1.), constraints.positive)
             self.b = PyroSample(dist.Normal(0, 1))
@@ -63,7 +63,7 @@ def test_parameterized():
 def test_nested_parameterized():
     class Linear(Parameterized):
         def __init__(self, a):
-            super(Linear, self).__init__()
+            super().__init__()
             self.a = Parameter(a)
 
         def forward(self, x):
@@ -71,7 +71,7 @@ def test_nested_parameterized():
 
     class Quadratic(Parameterized):
         def __init__(self, linear1, linear2, a):
-            super(Quadratic, self).__init__()
+            super().__init__()
             self._pyro_name = "Quadratic"
             self.linear1 = linear1
             self.linear2 = linear2
@@ -100,7 +100,7 @@ def test_nested_parameterized():
 def test_inference():
     class Linear(Parameterized):
         def __init__(self, a):
-            super(Linear, self).__init__()
+            super().__init__()
             self.a = Parameter(a)
 
         def forward(self, x):

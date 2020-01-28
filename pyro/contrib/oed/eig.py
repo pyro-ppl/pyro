@@ -896,7 +896,7 @@ class _EwmaLogFn(torch.autograd.Function):
 _ewma_log_fn = _EwmaLogFn.apply
 
 
-class EwmaLog(object):
+class EwmaLog:
     """Logarithm function with exponentially weighted moving average
     for gradients.
 

@@ -47,7 +47,7 @@ class LiftMessenger(Messenger):
 
         Constructor
         """
-        super(LiftMessenger, self).__init__()
+        super().__init__()
         self.prior = prior
         self._samples_cache = {}
 
@@ -56,7 +56,7 @@ class LiftMessenger(Messenger):
         if is_validation_enabled() and isinstance(self.prior, dict):
             self._param_hits = set()
             self._param_misses = set()
-        return super(LiftMessenger, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         self._samples_cache = {}
@@ -67,7 +67,7 @@ class LiftMessenger(Messenger):
                     "pyro.module prior did not find params ['{}']. "
                     "Did you instead mean one of ['{}']?"
                     .format("', '".join(extra), "', '".join(self._param_misses)))
-        return super(LiftMessenger, self).__exit__(*args, **kwargs)
+        return super().__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
         return None

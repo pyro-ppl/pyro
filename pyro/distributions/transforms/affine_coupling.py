@@ -74,7 +74,7 @@ class AffineCoupling(TransformModule):
     event_dim = 1
 
     def __init__(self, split_dim, hypernet, log_scale_min_clip=-5., log_scale_max_clip=3.):
-        super(AffineCoupling, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
         self.split_dim = split_dim
         self.hypernet = hypernet
         self._cached_log_scale = None

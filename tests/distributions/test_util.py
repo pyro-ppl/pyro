@@ -102,7 +102,7 @@ def test_sum_leftmost():
 
 def test_weakmethod():
 
-    class Foo(object):
+    class Foo:
         def __init__(self, state):
             self.state = state
             self.method = self._method
