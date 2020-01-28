@@ -38,6 +38,22 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
         return result
 
 
+class Beta(torch.distributions.Beta, TorchDistributionMixin):
+    def posterior(self, likelihood):
+        concentration1 = self.concentration1 + likelihood.concentration1 - 1
+        concentration0 = self.concentration0 + likelihood.concentration0 - 1
+        posterior = Beta(concentration1, concentration0)
+
+        def _log_beta(x, y):
+            return torch.lgamma(x) + torch.lgamma(y) - torch.lgamma(x + y)
+
+        def _log_normalizer(b):
+            return _log_beta(b.concentration1, b.concentration0)
+
+        log_normalizer = _log_normalizer(posterior) - _log_normalizer(self) - _log_normalizer(likelihood)
+        return posterior, log_normalizer
+
+
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 

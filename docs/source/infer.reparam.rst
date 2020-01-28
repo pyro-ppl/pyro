@@ -14,6 +14,15 @@ shaped. These can be used with a variety of inference algorithms, e.g.
     :member-order: bysource
     :special-members: __call__
 
+Conjugate Update
+----------------
+.. automodule:: pyro.infer.reparam.conjugate
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Loc-Scale Decentering
 ---------------------
 .. automodule:: pyro.infer.reparam.loc_scale

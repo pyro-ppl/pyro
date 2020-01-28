@@ -116,6 +116,27 @@ def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         assert_ok(model, guide, elbo)
 
 
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
+])
+@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+def test_nonempty_model_empty_guide_error(Elbo, strict_enumeration_warning):
+
+    def model():
+        pyro.sample("x", dist.Normal(0, 1))
+
+    def guide():
+        pass
+
+    elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
+    assert_error(model, guide, elbo)
+
+
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
