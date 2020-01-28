@@ -32,7 +32,7 @@ class ConjugateReparam(Reparam):
         # Draw a sample from the approximate posterior.
         posterior, log_normalizer = fn.posterior(guide_dist)
         assert isinstance(guide_dist, dist.Distribution)
-        value = pyro.sample("{}_posterior", posterior, infer={"from_prior": True})
+        value = pyro.sample("{}_posterior", posterior, infer={"require_guide": False})
 
         # Return an importance-weighted point estimate.
         # This is equal to fn.log_prob(value) - posterior.log_prob(value).
