@@ -111,7 +111,7 @@ class Distribution(object, metaclass=ABCMeta):
         :return: An iterator over the distribution's discrete support.
         :rtype: iterator
         """
-        raise NotImplementedError("Support not implemented for {}".format(type(self)))
+        raise NotImplementedError("Support not implemented for {}".format(type(self).__name__))
 
     def conjugate_update(self, other):
         """
@@ -130,4 +130,5 @@ class Distribution(object, metaclass=ABCMeta):
             updated distribution of type ``type(self)``, and ``log_normalizer``
             is a :class:`~torch.Tensor` representing the normalization factor.
         """
-        raise NotImplementedError("{} does not support .conjugate_update()".format(type(self)))
+        raise NotImplementedError("{} does not support .conjugate_update()"
+                                  .format(type(self).__name__))

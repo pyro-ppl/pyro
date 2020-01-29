@@ -31,11 +31,10 @@ class ReparamMessenger(Messenger):
         super().__init__()
         assert isinstance(config, dict) or callable(config)
         self.config = config
-        self._context = {}
         self._args_kwargs = None
 
     def __call__(self, fn):
-        return ParamHandler(self, fn)
+        return ReparamHandler(self, fn)
 
     def _pyro_sample(self, msg):
         if isinstance(self.config, dict):
@@ -61,7 +60,7 @@ class ReparamMessenger(Messenger):
         msg["fn"] = new_fn
 
 
-class ParamHandler(object):
+class ReparamHandler(object):
     """
     Reparameterization poutine.
     """

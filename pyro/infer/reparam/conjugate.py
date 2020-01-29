@@ -63,10 +63,11 @@ class ConjugateReparam(Reparam):
         fn, log_normalizer = fn.conjugate_update(guide_dist)
         assert isinstance(guide_dist, dist.Distribution)
         if not fn.has_rsample:
+            # Note supporting non-reparameterized sites would require more delicate
+            # handling of traced sites than the crude _do_not_trace flag below.
             raise NotImplementedError("ConjugateReparam inference supports only reparameterized "
                                       "distributions, but got {}".format(type(fn)))
-        value = pyro.sample("{}_posterior".format(name), fn,
-                            infer={"_do_not_trace": True})
+        value = pyro.sample("{}_updated".format(name), fn, infer={"_do_not_trace": True})
 
         # Compute importance weight. Let p(z) be the original fn, q(z|x) be
         # the guide, and u(z) be the conjugate_updated distribution. Then
