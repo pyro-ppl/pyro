@@ -50,7 +50,7 @@ def test_beta_binomial_elbo():
         pyro.sample("counts", dist.Binomial(total, prob), obs=counts)
 
     def guide():
-        pyro.sample("probs", posterior)
+        pyro.sample("prob", posterior)
 
     reparam_model = poutine.reparam(model, {"prob": ConjugateReparam(likelihood)})
 
@@ -60,7 +60,7 @@ def test_beta_binomial_elbo():
     elbo = Trace_ELBO(num_particles=100000, vectorize_particles=True, max_plate_nesting=0)
     expected_loss = elbo.differentiable_loss(model, guide)
     actual_loss = elbo.differentiable_loss(reparam_model, reparam_guide)
-    assert_close(actual_loss, expected_loss, 0, atol=0.01)
+    assert_close(actual_loss, expected_loss, atol=0.01)
 
     params = [concentration1, concentration0]
     expected_grads = torch.autograd.grad(expected_loss, params, retain_graph=True)

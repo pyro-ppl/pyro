@@ -39,9 +39,22 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
-    def posterior(self, likelihood):
-        concentration1 = self.concentration1 + likelihood.concentration1 - 1
-        concentration0 = self.concentration0 + likelihood.concentration0 - 1
+    def conjugate_update(self, other):
+        """
+        This should satisfy::
+
+            fg, log_normalizer = f.conjugate_update(g)
+            assert f.log_prob(x) + g.log_prob(x) == fg.log_prob(x) + log_normalizer
+
+        :param Beta likelihood: A distribution representing ``p(data|self.probs)``
+            but normalized over ``self.probs`` rather than ``data``.
+        :return: a pair ``(dist,log_normalizer)`` where ``dist`` is an updated
+            :class:`Beta` distribution and ``log_normalizer`` is a
+            :class:`~torch.Tensor` representing the normalization factor.
+        """
+        assert isinstance(other, Beta)
+        concentration1 = self.concentration1 + other.concentration1 - 1
+        concentration0 = self.concentration0 + other.concentration0 - 1
         posterior = Beta(concentration1, concentration0)
 
         def _log_beta(x, y):
@@ -50,7 +63,7 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
         def _log_normalizer(b):
             return _log_beta(b.concentration1, b.concentration0)
 
-        log_normalizer = _log_normalizer(posterior) - _log_normalizer(self) - _log_normalizer(likelihood)
+        log_normalizer = _log_normalizer(posterior) - _log_normalizer(self) - _log_normalizer(other)
         return posterior, log_normalizer
 
 
