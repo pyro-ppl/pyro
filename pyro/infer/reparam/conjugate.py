@@ -67,7 +67,8 @@ class ConjugateReparam(Reparam):
             # handling of traced sites than the crude _do_not_trace flag below.
             raise NotImplementedError("ConjugateReparam inference supports only reparameterized "
                                       "distributions, but got {}".format(type(fn)))
-        value = pyro.sample("{}_updated".format(name), fn, infer={"_do_not_trace": True})
+        value = pyro.sample("{}_updated".format(name), fn,
+                            infer={"is_auxiliary": True, "_do_not_trace": True})
 
         # Compute importance weight. Let p(z) be the original fn, q(z|x) be
         # the guide, and u(z) be the conjugate_updated distribution. Then
