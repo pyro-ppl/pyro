@@ -23,7 +23,8 @@ def neals_funnel(dim):
 def dirichlet_categorical(data):
     concentration = torch.tensor([1.0, 1.0, 1.0])
     p_latent = pyro.sample('p', dist.Dirichlet(concentration))
-    pyro.sample('obs', dist.Categorical(p_latent), obs=data)
+    with pyro.plate('N', data.shape[0]):
+        pyro.sample('obs', dist.Categorical(p_latent), obs=data)
     return p_latent
 
 
@@ -50,7 +51,7 @@ def test_neals_funnel_smoke():
 
 @pytest.mark.parametrize('model, kwargs', [
     (neals_funnel, {'dim': 10}),
-    (dirichlet_categorical, {'data': torch.ones(3, 10)})
+    (dirichlet_categorical, {'data': torch.ones(10,)})
 ])
 def test_reparam_log_joint(model, kwargs):
     guide = AutoIAFNormal(model)
