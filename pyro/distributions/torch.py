@@ -9,6 +9,22 @@ from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 
+class Beta(torch.distributions.Beta, TorchDistributionMixin):
+    def conjugate_update(self, other):
+        assert isinstance(other, Beta)
+        concentration1 = self.concentration1 + other.concentration1 - 1
+        concentration0 = self.concentration0 + other.concentration0 - 1
+        updated = Beta(concentration1, concentration0)
+
+        def _log_normalizer(d):
+            x = d.concentration1
+            y = d.concentration0
+            return (x + y).lgamma() - x.lgamma() - y.lgamma()
+
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        return updated, log_normalizer
+
+
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
 # log_prob on the support of this variable: we can completely avoid tensor ops
 # and merely reshape the self.logits tensor. This is especially important for
@@ -38,33 +54,33 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
         return result
 
 
-class Beta(torch.distributions.Beta, TorchDistributionMixin):
+class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
     def conjugate_update(self, other):
-        """
-        This should satisfy::
+        assert isinstance(other, Dirichlet)
+        concentration = self.concentration + other.concentration - 1
+        updated = Dirichlet(concentration)
 
-            fg, log_normalizer = f.conjugate_update(g)
-            assert f.log_prob(x) + g.log_prob(x) == fg.log_prob(x) + log_normalizer
+        def _log_normalizer(d):
+            c = d.concentration
+            return c.sum(-1).lgamma() - c.lgamma().sum(-1)
 
-        :param Beta likelihood: A distribution representing ``p(data|self.probs)``
-            but normalized over ``self.probs`` rather than ``data``.
-        :return: a pair ``(dist,log_normalizer)`` where ``dist`` is an updated
-            :class:`Beta` distribution and ``log_normalizer`` is a
-            :class:`~torch.Tensor` representing the normalization factor.
-        """
-        assert isinstance(other, Beta)
-        concentration1 = self.concentration1 + other.concentration1 - 1
-        concentration0 = self.concentration0 + other.concentration0 - 1
-        posterior = Beta(concentration1, concentration0)
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        return updated, log_normalizer
 
-        def _log_beta(x, y):
-            return torch.lgamma(x) + torch.lgamma(y) - torch.lgamma(x + y)
 
-        def _log_normalizer(b):
-            return _log_beta(b.concentration1, b.concentration0)
+class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
+    def conjugate_update(self, other):
+        assert isinstance(other, Gamma)
+        concentration = self.concentration + other.concentration - 1
+        rate = self.rate + other.rate
+        updated = Gamma(concentration, rate)
 
-        log_normalizer = _log_normalizer(posterior) - _log_normalizer(self) - _log_normalizer(other)
-        return posterior, log_normalizer
+        def _log_normalizer(d):
+            c = d.concentration
+            return d.rate.log() * c - c.lgamma()
+
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        return updated, log_normalizer
 
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):

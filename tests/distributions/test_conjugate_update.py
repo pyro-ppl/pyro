@@ -22,3 +22,35 @@ def test_beta_binomial(sample_shape, batch_shape):
 
     x = fg.sample(sample_shape)
     assert_close(f.log_prob(x) + g.log_prob(x), fg.log_prob(x) + log_normalizer)
+
+
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+def test_dirichlet_multinomial(sample_shape, batch_shape):
+    concentration = torch.randn(batch_shape + (3,)).exp()
+    total = 10
+    probs = torch.tensor([0.2, 0.3, 0.5])
+    obs = dist.Multinomial(total, probs).sample(sample_shape + batch_shape)
+
+    f = dist.Dirichlet(concentration)
+    g = dist.Dirichlet(1 + obs)
+    fg, log_normalizer = f.conjugate_update(g)
+
+    x = fg.sample(sample_shape)
+    assert_close(f.log_prob(x) + g.log_prob(x), fg.log_prob(x) + log_normalizer)
+
+
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+def test_gamma_poisson(sample_shape, batch_shape):
+    concentration = torch.randn(batch_shape).exp()
+    rate = torch.randn(batch_shape).exp()
+    nobs = 5
+    obs = dist.Poisson(10.).sample((nobs,) + sample_shape + batch_shape).sum(0)
+
+    f = dist.Gamma(concentration, rate)
+    g = dist.Gamma(1 + obs, nobs)
+    fg, log_normalizer = f.conjugate_update(g)
+
+    x = fg.sample(sample_shape)
+    assert_close(f.log_prob(x) + g.log_prob(x), fg.log_prob(x) + log_normalizer)
