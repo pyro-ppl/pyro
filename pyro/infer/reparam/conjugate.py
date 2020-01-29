@@ -75,11 +75,12 @@ class ConjugateReparam(Reparam):
         #   normalizer = p(z) q(z|x) / u(z).
         # Since we've sampled from u(z) instead of p(z), we
         # need an importance weight
-        #   p(z) / u(z) = normalizer / q(z|x)                       (Eqn 1)
+        #   p(z) / u(z) = normalizer / q(z|x)                          (Eqn 1)
         # Note that q(z|x) is often approximate; in the exact case
         #   q(z|x) = p(x|z) / integral p(x|z) dz
-        # and since this site and the downstream likelihood site will have combined density
-        #   normalizer q(z|x) p(x|z) = normalizer / integral p(x|z) dz
+        # this site and the downstream likelihood site will have combined density
+        #   (p(z) / u(z)) p(x|z) = (normalizer / q(z|x)) p(x|z)
+        #                        = normalizer integral p(x|z) dz
         # Hence in the exact case, downstream probability does not depend on the sampled z,
         # permitting this reparameterizer to be used in HMC.
         log_density = log_normalizer - guide_dist.log_prob(value)  # By Eqn 1.
