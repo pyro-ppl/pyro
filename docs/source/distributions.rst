@@ -28,6 +28,7 @@ Abstract Distribution
     :undoc-members:
     :special-members: __call__
     :show-inheritance:
+    :member-order: bysource
 
 TorchDistributionMixin
 ----------------------
