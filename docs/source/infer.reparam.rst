@@ -14,8 +14,8 @@ shaped. These can be used with a variety of inference algorithms, e.g.
     :member-order: bysource
     :special-members: __call__
 
-Conjugate Update
-----------------
+Conjugate Updating
+------------------
 .. automodule:: pyro.infer.reparam.conjugate
     :members:
     :undoc-members:

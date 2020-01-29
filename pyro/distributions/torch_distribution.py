@@ -170,26 +170,6 @@ class TorchDistributionMixin(Distribution):
         """
         return MaskedDistribution(self, mask)
 
-    def conjugate_update(self, other):
-        """
-        Creates an updated distribution fusing information from another
-        compatible distribution. This is supported by only a few conjugate
-        distributions.
-
-        This should satisfy::
-
-            fg, log_normalizer = f.conjugate_update(g)
-            assert f.log_prob(x) + g.log_prob(x) == fg.log_prob(x) + log_normalizer
-
-        :param other: A distribution representing ``p(data|self.probs)`` but
-            normalized over ``self.probs`` rather than ``data``.
-        :return: a pair ``(updated,log_normalizer)`` where ``updated`` is an
-            updated distribution of type ``type(self)``, and ``log_normalizer``
-            is a :class:`~torch.Tensor` representing the normalization factor.
-        """
-        assert other.event_shape == self.event_shape
-        raise NotImplementedError("{} does not support .conjugate_update()".format(type(self)))
-
 
 class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin):
     """
