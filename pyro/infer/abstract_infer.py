@@ -40,9 +40,7 @@ class EmpiricalMarginal(Empirical):
         self._weights_buffer = defaultdict(list)
         self._populate_traces(trace_posterior, sites)
         samples, weights = self._get_samples_and_weights()
-        super(EmpiricalMarginal, self).__init__(samples,
-                                                weights,
-                                                validate_args=validate_args)
+        super().__init__(samples, weights, validate_args=validate_args)
 
     def _get_samples_and_weights(self):
         """
@@ -99,7 +97,7 @@ class EmpiricalMarginal(Empirical):
             self._add_sample(value, log_weight=log_weight, chain_id=chain_id)
 
 
-class Marginals(object):
+class Marginals:
     """
     Holds the marginal distribution over one or more sites from the ``TracePosterior``'s
     model. This is a convenience container class, which can be extended by ``TracePosterior``
@@ -295,7 +293,7 @@ class TracePredictive(TracePosterior):
         self.posterior = posterior
         self.num_samples = num_samples
         self.keep_sites = keep_sites
-        super(TracePredictive, self).__init__()
+        super().__init__()
         warnings.warn('The `TracePredictive` class is deprecated and will be removed '
                       'in a future release. Use the `pyro.infer.Predictive` class instead.',
                       FutureWarning)

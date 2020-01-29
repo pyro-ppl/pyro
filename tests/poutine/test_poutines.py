@@ -279,7 +279,7 @@ class QueueHandlerDiscreteTest(TestCase):
 
 class Model(nn.Module):
     def __init__(self):
-        super(Model, self).__init__()
+        super().__init__()
         self.fc = nn.Linear(2, 1)
 
     def forward(self, x):
@@ -777,7 +777,7 @@ def test_decorator_interface_queue():
 
 def test_method_decorator_interface_condition():
 
-    class cls_model(object):
+    class cls_model:
 
         @poutine.condition(data={"b": torch.tensor(1.)})
         def model(self, p):

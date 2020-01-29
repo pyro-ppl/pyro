@@ -248,7 +248,7 @@ class DiscreteHMM(TorchDistribution):
         self.initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
         self.transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
         self.observation_dist = observation_dist
-        super(DiscreteHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(DiscreteHMM, _instance)
@@ -587,7 +587,7 @@ class GammaGaussianHMM(TorchDistribution):
                                 observation_dist.batch_shape)
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super(GammaGaussianHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self._init = gamma_and_mvn_to_gamma_gaussian(scale_dist, initial_dist)
@@ -880,7 +880,7 @@ class GaussianMRF(TorchDistribution):
                                 observation_dist.batch_shape)
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super(GaussianMRF, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self._init = mvn_to_gaussian(initial_dist)

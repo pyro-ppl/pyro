@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-class DualAveraging(object):
+class DualAveraging:
     """
     Dual Averaging is a scheme to solve convex optimization problems. It belongs
     to a class of subgradient methods which uses subgradients to update parameters

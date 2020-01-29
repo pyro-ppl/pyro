@@ -80,7 +80,7 @@ class VariationalSparseGP(GPModel):
     """
     def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
                  latent_shape=None, num_data=None, whiten=False, jitter=1e-6):
-        super(VariationalSparseGP, self).__init__(X, y, kernel, mean_function, jitter)
+        super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
         self.Xu = Parameter(Xu)

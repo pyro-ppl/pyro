@@ -41,7 +41,7 @@ def _hashable_args_kwargs(args, kwargs):
     return len(args), hashable_kwargs
 
 
-class CompiledFunction(object):
+class CompiledFunction:
     """
     Output type of :func:`pyro.ops.jit.trace`.
 

@@ -44,7 +44,7 @@ class Permute(Transform):
     volume_preserving = True
 
     def __init__(self, permutation):
-        super(Permute, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
 
         self.permutation = permutation
 

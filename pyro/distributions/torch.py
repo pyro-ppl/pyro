@@ -29,10 +29,10 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
             if not torch._C._get_tracing_state():
                 assert logits.size(-1 - value.dim()) == 1
             return logits.transpose(-1 - value.dim(), -1).squeeze(-1)
-        return super(Categorical, self).log_prob(value)
+        return super().log_prob(value)
 
     def enumerate_support(self, expand=True):
-        result = super(Categorical, self).enumerate_support(expand=expand)
+        result = super().enumerate_support(expand=expand)
         if not expand:
             result._pyro_categorical_support = id(self)
         return result

@@ -262,7 +262,7 @@ class MaskedDistribution(TorchDistribution):
                 base_dist = base_dist.expand(batch_shape)
             self._mask = mask.bool()
         self.base_dist = base_dist
-        super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        super().__init__(base_dist.batch_shape, base_dist.event_shape)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MaskedDistribution, _instance)
@@ -324,7 +324,7 @@ class ExpandedDistribution(TorchDistribution):
 
     def __init__(self, base_dist, batch_shape=torch.Size()):
         self.base_dist = base_dist
-        super(ExpandedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        super().__init__(base_dist.batch_shape, base_dist.event_shape)
         # adjust batch shape
         self.expand(batch_shape)
 

@@ -10,7 +10,7 @@ class UnconditionMessenger(Messenger):
     distribution, ignoring observations.
     """
     def __init__(self):
-        super(UnconditionMessenger, self).__init__()
+        super().__init__()
 
     def _pyro_sample(self, msg):
         """
