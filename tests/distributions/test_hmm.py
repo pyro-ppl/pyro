@@ -275,7 +275,6 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     trans_dist = random_mvn(trans_mvn_shape, hidden_dim)
     obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
     obs_dist = random_mvn(obs_mvn_shape, obs_dim)
-    likelihood = dist.Normal(obs_dist.loc, 1e8).to_event(1)
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
@@ -304,7 +303,8 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     x = d.expand((6, 5)).rsample()
     assert x.shape == (6, 5) + d.event_shape
 
-    p = d.posterior(likelihood)
+    likelihood = dist.Normal(data, 1).to_event(2)
+    p, log_normalizer = d.conjugate_update(likelihood)
     assert p.batch_shape == d.batch_shape
     assert p.event_shape == d.event_shape
     x = p.rsample()
@@ -332,7 +332,6 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
     obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim))
     obs_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
-    like_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
@@ -359,6 +358,7 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     init = mvn_to_gaussian(init_dist)
     trans = matrix_and_mvn_to_gaussian(trans_mat, trans_dist)
     obs = matrix_and_mvn_to_gaussian(obs_mat, obs_mvn)
+    like_dist = dist.Normal(torch.randn(data.shape), 1).to_event(2)
     like = mvn_to_gaussian(like_dist)
 
     unrolled_trans = reduce(operator.add, [
@@ -387,12 +387,16 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     expected_log_prob = logp.log_density(unrolled_data)
     assert_close(actual_log_prob, expected_log_prob)
 
+    d_posterior, log_normalizer = d.conjugate_update(like_dist)
+    assert_close(d.log_prob(data) + like_dist.log_prob(data),
+                 d_posterior.log_prob(data) + log_normalizer)
+
     if batch_shape or sample_shape:
         return
 
     # Test mean and covariance.
     prior = "prior", d, logp
-    posterior = "posterior", d.posterior(like_dist), logp + unrolled_like
+    posterior = "posterior", d_posterior, logp + unrolled_like
     for name, d, g in [prior, posterior]:
         logging.info("testing {} moments".format(name))
         with torch.no_grad():
@@ -411,7 +415,7 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
 
             assert_close(actual_mean, expected_mean, atol=0.05, rtol=0.02)
             assert_close(actual_std, expected_std, atol=0.05, rtol=0.02)
-            assert_close(actual_corr, expected_corr, atol=0.01)
+            assert_close(actual_corr, expected_corr, atol=0.02)
 
 
 @pytest.mark.parametrize('obs_dim', [1, 2, 3])

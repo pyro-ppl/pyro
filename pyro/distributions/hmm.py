@@ -465,37 +465,47 @@ class GaussianHMM(TorchDistribution):
         return MultivariateNormal(loc, precision_matrix=precision,
                                   validate_args=self._validate_args)
 
-    def posterior(self, likelihood):
+    def conjugate_update(self, other):
         """
-        Create a new :class:`GaussianHMM` incorporating likelihood information.
+        Creates an updated :class:`GaussianHMM` fusing information from another
+        compatible distribution.
 
-        This is useful for generating posterior samples using :meth:`rsample` .
+        This should satisfy::
 
-        :param likelihood: A distribution representing likelihoods of
-            observations, or equivalently, noisy observations.
-        :type likelihood: ~torch.distributions.MultivariateNormal or
-            ~torch.distributions.Independent of ~torch.distributions.Normal
-        :return: A new instance updated with the likelihood.
-        :rtype: GaussianHMM
+            fg, log_normalizer = f.conjugate_update(g)
+            assert f.log_prob(x) + g.log_prob(x) == fg.log_prob(x) + log_normalizer
+
+        :param other: A distribution representing ``p(data|self.probs)`` but
+            normalized over ``self.probs`` rather than ``data``.
+        :type other: ~torch.distributions.Independent of
+            ~torch.distributions.MultivariateNormal or ~torch.distributions.Normal
+        :return: a pair ``(updated,log_normalizer)`` where ``updated`` is an
+            updated :class:`GaussianHMM` , and ``log_normalizer`` is a
+            :class:`~torch.Tensor` representing the normalization factor.
         """
-        assert (isinstance(likelihood, torch.distributions.MultivariateNormal) or
-                (isinstance(likelihood, torch.distributions.Independent) and
-                 isinstance(likelihood.base_dist, torch.distributions.Normal)))
+        assert other.event_shape == self.event_shape
+        assert (isinstance(other, torch.distributions.Independent) and
+                (isinstance(other.base_dist, torch.distributions.Normal) or
+                 isinstance(other.base_dist, torch.distributions.MultivariateNormal)))
         new = self._get_checked_instance(GaussianHMM)
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
+        new._init = self._init
         new._trans = self._trans
-        new._obs = self._obs + mvn_to_gaussian(likelihood).event_pad(left=self.hidden_dim)
+        new._obs = self._obs + mvn_to_gaussian(other.to_event(-1)).event_pad(left=self.hidden_dim)
 
-        # To save computation in _sequential_gaussian_tensordot(), we expand
-        # only _init, which is applied only after
-        # _sequential_gaussian_tensordot().
-        batch_shape = torch.Size(broadcast_shape(self.batch_shape, likelihood.batch_shape[:-1]))
-        new._init = self._init if batch_shape == self.batch_shape else self._init.expand(batch_shape)
+        # Normalize.
+        # TODO cache this computation for the forward pass of .rsample().
+        logp = new._trans + new._obs.marginalize(right=new.obs_dim).event_pad(left=new.hidden_dim)
+        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+        logp = gaussian_tensordot(new._init, logp, dims=new.hidden_dim)
+        log_normalizer = logp.event_logsumexp()
+        new._init = new._init - log_normalizer
 
+        batch_shape = log_normalizer.shape
         super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
-        return new
+        return new, log_normalizer
 
 
 class GammaGaussianHMM(TorchDistribution):

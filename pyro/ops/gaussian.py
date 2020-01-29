@@ -103,11 +103,19 @@ class Gaussian:
         """
         Adds two Gaussians in log-density space.
         """
-        assert isinstance(other, Gaussian)
-        assert self.dim() == other.dim()
-        return Gaussian(self.log_normalizer + other.log_normalizer,
-                        self.info_vec + other.info_vec,
-                        self.precision + other.precision)
+        if isinstance(other, Gaussian):
+            assert self.dim() == other.dim()
+            return Gaussian(self.log_normalizer + other.log_normalizer,
+                            self.info_vec + other.info_vec,
+                            self.precision + other.precision)
+        if isinstance(other, (int, float, torch.Tensor)):
+            return Gaussian(self.log_normalizer + other, self.info_vec, self.precision)
+        raise ValueError("Unsupported type: {}".format(type(other)))
+
+    def __sub__(self, other):
+        if isinstance(other, (int, float, torch.Tensor)):
+            return Gaussian(self.log_normalizer - other, self.info_vec, self.precision)
+        raise ValueError("Unsupported type: {}".format(type(other)))
 
     def log_density(self, value):
         """
