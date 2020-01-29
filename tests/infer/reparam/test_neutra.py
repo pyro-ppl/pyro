@@ -40,7 +40,7 @@ def test_neals_funnel_smoke():
     model = neutra.reparam(neals_funnel)
     nuts = NUTS(model)
     mcmc = MCMC(nuts, num_samples=50, warmup_steps=50)
-    mcmc.run()
+    mcmc.run(dim)
     samples = mcmc.get_samples()
     # XXX: `MCMC.get_samples` adds a leftmost batch dim to all sites, not uniformly at -max_plate_nesting-1;
     # hence the unsqueeze
