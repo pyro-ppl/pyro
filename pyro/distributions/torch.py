@@ -7,6 +7,7 @@ from torch.distributions.utils import lazy_property
 
 from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.distributions.util import sum_rightmost
 
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
@@ -106,6 +107,13 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
     @_validate_args.setter
     def _validate_args(self, value):
         self.base_dist._validate_args = value
+
+    def conjugate_update(self, other):
+        n = self.reintepreted_batch_ndims
+        updated, log_normalizer = self.base_dist.conjugate_update(other.to_event(-n))
+        updated = updated.to_event(n)
+        log_normalizer = sum_rightmost(log_normalizer, n)
+        return updated, log_normalizer
 
 
 # Programmatically load all distributions from PyTorch.

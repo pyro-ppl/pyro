@@ -428,6 +428,12 @@ class ExpandedDistribution(TorchDistribution):
     def variance(self):
         return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
 
+    def conjugate_update(self, other):
+        updated, log_normalizer = self.base_dist.conjugate_update(other)
+        updated = updated.expand(self.batch_shape)
+        log_normalizer = log_normalizer.expand(self.batch_shape)
+        return updated, log_normalizer
+
 
 @register_kl(MaskedDistribution, MaskedDistribution)
 def _kl_masked_masked(p, q):
