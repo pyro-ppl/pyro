@@ -78,7 +78,7 @@ class ConjugateReparam(Reparam):
         #   p(z) / u(z) = normalizer / q(z|x)                          (Eqn 1)
         # Note that q(z|x) is often approximate; in the exact case
         #   q(z|x) = p(x|z) / integral p(x|z) dz
-        # this site and the downstream likelihood site will have combined density
+        # so this site and the downstream likelihood site will have combined density
         #   (p(z) / u(z)) p(x|z) = (normalizer / q(z|x)) p(x|z)
         #                        = normalizer integral p(x|z) dz
         # Hence in the exact case, downstream probability does not depend on the sampled z,
