@@ -132,7 +132,7 @@ class Distribution(object, metaclass=ABCMeta):
         :func:`~funsor.pyro.convert.tensor_to_funsor` ::
 
             dist_to_funsor(f) + dist_to_funsor(g)
-              == dist_to_funsor(gf) + tensor_to_funsor(log_normalizer)
+              == dist_to_funsor(fg) + tensor_to_funsor(log_normalizer)
 
         :param other: A distribution representing ``p(data|latent)`` but
             normalized over ``latent`` rather than ``data``. Here ``latent``
