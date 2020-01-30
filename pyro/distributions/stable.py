@@ -162,3 +162,15 @@ class Stable(TorchDistribution):
         # Differentiably transform.
         x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential, coords=self.coords)
         return self.loc + self.scale * x
+
+    @property
+    def mean(self):
+        result = self.loc
+        if self.coords == "S0":
+            result = result - self.scale * self.skew * (math.pi / 2 * self.stability).tan()
+        return result.masked_fill(self.stability <= 1, math.nan)
+
+    @property
+    def variance(self):
+        var = self.scale * self.scale
+        return var.mul(2).masked_fill(self.stability < 2, math.inf)
