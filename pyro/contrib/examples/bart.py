@@ -28,6 +28,7 @@ SOURCE_FILES = [
     "date-hour-soo-dest-2016.csv.gz",
     "date-hour-soo-dest-2017.csv.gz",
     "date-hour-soo-dest-2018.csv.gz",
+    "date-hour-soo-dest-2019.csv.gz",
 ]
 CACHE_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/bart_full.pkl.bz2"
 
@@ -95,13 +96,17 @@ def _load_hourly_od(basename):
 def load_bart_od():
     """
     Load a dataset of hourly origin-destination ridership counts for every pair
-    of BART stations during the years 2011-2018.
+    of BART stations during the years 2011-2019.
 
     **Source** https://www.bart.gov/about/reports/ridership
 
-    This downloads and preprocesses the dataset the first time it is called,
-    requiring about 300MB of file transfer and storing a few GB of temp files.
-    On subsequent calls this reads from a cached ``.pkl.bz2``.
+    This downloads the dataset the first time it is called. On subsequent calls
+    this reads from a local cached file ``.pkl.bz2``. This attempts to
+    download a preprocessed compressed cached file maintained by the Pyro team.
+    On cache hit this should be very fast. On cache miss this falls back to
+    downloading the original data source and preprocessing the dataset,
+    requiring about 350MB of file transfer, storing a few GB of temp files, and
+    taking upwards of 30 minutes.
 
     :returns: a dataset is a dictionary with fields:
 
@@ -123,7 +128,7 @@ def load_bart_od():
     if os.path.exists(pkl_file):
         return torch.load(pkl_file)
 
-    filenames = multiprocessing.Pool().map(_load_hourly_od, SOURCE_FILES)
+    filenames = multiprocessing.Pool(len(SOURCE_FILES)).map(_load_hourly_od, SOURCE_FILES)
     datasets = list(map(torch.load, filenames))
 
     stations = sorted(set().union(*(d["stations"].keys() for d in datasets)))
