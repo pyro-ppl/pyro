@@ -3,7 +3,6 @@
 
 import torch
 from torch.autograd import grad
-from torchviz import make_dot
 
 
 def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_steps=1, z_grads=None):

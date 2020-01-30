@@ -73,7 +73,7 @@ class NeuTraReparam(Reparam):
                                           posterior.base_dist.mask(False))
 
             # Differentiably transform.
-            x_unconstrained = self.transform(z_unconstrained)
+            x_unconstrained = dist.transforms.ComposeTransform(posterior.transforms)
             log_density = self.transform.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
             self.x_unconstrained = list(reversed(list(self.guide._unpack_latent(x_unconstrained))))
 
