@@ -93,7 +93,7 @@ class AffineAutoregressive(TransformModule):
             sigmoid_bias=2.0,
             stable=False
     ):
-        super(AffineAutoregressive, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
         self.arn = autoregressive_nn
         self._cached_log_scale = None
         self.log_scale_min_clip = log_scale_min_clip

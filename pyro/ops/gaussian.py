@@ -103,11 +103,19 @@ class Gaussian:
         """
         Adds two Gaussians in log-density space.
         """
-        assert isinstance(other, Gaussian)
-        assert self.dim() == other.dim()
-        return Gaussian(self.log_normalizer + other.log_normalizer,
-                        self.info_vec + other.info_vec,
-                        self.precision + other.precision)
+        if isinstance(other, Gaussian):
+            assert self.dim() == other.dim()
+            return Gaussian(self.log_normalizer + other.log_normalizer,
+                            self.info_vec + other.info_vec,
+                            self.precision + other.precision)
+        if isinstance(other, (int, float, torch.Tensor)):
+            return Gaussian(self.log_normalizer + other, self.info_vec, self.precision)
+        raise ValueError("Unsupported type: {}".format(type(other)))
+
+    def __sub__(self, other):
+        if isinstance(other, (int, float, torch.Tensor)):
+            return Gaussian(self.log_normalizer - other, self.info_vec, self.precision)
+        raise ValueError("Unsupported type: {}".format(type(other)))
 
     def log_density(self, value):
         """
@@ -124,6 +132,17 @@ class Gaussian:
         result = result + self.info_vec
         result = (value * result).sum(-1)
         return result + self.log_normalizer
+
+    def rsample(self, sample_shape=torch.Size()):
+        """
+        Reparameterized sampler.
+        """
+        P_chol = self.precision.cholesky()
+        loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
+        shape = sample_shape + self.batch_shape + (self.dim(), 1)
+        noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
+        noise = noise.triangular_solve(P_chol, upper=False, transpose=True).solution.squeeze(-1)
+        return loc + noise
 
     def condition(self, value):
         """
@@ -231,7 +250,6 @@ class AffineNormal:
     """
     def __init__(self, matrix, loc, scale):
         assert loc.shape == scale.shape
-        x_dim, y_dim = matrix.shape[-2:]
         self.matrix = matrix
         self.loc = loc
         self.scale = scale
@@ -256,8 +274,14 @@ class AffineNormal:
         mvn = torch.distributions.MultivariateNormal(self.loc, scale_tril=self.scale.diag_embed())
         return matrix_and_mvn_to_gaussian(self.matrix, mvn)
 
+    def event_permute(self, perm):
+        return self.to_gaussian().event_permute(perm)
+
     def __add__(self, other):
         return self.to_gaussian() + other
+
+    def marginalize(self, left=0, right=0):
+        return self.to_gaussian().marginalize(left, right)
 
 
 def mvn_to_gaussian(mvn):

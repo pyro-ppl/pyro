@@ -34,7 +34,7 @@ OUTPUT_DIR = RESULTS_DIR
 # VAE encoder network
 class Encoder(nn.Module):
     def __init__(self):
-        super(Encoder, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(784, 400)
         self.fc21 = nn.Linear(400, 20)
         self.fc22 = nn.Linear(400, 20)
@@ -49,7 +49,7 @@ class Encoder(nn.Module):
 # VAE Decoder network
 class Decoder(nn.Module):
     def __init__(self):
-        super(Decoder, self).__init__()
+        super().__init__()
         self.fc3 = nn.Linear(20, 400)
         self.fc4 = nn.Linear(400, 784)
         self.relu = nn.ReLU()
@@ -144,7 +144,7 @@ class PyTorchVAEImpl(VAE):
     """
 
     def __init__(self, *args, **kwargs):
-        super(PyTorchVAEImpl, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.optimizer = self.initialize_optimizer(lr=1e-3)
 
     def compute_loss_and_gradient(self, x):
@@ -176,7 +176,7 @@ class PyroVAEImpl(VAE):
     """
 
     def __init__(self, *args, **kwargs):
-        super(PyroVAEImpl, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.optimizer = self.initialize_optimizer(lr=1e-3)
 
     def model(self, data):

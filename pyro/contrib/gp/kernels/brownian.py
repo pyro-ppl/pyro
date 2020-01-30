@@ -26,7 +26,7 @@ class Brownian(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None):
         if input_dim != 1:
             raise ValueError("Input dimensional for Brownian kernel must be 1.")
-        super(Brownian, self).__init__(input_dim, active_dims)
+        super().__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)

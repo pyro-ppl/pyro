@@ -66,7 +66,7 @@ class Polynomial(TransformModule):
     autoregressive = True
 
     def __init__(self, autoregressive_nn, input_dim, count_degree, count_sum):
-        super(Polynomial, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
 
         self.arn = autoregressive_nn
         self.input_dim = input_dim

@@ -131,7 +131,7 @@ class HMC(MCMCKernel):
                                       adapt_mass_matrix=adapt_mass_matrix,
                                       target_accept_prob=target_accept_prob,
                                       is_diag_mass=not full_mass)
-        super(HMC, self).__init__()
+        super().__init__()
 
     def _kinetic_energy(self, r):
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])

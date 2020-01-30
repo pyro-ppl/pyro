@@ -67,7 +67,7 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
             raise NotImplementedError('This distribution does not support D = 1')
         self.categorical = Categorical(logits=component_logits)
         self.probs = self.categorical.probs
-        super(MixtureOfDiagNormalsSharedCovariance, self).__init__(batch_shape=batch_shape, event_shape=(self.dim,))
+        super().__init__(batch_shape=batch_shape, event_shape=(self.dim,))
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MixtureOfDiagNormalsSharedCovariance, _instance)

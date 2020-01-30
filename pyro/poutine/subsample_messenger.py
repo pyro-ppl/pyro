@@ -67,7 +67,7 @@ class SubsampleMessenger(IndepMessenger):
 
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
                  use_cuda=None, device=None):
-        super(SubsampleMessenger, self).__init__(name, size, dim, device)
+        super().__init__(name, size, dim, device)
         self.subsample_size = subsample_size
         self._indices = subsample
         self.use_cuda = use_cuda
@@ -120,7 +120,7 @@ class SubsampleMessenger(IndepMessenger):
 
     def _reset(self):
         self._indices = None
-        super(SubsampleMessenger, self)._reset()
+        super()._reset()
 
     def _process_message(self, msg):
         frame = CondIndepStackFrame(self.name, self.dim, self.subsample_size, self.counter)

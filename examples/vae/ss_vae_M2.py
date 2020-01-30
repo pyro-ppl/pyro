@@ -36,7 +36,7 @@ class SSVAE(nn.Module):
     def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
                  config_enum=None, use_cuda=False, aux_loss_multiplier=None):
 
-        super(SSVAE, self).__init__()
+        super().__init__()
 
         # initialize the class with all arguments provided to the constructor
         self.output_size = output_size

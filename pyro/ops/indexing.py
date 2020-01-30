@@ -126,7 +126,7 @@ def vindex(tensor, args):
     return tensor[args]
 
 
-class Vindex(object):
+class Vindex:
     """
     Convenience wrapper around :func:`vindex`.
 

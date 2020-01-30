@@ -49,7 +49,7 @@ class NeuTraReparam(Reparam):
         self.x_unconstrained = []
 
     def _reparam_config(self, site):
-        if site["name"] in self.guide.prototype_trace:
+        if site["name"] in self.guide.prototype_trace and not site['is_observed']:
             return self
 
     def reparam(self, fn=None):
@@ -68,12 +68,12 @@ class NeuTraReparam(Reparam):
                 raise ValueError("NeuTraReparam only supports guides whose posteriors are "
                                  "TransformedDistributions but got a posterior of type {}"
                                  .format(type(posterior)))
-            self.transform = self.guide.transform
+            self.transform = dist.transforms.ComposeTransform(posterior.transforms)
             z_unconstrained = pyro.sample("{}_shared_latent".format(name),
                                           posterior.base_dist.mask(False))
 
             # Differentiably transform.
-            x_unconstrained = dist.transforms.ComposeTransform(posterior.transforms)
+            x_unconstrained = self.transform(z_unconstrained)
             log_density = self.transform.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
             self.x_unconstrained = list(reversed(list(self.guide._unpack_latent(x_unconstrained))))
 

@@ -69,7 +69,7 @@ class GaussianScaleMixture(TorchDistribution):
         self.component_scale = component_scale
         self.coeffs = self._compute_coeffs()
         self.categorical = Categorical(logits=component_logits)
-        super(GaussianScaleMixture, self).__init__(event_shape=(self.dim,))
+        super().__init__(event_shape=(self.dim,))
 
     def _compute_coeffs(self):
         """

@@ -44,7 +44,7 @@ def rand_tensor(shape, mean, sigma):
     return mean * torch.ones(shape) + sigma * torch.randn(shape)
 
 
-class SparseGammaDEF(object):
+class SparseGammaDEF:
     def __init__(self):
         # define the sizes of the layers in the deep exponential family
         self.top_width = 100
