@@ -12,7 +12,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.distributions.transforms import make_transform, block_autoregressive
+from pyro.distributions.transforms import iterated, block_autoregressive
 from pyro.infer.autoguide import (AutoDiagonalNormal, AutoIAFNormal, AutoLaplaceApproximation,
                                   AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO
@@ -151,7 +151,7 @@ def test_auto_transform(auto_class):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
-    lambda m: AutoNormalizingFlow(m, partial(make_transform, block_autoregressive, repeats=2)),
+    lambda m: AutoNormalizingFlow(m, partial(iterated, block_autoregressive, repeats=2)),
 ])
 @pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_dirichlet(auto_class, Elbo):

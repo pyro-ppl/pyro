@@ -28,7 +28,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.transforms import affine_autoregressive, make_transform
+from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
@@ -666,7 +666,7 @@ class AutoNormalizingFlow(AutoContinuous):
 
     Usage::
 
-        transform_init = partial(make_transforms, block_autoregressive,
+        transform_init = partial(iterated, block_autoregressive,
                                  repeats=2)
         guide = AutoNormalizingFlow(model, transform_init)
         svi = SVI(model, guide, ...)
@@ -721,7 +721,7 @@ class AutoIAFNormal(AutoNormalizingFlow):
 
     def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median, num_transforms=1, **init_transform_kwargs):
         super().__init__(model,
-                         init_transform_fn=functools.partial(make_transform, affine_autoregressive,
+                         init_transform_fn=functools.partial(iterated, affine_autoregressive,
                                                              repeats=num_transforms,
                                                              hidden_dims=hidden_dim,
                                                              **init_transform_kwargs),
