@@ -151,7 +151,7 @@ def test_auto_transform(auto_class):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
-    lambda m: AutoNormalizingFlow(m, partial(iterated, block_autoregressive, repeats=2)),
+    lambda m: AutoNormalizingFlow(m, partial(iterated, 2, block_autoregressive)),
 ])
 @pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_dirichlet(auto_class, Elbo):

@@ -100,6 +100,7 @@ def test_factor(auto_class, Elbo):
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_shapes(auto_class, init_loc_fn, Elbo):
 
     def model():

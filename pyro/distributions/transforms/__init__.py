@@ -38,14 +38,14 @@ def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
 
 
-def iterated(base_fn, *args, repeats=1, **kwargs):
+def iterated(repeats, base_fn, *args, **kwargs):
     """
     Helper function to compose a sequence of bijective transforms with potentially
     learnable parameters using :class:`~pyro.distributions.ComposeTransformModule`.
 
+    :param repeats: number of repeated transforms.
     :param base_fn: function to construct the bijective transform.
     :param args: arguments taken by `base_fn`.
-    :param repeats: number of repeated transforms.
     :param kwargs: keyword arguments taken by `base_fn`.
     :return: instance of :class:`~pyro.distributions.TransformModule`.
     """

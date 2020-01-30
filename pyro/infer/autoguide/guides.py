@@ -30,7 +30,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_median, init_to_feasible
 from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import PyroModule, PyroParam
@@ -681,10 +681,10 @@ class AutoNormalizingFlow(AutoContinuous):
 
     """
 
-    def __init__(self, model, init_transform_fn, init_loc_fn=init_to_median):
+    def __init__(self, model, init_transform_fn):
         self._init_transform_fn = init_transform_fn
         self.transform = None
-        super().__init__(model, init_loc_fn=init_loc_fn)
+        super().__init__(model, init_loc_fn=init_to_feasible)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -713,19 +713,28 @@ class AutoIAFNormal(AutoNormalizingFlow):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+
+        .. warning::
+
+            This argument is only to preserve backwards compatibility
+            and has no effect in practice.
+
     :param int num_transforms: number of :class:`~pyro.distributions.transforms.AffineAutoregressive`
         transforms to use in sequence.
     :param init_transform_kwargs: other keyword arguments taken by
         :func:`~pyro.distributions.transforms.affine_autoregressive`.
     """
 
-    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median, num_transforms=1, **init_transform_kwargs):
+    def __init__(self, model, hidden_dim=None, init_loc_fn=None, num_transforms=1, **init_transform_kwargs):
+        if init_loc_fn:
+            warnings.warn("The `init_loc_fn` argument to AutoIAFNormal is not used in practice. "
+                          "Please consider removing, as this may be removed in a future release.",
+                          category=FutureWarning)
         super().__init__(model,
-                         init_transform_fn=functools.partial(iterated, affine_autoregressive,
-                                                             repeats=num_transforms,
+                         init_transform_fn=functools.partial(iterated, num_transforms,
+                                                             affine_autoregressive,
                                                              hidden_dims=hidden_dim,
-                                                             **init_transform_kwargs),
-                         init_loc_fn=init_loc_fn)
+                                                             **init_transform_kwargs))
 
 
 class AutoLaplaceApproximation(AutoContinuous):
