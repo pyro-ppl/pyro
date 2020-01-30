@@ -11,7 +11,7 @@ from pyro.infer.autoguide import AutoIAFNormal
 from pyro import optim
 from pyro.infer.mcmc.util import initialize_model
 from pyro.infer.reparam import NeuTraReparam
-from tests.common import assert_close
+from tests.common import assert_close, xfail_param
 
 
 def neals_funnel(dim):
@@ -28,7 +28,11 @@ def dirichlet_categorical(data):
     return p_latent
 
 
-def test_neals_funnel_smoke():
+@pytest.mark.parametrize('jit', [
+    False,
+    xfail_param(True, reason="https://github.com/pyro-ppl/pyro/issues/2292"),
+])
+def test_neals_funnel_smoke(jit):
     dim = 10
 
     guide = AutoIAFNormal(neals_funnel)
@@ -36,9 +40,9 @@ def test_neals_funnel_smoke():
     for _ in range(1000):
         svi.step(dim)
 
-    neutra = NeuTraReparam(guide)
+    neutra = NeuTraReparam(guide.requires_grad_(False))
     model = neutra.reparam(neals_funnel)
-    nuts = NUTS(model)
+    nuts = NUTS(model, jit_compile=jit)
     mcmc = MCMC(nuts, num_samples=50, warmup_steps=50)
     mcmc.run(dim)
     samples = mcmc.get_samples()

@@ -82,6 +82,7 @@ class AffineAutoregressive(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    sign = +1
     autoregressive = True
 
     def __init__(
