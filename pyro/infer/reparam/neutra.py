@@ -49,7 +49,7 @@ class NeuTraReparam(Reparam):
         self.x_unconstrained = []
 
     def _reparam_config(self, site):
-        if site["name"] in self.guide.prototype_trace and not site['is_observed']:
+        if site["name"] in self.guide.prototype_trace:
             return self
 
     def reparam(self, fn=None):
