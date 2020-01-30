@@ -362,7 +362,9 @@ class GaussianHMM(TorchDistribution):
     :type observation_dist: ~torch.distributions.MultivariateNormal or
         ~torch.distributions.Independent of ~torch.distributions.Normal
     """
+    has_rsample = True
     arg_constraints = {}
+    support = constraints.real
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None):

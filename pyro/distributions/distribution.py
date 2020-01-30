@@ -115,7 +115,39 @@ class Distribution(object, metaclass=ABCMeta):
         :return: An iterator over the distribution's discrete support.
         :rtype: iterator
         """
-        raise NotImplementedError("Support not implemented for {}".format(type(self)))
+        raise NotImplementedError("Support not implemented for {}".format(type(self).__name__))
+
+    def conjugate_update(self, other):
+        """
+        Creates an updated distribution fusing information from another
+        compatible distribution. This is supported by only a few conjugate
+        distributions.
+
+        This should satisfy the equation::
+
+            fg, log_normalizer = f.conjugate_update(g)
+            assert f.log_prob(x) + g.log_prob(x) == fg.log_prob(x) + log_normalizer
+
+        Note this is equivalent to :obj:`funsor.ops.add` on
+        :class:`~funsor.terms.Funsor` distributions, but we return a lazy sum
+        ``(updated, log_normalizer)`` because PyTorch distributions must be
+        normalized.  Thus :meth:`conjugate_update` should commute with
+        :func:`~funsor.pyro.convert.dist_to_funsor` and
+        :func:`~funsor.pyro.convert.tensor_to_funsor` ::
+
+            dist_to_funsor(f) + dist_to_funsor(g)
+              == dist_to_funsor(fg) + tensor_to_funsor(log_normalizer)
+
+        :param other: A distribution representing ``p(data|latent)`` but
+            normalized over ``latent`` rather than ``data``. Here ``latent``
+            is a candidate sample from ``self`` and ``data`` is a ground
+            observation of unrelated type.
+        :return: a pair ``(updated,log_normalizer)`` where ``updated`` is an
+            updated distribution of type ``type(self)``, and ``log_normalizer``
+            is a :class:`~torch.Tensor` representing the normalization factor.
+        """
+        raise NotImplementedError("{} does not support .conjugate_update()"
+                                  .format(type(self).__name__))
 
     def has_rsample_(self, value):
         """

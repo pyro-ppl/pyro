@@ -7,6 +7,23 @@ from torch.distributions.utils import lazy_property
 
 from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.distributions.util import sum_rightmost
+
+
+class Beta(torch.distributions.Beta, TorchDistributionMixin):
+    def conjugate_update(self, other):
+        assert isinstance(other, Beta)
+        concentration1 = self.concentration1 + other.concentration1 - 1
+        concentration0 = self.concentration0 + other.concentration0 - 1
+        updated = Beta(concentration1, concentration0)
+
+        def _log_normalizer(d):
+            x = d.concentration1
+            y = d.concentration0
+            return (x + y).lgamma() - x.lgamma() - y.lgamma()
+
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        return updated, log_normalizer
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
@@ -38,6 +55,35 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
         return result
 
 
+class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
+    def conjugate_update(self, other):
+        assert isinstance(other, Dirichlet)
+        concentration = self.concentration + other.concentration - 1
+        updated = Dirichlet(concentration)
+
+        def _log_normalizer(d):
+            c = d.concentration
+            return c.sum(-1).lgamma() - c.lgamma().sum(-1)
+
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        return updated, log_normalizer
+
+
+class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
+    def conjugate_update(self, other):
+        assert isinstance(other, Gamma)
+        concentration = self.concentration + other.concentration - 1
+        rate = self.rate + other.rate
+        updated = Gamma(concentration, rate)
+
+        def _log_normalizer(d):
+            c = d.concentration
+            return d.rate.log() * c - c.lgamma()
+
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        return updated, log_normalizer
+
+
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 
@@ -61,6 +107,13 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
     @_validate_args.setter
     def _validate_args(self, value):
         self.base_dist._validate_args = value
+
+    def conjugate_update(self, other):
+        n = self.reintepreted_batch_ndims
+        updated, log_normalizer = self.base_dist.conjugate_update(other.to_event(-n))
+        updated = updated.to_event(n)
+        log_normalizer = sum_rightmost(log_normalizer, n)
+        return updated, log_normalizer
 
 
 # Programmatically load all distributions from PyTorch.
