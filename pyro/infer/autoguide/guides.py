@@ -676,9 +676,6 @@ class AutoNormalizingFlow(AutoContinuous):
         dimension returns an instance of :class:`~torch.distributions.Transform`
         , or :class:`~pyro.distributions.TransformModule` if the transform has
         trainable params.
-    :param callable init_loc_fn: A per-site initialization function.
-        See :ref:`autoguide-initialization` section for available functions.
-
     """
 
     def __init__(self, model, init_transform_fn):

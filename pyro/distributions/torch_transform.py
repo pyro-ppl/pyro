@@ -25,7 +25,7 @@ class ComposeTransformModule(torch.distributions.ComposeTransform, torch.nn.Modu
     store when used in :class:`~pyro.nn.module.PyroModule` instances.
     """
     def __init__(self, parts):
-        super(ComposeTransformModule, self).__init__(parts)
+        super().__init__(parts)
         for part in parts:
             self.append(part)
 
