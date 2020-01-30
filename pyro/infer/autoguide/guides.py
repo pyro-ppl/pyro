@@ -58,7 +58,7 @@ def _deep_setattr(obj, key, val):
     setattr(obj, rpart, val)
 
 
-def _prototype_hide_fn(msg):
+def prototype_hide_fn(msg):
     # Record only stochastic sites in the prototype_trace.
     return msg["type"] != "sample" or msg["is_observed"] or site_is_subsample(msg)
 
@@ -129,7 +129,7 @@ class AutoGuide(PyroModule):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = poutine.block(self.model, _prototype_hide_fn)
+        model = poutine.block(self.model, prototype_hide_fn)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
@@ -764,7 +764,7 @@ class AutoDiscreteParallel(AutoGuide):
     """
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = poutine.block(config_enumerate(self.model), _prototype_hide_fn)
+        model = poutine.block(config_enumerate(self.model), prototype_hide_fn)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
