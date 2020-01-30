@@ -28,7 +28,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.transforms import affine_autoregressive
+from pyro.distributions.transforms import affine_autoregressive, make_transform
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
@@ -660,18 +660,22 @@ class AutoNormalizingFlow(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
     distribution transformed via a sequence of bijective transforms
-    (:mod:`~pyro.distributions.transforms`) to construct a guide over the entire
-    latent space. The guide does not depend on the model's ``*args, **kwargs``.
+    (e.g. various :mod:`~pyro.distributions.TransformModule` subclasses)
+    to construct a guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
 
     Usage::
 
-        guide = AutoNormalizingFlow(model, affine_autoregressive, num_transforms=2)
+        transform_init = partial(make_transforms, block_autoregressive,
+                                 repeats=2)
+        guide = AutoNormalizingFlow(model, transform_init)
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
     :param init_transform_fn: a callable which when provided with the latent
-        dimension returns an instance of
-        :class:`~pyro.distributions.torch_tranform.TransformModule`.
+        dimension returns an instance of :class:`~torch.distributions.Transform`
+        , or :class:`~pyro.distributions.TransformModule` if the transform has
+        trainable params.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
 
@@ -685,7 +689,7 @@ class AutoNormalizingFlow(AutoContinuous):
     def get_posterior(self, *args, **kwargs):
         """
         Returns a diagonal Normal posterior distribution transformed by
-        :class:`~pyro.distributions.torch_tranform.TransformModule`.
+        a bijective transform.
         """
         if self.transform is None:
             self.transform = self._init_transform_fn(self.latent_dim)
@@ -709,19 +713,18 @@ class AutoIAFNormal(AutoNormalizingFlow):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param init_transform_fn: a callable which when provided with the latent
-        dimension returns an instance of
-        :class:`~pyro.distributions.torch_tranform.TransformModule`.
+    :param int num_transforms: number of :class:`~pyro.distributions.transforms.AffineAutoregressive`
+        transforms to use in sequence.
+    :param init_transform_kwargs: other keyword arguments taken by
+        :func:`~pyro.distributions.transforms.affine_autoregressive`.
     """
 
-    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median, init_transform_fn=None):
-        if not init_transform_fn:
-            def make_transform(x):
-                return affine_autoregressive(x, hidden_dims=hidden_dim)
-        else:
-            make_transform = init_transform_fn
+    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median, num_transforms=1, **init_transform_kwargs):
         super().__init__(model,
-                         init_transform_fn=make_transform,
+                         init_transform_fn=functools.partial(make_transform, affine_autoregressive,
+                                                             repeats=num_transforms,
+                                                             hidden_dims=hidden_dim,
+                                                             **init_transform_kwargs),
                          init_loc_fn=init_loc_fn)
 
 

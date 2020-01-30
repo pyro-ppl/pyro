@@ -3,6 +3,7 @@
 
 import torch
 from torch.autograd import grad
+from torchviz import make_dot
 
 
 def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_steps=1, z_grads=None):
@@ -83,7 +84,7 @@ def potential_grad(potential_fn, z):
         else:
             raise e
 
-    grads = grad(potential_energy, z_nodes, retain_graph=True)
+    grads = grad(potential_energy, z_nodes)
     for node in z_nodes:
         node.requires_grad_(False)
     return dict(zip(z_keys, grads)), potential_energy.detach()

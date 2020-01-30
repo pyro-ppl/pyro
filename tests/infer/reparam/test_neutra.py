@@ -26,7 +26,7 @@ def test_neals_funnel_smoke():
 
     neutra = NeuTraReparam(guide.requires_grad_(False))
     model = neutra.reparam(model)
-    nuts = NUTS(model)
+    nuts = NUTS(model, jit_compile=True)
     mcmc = MCMC(nuts, num_samples=50, warmup_steps=50)
     mcmc.run()
     samples = mcmc.get_samples()
