@@ -311,6 +311,12 @@ def test_gaussian_tensordot(dot_dims,
     assert_close(covariance[..., x_dim:, :na], z_covariance[..., na:, :na])
     assert_close(covariance[..., x_dim:, x_dim:], z_covariance[..., na:, na:])
 
+    # test triangularize
+    assert z.rank() == x.rank() + y.rank()
+    z_tri = z.triangularize()
+    assert z_tri.rank() == min(z.rank(), z.dim())
+    assert_close(z_tri.precision, z.precision)
+
     # Assume a = c = 0, integrate out b
     num_samples = 200000
     scale = 20

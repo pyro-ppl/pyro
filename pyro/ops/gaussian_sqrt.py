@@ -223,6 +223,8 @@ class GaussianS:
         B_sqrt = Psqrt_b.triangular_solve(Psqrt_b_tril, upper=False).solution
         tmp = Psqrt_a.matmul(B_sqrt.transpose(-1, -2))
         prec_sqrt = Psqrt_a - tmp.matmul(B_sqrt)
+        # FIXME: In gaussian tensordot, P_sqrt_a is a block diagonal matrix, B and I - B is
+        # a idempotent matrix. Can we leverage that information to triangularize Psqrt_a @ (I - B)?
 
         info_a = self.info_vec[..., a]
         info_b = self.info_vec[..., b]
@@ -236,6 +238,14 @@ class GaussianS:
                           0.5 * Psqrt_b_tril.diagonal(dim1=-2, dim2=-1).pow(2).log().sum(-1) +
                           0.5 * b_tmp.squeeze(-1).pow(2).sum(-1))
         return GaussianS(log_normalizer, info_vec, prec_sqrt)
+
+    def triangularize(self):
+        """
+        Returns the same GaussianS instance with prec_sqrt is triangularized.
+        """
+        # NB: batching qr is very slow in GPU.
+        prec_sqrt = triangularize(self.prec_sqrt, method="qr")
+        return GaussianS(self.log_normalizer, self.info_vec, prec_sqrt)
 
     def event_logsumexp(self):
         """
