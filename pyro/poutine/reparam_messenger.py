@@ -13,6 +13,10 @@ class ReparamMessenger(Messenger):
     constructor.  See the :mod:`pyro.infer.reparam` module for available
     reparameterizers.
 
+    Note some reparameterizers can examine the ``*args,**kwargs`` inputs of
+    functions they affect; these reparameterizers require using
+    ``poutine.reparam`` as a decorator rather than as a context manager.
+
     [1] Maria I. Gorinova, Dave Moore, Matthew D. Hoffman (2019)
         "Automatic Reparameterisation of Probabilistic Programs"
         https://arxiv.org/pdf/1906.03028.pdf
@@ -27,6 +31,10 @@ class ReparamMessenger(Messenger):
         super().__init__()
         assert isinstance(config, dict) or callable(config)
         self.config = config
+        self._args_kwargs = None
+
+    def __call__(self, fn):
+        return ReparamHandler(self, fn)
 
     def _pyro_sample(self, msg):
         if isinstance(self.config, dict):
@@ -36,7 +44,12 @@ class ReparamMessenger(Messenger):
         if reparam is None:
             return
 
-        new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
+        reparam.args_kwargs = self._args_kwargs
+        try:
+            new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
+        finally:
+            reparam.args_kwargs = None
+
         if value is not None:
             if msg["value"] is None:
                 msg["is_observed"] = True
@@ -45,3 +58,21 @@ class ReparamMessenger(Messenger):
                 # Validate while the original msg["fn"] is known.
                 msg["fn"]._validate_sample(value)
         msg["fn"] = new_fn
+
+
+class ReparamHandler(object):
+    """
+    Reparameterization poutine.
+    """
+    def __init__(self, msngr, fn):
+        self.msngr = msngr
+        self.fn = fn
+
+    def __call__(self, *args, **kwargs):
+        # This saves args,kwargs for optional use by reparameterizers.
+        self.msngr._args_kwargs = args, kwargs
+        try:
+            with self.msngr:
+                return self.fn(*args, **kwargs)
+        finally:
+            self.msngr._args_kwargs = None

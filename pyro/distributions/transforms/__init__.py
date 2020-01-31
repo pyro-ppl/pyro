@@ -5,6 +5,7 @@ from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
 
+from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms.affine_autoregressive import AffineAutoregressive, affine_autoregressive
 from pyro.distributions.transforms.affine_coupling import AffineCoupling, affine_coupling
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
@@ -37,11 +38,28 @@ def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
 
 
+def iterated(repeats, base_fn, *args, **kwargs):
+    """
+    Helper function to compose a sequence of bijective transforms with potentially
+    learnable parameters using :class:`~pyro.distributions.ComposeTransformModule`.
+
+    :param repeats: number of repeated transforms.
+    :param base_fn: function to construct the bijective transform.
+    :param args: arguments taken by `base_fn`.
+    :param kwargs: keyword arguments taken by `base_fn`.
+    :return: instance of :class:`~pyro.distributions.TransformModule`.
+    """
+    assert isinstance(repeats, int) and repeats >= 1
+    return ComposeTransformModule([base_fn(*args, **kwargs) for _ in range(repeats)])
+
+
 __all__ = [
+    'iterated',
     'AffineAutoregressive',
     'AffineCoupling',
     'BatchNorm',
     'BlockAutoregressive',
+    'ComposeTransformModule',
     'ConditionalPlanar',
     'CorrLCholeskyTransform',
     'DiscreteCosineTransform',

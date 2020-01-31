@@ -118,8 +118,13 @@ class TraceMessenger(Messenger):
         super()._reset()
 
     def _pyro_post_sample(self, msg):
-        if not self.param_only:
-            self.trace.add_node(msg["name"], **msg.copy())
+        if self.param_only:
+            return
+        if msg["infer"].get("_do_not_trace"):
+            assert msg["infer"].get("is_auxiliary")
+            assert not msg["is_observed"]
+            return
+        self.trace.add_node(msg["name"], **msg.copy())
 
     def _pyro_post_param(self, msg):
         self.trace.add_node(msg["name"], **msg.copy())

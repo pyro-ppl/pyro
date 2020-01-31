@@ -116,6 +116,27 @@ def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         assert_ok(model, guide, elbo)
 
 
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+    EnergyDistance_prior,
+    EnergyDistance_noprior,
+])
+@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+def test_nonempty_model_empty_guide_error(Elbo, strict_enumeration_warning):
+
+    def model():
+        pyro.sample("x", dist.Normal(0, 1))
+
+    def guide():
+        pass
+
+    elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
+    assert_error(model, guide, elbo)
+
+
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
@@ -195,6 +216,50 @@ def test_variable_clash_in_guide_error(Elbo):
         pyro.sample("x", dist.Bernoulli(p))  # Should error here.
 
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
+
+
+@pytest.mark.parametrize("has_rsample", [False, True])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
+def test_set_has_rsample_ok(has_rsample, Elbo):
+
+    # This model has sparse gradients, so users may want to disable
+    # reparametrized sampling to reduce variance of gradient estimates.
+    # However both versions should be correct, i.e. with or without has_rsample.
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1))
+        loc = (z * 100).clamp(min=0, max=1)  # sparse gradients
+        pyro.sample("x", dist.Normal(loc, 1), obs=torch.tensor(0.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        pyro.sample("z", dist.Normal(loc, 1).has_rsample_(has_rsample))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+    elif Elbo is TraceTMC_ELBO:
+        guide = config_enumerate(guide, num_samples=2)
+
+    assert_ok(model, guide, Elbo(strict_enumeration_warning=False))
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
+def test_not_has_rsample_ok(Elbo):
+
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1))
+        p = z.round().clamp(min=0.2, max=0.8)  # discontinuous
+        pyro.sample("x", dist.Bernoulli(p), obs=torch.tensor(0.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        pyro.sample("z", dist.Normal(loc, 1).has_rsample_(False))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+    elif Elbo is TraceTMC_ELBO:
+        guide = config_enumerate(guide, num_samples=2)
+
+    assert_ok(model, guide, Elbo(strict_enumeration_warning=False))
 
 
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
