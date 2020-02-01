@@ -342,6 +342,102 @@ class AutoDelta(AutoGuide):
         return self(*args, **kwargs)
 
 
+class AutoConstrainedNormal(AutoGuide):
+    """This is AutoNormal, but it uses the same shape constraint logic found
+    in AutoMultivariateNormal and AutoDiagonalNormal.
+    """
+    def __init__(self, model, init_loc_fn=init_to_median, prefix='auto'):
+        #  Does this accept a 'prefix' arg?  It doesn't look like it.
+        self.init_loc_fn = init_loc_fn
+        self.prefix = prefix
+        model = InitMessenger(self.init_loc_fn)(model)
+        super().__init__(model)
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+
+        self._unconstrained_shapes = {}
+        self._cond_indep_stacks = {}
+
+        # Initialize guide params
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            # Collect the shapes of unconstrained values.
+            # These may differ from the shapes of constrained values.
+            self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
+
+            # Collect independence contexts.
+            self._cond_indep_stacks[name] = site["cond_indep_stack"]
+
+    def forward(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        plates = self._create_plates()
+        result = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            constrained_shape = site["value"].shape
+            unconstrained_shape = self._unconstrained_shapes[name]
+
+            #  size = _product(unconstrained_shape)
+            event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
+
+            site_batch_shape = site["fn"].batch_shape
+            unconstrained_shape = broadcast_shape(unconstrained_shape,
+                                                  site_batch_shape + (1,) * event_dim)
+            transform = biject_to(site["fn"].support)
+
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(plates[frame.name])
+                loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
+                scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
+
+                loc_value = pyro.param(
+                    loc_name,
+                    lambda: site["value"].new_zeros(site["value"].shape)
+                )
+                scale_value = pyro.param(
+                    scale_name,
+                    lambda: site["value"].new_ones(site["value"].shape),
+                    constraint=constraints.positive
+                )
+
+                #  Now make latent just like sample_latent in AutoContinuous.
+                unconstrained_latent = pyro.sample(
+                    name + "_unconstrained",
+                    dist.Normal(
+                        loc_value, scale_value,
+                    ).to_event(site["fn"].event_dim),
+                    infer={"is_auxiliary": True}
+                )
+
+                value = transform(unconstrained_latent)
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_latent)
+                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
+                delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
+
+                result[name] = pyro.sample(name, delta_dist)
+
+        return result
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        return self(*args, **kwargs)
+
+
 class AutoNormal(AutoGuide):
     """
     This implementation of :class:`AutoGuide` uses Delta distributions to
@@ -383,6 +479,7 @@ class AutoNormal(AutoGuide):
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
+            #  can I ignore the constraints???  I don't even know what this does.
             _deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
@@ -405,21 +502,28 @@ class AutoNormal(AutoGuide):
                         stack.enter_context(plates[frame.name])
                 loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
                 scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
+                print(f'\n Name is {name}')
+                print(f'site value shape is {site["value"].shape}')
+                print(f'site fn shape() is {site["fn"].shape()}')
+                print(f'site fn batch is {site["fn"].batch_shape}')
+                print(f'site fn event shape is {site["fn"].event_shape}')
+                print(f'site fn support is  is {site["fn"].support}')
                 loc_value = pyro.param(
                     loc_name,
-                    lambda: site["value"].new_zeros(site["fn"].shape()),
-                    constraint=site["fn"].support
+                    lambda: site["value"].new_zeros(site["value"].shape)
+                    #  constraint=site["fn"].support
+                    #  this breaks sampling the dirichlet in test_shapes.
                 )
                 scale_value = pyro.param(
                     scale_name,
-                    lambda: site["value"].new_ones(site["fn"].shape()),
+                    lambda: site["value"].new_ones(site["value"].shape),
                     constraint=constraints.positive
                 )
 
                 result[name] = pyro.sample(
                     name,
                     dist.Normal(
-                        loc_value, scale_value
+                        loc_value, scale_value,
                     ).to_event(site["fn"].event_dim)
                 )
         return result
@@ -655,7 +759,7 @@ class AutoDiagonalNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
-    initialized to the identity times a small factor.
+
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
