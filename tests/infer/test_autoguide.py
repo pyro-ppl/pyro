@@ -17,7 +17,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, Predictive
-from pyro.infer.autoguide import (AutoCallable, AutoConstrainedNormal, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
+from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
                                   AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoNormal, AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
                                   init_to_sample)
@@ -29,9 +29,9 @@ from tests.common import assert_close, assert_equal
 
 
 @pytest.mark.parametrize("auto_class", [
-    AutoConstrainedNormal,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
 ])
@@ -50,9 +50,10 @@ def test_scores(auto_class):
     model_trace.compute_log_prob()
 
     prefix = auto_class.__name__
-    #  assert '_{}_latent'.format(prefix) not in model_trace.nodes
+    if prefix != 'AutoNormal':
+        assert '_{}_latent'.format(prefix) not in model_trace.nodes
+        assert guide_trace.nodes['_{}_latent'.format(prefix)]['log_prob_sum'].item() != 0.0
     assert model_trace.nodes['z']['log_prob_sum'].item() != 0.0
-    #  assert guide_trace.nodes['_{}_latent'.format(prefix)]['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
 
 
@@ -60,8 +61,8 @@ def test_scores(auto_class):
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
-    AutoConstrainedNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
@@ -95,10 +96,10 @@ def test_factor(auto_class, Elbo):
     init_to_sample,
 ])
 @pytest.mark.parametrize("auto_class", [
-    AutoConstrainedNormal,
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
@@ -122,10 +123,10 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
 
 @pytest.mark.xfail(reason="sequential plate is not yet supported")
 @pytest.mark.parametrize('auto_class', [
-    AutoConstrainedNormal,
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
@@ -202,10 +203,10 @@ def nested_auto_guide_callable(model):
 
 
 @pytest.mark.parametrize("auto_class", [
-    AutoConstrainedNormal,
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
     auto_guide_list_x,
@@ -248,6 +249,7 @@ def test_median(auto_class, Elbo):
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
     auto_guide_list_x,
@@ -351,6 +353,7 @@ def test_quantiles(auto_class, Elbo):
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
@@ -382,6 +385,7 @@ def test_discrete_parallel(continuous_class):
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
@@ -399,7 +403,6 @@ def test_guide_list(auto_class):
 
 
 @pytest.mark.parametrize("auto_class", [
-    AutoConstrainedNormal,
     AutoDelta,
     AutoDiagonalNormal,
     AutoNormal,
@@ -428,6 +431,7 @@ def test_callable(auto_class):
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
 ])

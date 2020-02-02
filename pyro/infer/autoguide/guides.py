@@ -342,7 +342,7 @@ class AutoDelta(AutoGuide):
         return self(*args, **kwargs)
 
 
-class AutoConstrainedNormal(AutoGuide):
+class AutoNormal(AutoGuide):
     """This is AutoNormal, but it uses the same shape constraint logic found
     in AutoMultivariateNormal and AutoDiagonalNormal.
     """
@@ -436,106 +436,11 @@ class AutoConstrainedNormal(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        return self(*args, **kwargs)
-
-
-class AutoNormal(AutoGuide):
-    """
-    This implementation of :class:`AutoGuide` uses Delta distributions to
-    construct a MAP guide over the entire latent space. The guide does not
-    depend on the model's ``*args, **kwargs``.
-
-    .. note:: This class does MAP inference in constrained space.
-
-    Usage::
-
-        guide = AutoDelta(model)
-        svi = SVI(model, guide, ...)
-
-    Latent variables are initialized using ``init_loc_fn()``. To change the
-    default behavior, create a custom ``init_loc_fn()`` as described in
-    :ref:`autoguide-initialization` , for example::
-
-        def my_init_fn(site):
-            if site["name"] == "level":
-                return torch.tensor([-1., 0., 1.])
-            if site["name"] == "concentration":
-                return torch.ones(k)
-            return init_to_sample(site)
-
-    :param callable model: A Pyro model.
-    :param callable init_loc_fn: A per-site initialization function.
-        See :ref:`autoguide-initialization` section for available functions.
-    """
-    def __init__(self, model, init_loc_fn=init_to_median, prefix='auto'):
-        #  Does this accept a 'prefix' arg?  It doesn't look like it.
-        self.init_loc_fn = init_loc_fn
-        self.prefix = prefix
-        model = InitMessenger(self.init_loc_fn)(model)
-        super().__init__(model)
-
-    def _setup_prototype(self, *args, **kwargs):
-        super()._setup_prototype(*args, **kwargs)
-
-        # Initialize guide params
-        for name, site in self.prototype_trace.iter_stochastic_nodes():
-            value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
-            #  can I ignore the constraints???  I don't even know what this does.
-            _deep_setattr(self, name, value)
-
-    def forward(self, *args, **kwargs):
-        """
-        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
-
-        :return: A dict mapping sample site name to sampled value.
-        :rtype: dict
-        """
-        # if we've never run the model before, do so now so we can inspect the model structure
-        if self.prototype_trace is None:
-            self._setup_prototype(*args, **kwargs)
-
-        plates = self._create_plates()
-        result = {}
-        for name, site in self.prototype_trace.iter_stochastic_nodes():
-            with ExitStack() as stack:
-                for frame in site["cond_indep_stack"]:
-                    if frame.vectorized:
-                        stack.enter_context(plates[frame.name])
-                loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
-                scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
-                print(f'\n Name is {name}')
-                print(f'site value shape is {site["value"].shape}')
-                print(f'site fn shape() is {site["fn"].shape()}')
-                print(f'site fn batch is {site["fn"].batch_shape}')
-                print(f'site fn event shape is {site["fn"].event_shape}')
-                print(f'site fn support is  is {site["fn"].support}')
-                loc_value = pyro.param(
-                    loc_name,
-                    lambda: site["value"].new_zeros(site["value"].shape)
-                    #  constraint=site["fn"].support
-                    #  this breaks sampling the dirichlet in test_shapes.
-                )
-                scale_value = pyro.param(
-                    scale_name,
-                    lambda: site["value"].new_ones(site["value"].shape),
-                    constraint=constraints.positive
-                )
-
-                result[name] = pyro.sample(
-                    name,
-                    dist.Normal(
-                        loc_value, scale_value,
-                    ).to_event(site["fn"].event_dim)
-                )
-        return result
-
-    def median(self, *args, **kwargs):
-        """
-        Returns the posterior median value of each latent variable.
-
-        :return: A dict mapping sample site name to median tensor.
-        :rtype: dict
-        """
+        # medians = {}
+        # for name, site in self.prototype_trace.iter_stochastic_nodes():
+        #     #  get unconstrained val just like above.
+        #     medians[name] = biject_to(site["fn"].support)(
+        #          )
         return self(*args, **kwargs)
 
 
