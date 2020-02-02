@@ -402,11 +402,11 @@ class AutoConstrainedNormal(AutoGuide):
 
                 loc_value = pyro.param(
                     loc_name,
-                    lambda: site["value"].new_zeros(site["value"].shape)
+                    lambda: site["value"].new_zeros(unconstrained_shape)
                 )
                 scale_value = pyro.param(
                     scale_name,
-                    lambda: site["value"].new_ones(site["value"].shape),
+                    lambda: site["value"].new_ones(unconstrained_shape),
                     constraint=constraints.positive
                 )
 
@@ -422,7 +422,8 @@ class AutoConstrainedNormal(AutoGuide):
                 value = transform(unconstrained_latent)
                 log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_latent)
                 log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-                delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
+                delta_dist = dist.Delta(value, log_density=log_density,
+                                        event_dim=site["fn"].event_dim)
 
                 result[name] = pyro.sample(name, delta_dist)
 
