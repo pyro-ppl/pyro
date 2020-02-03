@@ -7,7 +7,7 @@ import pyro.distributions as dist
 from .reparam import Reparam
 
 
-class ConjugateReparam(Reparam):
+class ConjugateUpdateReparam(Reparam):
     """
     Reparameterize to a conjugate updated distribution.
 
@@ -50,7 +50,7 @@ class ConjugateReparam(Reparam):
         self.guide = guide
 
     def __call__(self, name, fn, obs):
-        assert obs is None, "PosteriorReparam does not support observe statements"
+        assert obs is None, "ConjugateUpdateReparam does not support observe statements"
 
         # Compute a guide distribution, either static or dependent.
         guide_dist = self.guide
@@ -65,7 +65,7 @@ class ConjugateReparam(Reparam):
         if not fn.has_rsample:
             # Note supporting non-reparameterized sites would require more delicate
             # handling of traced sites than the crude _do_not_trace flag below.
-            raise NotImplementedError("ConjugateReparam inference supports only reparameterized "
+            raise NotImplementedError("ConjugateUpdateReparam inference supports only reparameterized "
                                       "distributions, but got {}".format(type(fn)))
         value = pyro.sample("{}_updated".format(name), fn,
                             infer={"is_auxiliary": True, "_do_not_trace": True})
@@ -87,4 +87,35 @@ class ConjugateReparam(Reparam):
 
         # Return an importance-weighted point estimate.
         new_fn = dist.Delta(value, log_density=log_density, event_dim=fn.event_dim)
+        return new_fn, value
+
+
+class ConjugateLatentReparam(Reparam):
+    """
+    Reparameterize to add an extra ``pyro.deterministic`` site for the latent
+    variable of a conjugate pair distribution.
+
+    This only works for a small set of conjugate pair distributions, including
+    :class:`~pyro.distributions.BetaBinomial` ,
+    :class:`~pyro.distributions.DirichletMultinomial` ,
+    :class:`~pyro.distributions.GammaPoisson` , and
+    :class:`~pyro.distributions.GaussianHMM` .
+    """
+    def __call__(self, name, fn, obs):
+        assert obs is None, "ConjugateLatentReparam does not support observe statements"
+
+        # Sample the observed value.
+        value = pyro.sample("{}_obs".format(name), fn)
+
+        # Expose the latent sample.
+        latent = getattr(value, "_pyro_latent", None)
+        if latent is not None:  # Try to use the latent cached by fn.sample().
+            pyro.deterministic("{}_latent".format(name), latent,
+                               event_dim=fn.event_dim + latent.dim() - value.dim())
+        else:  # Fall back to constucting and sampling from the posterior.
+            latent_fn = fn.get_posterior(value)
+            latent = pyro.sample("{}_latent".format(name), latent_fn)
+
+        # Simulate a pyro.deterministic() site.
+        new_fn = dist.Delta(value, event_dim=fn.event_dim).mask(False)
         return new_fn, value

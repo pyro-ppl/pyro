@@ -439,6 +439,7 @@ class GaussianHMM(TorchDistribution):
         perm = torch.cat([torch.arange(hidden_dim, hidden_dim + obs_dim, device=z.device),
                           torch.arange(hidden_dim, device=z.device)])
         x = self._obs.event_permute(perm).condition(z).rsample()
+        x._pyro_latent = z
         return x
 
     def filter(self, value):

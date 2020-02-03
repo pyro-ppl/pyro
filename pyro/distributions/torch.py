@@ -26,6 +26,12 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
         return updated, log_normalizer
 
 
+class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
+    @staticmethod
+    def conjugate(self, total_count, data):
+        return Beta(1 + data, 1 + total_count - data)
+
+
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
 # log_prob on the support of this variable: we can completely avoid tensor ops
 # and merely reshape the self.logits tensor. This is especially important for

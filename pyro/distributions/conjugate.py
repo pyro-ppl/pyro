@@ -72,7 +72,9 @@ class BetaBinomial(TorchDistribution):
 
     def sample(self, sample_shape=()):
         probs = self._beta.sample(sample_shape)
-        return Binomial(self.total_count, probs).sample()
+        value = Binomial(self.total_count, probs).sample()
+        value._pyro_latent = probs
+        return value
 
     def log_prob(self, value):
         if self._validate_args:
@@ -152,7 +154,9 @@ class DirichletMultinomial(TorchDistribution):
         total_count = int(self.total_count.max())
         if not self.total_count.min() == total_count:
             raise NotImplementedError("Inhomogeneous total count not supported by `sample`.")
-        return Multinomial(total_count, probs).sample()
+        value = Multinomial(total_count, probs).sample()
+        value._pyro_latent = probs
+        return value
 
     def log_prob(self, value):
         if self._validate_args:
@@ -217,7 +221,9 @@ class GammaPoisson(TorchDistribution):
 
     def sample(self, sample_shape=()):
         rate = self._gamma.sample(sample_shape)
-        return Poisson(rate).sample()
+        value = Poisson(rate).sample()
+        value._pyro_latent = rate
+        return value
 
     def log_prob(self, value):
         if self._validate_args:
