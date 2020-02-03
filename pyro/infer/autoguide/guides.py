@@ -393,6 +393,13 @@ class AutoNormal(AutoGuide):
                 constraint=constraints.positive
             )
 
+    def _get_loc_and_scale(self, name):
+        loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
+        scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
+        site_loc = pyro.get_param_store().get_param(loc_name)
+        site_scale = pyro.get_param_store().get_param(scale_name)
+        return site_loc, site_scale
+
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
@@ -414,13 +421,9 @@ class AutoNormal(AutoGuide):
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
 
-                loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
-                scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
-                site_loc = pyro.get_param_store().get_param(loc_name)
-                site_scale = pyro.get_param_store().get_param(scale_name)
-
                 #  Now make latent just like sample_latent in AutoContinuous.
                 #  Need to look up loc and scale.
+                site_loc, site_scale = self._get_loc_and_scale(name)
                 unconstrained_latent = pyro.sample(
                     name + "_unconstrained",
                     dist.Normal(
@@ -448,8 +451,7 @@ class AutoNormal(AutoGuide):
         """
         medians = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
-            site_loc = pyro.get_param_store().get_param(loc_name)
+            site_loc, _ = self._get_loc_and_scale(name)
             median = biject_to(site["fn"].support)(site_loc)
             medians[name] = median
 
@@ -469,10 +471,7 @@ class AutoNormal(AutoGuide):
         results = {}
 
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
-            scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
-            site_loc = pyro.get_param_store().get_param(loc_name)
-            site_scale = pyro.get_param_store().get_param(scale_name)
+            site_loc, site_scale = self._get_loc_and_scale(name)
 
             site_quantiles = torch.tensor(quantiles, dtype=site_loc.dtype, device=site_loc.device)
             site_quantiles_values = dist.Normal(site_loc, site_scale).icdf(site_quantiles)
