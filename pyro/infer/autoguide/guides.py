@@ -363,10 +363,36 @@ class AutoNormal(AutoGuide):
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect the shapes of unconstrained values.
             # These may differ from the shapes of constrained values.
-            self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
+            constrained_shape = site["value"].shape
+            unconstrained_shape = biject_to(site["fn"].support).inv(site["value"]).shape
+
+            event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
+
+            site_batch_shape = site["fn"].batch_shape
+
+            self._unconstrained_shapes[name] = unconstrained_shape
+            unconstrained_shape_for_params = broadcast_shape(
+                unconstrained_shape,
+                site_batch_shape + (1,) * event_dim
+            )
 
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
+
+            #  Set up params
+            loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
+            scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
+
+            pyro.param(
+                loc_name,
+                lambda: site["value"].new_zeros(unconstrained_shape_for_params)
+            )
+            pyro.param(
+                scale_name,
+                lambda: site["value"].new_ones(unconstrained_shape_for_params),
+                constraint=constraints.positive
+            )
+
 
     def forward(self, *args, **kwargs):
         """
@@ -382,39 +408,24 @@ class AutoNormal(AutoGuide):
         plates = self._create_plates()
         result = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            constrained_shape = site["value"].shape
-            unconstrained_shape = self._unconstrained_shapes[name]
-
-            #  size = _product(unconstrained_shape)
-            event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
-
-            site_batch_shape = site["fn"].batch_shape
-            unconstrained_shape = broadcast_shape(unconstrained_shape,
-                                                  site_batch_shape + (1,) * event_dim)
             transform = biject_to(site["fn"].support)
 
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
+
                 loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
                 scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
-
-                loc_value = pyro.param(
-                    loc_name,
-                    lambda: site["value"].new_zeros(unconstrained_shape)
-                )
-                scale_value = pyro.param(
-                    scale_name,
-                    lambda: site["value"].new_ones(unconstrained_shape),
-                    constraint=constraints.positive
-                )
+                site_loc = pyro.get_param_store().get_param(loc_name)
+                site_scale = pyro.get_param_store().get_param(scale_name)
 
                 #  Now make latent just like sample_latent in AutoContinuous.
+                #  Need to look up loc and scale.
                 unconstrained_latent = pyro.sample(
                     name + "_unconstrained",
                     dist.Normal(
-                        loc_value, scale_value,
+                        site_loc, site_scale,
                     ).to_event(site["fn"].event_dim),
                     infer={"is_auxiliary": True}
                 )
