@@ -305,6 +305,7 @@ def test_autoguide_serialization(auto_class, Elbo):
 @pytest.mark.parametrize("auto_class", [
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
 ])
