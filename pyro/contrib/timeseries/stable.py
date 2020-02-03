@@ -13,7 +13,7 @@ import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
 from pyro.infer.reparam import ConjugateReparam, LinearHMMReparam, StableReparam
-from pyro.nn import PyroModule
+from pyro.nn import PyroModule, PyroSample, PyroParam
 from pyro.optim import ClippedAdam
 from pyro.util import torch_isnan
 
@@ -31,25 +31,26 @@ class StableModel(PyroModule):
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         super().__init__()
+        self.stability = PyroSample(dist.Uniform(0, 2))
+        self.init_scale = 1e6
+        self.init_skew = 0.
+        self.init_loc = 0.
+        self.trans_matrix = PyroParam(lambda: torch.eye(hidden_dim))
+        self.trans_skew = PyroSample(dist.Uniform(-1, 1).expand([hidden_dim]).to_event(1))
+        self.trans_scale = PyroSample(dist.LogNormal(0, 10).expand([hidden_dim]).to_event(1))
+        self.trans_loc = PyroSample(dist.Normal(0, 10).expand([hidden_dim]).to_event(1))
+        self.obs_matrix = PyroParam(lambda: torch.eye(hidden_dim, obs_dim))
+        self.obs_skew = PyroSample(dist.Uniform(-1, 1).expand([obs_dim]).to_event(1))
+        self.obs_scale = PyroSample(dist.LogNormal(0, 10).expand([obs_dim]).to_event(1))
+        self.obs_loc = PyroSample(dist.Normal(0, 10).expand([obs_dim]).to_event(1))
 
     def forward(self, data=None):
-        hidden_dim = self.hidden_dim
-        obs_dim = self.obs_dim
-        stability = pyro.sample("stability", dist.Uniform(0, 2))
-        init_scale = 1e6
-        trans_matrix = "TODO"
-        trans_skew = pyro.sample("trans_skew", dist.Uniform(-1, 1).expand([hidden_dim]).to_event(1))
-        trans_scale = pyro.sample("trans_scale", dist.LogNormal(0, 10).expand([hidden_dim]).to_event(1))
-        trans_loc = pyro.sample("trans_loc", dist.Normal(0, 10).expand([hidden_dim]).to_event(1))
-        obs_matrix = "TODO"
-        obs_skew = pyro.sample("obs_skew", dist.Uniform(-1, 1).expand([obs_dim]).to_event(1))
-        obs_scale = pyro.sample("obs_scale", dist.LogNormal(0, 10).expand([obs_dim]).to_event(1))
-        obs_loc = pyro.sample("obs_loc", dist.Normal(0, 10).expand([obs_dim]).to_event(1))
-        hmm = dist.LinearHMM(dist.Stable(stability, 0, init_scale).to_event(1),
-                             trans_matrix,
-                             dist.Stable(stability, trans_skew, trans_scale, trans_loc).to_event(1),
-                             obs_matrix,
-                             dist.Stable(stability, obs_skew, obs_scale, obs_loc).to_event(1))
+        init_dist = dist.Stable(self.stability, self.init_skew, self.init_scale, self.init_loc)
+        trans_dist = dist.Stable(self.stability, self.trans_skew, self.trans_scale, self.trans_loc)
+        obs_dist = dist.Stable(self.stability, self.obs_skew, self.obs_scale, self.obs_loc)
+        hmm = dist.LinearHMM(init_dist.to_event(1),
+                             self.trans_matrix, trans_dist.to_event(1),
+                             self.obs_matrix, obs_dist.to_event(1))
         self.hmm = hmm
         return pyro.sample(self.name, hmm, obs=data)
 
@@ -60,20 +61,17 @@ class LogNormalCoxGuide:
     log-normal prior.
     """
     def __init__(self, event_dim):
-        one = torch.tensor(1., dtype=torch.double, device="cpu")
-        self.digamma_one = one.digamma().item()
-        self.scale = one.polygamma(1).sqrt().item()
         self.event_dim = event_dim
 
     def __call__(self, data):
         # See https://en.wikipedia.org/wiki/Gamma_distribution#Logarithmic_expectation_and_variance
-        loc = data.digamma() - self.digamma_one
-        return dist.Normal(loc, self.scale).to_event(self.event_dim)
+        data = data.clamp(min=0.5)  # Work around asymptote at data==0.
+        loc = data.digamma()
+        scale = 1.2825498301618641  # = sqrt(trigamma(1))
+        return dist.Normal(loc, scale).to_event(self.event_dim)
 
 
 class LogStableCoxProcess(nn.Module):
-    """
-    """
     def __init__(self, name):
         model = StableModel(name)
         rep = StableReparam()
