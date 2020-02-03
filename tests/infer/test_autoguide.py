@@ -606,6 +606,7 @@ def test_nested_autoguide(Elbo):
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
+    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
