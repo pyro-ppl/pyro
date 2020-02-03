@@ -7,7 +7,7 @@ import pyro.distributions as dist
 from .reparam import Reparam
 
 
-class ConjugateUpdateReparam(Reparam):
+class ConjugateReparam(Reparam):
     """
     Reparameterize to a conjugate updated distribution.
 
@@ -50,7 +50,7 @@ class ConjugateUpdateReparam(Reparam):
         self.guide = guide
 
     def __call__(self, name, fn, obs):
-        assert obs is None, "ConjugateUpdateReparam does not support observe statements"
+        assert obs is None, "ConjugateReparam does not support observe statements"
 
         # Compute a guide distribution, either static or dependent.
         guide_dist = self.guide
@@ -65,7 +65,7 @@ class ConjugateUpdateReparam(Reparam):
         if not fn.has_rsample:
             # Note supporting non-reparameterized sites would require more delicate
             # handling of traced sites than the crude _do_not_trace flag below.
-            raise NotImplementedError("ConjugateUpdateReparam inference supports only reparameterized "
+            raise NotImplementedError("ConjugateReparam inference supports only reparameterized "
                                       "distributions, but got {}".format(type(fn)))
         value = pyro.sample("{}_updated".format(name), fn,
                             infer={"is_auxiliary": True, "_do_not_trace": True})
