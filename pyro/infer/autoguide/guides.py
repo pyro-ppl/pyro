@@ -393,7 +393,6 @@ class AutoNormal(AutoGuide):
                 constraint=constraints.positive
             )
 
-
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
@@ -447,12 +446,40 @@ class AutoNormal(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        # medians = {}
-        # for name, site in self.prototype_trace.iter_stochastic_nodes():
-        #     #  get unconstrained val just like above.
-        #     medians[name] = biject_to(site["fn"].support)(
-        #          )
-        return self(*args, **kwargs)
+        medians = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
+            site_loc = pyro.get_param_store().get_param(loc_name)
+            median = biject_to(site["fn"].support)(site_loc)
+            medians[name] = median
+
+        return medians
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns posterior quantiles each latent variable. Example::
+
+            print(guide.quantiles([0.05, 0.5, 0.95]))
+
+        :param quantiles: A list of requested quantiles between 0 and 1.
+        :type quantiles: torch.Tensor or list
+        :return: A dict mapping sample site name to a list of quantile values.
+        :rtype: dict
+        """
+        results = {}
+
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
+            scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
+            site_loc = pyro.get_param_store().get_param(loc_name)
+            site_scale = pyro.get_param_store().get_param(scale_name)
+
+            site_quantiles = torch.tensor(quantiles, dtype=site_loc.dtype, device=site_loc.device)
+            site_quantiles_values = dist.Normal(site_loc, site_scale).icdf(site_quantiles)
+            constrained_site_quantiles = biject_to(site["fn"].support)(site_quantiles_values)
+            results[name] = constrained_site_quantiles
+
+        return results
 
 
 class AutoContinuous(AutoGuide):
