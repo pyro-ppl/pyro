@@ -35,7 +35,7 @@ from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
-from pyro.poutine.util import prune_subsample_sites
+from pyro.poutine.util import site_is_subsample
 
 
 def _deep_setattr(obj, key, val):
@@ -56,6 +56,11 @@ def _deep_setattr(obj, key, val):
     if lpart:
         obj = functools.reduce(_getattr, [obj] + lpart.split('.'))
     setattr(obj, rpart, val)
+
+
+def prototype_hide_fn(msg):
+    # Record only stochastic sites in the prototype_trace.
+    return msg["type"] != "sample" or msg["is_observed"] or site_is_subsample(msg)
 
 
 class AutoGuide(PyroModule):
@@ -124,8 +129,8 @@ class AutoGuide(PyroModule):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
-        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+        model = poutine.block(self.model, prototype_hide_fn)
+        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 
@@ -797,9 +802,8 @@ class AutoDiscreteParallel(AutoGuide):
     """
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = config_enumerate(self.model)
+        model = poutine.block(config_enumerate(self.model), prototype_hide_fn)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
-        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 
