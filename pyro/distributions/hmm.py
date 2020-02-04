@@ -486,7 +486,8 @@ class GaussianHMM(TorchDistribution):
             updated :class:`GaussianHMM` , and ``log_normalizer`` is a
             :class:`~torch.Tensor` representing the normalization factor.
         """
-        assert other.event_shape == self.event_shape
+        assert (other.event_shape == self.event_shape or
+                (self.event_shape[0] == 1 and other.event_shape[-1] == self.event_shape[-1]))
         assert (isinstance(other, torch.distributions.Independent) and
                 (isinstance(other.base_dist, torch.distributions.Normal) or
                  isinstance(other.base_dist, torch.distributions.MultivariateNormal)))
@@ -506,7 +507,8 @@ class GaussianHMM(TorchDistribution):
         new._init = new._init - log_normalizer
 
         batch_shape = log_normalizer.shape
-        super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        event_shape = broadcast_shape(self.event_shape, other.event_shape)
+        super(GaussianHMM, new).__init__(batch_shape, event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new, log_normalizer
 

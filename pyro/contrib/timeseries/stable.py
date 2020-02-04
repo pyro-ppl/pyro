@@ -25,14 +25,20 @@ def bounded_exp(x, bound):
 
 
 class StableModel(PyroModule):
-    def __init__(self, name, hidden_dim, obs_dim):
+    def __init__(self, name, hidden_dim, obs_dim, max_rate):
         assert isinstance(name, str)
+        assert isinstance(hidden_dim, int) and hidden_dim >= 1
+        assert isinstance(obs_dim, int) and obs_dim >= 1
+        assert isinstance(max_rate, (int, float)) and max_rate >= 1
         self.name = name
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
+        self.max_rate = max_rate
         super().__init__()
-        self.stability = PyroSample(dist.Uniform(0, 2))
-        self.init_scale = 1e6
+
+        # All of the following can be overridden in instances or subclasses.
+        self.stability = PyroSample(dist.Uniform(1, 2))
+        self.init_scale = torch.full([hidden_dim], max_rate)
         self.init_skew = 0.
         self.init_loc = 0.
         self.trans_matrix = PyroParam(lambda: torch.eye(hidden_dim))
@@ -52,7 +58,9 @@ class StableModel(PyroModule):
                              self.trans_matrix, trans_dist.to_event(1),
                              self.obs_matrix, obs_dist.to_event(1))
         self.hmm = hmm
-        return pyro.sample(self.name, hmm, obs=data)
+        log_rate = pyro.sample(self.name, hmm)
+        rate = bounded_exp(log_rate, self.max_rate)
+        return pyro.sample("{}_counts".format(self.name), dist.Poisson(rate).to_event(2), obs=data)
 
 
 class LogNormalCoxGuide:
@@ -72,9 +80,11 @@ class LogNormalCoxGuide:
 
 
 class LogStableCoxProcess(nn.Module):
-    def __init__(self, name):
-        model = StableModel(name)
+    def __init__(self, name, hidden_dim, obs_dim, max_rate):
+        super().__init__()
+        model = StableModel(name, hidden_dim, obs_dim, max_rate)
         rep = StableReparam()
+        # FIXME poutine-wrapped PyroModules are not nn.Modules.
         model = poutine.reparam(model, {name: LinearHMMReparam(rep, rep, rep)})
         model = poutine.reparam(model, {name: ConjugateReparam(LogNormalCoxGuide(event_dim=2))})
         self.model = model
@@ -89,6 +99,7 @@ class LogStableCoxProcess(nn.Module):
         losses = []
         for step in range(num_steps):
             loss = svi.step(data)
+            logger.info("step {: >4d} loss = {:0.4g}".format(step, loss))
             assert not torch_isnan(loss)
             losses.append(loss)
         return losses
