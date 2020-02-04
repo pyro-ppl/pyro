@@ -12,7 +12,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
+from pyro.infer.autoguide import AutoDiagonalNormal, init_to_sample
 from pyro.infer.reparam import ConjugateReparam, LinearHMMReparam, StableReparam
 from pyro.nn import PyroModule, PyroParam, PyroSample
 from pyro.optim import ClippedAdam
@@ -45,8 +45,8 @@ class StableModel(PyroModule):
 
         # All of the following can be overridden in instances or subclasses.
         self.stability = PyroParam(torch.tensor(1.9), constraints.interval(0., 2.))
-        self.init_scale = torch.full([hidden_dim], max_rate)
         self.init_skew = 0.
+        self.init_scale = torch.full([hidden_dim], max_rate)
         self.init_loc = 0.
         self.trans_matrix = PyroParam(torch.eye(hidden_dim))
         self.trans_skew = PyroSample(dist.Uniform(-1, 1).expand([hidden_dim]).to_event(1))
@@ -97,7 +97,7 @@ class LogStableCoxProcess(nn.Module):
         model = poutine.reparam(model, {name: LinearHMMReparam(rep, rep, rep)})
         model = poutine.reparam(model, {name: ConjugateReparam(LogNormalCoxGuide(event_dim=2))})
         self.reparam_model = model
-        self.reparam_guide = AutoDiagonalNormal(model, init_loc_fn=init_to_feasible)
+        self.reparam_guide = AutoDiagonalNormal(model, init_loc_fn=init_to_sample, init_scale=0.01)
 
     def fit(self, data, num_steps=100, learning_rate=1e-2):
         optim = ClippedAdam({"lr": learning_rate, "betas": (0.8, 0.95)})
@@ -105,7 +105,7 @@ class LogStableCoxProcess(nn.Module):
         svi = SVI(self.reparam_model, self.reparam_guide, optim, elbo)
         losses = []
         for step in range(num_steps):
-            loss = svi.step(data)
+            loss = svi.step(data) / data.numel()
             logger.info("step {: >4d} loss = {:0.4g}".format(step, loss))
             assert not torch_isnan(loss)
             losses.append(loss)
