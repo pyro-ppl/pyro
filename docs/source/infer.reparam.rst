@@ -14,6 +14,15 @@ shaped. These can be used with a variety of inference algorithms, e.g.
     :member-order: bysource
     :special-members: __call__
 
+Conjugate Updating
+------------------
+.. automodule:: pyro.infer.reparam.conjugate
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Loc-Scale Decentering
 ---------------------
 .. automodule:: pyro.infer.reparam.loc_scale
@@ -32,9 +41,36 @@ Transformed Distributions
     :special-members: __call__
     :show-inheritance:
 
+Discrete Cosine Transform
+-------------------------
+.. automodule:: pyro.infer.reparam.discrete_cosine
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
+StudentT Distributions
+----------------------
+.. automodule:: pyro.infer.reparam.studentt
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Stable Distributions
 --------------------
 .. automodule:: pyro.infer.reparam.stable
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
+Hidden Markov Models
+--------------------
+.. automodule:: pyro.infer.reparam.hmm
     :members:
     :undoc-members:
     :member-order: bysource

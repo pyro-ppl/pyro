@@ -110,7 +110,7 @@ class MultiFrameTensor(dict):
         summed = downstream_cost.sum_to(target_site["cond_indep_stack"])
     """
     def __init__(self, *items):
-        super(MultiFrameTensor, self).__init__()
+        super().__init__()
         self.add(*items)
 
     def add(self, *items):
@@ -168,7 +168,7 @@ def compute_site_dice_factor(site):
     return log_prob, log_denom
 
 
-class Dice(object):
+class Dice:
     """
     An implementation of the DiCE operator compatible with Pyro features.
 

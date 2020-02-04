@@ -229,12 +229,12 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
 
     def __enter__(self):
         self.cache = {}
-        return super(BackwardSampleMessenger, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
             assert not self.sum_dims, self.sum_dims
-        return super(BackwardSampleMessenger, self).__exit__(exc_type, exc_value, traceback)
+        return super().__exit__(exc_type, exc_value, traceback)
 
     def _pyro_sample(self, msg):
         enum_msg = self.enum_trace.nodes.get(msg["name"])

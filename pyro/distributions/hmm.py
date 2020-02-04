@@ -3,10 +3,8 @@
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property
 
-from pyro.distributions.stable import Stable
-from pyro.distributions.torch import Categorical, Gamma, MultivariateNormal
+from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
@@ -89,6 +87,82 @@ def _sequential_gaussian_tensordot(gaussian):
             contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
         gaussian = contracted
     return gaussian[..., 0]
+
+
+def _is_subshape(x, y):
+    return broadcast_shape(x, y) == y
+
+
+def _sequential_gaussian_filter_sample(init, trans, sample_shape):
+    """
+    Draws a reparameterized sample from a Markov product of Gaussians via
+    parallel-scan forward-filter backward-sample.
+    """
+    assert isinstance(init, Gaussian)
+    assert isinstance(trans, Gaussian)
+    assert trans.dim() == 2 * init.dim()
+    assert _is_subshape(trans.batch_shape[:-1], init.batch_shape)
+    state_dim = trans.dim() // 2
+    device = trans.precision.device
+    perm = torch.cat([torch.arange(1 * state_dim, 2 * state_dim, device=device),
+                      torch.arange(0 * state_dim, 1 * state_dim, device=device),
+                      torch.arange(2 * state_dim, 3 * state_dim, device=device)])
+
+    # Forward filter, similar to _sequential_gaussian_tensordot().
+    tape = []
+    shape = trans.batch_shape[:-1]  # Note trans may be unbroadcasted.
+    gaussian = trans
+    while gaussian.batch_shape[-1] > 1:
+        time = gaussian.batch_shape[-1]
+        even_time = time // 2 * 2
+        even_part = gaussian[..., :even_time]
+        x_y = even_part.reshape(shape + (even_time // 2, 2))
+        x, y = x_y[..., 0], x_y[..., 1]
+        x = x.event_pad(right=state_dim)
+        y = y.event_pad(left=state_dim)
+        joint = (x + y).event_permute(perm)
+        tape.append(joint)
+        contracted = joint.marginalize(left=state_dim)
+        if time > even_time:
+            contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
+        gaussian = contracted
+    gaussian = gaussian[..., 0] + init.event_pad(right=state_dim)
+
+    # Backward sample.
+    shape = sample_shape + init.batch_shape
+    result = gaussian.rsample(sample_shape).reshape(shape + (2, state_dim))
+    for joint in reversed(tape):
+        # The following comments demonstrate two example computations, one
+        # EVEN, one ODD.  Ignoring sample_shape and batch_shape, let each zn be
+        # a single sampled event of shape (state_dim,).
+        if joint.batch_shape[-1] == result.size(-2) - 1:  # EVEN case.
+            # Suppose e.g. result = [z0, z2, z4]
+            cond = result.repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2, z4, z4]
+            cond = cond[..., 1:-1, :]  # [z0, z2, z2, z4]
+            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2, z2z4]
+            sample = joint.condition(cond).rsample()  # [z1, z3]
+            sample = torch.nn.functional.pad(sample, (0, 0, 0, 1))  # [z1, z3, 0]
+            result = torch.stack([
+                result,  # [z0, z2, z4]
+                sample,  # [z1, z3, 0]
+            ], dim=-2)  # [[z0, z1], [z2, z3], [z4, 0]]
+            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3, z4, 0]
+            result = result[..., :-1, :]  # [z0, z1, z2, z3, z4]
+        else:  # ODD case.
+            assert joint.batch_shape[-1] == result.size(-2) - 2
+            # Suppose e.g. result = [z0, z2, z3]
+            cond = result[..., :-1, :].repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2]
+            cond = cond[..., 1:-1, :]  # [z0, z2]
+            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2]
+            sample = joint.condition(cond).rsample()  # [z1]
+            sample = torch.cat([sample, result[..., -1:, :]], dim=-2)  # [z1, z3]
+            result = torch.stack([
+                result[..., :-1, :],  # [z0, z2]
+                sample,  # [z1, z3]
+            ], dim=-2)  # [[z0, z1], [z2, z3]]
+            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3]
+
+    return result[..., 1:, :]  # [z1, z2, z3, ...]
 
 
 def _sequential_gamma_gaussian_tensordot(gamma_gaussian):
@@ -174,7 +248,7 @@ class DiscreteHMM(TorchDistribution):
         self.initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
         self.transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
         self.observation_dist = observation_dist
-        super(DiscreteHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(DiscreteHMM, _instance)
@@ -288,7 +362,9 @@ class GaussianHMM(TorchDistribution):
     :type observation_dist: ~torch.distributions.MultivariateNormal or
         ~torch.distributions.Independent of ~torch.distributions.Normal
     """
+    has_rsample = True
     arg_constraints = {}
+    support = constraints.real
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None):
@@ -319,39 +395,23 @@ class GaussianHMM(TorchDistribution):
 
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
-        self.initial_dist = initial_dist
-        self.transition_matrix = transition_matrix
-        self.transition_dist = transition_dist
-        self.observation_matrix = observation_matrix
-        self.observation_dist = observation_dist
-
-    @lazy_property
-    def _init(self):
-        # To save computation in _sequential_gaussian_tensordot(), we expand
-        # only _init, which is applied only after
-        # _sequential_gaussian_tensordot().
-        return mvn_to_gaussian(self.initial_dist).expand(self.batch_shape)
-
-    @lazy_property
-    def _trans(self):
-        return matrix_and_mvn_to_gaussian(self.transition_matrix, self.transition_dist)
-
-    @lazy_property
-    def _obs(self):
-        return matrix_and_mvn_to_gaussian(self.observation_matrix, self.observation_dist)
+        self._init = mvn_to_gaussian(initial_dist).expand(batch_shape)
+        self._trans = matrix_and_mvn_to_gaussian(transition_matrix, transition_dist)
+        self._obs = matrix_and_mvn_to_gaussian(observation_matrix, observation_dist)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianHMM, _instance)
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
-        new.initial_dist = self.initial_dist
-        new.transition_matrix = self.transition_matrix
-        new.transition_dist = self.transition_dist
-        new.observation_matrix = self.observation_matrix
-        new.observation_dist = self.observation_dist
+        new._obs = self._obs
+        new._trans = self._trans
 
-        # Expand lazily.
+        # To save computation in _sequential_gaussian_tensordot(), we expand
+        # only _init, which is applied only after
+        # _sequential_gaussian_tensordot().
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        new._init = self._init.expand(batch_shape)
+
         super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new
@@ -371,14 +431,15 @@ class GaussianHMM(TorchDistribution):
         return result
 
     def rsample(self, sample_shape=torch.Size()):
-        batch_shape = self.batch_shape
-        time_shape = self.event_shape[:1]
-        init = self.initial_dist.expand(batch_shape).rsample(sample_shape)
-        trans = self.transition_dist.expand(batch_shape + time_shape).rsample(sample_shape)
-        obs = self.observation_dist.expand(batch_shape + time_shape).rsample(sample_shape)
-        mat = self.transition_matrix.expand(batch_shape + time_shape + (self.hidden_dim, self.hidden_dim))
-        z = _linear_integrate(init, mat, trans)
-        return (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
+        sample_shape = torch.Size(sample_shape)
+        obs_dim = self.obs_dim
+        hidden_dim = self.hidden_dim
+        obs = self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
+        z = _sequential_gaussian_filter_sample(self._init, self._trans + obs, sample_shape)
+        perm = torch.cat([torch.arange(hidden_dim, hidden_dim + obs_dim, device=z.device),
+                          torch.arange(hidden_dim, device=z.device)])
+        x = self._obs.event_permute(perm).condition(z).rsample()
+        return x
 
     def filter(self, value):
         """
@@ -405,6 +466,48 @@ class GaussianHMM(TorchDistribution):
         loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
         return MultivariateNormal(loc, precision_matrix=precision,
                                   validate_args=self._validate_args)
+
+    def conjugate_update(self, other):
+        """
+        Creates an updated :class:`GaussianHMM` fusing information from another
+        compatible distribution.
+
+        This should satisfy::
+
+            fg, log_normalizer = f.conjugate_update(g)
+            assert f.log_prob(x) + g.log_prob(x) == fg.log_prob(x) + log_normalizer
+
+        :param other: A distribution representing ``p(data|self.probs)`` but
+            normalized over ``self.probs`` rather than ``data``.
+        :type other: ~torch.distributions.Independent of
+            ~torch.distributions.MultivariateNormal or ~torch.distributions.Normal
+        :return: a pair ``(updated,log_normalizer)`` where ``updated`` is an
+            updated :class:`GaussianHMM` , and ``log_normalizer`` is a
+            :class:`~torch.Tensor` representing the normalization factor.
+        """
+        assert other.event_shape == self.event_shape
+        assert (isinstance(other, torch.distributions.Independent) and
+                (isinstance(other.base_dist, torch.distributions.Normal) or
+                 isinstance(other.base_dist, torch.distributions.MultivariateNormal)))
+        new = self._get_checked_instance(GaussianHMM)
+        new.hidden_dim = self.hidden_dim
+        new.obs_dim = self.obs_dim
+        new._init = self._init
+        new._trans = self._trans
+        new._obs = self._obs + mvn_to_gaussian(other.to_event(-1)).event_pad(left=self.hidden_dim)
+
+        # Normalize.
+        # TODO cache this computation for the forward pass of .rsample().
+        logp = new._trans + new._obs.marginalize(right=new.obs_dim).event_pad(left=new.hidden_dim)
+        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+        logp = gaussian_tensordot(new._init, logp, dims=new.hidden_dim)
+        log_normalizer = logp.event_logsumexp()
+        new._init = new._init - log_normalizer
+
+        batch_shape = log_normalizer.shape
+        super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self.__dict__.get('_validate_args')
+        return new, log_normalizer
 
 
 class GammaGaussianHMM(TorchDistribution):
@@ -496,7 +599,7 @@ class GammaGaussianHMM(TorchDistribution):
                                 observation_dist.batch_shape)
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super(GammaGaussianHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self._init = gamma_and_mvn_to_gamma_gaussian(scale_dist, initial_dist)
@@ -568,12 +671,17 @@ class GammaGaussianHMM(TorchDistribution):
         return scale_post, mvn
 
 
-class StableHMM(TorchDistribution):
+class LinearHMM(TorchDistribution):
     r"""
-    Hidden Markov Model with linear dynamics and observations and
-    :class:`~pyro.distributions.Stable` noise for initial, transition, and
-    observation distributions. The stability parameter :math:`\alpha` must be
-    shared among all distributions (but can differ among elements of a batch).
+    Hidden Markov Model with linear dynamics and observations and arbitrary
+    noise for initial, transition, and observation distributions.  Each of
+    those distributions can be e.g.
+    `:class:`~pyro.distributions.MultivariateNormal` or
+    `:class:`~pyro.distributions.Independent` of
+    `:class:`~pyro.distributions.Normal`,
+    `:class:`~pyro.distributions.StudentT`, or `~pyro.distributions.Stable` .
+    Additionally the observation distribution may be constrained, e.g.
+    `~pyro.distributions.LogNormal`
 
     This corresponds to the generative model::
 
@@ -581,13 +689,23 @@ class StableHMM(TorchDistribution):
         x = []
         for t in range(num_events):
             z = z @ transition_matrix + transition_dist.sample()
-            x.append(z @ observation_matrix + observation_dist.sample())
+            y = z @ observation_matrix + obs_base_dist.sample()
+            x.append(obs_transform(y))
+
+    where ``observation_dist`` is split into ``obs_base_dist`` and an optional
+    ``obs_transform`` (defaulting to the identity).
 
     This implements a reparameterized :meth:`rsample` method but does not
-    implement a :meth:`log_prob` method. Inference can be performed using
-    either reparameterization with
-    :class:`~pyro.infer.reparam.stable.StableHMMReparam` or likelihood-free
-    algorithms such as :class:`~pyro.infer.energy_distance.EnergyDistance` .
+    implement a :meth:`log_prob` method. Derived classes may implement
+    :meth:`log_prob` .
+
+    Inference without :meth:`log_prob` can be performed using either
+    reparameterization with :class:`~pyro.infer.reparam.hmm.LinearHMMReparam`
+    or likelihood-free algorithms such as
+    :class:`~pyro.infer.energy_distance.EnergyDistance` .  Note that while
+    stable processes generally require a common shared stability parameter
+    :math:`\alpha` , this distribution and the above inference algorithms allow
+    heterogeneous stability parameters.
 
     The event_shape of this distribution includes time on the left::
 
@@ -600,43 +718,38 @@ class StableHMM(TorchDistribution):
 
     :ivar int hidden_dim: The dimension of the hidden state.
     :ivar int obs_dim: The dimension of the observed state.
-    :param initial_dist: An ``Independent(Stable,1)`` distribution over initial
-        states. This should have batch_shape broadcastable to
-        ``self.batch_shape``.  This should have event_shape ``(hidden_dim,)``.
+    :param initial_dist: A distribution over initial states. This should have
+        batch_shape broadcastable to ``self.batch_shape``.  This should have
+        event_shape ``(hidden_dim,)``.
     :param ~torch.Tensor transition_matrix: A linear transformation of hidden
-        state. This should have shape broadcastable to
-        ``self.batch_shape + (num_steps, hidden_dim, hidden_dim)`` where the
-        rightmost dims are ordered ``(old, new)``.
-    :param transition_dist: An ``Independent(Stable,1)`` distribution over
-        process noise. This should have batch_shape broadcastable to
-        ``self.batch_shape + (num_steps,)``.  This should have event_shape
-        ``(hidden_dim,)``.
+        state. This should have shape broadcastable to ``self.batch_shape +
+        (num_steps, hidden_dim, hidden_dim)`` where the rightmost dims are
+        ordered ``(old, new)``.
+    :param transition_dist: A distribution over process noise. This should have
+        batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.  This
+        should have event_shape ``(hidden_dim,)``.
     :param ~torch.Tensor observation_matrix: A linear transformation from hidden
         to observed state. This should have shape broadcastable to
         ``self.batch_shape + (num_steps, hidden_dim, obs_dim)``.
-    :param observation_dist: An ``Independent(Stable,1)`` observation noise
-        distribution. This should have batch_shape broadcastable to
-        ``self.batch_shape + (num_steps,)``.
-        This should have event_shape ``(obs_dim,)``.
+    :param observation_dist: A observation noise distribution. This should have
+        batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.  This
+        should have event_shape ``(obs_dim,)``.
     """
     arg_constraints = {}
     has_rsample = True
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None):
-        assert (isinstance(initial_dist, torch.distributions.Independent) and
-                initial_dist.reinterpreted_batch_ndims == 1 and
-                isinstance(initial_dist.base_dist, Stable))
+        assert initial_dist.has_rsample
+        assert initial_dist.event_dim == 1
         assert (isinstance(transition_matrix, torch.Tensor) and
                 transition_matrix.dim() >= 2)
-        assert (isinstance(transition_dist, torch.distributions.Independent) and
-                initial_dist.reinterpreted_batch_ndims == 1 and
-                isinstance(transition_dist.base_dist, Stable))
+        assert transition_dist.has_rsample
+        assert transition_dist.event_dim == 1
         assert (isinstance(observation_matrix, torch.Tensor) and
                 observation_matrix.dim() >= 2)
-        assert (isinstance(observation_dist, torch.distributions.Independent) and
-                initial_dist.reinterpreted_batch_ndims == 1 and
-                isinstance(observation_dist.base_dist, Stable))
+        assert observation_dist.has_rsample
+        assert observation_dist.event_dim == 1
 
         hidden_dim, obs_dim = observation_matrix.shape[-2:]
         assert initial_dist.event_shape == (hidden_dim,)
@@ -652,16 +765,7 @@ class StableHMM(TorchDistribution):
         event_shape = time_shape + (obs_dim,)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
-        if self._validate_args:
-            initial_stability = initial_dist.base_dist.stability[..., :1]
-            assert (initial_stability == initial_dist.base_dist.stability).all()
-            transition_stability = transition_dist.base_dist.stability[..., :1]
-            assert (transition_stability == transition_dist.base_dist.stability).all()
-            assert (transition_stability == initial_stability.unsqueeze(-2)).all()
-            observation_stability = observation_dist.base_dist.stability[..., :1]
-            assert (observation_stability == observation_dist.base_dist.stability).all()
-            assert (observation_stability == initial_stability.unsqueeze(-2)).all()
-
+        # Expand eagerly.
         if initial_dist.batch_shape != batch_shape:
             initial_dist = initial_dist.expand(batch_shape)
         if transition_matrix.shape[:-2] != batch_shape + time_shape:
@@ -675,6 +779,19 @@ class StableHMM(TorchDistribution):
         if observation_dist.batch_shape != batch_shape + time_shape:
             observation_dist = observation_dist.expand(batch_shape + time_shape)
 
+        # Extract observation transforms.
+        transforms = []
+        while True:
+            if isinstance(observation_dist, torch.distributions.Independent):
+                observation_dist = observation_dist.base_dist
+            elif isinstance(observation_dist, torch.distributions.TransformedDistribution):
+                transforms = observation_dist.transforms + transforms
+                observation_dist = observation_dist.base_dist
+            else:
+                break
+        if not observation_dist.event_shape:
+            observation_dist = Independent(observation_dist, 1)
+
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self.initial_dist = initial_dist
@@ -682,9 +799,14 @@ class StableHMM(TorchDistribution):
         self.transition_dist = transition_dist
         self.observation_matrix = observation_matrix
         self.observation_dist = observation_dist
+        self.transforms = transforms
+
+    @property
+    def support(self):
+        return self.observation_dist.support
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(StableHMM, _instance)
+        new = self._get_checked_instance(LinearHMM, _instance)
         batch_shape = torch.Size(batch_shape)
         time_shape = self.transition_dist.batch_shape[-1:]
         new.hidden_dim = self.hidden_dim
@@ -696,19 +818,23 @@ class StableHMM(TorchDistribution):
         new.observation_matrix = self.observation_matrix.expand(
             batch_shape + time_shape + (self.hidden_dim, self.obs_dim))
         new.observation_dist = self.observation_dist.expand(batch_shape + time_shape)
-        super(StableHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new.transforms = self.transforms
+        super(LinearHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new
 
     def log_prob(self, value):
-        raise NotImplementedError("StableHMM.log_prob() is not implemented")
+        raise NotImplementedError("LinearHMM.log_prob() is not implemented")
 
     def rsample(self, sample_shape=torch.Size()):
         init = self.initial_dist.rsample(sample_shape)
         trans = self.transition_dist.rsample(sample_shape)
         obs = self.observation_dist.rsample(sample_shape)
         z = _linear_integrate(init, self.transition_matrix, trans)
-        return (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
+        x = (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
+        for t in self.transforms:
+            x = t(x)
+        return x
 
 
 class GaussianMRF(TorchDistribution):
@@ -766,7 +892,7 @@ class GaussianMRF(TorchDistribution):
                                 observation_dist.batch_shape)
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super(GaussianMRF, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self._init = mvn_to_gaussian(initial_dist)

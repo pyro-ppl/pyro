@@ -44,7 +44,7 @@ from pyro.contrib.examples.util import get_data_loader, get_data_directory
 
 class CNN(nn.Module):
     def __init__(self):
-        super(CNN, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
         self.fc1 = nn.Linear(320, 50)
@@ -165,7 +165,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.1.0')
+    assert pyro.__version__.startswith('1.2.1')
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
     parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')

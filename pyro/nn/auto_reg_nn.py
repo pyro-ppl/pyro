@@ -92,7 +92,7 @@ class MaskedLinear(nn.Linear):
     """
 
     def __init__(self, in_features, out_features, mask, bias=True):
-        super(MaskedLinear, self).__init__(in_features, out_features, bias)
+        super().__init__(in_features, out_features, bias)
         self.register_buffer('mask', mask.data)
 
     def forward(self, _input):
@@ -158,7 +158,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
             permutation=None,
             skip_connections=False,
             nonlinearity=nn.ReLU()):
-        super(ConditionalAutoRegressiveNN, self).__init__()
+        super().__init__()
         if input_dim == 1:
             warnings.warn('ConditionalAutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
         self.input_dim = input_dim

@@ -131,14 +131,27 @@ class TorchDistributionMixin(Distribution):
             >>> [d3.batch_shape, d3.event_shape]
             [torch.Size([]), torch.Size([2, 3, 4, 5])]
 
-        :param int reinterpreted_batch_ndims: The number of batch dimensions
-            to reinterpret as event dimensions.
+        :param int reinterpreted_batch_ndims: The number of batch dimensions to
+            reinterpret as event dimensions. May be negative to remove
+            dimensions from an :class:`pyro.distributions.torch.Independent` .
+            If None, convert all dimensions to event dimensions.
         :return: A reshaped version of this distribution.
         :rtype: :class:`pyro.distributions.torch.Independent`
         """
         if reinterpreted_batch_ndims is None:
             reinterpreted_batch_ndims = len(self.batch_shape)
-        return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
+
+        # Deconstruct Independent distributions.
+        base_dist = self
+        while isinstance(base_dist, torch.distributions.Independent):
+            reinterpreted_batch_ndims += base_dist.reinterpreted_batch_ndims
+            base_dist = base_dist.base_dist
+
+        if reinterpreted_batch_ndims == 0:
+            return base_dist
+        if reinterpreted_batch_ndims < 0:
+            raise ValueError("Cannot remove event dimensions from {}".format(type(self)))
+        return pyro.distributions.torch.Independent(base_dist, reinterpreted_batch_ndims)
 
     def independent(self, reinterpreted_batch_ndims=None):
         warnings.warn("independent is deprecated; use to_event instead", DeprecationWarning)
@@ -239,15 +252,17 @@ class MaskedDistribution(TorchDistribution):
     arg_constraints = {}
 
     def __init__(self, base_dist, mask):
-        self.base_dist = base_dist
         if isinstance(mask, bool):
             self._mask = mask
         else:
-            if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
-                raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
-                                 "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
+            batch_shape = broadcast_shape(mask.shape, base_dist.batch_shape)
+            if mask.shape != batch_shape:
+                mask = mask.expand(batch_shape)
+            if base_dist.batch_shape != batch_shape:
+                base_dist = base_dist.expand(batch_shape)
             self._mask = mask.bool()
-        super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        self.base_dist = base_dist
+        super().__init__(base_dist.batch_shape, base_dist.event_shape)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MaskedDistribution, _instance)
@@ -303,13 +318,19 @@ class MaskedDistribution(TorchDistribution):
     def variance(self):
         return self.base_dist.variance
 
+    def conjugate_update(self, other):
+        updated, log_normalizer = self.base_dist.conjugate_update(other)
+        updated = updated.mask(self._mask)
+        log_normalizer = torch.where(self._mask, log_normalizer, torch.zeros_like(log_normalizer))
+        return updated, log_normalizer
+
 
 class ExpandedDistribution(TorchDistribution):
     arg_constraints = {}
 
     def __init__(self, base_dist, batch_shape=torch.Size()):
         self.base_dist = base_dist
-        super(ExpandedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        super().__init__(base_dist.batch_shape, base_dist.event_shape)
         # adjust batch shape
         self.expand(batch_shape)
 
@@ -406,6 +427,12 @@ class ExpandedDistribution(TorchDistribution):
     @property
     def variance(self):
         return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
+
+    def conjugate_update(self, other):
+        updated, log_normalizer = self.base_dist.conjugate_update(other)
+        updated = updated.expand(self.batch_shape)
+        log_normalizer = log_normalizer.expand(self.batch_shape)
+        return updated, log_normalizer
 
 
 @register_kl(MaskedDistribution, MaskedDistribution)

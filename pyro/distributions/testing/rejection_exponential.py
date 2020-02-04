@@ -16,7 +16,7 @@ class RejectionExponential(Rejector):
         self.rate, self.factor = broadcast_all(rate, factor)
         propose = Exponential(self.factor * self.rate)
         log_scale = self.factor.log()
-        super(RejectionExponential, self).__init__(propose, self.log_prob_accept, log_scale)
+        super().__init__(propose, self.log_prob_accept, log_scale)
 
     @weakmethod
     def log_prob_accept(self, x):

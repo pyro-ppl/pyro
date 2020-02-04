@@ -65,7 +65,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
         progress_bars.close()
 
 
-class _Worker(object):
+class _Worker:
     def __init__(self, chain_id, result_queue, log_queue, event, kernel, num_samples,
                  warmup_steps, initial_params=None, hook=None):
         self.chain_id = chain_id
@@ -134,7 +134,7 @@ def _add_logging_hook(logger, progress_bar=None, hook=None):
     return _add_logging
 
 
-class _UnarySampler(object):
+class _UnarySampler:
     """
     Single process runner class optimized for the case chains are drawn sequentially.
     """
@@ -148,7 +148,7 @@ class _UnarySampler(object):
         self.logger = None
         self.disable_progbar = disable_progbar
         self.hook = hook
-        super(_UnarySampler, self).__init__()
+        super().__init__()
 
     def terminate(self, *args, **kwargs):
         pass
@@ -171,7 +171,7 @@ class _UnarySampler(object):
             progress_bar.close()
 
 
-class _MultiSampler(object):
+class _MultiSampler:
     """
     Parallel runner class for running MCMC chains in parallel. This uses the
     `torch.multiprocessing` module (itself a light wrapper over the python
@@ -252,7 +252,7 @@ class _MultiSampler(object):
             self.terminate(terminate_workers=exc_raised)
 
 
-class MCMC(object):
+class MCMC:
     """
     Wrapper class for Markov Chain Monte Carlo algorithms. Specific MCMC algorithms
     are TraceKernel instances and need to be supplied as a ``kernel`` argument
@@ -384,13 +384,16 @@ class MCMC(object):
 
         # If transforms is not explicitly provided, infer automatically using
         # model args, kwargs.
-        if self.transforms is None and isinstance(self.kernel, (HMC, NUTS)):
-            if self.kernel.transforms is not None:
+        if self.transforms is None:
+            # Use `kernel.transforms` when available
+            if hasattr(self.kernel, 'transforms') and self.kernel.transforms is not None:
                 self.transforms = self.kernel.transforms
+            # Else, get transforms from model (e.g. in multiprocessing).
             elif self.kernel.model:
                 _, _, self.transforms, _ = initialize_model(self.kernel.model,
                                                             model_args=args,
                                                             model_kwargs=kwargs)
+            # Assign default value
             else:
                 self.transforms = {}
 

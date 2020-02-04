@@ -382,7 +382,7 @@ class TonesGenerator(nn.Module):
     def __init__(self, args, data_dim):
         self.args = args
         self.data_dim = data_dim
-        super(TonesGenerator, self).__init__()
+        super().__init__()
         self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
         self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
         self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
@@ -638,7 +638,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.1.0')
+    assert pyro.__version__.startswith('1.2.1')
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))

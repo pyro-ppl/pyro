@@ -40,7 +40,7 @@ class Emitter(nn.Module):
     """
 
     def __init__(self, input_dim, z_dim, emission_dim):
-        super(Emitter, self).__init__()
+        super().__init__()
         # initialize the three linear transformations used in the neural network
         self.lin_z_to_hidden = nn.Linear(z_dim, emission_dim)
         self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
@@ -66,7 +66,7 @@ class GatedTransition(nn.Module):
     """
 
     def __init__(self, z_dim, transition_dim):
-        super(GatedTransition, self).__init__()
+        super().__init__()
         # initialize the six linear transformations used in the neural network
         self.lin_gate_z_to_hidden = nn.Linear(z_dim, transition_dim)
         self.lin_gate_hidden_to_z = nn.Linear(transition_dim, z_dim)
@@ -112,7 +112,7 @@ class Combiner(nn.Module):
     """
 
     def __init__(self, z_dim, rnn_dim):
-        super(Combiner, self).__init__()
+        super().__init__()
         # initialize the three linear transformations used in the neural network
         self.lin_z_to_hidden = nn.Linear(z_dim, rnn_dim)
         self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim)
@@ -146,7 +146,7 @@ class DMM(nn.Module):
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
                  transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.0,
                  num_iafs=0, iaf_dim=50, use_cuda=False):
-        super(DMM, self).__init__()
+        super().__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
@@ -450,7 +450,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.1.0')
+    assert pyro.__version__.startswith('1.2.1')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)

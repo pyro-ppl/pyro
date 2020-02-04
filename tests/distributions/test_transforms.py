@@ -110,6 +110,10 @@ class TransformTests(TestCase):
         for input_dim in [2, 5, 10]:
             self._test_jacobian(input_dim, T.tanh())
 
+    def test_dct_jacobians(self):
+        for input_dim in [2, 5, 10]:
+            self._test_jacobian(input_dim, T.DiscreteCosineTransform())
+
     def test_neural_autoregressive_jacobians(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             for input_dim in [2, 5, 10]:
@@ -188,6 +192,10 @@ class TransformTests(TestCase):
     def test_tanh_inverses(self):
         for input_dim in [2, 5, 10]:
             self._test_inverse(input_dim, T.tanh())
+
+    def test_dct_inverses(self):
+        for input_dim in [2, 5, 10]:
+            self._test_inverse(input_dim, T.DiscreteCosineTransform())
 
     def test_householder_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
@@ -274,3 +282,7 @@ class TransformTests(TestCase):
     def test_tanh_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, T.tanh())
+
+    def test_dct_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, T.DiscreteCosineTransform())

@@ -17,7 +17,7 @@ class Search(TracePosterior):
     def __init__(self, model, max_tries=int(1e6), **kwargs):
         self.model = model
         self.max_tries = max_tries
-        super(Search, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def _traces(self, *args, **kwargs):
         q = queue.Queue()

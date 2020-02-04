@@ -258,13 +258,13 @@ class plate(PlateMessenger):
 class iarange(plate):
     def __init__(self, *args, **kwargs):
         warnings.warn("pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning)
-        super(iarange, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class irange(SubsampleMessenger):
     def __init__(self, *args, **kwargs):
         warnings.warn("pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning)
-        super(irange, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 @contextmanager

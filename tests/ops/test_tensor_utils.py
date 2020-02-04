@@ -3,9 +3,10 @@
 
 import pytest
 import numpy as np
+import scipy.fftpack as fftpack
 import torch
 
-from pyro.ops.tensor_utils import block_diag_embed, convolve, repeated_matmul, block_diagonal
+from pyro.ops.tensor_utils import block_diag_embed, convolve, repeated_matmul, block_diagonal, dct, idct
 from tests.common import assert_equal, assert_close
 
 
@@ -75,3 +76,19 @@ def test_repeated_matmul(size, n):
     for i in range(n):
         assert_equal(result[i, ...], serial_result)
         serial_result = torch.matmul(serial_result, M)
+
+
+@pytest.mark.parametrize('shape', [(3, 4), (5,), (2, 1, 6)])
+def test_dct(shape):
+    x = torch.randn(shape)
+    actual = dct(x)
+    expected = torch.from_numpy(fftpack.dct(x.numpy(), norm='ortho'))
+    assert_close(actual, expected)
+
+
+@pytest.mark.parametrize('shape', [(3, 4), (5,), (2, 1, 6)])
+def test_idct(shape):
+    x = torch.randn(shape)
+    actual = idct(x)
+    expected = torch.from_numpy(fftpack.idct(x.numpy(), norm='ortho'))
+    assert_close(actual, expected)
