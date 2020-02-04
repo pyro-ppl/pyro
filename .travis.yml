@@ -39,6 +39,10 @@ branches:
 
 jobs:
     include:
+        - stage: failfast
+          name: failfast
+          install:
+          script: test -n ""
         - stage: lint
           name: lint
           python: 3.5
