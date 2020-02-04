@@ -84,19 +84,21 @@ class LogStableCoxProcess(nn.Module):
     def __init__(self, name, hidden_dim, obs_dim, max_rate):
         super().__init__()
         model = StableModel(name, hidden_dim, obs_dim, max_rate)
+        self.model = model
+
+        # Inference is performed over a reparameterized model and guide.
         rep = StableReparam()
-        # FIXME poutine-wrapped PyroModules are not nn.Modules.
         model = poutine.reparam(model, {name: LinearHMMReparam(rep, rep, rep)})
         model = poutine.reparam(model, {name: ConjugateReparam(LogNormalCoxGuide(event_dim=2))})
-        self.model = model
-        self.guide = AutoDiagonalNormal(model, init_loc_fn=init_to_feasible)
+        self.reparam_model = model
+        self.reparam_guide = AutoDiagonalNormal(model, init_loc_fn=init_to_feasible)
 
     def fit(self, data,
             num_steps=100,
             learning_rate=1e-2):
         optim = ClippedAdam({"lr": learning_rate, "betas": (0.8, 0.95)})
         elbo = Trace_ELBO()
-        svi = SVI(self.model, self.guide, optim, elbo)
+        svi = SVI(self.reparam_model, self.reparam_guide, optim, elbo)
         losses = []
         for step in range(num_steps):
             loss = svi.step(data)
@@ -111,8 +113,8 @@ class LogStableCoxProcess(nn.Module):
         Extract normalized noise vectors.
         These vectors can be sorted by magnitude to extract detections.
         """
-        guide_trace = poutine.trace(self.guide).get_trace(data)
-        model_trace = poutine.trace(poutine.replay(self.model, guide_trace)).get_trace(data)
+        guide_trace = poutine.trace(self.reparam_guide).get_trace(data)
+        model_trace = poutine.trace(poutine.replay(self.reparam_model, guide_trace)).get_trace(data)
 
         hmm = self.model.hmm
         x = model_trace.nodes[self.name]["value"]
