@@ -111,17 +111,22 @@ class LogStableCoxProcess(nn.Module):
             losses.append(loss)
         return losses
 
+    def posterior(self, data):
+        with poutine.block(), poutine.trace() as tr:
+            self.reparam_guide(data)
+        with poutine.replay(trace=tr.trace):
+            return self.reparam_model(data)
+
     @torch.no_grad()
     def detect(self, data):
         """
         Extract normalized noise vectors.
         These vectors can be sorted by magnitude to extract detections.
         """
-        guide_trace = poutine.trace(self.reparam_guide).get_trace(data)
-        model_trace = poutine.trace(poutine.replay(self.reparam_model, guide_trace)).get_trace(data)
+        trace = poutine.trace(self.posterior).get_trace(data)
 
         hmm = self.model.hmm
-        x = model_trace.nodes[self.model.name]["value"]
+        x = trace.nodes[self.model.name]["value"]
         z = x._pyro_latent
 
         z_pred = _vm(z, hmm.transition_matrix) - hmm.transition_dist.base_dist.loc
