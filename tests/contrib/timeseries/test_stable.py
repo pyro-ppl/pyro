@@ -17,3 +17,6 @@ def test_log_stable_cox_process_fit(hidden_dim, obs_dim, fixed):
         # TODO fix numerical issues with gradient of stability.
         process.model.stability = 1.9
     process.fit(data, num_steps=2)
+    noise = process.detect(data)
+    assert noise["trans"].shape == (num_steps - 1, hidden_dim)
+    assert noise["obs"].shape == (num_steps, obs_dim)

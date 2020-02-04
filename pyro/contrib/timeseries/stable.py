@@ -21,7 +21,13 @@ from pyro.util import torch_isnan
 logger = logging.getLogger(__name__)
 
 
+def _vm(vector, matrix):
+    return vector.unsqueeze(-2).matmul(matrix).squeeze(-2)
+
+
 def bounded_exp(x, bound):
+    if bound == math.inf:
+        return x.exp()
     return (x - math.log(bound)).sigmoid() * bound
 
 
@@ -81,7 +87,7 @@ class LogNormalCoxGuide:
 
 
 class LogStableCoxProcess(nn.Module):
-    def __init__(self, name, hidden_dim, obs_dim, max_rate):
+    def __init__(self, name, hidden_dim, obs_dim, max_rate=math.inf):
         super().__init__()
         model = StableModel(name, hidden_dim, obs_dim, max_rate)
         self.model = model
@@ -93,9 +99,7 @@ class LogStableCoxProcess(nn.Module):
         self.reparam_model = model
         self.reparam_guide = AutoDiagonalNormal(model, init_loc_fn=init_to_feasible)
 
-    def fit(self, data,
-            num_steps=100,
-            learning_rate=1e-2):
+    def fit(self, data, num_steps=100, learning_rate=1e-2):
         optim = ClippedAdam({"lr": learning_rate, "betas": (0.8, 0.95)})
         elbo = Trace_ELBO()
         svi = SVI(self.reparam_model, self.reparam_guide, optim, elbo)
@@ -117,13 +121,13 @@ class LogStableCoxProcess(nn.Module):
         model_trace = poutine.trace(poutine.replay(self.reparam_model, guide_trace)).get_trace(data)
 
         hmm = self.model.hmm
-        x = model_trace.nodes[self.name]["value"]
+        x = model_trace.nodes[self.model.name]["value"]
         z = x._pyro_latent
 
-        z_pred = z @ hmm.transition_matrix - hmm.transition_dist.mean
-        trans = (z[..., 1:, :] - z_pred[..., :-1, :]) / hmm.transition_dist.scale
+        z_pred = _vm(z, hmm.transition_matrix) - hmm.transition_dist.base_dist.loc
+        trans = (z[..., 1:, :] - z_pred[..., :-1, :]) / hmm.transition_dist.base_dist.scale
 
-        x_pred = z @ hmm.observation_matrix - hmm.observation_dist.mean
-        obs = (x - x_pred) / hmm.observation_dist.scale
+        x_pred = _vm(z, hmm.observation_matrix) - hmm.observation_dist.base_dist.loc
+        obs = (x - x_pred) / hmm.observation_dist.base_dist.scale
 
         return {"trans": trans, "obs": obs}
