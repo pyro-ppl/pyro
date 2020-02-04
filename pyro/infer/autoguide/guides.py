@@ -545,7 +545,9 @@ class AutoMultivariateNormal(AutoContinuous):
         """
         Returns a MultivariateNormal posterior distribution.
         """
-        return dist.MultivariateNormal(self.loc, scale_tril=self.scale_tril)
+        transform = dist.transforms.LowerCholeskyAffine(self.loc, scale_tril=self.scale_tril)
+        return dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]).to_event(1),
+                                            transform)
 
     def _loc_scale(self, *args, **kwargs):
         return self.loc, self.scale_tril.diag()
@@ -589,7 +591,9 @@ class AutoDiagonalNormal(AutoContinuous):
         """
         Returns a diagonal Normal posterior distribution.
         """
-        return dist.Normal(self.loc, self.scale).to_event(1)
+        transform = dist.transforms.AffineTransform(self.loc, self.scale)
+        return dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]).to_event(1),
+                                            transform)
 
     def _loc_scale(self, *args, **kwargs):
         return self.loc, self.scale
