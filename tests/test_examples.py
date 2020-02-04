@@ -67,7 +67,7 @@ CPU_EXAMPLES = [
     'minipyro.py --backend=pyro',
     'minipyro.py',
     'mixed_hmm/experiment.py --timesteps=1',
-    'neutra.py -n 10 --num-warmup 10 --num-samples 10'
+    'neutra.py -n 10 --num-warmup 10 --num-samples 10',
     'rsa/generics.py --num-samples=10',
     'rsa/hyperbole.py --price=10000',
     'rsa/schelling.py --num-samples=10',

@@ -19,6 +19,7 @@ References:
 
 import argparse
 import logging
+import os
 from functools import partial
 
 import torch
@@ -179,7 +180,7 @@ def main(args):
             title='Posterior (transformed) \n(BNAF + NeuTra HMC)')
     sns.kdeplot(samples[:, 0], samples[:, 1], ax=ax8)
 
-    plt.savefig('neutra.pdf')
+    plt.savefig(os.path.join(os.path.dirname(__file__), 'neutra.pdf'))
 
 
 if __name__ == '__main__':
