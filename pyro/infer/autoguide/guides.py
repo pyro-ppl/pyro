@@ -347,6 +347,145 @@ class AutoDelta(AutoGuide):
         return self(*args, **kwargs)
 
 
+class AutoNormal(AutoGuide):
+    """This is AutoNormal, but it uses the same shape constraint logic found
+    in AutoMultivariateNormal and AutoDiagonalNormal.
+    """
+    def __init__(self, model, init_loc_fn=init_to_median, prefix='auto'):
+        #  Does this accept a 'prefix' arg?  It doesn't look like it.
+        self.init_loc_fn = init_loc_fn
+        self.prefix = prefix
+        model = InitMessenger(self.init_loc_fn)(model)
+        super().__init__(model)
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+
+        self._unconstrained_shapes = {}
+        self._cond_indep_stacks = {}
+
+        # Initialize guide params
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            # Collect the shapes of unconstrained values.
+            # These may differ from the shapes of constrained values.
+            constrained_shape = site["value"].shape
+            unconstrained_shape = biject_to(site["fn"].support).inv(site["value"]).shape
+
+            event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
+
+            site_batch_shape = site["fn"].batch_shape
+
+            self._unconstrained_shapes[name] = unconstrained_shape
+            unconstrained_shape_for_params = broadcast_shape(
+                unconstrained_shape,
+                site_batch_shape + (1,) * event_dim
+            )
+
+            # Collect independence contexts.
+            self._cond_indep_stacks[name] = site["cond_indep_stack"]
+
+            #  Set up params
+            loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
+            scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
+
+            pyro.param(
+                loc_name,
+                lambda: site["value"].new_zeros(unconstrained_shape_for_params)
+            )
+            pyro.param(
+                scale_name,
+                lambda: site["value"].new_ones(unconstrained_shape_for_params),
+                constraint=constraints.positive
+            )
+
+    def _get_loc_and_scale(self, name):
+        loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
+        scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
+        site_loc = pyro.get_param_store().get_param(loc_name)
+        site_scale = pyro.get_param_store().get_param(scale_name)
+        return site_loc, site_scale
+
+    def forward(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        plates = self._create_plates()
+        result = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            transform = biject_to(site["fn"].support)
+
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(plates[frame.name])
+
+                #  Now make latent just like sample_latent in AutoContinuous.
+                #  Need to look up loc and scale.
+                site_loc, site_scale = self._get_loc_and_scale(name)
+                unconstrained_latent = pyro.sample(
+                    name + "_unconstrained",
+                    dist.Normal(
+                        site_loc, site_scale,
+                    ).to_event(site["fn"].event_dim),
+                    infer={"is_auxiliary": True}
+                )
+
+                value = transform(unconstrained_latent)
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_latent)
+                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
+                delta_dist = dist.Delta(value, log_density=log_density,
+                                        event_dim=site["fn"].event_dim)
+
+                result[name] = pyro.sample(name, delta_dist)
+
+        return result
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        medians = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            site_loc, _ = self._get_loc_and_scale(name)
+            median = biject_to(site["fn"].support)(site_loc)
+            medians[name] = median
+
+        return medians
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns posterior quantiles each latent variable. Example::
+
+            print(guide.quantiles([0.05, 0.5, 0.95]))
+
+        :param quantiles: A list of requested quantiles between 0 and 1.
+        :type quantiles: torch.Tensor or list
+        :return: A dict mapping sample site name to a list of quantile values.
+        :rtype: dict
+        """
+        results = {}
+
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            site_loc, site_scale = self._get_loc_and_scale(name)
+
+            site_quantiles = torch.tensor(quantiles, dtype=site_loc.dtype, device=site_loc.device)
+            site_quantiles_values = dist.Normal(site_loc, site_scale).icdf(site_quantiles)
+            constrained_site_quantiles = biject_to(site["fn"].support)(site_quantiles_values)
+            results[name] = constrained_site_quantiles
+
+        return results
+
+
 class AutoContinuous(AutoGuide):
     """
     Base class for implementations of continuous-valued Automatic
@@ -568,7 +707,7 @@ class AutoDiagonalNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
-    initialized to the identity times a small factor.
+
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
