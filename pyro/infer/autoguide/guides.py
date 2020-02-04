@@ -401,11 +401,41 @@ class AutoContinuous(AutoGuide):
         assert latent.size() == (self.latent_dim,)
         return latent
 
+    def get_base_dist(self):
+        """
+        Returns the base distribution of the posterior when reparameterized
+        as a :class:`~pyro.distributions.TransformedDistribution`. This
+        should not depend on the model's `*args, **kwargs`.
+
+        .. code-block:: python
+
+          posterior = TransformedDistribution(self.get_base_dist(), self.get_transform(*args, **kwargs))
+
+        :return: :class:`~pyro.distributions.TorchDistribution` instance representing the base distribution.
+        """
+        raise NotImplementedError
+
+    def get_transform(self, *args, **kwargs):
+        """
+        Returns the transform applied to the base distribution when the posterior
+        is reparameterized as a :class:`~pyro.distributions.TransformedDistribution`.
+        This may depend on the model's `*args, **kwargs`.
+
+        .. code-block:: python
+
+          posterior = TransformedDistribution(self.get_base_dist(), self.get_transform(*args, **kwargs))
+
+        :return: a :class:`~torch.distributions.Transform` instance.
+        """
+        raise NotImplementedError
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns the posterior distribution.
         """
-        raise NotImplementedError
+        base_dist = self.get_base_dist()
+        transform = self.get_transform(*args, **kwargs)
+        return dist.TransformedDistribution(base_dist, transform)
 
     def sample_latent(self, *args, **kwargs):
         """
@@ -541,13 +571,17 @@ class AutoMultivariateNormal(AutoContinuous):
         self.scale_tril = PyroParam(eye_like(self.loc, self.latent_dim) * self._init_scale,
                                     constraints.lower_cholesky)
 
+    def get_base_dist(self):
+        return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
+
+    def get_transform(self, *args, **kwargs):
+        return dist.transforms.LowerCholeskyAffine(self.loc, scale_tril=self.scale_tril)
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a MultivariateNormal posterior distribution.
         """
-        transform = dist.transforms.LowerCholeskyAffine(self.loc, scale_tril=self.scale_tril)
-        return dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]).to_event(1),
-                                            transform)
+        return dist.MultivariateNormal(self.loc, scale_tril=self.scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
         return self.loc, self.scale_tril.diag()
@@ -587,13 +621,17 @@ class AutoDiagonalNormal(AutoContinuous):
         self.scale = PyroParam(self.loc.new_full((self.latent_dim,), self._init_scale),
                                constraints.positive)
 
+    def get_base_dist(self):
+        return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
+
+    def get_transform(self, *args, **kwargs):
+        return dist.transforms.AffineTransform(self.loc, self.scale)
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a diagonal Normal posterior distribution.
         """
-        transform = dist.transforms.AffineTransform(self.loc, self.scale)
-        return dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]).to_event(1),
-                                            transform)
+        return dist.Normal(self.loc, self.scale).to_event(1)
 
     def _loc_scale(self, *args, **kwargs):
         return self.loc, self.scale
@@ -685,17 +723,26 @@ class AutoNormalizingFlow(AutoContinuous):
     def __init__(self, model, init_transform_fn):
         self._init_transform_fn = init_transform_fn
         self.transform = None
+        self._prototype_tensor = torch.tensor(0.)
         super().__init__(model, init_loc_fn=init_to_feasible)
 
+    def get_base_dist(self):
+        loc = self._prototype_tensor.new_zeros(1)
+        scale = self._prototype_tensor.new_ones(1)
+        return dist.Normal(loc, scale).expand([self.latent_dim]).to_event(1)
+
+    def get_transform(self, *args, **kwargs):
+        return self.transform
+
     def get_posterior(self, *args, **kwargs):
-        """
-        Returns a diagonal Normal posterior distribution transformed by
-        a bijective transform.
-        """
         if self.transform is None:
             self.transform = self._init_transform_fn(self.latent_dim)
-        flow_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), self.transform)
-        return flow_dist
+            # Update prototype tensor in case transform parameters
+            # device/dtype is not the same as default tensor type.
+            for _, p in self.named_pyro_params():
+                self._prototype_tensor = p
+                break
+        return super().get_posterior(*args, **kwargs)
 
 
 class AutoIAFNormal(AutoNormalizingFlow):
