@@ -6,6 +6,7 @@ import math
 
 import torch
 from torch import nn
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -13,7 +14,7 @@ import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
 from pyro.infer.reparam import ConjugateReparam, LinearHMMReparam, StableReparam
-from pyro.nn import PyroModule, PyroSample, PyroParam
+from pyro.nn import PyroModule, PyroParam, PyroSample
 from pyro.optim import ClippedAdam
 from pyro.util import torch_isnan
 
@@ -37,15 +38,15 @@ class StableModel(PyroModule):
         super().__init__()
 
         # All of the following can be overridden in instances or subclasses.
-        self.stability = PyroSample(dist.Uniform(1, 2))
+        self.stability = PyroParam(torch.tensor(1.9), constraints.interval(0., 2.))
         self.init_scale = torch.full([hidden_dim], max_rate)
         self.init_skew = 0.
         self.init_loc = 0.
-        self.trans_matrix = PyroParam(lambda: torch.eye(hidden_dim))
+        self.trans_matrix = PyroParam(torch.eye(hidden_dim))
         self.trans_skew = PyroSample(dist.Uniform(-1, 1).expand([hidden_dim]).to_event(1))
         self.trans_scale = PyroSample(dist.LogNormal(0, 10).expand([hidden_dim]).to_event(1))
         self.trans_loc = PyroSample(dist.Normal(0, 10).expand([hidden_dim]).to_event(1))
-        self.obs_matrix = PyroParam(lambda: torch.eye(hidden_dim, obs_dim))
+        self.obs_matrix = PyroParam(torch.eye(hidden_dim, obs_dim) + 1e-2 * torch.randn(hidden_dim, obs_dim))
         self.obs_skew = PyroSample(dist.Uniform(-1, 1).expand([obs_dim]).to_event(1))
         self.obs_scale = PyroSample(dist.LogNormal(0, 10).expand([obs_dim]).to_event(1))
         self.obs_loc = PyroSample(dist.Normal(0, 10).expand([obs_dim]).to_event(1))
