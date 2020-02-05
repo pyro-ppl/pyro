@@ -721,10 +721,10 @@ class AutoNormalizingFlow(AutoContinuous):
     """
 
     def __init__(self, model, init_transform_fn):
+        super().__init__(model, init_loc_fn=init_to_feasible)
         self._init_transform_fn = init_transform_fn
         self.transform = None
         self._prototype_tensor = torch.tensor(0.)
-        super().__init__(model, init_loc_fn=init_to_feasible)
 
     def get_base_dist(self):
         loc = self._prototype_tensor.new_zeros(1)
