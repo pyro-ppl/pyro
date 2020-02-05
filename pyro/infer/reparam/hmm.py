@@ -61,6 +61,11 @@ class LinearHMMReparam(Reparam):
         self.obs = obs
 
     def __call__(self, name, fn, obs):
+        assert isinstance(fn, LinearHMM)
+        if fn.duration is not None:
+            raise ValueError("LinearHMMReparam requires duration to be specified "
+                             "on targeted LinearHMM distributions")
+
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist = fn.initial_dist
         if self.init is not None:
@@ -80,7 +85,7 @@ class LinearHMMReparam(Reparam):
 
         # Reparameterize the entire HMM as conditionally Gaussian.
         hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
-                               fn.observation_matrix, obs_dist)
+                               fn.observation_matrix, obs_dist, duration=fn.duration)
 
         # Apply any observation transforms.
         if fn.transforms:
