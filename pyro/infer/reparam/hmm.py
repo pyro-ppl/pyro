@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.distributions as dist
+from pyro.distributions.hmm import LinearHMM
 
 from .reparam import Reparam
 
@@ -62,7 +63,7 @@ class LinearHMMReparam(Reparam):
 
     def __call__(self, name, fn, obs):
         assert isinstance(fn, LinearHMM)
-        if fn.duration is not None:
+        if fn.duration is None:
             raise ValueError("LinearHMMReparam requires duration to be specified "
                              "on targeted LinearHMM distributions")
 
