@@ -80,7 +80,7 @@ class LinearHMMReparam(Reparam):
 
         # Reparameterize the entire HMM as conditionally Gaussian.
         hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
-                               fn.observation_matrix, obs_dist)
+                               fn.observation_matrix, obs_dist, broadcast_time=False)
 
         # Apply any observation transforms.
         if fn.transforms:

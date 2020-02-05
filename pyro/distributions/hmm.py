@@ -361,13 +361,18 @@ class GaussianHMM(TorchDistribution):
         This should have event_shape ``(obs_dim,)``.
     :type observation_dist: ~torch.distributions.MultivariateNormal or
         ~torch.distributions.Independent of ~torch.distributions.Normal
+    :param bool broadcast_time: Whether to allow broadcasting of the time axis.
+        If False then :meth:`log_prob` requires ``event_shape[-2]`` to match
+        ``value.shape[-2]``; if True then ``event_shape[-2]==1`` allows any
+        size for ``value.shape[-2]``.
     """
     has_rsample = True
     arg_constraints = {}
     support = constraints.real
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
-                 observation_matrix, observation_dist, validate_args=None):
+                 observation_matrix, observation_dist, validate_args=None,
+                 broadcast_time=True):
         assert (isinstance(initial_dist, torch.distributions.MultivariateNormal) or
                 (isinstance(initial_dist, torch.distributions.Independent) and
                  isinstance(initial_dist.base_dist, torch.distributions.Normal)))
@@ -392,6 +397,7 @@ class GaussianHMM(TorchDistribution):
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
+        self._broadcast_time = broadcast_time
 
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
@@ -414,9 +420,16 @@ class GaussianHMM(TorchDistribution):
 
         super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
+        new._broadcast_time = self._broadcast_time
         return new
 
     def log_prob(self, value):
+        if self._validate_args:
+            if self._broadcast_time and self.event_shape[-2] == 1 and value.shape[-2] != 1:
+                pass  # TODO Add validation logic for broadcasted samples.
+            else:
+                self._validate_sample(value)
+
         # Combine observation and transition factors.
         result = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
@@ -507,6 +520,7 @@ class GaussianHMM(TorchDistribution):
         batch_shape = log_normalizer.shape
         super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
+        new._broadcast_time = self._broadcast_time
         return new, log_normalizer
 
 
