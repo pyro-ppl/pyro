@@ -351,7 +351,7 @@ class AutoNormal(AutoGuide):
     """This is AutoNormal, but it uses the same shape constraint logic found
     in AutoMultivariateNormal and AutoDiagonalNormal.
     """
-    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
+    def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1):
         # if init_loc_fn is not init_to_feasible:
         #     raise NotImplementedError("TODO")
         self.init_loc_fn = init_loc_fn
@@ -368,8 +368,8 @@ class AutoNormal(AutoGuide):
 
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
-        self.locs = PyroModule()
-        self.scales = PyroModule()
+        self.locs = PyroModule(name='locs')
+        self.scales = PyroModule(name='scales')
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
