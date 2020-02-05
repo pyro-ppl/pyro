@@ -75,12 +75,16 @@ class LinearHMMReparam(Reparam):
         # Reparameterize the transition distribution as conditionally Gaussian.
         trans_dist = fn.transition_dist
         if self.trans is not None:
+            if trans_dist.batch_shape[-1] != fn.duration:
+                trans_dist = trans_dist.expand(trans_dist.batch_shape[:-1] + (fn.duration,))
             trans_dist, _ = self.trans("{}_trans".format(name), trans_dist.to_event(1), None)
             trans_dist = trans_dist.to_event(-1)
 
         # Reparameterize the observation distribution as conditionally Gaussian.
         obs_dist = fn.observation_dist
         if self.obs is not None:
+            if obs_dist.batch_shape[-1] != fn.duration:
+                obs_dist = obs_dist.expand(obs_dist.batch_shape[:-1] + (fn.duration,))
             obs_dist, obs = self.obs("{}_obs".format(name), obs_dist.to_event(1), obs)
             obs_dist = obs_dist.to_event(-1)
 

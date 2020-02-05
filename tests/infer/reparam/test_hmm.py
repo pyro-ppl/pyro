@@ -75,7 +75,11 @@ def test_studentt_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
     with poutine.trace() as tr:
         with poutine.reparam(config={"x": LinearHMMReparam(rep, rep, rep)}):
             model(data)
+
     assert isinstance(tr.trace.nodes["x"]["fn"], dist.GaussianHMM)
+    assert tr.trace.nodes["x_init_gamma"]["fn"].event_shape == (hidden_dim,)
+    assert tr.trace.nodes["x_trans_gamma"]["fn"].event_shape == (duration, hidden_dim)
+    assert tr.trace.nodes["x_obs_gamma"]["fn"].event_shape == (duration, obs_dim)
     tr.trace.compute_log_prob()  # smoke test only
 
 
