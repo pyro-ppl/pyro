@@ -352,8 +352,8 @@ class AutoNormal(AutoGuide):
     in AutoMultivariateNormal and AutoDiagonalNormal.
     """
     def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1):
-        # if init_loc_fn is not init_to_feasible:
-        #     raise NotImplementedError("TODO")
+        if init_loc_fn is not init_to_feasible:
+            raise NotImplementedError("TODO")
         self.init_loc_fn = init_loc_fn
 
         if not isinstance(init_scale, float) or not (init_scale > 0):
