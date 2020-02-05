@@ -351,10 +351,15 @@ class AutoNormal(AutoGuide):
     """This is AutoNormal, but it uses the same shape constraint logic found
     in AutoMultivariateNormal and AutoDiagonalNormal.
     """
-    def __init__(self, model, init_loc_fn=init_to_median, prefix='auto'):
-        #  Does this accept a 'prefix' arg?  It doesn't look like it.
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
+        # if init_loc_fn is not init_to_feasible:
+        #     raise NotImplementedError("TODO")
         self.init_loc_fn = init_loc_fn
-        self.prefix = prefix
+
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
+
         model = InitMessenger(self.init_loc_fn)(model)
         super().__init__(model)
 
@@ -363,6 +368,8 @@ class AutoNormal(AutoGuide):
 
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
+        self.locs = PyroModule()
+        self.scales = PyroModule()
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
@@ -384,25 +391,14 @@ class AutoNormal(AutoGuide):
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
 
-            #  Set up params
-            loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
-            scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
-
-            pyro.param(
-                loc_name,
-                lambda: site["value"].new_zeros(unconstrained_shape_for_params)
-            )
-            pyro.param(
-                scale_name,
-                lambda: site["value"].new_ones(unconstrained_shape_for_params),
-                constraint=constraints.positive
-            )
+            init_loc = site["value"].new_zeros(unconstrained_shape_for_params)
+            init_scale = site["value"].new_full(unconstrained_shape_for_params, self._init_scale)
+            setattr(self.locs, name, nn.Parameter(init_loc))
+            setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
 
     def _get_loc_and_scale(self, name):
-        loc_name = "{}_{}_{}".format(self.prefix, name, 'loc')
-        scale_name = "{}_{}_{}".format(self.prefix, name, 'scale')
-        site_loc = pyro.get_param_store().get_param(loc_name)
-        site_scale = pyro.get_param_store().get_param(scale_name)
+        site_loc = getattr(self.locs, name)
+        site_scale = getattr(self.scales, name)
         return site_loc, site_scale
 
     def forward(self, *args, **kwargs):
