@@ -425,7 +425,9 @@ class GaussianHMM(HiddenMarkovModel):
         This should have event_shape ``(obs_dim,)``.
     :type observation_dist: ~torch.distributions.MultivariateNormal or
         ~torch.distributions.Independent of ~torch.distributions.Normal
-    :param int duration: Optional
+    :param int duration: Optional size of the time axis ``event_shape[0]``.
+        This is required when sampling from homogeneous HMMs whose parameters
+        are not expanded along the time axis.
     """
     has_rsample = True
     arg_constraints = {}
@@ -455,7 +457,7 @@ class GaussianHMM(HiddenMarkovModel):
                                 observation_matrix.shape[:-2],
                                 observation_dist.batch_shape)
         batch_shape, time_shape = shape[:-1], shape[-1:]
-        event_shape = time_shape + observation_dist.event_shape
+        event_shape = time_shape + (obs_dim,)
         super().__init__(duration, batch_shape, event_shape, validate_args=validate_args)
 
         self.hidden_dim = hidden_dim
@@ -652,6 +654,9 @@ class GammaGaussianHMM(HiddenMarkovModel):
         with unit scale mixing. This should have batch_shape broadcastable to
         ``self.batch_shape + (num_steps,)``.
         This should have event_shape ``(obs_dim,)``.
+    :param int duration: Optional size of the time axis ``event_shape[0]``.
+        This is required when sampling from homogeneous HMMs whose parameters
+        are not expanded along the time axis.
     """
     arg_constraints = {}
     support = constraints.real
@@ -818,6 +823,9 @@ class LinearHMM(HiddenMarkovModel):
     :param observation_dist: A observation noise distribution. This should have
         batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.  This
         should have event_shape ``(obs_dim,)``.
+    :param int duration: Optional size of the time axis ``event_shape[0]``.
+        This is required when sampling from homogeneous HMMs whose parameters
+        are not expanded along the time axis.
     """
     arg_constraints = {}
     support = constraints.real
