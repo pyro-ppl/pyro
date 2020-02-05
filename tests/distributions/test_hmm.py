@@ -106,11 +106,10 @@ def test_sequential_gamma_gaussian_tensordot(batch_shape, state_dim, num_steps):
 @pytest.mark.parametrize('state_dim', [2, 3])
 @pytest.mark.parametrize('event_shape', [(), (5,), (2, 3)], ids=str)
 @pytest.mark.parametrize('ok,init_shape,trans_shape,obs_shape', [
-    (True, (), (1,), ()),
     (True, (), (), (1,)),
-    (True, (), (7,), ()),
+    (True, (), (1,), (1,)),
     (True, (), (), (7,)),
-    (True, (), (7,), (1,)),
+    (True, (), (7,), (7,)),
     (True, (), (1,), (7,)),
     (True, (), (7,), (11, 7)),
     (True, (), (11, 7), (7,)),
@@ -120,6 +119,9 @@ def test_sequential_gamma_gaussian_tensordot(batch_shape, state_dim, num_steps):
     (True, (11,), (11, 7), (7,)),
     (True, (11,), (11, 7), (11, 7)),
     (True, (4, 1, 1), (3, 1, 7), (2, 7)),
+    (False, (), (1,), ()),
+    (False, (), (7,), ()),
+    (False, (), (7,), (1,)),
     (False, (), (7,), (6,)),
     (False, (3,), (4, 7), (7,)),
     (False, (3,), (7,), (4, 7)),
@@ -134,7 +136,8 @@ def test_discrete_hmm_shape(ok, init_shape, trans_shape, obs_shape, event_shape,
 
     if not ok:
         with pytest.raises(ValueError):
-            dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
+            d = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
+            d.log_prob(data)
         return
 
     d = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
@@ -335,7 +338,7 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
-    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps)
     if diag:
         obs_mvn = dist.MultivariateNormal(obs_dist.base_dist.loc,
                                           scale_tril=obs_dist.base_dist.scale.diag_embed())

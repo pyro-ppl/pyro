@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.distributions as dist
+from pyro.distributions.hmm import LinearHMM
 
 from .reparam import Reparam
 
@@ -61,6 +62,11 @@ class LinearHMMReparam(Reparam):
         self.obs = obs
 
     def __call__(self, name, fn, obs):
+        assert isinstance(fn, LinearHMM)
+        if fn.duration is None:
+            raise ValueError("LinearHMMReparam requires duration to be specified "
+                             "on targeted LinearHMM distributions")
+
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist = fn.initial_dist
         if self.init is not None:
@@ -69,18 +75,22 @@ class LinearHMMReparam(Reparam):
         # Reparameterize the transition distribution as conditionally Gaussian.
         trans_dist = fn.transition_dist
         if self.trans is not None:
+            if trans_dist.batch_shape[-1] != fn.duration:
+                trans_dist = trans_dist.expand(trans_dist.batch_shape[:-1] + (fn.duration,))
             trans_dist, _ = self.trans("{}_trans".format(name), trans_dist.to_event(1), None)
             trans_dist = trans_dist.to_event(-1)
 
         # Reparameterize the observation distribution as conditionally Gaussian.
         obs_dist = fn.observation_dist
         if self.obs is not None:
+            if obs_dist.batch_shape[-1] != fn.duration:
+                obs_dist = obs_dist.expand(obs_dist.batch_shape[:-1] + (fn.duration,))
             obs_dist, obs = self.obs("{}_obs".format(name), obs_dist.to_event(1), obs)
             obs_dist = obs_dist.to_event(-1)
 
         # Reparameterize the entire HMM as conditionally Gaussian.
         hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
-                               fn.observation_matrix, obs_dist)
+                               fn.observation_matrix, obs_dist, duration=fn.duration)
 
         # Apply any observation transforms.
         if fn.transforms:
