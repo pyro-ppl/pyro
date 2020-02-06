@@ -164,7 +164,7 @@ def main(args):
             title='Posterior \n(BNAF autoguide)')
     sns.kdeplot(guide_samples[:, 0], guide_samples[:, 1], ax=ax6)
 
-    # 3(b). Draw samples using NeuTra HMC
+    # 4(b). Draw samples using NeuTra HMC
     logging.info('\nDrawing samples using BNAF autoguide + NeuTra HMC ...')
     neutra = NeuTraReparam(guide.requires_grad_(False))
     neutra_model = poutine.reparam(model, config=lambda _: neutra)
