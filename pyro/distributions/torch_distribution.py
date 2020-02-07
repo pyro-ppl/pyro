@@ -254,6 +254,8 @@ class MaskedDistribution(TorchDistribution):
     def __init__(self, base_dist, mask):
         if isinstance(mask, bool):
             self._mask = mask
+        elif mask is None:
+            self._mask = mask
         else:
             batch_shape = broadcast_shape(mask.shape, base_dist.batch_shape)
             if mask.shape != batch_shape:
