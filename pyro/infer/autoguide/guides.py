@@ -58,6 +58,12 @@ def _deep_setattr(obj, key, val):
     setattr(obj, rpart, val)
 
 
+def _deep_getattr(obj, key):
+    for part in key.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
 def prototype_hide_fn(msg):
     # Record only stochastic sites in the prototype_trace.
     return msg["type"] != "sample" or msg["is_observed"] or site_is_subsample(msg)
@@ -393,12 +399,12 @@ class AutoNormal(AutoGuide):
 
             init_loc = site["value"].new_zeros(unconstrained_shape_for_params)
             init_scale = site["value"].new_full(unconstrained_shape_for_params, self._init_scale)
-            setattr(self.locs, name, nn.Parameter(init_loc))
-            setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
+            _deep_setattr(self.locs, name, nn.Parameter(init_loc))
+            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
 
     def _get_loc_and_scale(self, name):
-        site_loc = getattr(self.locs, name)
-        site_scale = getattr(self.scales, name)
+        site_loc = _deep_getattr(self.locs, name)
+        site_scale = _deep_getattr(self.scales, name)
         return site_loc, site_scale
 
     def forward(self, *args, **kwargs):
@@ -454,6 +460,8 @@ class AutoNormal(AutoGuide):
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             site_loc, _ = self._get_loc_and_scale(name)
             median = biject_to(site["fn"].support)(site_loc)
+            if median is site_loc:
+                median = median.clone()
             medians[name] = median
 
         return medians
