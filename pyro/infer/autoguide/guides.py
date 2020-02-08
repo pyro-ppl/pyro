@@ -444,8 +444,6 @@ class AutoNormal(AutoGuide):
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
 
-                #  Now make latent just like sample_latent in AutoContinuous.
-                #  Need to look up loc and scale.
                 site_loc, site_scale = self._get_loc_and_scale(name)
                 unconstrained_latent = pyro.sample(
                     name + "_unconstrained",
