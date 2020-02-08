@@ -58,6 +58,12 @@ def _deep_setattr(obj, key, val):
     setattr(obj, rpart, val)
 
 
+def _deep_getattr(obj, key):
+    for part in key.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
 def prototype_hide_fn(msg):
     # Record only stochastic sites in the prototype_trace.
     return msg["type"] != "sample" or msg["is_observed"] or site_is_subsample(msg)
@@ -348,12 +354,28 @@ class AutoDelta(AutoGuide):
 
 
 class AutoNormal(AutoGuide):
-    """This is AutoNormal, but it uses the same shape constraint logic found
-    in AutoMultivariateNormal and AutoDiagonalNormal.
+    """This implementation of :class:`AutoGuide` uses Normal(0, 1) distributions
+    to construct a guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
+
+    It should be equivalent to :class: `AutoDiagonalNormal` , but with
+    more convenient site names and with better support for
+    :class:`~pyro.infer.trace_mean_field_elbo.TraceMeanField_ELBO` .
+
+    In :class:`AutoDiagonalNormal` , if your model has N named
+    parameters with dimensions k_i and sum k_i = D, you get a single
+    vector of length D for your mean, and a single vector of length D
+    for sigmas.  This guide gives you N distinct normals that you can
+    call by name.
+
+    Usage::
+
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, ...)
     """
     def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1):
-        # if init_loc_fn is not init_to_feasible:
-        #     raise NotImplementedError("TODO")
+        if init_loc_fn is not init_to_feasible:
+            raise NotImplementedError("TODO")
         self.init_loc_fn = init_loc_fn
 
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -393,12 +415,12 @@ class AutoNormal(AutoGuide):
 
             init_loc = site["value"].new_zeros(unconstrained_shape_for_params)
             init_scale = site["value"].new_full(unconstrained_shape_for_params, self._init_scale)
-            setattr(self.locs, name, nn.Parameter(init_loc))
-            setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
+            _deep_setattr(self.locs, name, nn.Parameter(init_loc))
+            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
 
     def _get_loc_and_scale(self, name):
-        site_loc = getattr(self.locs, name)
-        site_scale = getattr(self.scales, name)
+        site_loc = _deep_getattr(self.locs, name)
+        site_scale = _deep_getattr(self.scales, name)
         return site_loc, site_scale
 
     def forward(self, *args, **kwargs):
@@ -422,8 +444,6 @@ class AutoNormal(AutoGuide):
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
 
-                #  Now make latent just like sample_latent in AutoContinuous.
-                #  Need to look up loc and scale.
                 site_loc, site_scale = self._get_loc_and_scale(name)
                 unconstrained_latent = pyro.sample(
                     name + "_unconstrained",
@@ -454,6 +474,8 @@ class AutoNormal(AutoGuide):
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             site_loc, _ = self._get_loc_and_scale(name)
             median = biject_to(site["fn"].support)(site_loc)
+            if median is site_loc:
+                median = median.clone()
             medians[name] = median
 
         return medians
