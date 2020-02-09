@@ -530,7 +530,6 @@ def test_init_scale(auto_class, init_scale):
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
-    AutoNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
     auto_guide_list_x,
