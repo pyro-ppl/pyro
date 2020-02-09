@@ -27,15 +27,15 @@ from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
-import pyro.distributions.transforms as transforms
 import pyro.poutine as poutine
+from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_median, init_to_feasible
 from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
-from pyro.nn import AutoRegressiveNN, PyroModule, PyroParam
+from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
-from pyro.poutine.util import prune_subsample_sites
+from pyro.poutine.util import site_is_subsample
 
 
 def _deep_setattr(obj, key, val):
@@ -56,6 +56,11 @@ def _deep_setattr(obj, key, val):
     if lpart:
         obj = functools.reduce(_getattr, [obj] + lpart.split('.'))
     setattr(obj, rpart, val)
+
+
+def prototype_hide_fn(msg):
+    # Record only stochastic sites in the prototype_trace.
+    return msg["type"] != "sample" or msg["is_observed"] or site_is_subsample(msg)
 
 
 class AutoGuide(PyroModule):
@@ -124,8 +129,8 @@ class AutoGuide(PyroModule):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
-        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+        model = poutine.block(self.model, prototype_hide_fn)
+        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 
@@ -656,7 +661,45 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         return self.loc, scale
 
 
-class AutoIAFNormal(AutoContinuous):
+class AutoNormalizingFlow(AutoContinuous):
+    """
+    This implementation of :class:`AutoContinuous` uses a Diagonal Normal
+    distribution transformed via a sequence of bijective transforms
+    (e.g. various :mod:`~pyro.distributions.TransformModule` subclasses)
+    to construct a guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
+
+    Usage::
+
+        transform_init = partial(iterated, block_autoregressive,
+                                 repeats=2)
+        guide = AutoNormalizingFlow(model, transform_init)
+        svi = SVI(model, guide, ...)
+
+    :param callable model: a generative model
+    :param init_transform_fn: a callable which when provided with the latent
+        dimension returns an instance of :class:`~torch.distributions.Transform`
+        , or :class:`~pyro.distributions.TransformModule` if the transform has
+        trainable params.
+    """
+
+    def __init__(self, model, init_transform_fn):
+        self._init_transform_fn = init_transform_fn
+        self.transform = None
+        super().__init__(model, init_loc_fn=init_to_feasible)
+
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns a diagonal Normal posterior distribution transformed by
+        a bijective transform.
+        """
+        if self.transform is None:
+            self.transform = self._init_transform_fn(self.latent_dim)
+        flow_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), self.transform)
+        return flow_dist
+
+
+class AutoIAFNormal(AutoNormalizingFlow):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
     distribution transformed via a :class:`~pyro.distributions.transforms.AffineAutoregressive`
@@ -672,28 +715,28 @@ class AutoIAFNormal(AutoContinuous):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+
+        .. warning::
+
+            This argument is only to preserve backwards compatibility
+            and has no effect in practice.
+
+    :param int num_transforms: number of :class:`~pyro.distributions.transforms.AffineAutoregressive`
+        transforms to use in sequence.
+    :param init_transform_kwargs: other keyword arguments taken by
+        :func:`~pyro.distributions.transforms.affine_autoregressive`.
     """
 
-    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median):
-        self.hidden_dim = hidden_dim
-        self.arn = None
-        super().__init__(model, init_loc_fn=init_loc_fn)
-
-    def get_posterior(self, *args, **kwargs):
-        """
-        Returns a diagonal Normal posterior distribution transformed by
-        :class:`~pyro.distributions.transforms.iaf.InverseAutoregressiveFlow`.
-        """
-        if self.latent_dim == 1:
-            raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
-        if self.hidden_dim is None:
-            self.hidden_dim = self.latent_dim
-        if self.arn is None:
-            self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
-
-        iaf = transforms.AffineAutoregressive(self.arn)
-        iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
-        return iaf_dist
+    def __init__(self, model, hidden_dim=None, init_loc_fn=None, num_transforms=1, **init_transform_kwargs):
+        if init_loc_fn:
+            warnings.warn("The `init_loc_fn` argument to AutoIAFNormal is not used in practice. "
+                          "Please consider removing, as this may be removed in a future release.",
+                          category=FutureWarning)
+        super().__init__(model,
+                         init_transform_fn=functools.partial(iterated, num_transforms,
+                                                             affine_autoregressive,
+                                                             hidden_dims=hidden_dim,
+                                                             **init_transform_kwargs))
 
 
 class AutoLaplaceApproximation(AutoContinuous):
@@ -759,9 +802,8 @@ class AutoDiscreteParallel(AutoGuide):
     """
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = config_enumerate(self.model)
+        model = poutine.block(config_enumerate(self.model), prototype_hide_fn)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
-        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 

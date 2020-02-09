@@ -31,7 +31,7 @@ class LinearModelPosteriorGuide(nn.Module):
         :param bool use_softplus: whether to transform the regressor by a softplus transform: useful if the
                                   regressor should be nonnegative but close to zero.
         """
-        super(LinearModelPosteriorGuide, self).__init__()
+        super().__init__()
         # Represent each parameter group as independent Gaussian
         # Making a weak mean-field assumption
         # To avoid this- combine labels
@@ -84,7 +84,7 @@ class LinearModelLaplaceGuide(nn.Module):
     :param float init_value: initial value for the posterior mean parameters.
     """
     def __init__(self, d, w_sizes, tau_label=None, init_value=0.1, **kwargs):
-        super(LinearModelLaplaceGuide, self).__init__()
+        super().__init__()
         # start in train mode
         self.train()
         if not isinstance(d, (tuple, list, torch.Tensor)):
@@ -174,7 +174,7 @@ class LinearModelLaplaceGuide(nn.Module):
 class SigmoidGuide(LinearModelPosteriorGuide):
 
     def __init__(self, d, n, w_sizes, **kwargs):
-        super(SigmoidGuide, self).__init__(d, w_sizes, **kwargs)
+        super().__init__(d, w_sizes, **kwargs)
         self.inverse_sigmoid_scale = nn.Parameter(torch.ones(n))
         self.h1_weight = nn.Parameter(torch.ones(n))
         self.h1_bias = nn.Parameter(torch.zeros(n))
@@ -198,7 +198,7 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
 
     def __init__(self, d, w_sizes, mf=False, tau_label="tau", alpha_init=100.,
                  b0_init=100., **kwargs):
-        super(NormalInverseGammaGuide, self).__init__(d, w_sizes, **kwargs)
+        super().__init__(d, w_sizes, **kwargs)
         self.alpha = nn.Parameter(alpha_init*torch.ones(d))
         self.b0 = nn.Parameter(b0_init*torch.ones(d))
         self.mf = mf
@@ -245,7 +245,7 @@ class GuideDV(nn.Module):
     the relation `T = log p(theta) - log q(theta | y, d)`
     """
     def __init__(self, guide):
-        super(GuideDV, self).__init__()
+        super().__init__()
         self.guide = guide
 
     def forward(self, design, trace, observation_labels, target_labels):

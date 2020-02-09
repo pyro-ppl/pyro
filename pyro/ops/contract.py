@@ -423,7 +423,7 @@ def _select(tensor, dims, indices):
     return tensor
 
 
-class _DimUnroller(object):
+class _DimUnroller:
     """
     Object to map plated dims to collections of unrolled dims.
 

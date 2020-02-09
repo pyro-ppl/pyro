@@ -41,7 +41,7 @@ class Delta(TorchDistribution):
                 log_density.shape, batch_shape))
         self.v = v
         self.log_density = log_density
-        super(Delta, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(Delta, _instance)

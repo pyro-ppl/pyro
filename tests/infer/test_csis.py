@@ -21,7 +21,7 @@ def model(observations={"y1": 0, "y2": 0}):
 
 class Guide(nn.Module):
     def __init__(self):
-        super(Guide, self).__init__()
+        super().__init__()
         self.linear = torch.nn.Linear(1, 1, bias=False)
         self.std = torch.nn.Parameter(torch.tensor(1.))
 

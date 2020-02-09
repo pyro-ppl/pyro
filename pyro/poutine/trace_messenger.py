@@ -64,7 +64,7 @@ class TraceMessenger(Messenger):
             to construct (currently only "flat" or "dense" supported)
         :param param_only: boolean that specifies whether to record sample sites
         """
-        super(TraceMessenger, self).__init__()
+        super().__init__()
         if graph_type is None:
             graph_type = "flat"
         if param_only is None:
@@ -76,7 +76,7 @@ class TraceMessenger(Messenger):
 
     def __enter__(self):
         self.trace = Trace(graph_type=self.graph_type)
-        return super(TraceMessenger, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         """
@@ -89,7 +89,7 @@ class TraceMessenger(Messenger):
                     self.trace.remove_node(node["name"])
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
-        return super(TraceMessenger, self).__exit__(*args, **kwargs)
+        return super().__exit__(*args, **kwargs)
 
     def __call__(self, fn):
         """
@@ -115,17 +115,22 @@ class TraceMessenger(Messenger):
                         args=self.trace.nodes["_INPUT"]["args"],
                         kwargs=self.trace.nodes["_INPUT"]["kwargs"])
         self.trace = tr
-        super(TraceMessenger, self)._reset()
+        super()._reset()
 
     def _pyro_post_sample(self, msg):
-        if not self.param_only:
-            self.trace.add_node(msg["name"], **msg.copy())
+        if self.param_only:
+            return
+        if msg["infer"].get("_do_not_trace"):
+            assert msg["infer"].get("is_auxiliary")
+            assert not msg["is_observed"]
+            return
+        self.trace.add_node(msg["name"], **msg.copy())
 
     def _pyro_post_param(self, msg):
         self.trace.add_node(msg["name"], **msg.copy())
 
 
-class TraceHandler(object):
+class TraceHandler:
     """
     Execution trace poutine.
 

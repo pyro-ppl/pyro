@@ -63,4 +63,6 @@ class BroadcastMessenger(Messenger):
             for i in range(-len(target_batch_shape) + 1, 1):
                 if target_batch_shape[i] is None:
                     target_batch_shape[i] = actual_batch_shape[i] if len(actual_batch_shape) >= -i else 1
-            msg["fn"] = msg["fn"].expand(target_batch_shape)
+            msg["fn"] = dist.expand(target_batch_shape)
+            if msg["fn"].has_rsample != dist.has_rsample:
+                msg["fn"].has_rsample = dist.has_rsample  # copy custom attribute

@@ -111,3 +111,30 @@ def test_additive(stability, skew0, skew1, scale0, scale1):
     actual = d.sample([num_samples])
 
     assert ks_2samp(expected, actual).pvalue > 0.05
+
+
+@pytest.mark.parametrize("scale", [0.5, 1.5])
+@pytest.mark.parametrize("skew", [-0.5, 0.0, 0.5, 0.9])
+@pytest.mark.parametrize("stability", [0.5, 1.0, 1.7, 2.0])
+@pytest.mark.parametrize("coords", ["S0", "S"])
+def test_mean(stability, skew, scale, coords):
+    loc = torch.randn(10)
+    d = dist.Stable(stability, skew, scale, loc, coords=coords)
+    if stability <= 1:
+        assert torch.isnan(d.mean).all()
+    else:
+        expected = d.sample((100000,)).mean(0)
+        assert_close(d.mean, expected, atol=0.1)
+
+
+@pytest.mark.parametrize("scale", [0.5, 1.5])
+@pytest.mark.parametrize("stability", [1.7, 2.0])
+def test_variance(stability, scale):
+    skew = dist.Uniform(-1, 1).sample((10,))
+    loc = torch.randn(10)
+    d = dist.Stable(stability, skew, scale, loc)
+    if stability < 2:
+        assert torch.isinf(d.variance).all()
+    else:
+        expected = d.sample((100000,)).var(0)
+        assert_close(d.variance, expected, rtol=0.02)

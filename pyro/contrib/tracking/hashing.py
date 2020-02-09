@@ -9,7 +9,7 @@ from numbers import Number
 import torch
 
 
-class LSH(object):
+class LSH:
     """
     Implements locality-sensitive hashing for low-dimensional euclidean space.
 
@@ -104,7 +104,7 @@ class LSH(object):
         return result
 
 
-class ApproxSet(object):
+class ApproxSet:
     """
     Queries low-dimensional euclidean space for approximate occupancy.
 

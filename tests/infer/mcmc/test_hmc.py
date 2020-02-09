@@ -32,7 +32,7 @@ def jit_idfn(param):
     return "JIT={}".format(param)
 
 
-class GaussianChain(object):
+class GaussianChain:
 
     def __init__(self, dim, chain_len, num_obs):
         self.dim = dim

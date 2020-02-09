@@ -28,7 +28,7 @@ class MaskMessenger(Messenger):
                 raise ValueError('Expected mask to be a boolean but got {}'.format(type(mask)))
             with ignore_jit_warnings():
                 mask = torch.tensor(mask)
-        super(MaskMessenger, self).__init__()
+        super().__init__()
         self.mask = mask
 
     def _process_message(self, msg):

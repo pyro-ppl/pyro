@@ -62,7 +62,7 @@ class Householder(TransformModule):
     volume_preserving = True
 
     def __init__(self, input_dim, count_transforms=1):
-        super(Householder, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
 
         self.input_dim = input_dim
         if count_transforms < 1:

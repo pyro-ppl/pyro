@@ -20,7 +20,7 @@ class SeedMessenger(Messenger):
     def __init__(self, rng_seed):
         assert isinstance(rng_seed, int)
         self.rng_seed = rng_seed
-        super(SeedMessenger, self).__init__()
+        super().__init__()
 
     def __enter__(self):
         self.old_state = get_rng_state()

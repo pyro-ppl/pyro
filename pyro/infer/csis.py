@@ -43,7 +43,7 @@ class CSIS(Importance):
                  num_inference_samples=10,
                  training_batch_size=10,
                  validation_batch_size=20):
-        super(CSIS, self).__init__(model, guide, num_inference_samples)
+        super().__init__(model, guide, num_inference_samples)
         self.model = model
         self.guide = guide
         self.optim = optim

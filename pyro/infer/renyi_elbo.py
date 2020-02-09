@@ -65,10 +65,10 @@ class RenyiELBO(ELBO):
             raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
                              "for the case alpha = 1.")
         self.alpha = alpha
-        super(RenyiELBO, self).__init__(num_particles=num_particles,
-                                        max_plate_nesting=max_plate_nesting,
-                                        vectorize_particles=vectorize_particles,
-                                        strict_enumeration_warning=strict_enumeration_warning)
+        super().__init__(num_particles=num_particles,
+                         max_plate_nesting=max_plate_nesting,
+                         vectorize_particles=vectorize_particles,
+                         strict_enumeration_warning=strict_enumeration_warning)
 
     def _get_trace(self, model, guide, args, kwargs):
         """

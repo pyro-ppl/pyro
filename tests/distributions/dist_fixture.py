@@ -13,7 +13,7 @@ SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
 
 
-class Fixture(object):
+class Fixture:
     def __init__(self,
                  pyro_dist=None,
                  scipy_dist=None,

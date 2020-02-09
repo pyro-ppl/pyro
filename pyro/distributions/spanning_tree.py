@@ -63,7 +63,7 @@ class SpanningTree(TorchDistribution):
         event_shape = (E, 2)
         batch_shape = ()
         self.edge_logits = edge_logits
-        super(SpanningTree, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
         if self._validate_args:
             if edge_logits.shape != (K,):
                 raise ValueError("Expected edge_logits of shape ({},), but got shape {}"

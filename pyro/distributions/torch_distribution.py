@@ -264,7 +264,7 @@ class MaskedDistribution(TorchDistribution):
                 base_dist = base_dist.expand(batch_shape)
             self._mask = mask.bool()
         self.base_dist = base_dist
-        super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        super().__init__(base_dist.batch_shape, base_dist.event_shape)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MaskedDistribution, _instance)
@@ -320,13 +320,19 @@ class MaskedDistribution(TorchDistribution):
     def variance(self):
         return self.base_dist.variance
 
+    def conjugate_update(self, other):
+        updated, log_normalizer = self.base_dist.conjugate_update(other)
+        updated = updated.mask(self._mask)
+        log_normalizer = torch.where(self._mask, log_normalizer, torch.zeros_like(log_normalizer))
+        return updated, log_normalizer
+
 
 class ExpandedDistribution(TorchDistribution):
     arg_constraints = {}
 
     def __init__(self, base_dist, batch_shape=torch.Size()):
         self.base_dist = base_dist
-        super(ExpandedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+        super().__init__(base_dist.batch_shape, base_dist.event_shape)
         # adjust batch shape
         self.expand(batch_shape)
 
@@ -423,6 +429,12 @@ class ExpandedDistribution(TorchDistribution):
     @property
     def variance(self):
         return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
+
+    def conjugate_update(self, other):
+        updated, log_normalizer = self.base_dist.conjugate_update(other)
+        updated = updated.expand(self.batch_shape)
+        log_normalizer = log_normalizer.expand(self.batch_shape)
+        return updated, log_normalizer
 
 
 @register_kl(MaskedDistribution, MaskedDistribution)
