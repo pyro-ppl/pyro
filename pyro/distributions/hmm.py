@@ -930,7 +930,8 @@ class LinearHMM(HiddenMarkovModel):
         init = self.initial_dist.rsample(sample_shape)
         trans = self.transition_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
         obs = self.observation_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
-        z = _linear_integrate(init, self.transition_matrix, trans)
+        trans_matrix = self.transition_matrix.expand(self.batch_shape + (self.duration, -1, -1))
+        z = _linear_integrate(init, trans_matrix, trans)
         x = (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
         for t in self.transforms:
             x = t(x)
