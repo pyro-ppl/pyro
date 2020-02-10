@@ -68,8 +68,9 @@ class ReplayMessenger(Messenger):
             msg["done"] = True
             msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
-        elif bool(self.trace.nodes.keys()) and msg["infer"].get("enumerate") is not None \
-                    and isinstance(msg["fn"], MaskedDistribution):
+        elif bool(self.trace.nodes.keys()) and \
+                msg["infer"].get("enumerate") is not None and \
+                isinstance(msg["fn"], MaskedDistribution):
             msg["mask"] = None
             msg["fn"] = msg["fn"].mask(msg["mask"])
         return None
