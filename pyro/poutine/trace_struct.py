@@ -7,7 +7,7 @@ import sys
 import opt_einsum
 
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import scale_and_mask, scale_tensor
+from pyro.distributions.util import scale_tensor
 from pyro.ops.packed import pack
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
