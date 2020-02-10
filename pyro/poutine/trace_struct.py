@@ -6,7 +6,6 @@ import sys
 
 import opt_einsum
 
-from pyro.distributions.torch_distribution import MaskedDistribution
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import scale_and_mask
 from pyro.ops.packed import pack
@@ -190,17 +189,12 @@ class Trace:
                 else:
                     try:
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
-                        #log_p = MaskedDistribution(site["fn"], site["mask"]).log_prob(site["value"], *site["args"], **site["kwargs"])
-                        mask_log_p = MaskedDistribution(site["fn"], site["mask"]).log_prob(site["value"], *site["args"], **site["kwargs"])
                     except ValueError:
                         _, exc_value, traceback = sys.exc_info()
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError("Error while computing log_prob_sum at site '{}':\n{}\n"
                                          .format(name, exc_value, shapes)).with_traceback(traceback)
-                    #print("before", log_p.sum())
-                    #print("masked", mask_log_p.sum())
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
-                    #print("after", log_p.sum())
                     site["log_prob_sum"] = log_p
                     if is_validation_enabled():
                         warn_if_nan(log_p, "log_prob_sum at site '{}'".format(name))
@@ -220,21 +214,13 @@ class Trace:
                 if "log_prob" not in site:
                     try:
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
-                        #log_p = MaskedDistribution(site["fn"], site["mask"]).log_prob(site["value"], *site["args"], **site["kwargs"])
-                        mask_log_p = MaskedDistribution(site["fn"], site["mask"]).log_prob(site["value"], *site["args"], **site["kwargs"])
                     except ValueError:
                         _, exc_value, traceback = sys.exc_info()
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError("Error while computing log_prob at site '{}':\n{}\n{}"
                                          .format(name, exc_value, shapes)).with_traceback(traceback)
                     site["unscaled_log_prob"] = log_p
-                    site["masked_unscaled_log_prob"] = mask_log_p
-                    #print("before", log_p.sum())
-                    #print("masked", mask_log_p.sum())
-                    log_p = scale_and_mask(mask_log_p, site["scale"], site["mask"])
-                    mask_log_p = scale_and_mask(mask_log_p, site["scale"], site["mask"])
-                    #print("after", log_p.sum())
-                    #print("after masked", mask_log_p.sum())
+                    log_p = scale_and_mask(log_p, site["scale"], site["mask"])
                     site["log_prob"] = log_p
                     site["log_prob_sum"] = log_p.sum()
                     if is_validation_enabled():
@@ -389,7 +375,6 @@ class Trace:
                 elif "log_prob" in site:
                     packed["log_prob"] = pack(site["log_prob"], dim_to_symbol)
                     packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
-                    packed["masked_unscaled_log_prob"] = pack(site["masked_unscaled_log_prob"], dim_to_symbol)
             except ValueError:
                 _, exc_value, traceback = sys.exc_info()
                 shapes = self.format_shapes(last_site=site["name"])

@@ -263,7 +263,10 @@ class MaskedDistribution(TorchDistribution):
             if base_dist.batch_shape != batch_shape:
                 base_dist = base_dist.expand(batch_shape)
             self._mask = mask.bool()
-        self.base_dist = base_dist
+        if isinstance(base_dist, MaskedDistribution):
+            self.base_dist = base_dist.base_dist
+        else:
+            self.base_dist = base_dist
         super().__init__(base_dist.batch_shape, base_dist.event_shape)
 
     def expand(self, batch_shape, _instance=None):

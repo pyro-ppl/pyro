@@ -1540,11 +1540,7 @@ def test_elbo_enumerate_plate_2(num_samples, num_masked, scale):
                     pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
                 else:
                     with poutine.mask(mask=torch.arange(num_samples) < num_masked):
-                        d = dist.Categorical(probs_y[x])
-                        #print("d.batch_shape", d.batch_shape)
-                        #d = dist.Categorical(probs_y[x]).mask(mask=torch.arange(num_samples) < num_masked)
-                        y = pyro.sample("y", d,
-                        #y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                        y = pyro.sample("y", dist.Categorical(probs_y[x]),
                                         infer={"enumerate": "parallel"})
                         pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
 
@@ -1564,14 +1560,12 @@ def test_elbo_enumerate_plate_2(num_samples, num_masked, scale):
         probs_x = pyro.param("guide_probs_x")
         pyro.sample("x", dist.Categorical(probs_x))
 
+    #if num_masked != num_samples:
+        #import pdb; pdb.set_trace()
     data = dist.Categorical(torch.tensor([0.3, 0.7])).sample((num_samples,))
     elbo = TraceEnum_ELBO(max_plate_nesting=1)
     auto_loss = elbo.differentiable_loss(auto_model, guide, data)
     hand_loss = elbo.differentiable_loss(hand_model, guide, data)
-    trace = pyro.poutine.trace(pyro.poutine.enum(auto_model, first_available_dim=-2)).get_trace(data)
-    #print("auto\n", trace.format_shapes())
-    trace = pyro.poutine.trace(pyro.poutine.enum(hand_model, first_available_dim=-2)).get_trace(data)
-    #print("hand\n", trace.format_shapes())
     _check_loss_and_grads(hand_loss, auto_loss)
 
 

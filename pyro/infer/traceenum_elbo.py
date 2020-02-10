@@ -119,8 +119,6 @@ def _compute_model_factors(model_trace, guide_trace):
     # Marginalize out all variables that have been enumerated in the model.
     marginal_costs = OrderedDict()
     scales = []
-    print("cost_sites", cost_sites)
-    print("enum_sites", enum_sites)
     for t, sites_t in cost_sites.items():
         for site in sites_t:
             if enum_dims.isdisjoint(site["packed"]["log_prob"]._pyro_dims):
@@ -133,28 +131,17 @@ def _compute_model_factors(model_trace, guide_trace):
                     site["packed"]["masked_log_prob"] = packed.scale_and_mask(
                         site["packed"]["unscaled_log_prob"], mask=site["packed"]["mask"])
                 cost = site["packed"]["masked_log_prob"]
-                #cost = site["packed"]["masked_unscaled_log_prob"]
                 log_factors.setdefault(t, []).append(cost)
                 scales.append(site["scale"])
     if log_factors:
-        print(log_factors)
         for t, sites_t in enum_sites.items():
             # TODO refine this coarse dependency ordering using time and tensor shapes.
             if any(t <= u for u in log_factors):
-                print("t", t)
-                #print("sites_t", sites_t)
                 for site in sites_t:
                     logprob = site["packed"]["unscaled_log_prob"]
-                    #print("mask", site["packed"]["mask"])
-                    #print("unscaled", site["packed"]["unscaled_log_prob"].sum())
-                    #print("masked unscaled", site["packed"]["masked_unscaled_log_prob"].sum())
-                    #print(site["packed"]["unscaled_log_prob"])
-                    #print(site["packed"]["masked_unscaled_log_prob"])
-                    #logprob = site["packed"]["masked_unscaled_log_prob"]
                     log_factors.setdefault(t, []).append(logprob)
                     scales.append(site["scale"])
         scale = _get_common_scale(scales)
-        print(log_factors)
     return marginal_costs, log_factors, ordering, enum_dims, scale
 
 

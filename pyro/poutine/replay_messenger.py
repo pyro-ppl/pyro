@@ -67,6 +67,9 @@ class ReplayMessenger(Messenger):
             msg["done"] = True
             msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
+        elif self.trace is not None and msg["infer"].get("enumerate") is not None:
+            msg["mask"] = None
+            msg["fn"] = msg["fn"].mask(msg["mask"])
         return None
 
     def _pyro_param(self, msg):
