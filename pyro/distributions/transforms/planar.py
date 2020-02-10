@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -14,8 +17,13 @@ from pyro.nn import DenseNN
 
 @copy_docs_from(Transform)
 class ConditionedPlanar(Transform):
+    domain = constraints.real
+    codomain = constraints.real
+    bijective = True
+    event_dim = 1
+
     def __init__(self, bias=None, u=None, w=None):
-        super(ConditionedPlanar, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
         self.bias = bias
         self.u = u
         self.w = w
@@ -112,7 +120,7 @@ class Planar(ConditionedPlanar, TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super(Planar, self).__init__()
+        super().__init__()
 
         self.bias = nn.Parameter(torch.Tensor(1,))
         self.u = nn.Parameter(torch.Tensor(input_dim,))
@@ -176,7 +184,7 @@ class ConditionalPlanar(ConditionalTransformModule):
     event_dim = 1
 
     def __init__(self, nn):
-        super(ConditionalPlanar, self).__init__()
+        super().__init__()
         self.nn = nn
 
     def condition(self, context):

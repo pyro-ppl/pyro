@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 import os
 import sys
@@ -64,6 +67,7 @@ CPU_EXAMPLES = [
     'minipyro.py --backend=pyro',
     'minipyro.py',
     'mixed_hmm/experiment.py --timesteps=1',
+    'neutra.py -n 10 --num-warmup 10 --num-samples 10',
     'rsa/generics.py --num-samples=10',
     'rsa/hyperbole.py --price=10000',
     'rsa/schelling.py --num-samples=10',

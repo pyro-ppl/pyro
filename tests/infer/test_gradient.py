@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 
 import numpy as np
@@ -22,7 +25,9 @@ def DiffTrace_ELBO(*args, **kwargs):
 
 
 @pytest.mark.parametrize("scale", [1., 2.], ids=["unscaled", "scaled"])
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parametrize("reparameterized,has_rsample",
+                         [(True, None), (True, False), (True, True), (False, None)],
+                         ids=["reparam", "reparam-False", "reparam-True", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo,local_samples", [
     (Trace_ELBO, False),
@@ -32,7 +37,7 @@ def DiffTrace_ELBO(*args, **kwargs):
     (TraceEnum_ELBO, False),
     (TraceEnum_ELBO, True),
 ])
-def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, scale):
+def test_subsample_gradient(Elbo, reparameterized, has_rsample, subsample, local_samples, scale):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
@@ -49,7 +54,10 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
         scale = pyro.param("scale", lambda: torch.tensor([1.0]))
         with pyro.plate("data", len(data), subsample_size, subsample):
             loc = pyro.param("loc", lambda: torch.zeros(len(data)), event_dim=0)
-            pyro.sample("z", Normal(loc, scale))
+            z_dist = Normal(loc, scale)
+            if has_rsample is not None:
+                z_dist.has_rsample_(has_rsample)
+            pyro.sample("z", z_dist)
 
     if scale != 1.0:
         model = poutine.scale(model, scale=scale)

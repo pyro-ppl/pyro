@@ -1,12 +1,16 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 import torch
+from scipy.stats import ks_2samp
 from torch.autograd import grad
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
-from pyro.infer.reparam import StableHMMReparam, StableReparam, SymmetricStableReparam
+from pyro.infer.reparam import LatentStableReparam, StableReparam, SymmetricStableReparam
 from tests.common import assert_close
 
 
@@ -19,7 +23,8 @@ def get_moments(x):
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
-def test_stable(shape):
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, StableReparam])
+def test_stable(Reparam, shape):
     stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
     skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
@@ -34,10 +39,13 @@ def test_stable(shape):
     value = model()
     expected_moments = get_moments(value)
 
-    reparam_model = poutine.reparam(model, {"x": StableReparam()})
+    reparam_model = poutine.reparam(model, {"x": Reparam()})
     trace = poutine.trace(reparam_model).get_trace()
-    assert isinstance(trace.nodes["x"]["fn"], MaskedDistribution)
-    assert isinstance(trace.nodes["x"]["fn"].base_dist, dist.Delta)
+    if Reparam is LatentStableReparam:
+        assert isinstance(trace.nodes["x"]["fn"], MaskedDistribution)
+        assert isinstance(trace.nodes["x"]["fn"].base_dist, dist.Delta)
+    else:
+        assert isinstance(trace.nodes["x"]["fn"], dist.Normal)
     trace.compute_log_prob()  # smoke test only
     value = trace.nodes["x"]["value"]
     actual_moments = get_moments(value)
@@ -83,76 +91,20 @@ def test_symmetric_stable(shape):
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
 
 
-def random_stable(shape, stability, skew=None):
-    if skew is None:
-        skew = dist.Uniform(-1, 1).sample(shape)
-    scale = torch.rand(shape).exp()
-    loc = torch.randn(shape)
-    return dist.Stable(stability, skew, scale, loc)
+@pytest.mark.parametrize("skew", [-1.0, -0.5, 0.0, 0.5, 1.0])
+@pytest.mark.parametrize("stability", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
+def test_distribution(stability, skew, Reparam):
+    if Reparam is SymmetricStableReparam and (skew != 0 or stability == 2):
+        pytest.skip()
+    if stability == 2 and skew in (-1, 1):
+        pytest.skip()
 
+    def model():
+        with pyro.plate("particles", 20000):
+            return pyro.sample("x", dist.Stable(stability, skew))
 
-@pytest.mark.parametrize("duration", [1, 2, 3, 4, 5, 6])
-@pytest.mark.parametrize("obs_dim", [1, 2])
-@pytest.mark.parametrize("hidden_dim", [1, 3])
-@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
-def test_stable_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
-    stability = dist.Uniform(0.5, 2).sample(batch_shape)
-
-    init_dist = random_stable(batch_shape + (hidden_dim,),
-                              stability.unsqueeze(-1), skew=0).to_event(1)
-    trans_mat = torch.randn(batch_shape + (duration, hidden_dim, hidden_dim))
-    trans_dist = random_stable(batch_shape + (duration, hidden_dim),
-                               stability.unsqueeze(-1).unsqueeze(-1), skew=0).to_event(1)
-    obs_mat = torch.randn(batch_shape + (duration, hidden_dim, obs_dim))
-    obs_dist = random_stable(batch_shape + (duration, obs_dim),
-                             stability.unsqueeze(-1).unsqueeze(-1), skew=0).to_event(1)
-    hmm = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
-
-    def model(data=None):
-        with pyro.plate_stack("plates", batch_shape):
-            return pyro.sample("x", hmm, obs=data)
-
-    data = model()
-    with poutine.trace() as tr:
-        with poutine.reparam(config={"x": StableHMMReparam()}):
-            model(data)
-    assert isinstance(tr.trace.nodes["x"]["fn"], dist.GaussianHMM)
-    tr.trace.compute_log_prob()  # smoke test only
-
-
-# Test helper to extract a few fractional moments from joint samples.
-# This uses fractional moments because Stable variance is infinite.
-def get_hmm_moments(samples):
-    loc = samples.median(0).values
-    delta = samples - loc
-    cov = (delta.unsqueeze(-1) * delta.unsqueeze(-2)).sqrt().mean(0)
-    scale = cov.diagonal(dim1=-2, dim2=-1)
-    sigma = scale.sqrt()
-    corr = cov / (sigma.unsqueeze(-1) * sigma.unsqueeze(-2))
-    return loc, scale, corr
-
-
-@pytest.mark.parametrize("duration", [1, 2, 3])
-@pytest.mark.parametrize("obs_dim", [1, 2])
-@pytest.mark.parametrize("hidden_dim", [1, 2])
-@pytest.mark.parametrize("stability", [1.9, 1.6])
-def test_stable_hmm_distribution(stability, duration, hidden_dim, obs_dim):
-    init_dist = random_stable((hidden_dim,), stability, skew=0).to_event(1)
-    trans_mat = torch.randn(duration, hidden_dim, hidden_dim)
-    trans_dist = random_stable((duration, hidden_dim), stability, skew=0).to_event(1)
-    obs_mat = torch.randn(duration, hidden_dim, obs_dim)
-    obs_dist = random_stable((duration, obs_dim), stability, skew=0).to_event(1)
-    hmm = dist.StableHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
-
-    num_samples = 200000
-    expected_samples = hmm.sample([num_samples]).reshape(num_samples, duration * obs_dim)
-    expected_loc, expected_scale, expected_corr = get_hmm_moments(expected_samples)
-
-    with pyro.plate("samples", num_samples):
-        with poutine.reparam(config={"x": StableHMMReparam()}):
-            actual_samples = pyro.sample("x", hmm).reshape(num_samples, duration * obs_dim)
-    actual_loc, actual_scale, actual_corr = get_hmm_moments(actual_samples)
-
-    assert_close(actual_loc, expected_loc, atol=0.02, rtol=0.05)
-    assert_close(actual_scale, expected_scale, atol=0.02, rtol=0.05)
-    assert_close(actual_corr, expected_corr, atol=0.01)
+    expected = model()
+    with poutine.reparam(config={"x": Reparam()}):
+        actual = model()
+    assert ks_2samp(expected, actual).pvalue > 0.05

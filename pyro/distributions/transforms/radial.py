@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -54,7 +57,7 @@ class Radial(TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super(Radial, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
 
         self.input_dim = input_dim
         self._cached_logDetJ = None

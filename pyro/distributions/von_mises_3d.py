@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -33,7 +36,7 @@ class VonMises3D(TorchDistribution):
                 concentration.shape))
         self.concentration = concentration
         batch_shape, event_shape = concentration.shape[:-1], concentration.shape[-1:]
-        super(VonMises3D, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -48,7 +51,7 @@ class VonMises3D(TorchDistribution):
 
     def expand(self, batch_shape):
         try:
-            return super(VonMises3D, self).expand(batch_shape)
+            return super().expand(batch_shape)
         except NotImplementedError:
             validate_args = self.__dict__.get('_validate_args')
             concentration = self.concentration.expand(torch.Size(batch_shape) + (3,))

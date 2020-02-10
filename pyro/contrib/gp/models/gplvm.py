@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
 from pyro.nn.module import PyroSample, pyro_method
@@ -53,7 +56,7 @@ class GPLVM(Parameterized):
         variational parameter ``X_loc``.
     """
     def __init__(self, base_model):
-        super(GPLVM, self).__init__()
+        super().__init__()
         if base_model.X.dim() != 2:
             raise ValueError("GPLVM model only works with 2D latent X, but got "
                              "X.dim() = {}.".format(base_model.X.dim()))

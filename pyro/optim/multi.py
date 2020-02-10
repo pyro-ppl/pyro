@@ -1,10 +1,13 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 from pyro.ops.newton import newton_step
 from pyro.optim.optim import PyroOptim
 
 
-class MultiOptimizer(object):
+class MultiOptimizer:
     """
     Base class of optimizers that make use of higher-order derivatives.
 
@@ -87,7 +90,7 @@ class TorchMultiOptimizer(PyroMultiOptimizer):
     """
     def __init__(self, optim_constructor, optim_args):
         optim = PyroOptim(optim_constructor, optim_args)
-        super(TorchMultiOptimizer, self).__init__(optim)
+        super().__init__(optim)
 
 
 class MixedMultiOptimizer(MultiOptimizer):

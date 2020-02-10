@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import functools
 from collections import OrderedDict
 
@@ -29,7 +32,7 @@ class SamplePosteriorMessenger(ReplayMessenger):
 
     def _pyro_sample(self, msg):
         if msg["infer"].get("enumerate") == "parallel":
-            super(SamplePosteriorMessenger, self)._pyro_sample(msg)
+            super()._pyro_sample(msg)
         if msg["name"] in self.trace:
             msg["cond_indep_stack"] = self.trace.nodes[msg["name"]]["cond_indep_stack"]
 
@@ -209,7 +212,7 @@ class TraceEnumSample_ELBO(TraceEnum_ELBO):
 
     """
     def _get_trace(self, model, guide, args, kwargs):
-        model_trace, guide_trace = super(TraceEnumSample_ELBO, self)._get_trace(
+        model_trace, guide_trace = super()._get_trace(
             model, guide, args, kwargs)
 
         # Mark all sample sites with require_backward to gather enumerated

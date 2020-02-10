@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 import logging
 import os
@@ -39,7 +42,7 @@ DIAGNOSTIC_MSG = "DIAGNOSTICS"
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
-class ProgressBar(object):
+class ProgressBar:
     """
     Initialize progress bars using :class:`~tqdm.tqdm`.
 
@@ -215,7 +218,7 @@ class MetadataFilter(logging.Filter):
     """
     def __init__(self, logger_id):
         self.logger_id = logger_id
-        super(MetadataFilter, self).__init__()
+        super().__init__()
 
     def filter(self, record):
         record.logger_id = self.logger_id

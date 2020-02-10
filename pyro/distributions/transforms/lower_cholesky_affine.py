@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform
@@ -22,7 +25,7 @@ class LowerCholeskyAffine(Transform):
     volume_preserving = False
 
     def __init__(self, loc, scale_tril):
-        super(LowerCholeskyAffine, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
         self.loc = loc
         self.scale_tril = scale_tril
         assert loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2), \

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 
@@ -21,7 +24,7 @@ class Unit(TorchDistribution):
         batch_shape = log_factor.shape
         event_shape = torch.Size((0,))  # This satisfies .numel() == 0.
         self.log_factor = log_factor
-        super(Unit, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(Unit, _instance)

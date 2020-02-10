@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 
@@ -57,9 +60,9 @@ class Empirical(TorchDistribution):
         self._aggregation_dim = log_weights.dim() - 1
         event_shape = sample_shape[len(weight_shape):]
         self._categorical = Categorical(logits=self._log_weights)
-        super(TorchDistribution, self).__init__(batch_shape=weight_shape[:-1],
-                                                event_shape=event_shape,
-                                                validate_args=validate_args)
+        super().__init__(batch_shape=weight_shape[:-1],
+                         event_shape=event_shape,
+                         validate_args=validate_args)
 
     @property
     def sample_size(self):

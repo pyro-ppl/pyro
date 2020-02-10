@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import warnings
 import weakref
 
@@ -61,7 +64,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
     dependency structures.
     """
     def _get_trace(self, model, guide, args, kwargs):
-        model_trace, guide_trace = super(TraceMeanField_ELBO, self)._get_trace(
+        model_trace, guide_trace = super()._get_trace(
             model, guide, args, kwargs)
         if is_validation_enabled():
             _check_mean_field_requirement(model_trace, guide_trace)

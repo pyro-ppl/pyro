@@ -37,6 +37,7 @@ Welcome to Pyro Examples and Tutorials!
    dmm
    air
    ss-vae
+   stable
 
 .. toctree::
    :maxdepth: 2
@@ -69,6 +70,7 @@ Welcome to Pyro Examples and Tutorials!
    dkl
    einsum
    smcfilter
+   timeseries
 
 
 Indices and tables

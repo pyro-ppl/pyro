@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Combining models of RSA pragmatics and CCG-based compositional semantics.
 
@@ -42,7 +45,7 @@ def Obj(name):
                tall=flip(name + "_tall", 0.5))
 
 
-class Meaning(object):
+class Meaning:
     def sem(self, world):
         raise NotImplementedError
 
@@ -337,7 +340,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.1.0')
+    assert pyro.__version__.startswith('1.2.1')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=10, type=int)
     args = parser.parse_args()

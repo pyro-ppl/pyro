@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from functools import partial
 
 from pyro.poutine.messenger import Messenger
@@ -114,7 +117,7 @@ class BlockMessenger(Messenger):
                  hide_all=True, expose_all=False,
                  hide=None, expose=None,
                  hide_types=None, expose_types=None):
-        super(BlockMessenger, self).__init__()
+        super().__init__()
         if not (hide_fn is None or expose_fn is None):
             raise ValueError("Only specify one of hide_fn or expose_fn")
         if hide_fn is not None:

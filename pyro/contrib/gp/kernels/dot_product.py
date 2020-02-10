@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 
@@ -11,7 +14,7 @@ class DotProduct(Kernel):
     """
 
     def __init__(self, input_dim, variance=None, active_dims=None):
-        super(DotProduct, self).__init__(input_dim, active_dims)
+        super().__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)
@@ -48,7 +51,7 @@ class Linear(DotProduct):
     """
 
     def __init__(self, input_dim, variance=None, active_dims=None):
-        super(Linear, self).__init__(input_dim, variance, active_dims)
+        super().__init__(input_dim, variance, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         return self.variance * self._dot_product(X, Z, diag)
@@ -65,7 +68,7 @@ class Polynomial(DotProduct):
     """
 
     def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None):
-        super(Polynomial, self).__init__(input_dim, variance, active_dims)
+        super().__init__(input_dim, variance, active_dims)
 
         bias = torch.tensor(1.) if bias is None else bias
         self.bias = PyroParam(bias, constraints.positive)

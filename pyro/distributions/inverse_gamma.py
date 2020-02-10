@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from torch.distributions import constraints
 from torch.distributions.transforms import PowerTransform
 from pyro.distributions.torch import Gamma, TransformedDistribution
@@ -20,11 +23,11 @@ class InverseGamma(TransformedDistribution):
 
     def __init__(self, concentration, rate, validate_args=None):
         base_dist = Gamma(concentration, rate)
-        super(InverseGamma, self).__init__(base_dist, PowerTransform(-1.0), validate_args=validate_args)
+        super().__init__(base_dist, PowerTransform(-1.0), validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(InverseGamma, _instance)
-        return super(InverseGamma, self).expand(batch_shape, _instance=new)
+        return super().expand(batch_shape, _instance=new)
 
     @property
     def concentration(self):

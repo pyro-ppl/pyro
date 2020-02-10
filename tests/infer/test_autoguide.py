@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import functools
 import io
 import warnings
@@ -97,6 +100,7 @@ def test_factor(auto_class, Elbo):
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_shapes(auto_class, init_loc_fn, Elbo):
 
     def model():

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 from unittest import TestCase
 
@@ -136,7 +139,7 @@ class NormalNormalNormalTests(TestCase):
 
             class VanillaBaselineNN(nn.Module):
                 def __init__(self, dim_input, dim_h):
-                    super(VanillaBaselineNN, self).__init__()
+                    super().__init__()
                     self.lin1 = nn.Linear(dim_input, dim_h)
                     self.lin2 = nn.Linear(dim_h, 2)
                     self.sigmoid = nn.Sigmoid()

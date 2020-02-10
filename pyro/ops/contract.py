@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import itertools
 import warnings
 from collections import OrderedDict, defaultdict
@@ -420,7 +423,7 @@ def _select(tensor, dims, indices):
     return tensor
 
 
-class _DimUnroller(object):
+class _DimUnroller:
     """
     Object to map plated dims to collections of unrolled dims.
 

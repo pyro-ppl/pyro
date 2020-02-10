@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import heapq
 import itertools
 from collections import defaultdict
@@ -6,7 +9,7 @@ from numbers import Number
 import torch
 
 
-class LSH(object):
+class LSH:
     """
     Implements locality-sensitive hashing for low-dimensional euclidean space.
 
@@ -101,7 +104,7 @@ class LSH(object):
         return result
 
 
-class ApproxSet(object):
+class ApproxSet:
     """
     Queries low-dimensional euclidean space for approximate occupancy.
 

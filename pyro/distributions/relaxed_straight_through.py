@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 from pyro.distributions.torch import RelaxedOneHotCategorical, RelaxedBernoulli
@@ -28,14 +31,14 @@ class RelaxedOneHotCategoricalStraightThrough(RelaxedOneHotCategorical):
         Eric Jang, Shixiang Gu, Ben Poole
     """
     def rsample(self, sample_shape=torch.Size()):
-        soft_sample = super(RelaxedOneHotCategoricalStraightThrough, self).rsample(sample_shape)
+        soft_sample = super().rsample(sample_shape)
         soft_sample = clamp_probs(soft_sample)
         hard_sample = QuantizeCategorical.apply(soft_sample)
         return hard_sample
 
     def log_prob(self, value):
         value = getattr(value, '_unquantize', value)
-        return super(RelaxedOneHotCategoricalStraightThrough, self).log_prob(value)
+        return super().log_prob(value)
 
 
 class QuantizeCategorical(torch.autograd.Function):
@@ -76,14 +79,14 @@ class RelaxedBernoulliStraightThrough(RelaxedBernoulli):
         Eric Jang, Shixiang Gu, Ben Poole
     """
     def rsample(self, sample_shape=torch.Size()):
-        soft_sample = super(RelaxedBernoulliStraightThrough, self).rsample(sample_shape)
+        soft_sample = super().rsample(sample_shape)
         soft_sample = clamp_probs(soft_sample)
         hard_sample = QuantizeBernoulli.apply(soft_sample)
         return hard_sample
 
     def log_prob(self, value):
         value = getattr(value, '_unquantize', value)
-        return super(RelaxedBernoulliStraightThrough, self).log_prob(value)
+        return super().log_prob(value)
 
 
 class QuantizeBernoulli(torch.autograd.Function):

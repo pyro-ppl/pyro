@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import defaultdict
 
 import torch
@@ -67,7 +70,7 @@ class Trace_MMD(ELBO):
                  strict_enumeration_warning=True,
                  ignore_jit_warnings=False,
                  retain_graph=None):
-        super(Trace_MMD, self).__init__(
+        super().__init__(
             num_particles, max_plate_nesting, max_iarange_nesting, vectorize_particles,
             strict_enumeration_warning, ignore_jit_warnings, retain_graph,
         )

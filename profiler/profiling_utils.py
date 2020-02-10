@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import cProfile
 from io import StringIO
 import functools
@@ -14,7 +17,7 @@ if not os.path.exists(PROF_DIR):
     os.makedirs(PROF_DIR)
 
 
-class ProfilePrinter(object):
+class ProfilePrinter:
 
     def __init__(self, column_widths=None, field_format=None, template='column'):
         assert template in ('column', 'row')
@@ -90,7 +93,7 @@ def profile_cprofile(fn_callable, prof_file):
     return ret, prof_stats.getvalue()
 
 
-class Profile(object):
+class Profile:
 
     def __init__(self, tool, tool_cfg, fn_id):
         self.tool = tool

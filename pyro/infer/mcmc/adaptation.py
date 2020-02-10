@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 import torch
 from collections import namedtuple
@@ -10,7 +13,7 @@ from pyro.ops.welford import WelfordCovariance
 adapt_window = namedtuple("adapt_window", ["start", "end"])
 
 
-class WarmupAdapter(object):
+class WarmupAdapter:
     r"""
     Adapts tunable parameters, namely step size and mass matrix, during the
     warmup phase. This class provides lookup properties to read the latest

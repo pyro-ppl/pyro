@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 from pyro.poutine.util import is_validation_enabled
@@ -37,7 +40,7 @@ class ScaleMessenger(Messenger):
                                  "Consider using poutine.mask() instead of poutine.scale().")
         elif not (scale > 0):
             raise ValueError("Expected scale > 0 but got {}".format(scale))
-        super(ScaleMessenger, self).__init__()
+        super().__init__()
         self.scale = scale
 
     def _process_message(self, msg):

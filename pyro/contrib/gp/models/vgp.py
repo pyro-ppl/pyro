@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
@@ -58,7 +61,7 @@ class VariationalGP(GPModel):
     """
     def __init__(self, X, y, kernel, likelihood, mean_function=None,
                  latent_shape=None, whiten=False, jitter=1e-6):
-        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter)
+        super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
 

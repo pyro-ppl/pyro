@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import copy
 import warnings
 from collections import OrderedDict
@@ -255,13 +258,13 @@ class plate(PlateMessenger):
 class iarange(plate):
     def __init__(self, *args, **kwargs):
         warnings.warn("pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning)
-        super(iarange, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class irange(SubsampleMessenger):
     def __init__(self, *args, **kwargs):
         warnings.warn("pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning)
-        super(irange, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 @contextmanager

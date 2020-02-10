@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import warnings
 from collections import OrderedDict
 from functools import partial
@@ -61,7 +64,7 @@ class Parameterized(PyroModule):
 
         >>> class Linear(Parameterized):
         ...     def __init__(self, a, b):
-        ...         super(Linear, self).__init__()
+        ...         super().__init__()
         ...         self.a = Parameter(a)
         ...         self.b = Parameter(b)
         ...
@@ -84,7 +87,7 @@ class Parameterized(PyroModule):
     information.
     """
     def __init__(self):
-        super(Parameterized, self).__init__()
+        super().__init__()
         self._priors = OrderedDict()
         self._guides = OrderedDict()
         self._mode = "model"

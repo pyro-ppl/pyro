@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import defaultdict
 
 import torch
@@ -51,7 +54,7 @@ def _compound(base, parent):
     return _make_cls(base, {}, {"parent": parent})
 
 
-class BetaBinomialPair(object):
+class BetaBinomialPair:
     def __init__(self):
         self._latent = None
         self._conditional = None
@@ -83,7 +86,7 @@ class BetaBinomialPair(object):
                                                          total_count=self._conditional.total_count)
 
 
-class GammaPoissonPair(object):
+class GammaPoissonPair:
     def __init__(self):
         self._latent = None
         self._conditional = None
@@ -122,7 +125,7 @@ class UncollapseConjugateMessenger(Messenger):
         Stores trace in an attribute.
         """
         self.trace = trace
-        super(UncollapseConjugateMessenger, self).__init__()
+        super().__init__()
 
     def _pyro_sample(self, msg):
         is_collapsible = getattr(msg["fn"], "collapsible", False)

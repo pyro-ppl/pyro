@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import absolute_import, division, print_function
 
 import math
@@ -153,7 +156,7 @@ class NeuralAutoregressive(TransformModule):
     event_dim = 1
 
     def __init__(self, autoregressive_nn, hidden_units=16, activation='sigmoid'):
-        super(NeuralAutoregressive, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
 
         # Create the intermediate transform used
         name_to_mixin = {

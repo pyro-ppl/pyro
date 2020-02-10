@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import functools
 import numbers
 import random
@@ -395,7 +398,7 @@ def jit_iter(tensor):
         return list(tensor)
 
 
-class optional(object):
+class optional:
     """
     Optionally wrap inside `context_manager` if condition is `True`.
     """
@@ -431,7 +434,7 @@ def deep_getattr(obj, name):
     return functools.reduce(getattr, name.split("."), obj)
 
 
-class timed(object):
+class timed:
     def __enter__(self, timer=timeit.default_timer):
         self.start = timer()
         return self

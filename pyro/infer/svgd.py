@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from abc import ABCMeta, abstractmethod
 import math
 
@@ -26,7 +29,7 @@ class _SVGDGuide(AutoContinuous):
     :class:`SVGD` inference algorithm.
     """
     def __init__(self, model):
-        super(_SVGDGuide, self).__init__(model, init_loc_fn=init_to_sample)
+        super().__init__(model, init_loc_fn=init_to_sample)
 
     def get_posterior(self, *args, **kwargs):
         svgd_particles = pyro.param("svgd_particles", self._init_loc)
@@ -184,7 +187,7 @@ class IMQSteinKernel(SteinKernel):
         self._bandwidth_factor = bandwidth_factor
 
 
-class SVGD(object):
+class SVGD:
     """
     A basic implementation of Stein Variational Gradient Descent as described in reference [1].
 

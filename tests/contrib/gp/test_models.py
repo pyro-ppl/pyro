@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 from collections import namedtuple
 
@@ -298,7 +301,7 @@ def test_inference_deepGP():
 
     class DeepGP(torch.nn.Module):
         def __init__(self, gp1, gp2):
-            super(DeepGP, self).__init__()
+            super().__init__()
             self.gp1 = gp1
             self.gp2 = gp2
 
@@ -342,7 +345,7 @@ def _pre_test_mean_function():
 
     class Trend(torch.nn.Module):
         def __init__(self):
-            super(Trend, self).__init__()
+            super().__init__()
             self.a = torch.nn.Parameter(torch.tensor(0.))
             self.b = torch.nn.Parameter(torch.tensor(1.))
 

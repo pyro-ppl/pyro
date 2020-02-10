@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import weakref
 from abc import ABCMeta, abstractmethod
@@ -12,8 +15,8 @@ import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger
+from pyro.infer.autoguide.guides import prototype_hide_fn
 from pyro.nn.module import PyroModule, PyroParam
-from pyro.poutine.util import prune_subsample_sites
 
 
 class _EasyGuideMeta(type(PyroModule), ABCMeta):
@@ -54,9 +57,8 @@ class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = InitMessenger(self.init)(self.model)
+        model = poutine.block(InitMessenger(self.init)(self.model), prototype_hide_fn)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
-        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:

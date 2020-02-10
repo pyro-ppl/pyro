@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from .messenger import Messenger
 
 
@@ -36,7 +39,7 @@ class ReplayMessenger(Messenger):
         Constructor.
         Stores trace in an attribute.
         """
-        super(ReplayMessenger, self).__init__()
+        super().__init__()
         if trace is None and params is None:
             raise ValueError("must provide trace or params to replay against")
         self.trace = trace

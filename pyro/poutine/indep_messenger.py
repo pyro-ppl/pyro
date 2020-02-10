@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import numbers
 from collections import namedtuple
 
@@ -54,7 +57,7 @@ class IndepMessenger(Messenger):
         if not torch._C._get_tracing_state() and size == 0:
             raise ZeroDivisionError("size cannot be zero")
 
-        super(IndepMessenger, self).__init__()
+        super().__init__()
         self._vectorized = None
         if dim is not None:
             self._vectorized = True
@@ -79,12 +82,12 @@ class IndepMessenger(Messenger):
         if self._vectorized is True:
             self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
 
-        return super(IndepMessenger, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args):
         if self._vectorized is True:
             _DIM_ALLOCATOR.free(self.name, self.dim)
-        return super(IndepMessenger, self).__exit__(*args)
+        return super().__exit__(*args)
 
     def __iter__(self):
         if self._vectorized is True or self.dim is not None:

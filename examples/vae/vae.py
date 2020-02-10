@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import argparse
 
 import numpy as np
@@ -18,7 +21,7 @@ from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 # diagonal gaussian distribution q(z|x)
 class Encoder(nn.Module):
     def __init__(self, z_dim, hidden_dim):
-        super(Encoder, self).__init__()
+        super().__init__()
         # setup the three linear transformations used
         self.fc1 = nn.Linear(784, hidden_dim)
         self.fc21 = nn.Linear(hidden_dim, z_dim)
@@ -43,7 +46,7 @@ class Encoder(nn.Module):
 # observation likelihood p(x|z)
 class Decoder(nn.Module):
     def __init__(self, z_dim, hidden_dim):
-        super(Decoder, self).__init__()
+        super().__init__()
         # setup the two linear transformations used
         self.fc1 = nn.Linear(z_dim, hidden_dim)
         self.fc21 = nn.Linear(hidden_dim, 784)
@@ -65,7 +68,7 @@ class VAE(nn.Module):
     # by default our latent space is 50-dimensional
     # and we use 400 hidden units
     def __init__(self, z_dim=50, hidden_dim=400, use_cuda=False):
-        super(VAE, self).__init__()
+        super().__init__()
         # create the encoder and decoder networks
         self.encoder = Encoder(z_dim, hidden_dim)
         self.decoder = Decoder(z_dim, hidden_dim)
@@ -198,7 +201,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.1.0')
+    assert pyro.__version__.startswith('1.2.1')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')

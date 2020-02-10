@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 from pyro.util import ignore_jit_warnings
@@ -24,7 +27,7 @@ class MaskMessenger(Messenger):
                 raise ValueError('Expected mask to be a boolean but got {}'.format(type(mask)))
             with ignore_jit_warnings():
                 mask = torch.tensor(mask)
-        super(MaskMessenger, self).__init__()
+        super().__init__()
         self.mask = mask
 
     def _process_message(self, msg):

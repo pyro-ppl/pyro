@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from abc import ABC, abstractmethod
 
 import torch
@@ -26,10 +29,10 @@ class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
     """
 
     def __init__(self, *args, **kwargs):
-        super(ConditionalTransformModule, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __hash__(self):
-        return super(torch.nn.Module, self).__hash__()
+        return super().__hash__()
 
 
 class ConstantConditionalDistribution(ConditionalDistribution):

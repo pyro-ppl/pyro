@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.distributions as torchdist
 from torch.distributions import constraints
@@ -63,7 +66,7 @@ class GPRegression(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
-        super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter)
+        super().__init__(X, y, kernel, mean_function, jitter)
 
         noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = PyroParam(noise, constraints.positive)

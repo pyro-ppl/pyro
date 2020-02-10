@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -10,7 +13,7 @@ from pyro.infer.util import is_validation_enabled
 from .reparam import Reparam
 
 
-class StableReparam(Reparam):
+class LatentStableReparam(Reparam):
     """
     Auxiliary variable reparameterizer for
     :class:`~pyro.distributions.Stable` latent variables.
@@ -27,7 +30,7 @@ class StableReparam(Reparam):
 
     This reparameterization works only for latent variables, not likelihoods.
     For likelihood-compatible reparameterization see
-    :class:`SymmetricStableReparam` .
+    :class:`SymmetricStableReparam` or :class:`StableReparam` .
 
     [1] J.P. Nolan (2017).
         Stable Distributions: Models for Heavy Tailed Data.
@@ -35,8 +38,8 @@ class StableReparam(Reparam):
     """
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable)
-        assert obs is None, "StableReparam does not support observe statements"
+        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
+        assert obs is None, "LatentStableReparam does not support observe statements"
 
         # Draw parameter-free noise.
         proto = fn.stability
@@ -48,7 +51,7 @@ class StableReparam(Reparam):
                         self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform.
-        x = _standard_stable(fn.stability, fn.skew, u, e)
+        x = _standard_stable(fn.stability, fn.skew, u, e, coords="S0")
         value = fn.loc + fn.scale * x
 
         # Simulate a pyro.deterministic() site.
@@ -79,7 +82,7 @@ class SymmetricStableReparam(Reparam):
     """
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable)
+        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
         if is_validation_enabled():
             if not (fn.skew == 0).all():
                 raise ValueError("SymmetricStableReparam found nonzero skew")
@@ -96,54 +99,122 @@ class SymmetricStableReparam(Reparam):
                         self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
-        _, z = _unsafe_standard_stable(fn.stability / 2, 1, u, e)
+        a = fn.stability
+        z = _unsafe_standard_stable(a / 2, 1, u, e, coords="S")
         assert (z >= 0).all()
-        scale = fn.scale * (2 ** 0.5) * (math.pi / 4 * fn.stability).cos().pow(1 / fn.stability) * z.sqrt()
+        scale = fn.scale * (math.pi / 4 * a).cos().pow(a.reciprocal()) * z.sqrt()
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
-        # Construct a scaled Gaussian.
-        new_fn = self._wrap(dist.Normal(fn.loc, scale), event_dim)
+        # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
+        new_fn = self._wrap(dist.Normal(fn.loc, scale * (2 ** 0.5)), event_dim)
         return new_fn, obs
 
 
-class StableHMMReparam(Reparam):
+class StableReparam(Reparam):
     """
-    Auxiliary variable reparameterizer for symmetric
-    :class:`~pyro.distributions.StableHMM` random variables whose
-    ``initial_dist``, ``transition_dist``, and ``observation_dist`` are
-    symmetric.
+    Auxiliary variable reparameterizer for arbitrary
+    :class:`~pyro.distributions.Stable` random variables.
 
-    This is useful for training the parameters of a
-    :class:`~pyro.distributions.StableHMM` distribution, whose
-    :meth:`~pyro.distributions.StableHMM.log_prob` method is undefined.
+    This is useful in inference of non-symmetric
+    :class:`~pyro.distributions.Stable` variables because the
+    :meth:`~pyro.distributions.Stable.log_prob` is not implemented.
 
-    This introduces auxiliary random variables conditioned on which the process
-    becomes a :class:`~pyro.distributions.GaussianHMM` . The component
-    distributions are reparameterized by :class:`SymmetricStableReparam` .
+    This reparameterizes a :class:`~pyro.distributions.Stable` random variable
+    as sum of two other stable random variables, one symmetric and the other
+    totally skewed (applying Property 2.3.a of [1]). The totally skewed
+    variable is sampled as in :class:`LatentStableReparam` , and the symmetric
+    variable is decomposed as in :class:`SymmetricStableReparam` .
+
+    [1] V. M. Zolotarev (1986)
+        "One-dimensional stable distributions"
     """
+
     def __call__(self, name, fn, obs):
-        assert isinstance(fn, dist.StableHMM)
+        fn, event_dim = self._unwrap(fn)
+        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
 
-        # Reparameterize the initial distribution as conditionally Gaussian.
-        init_dist, _ = SymmetricStableReparam()("{}_init".format(name), fn.initial_dist, None)
-        assert isinstance(init_dist, dist.Independent)
-        assert isinstance(init_dist.base_dist, dist.Normal)
+        # Strategy: Let X ~ S0(a,b,s,m) be the stable variable of interest.
+        # 1. WLOG scale and shift so s=1 and m=0, additionally shifting to convert
+        #    from Zolotarev's S parameterization to Nolan's S0 parameterization.
+        # 2. Decompose X = S + T, where
+        #    S ~ S(a,0,...,0) is symmetric and
+        #    T ~ S(a,sgn(b),...,0) is totally skewed.
+        # 3. Decompose S = G * sqrt(Z) via the symmetric strategy, where
+        #    Z ~ S(a/2,1,...,0) is totally-skewed and
+        #    G ~ Normal(0,1) is Gaussian.
+        # 4. Defer the totally-skewed Z and T to the Chambers-Mallows-Stuck
+        #    strategy: Z = f(Unif,Exp), T = f(Unif,Exp).
+        #
+        # To derive the parameters of S and T, we solve the equations
+        #
+        #   T.stability = a            S.stability = a
+        #   T.skew = sgn(b)            S.skew = 0
+        #   T.loc = 0                  S.loc = 0
+        #
+        #   s = (S.scale**a + T.scale**a)**(1/a) = 1       # by step 1.
+        #
+        #       S.skew * S.scale**a + T.skew * T.scale**a
+        #   b = ----------------------------------------- = sgn(b) * T.scale**a
+        #                S.scale**a + T.scale**a
+        # yielding
+        #
+        #   T.scale = |b| ** (1/a)     S.scale = (1 - |b|) ** (1/a)
 
-        # Reparameterize the transition distribution as conditionally Gaussian.
-        trans_dist, _ = SymmetricStableReparam()("{}_trans".format(name),
-                                                 fn.transition_dist.to_event(1), None)
-        assert isinstance(trans_dist, dist.Independent)
-        assert isinstance(trans_dist.base_dist, dist.Normal)
-        trans_dist = trans_dist.base_dist.to_event(1)
+        # Draw parameter-free noise.
+        proto = fn.stability
+        half_pi = proto.new_full(proto.shape, math.pi / 2)
+        one = proto.new_ones(proto.shape)
+        zu = pyro.sample("{}_z_uniform".format(name),
+                         self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
+        ze = pyro.sample("{}_z_exponential".format(name),
+                         self._wrap(dist.Exponential(one), event_dim))
+        tu = pyro.sample("{}_t_uniform".format(name),
+                         self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
+        te = pyro.sample("{}_t_exponential".format(name),
+                         self._wrap(dist.Exponential(one), event_dim))
 
-        # Reparameterize the observation distribution as conditionally Gaussian.
-        obs_dist, obs = SymmetricStableReparam()("{}_obs".format(name),
-                                                 fn.observation_dist.to_event(1), obs)
-        assert isinstance(obs_dist, dist.Independent)
-        assert isinstance(obs_dist.base_dist, dist.Normal)
-        obs_dist = obs_dist.base_dist.to_event(1)
+        # Differentiably transform.
+        a = fn.stability
+        z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
+        t = _standard_stable(a, one, tu, te, coords="S0")
+        a_inv = a.reciprocal()
+        skew_abs = fn.skew.abs()
+        t_scale = skew_abs.pow(a_inv)
+        s_scale = (1 - skew_abs).pow(a_inv)
+        shift = _safe_shift(a, skew_abs, t_scale)
+        loc = fn.loc + fn.scale * fn.skew.sign() * (t * t_scale + shift)
+        scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
+        scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
-        # Reparameterize the entire HMM as conditionally Gaussian.
-        hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
-                               fn.observation_matrix, obs_dist)
-        return hmm, obs
+        # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
+        new_fn = self._wrap(dist.Normal(loc, scale * (2 ** 0.5)), event_dim)
+        return new_fn, obs
+
+
+def _unsafe_shift(a, skew_abs, t_scale):
+    # At a=1 the lhs has a root and the rhs has an asymptote.
+    return (t_scale - skew_abs) * (math.pi / 2 * a).tan()
+
+
+def _safe_shift(a, skew_abs, t_scale):
+    radius = 0.005
+    hole = 1.0
+    with torch.no_grad():
+        near_hole = (a - hole).abs() <= radius
+    if not near_hole.any():
+        return _unsafe_shift(a, skew_abs, t_scale)
+
+    # Avoid the hole at a=1 by interpolating between points on either side.
+    a_ = a.unsqueeze(-1).expand(a.shape + (2,)).contiguous()
+    with torch.no_grad():
+        lb, ub = a_.data.unbind(-1)
+        lb[near_hole] = hole - radius
+        ub[near_hole] = hole + radius
+        # We don't need to backprop through weights, since we've pretended
+        # a_ is reparametrized, even though we've clamped some values.
+        weights = (a_ - a.unsqueeze(-1)).abs_().mul_(-1 / (2 * radius)).add_(1)
+        weights[~near_hole] = 0.5
+    skew_abs_ = skew_abs.unsqueeze(-1)
+    t_scale_ = skew_abs_.pow(a_.reciprocal())
+    pairs = _unsafe_shift(a_, skew_abs_, t_scale_)
+    return (pairs * weights).sum(-1)

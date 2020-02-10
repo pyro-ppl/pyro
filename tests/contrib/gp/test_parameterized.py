@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
@@ -12,7 +15,7 @@ from tests.common import assert_equal
 def test_parameterized():
     class Linear(Parameterized):
         def __init__(self):
-            super(Linear, self).__init__()
+            super().__init__()
             self._pyro_name = "Linear"
             self.a = PyroParam(torch.tensor(1.), constraints.positive)
             self.b = PyroSample(dist.Normal(0, 1))
@@ -51,14 +54,16 @@ def test_parameterized():
         assert "Linear.{}".format(p) in guide_trace.nodes
 
     assert isinstance(guide_trace.nodes["Linear.b"]["fn"], dist.Delta)
-    assert isinstance(guide_trace.nodes["Linear.c"]["fn"].base_dist, dist.Normal)
-    assert isinstance(guide_trace.nodes["Linear.d"]["fn"].base_dist, dist.MultivariateNormal)
+    c_dist = guide_trace.nodes["Linear.c"]["fn"]
+    assert isinstance(getattr(c_dist, "base_dist", c_dist), dist.Normal)
+    d_dist = guide_trace.nodes["Linear.d"]["fn"]
+    assert isinstance(getattr(d_dist, "base_dist", d_dist), dist.MultivariateNormal)
 
 
 def test_nested_parameterized():
     class Linear(Parameterized):
         def __init__(self, a):
-            super(Linear, self).__init__()
+            super().__init__()
             self.a = Parameter(a)
 
         def forward(self, x):
@@ -66,7 +71,7 @@ def test_nested_parameterized():
 
     class Quadratic(Parameterized):
         def __init__(self, linear1, linear2, a):
-            super(Quadratic, self).__init__()
+            super().__init__()
             self._pyro_name = "Quadratic"
             self.linear1 = linear1
             self.linear2 = linear2
@@ -95,7 +100,7 @@ def test_nested_parameterized():
 def test_inference():
     class Linear(Parameterized):
         def __init__(self, a):
-            super(Linear, self).__init__()
+            super().__init__()
             self.a = Parameter(a)
 
         def forward(self, x):

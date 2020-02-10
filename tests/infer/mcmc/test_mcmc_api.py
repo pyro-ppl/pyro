@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 from functools import partial
 
@@ -206,13 +209,13 @@ def test_sequential_consistent(monkeypatch):
         def setup(self, warmup_steps, *args, **kwargs):
             self._chain_id = 0 if '_chain_id' not in self.__dict__ else 1
             pyro.set_rng_seed(self._chain_id)
-            super(FirstKernel, self).setup(warmup_steps, *args, **kwargs)
+            super().setup(warmup_steps, *args, **kwargs)
 
     class SecondKernel(NUTS):
         def setup(self, warmup_steps, *args, **kwargs):
             self._chain_id = 1 if '_chain_id' not in self.__dict__ else 0
             pyro.set_rng_seed(self._chain_id)
-            super(SecondKernel, self).setup(warmup_steps, *args, **kwargs)
+            super().setup(warmup_steps, *args, **kwargs)
 
     data = torch.tensor([1.0])
     kernel = FirstKernel(normal_normal_model)

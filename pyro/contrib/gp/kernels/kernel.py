@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import numbers
 
 from pyro.contrib.gp.parameterized import Parameterized
@@ -25,7 +28,7 @@ class Kernel(Parameterized):
     """
 
     def __init__(self, input_dim, active_dims=None):
-        super(Kernel, self).__init__()
+        super().__init__()
 
         if active_dims is None:
             active_dims = list(range(input_dim))
@@ -87,7 +90,7 @@ class Combination(Kernel):
             active_dims |= set(kern1.active_dims)
         active_dims = sorted(active_dims)
         input_dim = len(active_dims)
-        super(Combination, self).__init__(input_dim, active_dims)
+        super().__init__(input_dim, active_dims)
 
         self.kern0 = kern0
         self.kern1 = kern1
@@ -125,7 +128,7 @@ class Transforming(Kernel):
     :param Kernel kern: The original kernel.
     """
     def __init__(self, kern):
-        super(Transforming, self).__init__(kern.input_dim, kern.active_dims)
+        super().__init__(kern.input_dim, kern.active_dims)
 
         self.kern = kern
 
@@ -151,7 +154,7 @@ class VerticalScaling(Transforming):
     :param callable vscaling_fn: A vertical scaling function :math:`f`.
     """
     def __init__(self, kern, vscaling_fn):
-        super(VerticalScaling, self).__init__(kern)
+        super().__init__(kern)
 
         self.vscaling_fn = vscaling_fn
 
@@ -207,7 +210,7 @@ class Warping(Transforming):
         These coefficients must be non-negative.
     """
     def __init__(self, kern, iwarping_fn=None, owarping_coef=None):
-        super(Warping, self).__init__(kern)
+        super().__init__(kern)
 
         self.iwarping_fn = iwarping_fn
 

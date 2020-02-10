@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from inspect import isclass
 
 import torch
@@ -11,7 +14,7 @@ class Exp(nn.Module):
     a custom module for exponentiation of tensors
     """
     def __init__(self):
-        super(Exp, self).__init__()
+        super().__init__()
 
     def forward(self, val):
         return torch.exp(val)
@@ -23,7 +26,7 @@ class ConcatModule(nn.Module):
     """
     def __init__(self, allow_broadcast=False):
         self.allow_broadcast = allow_broadcast
-        super(ConcatModule, self).__init__()
+        super().__init__()
 
     def forward(self, *input_args):
         # we have a single object
@@ -48,7 +51,7 @@ class ListOutModule(nn.ModuleList):
     a custom module for outputting a list of tensors from a list of nn modules
     """
     def __init__(self, modules):
-        super(ListOutModule, self).__init__(modules)
+        super().__init__(modules)
 
     def forward(self, *args, **kwargs):
         # loop over modules in self, apply same args
@@ -76,7 +79,7 @@ class MLP(nn.Module):
                  post_act_fct=lambda layer_ix, total_layers, layer: None,
                  allow_broadcast=False, use_cuda=False):
         # init the module object
-        super(MLP, self).__init__()
+        super().__init__()
 
         assert len(mlp_sizes) >= 2, "Must have input and output layer sizes defined"
 

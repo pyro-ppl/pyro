@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from torch.distributions import biject_to
 
 import pyro
@@ -59,15 +62,15 @@ class NeuTraReparam(Reparam):
         log_density = 0.
         if not self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
-            # TODO(fehiepsi) Consider adding a method to extract transform from an Auto*Normal(posterior).
-            posterior = self.guide.get_posterior()
-            if not isinstance(posterior, dist.TransformedDistribution):
-                raise ValueError("NeuTraReparam only supports guides whose posteriors are "
-                                 "TransformedDistributions but got a posterior of type {}"
-                                 .format(type(posterior)))
-            self.transform = dist.transforms.ComposeTransform(posterior.transforms)
+            try:
+                self.transform = self.guide.get_transform()
+            except (NotImplementedError, TypeError):
+                raise ValueError("NeuTraReparam only supports guides that implement "
+                                 "`get_transform` method that does not depend on the "
+                                 "model's `*args, **kwargs`")
+
             z_unconstrained = pyro.sample("{}_shared_latent".format(name),
-                                          posterior.base_dist.mask(False))
+                                          self.guide.get_base_dist().mask(False))
 
             # Differentiably transform.
             x_unconstrained = self.transform(z_unconstrained)

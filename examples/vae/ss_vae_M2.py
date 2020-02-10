@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import argparse
 
 import torch
@@ -33,7 +36,7 @@ class SSVAE(nn.Module):
     def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
                  config_enum=None, use_cuda=False, aux_loss_multiplier=None):
 
-        super(SSVAE, self).__init__()
+        super().__init__()
 
         # initialize the class with all arguments provided to the constructor
         self.output_size = output_size
@@ -380,7 +383,7 @@ EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -n 2 --aux-loss 
               "-sup 3000 -zd 50 -hl 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.1.0')
+    assert pyro.__version__.startswith('1.2.1')
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import numpy as np
@@ -10,7 +13,7 @@ SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
 
 
-class Fixture(object):
+class Fixture:
     def __init__(self,
                  pyro_dist=None,
                  scipy_dist=None,

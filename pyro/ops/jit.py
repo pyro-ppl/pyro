@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import argparse
 import warnings
 import weakref
@@ -38,7 +41,7 @@ def _hashable_args_kwargs(args, kwargs):
     return len(args), hashable_kwargs
 
 
-class CompiledFunction(object):
+class CompiledFunction:
     """
     Output type of :func:`pyro.ops.jit.trace`.
 

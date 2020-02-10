@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # This is an implementation of the sparse gamma deep exponential family model described in
 # Ranganath, Rajesh, Tang, Linpeng, Charlin, Laurent, and Blei, David. Deep exponential families.
 #
@@ -41,7 +44,7 @@ def rand_tensor(shape, mean, sigma):
     return mean * torch.ones(shape) + sigma * torch.randn(shape)
 
 
-class SparseGammaDEF(object):
+class SparseGammaDEF:
     def __init__(self):
         # define the sizes of the layers in the deep exponential family
         self.top_width = 100
@@ -231,7 +234,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.1.0')
+    assert pyro.__version__.startswith('1.2.1')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1500, type=int, help='number of training epochs')

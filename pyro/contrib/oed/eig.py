@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import math
 import warnings
@@ -893,7 +896,7 @@ class _EwmaLogFn(torch.autograd.Function):
 _ewma_log_fn = _EwmaLogFn.apply
 
 
-class EwmaLog(object):
+class EwmaLog:
     """Logarithm function with exponentially weighted moving average
     for gradients.
 

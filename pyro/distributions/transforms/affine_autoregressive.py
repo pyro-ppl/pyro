@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
@@ -79,6 +82,7 @@ class AffineAutoregressive(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    sign = +1
     autoregressive = True
 
     def __init__(
@@ -89,7 +93,7 @@ class AffineAutoregressive(TransformModule):
             sigmoid_bias=2.0,
             stable=False
     ):
-        super(AffineAutoregressive, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
         self.arn = autoregressive_nn
         self._cached_log_scale = None
         self.log_scale_min_clip = log_scale_min_clip

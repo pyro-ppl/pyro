@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -33,22 +36,29 @@ class MultivariateStudentT(TorchDistribution):
         batch_shape = broadcast_shape(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
         event_shape = (dim,)
         self.df = df.expand(batch_shape)
-        self.loc = loc
-        self.scale_tril = scale_tril
+        self.loc = loc.expand(batch_shape + event_shape)
+        self._unbroadcasted_scale_tril = scale_tril
         self._chi2 = Chi2(self.df)
-        super(MultivariateStudentT, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
+
+    @lazy_property
+    def scale_tril(self):
+        return self._unbroadcasted_scale_tril.expand(
+            self._batch_shape + self._event_shape + self._event_shape)
 
     @lazy_property
     def covariance_matrix(self):
         # NB: this is not covariance of this distribution;
         # the actual covariance is df / (df - 2) * covariance_matrix
-        return torch.matmul(self.scale_tril, self.scale_tril.transpose(-1, -2))
+        return (torch.matmul(self._unbroadcasted_scale_tril,
+                             self._unbroadcasted_scale_tril.transpose(-1, -2))
+                .expand(self._batch_shape + self._event_shape + self._event_shape))
 
     @lazy_property
     def precision_matrix(self):
         identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
-        scale_inv = identity.triangular_solve(self.scale_tril, upper=False).solution.transpose(-1, -2)
-        return torch.matmul(scale_inv.transpose(-1, -2), scale_inv)
+        return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
+            self._batch_shape + self._event_shape + self._event_shape)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MultivariateStudentT, _instance)
@@ -57,7 +67,9 @@ class MultivariateStudentT(TorchDistribution):
         scale_shape = loc_shape + self.event_shape
         new.df = self.df.expand(batch_shape)
         new.loc = self.loc.expand(loc_shape)
-        new.scale_tril = self.scale_tril.expand(scale_shape)
+        new._unbroadcasted_scale_tril = self._unbroadcasted_scale_tril
+        if 'scale_tril' in self.__dict__:
+            new.scale_tril = self.scale_tril.expand(scale_shape)
         if 'covariance_matrix' in self.__dict__:
             new.covariance_matrix = self.covariance_matrix.expand(scale_shape)
         if 'precision_matrix' in self.__dict__:

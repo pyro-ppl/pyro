@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 
@@ -123,7 +126,7 @@ def vindex(tensor, args):
     return tensor[args]
 
 
-class Vindex(object):
+class Vindex:
     """
     Convenience wrapper around :func:`vindex`.
 

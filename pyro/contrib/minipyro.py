@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Mini Pyro
 ---------
@@ -36,7 +39,7 @@ def get_param_store():
 
 
 # The base effect handler class (called Messenger here for consistency with Pyro).
-class Messenger(object):
+class Messenger:
     def __init__(self, fn=None):
         self.fn = fn
 
@@ -65,7 +68,7 @@ class Messenger(object):
 # and returns a dictionary containing that data to the user.
 class trace(Messenger):
     def __enter__(self):
-        super(trace, self).__enter__()
+        super().__enter__()
         self.trace = OrderedDict()
         return self.trace
 
@@ -89,7 +92,7 @@ class trace(Messenger):
 class replay(Messenger):
     def __init__(self, fn, guide_trace):
         self.guide_trace = guide_trace
-        super(replay, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if msg["name"] in self.guide_trace:
@@ -102,7 +105,7 @@ class replay(Messenger):
 class block(Messenger):
     def __init__(self, fn=None, hide_fn=lambda msg: True):
         self.hide_fn = hide_fn
-        super(block, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if self.hide_fn(msg):
@@ -113,7 +116,7 @@ class block(Messenger):
 class seed(Messenger):
     def __init__(self, fn=None, rng_seed=None):
         self.rng_seed = rng_seed
-        super(seed, self).__init__(fn)
+        super().__init__(fn)
 
     def __enter__(self):
         self.old_state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
@@ -140,7 +143,7 @@ class PlateMessenger(Messenger):
         assert dim < 0
         self.size = size
         self.dim = dim
-        super(PlateMessenger, self).__init__(fn)
+        super().__init__(fn)
 
     def process_message(self, msg):
         if msg["type"] == "sample":
@@ -249,7 +252,7 @@ def plate(name, size, dim=None):
 # This is a thin wrapper around the `torch.optim.Adam` class that
 # dynamically generates optimizers for dynamically generated parameters.
 # See http://docs.pyro.ai/en/0.3.1/optimization.html
-class Adam(object):
+class Adam:
     def __init__(self, optim_args):
         self.optim_args = optim_args
         # Each parameter will get its own optimizer, which we keep track
@@ -274,7 +277,7 @@ class Adam(object):
 # This is a unified interface for stochastic variational inference in Pyro.
 # The actual construction of the loss is taken care of by `loss`.
 # See http://docs.pyro.ai/en/0.3.1/inference_algos.html
-class SVI(object):
+class SVI:
     def __init__(self, model, guide, optim, loss):
         self.model = model
         self.guide = guide
@@ -347,7 +350,7 @@ def Trace_ELBO(**kwargs):
 # This is a Jit wrapper around elbo() that (1) delays tracing until the first
 # invocation, and (2) registers pyro.param() statements with torch.jit.trace.
 # This version does not support variable number of args or non-tensor kwargs.
-class JitTrace_ELBO(object):
+class JitTrace_ELBO:
     def __init__(self, **kwargs):
         self.ignore_jit_warnings = kwargs.pop("ignore_jit_warnings", False)
         self._compiled = None

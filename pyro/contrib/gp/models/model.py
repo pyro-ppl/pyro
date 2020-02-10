@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.contrib.gp.parameterized import Parameterized
 
 
@@ -85,7 +88,7 @@ class GPModel(Parameterized):
         a covariance matrix to help stablize its Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6):
-        super(GPModel, self).__init__()
+        super().__init__()
         self.set_data(X, y)
         self.kernel = kernel
         self.mean_function = (mean_function if mean_function is not None else

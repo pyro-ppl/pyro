@@ -1,4 +1,8 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
+from functools import partial
 
 import numpy as np
 import pytest
@@ -8,9 +12,11 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.infer.autoguide import (AutoDiagonalNormal, AutoLaplaceApproximation,
+from pyro.distributions.transforms import iterated, block_autoregressive
+from pyro.infer.autoguide import (AutoDiagonalNormal, AutoIAFNormal, AutoLaplaceApproximation,
                                   AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO
+from pyro.infer.autoguide.guides import AutoNormalizingFlow
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
 
@@ -139,8 +145,14 @@ def test_auto_transform(auto_class):
                  msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
-                                        AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
+@pytest.mark.parametrize('auto_class', [
+    AutoDiagonalNormal,
+    AutoIAFNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    lambda m: AutoNormalizingFlow(m, partial(iterated, 2, block_autoregressive)),
+])
 @pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_dirichlet(auto_class, Elbo):
     num_steps = 2000
@@ -161,7 +173,11 @@ def test_auto_dirichlet(auto_class, Elbo):
         assert np.isfinite(loss), loss
 
     expected_mean = posterior / posterior.sum()
-    actual_mean = biject_to(constraints.simplex)(guide.loc)
+    if isinstance(guide, (AutoIAFNormal, AutoNormalizingFlow)):
+        loc = guide.transform(torch.zeros(guide.latent_dim))
+    else:
+        loc = guide.loc
+    actual_mean = biject_to(constraints.simplex)(loc)
     assert_equal(actual_mean, expected_mean, prec=0.2, msg=''.join([
         '\nexpected {}'.format(expected_mean.detach().cpu().numpy()),
         '\n  actual {}'.format(actual_mean.detach().cpu().numpy())]))

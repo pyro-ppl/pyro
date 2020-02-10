@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 from collections import OrderedDict
 
@@ -128,7 +131,7 @@ class HMC(MCMCKernel):
                                       adapt_mass_matrix=adapt_mass_matrix,
                                       target_accept_prob=target_accept_prob,
                                       is_diag_mass=not full_mass)
-        super(HMC, self).__init__()
+        super().__init__()
 
     def _kinetic_energy(self, r):
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
@@ -161,6 +164,9 @@ class HMC(MCMCKernel):
         potential_energy = self.potential_fn(z)
         r, _ = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r) + potential_energy
+        # This is required so as to avoid issues with autograd when model
+        # contains transforms with cache_size > 0 (https://github.com/pyro-ppl/pyro/issues/2292)
+        z = {k: v.clone() for k, v in z.items()}
         z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
             z, r, self.potential_fn, self.inverse_mass_matrix, step_size)
         energy_new = self._kinetic_energy(r_new) + potential_energy_new

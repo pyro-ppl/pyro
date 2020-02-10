@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 import torch
 
@@ -11,7 +14,7 @@ EXAMPLE_MODELS = []
 EXAMPLE_MODEL_IDS = []
 
 
-class ExampleModel(object):
+class ExampleModel:
     def __init__(self, fn, poutine_kwargs):
         self.fn = fn
         self.poutine_kwargs = poutine_kwargs

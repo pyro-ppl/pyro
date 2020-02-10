@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import warnings
 
 import torch
@@ -54,7 +57,7 @@ class SVI(TracePosterior):
         self.optim = optim
         self.num_steps = num_steps
         self.num_samples = num_samples
-        super(SVI, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         if not isinstance(optim, pyro.optim.PyroOptim):
             raise ValueError("Optimizer should be an instance of pyro.optim.PyroOptim class.")
@@ -88,7 +91,7 @@ class SVI(TracePosterior):
             with poutine.block():
                 for i in range(self.num_steps):
                     self.step(*args, **kwargs)
-        return super(SVI, self).run(*args, **kwargs)
+        return super().run(*args, **kwargs)
 
     def _traces(self, *args, **kwargs):
         for i in range(self.num_samples):

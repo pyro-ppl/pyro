@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import numbers
 import warnings
 
@@ -45,7 +48,7 @@ class DoMessenger(Messenger):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.do_messenger.DoMessenger`
     """
     def __init__(self, data):
-        super(DoMessenger, self).__init__()
+        super().__init__()
         self.data = data
         self._intervener_id = str(id(self))
 

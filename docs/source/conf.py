@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import sys
 
@@ -185,8 +188,10 @@ texinfo_documents = [
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
-    'torch': ('http://pytorch.org/docs/master/', None),
-    'opt_einsum': ('https://optimized-einsum.readthedocs.io/en/stable/', None)
+    'torch': ('https://pytorch.org/docs/master/', None),
+    'funsor': ('http://funsor.pyro.ai/en/stable/', None),
+    'opt_einsum': ('https://optimized-einsum.readthedocs.io/en/stable/', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
 }
 
 # document class constructors (__init__ methods):
@@ -206,5 +211,5 @@ def setup(app):
 # @jpchen's hack to get rtd builder to install latest pytorch
 # See similar line in the install section of .travis.yml
 if 'READTHEDOCS' in os.environ:
-    os.system('pip install torch==1.3.0+cpu torchvision==0.4.0+cpu '
+    os.system('pip install torch==1.4.0+cpu torchvision==0.5.0+cpu '
               '-f https://download.pytorch.org/whl/torch_stable.html')

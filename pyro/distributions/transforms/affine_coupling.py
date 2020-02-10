@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 
@@ -71,7 +74,7 @@ class AffineCoupling(TransformModule):
     event_dim = 1
 
     def __init__(self, split_dim, hypernet, log_scale_min_clip=-5., log_scale_max_clip=3.):
-        super(AffineCoupling, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
         self.split_dim = split_dim
         self.hypernet = hypernet
         self._cached_log_scale = None
@@ -106,7 +109,7 @@ class AffineCoupling(TransformModule):
         """
         y1, y2 = y[..., :self.split_dim], y[..., self.split_dim:]
         x1 = y1
-        mean, log_scale = self.arn(x1)
+        mean, log_scale = self.hypernet(x1)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
 

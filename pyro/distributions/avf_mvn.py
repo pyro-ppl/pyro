@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
@@ -46,7 +49,7 @@ class AVFMultivariateNormal(MultivariateNormal):
         if control_var.dim() != 3 or control_var.size(0) != 2 or control_var.size(2) != loc.size(0):
             raise ValueError("control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc")  # noqa: E501
         self.control_var = control_var
-        super(AVFMultivariateNormal, self).__init__(loc, scale_tril=scale_tril)
+        super().__init__(loc, scale_tril=scale_tril)
 
     def rsample(self, sample_shape=torch.Size()):
         return _AVFMVNSample.apply(self.loc, self.scale_tril, self.control_var, sample_shape + self.loc.shape)

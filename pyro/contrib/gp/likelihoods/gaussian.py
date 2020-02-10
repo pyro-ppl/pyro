@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 
@@ -18,7 +21,7 @@ class Gaussian(Likelihood):
         ``noise`` in regression problems.
     """
     def __init__(self, variance=None):
-        super(Gaussian, self).__init__()
+        super().__init__()
 
         variance = torch.tensor(1.) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions.utils import lazy_property
 from torch.distributions import constraints
@@ -41,7 +44,7 @@ class Permute(Transform):
     volume_preserving = True
 
     def __init__(self, permutation):
-        super(Permute, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
 
         self.permutation = permutation
 

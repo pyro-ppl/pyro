@@ -67,6 +67,16 @@ AutoLowRankMultivariateNormal
     :special-members: __call__
     :show-inheritance:
 
+
+AutoNormalizingFlow
+-------------------
+.. autoclass:: pyro.infer.autoguide.AutoNormalizingFlow
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+
+
 AutoIAFNormal
 -----------------------------
 .. autoclass:: pyro.infer.autoguide.AutoIAFNormal

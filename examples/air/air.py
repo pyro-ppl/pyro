@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 An implementation of the model described in [1].
 
@@ -51,7 +54,7 @@ class AIR(nn.Module):
                  likelihood_sd=0.3,
                  use_cuda=False):
 
-        super(AIR, self).__init__()
+        super().__init__()
 
         self.num_steps = num_steps
         self.x_size = x_size

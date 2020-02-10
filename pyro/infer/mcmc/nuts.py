@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import namedtuple
 
 import torch
@@ -128,18 +131,18 @@ class NUTS(HMC):
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8,
                  max_tree_depth=10):
-        super(NUTS, self).__init__(model,
-                                   potential_fn,
-                                   step_size,
-                                   adapt_step_size=adapt_step_size,
-                                   adapt_mass_matrix=adapt_mass_matrix,
-                                   full_mass=full_mass,
-                                   transforms=transforms,
-                                   max_plate_nesting=max_plate_nesting,
-                                   jit_compile=jit_compile,
-                                   jit_options=jit_options,
-                                   ignore_jit_warnings=ignore_jit_warnings,
-                                   target_accept_prob=target_accept_prob)
+        super().__init__(model,
+                         potential_fn,
+                         step_size,
+                         adapt_step_size=adapt_step_size,
+                         adapt_mass_matrix=adapt_mass_matrix,
+                         full_mass=full_mass,
+                         transforms=transforms,
+                         max_plate_nesting=max_plate_nesting,
+                         jit_compile=jit_compile,
+                         jit_options=jit_options,
+                         ignore_jit_warnings=ignore_jit_warnings,
+                         target_accept_prob=target_accept_prob)
         self.use_multinomial_sampling = use_multinomial_sampling
         self._max_tree_depth = max_tree_depth
         # There are three conditions to stop doubling process:

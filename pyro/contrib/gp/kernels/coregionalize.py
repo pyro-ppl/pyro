@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
@@ -43,7 +46,7 @@ class Coregionalize(Kernel):
     """
 
     def __init__(self, input_dim, rank=None, components=None, diagonal=None, active_dims=None):
-        super(Coregionalize, self).__init__(input_dim, active_dims)
+        super().__init__(input_dim, active_dims)
 
         # Add a low-rank kernel with expected value torch.eye(input_dim, input_dim) / 2.
         if components is None:

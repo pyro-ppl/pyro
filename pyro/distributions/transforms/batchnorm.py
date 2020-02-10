@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
@@ -69,7 +72,7 @@ class BatchNorm(TransformModule):
     event_dim = 0
 
     def __init__(self, input_dim, momentum=0.1, epsilon=1e-5):
-        super(BatchNorm, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.gamma = nn.Parameter(torch.zeros(input_dim))

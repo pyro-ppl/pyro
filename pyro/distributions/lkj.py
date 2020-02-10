@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 
 import torch
@@ -58,7 +61,7 @@ class LKJCorrCholesky(TorchDistribution):
         self.eta = eta
         self._d = d
         self._lkj_constant = None
-        super(LKJCorrCholesky, self).__init__(torch.Size(), torch.Size((d, d)), validate_args=validate_args)
+        super().__init__(torch.Size(), torch.Size((d, d)), validate_args=validate_args)
 
     def sample(self, sample_shape=torch.Size()):
         y = self._gen.sample(sample_shape=self.batch_shape + sample_shape).detach()

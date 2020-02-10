@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from pyro.util import get_rng_state, set_rng_seed, set_rng_state
 
 from .messenger import Messenger
@@ -17,7 +20,7 @@ class SeedMessenger(Messenger):
     def __init__(self, rng_seed):
         assert isinstance(rng_seed, int)
         self.rng_seed = rng_seed
-        super(SeedMessenger, self).__init__()
+        super().__init__()
 
     def __enter__(self):
         self.old_state = get_rng_state()

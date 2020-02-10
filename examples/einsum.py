@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This example demonstrates how to use plated ``einsum`` with different backends
 to compute logprob, gradients, MAP estimates, posterior samples, and marginals.

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import OrderedDict
 import sys
 
@@ -10,7 +13,7 @@ from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
 
-class Trace(object):
+class Trace:
     """
     Graph data structure denoting the relationships amongst different pyro primitives
     in the execution trace.

@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # This implementation is adapted in part from https://github.com/nicola-decao/BNAF under the MIT license.
 import math
 
@@ -69,7 +72,7 @@ class BlockAutoregressive(TransformModule):
     autoregressive = True
 
     def __init__(self, input_dim, hidden_factors=[8, 8], activation='tanh', residual=None):
-        super(BlockAutoregressive, self).__init__(cache_size=1)
+        super().__init__(cache_size=1)
 
         if any([h < 1 for h in hidden_factors]):
             raise ValueError('Hidden factors, {}, must all be >= 1'.format(hidden_factors))
@@ -171,7 +174,7 @@ class MaskedBlockLinear(torch.nn.Module):
     """
 
     def __init__(self, in_features, out_features, dim, bias=True):
-        super(MaskedBlockLinear, self).__init__()
+        super().__init__()
         self.in_features, self.out_features, self.dim = in_features, out_features, dim
 
         weight = torch.zeros(out_features, in_features)

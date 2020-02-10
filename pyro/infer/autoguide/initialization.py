@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 r"""
 The pyro.infer.autoguide.initialization module contains initialization functions for
 automatic guides.
@@ -89,7 +92,7 @@ class InitMessenger(Messenger):
     """
     def __init__(self, init_fn):
         self.init_fn = init_fn
-        super(InitMessenger, self).__init__()
+        super().__init__()
 
     def _pyro_sample(self, msg):
         if msg["done"] or msg["is_observed"] or type(msg["fn"]).__name__ == "_Subsample":

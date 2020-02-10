@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 import warnings
 
@@ -26,7 +29,7 @@ class Importance(TracePosterior):
         """
         Constructor. default to num_samples = 10, guide = model
         """
-        super(Importance, self).__init__()
+        super().__init__()
         if num_samples is None:
             num_samples = 10
             warnings.warn("num_samples not provided, defaulting to {}".format(num_samples))

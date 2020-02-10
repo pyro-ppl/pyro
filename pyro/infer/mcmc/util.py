@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import functools
 import warnings
 from collections import OrderedDict, defaultdict
@@ -23,7 +26,7 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_site_shape, ignore_jit_warnings
 
 
-class TraceTreeEvaluator(object):
+class TraceTreeEvaluator:
     """
     Computes the log probability density of a trace (of a model with
     tree structure) that possibly contains discrete sample sites
@@ -147,7 +150,7 @@ class TraceTreeEvaluator(object):
             return self._aggregate_log_probs(ordinal=frozenset()).sum()
 
 
-class TraceEinsumEvaluator(object):
+class TraceEinsumEvaluator:
     """
     Computes the log probability density of a trace (of a model with
     tree structure) that possibly contains discrete sample sites
@@ -242,7 +245,7 @@ def _guess_max_plate_nesting(model, args, kwargs):
     return max_plate_nesting
 
 
-class _PEMaker(object):
+class _PEMaker:
     def __init__(self, model, model_args, model_kwargs, trace_prob_evaluator, transforms):
         self.model = model
         self.model_args = model_args

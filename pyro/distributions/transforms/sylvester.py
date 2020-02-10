@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
@@ -53,7 +56,7 @@ class Sylvester(Householder):
     event_dim = 1
 
     def __init__(self, input_dim, count_transforms=1):
-        super(Sylvester, self).__init__(input_dim, count_transforms)
+        super().__init__(input_dim, count_transforms)
 
         # Create parameters for Sylvester transform
         self.R_dense = nn.Parameter(torch.Tensor(input_dim, input_dim))

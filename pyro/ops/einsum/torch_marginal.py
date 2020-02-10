@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pyro.ops.einsum.torch_log
 from pyro.ops.einsum.adjoint import Backward, transpose
 from pyro.ops.einsum.util import Tensordot

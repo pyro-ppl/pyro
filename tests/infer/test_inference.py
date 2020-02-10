@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 import math
 from unittest import TestCase
@@ -17,7 +20,7 @@ from pyro.infer import (SVI, EnergyDistance, JitTrace_ELBO, JitTraceEnum_ELBO, J
                         ReweightedWakeSleep, Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO,
                         TraceMeanField_ELBO, TraceTailAdaptive_ELBO)
 from pyro.infer.autoguide import AutoDelta
-from pyro.infer.reparam import StableReparam
+from pyro.infer.reparam import LatentStableReparam
 from pyro.infer.util import torch_item
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
@@ -721,7 +724,7 @@ def test_energy_distance_multivariate(prior_scale):
 def test_reparam_stable():
     data = dist.Poisson(torch.randn(8).exp()).sample()
 
-    @poutine.reparam(config={"dz": StableReparam(), "y": StableReparam()})
+    @poutine.reparam(config={"dz": LatentStableReparam(), "y": LatentStableReparam()})
     def model():
         stability = pyro.sample("stability", dist.Uniform(1., 2.))
         trans_skew = pyro.sample("trans_skew", dist.Uniform(-1., 1.))
