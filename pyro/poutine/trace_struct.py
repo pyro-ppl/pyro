@@ -7,7 +7,7 @@ import sys
 import opt_einsum
 
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import scale_and_mask
+from pyro.distributions.util import scale_and_mask, scale_tensor
 from pyro.ops.packed import pack
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
@@ -194,7 +194,7 @@ class Trace:
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError("Error while computing log_prob_sum at site '{}':\n{}\n"
                                          .format(name, exc_value, shapes)).with_traceback(traceback)
-                    log_p = scale_and_mask(log_p, site["scale"]).sum()
+                    log_p = scale_tensor(log_p, site["scale"]).sum()
                     site["log_prob_sum"] = log_p
                     if is_validation_enabled():
                         warn_if_nan(log_p, "log_prob_sum at site '{}'".format(name))
@@ -220,7 +220,7 @@ class Trace:
                         raise ValueError("Error while computing log_prob at site '{}':\n{}\n{}"
                                          .format(name, exc_value, shapes)).with_traceback(traceback)
                     site["unscaled_log_prob"] = log_p
-                    log_p = scale_and_mask(log_p, site["scale"])
+                    log_p = scale_tensor(log_p, site["scale"])
                     site["log_prob"] = log_p
                     site["log_prob_sum"] = log_p.sum()
                     if is_validation_enabled():
@@ -363,7 +363,7 @@ class Trace:
             dim_to_symbol = site["infer"]["_dim_to_symbol"]
             packed = site.setdefault("packed", {})
             try:
-                packed["mask"] = pack(site["mask"], dim_to_symbol)
+                #packed["mask"] = pack(site["mask"], dim_to_symbol)
                 if "score_parts" in site:
                     log_prob, score_function, entropy_term = site["score_parts"]
                     log_prob = pack(log_prob, dim_to_symbol)
