@@ -4,6 +4,7 @@
 import torch
 
 from pyro.util import ignore_jit_warnings
+from pyro.distributions.torch_distribution import MaskedDistribution
 
 from .messenger import Messenger
 
@@ -35,5 +36,5 @@ class MaskMessenger(Messenger):
             return None
 
         msg["mask"] = self.mask if msg["mask"] is None else self.mask & msg["mask"]
-        msg["fn"] = msg["fn"].mask(msg["mask"])
+        msg["fn"] = MaskedDistribution(msg["fn"], msg["mask"])
         return None
