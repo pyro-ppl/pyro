@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .messenger import Messenger
+from pyro.distributions.torch_distribution import MaskedDistribution
 
 
 class ReplayMessenger(Messenger):
@@ -67,7 +68,7 @@ class ReplayMessenger(Messenger):
             msg["done"] = True
             msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
-        elif self.trace is not None and msg["infer"].get("enumerate") is not None:
+        elif bool(self.trace.nodes.keys()) and msg["infer"].get("enumerate") is not None and isinstance(msg["fn"], MaskedDistribution):
             msg["mask"] = None
             msg["fn"] = msg["fn"].mask(msg["mask"])
         return None

@@ -127,10 +127,7 @@ def _compute_model_factors(model_trace, guide_trace):
             else:
                 # For sites that depend on an enumerated variable, we need to apply
                 # the mask inside- and the scale outside- of the log expectation.
-                if "masked_log_prob" not in site["packed"]:
-                    site["packed"]["masked_log_prob"] = packed.scale_and_mask(
-                        site["packed"]["unscaled_log_prob"], mask=site["packed"]["mask"])
-                cost = site["packed"]["masked_log_prob"]
+                cost = site["packed"]["unscaled_log_prob"]
                 log_factors.setdefault(t, []).append(cost)
                 scales.append(site["scale"])
     if log_factors:

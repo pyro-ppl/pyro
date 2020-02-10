@@ -194,7 +194,7 @@ class Trace:
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError("Error while computing log_prob_sum at site '{}':\n{}\n"
                                          .format(name, exc_value, shapes)).with_traceback(traceback)
-                    log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
+                    log_p = scale_and_mask(log_p, site["scale"]).sum()
                     site["log_prob_sum"] = log_p
                     if is_validation_enabled():
                         warn_if_nan(log_p, "log_prob_sum at site '{}'".format(name))
@@ -220,7 +220,7 @@ class Trace:
                         raise ValueError("Error while computing log_prob at site '{}':\n{}\n{}"
                                          .format(name, exc_value, shapes)).with_traceback(traceback)
                     site["unscaled_log_prob"] = log_p
-                    log_p = scale_and_mask(log_p, site["scale"], site["mask"])
+                    log_p = scale_and_mask(log_p, site["scale"])
                     site["log_prob"] = log_p
                     site["log_prob_sum"] = log_p.sum()
                     if is_validation_enabled():
@@ -247,7 +247,7 @@ class Trace:
                     raise ValueError("Error while computing score_parts at site '{}':\n{}\n{}"
                                      .format(name, exc_value, shapes)).with_traceback(traceback)
                 site["unscaled_log_prob"] = value.log_prob
-                value = value.scale_and_mask(site["scale"], site["mask"])
+                value = value.scale_and_mask(site["scale"])
                 site["score_parts"] = value
                 site["log_prob"] = value.log_prob
                 site["log_prob_sum"] = value.log_prob.sum()

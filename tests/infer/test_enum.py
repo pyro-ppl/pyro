@@ -1637,8 +1637,6 @@ def test_elbo_enumerate_plate_3(num_samples, num_masked, scale):
         for i in pyro.plate("data", num_masked):
             pyro.sample("x_{}".format(i), dist.Categorical(probs_x))
 
-    if num_masked != num_samples:
-        import pdb; pdb.set_trace()
     data = dist.Categorical(torch.tensor([0.3, 0.7])).sample((num_samples,))
     elbo = TraceEnum_ELBO(max_plate_nesting=1, strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, auto_guide, data)
