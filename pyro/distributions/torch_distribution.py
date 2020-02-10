@@ -11,7 +11,7 @@ from torch.distributions.kl import kl_divergence, register_kl
 import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import broadcast_shape, scale_and_mask
+from pyro.distributions.util import broadcast_shape, mask_tensor
 
 
 class TorchDistributionMixin(Distribution):
@@ -305,12 +305,12 @@ class MaskedDistribution(TorchDistribution):
             return torch.zeros((), device=value.device).expand(shape)
         if self._mask is True:
             return self.base_dist.log_prob(value)
-        return scale_and_mask(self.base_dist.log_prob(value), mask=self._mask)
+        return mask_tensor(self.base_dist.log_prob(value), mask=self._mask)
 
     def score_parts(self, value):
         if isinstance(self._mask, bool):
             return super().score_parts(value)  # calls self.log_prob(value)
-        return self.base_dist.score_parts(value).scale_and_mask(mask=self._mask)
+        return self.base_dist.score_parts(value).mask_tensor(mask=self._mask)
 
     def enumerate_support(self, expand=True):
         return self.base_dist.enumerate_support(expand=expand)
@@ -458,4 +458,4 @@ def _kl_masked_masked(p, q):
     if mask is True:
         return kl_divergence(p.base_dist, q.base_dist)
     kl = kl_divergence(p.base_dist, q.base_dist)
-    return scale_and_mask(kl, mask=mask)
+    return mask_tensor(kl, mask=mask)

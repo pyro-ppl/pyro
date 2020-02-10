@@ -244,6 +244,20 @@ def scale_tensor(tensor, scale=1.0):
     return tensor * scale
 
 
+def mask_tensor(tensor, mask=None):
+    """
+    Mask a tensor, broadcasting and avoiding unnecessary ops.
+
+    :param tensor: an input tensor or zero
+    :type tensor: torch.Tensor or the number zero
+    :param mask: an optional masking tensor
+    :type mask: torch.BoolTensor or None
+    """
+    if is_identically_zero(tensor) or mask is None:
+        return tensor
+    return torch.where(mask, tensor, tensor.new_zeros(()))
+
+
 def scalar_like(prototype, fill_value):
     return torch.tensor(fill_value, dtype=prototype.dtype, device=prototype.device)
 

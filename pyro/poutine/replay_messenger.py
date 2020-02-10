@@ -73,7 +73,7 @@ class ReplayMessenger(Messenger):
                 msg["infer"].get("enumerate") is not None and \
                 isinstance(msg["fn"], MaskedDistribution):
             msg["mask"] = None
-            msg["fn"] = msg["fn"].mask(msg["mask"])
+            msg["fn"] = MaskedDistribution(msg["fn"], msg["mask"])
         return None
 
     def _pyro_param(self, msg):

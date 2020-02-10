@@ -3,7 +3,7 @@
 
 from collections import namedtuple
 
-from pyro.distributions.util import scale_and_mask
+from pyro.distributions.util import scale_and_mask, scale_tensor, mask_tensor
 
 
 class ScoreParts(namedtuple('ScoreParts', ['log_prob', 'score_function', 'entropy_term'])):
@@ -24,4 +24,34 @@ class ScoreParts(namedtuple('ScoreParts', ['log_prob', 'score_function', 'entrop
         log_prob = scale_and_mask(self.log_prob, scale, mask)
         score_function = self.score_function  # not scaled
         entropy_term = scale_and_mask(self.entropy_term, scale, mask)
+        return ScoreParts(log_prob, score_function, entropy_term)
+
+    def scale_tensor(self, scale=1.0):
+        """
+        Scale appropriate terms of a gradient estimator by a data multiplicity factor.
+        Note that the `score_function` term should not be scaled or masked.
+
+        :param scale: a positive scale
+        :type scale: torch.Tensor or number
+        :param mask: an optional masking tensor
+        :type mask: torch.BoolTensor or None
+        """
+        log_prob = scale_tensor(self.log_prob, scale)
+        score_function = self.score_function  # not scaled
+        entropy_term = scale_tensor(self.entropy_term, scale)
+        return ScoreParts(log_prob, score_function, entropy_term)
+
+    def mask_tensor(self, mask=None):
+        """
+        Mask appropriate terms of a gradient estimator by a data multiplicity factor.
+        Note that the `score_function` term should not be scaled or masked.
+
+        :param scale: a positive scale
+        :type scale: torch.Tensor or number
+        :param mask: an optional masking tensor
+        :type mask: torch.BoolTensor or None
+        """
+        log_prob = mask_tensor(self.log_prob, mask)
+        score_function = self.score_function  # not scaled
+        entropy_term = mask_tensor(self.entropy_term, mask)
         return ScoreParts(log_prob, score_function, entropy_term)
