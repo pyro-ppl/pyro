@@ -324,6 +324,9 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     assert final.batch_shape == d.batch_shape
     assert final.event_shape == (hidden_dim,)
 
+    z = d.rsample_posterior(data)
+    assert z.shape == expected_batch_shape + time_shape + (hidden_dim,)
+
 
 @pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)
 @pytest.mark.parametrize('batch_shape', [(), (4,), (3, 2)], ids=str)
