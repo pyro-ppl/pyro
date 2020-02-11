@@ -514,6 +514,9 @@ class GaussianHMM(HiddenMarkovModel):
         return x
 
     def rsample_posterior(self, value, sample_shape=torch.Size()):
+        """
+        EXPERIMENTAL Sample from the latent state conditioned on observation.
+        """
         trans = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
         trans = trans.expand(trans.batch_shape)
         z = _sequential_gaussian_filter_sample(self._init, trans, sample_shape)
