@@ -550,8 +550,8 @@ class GaussianHMM(HiddenMarkovModel):
 
     def conjugate_update(self, other):
         """
-        Creates an updated :class:`GaussianHMM` fusing information from another
-        compatible distribution.
+        EXPERIMENTAL Creates an updated :class:`GaussianHMM` fusing information
+        from another compatible distribution.
 
         This should satisfy::
 

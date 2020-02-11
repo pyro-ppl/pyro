@@ -119,9 +119,9 @@ class Distribution(object, metaclass=ABCMeta):
 
     def conjugate_update(self, other):
         """
-        Creates an updated distribution fusing information from another
-        compatible distribution. This is supported by only a few conjugate
-        distributions.
+        EXPERIMENTAL Creates an updated distribution fusing information from
+        another compatible distribution. This is supported by only a few
+        conjugate distributions.
 
         This should satisfy the equation::
 

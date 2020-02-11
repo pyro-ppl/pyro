@@ -9,7 +9,7 @@ from .reparam import Reparam
 
 class ConjugateReparam(Reparam):
     """
-    Reparameterize to a conjugate updated distribution.
+    EXPERIMENTAL Reparameterize to a conjugate updated distribution.
 
     This updates a prior distribution ``fn`` using the
     :meth:`~pyro.distributions.Distribution.conjugate_update`
