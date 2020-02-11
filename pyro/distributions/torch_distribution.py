@@ -251,15 +251,6 @@ class MaskedDistribution(TorchDistribution):
     """
     arg_constraints = {}
 
-    def __new__(cls, base_dist, mask):
-        if mask is None:
-            if isinstance(base_dist, MaskedDistribution):
-                return base_dist.base_dist
-            else:
-                return base_dist
-        else:
-            return super(MaskedDistribution, cls).__new__(cls)
-
     def __init__(self, base_dist, mask):
         if isinstance(mask, bool):
             self._mask = mask
