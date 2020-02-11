@@ -3,7 +3,7 @@
 
 from collections import namedtuple
 
-from pyro.distributions.util import scale_and_mask, scale_tensor, mask_tensor
+from pyro.distributions.util import scale_tensor, mask_tensor
 
 
 class ScoreParts(namedtuple('ScoreParts', ['log_prob', 'score_function', 'entropy_term'])):
