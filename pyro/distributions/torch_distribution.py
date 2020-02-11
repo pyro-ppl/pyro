@@ -251,16 +251,24 @@ class MaskedDistribution(TorchDistribution):
     """
     arg_constraints = {}
 
+    def __new__(cls, base_dist, mask):
+        if mask is None:
+            if isinstance(base_dist, MaskedDistribution):
+                return base_dist.base_dist
+            else:
+                return base_dist
+        else:
+            return super(MaskedDistribution, cls).__new__(cls)
+
     def __init__(self, base_dist, mask):
         if isinstance(mask, bool):
-            self._mask = mask
-        elif mask is None:
             self._mask = mask
         else:
             broadcast_shape(mask.shape, base_dist.batch_shape)
             self._mask = mask.bool()
         if isinstance(base_dist, MaskedDistribution):
             self.base_dist = base_dist.base_dist
+            self._mask = self._mask & base_dist._mask
         else:
             self.base_dist = base_dist
         super().__init__(base_dist.batch_shape, base_dist.event_shape)

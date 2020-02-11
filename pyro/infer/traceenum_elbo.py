@@ -126,17 +126,15 @@ def _compute_model_factors(model_trace, guide_trace):
                 marginal_costs.setdefault(t, []).append(site["packed"]["log_prob"])
             else:
                 # For sites that depend on an enumerated variable, we need to apply
-                # the mask inside- and the scale outside- of the log expectation.
-                cost = site["packed"]["unscaled_log_prob"]
-                log_factors.setdefault(t, []).append(cost)
+                # the scale outside- of the log expectation.
+                log_factors.setdefault(t, []).append(site["packed"]["unscaled_log_prob"])
                 scales.append(site["scale"])
     if log_factors:
         for t, sites_t in enum_sites.items():
             # TODO refine this coarse dependency ordering using time and tensor shapes.
             if any(t <= u for u in log_factors):
                 for site in sites_t:
-                    logprob = site["packed"]["unscaled_log_prob"]
-                    log_factors.setdefault(t, []).append(logprob)
+                    log_factors.setdefault(t, []).append(site["packed"]["unscaled_log_prob"])
                     scales.append(site["scale"])
         scale = _get_common_scale(scales)
     return marginal_costs, log_factors, ordering, enum_dims, scale
