@@ -302,7 +302,7 @@ class MaskedDistribution(TorchDistribution):
     def score_parts(self, value):
         if isinstance(self._mask, bool):
             return super().score_parts(value)  # calls self.log_prob(value)
-        return self.base_dist.score_parts(value).mask_tensor(mask=self._mask)
+        return self.base_dist.score_parts(value).mask_terms(mask=self._mask)
 
     def enumerate_support(self, expand=True):
         return self.base_dist.enumerate_support(expand=expand)

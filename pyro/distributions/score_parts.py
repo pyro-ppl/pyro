@@ -11,7 +11,7 @@ class ScoreParts(namedtuple('ScoreParts', ['log_prob', 'score_function', 'entrop
     This data structure stores terms used in stochastic gradient estimators that
     combine the pathwise estimator and the score function estimator.
     """
-    def scale_tensor(self, scale=1.0):
+    def scale_terms(self, scale=1.0):
         """
         Scale appropriate terms of a gradient estimator by a data multiplicity factor.
         Note that the `score_function` term should not be scaled or masked.
@@ -24,7 +24,7 @@ class ScoreParts(namedtuple('ScoreParts', ['log_prob', 'score_function', 'entrop
         entropy_term = scale_tensor(self.entropy_term, scale)
         return ScoreParts(log_prob, score_function, entropy_term)
 
-    def mask_tensor(self, mask=None):
+    def mask_terms(self, mask=None):
         """
         Mask appropriate terms of a gradient estimator by a data multiplicity factor.
         Note that the `score_function` term should not be scaled or masked.

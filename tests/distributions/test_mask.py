@@ -7,7 +7,7 @@ from torch import tensor
 from torch.distributions import kl_divergence
 
 from pyro.distributions.torch import Bernoulli, Normal
-from pyro.distributions.util import scale_and_mask
+from pyro.distributions.util import mask_tensor
 from tests.common import assert_equal
 
 
@@ -43,9 +43,9 @@ def test_mask(batch_dim, event_dim, mask_dim):
     assert_equal(dist.mean, base_dist.mean)
     assert_equal(dist.variance, base_dist.variance)
     assert_equal(dist.log_prob(sample),
-                 scale_and_mask(base_dist.log_prob(sample), mask=mask))
+                 mask_tensor(base_dist.log_prob(sample), mask=mask))
     assert_equal(dist.score_parts(sample),
-                 base_dist.score_parts(sample).scale_and_mask(mask=mask), prec=0)
+                 base_dist.score_parts(sample).mask_terms(mask=mask), prec=0)
     if not dist.event_shape:
         assert_equal(dist.enumerate_support(), base_dist.enumerate_support())
         assert_equal(dist.enumerate_support(expand=True), base_dist.enumerate_support(expand=True))

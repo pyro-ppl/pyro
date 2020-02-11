@@ -247,7 +247,7 @@ class Trace:
                     raise ValueError("Error while computing score_parts at site '{}':\n{}\n{}"
                                      .format(name, exc_value, shapes)).with_traceback(traceback)
                 site["unscaled_log_prob"] = value.log_prob
-                value = value.scale_tensor(site["scale"])
+                value = value.scale_terms(site["scale"])
                 site["score_parts"] = value
                 site["log_prob"] = value.log_prob
                 site["log_prob_sum"] = value.log_prob.sum()
