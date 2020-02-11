@@ -257,11 +257,15 @@ class MaskedDistribution(TorchDistribution):
         elif mask is None:
             self._mask = mask
         else:
-            batch_shape = broadcast_shape(mask.shape, base_dist.batch_shape)
-            if mask.shape != batch_shape:
-                mask = mask.expand(batch_shape)
-            if base_dist.batch_shape != batch_shape:
-                base_dist = base_dist.expand(batch_shape)
+            try:
+                batch_shape = broadcast_shape(mask.shape, base_dist.batch_shape)
+            except:
+                raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
+                                 "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
+            #if mask.shape != batch_shape:
+            #    mask = mask.expand(batch_shape)
+            #if base_dist.batch_shape != batch_shape:
+            #    base_dist = base_dist.expand(batch_shape)
             self._mask = mask.bool()
         if isinstance(base_dist, MaskedDistribution):
             self.base_dist = base_dist.base_dist
@@ -272,10 +276,11 @@ class MaskedDistribution(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MaskedDistribution, _instance)
         batch_shape = torch.Size(batch_shape)
+        #batch_shape = broadcast_shape(torch.Size(batch_shape), self._mask.shape, self.base_dist.batch_shape)
         new.base_dist = self.base_dist.expand(batch_shape)
         new._mask = self._mask
-        if isinstance(new._mask, torch.Tensor):
-            new._mask = new._mask.expand(batch_shape)
+        #if isinstance(new._mask, torch.Tensor):
+        #    new._mask = new._mask.expand(batch_shape)
         super(MaskedDistribution, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
