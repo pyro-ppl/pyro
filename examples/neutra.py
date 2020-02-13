@@ -1,3 +1,6 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This example illustrates the use of `NeuTraReparam` to run neural transport HMC [1]
 on a toy model that draws from a banana-shaped bivariate distribution [2]. We first
@@ -22,20 +25,19 @@ import logging
 import os
 from functools import partial
 
-import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
 from matplotlib.gridspec import GridSpec
 
 import pyro
-from pyro import optim, poutine
 import pyro.distributions as dist
+from pyro import optim, poutine
 from pyro.distributions import constraints
-from pyro.distributions.transforms import iterated, block_autoregressive
+from pyro.distributions.transforms import block_autoregressive, iterated
 from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoNormalizingFlow
 from pyro.infer.reparam import NeuTraReparam
-
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
