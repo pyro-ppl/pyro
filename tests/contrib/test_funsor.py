@@ -1,13 +1,11 @@
 from collections import OrderedDict
 
 import torch
-import pyro
 
 from pyro.contrib.funsor import to_funsor, to_data, named
 
 
 def test_iteration():
-    import funsor
     from funsor.domains import bint, reals
     from funsor.tensor import Tensor
 
@@ -32,8 +30,7 @@ def test_iteration():
 
 
 def test_nesting():
-    import funsor
-    from funsor.domains import bint, reals
+    from funsor.domains import bint
     from funsor.tensor import Tensor
 
     @named
@@ -64,7 +61,6 @@ def test_nesting():
 
 
 def test_staggered():
-    import funsor
     from funsor.domains import bint, reals
     from funsor.tensor import Tensor
 
