@@ -58,6 +58,12 @@ def _deep_setattr(obj, key, val):
     setattr(obj, rpart, val)
 
 
+def _deep_getattr(obj, key):
+    for part in key.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
 def prototype_hide_fn(msg):
     # Record only stochastic sites in the prototype_trace.
     return msg["type"] != "sample" or msg["is_observed"] or site_is_subsample(msg)
@@ -345,6 +351,144 @@ class AutoDelta(AutoGuide):
         :rtype: dict
         """
         return self(*args, **kwargs)
+
+
+class AutoNormal(AutoGuide):
+    """This implementation of :class:`AutoGuide` uses Normal(0, 1) distributions
+    to construct a guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
+
+    It should be equivalent to :class: `AutoDiagonalNormal` , but with
+    more convenient site names and with better support for
+    :class:`~pyro.infer.trace_mean_field_elbo.TraceMeanField_ELBO` .
+
+    In :class:`AutoDiagonalNormal` , if your model has N named
+    parameters with dimensions k_i and sum k_i = D, you get a single
+    vector of length D for your mean, and a single vector of length D
+    for sigmas.  This guide gives you N distinct normals that you can
+    call by name.
+
+    Usage::
+
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, ...)
+    """
+    def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1):
+        self.init_loc_fn = init_loc_fn
+
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
+
+        model = InitMessenger(self.init_loc_fn)(model)
+        super().__init__(model)
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+
+        self._unconstrained_shapes = {}
+        self._cond_indep_stacks = {}
+        self.locs = PyroModule()
+        self.scales = PyroModule()
+
+        # Initialize guide params
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            # Collect the shapes of unconstrained values.
+            # These may differ from the shapes of constrained values.
+            init_loc = biject_to(site["fn"].support).inv(site["value"].detach())
+            self._unconstrained_shapes[name] = init_loc.shape
+
+            # Collect independence contexts.
+            self._cond_indep_stacks[name] = site["cond_indep_stack"]
+            init_scale = torch.full_like(init_loc, self._init_scale)
+
+            _deep_setattr(self.locs, name, nn.Parameter(init_loc))
+            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
+
+    def _get_loc_and_scale(self, name):
+        site_loc = _deep_getattr(self.locs, name)
+        site_scale = _deep_getattr(self.scales, name)
+        return site_loc, site_scale
+
+    def forward(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        plates = self._create_plates()
+        result = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            transform = biject_to(site["fn"].support)
+
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(plates[frame.name])
+
+                site_loc, site_scale = self._get_loc_and_scale(name)
+                unconstrained_latent = pyro.sample(
+                    name + "_unconstrained",
+                    dist.Normal(
+                        site_loc, site_scale,
+                    ).to_event(site["fn"].event_dim),
+                    infer={"is_auxiliary": True}
+                )
+
+                value = transform(unconstrained_latent)
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_latent)
+                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
+                delta_dist = dist.Delta(value, log_density=log_density,
+                                        event_dim=site["fn"].event_dim)
+
+                result[name] = pyro.sample(name, delta_dist)
+
+        return result
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        medians = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            site_loc, _ = self._get_loc_and_scale(name)
+            median = biject_to(site["fn"].support)(site_loc)
+            if median is site_loc:
+                median = median.clone()
+            medians[name] = median
+
+        return medians
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns posterior quantiles each latent variable. Example::
+
+            print(guide.quantiles([0.05, 0.5, 0.95]))
+
+        :param quantiles: A list of requested quantiles between 0 and 1.
+        :type quantiles: torch.Tensor or list
+        :return: A dict mapping sample site name to a list of quantile values.
+        :rtype: dict
+        """
+        results = {}
+
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            site_loc, site_scale = self._get_loc_and_scale(name)
+
+            site_quantiles = torch.tensor(quantiles, dtype=site_loc.dtype, device=site_loc.device)
+            site_quantiles_values = dist.Normal(site_loc, site_scale).icdf(site_quantiles)
+            constrained_site_quantiles = biject_to(site["fn"].support)(site_quantiles_values)
+            results[name] = constrained_site_quantiles
+
+        return results
 
 
 class AutoContinuous(AutoGuide):
