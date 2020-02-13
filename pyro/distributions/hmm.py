@@ -506,13 +506,21 @@ class GaussianHMM(HiddenMarkovModel):
         obs_dim = self.obs_dim
         hidden_dim = self.hidden_dim
         trans = self._trans + self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
-        if trans.batch_shape[-1] != self.duration:
-            trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
+        trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
         z = _sequential_gaussian_filter_sample(self._init, trans, sample_shape)
         perm = torch.cat([torch.arange(hidden_dim, hidden_dim + obs_dim, device=z.device),
                           torch.arange(hidden_dim, device=z.device)])
         x = self._obs.event_permute(perm).condition(z).rsample()
         return x
+
+    def rsample_posterior(self, value, sample_shape=torch.Size()):
+        """
+        EXPERIMENTAL Sample from the latent state conditioned on observation.
+        """
+        trans = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
+        trans = trans.expand(trans.batch_shape)
+        z = _sequential_gaussian_filter_sample(self._init, trans, sample_shape)
+        return z
 
     def filter(self, value):
         """
@@ -545,8 +553,8 @@ class GaussianHMM(HiddenMarkovModel):
 
     def conjugate_update(self, other):
         """
-        Creates an updated :class:`GaussianHMM` fusing information from another
-        compatible distribution.
+        EXPERIMENTAL Creates an updated :class:`GaussianHMM` fusing information
+        from another compatible distribution.
 
         This should satisfy::
 
@@ -925,7 +933,8 @@ class LinearHMM(HiddenMarkovModel):
         init = self.initial_dist.rsample(sample_shape)
         trans = self.transition_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
         obs = self.observation_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
-        z = _linear_integrate(init, self.transition_matrix, trans)
+        trans_matrix = self.transition_matrix.expand(self.batch_shape + (self.duration, -1, -1))
+        z = _linear_integrate(init, trans_matrix, trans)
         x = (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
         for t in self.transforms:
             x = t(x)

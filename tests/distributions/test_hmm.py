@@ -255,6 +255,7 @@ def test_discrete_hmm_diag_normal(num_steps):
 @pytest.mark.parametrize('obs_dim', [1, 2])
 @pytest.mark.parametrize('hidden_dim', [1, 3])
 @pytest.mark.parametrize('init_shape,trans_mat_shape,trans_mvn_shape,obs_mat_shape,obs_mvn_shape', [
+    ((), (), (), (), ()),
     ((), (6,), (), (), ()),
     ((), (), (6,), (), ()),
     ((), (), (), (6,), ()),
@@ -281,9 +282,10 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
-    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
+                         duration=6)
 
-    shape = broadcast_shape(init_shape + (1,),
+    shape = broadcast_shape(init_shape + (6,),
                             trans_mat_shape,
                             trans_mvn_shape,
                             obs_mat_shape,
@@ -321,6 +323,9 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     assert isinstance(final, dist.MultivariateNormal)
     assert final.batch_shape == d.batch_shape
     assert final.event_shape == (hidden_dim,)
+
+    z = d.rsample_posterior(data)
+    assert z.shape == expected_batch_shape + time_shape + (hidden_dim,)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)
@@ -653,6 +658,7 @@ def random_stable(stability, skew_scale_loc_shape):
 @pytest.mark.parametrize('obs_dim', [1, 2])
 @pytest.mark.parametrize('hidden_dim', [1, 3])
 @pytest.mark.parametrize('init_shape,trans_mat_shape,trans_dist_shape,obs_mat_shape,obs_dist_shape', [
+    ((), (), (), (), ()),
     ((), (4,), (), (), ()),
     ((), (), (4,), (), ()),
     ((), (), (), (4,), ()),
@@ -676,9 +682,10 @@ def test_stable_hmm_shape(init_shape, trans_mat_shape, trans_dist_shape,
     trans_dist = random_stable(stability, trans_dist_shape + (hidden_dim,)).to_event(1)
     obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
     obs_dist = random_stable(stability, obs_dist_shape + (obs_dim,)).to_event(1)
-    d = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    d = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
+                       duration=4)
 
-    shape = broadcast_shape(init_shape + (1,),
+    shape = broadcast_shape(init_shape + (4,),
                             trans_mat_shape,
                             trans_dist_shape,
                             obs_mat_shape,
