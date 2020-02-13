@@ -25,7 +25,7 @@ from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-from tests.common import assert_close, assert_equal, xfail_if_not_implemented
+from tests.common import assert_close, assert_equal
 
 
 @pytest.mark.parametrize("auto_class", [
@@ -116,11 +116,10 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
         pyro.sample("z5", dist.Dirichlet(torch.ones(3)))
         pyro.sample("z6", dist.Normal(0, 1).expand((2,)).mask(torch.arange(2) > 0).to_event(1))
 
-    with xfail_if_not_implemented():
-        guide = auto_class(model, init_loc_fn=init_loc_fn)
-        elbo = Elbo(strict_enumeration_warning=False)
-        loss = elbo.loss(model, guide)
-        assert np.isfinite(loss), loss
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    elbo = Elbo(strict_enumeration_warning=False)
+    loss = elbo.loss(model, guide)
+    assert np.isfinite(loss), loss
 
 
 @pytest.mark.xfail(reason="sequential plate is not yet supported")

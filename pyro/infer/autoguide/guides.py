@@ -374,8 +374,6 @@ class AutoNormal(AutoGuide):
         svi = SVI(model, guide, ...)
     """
     def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1):
-        if init_loc_fn is not init_to_feasible:
-            raise NotImplementedError("TODO")
         self.init_loc_fn = init_loc_fn
 
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -390,31 +388,20 @@ class AutoNormal(AutoGuide):
 
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
-        self.locs = PyroModule(name='locs')
-        self.scales = PyroModule(name='scales')
+        self.locs = PyroModule()
+        self.scales = PyroModule()
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect the shapes of unconstrained values.
             # These may differ from the shapes of constrained values.
-            constrained_shape = site["value"].shape
-            unconstrained_shape = biject_to(site["fn"].support).inv(site["value"]).shape
-
-            event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
-
-            site_batch_shape = site["fn"].batch_shape
-
-            self._unconstrained_shapes[name] = unconstrained_shape
-            unconstrained_shape_for_params = broadcast_shape(
-                unconstrained_shape,
-                site_batch_shape + (1,) * event_dim
-            )
+            init_loc = biject_to(site["fn"].support).inv(site["value"].detach())
+            self._unconstrained_shapes[name] = init_loc.shape
 
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
+            init_scale = torch.full_like(init_loc, self._init_scale)
 
-            init_loc = site["value"].new_zeros(unconstrained_shape_for_params)
-            init_scale = site["value"].new_full(unconstrained_shape_for_params, self._init_scale)
             _deep_setattr(self.locs, name, nn.Parameter(init_loc))
             _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
 
@@ -725,7 +712,7 @@ class AutoDiagonalNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
-
+    initialized to the identity times a small factor.
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
