@@ -92,7 +92,7 @@ class NamedMessenger(ReentrantMessenger):
                             dim -= 1
                         frame.name_to_dim[name] = dim
                     dim = frame.name_to_dim[name]
-                    frame.dim_to_name[dim] = (name, funsor_value.inputs[name])
+                    frame.dim_to_name[dim] = name
                     name_to_dim[name] = dim
         msg['depth'] += self._pos
 
@@ -108,7 +108,7 @@ class NamedMessenger(ReentrantMessenger):
                 frame.name_to_dim.update({name: name_to_dim[name] for name in msg["fresh"]})
                 # dim_to_name maps dims to (name, domain) pairs
                 frame.dim_to_name.update(
-                    {name_to_dim[name]: (name, funsor_value.inputs[name]) for name in msg["fresh"]})
+                    {name_to_dim[name]: name for name in msg["fresh"]})
 
             msg["depth"] -= 1
 
