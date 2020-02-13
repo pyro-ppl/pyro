@@ -7,7 +7,7 @@ from collections import OrderedDict
 from pyro.poutine import Messenger
 from pyro.poutine.trace_messenger import TraceMessenger
 
-from pyro.contrib.funsor import to_funsor, to_data
+from pyro.contrib.funsor import named, to_funsor, to_data
 
 
 class SimpleEnumMessenger(Messenger):
@@ -47,7 +47,7 @@ def simple_ve_1(model, *args):
     import funsor
 
     with FunsorLogJointMessenger() as tr:
-        with SimpleEnumMessenger():
+        with SimpleEnumMessenger(), named():
             model(*args)
 
     log_joint = sum([site["infer"]["funsor_fn"](value=site["infer"]["funsor_value"])
@@ -74,7 +74,7 @@ def simple_ve_2(model, *args):
     import funsor
 
     with FunsorLogJointMessenger() as tr:
-        with SimpleEnumMessenger():
+        with SimpleEnumMessenger(), named():
             model(*args)
 
     with funsor.interpretation(funsor.optimizer.optimize):
