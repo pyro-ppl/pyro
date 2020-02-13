@@ -1,3 +1,6 @@
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 import pyro.poutine.runtime
 
 from .named_messenger import NamedMessenger
@@ -15,7 +18,7 @@ def to_data(x, name_to_dim=None):
     return funsor.to_data(x, name_to_dim=name_to_dim)
 
 
-def named(fn=None, history=1, keep=False, dim=None, name=None):
+def named(fn=None, history=1, keep=False):
     """
     Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
 
@@ -31,17 +34,12 @@ def named(fn=None, history=1, keep=False, dim=None, name=None):
         when branching: if ``keep=True``, neighboring branches at the same
         level can depend on each other; if ``keep=False``, neighboring branches
         are independent (conditioned on their share"
-    :param int dim: An optional dimension to use for this independence index.
-        Interface stub, behavior not yet implemented.
-    :param str name: An optional unique name to help inference algorithms match
-        :func:`pyro.markov` sites between models and guides.
-        Interface stub, behavior not yet implemented.
     """
     if fn is None:
         # Used as a decorator with bound args
-        return NamedMessenger(history=history, keep=keep, dim=dim, name=name)
+        return NamedMessenger(history=history, keep=keep)
     if not callable(fn):
         # Used as a generator
-        return NamedMessenger(history=history, keep=keep, dim=dim, name=name).generator(iterable=fn)
+        return NamedMessenger(history=history, keep=keep).generator(iterable=fn)
     # Used as a decorator with bound args
-    return NamedMessenger(history=history, keep=keep, dim=dim, name=name)(fn)
+    return NamedMessenger(history=history, keep=keep)(fn)

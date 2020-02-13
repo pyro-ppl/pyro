@@ -13,7 +13,7 @@ StackFrame = namedtuple('StackFrame', ['name_to_dim', 'dim_to_name'])
 
 class NamedMessenger(ReentrantMessenger):
     """
-    This is a statistical equivalent of a memory management arena.
+    Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
 
     :param int history: The number of previous contexts visible from the
         current context. Defaults to 1. If zero, this is similar to
@@ -22,24 +22,11 @@ class NamedMessenger(ReentrantMessenger):
         when branching: if ``keep=True``, neighboring branches at the same
         level can depend on each other; if ``keep=False``, neighboring branches
         are independent (conditioned on their shared ancestors).
-    :param int dim: An optional dimension to use for this independence index.
-        Interface stub, behavior not yet implemented.
-    :param str name: An optional unique name to help inference algorithms match
-        :func:`pyro.markov` sites between models and guides.
-        Interface stub, behavior not yet implemented.
     """
-    def __init__(self, history=1, keep=False, dim=None, name=None):
+    def __init__(self, history=1, keep=False):
         assert history >= 0
         self.history = history
         self.keep = keep
-        self.dim = dim
-        self.name = name
-        if dim is not None:
-            raise NotImplementedError(
-                "vectorized markov not yet implemented, try setting dim to None")
-        if name is not None:
-            raise NotImplementedError(
-                "vectorized markov not yet implemented, try setting name to None")
         self._iterable = None
         self._pos = -1
         self._stack = []
@@ -80,13 +67,13 @@ class NamedMessenger(ReentrantMessenger):
         # every markov context is responsible for knowing about non-fresh local vars,
         # and fresh vars are handled by passing information up & down the stack
 
-        # handling non-fresh vars
+        # handling non-fresh vars: just look at the deepest context they appear in
         name_to_dim.update({name: self.current_frame.name_to_dim[name]
                             for name in funsor_value.inputs
                             if name in self.current_frame.name_to_dim
                             and name not in name_to_dim})
 
-        # handling fresh vars
+        # handling fresh vars: pass responsibility for allocation up the stack
         depth = msg.setdefault("depth", -self.history - 1)
         if depth == -self.history - 1:
             msg["fresh"] = frozenset(name for name in funsor_value.inputs
