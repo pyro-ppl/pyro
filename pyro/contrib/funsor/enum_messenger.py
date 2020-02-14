@@ -74,9 +74,11 @@ class EnumMessenger(GlobalNameMessenger):
         import funsor
 
         if msg["done"] or msg["is_observed"] or msg.get("expand", False) or \
-                msg["infer"].get("enumerate") != "parallel" or \
-                msg["infer"].get("num_samples", None) is not None:
+                msg["infer"].get("enumerate") != "parallel":
             return
+
+        if msg["infer"].get("num_samples", None) is not None:
+            raise NotImplementedError("TODO implement multiple sampling")
 
         msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
         size = msg["infer"]["funsor_fn"].inputs["value"].dtype
