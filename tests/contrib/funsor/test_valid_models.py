@@ -29,14 +29,14 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
         model(**kwargs)
 
 
-@pytest.mark.parametrize('enumerate_,expand,num_samples', [
-    (None, False, None),
-    ("sequential", False, None),
-    ("sequential", True, None),
-    ("parallel", False, None),
-    ("parallel", True, None),
+@pytest.mark.parametrize('enumerate_,expand', [
+    (None, False),
+    ("sequential", False),
+    ("sequential", True),
+    ("parallel", False),
+    ("parallel", True),
 ])
-def test_enumerate_parallel_plate_ok(enumerate_, expand, num_samples):
+def test_enumerate_parallel_plate_ok(enumerate_, expand):
 
     def model():
         p2 = torch.ones(2) / 2
@@ -136,12 +136,12 @@ def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
     assert_ok(model, max_plate_nesting=1)
 
 
-@pytest.mark.parametrize('enumerate_,expand,num_samples', [
-    (None, True, None),
-    ("parallel", True, None),
-    ("parallel", False, None),
+@pytest.mark.parametrize('enumerate_,expand', [
+    (None, True),
+    ("parallel", True),
+    ("parallel", False),
 ])
-def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_, expand, num_samples):
+def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_, expand):
 
     def model():
         x_plate = pyro.plate("x_plate", 10, 5, dim=-1)
