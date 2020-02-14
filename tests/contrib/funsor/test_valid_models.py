@@ -26,7 +26,6 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     """
     Assert that enumeration runs...
     """
-    pyro.clear_param_store()
     with poutine.enum(first_available_dim=-max_plate_nesting - 1):
         model(**kwargs)
     with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
