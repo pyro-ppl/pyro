@@ -9,7 +9,6 @@ def test_iteration():
     from funsor.domains import bint, reals
     from funsor.tensor import Tensor
 
-    @named
     def testing():
         for i in named(range(5)):
             v1 = to_data(Tensor(torch.ones(2), OrderedDict([(f"{i}", bint(2))]), 'real'))
