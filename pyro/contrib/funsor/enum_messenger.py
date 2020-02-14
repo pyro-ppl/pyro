@@ -17,7 +17,7 @@ class MarkovMessenger(NamedMessenger):
 
 class IndepMessenger(GlobalNameMessenger):
     """
-    Sketch of vectorized plate implementation using to_data
+    Sketch of vectorized plate implementation using to_data instead of _DIM_ALLOCATOR
     """
     def __init__(self, name=None, size=None):
         assert size > 1
