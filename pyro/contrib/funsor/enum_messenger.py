@@ -4,10 +4,9 @@
 import torch
 from collections import OrderedDict
 
-from pyro.poutine import Messenger
 from pyro.poutine.trace_messenger import TraceMessenger
 
-from pyro.contrib.funsor import named, to_funsor, to_data
+from pyro.contrib.funsor import to_funsor, to_data
 from pyro.contrib.funsor.named_messenger import GlobalNameMessenger
 
 
