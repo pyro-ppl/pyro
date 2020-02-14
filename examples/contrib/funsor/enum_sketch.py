@@ -4,14 +4,14 @@
 from pyro.poutine import Messenger
 
 from pyro.contrib.funsor import to_funsor
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, FunsorTraceMessenger
+from pyro.contrib.funsor.enum_messenger import EnumMessenger, TraceMessenger
 
 
 def simple_ve_1(model, *args):
 
     import funsor
 
-    with FunsorTraceMessenger() as tr:
+    with TraceMessenger() as tr:
         with EnumMessenger():
             model(*args)
 

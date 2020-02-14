@@ -8,7 +8,7 @@ import torch
 from collections import OrderedDict
 
 from pyro.poutine.indep_messenger import CondIndepStackFrame
-from pyro.poutine.trace_messenger import TraceMessenger
+from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
 from pyro.contrib.funsor.named_messenger import GlobalNameMessenger, NamedMessenger
@@ -90,7 +90,7 @@ class EnumMessenger(GlobalNameMessenger):
         msg["done"] = True
 
 
-class FunsorTraceMessenger(TraceMessenger):
+class TraceMessenger(OrigTraceMessenger):
     """
     This version of TraceMessenger does its packing online instead of after the fact,
     converting all distributions and values to Funsors as soon as they are available.
