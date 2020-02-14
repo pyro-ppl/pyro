@@ -8,9 +8,15 @@ from pyro.poutine import Messenger
 from pyro.poutine.trace_messenger import TraceMessenger
 
 from pyro.contrib.funsor import named, to_funsor, to_data
+from pyro.contrib.funsor.named_messenger import GlobalNameMessenger
 
 
-class SimpleEnumMessenger(Messenger):
+class IndepMessenger(GlobalNameMessenger):
+    # TODO
+    pass
+
+
+class EnumMessenger(GlobalNameMessenger):
 
     def _pyro_sample(self, msg):
 
@@ -40,42 +46,3 @@ class FunsorTraceMessenger(TraceMessenger):
         if "funsor_value" not in msg["infer"]:
             msg["infer"]["funsor_value"] = to_funsor(msg["value"])
         return super()._pyro_post_sample(msg)
-
-
-def simple_ve_1(model, *args):
-
-    import funsor
-
-    with FunsorLogJointMessenger() as tr:
-        with SimpleEnumMessenger(), named():
-            model(*args)
-
-    log_joint = sum([site["infer"]["funsor_fn"](value=site["infer"]["funsor_value"])
-                     for site in tr.trace.nodes.values()])
-    return log_joint.reduce(funsor.ops.logaddexp)
-
-
-class FunsorLogJointMessenger(Messenger):
-
-    def __enter__(self):
-        self.log_joint = to_funsor(0.)
-        return super().__enter__()
-
-    def _pyro_post_sample(self, msg):
-        import funsor
-        with funsor.interpretation(funsor.terms.lazy):
-            self.log_joint += msg["infer"].get("funsor_fn", to_funsor(msg["fn"]))(
-                value=msg["infer"].get("funsor_value", to_funsor(msg["value"]))
-            )
-
-
-def simple_ve_2(model, *args):
-
-    import funsor
-
-    with FunsorLogJointMessenger() as tr:
-        with SimpleEnumMessenger(), named():
-            model(*args)
-
-    with funsor.interpretation(funsor.optimizer.optimize):
-        return tr.log_joint.reduce(funsor.ops.logaddexp)
