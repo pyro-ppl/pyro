@@ -71,7 +71,7 @@ def test_staggered():
                 v2 = to_data(Tensor(torch.zeros(2), OrderedDict([('a', bint(2))]), 'real'))
                 fv2 = to_funsor(v2, reals())
                 assert v2.shape == (2,)
-                print('a', v2.shape)  # shapes should also alternate?
+                print('a', v2.shape)
                 print('a', fv2.inputs)
 
     testing()
