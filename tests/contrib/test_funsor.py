@@ -3,6 +3,7 @@ from collections import OrderedDict
 import torch
 
 from pyro.contrib.funsor import to_funsor, to_data, named
+from pyro.contrib.funsor.named_messenger import GlobalNameMessenger
 
 
 def test_iteration():
@@ -25,14 +26,14 @@ def test_iteration():
             print('a', v2.shape)  # shapes should stay the same
             print('a', fv2.inputs)
 
-    testing()
+    with GlobalNameMessenger():
+        testing()
 
 
 def test_nesting():
     from funsor.domains import bint
     from funsor.tensor import Tensor
 
-    @named
     def testing():
 
         with named():
@@ -56,14 +57,14 @@ def test_nesting():
 
                         assert v4.shape == (2, 1)
 
-    testing()
+    with GlobalNameMessenger():
+        testing()
 
 
 def test_staggered():
     from funsor.domains import bint, reals
     from funsor.tensor import Tensor
 
-    @named
     def testing():
         for i in named(range(12)):
             if i % 4 == 0:
@@ -73,4 +74,5 @@ def test_staggered():
                 print('a', v2.shape)
                 print('a', fv2.inputs)
 
-    testing()
+    with GlobalNameMessenger():
+        testing()

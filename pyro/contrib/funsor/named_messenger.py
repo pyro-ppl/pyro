@@ -4,6 +4,7 @@
 from collections import OrderedDict, namedtuple
 from contextlib import ExitStack  # python 3
 
+from pyro.poutine.messenger import Messenger
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 
 
@@ -35,8 +36,9 @@ class DimStack:
     def global_frame(self):
         return self.stack[0]
 
-    def free_globals(self, names):
-        global_frame = self.stack[0]
+    def free_globals(self, names=None):
+        global_frame = self.global_frame
+        names = frozenset(global_frame.name_to_dim.keys()) if names is None else names
         for name in frozenset(names).intersection(global_frame.name_to_dim):
             global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
 
@@ -134,6 +136,17 @@ class NamedMessenger(ReentrantMessenger):
                             for dim in range(-batch_dim, 0)
                             if dim not in dim_to_name
                             and dim in _DIM_STACK.current_frame.dim_to_name})
+
+
+class GlobalNameMessenger(Messenger):
+    # demonstration of managing names in global scope, as done by plate and enum
+    def __enter__(self):
+        self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)
+        return super().__enter__()
+
+    def __exit__(self, *args, **kwargs):
+        _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
+        return super().__exit__(*args, **kwargs)
 
 
 def named(fn=None, history=1, keep=False):
