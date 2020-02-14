@@ -11,7 +11,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, IndepMessenger
+from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def pyro_plate(*args, **kwargs):
-    return IndepMessenger(*args, **kwargs)
+    return PlateMessenger(*args, **kwargs)
 
 
 def assert_ok(model, max_plate_nesting=None, **kwargs):
@@ -92,7 +92,7 @@ def test_enum_discrete_iplate_plate_dependency_ok(enumerate_, max_plate_nesting)
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
         inner_plate = pyro_plate("plate", 10)
-        for i in pyro_plate("iplate", 3):
+        for i in pyro.plate("iplate", 3):  # use regular sequential plate here...
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
             with inner_plate:
                 pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).expand_by([5]),

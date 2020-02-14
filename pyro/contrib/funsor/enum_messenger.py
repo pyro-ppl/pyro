@@ -7,6 +7,7 @@ which should eventually be drop-in replacements for the current versions.
 import torch
 from collections import OrderedDict
 
+from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
@@ -24,7 +25,6 @@ class MarkovMessenger(NamedMessenger):
 class IndepMessenger(GlobalNameMessenger):
     """
     Sketch of vectorized plate implementation using to_data instead of _DIM_ALLOCATOR.
-    Should eventually be a drop-in replacement for pyro.plate.
     """
     def __init__(self, name=None, size=None, dim=None):
         assert size > 1
@@ -57,6 +57,16 @@ class IndepMessenger(GlobalNameMessenger):
     def _pyro_param(self, msg):
         frame = CondIndepStackFrame(self.name, self.dim, self.size, 0)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+
+
+class PlateMessenger(IndepMessenger):
+    """
+    Combines new IndepMessenger implementation with existing BroadcastMessenger.
+    Should eventually be a drop-in replacement for pyro.plate.
+    """
+    def _pyro_sample(self, msg):
+        super()._pyro_sample(msg)
+        BroadcastMessenger._pyro_sample(msg)
 
 
 class EnumMessenger(GlobalNameMessenger):
