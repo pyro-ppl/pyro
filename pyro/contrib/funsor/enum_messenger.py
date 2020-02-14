@@ -83,7 +83,7 @@ class EnumMessenger(GlobalNameMessenger):
         msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
         size = msg["infer"]["funsor_fn"].inputs["value"].dtype
         msg["infer"]["funsor_value"] = funsor.Tensor(
-            torch.arange(size),
+            torch.arange(size),  # TODO use funsor.Arange for backend independence
             OrderedDict([(msg["name"], size)]),
             funsor.bint(size)
         )
