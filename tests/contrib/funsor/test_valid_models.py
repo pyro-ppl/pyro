@@ -2,25 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-import warnings
-from collections import defaultdict
 
 import pytest
 import torch
-from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
-from pyro.infer.util import torch_item
-from pyro.ops.indexing import Vindex
-from pyro.optim import Adam
-from tests.common import assert_close
 
 from pyro.contrib.funsor.enum_messenger import EnumMessenger as FunsorEnumMessenger
 
 logger = logging.getLogger(__name__)
+
+# These tests are currently not functioning due to missing stuff in contrib.funsor
 
 
 def assert_ok(model, max_plate_nesting=None, **kwargs):
@@ -141,20 +136,6 @@ def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
     assert_ok(model, max_plate_nesting=1)
 
 
-def test_plate_shape_broadcasting():
-    data = torch.ones(1000, 2)
-
-    def model():
-        with pyro.plate("num_particles", 10, dim=-3):
-            with pyro.plate("components", 2, dim=-1):
-                p = pyro.sample("p", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
-                assert p.shape == torch.Size((10, 1, 2))
-            with pyro.plate("data", data.shape[0], dim=-2):
-                pyro.sample("obs", dist.Bernoulli(p), obs=data)
-
-    assert_ok(model)
-
-
 @pytest.mark.parametrize('enumerate_,expand,num_samples', [
     (None, True, None),
     ("parallel", True, None),
@@ -210,15 +191,9 @@ def test_dim_allocation_ok(expand):
                         q = pyro.sample("q", dist.Bernoulli(p))
 
         # check shapes
-        if enumerate_ and not expand:
-            assert x.shape == (1, 1, 1)
-            assert y.shape == (1, 1, 1)
-            assert z.shape == (1, 1, 1)
-            assert q.shape == (1, 1, 1, 1)
-        else:
-            assert x.shape == (5, 1, 1)
-            assert y.shape == (5, 1, 6)
-            assert z.shape == (5, 7, 6)
-            assert q.shape == (8, 5, 7, 6)
+        assert x.shape == (5, 1, 1)
+        assert y.shape == (5, 1, 6)
+        assert z.shape == (5, 7, 6)
+        assert q.shape == (8, 5, 7, 6)
 
     assert_ok(model, max_plate_nesting=4)
