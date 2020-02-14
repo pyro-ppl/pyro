@@ -4,6 +4,7 @@
 import torch
 from collections import OrderedDict
 
+from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.trace_messenger import TraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
@@ -11,8 +12,36 @@ from pyro.contrib.funsor.named_messenger import GlobalNameMessenger
 
 
 class IndepMessenger(GlobalNameMessenger):
-    # TODO
-    pass
+    """
+    Sketch of vectorized plate implementation using to_data
+    """
+    def __init__(self, name=None, size=None):
+        assert size > 1
+        super().__init__()
+        self.name = name
+        self.size = size
+
+        import funsor
+
+        self._indices = funsor.Tensor(
+            torch.arange(self.size, dtype=torch.long),
+            OrderedDict([(self.name, funsor.bint(self.size))]),
+            self.size
+        )
+
+    def __enter__(self):
+        super().__enter__()  # do this first to take care of globals recycling
+        indices = to_data(self._indices)  # TODO indicate that this dim is user-visible
+        self.dim, self.indices = -indices.dim(), indices.squeeze()
+        return self
+
+    def _pyro_sample(self, msg):
+        frame = CondIndepStackFrame(self.name, self.dim, self.size, 0)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+
+    def _pyro_param(self, msg):
+        frame = CondIndepStackFrame(self.name, self.dim, self.size, 0)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
 
 
 class EnumMessenger(GlobalNameMessenger):
