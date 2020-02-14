@@ -37,7 +37,7 @@ class IndepMessenger(GlobalNameMessenger):
         import funsor
 
         self._indices = funsor.Tensor(
-            torch.arange(self.size, dtype=torch.long),
+            torch.arange(self.size, dtype=torch.long),  # TODO use funsor.Arange for backend independence
             OrderedDict([(self.name, funsor.bint(self.size))]),
             self.size
         )
