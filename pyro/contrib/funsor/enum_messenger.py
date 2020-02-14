@@ -8,7 +8,11 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.trace_messenger import TraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
-from pyro.contrib.funsor.named_messenger import GlobalNameMessenger
+from pyro.contrib.funsor.named_messenger import GlobalNameMessenger, NamedMessenger
+
+
+class MarkovMessenger(NamedMessenger):
+    pass
 
 
 class IndepMessenger(GlobalNameMessenger):
