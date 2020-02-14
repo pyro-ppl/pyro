@@ -1,6 +1,9 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
-
+"""
+This file contains reimplementations of some of Pyro's core enumeration machinery,
+which should eventually be drop-in replacements for the current versions.
+"""
 import torch
 from collections import OrderedDict
 
@@ -57,7 +60,10 @@ class IndepMessenger(GlobalNameMessenger):
 
 
 class EnumMessenger(GlobalNameMessenger):
-
+    """
+    This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
+    for each discrete sample site.
+    """
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
@@ -85,7 +91,10 @@ class EnumMessenger(GlobalNameMessenger):
 
 
 class FunsorTraceMessenger(TraceMessenger):
-
+    """
+    This version of TraceMessenger does its packing online instead of after the fact,
+    converting all distributions and values to Funsors as soon as they are available.
+    """
     def _pyro_post_sample(self, msg):
         if "funsor_fn" not in msg["infer"]:
             msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
