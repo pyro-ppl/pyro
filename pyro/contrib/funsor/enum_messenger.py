@@ -12,12 +12,16 @@ from pyro.contrib.funsor.named_messenger import GlobalNameMessenger, NamedMessen
 
 
 class MarkovMessenger(NamedMessenger):
+    """
+    NamedMessenger is meant to be a drop-in replacement for pyro.markov.
+    """
     pass
 
 
 class IndepMessenger(GlobalNameMessenger):
     """
-    Sketch of vectorized plate implementation using to_data instead of _DIM_ALLOCATOR
+    Sketch of vectorized plate implementation using to_data instead of _DIM_ALLOCATOR.
+    Should eventually be a drop-in replacement for pyro.plate.
     """
     def __init__(self, name=None, size=None, dim=None):
         assert size > 1
@@ -37,10 +41,9 @@ class IndepMessenger(GlobalNameMessenger):
 
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
-        if self.dim is not None:
-            indices = to_data(self._indices, name_to_dim=OrderedDict([(self.name, self.dim)]))
-        else:
-            indices = to_data(self._indices)  # TODO indicate that this dim is user-visible
+        name_to_dim = OrderedDict([(self.name, self.dim)]) if self.dim is not None else self.dim
+        indices = to_data(self._indices, name_to_dim=name_to_dim)  # TODO indicate that this dim is user-visible
+        # extract the dimension allocated by to_data to match plate's current behavior
         self.dim, self.indices = -indices.dim(), indices.squeeze()
         return self
 
@@ -65,7 +68,8 @@ class EnumMessenger(GlobalNameMessenger):
         import funsor
 
         if msg["done"] or msg["is_observed"] or msg.get("expand", False) or \
-                msg["infer"].get("enumerate") != "parallel":
+                msg["infer"].get("enumerate") != "parallel" or \
+                msg["infer"].get("num_samples", None) is not None:
             return
 
         msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
