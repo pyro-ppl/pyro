@@ -18,33 +18,20 @@ from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from tests.common import assert_close
 
+from pyro.contrib.funsor.enum_messenger import EnumMessenger as FunsorEnumMessenger
+
 logger = logging.getLogger(__name__)
 
 
-def assert_ok(model, guide, elbo, **kwargs):
+def assert_ok(model, max_plate_nesting=None, **kwargs):
     """
-    Assert that inference works without warnings or errors.
+    Assert that enumeration runs...
     """
     pyro.clear_param_store()
-    inference = SVI(model, guide, Adam({"lr": 1e-6}), elbo)
-    inference.step(**kwargs)
-    try:
-        pyro.set_rng_seed(0)
-        loss = elbo.loss(model, guide, **kwargs)
-        if hasattr(elbo, "differentiable_loss"):
-            try:
-                pyro.set_rng_seed(0)
-                differentiable_loss = torch_item(elbo.differentiable_loss(model, guide, **kwargs))
-            except ValueError:
-                pass  # Ignore cases where elbo cannot be differentiated
-            else:
-                assert_close(differentiable_loss, loss, atol=0.01)
-        if hasattr(elbo, "loss_and_grads"):
-            pyro.set_rng_seed(0)
-            loss_and_grads = elbo.loss_and_grads(model, guide, **kwargs)
-            assert_close(loss_and_grads, loss, atol=0.01)
-    except NotImplementedError:
-        pass  # Ignore cases where loss isn't implemented, eg. TraceTailAdaptive_ELBO
+    with poutine.enum(first_available_dim=-max_plate_nesting - 1):
+        model(**kwargs)
+    with FunsorEnumMessenger(first_available_dim=-max_plate_nesting - 1):
+        model(**kwargs)
 
 
 @pytest.mark.parametrize('enumerate_,expand,num_samples', [
@@ -96,9 +83,8 @@ def test_enumerate_parallel_plate_ok(enumerate_, expand, num_samples):
             assert x34.shape == torch.Size([3])
             assert x536.shape == torch.Size([5, 3])
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=2, strict_enumeration_warning=enumerate_)
-    guide = config_enumerate(model, enumerate_, expand)
-    assert_ok(model, guide, elbo)
+    model = config_enumerate(model, enumerate_, expand)
+    assert_ok(model, max_plate_nesting=2)
 
 
 @pytest.mark.parametrize('max_plate_nesting', [1, float('inf')])
@@ -114,7 +100,7 @@ def test_enum_discrete_iplate_plate_dependency_ok(enumerate_, max_plate_nesting)
                 pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).expand_by([5]),
                             infer={'enumerate': enumerate_})
 
-    assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=max_plate_nesting))
+    assert_ok(model, max_plate_nesting=max_plate_nesting)
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
@@ -133,7 +119,7 @@ def test_enum_discrete_plates_dependency_ok(enumerate_):
         with x_plate, y_plate:
             pyro.sample("d", dist.Bernoulli(0.5).expand_by([6, 5]))
 
-    assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=2))
+    assert_ok(model, max_plate_nesting=2)
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
@@ -152,8 +138,7 @@ def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
             pyro.sample("b", dist.Bernoulli(p).expand_by([3]),
                         infer={'enumerate': enumerate_})
 
-    with pyro.validation_enabled():
-        assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=1))
+    assert_ok(model, max_plate_nesting=1)
 
 
 def test_plate_shape_broadcasting():
@@ -167,18 +152,11 @@ def test_plate_shape_broadcasting():
             with pyro.plate("data", data.shape[0], dim=-2):
                 pyro.sample("obs", dist.Bernoulli(p), obs=data)
 
-    def guide():
-        with pyro.plate("num_particles", 10, dim=-3):
-            with pyro.plate("components", 2, dim=-1):
-                pyro.sample("p", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
-
-    assert_ok(model, guide, Trace_ELBO())
+    assert_ok(model)
 
 
 @pytest.mark.parametrize('enumerate_,expand,num_samples', [
     (None, True, None),
-    ("sequential", True, None),
-    ("sequential", False, None),
     ("parallel", True, None),
     ("parallel", False, None),
 ])
@@ -205,34 +183,17 @@ def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_, expand, num_sampl
                 assert b.shape == (50, 1, 5)
                 assert c.shape == (2, 1, 1, 1)
                 assert d.shape == (2, 1, 1, 1, 1)
-        elif enumerate_ == "sequential":
-            if expand:
-                assert b.shape == (50, 1, 5)
-                assert c.shape == (50, 6, 1)
-                assert d.shape == (50, 6, 5)
-            else:
-                assert b.shape == (50, 1, 5)
-                assert c.shape == (1, 1, 1)
-                assert d.shape == (1, 1, 1)
         else:
             assert b.shape == (50, 1, 5)
             assert c.shape == (50, 6, 1)
             assert d.shape == (50, 6, 5)
 
-    guide = config_enumerate(model, default=enumerate_, expand=expand, num_samples=num_samples)
-    elbo = TraceEnum_ELBO(max_plate_nesting=3,
-                          strict_enumeration_warning=(enumerate_ == "parallel"))
-    assert_ok(model, guide, elbo)
+    model = config_enumerate(model, default=enumerate_, expand=expand)
+    assert_ok(model, max_plate_nesting=3)
 
 
-@pytest.mark.parametrize("Elbo,expand", [
-    (Trace_ELBO, False),
-    (TraceGraph_ELBO, False),
-    (TraceEnum_ELBO, False),
-    (TraceEnum_ELBO, True),
-])
-def test_dim_allocation_ok(Elbo, expand):
-    enumerate_ = (Elbo is TraceEnum_ELBO)
+@pytest.mark.parametrize("expand", [True, False])
+def test_dim_allocation_ok(expand):
 
     def model():
         p = torch.tensor(0.5, requires_grad=True)
@@ -260,5 +221,4 @@ def test_dim_allocation_ok(Elbo, expand):
             assert z.shape == (5, 7, 6)
             assert q.shape == (8, 5, 7, 6)
 
-    guide = config_enumerate(model, "sequential", expand=expand) if enumerate_ else model
-    assert_ok(model, guide, Elbo(max_plate_nesting=4))
+    assert_ok(model, max_plate_nesting=4)
