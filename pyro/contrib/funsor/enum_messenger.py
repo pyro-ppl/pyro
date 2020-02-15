@@ -128,8 +128,7 @@ class ReplayMessenger(OrigReplayMessenger):
             guide_msg = self.trace.nodes[name]
             if msg["is_observed"]:
                 return None
-            if guide_msg["type"] != "sample" or \
-                    guide_msg["is_observed"]:
+            if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sample in trace".format(name))
             msg["done"] = True
             msg["value"] = to_data(guide_msg["funsor"]["funsor_value"])  # only difference is here
