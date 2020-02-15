@@ -3,7 +3,6 @@
 
 import logging
 
-import torch
 import torch.nn as nn
 
 import pyro
@@ -74,13 +73,13 @@ class ForecastingModel(PyroModule):
         :param globals_: Any data computed by the :meth:`get_globals` method.
         :type globals_: object
         :returns: A pair ``(prediction, locals_)`` where ``prediction`` is a
-            ``data``-shaped :class:`~torch.Tensor` (defaults to ``zero_data``)
-            and ``locals_`` is arbitrary time-local data to be passed to
+            ``data``-shaped :class:`~torch.Tensor` (defaults to zero) and
+            ``locals_`` is arbitrary time-local data to be passed to
             :meth:`get_noise_dist` (defaults to None).
         :rtype tuple:
         """
-        prediction = zero_data
         locals_ = None
+        prediction = zero_data
         return prediction, locals_
 
     def get_noise_dist(self, zero_data, covariates, globals_, locals_):
@@ -103,31 +102,34 @@ class ForecastingModel(PyroModule):
         """
         return dist.Normal(zero_data, 1).to_event(zero_data.dim())
 
-    @torch.no_grad()
     def forward(self, data, covariates):
         t_obs = data.size(-2)
         t_cov = covariates.size(-2)
         assert t_obs <= t_cov
-        zero_data = data.new_zeros(()).expand(data.shape)
+        if t_obs == t_cov:  # training
+            zero_data = data.new_zeros(()).expand(data.shape)
+        else:  # forecasting
+            zero_data = data.new_zeros(()).expand(
+                data.shape[:-2] + covariates.shape[-2:-1] + data.shape[-1:])
 
         # Globals.
         with poutine.trace(param_only=True) as tr:
             globals_ = self.get_globals(zero_data, covariates)
-        self.global_params = tr.trace.param_nodes()
+        self.global_params = tr.trace.param_nodes
 
         # Locals.
         with poutine.trace(param_only=True) as tr:
             with pyro.plate("time", covariates.size(-2), dim=-1):
                 prediction, locals_ = self.get_locals(zero_data, covariates, globals_)
-        self.local_params = tr.trace.param_nodes()
+        self.local_params = tr.trace.param_nodes
 
         # Noise distribution.
         with poutine.trace(param_only=True) as tr:
             noise_dist = self.get_noise_dist(zero_data, covariates, globals_, locals_)
-        self.noise_params = tr.trace.param_nodes()
+        self.noise_params = tr.trace.param_nodes
 
         # Likelihood.
-        with pyro.plate_stack("series", data.dim() - 2):
+        with pyro.plate_stack("series", data.shape[:-2]):
             if t_obs == t_cov:  # training
                 pyro.sample("noise", noise_dist, obs=data - prediction)
             else:  # forecasting
@@ -135,6 +137,7 @@ class ForecastingModel(PyroModule):
                 right_pred = prediction[..., t_obs:, :]
                 noise_dist = prefix_condition(noise_dist, data - left_pred)
                 noise = pyro.sample("noise", noise_dist)
+                assert noise.shape[-right_pred.dim():] == right_pred.shape
                 return right_pred + noise
 
 
@@ -170,13 +173,16 @@ class Forecaster(nn.Module):
         optim = ClippedAdam({"lr": learning_rate, "betas": betas,
                              "lrd": learning_rate_decay ** (1 / num_steps)})
         elbo = Trace_ELBO()
+        elbo._guess_max_plate_nesting(self.model, self.guide, (data, covariates), {})
+        elbo.max_plate_nesting = max(elbo.max_plate_nesting, 1)  # force a time plate
+
         svi = SVI(self.model, self.guide, optim, elbo)
 
         losses = []
         for step in range(num_steps):
             loss = svi.step(data, covariates) / data.numel()
             if log_every and step % log_every == 0:
-                logging.info("step {: >4d} loss = {:0.6g}".format(step, loss))
+                logger.info("step {: >4d} loss = {:0.6g}".format(step, loss))
             losses.append(loss)
 
         self.max_plate_nesting = elbo.max_plate_nesting
@@ -184,10 +190,12 @@ class Forecaster(nn.Module):
 
     def forward(self, data, covariates, num_samples):
         assert data.size(-2) < covariates.size(-2)
+        assert self.max_plate_nesting >= 1
         dim = -1 - self.max_plate_nesting
+
         with poutine.trace() as tr:
-            with poutine.plate("particles", num_samples, dim=dim):
+            with pyro.plate("particles", num_samples, dim=dim):
                 self.guide()
         with PrefixReplayMessenger(tr.trace):
-            with poutine.plate("particles", num_samples, dim=dim):
+            with pyro.plate("particles", num_samples, dim=dim):
                 return self.model(data, covariates)

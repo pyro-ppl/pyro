@@ -81,7 +81,7 @@ UNIVARIATE_DISTS = [
 for _type, _params in UNIVARIATE_DISTS:
 
     @prefix_condition.register(_type)
-    def _(d, x):
+    def _(d, x, _type=_type, _params=_params):
         t = x.size(-2)
         params = [getattr(d, name)[..., t:, :] for name in _params]
         return type(d)(*params)
