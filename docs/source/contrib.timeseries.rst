@@ -40,5 +40,3 @@ Linear Gaussian State Space Models
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
-
-
