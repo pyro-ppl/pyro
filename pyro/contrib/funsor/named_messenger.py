@@ -15,26 +15,22 @@ StackFrame = namedtuple('StackFrame', ['name_to_dim', 'dim_to_name'])
 class DimStack:
 
     def __init__(self):
-        self.stack = [StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict())]
+        self._stack = [StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict())]
 
     def push(self, frame):
-        self.stack.append(frame)
+        self._stack.append(frame)
 
     def pop(self):
-        assert len(self.stack) > 1, "cannot pop the global frame"
-        return self.stack.pop()
-
-    def get(self, offset):
-        assert offset <= 0
-        return self.stack[len(self.stack) + offset - 1]
+        assert len(self._stack) > 1, "cannot pop the global frame"
+        return self._stack.pop()
 
     @property
     def current_frame(self):
-        return self.stack[-1]
+        return self._stack[-1]
 
     @property
     def global_frame(self):
-        return self.stack[0]
+        return self._stack[0]
 
     def free_globals(self, names=None):
         global_frame = self.global_frame
@@ -48,7 +44,7 @@ class DimStack:
 
         fresh_name_to_dim = OrderedDict()
 
-        parent_frame = self.get(-history)
+        parent_frame = self._stack[len(self._stack) - history - 1]
         for name in fresh:
 
             # allocation
@@ -64,7 +60,7 @@ class DimStack:
 
         # copy fresh variables down the stack
         for offset in range(-history, 1):
-            frame = self.get(offset)
+            frame = self._stack[len(self._stack) + offset - 1]
             frame.name_to_dim.update({name: fresh_name_to_dim[name] for name in fresh})
             frame.dim_to_name.update({fresh_name_to_dim[name]: name for name in fresh})
 
@@ -163,30 +159,3 @@ class GlobalNamedMessenger(Messenger):
     def __exit__(self, *args, **kwargs):
         _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
         return super().__exit__(*args, **kwargs)
-
-
-def named(fn=None, history=1, keep=False):
-    """
-    Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
-
-    This function is a piece of syntactic sugar that can be used in a variety of ways:
-    - as a context manager
-    - as a decorator for recursive functions
-    - as an iterator for markov chains
-
-    :param int history: The number of previous contexts visible from the
-        current context. Defaults to 1. If zero, this is similar to
-        :class:`pyro.plate`.
-    :param bool keep: If true, frames are replayable. This is important
-        when branching: if ``keep=True``, neighboring branches at the same
-        level can depend on each other; if ``keep=False``, neighboring branches
-        are independent (conditioned on their share"
-    """
-    if fn is None:
-        # Used as a decorator with bound args
-        return NamedMessenger(history=history, keep=keep)
-    if not callable(fn):
-        # Used as a generator
-        return NamedMessenger(history=history, keep=keep).generator(iterable=fn)
-    # Used as a decorator with bound args
-    return NamedMessenger(history=history, keep=keep)(fn)

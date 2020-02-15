@@ -93,6 +93,7 @@ class EnumMessenger(GlobalNamedMessenger):
         if msg["infer"].get("num_samples", None) is not None:
             raise NotImplementedError("TODO implement multiple sampling")
 
+        # TODO reinstate these when we have enough to_funsor implementations
         # msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
         # size = msg["infer"]["funsor_fn"].inputs["value"].dtype
         raw_value = msg["fn"].enumerate_support(expand=msg.get("expand", False)).squeeze()

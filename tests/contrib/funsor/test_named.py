@@ -14,9 +14,8 @@ import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.ops.indexing import Vindex
 
-from pyro.contrib.funsor import to_data, to_funsor
-from pyro.contrib.funsor import named
-from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger, _DIM_STACK
+from pyro.contrib.funsor import to_data, to_funsor, markov
+from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger
 from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,7 @@ def pyro_plate(*args, **kwargs):
 
 def pyro_markov(*args, **kwargs):
     global _ENUM_BACKEND_VERSION
-    return (named if _ENUM_BACKEND_VERSION == "funsor" else pyro.markov)(*args, **kwargs)
+    return (markov if _ENUM_BACKEND_VERSION == "funsor" else pyro.markov)(*args, **kwargs)
 
 
 def assert_ok(model, max_plate_nesting=None, **kwargs):
@@ -49,14 +48,13 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     Assert that enumeration runs...
     """
     pyro.clear_param_store()
-    _DIM_STACK.free_globals()
     with toggle_backend("pyro"), poutine.trace() as tr_pyro:
         with poutine.enum(first_available_dim=-max_plate_nesting - 1):
             model(**kwargs)
 
     with toggle_backend("funsor"), poutine.trace() as tr_funsor:
         with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
-            with named():
+            with markov():
                 model(**kwargs)
 
     assert tr_pyro.trace.nodes.keys() == tr_funsor.trace.nodes.keys()
