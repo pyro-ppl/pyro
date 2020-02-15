@@ -42,10 +42,13 @@ class DimStack:
         for name in frozenset(names).intersection(global_frame.name_to_dim):
             global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
 
-    def allocate(self, fresh, history=1):
+    def allocate(self, fresh, history=1, visible=False):
+        if visible:
+            raise NotImplementedError("TODO implement plate dimension allocation")
+
         fresh_name_to_dim = OrderedDict()
 
-        parent_frame = _DIM_STACK.get(-history)
+        parent_frame = self.get(-history)
         for name in fresh:
 
             # allocation
@@ -61,7 +64,7 @@ class DimStack:
 
         # copy fresh variables down the stack
         for offset in range(-history, 1):
-            frame = _DIM_STACK.get(offset)
+            frame = self.get(offset)
             frame.name_to_dim.update({name: fresh_name_to_dim[name] for name in fresh})
             frame.dim_to_name.update({fresh_name_to_dim[name]: name for name in fresh})
 
@@ -151,7 +154,7 @@ class NamedMessenger(ReentrantMessenger):
                             and dim in _DIM_STACK.current_frame.dim_to_name})
 
 
-class GlobalNameMessenger(Messenger):
+class GlobalNamedMessenger(Messenger):
     # demonstration of managing names in global scope, as done by plate and enum
     def __enter__(self):
         self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)

@@ -12,7 +12,7 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
-from pyro.contrib.funsor.named_messenger import GlobalNameMessenger, NamedMessenger
+from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger, NamedMessenger
 
 
 class MarkovMessenger(NamedMessenger):
@@ -22,7 +22,7 @@ class MarkovMessenger(NamedMessenger):
     pass
 
 
-class IndepMessenger(GlobalNameMessenger):
+class IndepMessenger(GlobalNamedMessenger):
     """
     Sketch of vectorized plate implementation using to_data instead of _DIM_ALLOCATOR.
     """
@@ -69,7 +69,7 @@ class PlateMessenger(IndepMessenger):
         BroadcastMessenger._pyro_sample(msg)
 
 
-class EnumMessenger(GlobalNameMessenger):
+class EnumMessenger(GlobalNamedMessenger):
     """
     This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
     for each discrete sample site.

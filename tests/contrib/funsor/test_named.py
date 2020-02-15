@@ -16,7 +16,7 @@ from pyro.ops.indexing import Vindex
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor import named
-from pyro.contrib.funsor.named_messenger import GlobalNameMessenger, _DIM_STACK
+from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger, _DIM_STACK
 from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ def test_iteration():
             print('a', v2.shape)  # shapes should stay the same
             print('a', fv2.inputs)
 
-    with toggle_backend("funsor"), GlobalNameMessenger():
+    with toggle_backend("funsor"), GlobalNamedMessenger():
         testing()
 
 
@@ -131,7 +131,7 @@ def test_nesting():
 
                         assert v4.shape == (2, 1)
 
-    with toggle_backend("funsor"), GlobalNameMessenger():
+    with toggle_backend("funsor"), GlobalNamedMessenger():
         testing()
 
 
@@ -148,7 +148,7 @@ def test_staggered():
                 print('a', v2.shape)
                 print('a', fv2.inputs)
 
-    with toggle_backend("funsor"), GlobalNameMessenger():
+    with toggle_backend("funsor"), GlobalNamedMessenger():
         testing()
 
 
