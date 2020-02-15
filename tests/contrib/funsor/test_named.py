@@ -16,7 +16,7 @@ from pyro.ops.indexing import Vindex
 
 from pyro.contrib.funsor import to_data, to_funsor, markov
 from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger
+from pyro.contrib.funsor.enum_messenger import EnumMessenger
 
 logger = logging.getLogger(__name__)
 
