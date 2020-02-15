@@ -21,7 +21,6 @@ from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger
 
 logger = logging.getLogger(__name__)
 
-# These tests are currently not functioning due to missing stuff in contrib.funsor
 _ENUM_BACKEND_VERSION = "pyro"
 
 

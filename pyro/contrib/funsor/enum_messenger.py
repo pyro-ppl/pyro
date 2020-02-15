@@ -9,6 +9,7 @@ from collections import OrderedDict
 
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
@@ -117,3 +118,19 @@ class TraceMessenger(OrigTraceMessenger):
         if "funsor_value" not in msg["infer"]:
             msg["infer"]["funsor_value"] = to_funsor(msg["value"])
         return super()._pyro_post_sample(msg)
+
+
+class ReplayMessenger(OrigReplayMessenger):
+
+    def _pyro_sample(self, msg):
+        name = msg["name"]
+        if self.trace is not None and name in self.trace:
+            guide_msg = self.trace.nodes[name]
+            if msg["is_observed"]:
+                return None
+            if guide_msg["type"] != "sample" or \
+                    guide_msg["is_observed"]:
+                raise RuntimeError("site {} must be sample in trace".format(name))
+            msg["done"] = True
+            msg["value"] = to_data(guide_msg["value"])  # only difference is here
+            msg["infer"] = guide_msg["infer"]
