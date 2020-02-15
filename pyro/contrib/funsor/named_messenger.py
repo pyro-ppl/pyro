@@ -4,7 +4,6 @@
 from collections import OrderedDict, namedtuple
 from contextlib import ExitStack  # python 3
 
-from pyro.poutine.messenger import Messenger
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 
 
@@ -71,6 +70,48 @@ _DIM_STACK = DimStack()  # only one global instance
 
 
 class NamedMessenger(ReentrantMessenger):
+
+    def __init__(self, history=1):
+        assert history >= 0
+        self.history = history  # TODO store information about history in the frames
+        super().__init__()
+
+    def _pyro_to_data(self, msg):
+        if len(msg["args"]) < 2:
+            msg["args"] = msg["args"] + (OrderedDict(),)
+        funsor_value, name_to_dim = msg["args"]
+
+        # handling non-fresh vars: just look at the deepest context they appear in?
+        name_to_dim.update({name: _DIM_STACK.current_frame.name_to_dim[name]
+                            for name in funsor_value.inputs
+                            if name in _DIM_STACK.current_frame.name_to_dim
+                            and name not in name_to_dim})
+
+        # handling fresh vars: pass responsibility for allocation up the _DIM_STACK
+        fresh = frozenset(name for name in funsor_value.inputs
+                          if name not in name_to_dim
+                          and name not in _DIM_STACK.current_frame.name_to_dim)
+
+        # allocate fresh dimensions in the parent frame
+        # TODO store informaton about history in the frames and remove it here
+        name_to_dim.update(_DIM_STACK.allocate(fresh, self.history))
+
+    def _pyro_to_funsor(self, msg):
+        if len(msg["args"]) < 3:
+            msg["args"] = msg["args"] + (OrderedDict(),)
+        raw_value, output, dim_to_name = msg["args"]
+
+        event_dim = len(output.shape)
+        batch_dim = len(raw_value.shape) - event_dim
+
+        # since we don't allow fresh positional dims, only look at current frame
+        dim_to_name.update({dim: _DIM_STACK.current_frame.dim_to_name[dim]
+                            for dim in range(-batch_dim, 0)
+                            if dim not in dim_to_name
+                            and dim in _DIM_STACK.current_frame.dim_to_name})
+
+
+class LocalNamedMessenger(NamedMessenger):
     """
     Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
 
@@ -83,12 +124,10 @@ class NamedMessenger(ReentrantMessenger):
         are independent (conditioned on their shared ancestors).
     """
     def __init__(self, history=1, keep=False):
-        assert history >= 0
-        self.history = history
         self.keep = keep
         self._iterable = None
         self._saved_frames = []
-        super().__init__()
+        super().__init__(history)
 
     def generator(self, iterable):
         self._iterable = iterable
@@ -116,46 +155,22 @@ class NamedMessenger(ReentrantMessenger):
             _DIM_STACK.pop()
         return super().__exit__(*args, **kwargs)
 
-    def _pyro_to_data(self, msg):
-        if len(msg["args"]) < 2:
-            msg["args"] = msg["args"] + (OrderedDict(),)
-        funsor_value, name_to_dim = msg["args"]
 
-        # handling non-fresh vars: just look at the deepest context they appear in?
-        name_to_dim.update({name: _DIM_STACK.current_frame.name_to_dim[name]
-                            for name in funsor_value.inputs
-                            if name in _DIM_STACK.current_frame.name_to_dim
-                            and name not in name_to_dim})
+class GlobalNamedMessenger(NamedMessenger):
 
-        # handling fresh vars: pass responsibility for allocation up the _DIM_STACK
-        fresh = frozenset(name for name in funsor_value.inputs
-                          if name not in name_to_dim
-                          and name not in _DIM_STACK.current_frame.name_to_dim)
+    def __init__(self, first_available_dim=None):
+        assert first_available_dim is None or first_available_dim < 0, first_available_dim
+        if first_available_dim is not None and first_available_dim < -1:
+            raise NotImplementedError("TODO support plates")
+        self.first_available_dim = first_available_dim
+        super().__init__()
 
-        # allocate fresh dimensions in the parent frame
-        name_to_dim.update(_DIM_STACK.allocate(fresh, self.history))
-
-    def _pyro_to_funsor(self, msg):
-        if len(msg["args"]) < 3:
-            msg["args"] = msg["args"] + (OrderedDict(),)
-        raw_value, output, dim_to_name = msg["args"]
-
-        event_dim = len(output.shape)
-        batch_dim = len(raw_value.shape) - event_dim
-
-        # since we don't allow fresh positional dims, only look at current frame
-        dim_to_name.update({dim: _DIM_STACK.current_frame.dim_to_name[dim]
-                            for dim in range(-batch_dim, 0)
-                            if dim not in dim_to_name
-                            and dim in _DIM_STACK.current_frame.dim_to_name})
-
-
-class GlobalNamedMessenger(Messenger):
-    # demonstration of managing names in global scope, as done by plate and enum
     def __enter__(self):
-        self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)
+        if self._ref_count == 0:
+            self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
-        _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
+        if self._ref_count == 1:
+            _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
         return super().__exit__(*args, **kwargs)

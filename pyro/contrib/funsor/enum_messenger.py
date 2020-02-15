@@ -13,12 +13,12 @@ from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
-from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger, NamedMessenger
+from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger, LocalNamedMessenger
 
 
-class MarkovMessenger(NamedMessenger):
+class MarkovMessenger(LocalNamedMessenger):
     """
-    NamedMessenger is meant to be a drop-in replacement for pyro.markov.
+    LocalNamedMessenger is meant to be a drop-in replacement for pyro.markov.
     """
     pass
 
@@ -75,13 +75,6 @@ class EnumMessenger(GlobalNamedMessenger):
     This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
     for each discrete sample site.
     """
-    def __init__(self, first_available_dim=None):
-        assert first_available_dim is None or first_available_dim < 0, first_available_dim
-        if first_available_dim < -1:
-            raise NotImplementedError("TODO support plates")
-        self.first_available_dim = first_available_dim
-        super().__init__()
-
     def _pyro_sample(self, msg):
 
         import funsor

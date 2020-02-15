@@ -3,7 +3,7 @@
 
 import pyro.poutine.runtime
 
-from .named_messenger import _DIM_STACK, NamedMessenger
+from .named_messenger import _DIM_STACK, LocalNamedMessenger
 
 
 @pyro.poutine.runtime.effectful(type="to_funsor")
@@ -41,12 +41,12 @@ def markov(fn=None, history=1, keep=False):
     """
     if fn is None:
         # Used as a decorator with bound args
-        return NamedMessenger(history=history, keep=keep)
+        return LocalNamedMessenger(history=history, keep=keep)
     if not callable(fn):
         # Used as a generator
-        return NamedMessenger(history=history, keep=keep).generator(iterable=fn)
+        return LocalNamedMessenger(history=history, keep=keep).generator(iterable=fn)
     # Used as a decorator with bound args
-    return NamedMessenger(history=history, keep=keep)(fn)
+    return LocalNamedMessenger(history=history, keep=keep)(fn)
 
 
 __all__ = [
