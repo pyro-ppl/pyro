@@ -237,7 +237,6 @@ def test_enum_recycling_nested():
     assert_ok(model, max_plate_nesting=0)
 
 
-@pytest.mark.xfail(reason="keep=True not implemented")
 @pytest.mark.parametrize('use_vindex', [False, True])
 def test_enum_recycling_grid(use_vindex):
     #  x---x---x---x    -----> i

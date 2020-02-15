@@ -60,10 +60,10 @@ class NamedMessenger(ReentrantMessenger):
     """
     def __init__(self, history=1, keep=False):
         assert history >= 0
-        if keep:
-            raise NotImplementedError("TODO")
         self.history = history
+        self.keep = keep
         self._iterable = None
+        self._saved_frames = []
         super().__init__()
 
     def generator(self, iterable):
@@ -79,11 +79,17 @@ class NamedMessenger(ReentrantMessenger):
                 yield value
 
     def __enter__(self):
-        _DIM_STACK.push(StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict()))
+        if self.keep and self._saved_frames:
+            _DIM_STACK.push(self._saved_frames.pop())
+        else:
+            _DIM_STACK.push(StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict()))
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
-        _DIM_STACK.pop()
+        if self.keep:
+            self._saved_frames.append(_DIM_STACK.pop())
+        else:
+            _DIM_STACK.pop()
         return super().__exit__(*args, **kwargs)
 
     def _pyro_to_data(self, msg):
