@@ -42,6 +42,31 @@ class DimStack:
         for name in frozenset(names).intersection(global_frame.name_to_dim):
             global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
 
+    def allocate(self, fresh, history=1):
+        fresh_name_to_dim = OrderedDict()
+
+        parent_frame = _DIM_STACK.get(-history)
+        for name in fresh:
+
+            # allocation
+            if name not in parent_frame.name_to_dim:
+                dim = -1
+                while dim in parent_frame.dim_to_name:
+                    dim -= 1
+                parent_frame.name_to_dim[name] = dim
+
+            dim = parent_frame.name_to_dim[name]
+            parent_frame.dim_to_name[dim] = name
+            fresh_name_to_dim[name] = dim
+
+        # copy fresh variables down the stack
+        for offset in range(-history, 1):
+            frame = _DIM_STACK.get(offset)
+            frame.name_to_dim.update({name: fresh_name_to_dim[name] for name in fresh})
+            frame.dim_to_name.update({fresh_name_to_dim[name]: name for name in fresh})
+
+        return fresh_name_to_dim
+
 
 _DIM_STACK = DimStack()  # only one global instance
 
@@ -109,25 +134,7 @@ class NamedMessenger(ReentrantMessenger):
                           and name not in _DIM_STACK.current_frame.name_to_dim)
 
         # allocate fresh dimensions in the parent frame
-        parent_frame = _DIM_STACK.get(-self.history)
-        for name in fresh:
-
-            # allocation
-            if name not in parent_frame.name_to_dim:
-                dim = -1
-                while dim in parent_frame.dim_to_name:
-                    dim -= 1
-                parent_frame.name_to_dim[name] = dim
-
-            dim = parent_frame.name_to_dim[name]
-            parent_frame.dim_to_name[dim] = name
-            name_to_dim[name] = dim
-
-        # copy fresh variables down the stack
-        for offset in range(-self.history, 1):
-            frame = _DIM_STACK.get(offset)
-            frame.name_to_dim.update({name: name_to_dim[name] for name in fresh})
-            frame.dim_to_name.update({name_to_dim[name]: name for name in fresh})
+        name_to_dim.update(_DIM_STACK.allocate(fresh, self.history))
 
     def _pyro_to_funsor(self, msg):
         if len(msg["args"]) < 3:
