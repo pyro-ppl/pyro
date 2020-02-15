@@ -106,7 +106,8 @@ class NamedMessenger(ReentrantMessenger):
         # TODO store informaton about history in the frames and remove it here
         name_to_dim.update(_DIM_STACK.allocate(fresh, self.history))
 
-    def _pyro_to_funsor(self, msg):  # TODO make this a staticmethod
+    @staticmethod  # only depends on the global _DIM_STACK state, not self
+    def _pyro_to_funsor(msg):
         if len(msg["args"]) < 3:
             msg["args"] = msg["args"] + (OrderedDict(),)
         raw_value, output, dim_to_name = msg["args"]
