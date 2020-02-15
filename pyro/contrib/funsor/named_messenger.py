@@ -12,9 +12,18 @@ StackFrame = namedtuple('StackFrame', ['name_to_dim', 'dim_to_name'])
 
 
 class DimStack:
+    """
+    Single piece of global state to keep track of the mapping between names and dimensions.
 
+    Replaces the plate DimAllocator, the enum EnumAllocator, the stack in MarkovMessenger,
+    _param_dims and _value_dims in EnumMessenger, and dim_to_symbol in msg['infer']
+    """
     def __init__(self):
         self._stack = [StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict())]
+        self._first_available_dim = None  # TODO default to -1?
+
+    def set_first_available_dim(self, dim):
+        self._first_available_dim = dim
 
     def push(self, frame):
         self._stack.append(frame)
@@ -38,6 +47,7 @@ class DimStack:
             global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
 
     def allocate(self, fresh, history=1, visible=False):
+
         if visible:
             raise NotImplementedError("TODO implement plate dimension allocation")
 
@@ -71,12 +81,12 @@ _DIM_STACK = DimStack()  # only one global instance
 
 class NamedMessenger(ReentrantMessenger):
 
-    def __init__(self, history=1):
+    def __init__(self, history=1):  # TODO remove this method
         assert history >= 0
         self.history = history  # TODO store information about history in the frames
         super().__init__()
 
-    def _pyro_to_data(self, msg):
+    def _pyro_to_data(self, msg):  # TODO make this a staticmethod
         if len(msg["args"]) < 2:
             msg["args"] = msg["args"] + (OrderedDict(),)
         funsor_value, name_to_dim = msg["args"]
@@ -96,7 +106,7 @@ class NamedMessenger(ReentrantMessenger):
         # TODO store informaton about history in the frames and remove it here
         name_to_dim.update(_DIM_STACK.allocate(fresh, self.history))
 
-    def _pyro_to_funsor(self, msg):
+    def _pyro_to_funsor(self, msg):  # TODO make this a staticmethod
         if len(msg["args"]) < 3:
             msg["args"] = msg["args"] + (OrderedDict(),)
         raw_value, output, dim_to_name = msg["args"]
@@ -127,7 +137,7 @@ class LocalNamedMessenger(NamedMessenger):
         self.keep = keep
         self._iterable = None
         self._saved_frames = []
-        super().__init__(history)
+        super().__init__(history)  # TODO store history here and in frames, not NamedMessenger
 
     def generator(self, iterable):
         self._iterable = iterable
@@ -161,16 +171,18 @@ class GlobalNamedMessenger(NamedMessenger):
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
         if first_available_dim is not None and first_available_dim < -1:
-            raise NotImplementedError("TODO support plates")
-        self.first_available_dim = first_available_dim
+            raise NotImplementedError("TODO support plates")  # TODO
+        self.first_available_dim = first_available_dim  # TODO store this in _DIM_STACK
         super().__init__()
 
     def __enter__(self):
         if self._ref_count == 0:
+            # TODO set _DIM_STACK._first_available_dim
             self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self._ref_count == 1:
+            # TODO unset _DIM_STACK._first_available_dim
             _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
         return super().__exit__(*args, **kwargs)
