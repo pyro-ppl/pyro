@@ -76,6 +76,8 @@ class EnumMessenger(GlobalNameMessenger):
     """
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
+        if first_available_dim < -1:
+            raise NotImplementedError("TODO support plates")
         self.first_available_dim = first_available_dim
         super().__init__()
 
@@ -90,12 +92,14 @@ class EnumMessenger(GlobalNameMessenger):
         if msg["infer"].get("num_samples", None) is not None:
             raise NotImplementedError("TODO implement multiple sampling")
 
-        msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
-        size = msg["infer"]["funsor_fn"].inputs["value"].dtype
+        # msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
+        # size = msg["infer"]["funsor_fn"].inputs["value"].dtype
+        raw_value = msg["fn"].enumerate_support(expand=msg.get("expand", False)).squeeze()
+        size = raw_value.numel()
         msg["infer"]["funsor_value"] = funsor.Tensor(
-            torch.arange(size),  # TODO use funsor.Arange for backend independence
-            OrderedDict([(msg["name"], size)]),
-            funsor.bint(size)
+            raw_value,  # TODO use funsor.Arange for backend independence
+            OrderedDict([(msg["name"], funsor.bint(size))]),
+            size
         )
 
         msg["value"] = to_data(msg["infer"]["funsor_value"])
