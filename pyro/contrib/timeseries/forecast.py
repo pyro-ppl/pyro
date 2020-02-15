@@ -20,8 +20,14 @@ logger = logging.getLogger(__name__)
 
 
 class ForecastingModel(PyroModule):
+    """
+    Abstract base class for forecasting models.
+
+    Derived classes should implement methods :meth:`get_locals` ,
+    :meth:`get_obs_dist` , and optionally :meth:`get_globals` .
+    """
     def get_globals(self, covariates):
-        return ()
+        return None
 
     @abstractmethod
     def get_locals(self, covariates, gloabls):
@@ -39,7 +45,7 @@ class ForecastingModel(PyroModule):
 
         globals_ = self.get_globals(covariates)
         with pyro.plate("time", covariates.size(-2), dim=-1):
-            prediction, locals_ = self.get_locals(covariates, globals)
+            prediction, locals_ = self.get_locals(covariates, globals_)
         noise_dist = self.get_noise_dist(covariates, globals_, locals_)
 
         if t_obs == t_cov:  # training
@@ -52,10 +58,20 @@ class ForecastingModel(PyroModule):
             return right_pred + noise
 
     def fit(self, data, covariates, **kwargs):
+        """
+        Convenience method to create and train a :class:`Forecaster` instance.
+        """
         return Forecaster(self, data, covariates, **kwargs)
 
 
 class Forecaster(nn.Module):
+    """
+    Forecaster for a :class:`ForecastingModel` .
+
+    This fits a distribution using variational inference over latent variables
+    and exact inference over the noise distribution, typically a
+    :class:`~pyro.distributions.GaussianHMM` or variant.
+    """
     def __init__(self, model, data, covariates, *,
                  learning_rate=0.01,
                  betas=(0.9, 0.99),

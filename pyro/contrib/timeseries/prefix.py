@@ -1,9 +1,12 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 from functools import singledispatch
 
 import torch
 
 import pyro.distributions as dist
-from pyro.poutine import Messenger
+from pyro.poutine.messenger import Messenger
 
 
 class PrefixReplayMessenger(Messenger):
