@@ -132,5 +132,5 @@ class ReplayMessenger(OrigReplayMessenger):
                     guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sample in trace".format(name))
             msg["done"] = True
-            msg["value"] = to_data(guide_msg["value"])  # only difference is here
+            msg["value"] = to_data(guide_msg["funsor"]["funsor_value"])  # only difference is here
             msg["infer"] = guide_msg["infer"]
