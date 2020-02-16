@@ -3,16 +3,8 @@ Time Series
 
 See the `GP example <http://pyro.ai/examples/independent_gps.html>`_ for example usage. 
 
-Forecasting Interface
----------------------
-.. automodule:: pyro.contrib.timeseries.forecast
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
-
-Abstract Noise Models
----------------------
+Abstract Models
+---------------
 .. automodule:: pyro.contrib.timeseries.base
     :members:
     :undoc-members:
