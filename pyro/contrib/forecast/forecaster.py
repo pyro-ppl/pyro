@@ -100,7 +100,7 @@ class ForecastingModel(PyroModule):
             Defaults to ``Normal(0,1)`` noise.
         :rtype: ~pyro.distributions.Distribution
         """
-        return dist.Normal(zero_data, 1).to_event(zero_data.dim())
+        return dist.Normal(zero_data.unsqueeze(-3), 1).to_event(2)
 
     def forward(self, data, covariates):
         t_obs = data.size(-2)
@@ -119,7 +119,7 @@ class ForecastingModel(PyroModule):
 
         # Locals.
         with poutine.trace(param_only=True) as tr:
-            with pyro.plate("time", covariates.size(-2), dim=-1):
+            with pyro.plate("time", t_cov, dim=-1):
                 prediction, locals_ = self.get_locals(zero_data, covariates, globals_)
         self.local_params = tr.trace.param_nodes
 
@@ -129,15 +129,17 @@ class ForecastingModel(PyroModule):
         self.noise_params = tr.trace.param_nodes
 
         # Likelihood.
-        with pyro.plate_stack("series", data.shape[:-2]):
+        with pyro.plate_stack("series", data.shape[:-2], rightmost_dim=-2):
             if t_obs == t_cov:  # training
-                pyro.sample("noise", noise_dist, obs=data - prediction)
+                pyro.sample("noise", noise_dist,
+                            obs=(data - prediction).unsqueeze(-3))
             else:  # forecasting
                 left_pred = prediction[..., :t_obs, :]
                 right_pred = prediction[..., t_obs:, :]
-                noise_dist = prefix_condition(noise_dist, data - left_pred)
-                noise = pyro.sample("noise", noise_dist)
-                assert noise.shape[-right_pred.dim():] == right_pred.shape
+                noise_dist = prefix_condition(noise_dist,
+                                              data=(data - left_pred).unsqueeze(-3))
+                noise = pyro.sample("noise", noise_dist).squeeze(-3)
+                assert noise.shape[-data.dim():] == right_pred.shape[-data.dim():]
                 return right_pred + noise
 
 
@@ -188,6 +190,7 @@ class Forecaster(nn.Module):
         self.max_plate_nesting = elbo.max_plate_nesting
         self.losses = losses
 
+    @torch.no_grad()
     def forward(self, data, covariates, num_samples):
         assert data.size(-2) < covariates.size(-2)
         assert self.max_plate_nesting >= 1

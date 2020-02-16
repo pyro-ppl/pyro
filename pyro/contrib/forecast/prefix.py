@@ -7,6 +7,7 @@ import torch
 
 import pyro.distributions as dist
 from pyro.poutine.messenger import Messenger
+from pyro.poutine.util import site_is_subsample
 
 
 class PrefixReplayMessenger(Messenger):
@@ -24,6 +25,9 @@ class PrefixReplayMessenger(Messenger):
         self.trace = trace
 
     def _pyro_post_sample(self, msg):
+        if site_is_subsample(msg):
+            return
+
         name = msg["name"]
         if name not in self.trace:
             return
