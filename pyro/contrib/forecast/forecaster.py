@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from abc import ABCMeta, abstractmethod
 
+import torch
 import torch.nn as nn
 
 import pyro
@@ -18,129 +20,109 @@ from .prefix import PrefixReplayMessenger, prefix_condition
 logger = logging.getLogger(__name__)
 
 
-class ForecastingModel(PyroModule):
+class _ForecastingModelMeta(type(PyroModule), ABCMeta):
+    pass
+
+
+class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
     """
-    Base class for forecasting models.
+    Abstract base class for forecasting models.
 
-    Derived classes may override the :meth:`get_noise_dist` , and
-    :meth:`get_globals` , and/or :meth:`get_locals` methods.
-
-    :ivar list global_params: A list of the names of all global parameters.
-    :ivar list local_params: A list of the names of all local parameters.
-    :ivar list noise_params: A list of the names of all noise parameters.
+    Derived classes must implement the :meth:`model` method.
     """
-    def get_globals(self, zero_data, covariates):
+    @abstractmethod
+    def model(self, zero_data, covariates):
         """
-        Sample any time-independent global variables, e.g. trend parameters or
-        noise scales.
+        Generative model definition.
 
-        :param zero_data: A zero tensor like the input data. This allows models
-            to depend on the shape and device of data but not its value.
+        Implementations must call the :meth:`predict` method exactly once.
+
+        Implementations must draw all time-dependent noise inside the
+        :meth:`time_plate` .  The prediction passed to :meth:`predict` must be
+        a deterministic function of noise tensors that are independent over
+        time. This requirement is slightly more general than state space
+        models.
+
+        :param zero_data: A zero tensor like the input data, but extended to
+            the duration of the :meth:`time_plate` . This allows models to
+            depend on the shape and device of data but not its value.
         :type zero_data: ~torch.Tensor
         :param covariates: A tensor of covariates with time dimension -2.
         :type covariates: ~torch.Tensor
-        :returns: Arbitrary global data to be passed to :meth:`get_locals` and
-            :meth:`get_noise_dist` ; defaults to None.
+        :returns: Return value is ignored.
         """
-        return None
+        raise NotImplementedError
 
-    def get_locals(self, zero_data, covariates, globals_):
+    @property
+    def time_plate(self):
         """
-        Sample time-dependent parameters, e.g. error terms in a local trend.
-
-        This will be called inside a time :class:`~pyro.primitives.plate` with
-        dimension -1, ensuring all samples are independent over time.
-
-        To sample a random time-dependent variable, you must factor that
-        variable as a state-space model with independent noise drawn at each
-        time step, and a final deterministic computation propagating the state.
-        For example to predict brownian motion, you could define::
-
-            def get_locals(self, zero_data, globals_):
-                jumps = pyro.sample("jumps",
-                                    dist.Normal(0, globals_["scale"])
-                                        .expand(zero_data.size(-1))
-                                        .to_event(1))
-                prediction = torch.cumsum(jumps, dim=-2)
-                locals_ = None
-                return prediction, locals_
-
-        :param zero_data: A zero tensor like the input data. This allows models
-            to depend on the shape and device of data but not its value.
-        :type zero_data: ~torch.Tensor
-        :param covariates: A tensor of covariates with time dimension -2.
-        :type covariates: ~torch.Tensor
-        :param globals_: Any data computed by the :meth:`get_globals` method.
-        :type globals_: object
-        :returns: A pair ``(prediction, locals_)`` where ``prediction`` is a
-            ``data``-shaped :class:`~torch.Tensor` (defaults to zero) and
-            ``locals_`` is arbitrary time-local data to be passed to
-            :meth:`get_noise_dist` (defaults to None).
-        :rtype tuple:
+        :returns: A plate named "time" with size ``covariates.size(-2)`` and
+            ``dim=-1``. This is available only during model execution.
+        :rtype: :class:`~pyro.plate`
         """
-        locals_ = None
-        prediction = zero_data
-        return prediction, locals_
+        assert self._time_plate is not None, ".time_plate accessed outside of .model()"
+        return self._time_plate
 
-    def get_noise_dist(self, zero_data, covariates, globals_, locals_):
+    def predict(self, noise_dist, prediction):
         """
-        Samples a noise distribution to be used as likelihood.
+        Prediction function.
 
-        :param zero_data: A zero tensor like the input data. This allows models
-            to depend on the shape and device of data but not its value.
-        :type zero_data: ~torch.Tensor
-        :param covariates: A tensor of covariates with time dimension -2.
-        :type covariates: ~torch.Tensor
-        :param globals_: Any data computed by the :meth:`get_globals` method.
-        :type globals_: object
-        :param locals_: Any data computed by the :meth:`get_locals` method.
-        :type locals_: object
-        :returns: A distribution over noise, should treat time as an event
-            dimension and satisfy ``event_shape == data.shape[-2:]``.
-            Defaults to ``Normal(0,1)`` noise.
-        :rtype: ~pyro.distributions.Distribution
+        This requires the following unusual shape requirements:
+
+        - ``noise_dist.event_shape == predction.shape[-2:]``
+        - ``noise_dist.batch_shape == prediction.shape[:-2] + (1,)``,
+          except during forecasting when ``noise_dist`` includes
+          ``sample_shape`` and ``prediction`` may or may not include
+          ``sample_shape``.
         """
-        return dist.Normal(zero_data.unsqueeze(-3), 1).to_event(2)
+        assert self._data is not None, ".predict() called outside .model()"
+        assert self._forecast is None, ".predict() called twice"
+        assert isinstance(noise_dist, dist.Distribution)
+        assert isinstance(prediction, torch.Tensor)
+        assert noise_dist.batch_shape[-1] == 1
+        assert noise_dist.event_shape == prediction.shape[-2:]
+
+        data = self._data
+        t_obs = data.size(-2)
+        t_cov = prediction.size(-2)
+        if t_obs == t_cov:  # training
+            pyro.sample("residual", noise_dist,
+                        obs=(data - prediction).unsqueeze(-3))
+            self._forecast = data.new_zeros(data.shape[:-2] + (0,) + data.shape[-1:])
+        else:  # forecasting
+            left_pred = prediction[..., :t_obs, :]
+            right_pred = prediction[..., t_obs:, :]
+            noise_dist = prefix_condition(noise_dist,
+                                          data=(data - left_pred).unsqueeze(-3))
+            noise = pyro.sample("residual", noise_dist).squeeze(-3)
+            assert noise.shape[-data.dim():] == right_pred.shape[-data.dim():]
+            self._forecast = right_pred + noise
 
     def forward(self, data, covariates):
+        assert data.dim() >= 2
+        assert covariates.dim() >= 2
         t_obs = data.size(-2)
         t_cov = covariates.size(-2)
         assert t_obs <= t_cov
-        if t_obs == t_cov:  # training
-            zero_data = data.new_zeros(()).expand(data.shape)
-        else:  # forecasting
-            zero_data = data.new_zeros(()).expand(
-                data.shape[:-2] + covariates.shape[-2:-1] + data.shape[-1:])
 
-        # Globals.
-        with poutine.trace(param_only=True) as tr:
-            globals_ = self.get_globals(zero_data, covariates)
-        self.global_params = tr.trace.param_nodes
-
-        # Locals.
-        with poutine.trace(param_only=True) as tr:
-            with pyro.plate("time", t_cov, dim=-1):
-                prediction, locals_ = self.get_locals(zero_data, covariates, globals_)
-        self.local_params = tr.trace.param_nodes
-
-        # Noise distribution.
-        with poutine.trace(param_only=True) as tr:
-            noise_dist = self.get_noise_dist(zero_data, covariates, globals_, locals_)
-        self.noise_params = tr.trace.param_nodes
-
-        # Likelihood.
-        with pyro.plate_stack("series", data.shape[:-2], rightmost_dim=-2):
+        try:
+            self._data = data
+            self._time_plate = pyro.plate("time", t_cov, dim=-1)
             if t_obs == t_cov:  # training
-                pyro.sample("noise", noise_dist,
-                            obs=(data - prediction).unsqueeze(-3))
+                zero_data = data.new_zeros(()).expand(data.shape)
             else:  # forecasting
-                left_pred = prediction[..., :t_obs, :]
-                right_pred = prediction[..., t_obs:, :]
-                noise_dist = prefix_condition(noise_dist,
-                                              data=(data - left_pred).unsqueeze(-3))
-                noise = pyro.sample("noise", noise_dist).squeeze(-3)
-                assert noise.shape[-data.dim():] == right_pred.shape[-data.dim():]
-                return right_pred + noise
+                zero_data = data.new_zeros(()).expand(
+                    data.shape[:-2] + covariates.shape[-2:-1] + data.shape[-1:])
+            self._forecast = None
+
+            self.model(zero_data, covariates)
+
+            assert self._forecast is not None, ".predict() was not called by .model()"
+            return self._forecast
+        finally:
+            self._data = None
+            self._time_plate = None
+            self._forecast = None
 
 
 class Forecaster(nn.Module):

@@ -43,6 +43,7 @@ class PrefixReplayMessenger(Messenger):
         assert model_value.shape[:-2] == guide_value.shape[:-2]
         assert model_value.size(-2) > guide_value.size(-2)
         assert model_value.size(-1) == guide_value.size(-1)
+        assert any(f.name == "time" for f in msg["cond_indep_stack"])
         split = guide_value.size(-2)
         msg["value"] = torch.cat([guide_value, model_value[..., split:, :]], dim=-2)
 

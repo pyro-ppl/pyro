@@ -9,31 +9,27 @@ import pyro.distributions as dist
 from pyro.contrib.forecast import Forecaster, ForecastingModel
 
 
-class SimpleForecastingModel(ForecastingModel):
-    def get_globals(self, zero_data, covariates):
-        loc = zero_data[..., :1, :]
-        scale = pyro.sample("scale", dist.LogNormal(loc, 1).to_event(1))
-        globals_ = scale
-        return globals_
+class Model1(ForecastingModel):
+    def model(self, zero_data, covariates):
+        with pyro.plate_stack("batch", zero_data.shape[:-2], rightmost_dim=-2):
+            loc = zero_data[..., :1, :]
+            scale = pyro.sample("scale", dist.LogNormal(loc, 1).to_event(1))
 
-    def get_locals(self, zero_data, covariates, globals_):
-        scale = globals_
-        jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
-        prediction = jumps.cumsum(-2)
-        locals_ = None
-        return prediction, locals_
+            with self.time_plate:
+                jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
+                prediction = jumps.cumsum(-2)
 
-    def get_dist(self, zero_data, covariates, globals_, locals_):
-        loc = zero_data.unsqueeze(-3)
-        return dist.Laplace(loc, 1).to_event(2)
+            loc = zero_data.unsqueeze(-3)
+            noise_dist = dist.Laplace(loc, 1).to_event(2)
+            self.predict(noise_dist, prediction)
 
 
 @pytest.mark.parametrize("t_obs", [1, 2, 3])
 @pytest.mark.parametrize("t_forecast", [1, 2, 3])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("cov_dim", [0, 1, 6])
-@pytest.mark.parametrize("obs_dim", [1, 2, 3])
-@pytest.mark.parametrize("Model", [ForecastingModel, SimpleForecastingModel])
+@pytest.mark.parametrize("obs_dim", [1, 2])
+@pytest.mark.parametrize("Model", [Model1])
 def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim):
     model = Model()
     data = torch.randn(batch_shape + (t_obs, obs_dim))
