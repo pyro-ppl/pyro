@@ -611,41 +611,36 @@ class GaussianHMM(HiddenMarkovModel):
         assert data.size(-1) == self.event_shape[-1]
         assert data.size(-2) < self.duration
         t = data.size(-2)
-
         f = self.duration - t
-        if self._event_shape[-1] == 1:  # homogeneous
-            try:
-                self.duration = t
-                initial_dist = self.filter(data)
-            finally:
-                self.duration = t + f
-            init = mvn_to_gaussian(initial_dist)
-            trans = self._trans
-            obs = self._obs
-            event_shape = (1, self.obs_dim)
-        else:  # heterogeneous
-            left = self._get_checked_instance(GaussianHMM)
-            left.hidden_dim = self.hidden_dim
-            left.obs_dim = self.obs_dim
-            left._init = self._init
-            left._trans = self._trans[..., :t]
-            left._obs = self._obs[..., :t]
-            super(GaussianHMM, left).__init__(t, self.batch_shape, (t, self.obs_dim),
-                                              validate_args=self.validate_args)
-            initial_dist = left.filter(data)
-            init = mvn_to_gaussian(initial_dist)
-            trans = self._trans[..., t:]
-            obs = self._obs[..., t:]
-            event_shape = (f, self.obs_dim)
+
+        left = self._get_checked_instance(GaussianHMM)
+        left.hidden_dim = self.hidden_dim
+        left.obs_dim = self.obs_dim
+        left._init = self._init
 
         right = self._get_checked_instance(GaussianHMM)
         right.hidden_dim = self.hidden_dim
         right.obs_dim = self.obs_dim
-        right._init = init
-        right._trans = trans
-        right._obs = obs
+
+        if self._event_shape[-1] == 1:  # homogeneous
+            left._trans = self._trans
+            left._obs = self._obs
+            right._trans = self._trans
+            right._obs = self._obs
+            event_shape = (1, self.obs_dim)
+        else:  # heterogeneous
+            left._trans = self._trans[..., :t]
+            left._obs = self._obs[..., :t]
+            right._trans = self._trans[..., t:]
+            right._obs = self._obs[..., t:]
+            event_shape = (f, self.obs_dim)
+
+        super(GaussianHMM, left).__init__(t, self.batch_shape, (t, self.obs_dim),
+                                          validate_args=self._validate_args)
+        initial_dist = left.filter(data)
+        right._init = mvn_to_gaussian(initial_dist)
         super(GaussianHMM, right).__init__(f, self.batch_shape, event_shape,
-                                           validate_args=self.validate_args)
+                                           validate_args=self._validate_args)
         return right
 
 

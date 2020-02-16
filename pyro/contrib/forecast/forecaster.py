@@ -79,7 +79,7 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         assert self._forecast is None, ".predict() called twice"
         assert isinstance(noise_dist, dist.Distribution)
         assert isinstance(prediction, torch.Tensor)
-        assert noise_dist.batch_shape[-1] == 1
+        assert noise_dist.batch_shape == () or noise_dist.batch_shape[-1] == 1
         assert noise_dist.event_shape == prediction.shape[-2:]
 
         data = self._data

@@ -49,7 +49,7 @@ class PrefixReplayMessenger(Messenger):
 
 
 @singledispatch
-def prefix_condition(d, x):
+def prefix_condition(d, data):
     """
     EXPERIMENTAL Given a distribution ``d`` of shape ``batch_shape + (t+f, d)``
     and data ``x`` of shape ``batch_shape + (t, d)``, find a conditional
@@ -59,14 +59,14 @@ def prefix_condition(d, x):
 
     :param d: a distribution with ``len(d.shape()) >= 2``
     :type d: ~pyro.distributions.Distribution
-    :param x: data of dimension at least 2.
-    :type x: ~torch.Tensor
+    :param data: data of dimension at least 2.
+    :type data: ~torch.Tensor
     """
+    return d.prefix_condition(data)
     try:
-        return d.prefix_condition(x)
+        return d.prefix_condition(data)
     except AttributeError:
-        raise NotImplementedError("pyro.contrib.timeseries.forecast does not suport {}"
-                                  .format(type(d)))
+        raise NotImplementedError("prefix_condition() does not suport {}".format(type(d)))
 
 
 @prefix_condition.register(dist.Independent)
@@ -86,7 +86,7 @@ UNIVARIATE_DISTS = [
 for _type, _params in UNIVARIATE_DISTS:
 
     @prefix_condition.register(_type)
-    def _(d, x, _type=_type, _params=_params):
-        t = x.size(-2)
+    def _(d, data, _type=_type, _params=_params):
+        t = data.size(-2)
         params = [getattr(d, name)[..., t:, :] for name in _params]
         return type(d)(*params)
