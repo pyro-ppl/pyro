@@ -17,7 +17,7 @@ class Model1(ForecastingModel):
 
             with self.time_plate:
                 jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
-                prediction = jumps.cumsum(-2)
+            prediction = jumps.cumsum(-2)
 
             noise_dist = dist.Laplace(zero_data, 1).to_event(2)
             self.predict(noise_dist, prediction)
@@ -31,18 +31,17 @@ class Model2(ForecastingModel):
 
             with self.time_plate:
                 jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
-                prediction = jumps.cumsum(-2)
+            prediction = jumps.cumsum(-2)
 
-            obs_dim = zero_data.size(-1)
-            batch_shape = zero_data.shape[:-2] + (1,)
+            duration, obs_dim = zero_data.shape[-2:]
             noise_dist = dist.GaussianHMM(
                 dist.Normal(0, 1).expand([obs_dim]).to_event(1),
                 torch.eye(obs_dim),
                 dist.Normal(0, 1).expand([obs_dim]).to_event(1),
                 torch.eye(obs_dim),
                 dist.Normal(0, 1).expand([obs_dim]).to_event(1),
-                duration=zero_data.size(-2),
-            ).expand(batch_shape)
+                duration=duration,
+            )
             self.predict(noise_dist, prediction)
 
 

@@ -622,24 +622,26 @@ class GaussianHMM(HiddenMarkovModel):
         right.hidden_dim = self.hidden_dim
         right.obs_dim = self.obs_dim
 
-        if self._event_shape[-1] == 1:  # homogeneous
-            left._trans = self._trans
+        if self._obs.batch_shape == () or self._obs.batch_shape[-1] == 1:  # homogeneous
             left._obs = self._obs
-            right._trans = self._trans
             right._obs = self._obs
-            event_shape = (1, self.obs_dim)
+        else:  # heterogeneous
+            left._obs = self._obs[..., :t]
+            right._obs = self._obs[..., t:]
+
+        if self._trans.batch_shape == () or self._trans.batch_shape[-1] == 1:  # homogeneous
+            left._trans = self._trans
+            right._trans = self._trans
         else:  # heterogeneous
             left._trans = self._trans[..., :t]
-            left._obs = self._obs[..., :t]
             right._trans = self._trans[..., t:]
-            right._obs = self._obs[..., t:]
-            event_shape = (f, self.obs_dim)
 
         super(GaussianHMM, left).__init__(t, self.batch_shape, (t, self.obs_dim),
                                           validate_args=self._validate_args)
         initial_dist = left.filter(data)
         right._init = mvn_to_gaussian(initial_dist)
-        super(GaussianHMM, right).__init__(f, self.batch_shape, event_shape,
+        batch_shape = broadcast_shape(right._init.batch_shape, self.batch_shape)
+        super(GaussianHMM, right).__init__(f, batch_shape, (f, self.obs_dim),
                                            validate_args=self._validate_args)
         return right
 

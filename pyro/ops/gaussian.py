@@ -290,6 +290,13 @@ class AffineNormal:
         scale = self.scale.reshape(batch_shape + self.scale.shape[-1:])
         return AffineNormal(matrix, loc, scale)
 
+    def __getitem__(self, index):
+        assert isinstance(index, tuple)
+        matrix = self.matrix[index + (slice(None), slice(None))]
+        loc = self.loc[index + (slice(None),)]
+        scale = self.scale[index + (slice(None),)]
+        return AffineNormal(matrix, loc, scale)
+
     def event_permute(self, perm):
         return self.to_gaussian().event_permute(perm)
 

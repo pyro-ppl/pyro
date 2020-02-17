@@ -136,13 +136,27 @@ for _type in UNIVARIATE_DISTS:
 
 @reshape_batch.register(dist.GaussianHMM)
 def _(d, batch_shape):
-    # TODO this could save computation by less eagerly expanding
+    init = d._init
+    if init.batch_shape:
+        init = init.expand(d.batch_shape)
+        init = init.reshape(batch_shape)
+
+    trans = d._trans
+    if len(trans.batch_shape) > 1:
+        trans = trans.expand(d.batch_shape + (-1,))
+        trans = trans.reshape(batch_shape + (-1,))
+
+    obs = d._obs
+    if len(obs.batch_shape) > 1:
+        obs = obs.expand(d.batch_shape + (-1,))
+        obs = obs.reshape(batch_shape + (-1,))
+
     new = d._get_checked_instance(dist.GaussianHMM)
     new.hidden_dim = d.hidden_dim
     new.obs_dim = d.obs_dim
-    new._init = d._init.expand(d.batch_shape).reshape(batch_shape)
-    new._obs = d._obs.expand(d.batch_shape + (-1,)).reshape(batch_shape + d._obs.batch_shape[-1:])
-    new._trans = d._trans.expand(d.batch_shape + (-1,)).reshape(batch_shape + d._trans.batch_shape[-1:])
+    new._init = init
+    new._trans = trans
+    new._obs = obs
     super(dist.GaussianHMM, new).__init__(d.duration, batch_shape, d.event_shape,
                                           validate_args=d._validate_args)
     return new
@@ -150,15 +164,30 @@ def _(d, batch_shape):
 
 @reshape_batch.register(dist.LinearHMM)
 def _(d, batch_shape):
-    # TODO this could save computation by less eagerly expanding
-    return dist.LinearHMM(
-        reshape_batch(d.initial_dist.expand(d.batch_shape), batch_shape),
-        d.transition_matrix
-         .expand(d.batch_shape + (-1, d.hidden_dim, d.hidden_dim))
-         .reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim)),
-        reshape_batch(d.transition_dist.expand(d.batch_shape + (-1,)), batch_shape + (-1,)),
-        d.observation_matrix
-         .expand(d.batch_shape + (-1, d.hidden_dim, d.obs_dim))
-         .reshape(batch_shape + (-1, d.hidden_dim, d.obs_dim)),
-        reshape_batch(d.transition_dist.expand(d.batch_shape + (-1,)), batch_shape + (-1,)),
-        duration=d.duration)
+    init_dist = d.initial_dist
+    if init_dist.batch_shape:
+        init_dist = init_dist.expand(d.batch_shape)
+        init_dist = reshape_batch(init_dist, batch_shape)
+
+    trans_mat = d.transition_matrix
+    if trans_mat.dim() > 3:
+        trans_mat = trans_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+        trans_mat = trans_mat.reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+
+    trans_dist = d.transition_dist
+    if len(trans_dist.batch_shape) > 1:
+        trans_dist = trans_dist.expand(d.batch_shape + (-1,))
+        trans_dist = reshape_batch(trans_dist, batch_shape + (-1,))
+
+    obs_mat = d.observation_matrix
+    if obs_mat.dim() > 3:
+        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+
+    obs_dist = d.observation_dist
+    if len(obs_dist.batch_shape) > 1:
+        obs_dist = obs_dist.expand(d.batch_shape + (-1,))
+        obs_dist = reshape_batch(obs_dist, batch_shape + (-1,))
+
+    return dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
+                          duration=d.duration)
