@@ -254,6 +254,10 @@ class AffineNormal:
         self.loc = loc
         self.scale = scale
 
+    @property
+    def batch_shape(self):
+        return self.matrix.shape[:-2]
+
     def condition(self, value):
         """
         Condition on a ``Y`` value.
@@ -273,6 +277,18 @@ class AffineNormal:
     def to_gaussian(self):
         mvn = torch.distributions.MultivariateNormal(self.loc, scale_tril=self.scale.diag_embed())
         return matrix_and_mvn_to_gaussian(self.matrix, mvn)
+
+    def expand(self, batch_shape):
+        matrix = self.matrix.expand(batch_shape + self.matrix.shape[-2:])
+        loc = self.loc.expand(batch_shape + self.loc.shape[-1:])
+        scale = self.scale.expand(batch_shape + self.scale.shape[-1:])
+        return AffineNormal(matrix, loc, scale)
+
+    def reshape(self, batch_shape):
+        matrix = self.matrix.reshape(batch_shape + self.matrix.shape[-2:])
+        loc = self.loc.reshape(batch_shape + self.loc.shape[-1:])
+        scale = self.scale.reshape(batch_shape + self.scale.shape[-1:])
+        return AffineNormal(matrix, loc, scale)
 
     def event_permute(self, perm):
         return self.to_gaussian().event_permute(perm)

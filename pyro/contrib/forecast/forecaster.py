@@ -15,7 +15,7 @@ from pyro.infer.autoguide import AutoNormal, init_to_sample
 from pyro.nn.module import PyroModule
 from pyro.optim import ClippedAdam
 
-from .prefix import PrefixReplayMessenger, prefix_condition
+from .util import PrefixReplayMessenger, prefix_condition, reshape_batch
 
 logger = logging.getLogger(__name__)
 
@@ -65,38 +65,61 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
 
     def predict(self, noise_dist, prediction):
         """
-        Prediction function.
+        Prediction function, to be called by :meth:`model` implementations.
+        This should be called outside of the :meth:`time_plate` .
 
-        This requires the following unusual shape requirements:
-
-        - ``noise_dist.event_shape == predction.shape[-2:]``
-        - ``noise_dist.batch_shape == prediction.shape[:-2] + (1,)``,
-          except during forecasting when ``noise_dist`` includes
-          ``sample_shape`` and ``prediction`` may or may not include
-          ``sample_shape``.
+        :param noise_dist: A noise distribution with ``.event_dim == 2``.
+            ``noise_dist`` is typically zero-mean or zero-median or zero-mode
+            or somehow centered.
+        :type noise_dist: ~pyro.distributions.Distribution
+        :param prediction: A prediction for the data. This should have the same
+            shape as ``data``, but extended to full duration of the
+            ``covariates``.
+        :type prediction: ~torch.Tensor
         """
         assert self._data is not None, ".predict() called outside .model()"
         assert self._forecast is None, ".predict() called twice"
         assert isinstance(noise_dist, dist.Distribution)
         assert isinstance(prediction, torch.Tensor)
-        assert noise_dist.batch_shape == () or noise_dist.batch_shape[-1] == 1
         assert noise_dist.event_shape == prediction.shape[-2:]
 
-        data = self._data
+        # The following reshaping logic is required to reconcile batch and
+        # event shapes. This would be unnecessary if Pyro used name dimensions
+        # internally, e.g. using Funsor.
+        #
+        #     batch_shape                    | event_shape
+        #     -------------------------------+------------
+        #  1. sample_shape + shape + (time,) | (obs_dim,)       # if .event_dim == 1
+        #  2.           sample_shape + shape | (time, obs_dim)  # if .event_dim == 2
+        #  3.    sample_shape + shape + (1,) | (time, obs_dim)  # if .event_dim == 2
+        #
+        # If .event_dim == 1 as in 1., the sample_shape+shape align correctly.
+        # If .event_dim == 1 as in 2., the sample_shape+shape will of the
+        # "residual" site will be misaligned with other batch shapes in the
+        # trace. To fix this the following logic "unsqueezes" the distribution,
+        # resulting in correctly aligned shapes 3. Note the "time" dimension is
+        # effectively moved from a batch dimension to an event dimension.
+        noise_dist = reshape_batch(noise_dist, noise_dist.batch_shape + (1,))
+        data = self._data.unsqueeze(-3)
+        prediction = prediction.unsqueeze(-3)
+
+        # Create a sample site.
         t_obs = data.size(-2)
         t_cov = prediction.size(-2)
         if t_obs == t_cov:  # training
-            pyro.sample("residual", noise_dist,
-                        obs=(data - prediction).unsqueeze(-3))
+            pyro.sample("residual", noise_dist, obs=data - prediction)
             self._forecast = data.new_zeros(data.shape[:-2] + (0,) + data.shape[-1:])
         else:  # forecasting
             left_pred = prediction[..., :t_obs, :]
             right_pred = prediction[..., t_obs:, :]
-            noise_dist = prefix_condition(noise_dist,
-                                          data=(data - left_pred).unsqueeze(-3))
-            noise = pyro.sample("residual", noise_dist).squeeze(-3)
+            noise_dist = prefix_condition(noise_dist, data=data - left_pred)
+            noise = pyro.sample("residual", noise_dist)
             assert noise.shape[-data.dim():] == right_pred.shape[-data.dim():]
             self._forecast = right_pred + noise
+
+        # Move the "time" batch dim back to its original place.
+        assert self._forecast.size(-3) == 1
+        self._forecast = self._forecast.squeeze(-3)
 
     def forward(self, data, covariates):
         assert data.dim() >= 2
@@ -135,6 +158,8 @@ class Forecaster(nn.Module):
 
     After construction this can be called to generate sample forecasts.
 
+    :ivar list losses: A list of losses recorded during training, typically
+        used to debug convergence. Defined by ``loss = -elbo / data.numel()``.
     :param ForecastingModel model: A forecasting model subclass instance.
     :param data: A tensor dataset with time dimension -2.
     :type data: ~torch.Tensor
