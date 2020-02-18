@@ -35,6 +35,21 @@ class Model2(ForecastingModel):
                 jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
             prediction = jumps.cumsum(-2)
 
+            scale_tril = torch.eye(zero_data.size(-1))
+            noise_dist = dist.MultivariateNormal(zero_data, scale_tril=scale_tril).to_event(1)
+            self.predict(noise_dist, prediction)
+
+
+class Model3(ForecastingModel):
+    def model(self, zero_data, covariates):
+        with pyro.plate_stack("batch", zero_data.shape[:-2], rightmost_dim=-2):
+            loc = zero_data[..., :1, :]
+            scale = pyro.sample("scale", dist.LogNormal(loc, 1).to_event(1))
+
+            with self.time_plate:
+                jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
+            prediction = jumps.cumsum(-2)
+
             duration, obs_dim = zero_data.shape[-2:]
             noise_dist = dist.GaussianHMM(
                 dist.Normal(0, 1).expand([obs_dim]).to_event(1),
@@ -47,7 +62,7 @@ class Model2(ForecastingModel):
             self.predict(noise_dist, prediction)
 
 
-class Model3(ForecastingModel):
+class Model4(ForecastingModel):
     def model(self, zero_data, covariates):
         with pyro.plate_stack("batch", zero_data.shape[:-2], rightmost_dim=-2):
             loc = zero_data[..., :1, :]
@@ -76,7 +91,7 @@ class Model3(ForecastingModel):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("cov_dim", [0, 1, 6])
 @pytest.mark.parametrize("obs_dim", [1, 2])
-@pytest.mark.parametrize("Model", [Model1, Model2, Model3])
+@pytest.mark.parametrize("Model", [Model1, Model2, Model3, Model4])
 def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim):
     model = Model()
     data = torch.randn(batch_shape + (t_obs, obs_dim))
