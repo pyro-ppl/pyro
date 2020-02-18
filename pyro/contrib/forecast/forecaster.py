@@ -15,7 +15,7 @@ from pyro.infer.autoguide import AutoNormal, init_to_sample
 from pyro.nn.module import PyroModule
 from pyro.optim import ClippedAdam
 
-from .util import PrefixReplayMessenger, prefix_condition, reshape_batch
+from .util import PrefixConditionMessenger, PrefixReplayMessenger, reshape_batch
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,10 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
 
     Derived classes must implement the :meth:`model` method.
     """
+    def __init__(self):
+        super().__init__()
+        self._prefix_condition_data = {}
+
     @abstractmethod
     def model(self, zero_data, covariates):
         """
@@ -112,8 +116,13 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         else:  # forecasting
             left_pred = prediction[..., :t_obs, :]
             right_pred = prediction[..., t_obs:, :]
-            noise_dist = prefix_condition(noise_dist, data=data - left_pred)
+
+            # This prefix_condition indirection is needed to ensure that
+            # PrefixConditionMessenger is handled outside of the .model() call.
+            self._prefix_condition_data["residual"] = data - left_pred
             noise = pyro.sample("residual", noise_dist)
+            del self._prefix_condition_data["residual"]
+
             assert noise.shape[-data.dim():] == right_pred.shape[-data.dim():]
             self._forecast = right_pred + noise
 
@@ -207,5 +216,6 @@ class Forecaster(nn.Module):
             with pyro.plate("particles", num_samples, dim=dim):
                 self.guide()
         with PrefixReplayMessenger(tr.trace):
-            with pyro.plate("particles", num_samples, dim=dim):
-                return self.model(data, covariates)
+            with PrefixConditionMessenger(self.model._prefix_condition_data):
+                with pyro.plate("particles", num_samples, dim=dim):
+                    return self.model(data, covariates)

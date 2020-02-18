@@ -43,9 +43,28 @@ class PrefixReplayMessenger(Messenger):
         assert model_value.shape[:-2] == guide_value.shape[:-2]
         assert model_value.size(-2) > guide_value.size(-2)
         assert model_value.size(-1) == guide_value.size(-1)
-        assert any(f.name == "time" for f in msg["cond_indep_stack"])
         split = guide_value.size(-2)
         msg["value"] = torch.cat([guide_value, model_value[..., split:, :]], dim=-2)
+
+
+class PrefixConditionMessenger(Messenger):
+    """
+    EXPERIMENTAL Given a prefix of t-many observations, condition a (t+f)-long
+    distribution on the observations, converting it to an f-long distribution.
+
+    :param dict data: A dict mapping site name to tensors of observations.
+    """
+    def __init__(self, data):
+        super().__init__()
+        self.data = data
+
+    def _pyro_sample(self, msg):
+        if msg["name"] not in self.data:
+            return
+
+        assert msg["value"] is None
+        data = self.data[msg["name"]]
+        msg["fn"] = prefix_condition(msg["fn"], data)
 
 
 # ----------------------------------------------------------------------------
