@@ -97,8 +97,8 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         #  2.           sample_shape + shape | (time, obs_dim)
         #  3.    sample_shape + shape + (1,) | (time, obs_dim)
         #
-        # Parameters like noise_dist.loc typicall have shape as in 1.  However
-        # calling .to_event(1) will shift the shapes resulging in 2., where
+        # Parameters like noise_dist.loc typically have shape as in 1.  However
+        # calling .to_event(1) will shift the shapes resulting in 2., where
         # sample_shape+shape will be misaligned with other batch shapes in the
         # trace. To fix this the following logic "unsqueezes" the distribution,
         # resulting in correctly aligned shapes 3. Note the "time" dimension is
