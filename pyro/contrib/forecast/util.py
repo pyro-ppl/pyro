@@ -117,6 +117,14 @@ for _type in UNIVARIATE_DISTS:
     prefix_condition.register(_type)(_prefix_condition_univariate)
 
 
+@prefix_condition.register(dist.MultivariateNormal)
+def _(d, data):
+    t = data.size(-2)
+    loc = d.loc[..., t:, :]
+    scale_tril = d.scale_tril[..., t:, :, :]
+    return dist.MultivariateNormal(loc, scale_tril=scale_tril)
+
+
 @singledispatch
 def reshape_batch(d, batch_shape):
     """
@@ -151,6 +159,14 @@ def _reshape_batch_univariate(d, batch_shape):
 
 for _type in UNIVARIATE_DISTS:
     reshape_batch.register(_type)(_reshape_batch_univariate)
+
+
+@reshape_batch.register(dist.MultivariateNormal)
+def _(d, batch_shape):
+    dim = d.event_shape[0]
+    loc = d.loc.reshape(batch_shape + (dim,))
+    scale_tril = d.scale_tril.reshape(batch_shape + (dim, dim))
+    return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
 
 @reshape_batch.register(dist.GaussianHMM)

@@ -66,8 +66,8 @@ class Model3(ForecastingModel):
                 dist.Stable(1.9, 0).expand([obs_dim]).to_event(1),
                 duration=duration,
             )
-            with poutine.reparam(config={
-                    "residual": LinearHMMReparam(StableReparam(), StableReparam(), StableReparam())}):
+            rep = StableReparam()
+            with poutine.reparam(config={"residual": LinearHMMReparam(rep, rep, rep)}):
                 self.predict(noise_dist, prediction)
 
 
