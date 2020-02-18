@@ -38,3 +38,11 @@ class TimeSeriesModel(PyroModule):
             predictive distributions do not encode correlations between distinct times in ``dts``.
         """
         raise NotImplementedError
+
+    def get_dist(self):
+        """
+        Get a :class:`~pyro.distributions.Distribution` object corresponding to
+        this time series model.  Often this is a
+        :class:`~pyro.distributions.GaussianHMM`.
+        """
+        raise NotImplementedError
