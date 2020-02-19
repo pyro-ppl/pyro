@@ -42,13 +42,12 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         Implementations must call the :meth:`predict` method exactly once.
 
         Implementations must draw all time-dependent noise inside the
-        :meth:`time_plate` .  The prediction passed to :meth:`predict` must be
-        a deterministic function of noise tensors that are independent over
-        time. This requirement is slightly more general than state space
-        models.
+        :meth:`time_plate`. The prediction passed to :meth:`predict` must be a
+        deterministic function of noise tensors that are independent over time.
+        This requirement is slightly more general than state space models.
 
         :param zero_data: A zero tensor like the input data, but extended to
-            the duration of the :meth:`time_plate` . This allows models to
+            the duration of the :meth:`time_plate`. This allows models to
             depend on the shape and device of data but not its value.
         :type zero_data: ~torch.Tensor
         :param covariates: A tensor of covariates with time dimension -2.
@@ -70,7 +69,7 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
     def predict(self, noise_dist, prediction):
         """
         Prediction function, to be called by :meth:`model` implementations.
-        This should be called outside of the :meth:`time_plate` .
+        This should be called outside of the :meth:`time_plate`.
 
         :param noise_dist: A noise distribution with ``.event_dim == 2``.
             ``noise_dist`` is typically zero-mean or zero-median or zero-mode
@@ -159,7 +158,7 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
 
 class Forecaster(nn.Module):
     """
-    Forecaster for a :class:`ForecastingModel` .
+    Forecaster for a :class:`ForecastingModel`.
 
     On initialization, this fits a distribution using variational inference
     over latent variables and exact inference over the noise distribution,

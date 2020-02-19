@@ -38,13 +38,16 @@ class PrefixReplayMessenger(Messenger):
             msg["value"] = guide_value
             return
 
-        assert model_value.dim() >= 2
+        # Search for a single dim with mismatched size.
         assert model_value.dim() == guide_value.dim()
-        assert model_value.shape[:-2] == guide_value.shape[:-2]
-        assert model_value.size(-2) > guide_value.size(-2)
-        assert model_value.size(-1) == guide_value.size(-1)
-        split = guide_value.size(-2)
-        msg["value"] = torch.cat([guide_value, model_value[..., split:, :]], dim=-2)
+        for dim in range(model_value.dim()):
+            if model_value.size(dim) != guide_value.size(dim):
+                break
+        assert model_value.size(dim) > guide_value.size(dim)
+        assert model_value.shape[dim + 1:] == guide_value.shape[dim + 1:]
+        split = guide_value.size(dim)
+        index = (slice(None),) * dim + (slice(split, None),)
+        msg["value"] = torch.cat([guide_value, model_value[index]], dim=dim)
 
 
 class PrefixConditionMessenger(Messenger):
@@ -68,7 +71,7 @@ class PrefixConditionMessenger(Messenger):
 
 
 # ----------------------------------------------------------------------------
-# The pattern-matching code in the remainder of ths file could be eventually
+# The pattern-matching code in the remainder of this file could be eventually
 # replace by much simpler Funsor logic.
 
 UNIVARIATE_DISTS = {

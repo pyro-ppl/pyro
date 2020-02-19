@@ -11,6 +11,20 @@ from pyro.contrib.forecast import Forecaster, ForecastingModel
 from pyro.infer.reparam import LinearHMMReparam, StableReparam
 
 
+class Model0(ForecastingModel):
+    def model(self, zero_data, covariates):
+        with pyro.plate_stack("batch", zero_data.shape[:-2], rightmost_dim=-2):
+            loc = zero_data[..., :1, 0]
+            scale = pyro.sample("scale", dist.LogNormal(loc, 1))
+
+            with self.time_plate:
+                jumps = pyro.sample("jumps", dist.Normal(0, scale))
+            prediction = jumps.cumsum(-1).unsqueeze(-1) + zero_data
+
+            noise_dist = dist.Laplace(zero_data, 1).to_event(2)
+            self.predict(noise_dist, prediction)
+
+
 class Model1(ForecastingModel):
     def model(self, zero_data, covariates):
         with pyro.plate_stack("batch", zero_data.shape[:-2], rightmost_dim=-2):
@@ -91,7 +105,7 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("cov_dim", [0, 1, 6])
 @pytest.mark.parametrize("obs_dim", [1, 2])
-@pytest.mark.parametrize("Model", [Model1, Model2, Model3, Model4])
+@pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
 def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim):
     model = Model()
     data = torch.randn(batch_shape + (t_obs, obs_dim))
