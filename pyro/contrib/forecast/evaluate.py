@@ -82,11 +82,11 @@ def backtest(data, covariates, model, *,
     :type model: ~pyro.contrib.forecast.forecaster.ForecastingModel
 
     :param dict metrics: A dictionary mapping metric name to metric function.
-        The metric function should input a forecat ``pred`` and ground
+        The metric function should input a forecast ``pred`` and ground
         ``truth`` and can output anything, often a number. Example metrics include:
         :func:`eval_mae` and :func:`eval_crps`.
     :param callable transform: An optional transform to apply before computing
-        metrics. If provided this will be appled as
+        metrics. If provided this will be applied as
         ``pred, truth = transform(pred, truth)``.
     :param int train_window: Size of the training window. Be default trains
         from beginning of data.
