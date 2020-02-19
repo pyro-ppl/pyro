@@ -1,14 +1,14 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import numpy as np
+import pytest
 import scipy.fftpack as fftpack
 import torch
 
-from pyro.ops.tensor_utils import block_diag_embed, convolve, repeated_matmul, block_diagonal, dct, idct
-from tests.common import assert_equal, assert_close
-
+from pyro.ops.tensor_utils import (block_diag_embed, block_diagonal, convolve, dct, idct, periodic_cumsum,
+                                   periodic_repeat, repeated_matmul)
+from tests.common import assert_close, assert_equal
 
 pytestmark = pytest.mark.stage('unit')
 
@@ -37,6 +37,36 @@ def test_block_diag(batch_shape, mat_size, block_size):
     mat_embed = block_diag_embed(mat)
     mat_embed_diag = block_diagonal(mat_embed, block_size)
     assert_equal(mat_embed_diag, mat)
+
+
+@pytest.mark.parametrize("size", [5, 6, 7, 8])
+@pytest.mark.parametrize("period", [2, 3, 4])
+@pytest.mark.parametrize("left_shape", [(), (6,), (3, 2)], ids=str)
+@pytest.mark.parametrize("right_shape", [(), (7,), (5, 4)], ids=str)
+def test_periodic_repeat(period, size, left_shape, right_shape):
+    dim = -1 - len(right_shape)
+    tensor = torch.randn(left_shape + (period,) + right_shape)
+    actual = periodic_repeat(tensor, size, dim)
+    assert actual.shape == left_shape + (size,) + right_shape
+    dots = (slice(None),) * len(left_shape)
+    for t in range(size):
+        assert_equal(actual[dots + (t,)], tensor[dots + (t % period,)])
+
+
+@pytest.mark.parametrize("size", [5, 6, 7, 8])
+@pytest.mark.parametrize("period", [2, 3, 4])
+@pytest.mark.parametrize("left_shape", [(), (6,), (3, 2)], ids=str)
+@pytest.mark.parametrize("right_shape", [(), (7,), (5, 4)], ids=str)
+def test_periodic_cumsum(period, size, left_shape, right_shape):
+    dim = -1 - len(right_shape)
+    tensor = torch.randn(left_shape + (size,) + right_shape)
+    actual = periodic_cumsum(tensor, period, dim)
+    assert actual.shape == tensor.shape
+    dots = (slice(None),) * len(left_shape)
+    for t in range(period):
+        assert_equal(actual[dots + (t,)], tensor[dots + (t,)])
+    for t in range(period, size):
+        assert_close(actual[dots + (t,)], tensor[dots + (t,)] + actual[dots + (t - period,)])
 
 
 @pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
