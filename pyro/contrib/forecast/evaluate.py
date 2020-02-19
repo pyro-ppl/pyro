@@ -83,8 +83,8 @@ def backtest(data, covariates, model, *,
 
     :param dict metrics: A dictionary mapping metric name to metric function.
         The metric function should input a forecast ``pred`` and ground
-        ``truth`` and can output anything, often a number. Example metrics include:
-        :func:`eval_mae` and :func:`eval_crps`.
+        ``truth`` and can output anything, often a number. Example metrics
+        include: :func:`eval_mae`, :func:`eval_rmse`, and :func:`eval_crps`.
     :param callable transform: An optional transform to apply before computing
         metrics. If provided this will be applied as
         ``pred, truth = transform(pred, truth)``.
