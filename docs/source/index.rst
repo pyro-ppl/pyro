@@ -34,6 +34,7 @@ Pyro Documentation
    contrib.cevae
    contrib.easyguide
    contrib.examples
+   contrib.forecast
    contrib.gp
    contrib.minipyro
    contrib.oed

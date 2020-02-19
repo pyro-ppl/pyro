@@ -1,3 +1,6 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This example illustrates the use of `NeuTraReparam` to run neural transport HMC [1]
 on a toy model that draws from a banana-shaped bivariate distribution [2]. We first

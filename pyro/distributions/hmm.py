@@ -596,6 +596,55 @@ class GaussianHMM(HiddenMarkovModel):
         new._validate_args = self.__dict__.get('_validate_args')
         return new, log_normalizer
 
+    def prefix_condition(self, data):
+        """
+        EXPERIMENTAL Given self has ``event_shape == (t+f, d)`` and data ``x``
+        of shape ``batch_shape + (t, d)``, compute a conditional distribution
+        of event_shape ``(f, d)``. Typically ``t`` is the number of training
+        time steps, ``f`` is the number of forecast time steps, and ``d`` is
+        the data dimension.
+
+        :param data: data of dimension at least 2.
+        :type data: ~torch.Tensor
+        """
+        assert data.dim() >= 2
+        assert data.size(-1) == self.event_shape[-1]
+        assert data.size(-2) < self.duration
+        t = data.size(-2)
+        f = self.duration - t
+
+        left = self._get_checked_instance(GaussianHMM)
+        left.hidden_dim = self.hidden_dim
+        left.obs_dim = self.obs_dim
+        left._init = self._init
+
+        right = self._get_checked_instance(GaussianHMM)
+        right.hidden_dim = self.hidden_dim
+        right.obs_dim = self.obs_dim
+
+        if self._obs.batch_shape == () or self._obs.batch_shape[-1] == 1:  # homogeneous
+            left._obs = self._obs
+            right._obs = self._obs
+        else:  # heterogeneous
+            left._obs = self._obs[..., :t]
+            right._obs = self._obs[..., t:]
+
+        if self._trans.batch_shape == () or self._trans.batch_shape[-1] == 1:  # homogeneous
+            left._trans = self._trans
+            right._trans = self._trans
+        else:  # heterogeneous
+            left._trans = self._trans[..., :t]
+            right._trans = self._trans[..., t:]
+
+        super(GaussianHMM, left).__init__(t, self.batch_shape, (t, self.obs_dim),
+                                          validate_args=self._validate_args)
+        initial_dist = left.filter(data)
+        right._init = mvn_to_gaussian(initial_dist)
+        batch_shape = broadcast_shape(right._init.batch_shape, self.batch_shape)
+        super(GaussianHMM, right).__init__(f, batch_shape, (f, self.obs_dim),
+                                           validate_args=self._validate_args)
+        return right
+
 
 class GammaGaussianHMM(HiddenMarkovModel):
     """
