@@ -35,7 +35,7 @@ WINDOWS = [
 
 @pytest.mark.parametrize("train_window,test_window,stride", WINDOWS)
 def test_simple(train_window, test_window, stride):
-    duration = 20
+    duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
     data = torch.randn(duration, obs_dim) + 4
@@ -54,7 +54,7 @@ def test_simple(train_window, test_window, stride):
 
 @pytest.mark.parametrize("train_window,test_window,stride", WINDOWS)
 def test_poisson(train_window, test_window, stride):
-    duration = 20
+    duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
     rate = torch.randn(duration, obs_dim) + 4

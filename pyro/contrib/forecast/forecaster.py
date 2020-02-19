@@ -182,6 +182,7 @@ class Forecaster(nn.Module):
 
     :ivar list losses: A list of losses recorded during training, typically
         used to debug convergence. Defined by ``loss = -elbo / data.numel()``.
+
     :param ForecastingModel model: A forecasting model subclass instance.
     :param data: A tensor dataset with time dimension -2.
     :type data: ~torch.Tensor
@@ -189,6 +190,22 @@ class Forecaster(nn.Module):
         For models not using covariates, pass a shaped empty tensor
         ``torch.empty(duration, 0)``.
     :type covariates: ~torch.Tensor
+
+    :param float learning_rate: Learning rate used by
+        :class:`~pyro.optim.optim.ClippedAdam`.
+    :param tuple betas: Coefficients for running averages used by
+        :class:`~pyro.optim.optim.ClippedAdam`.
+    :param float learning_rate_decay: Learning rate decay used by
+        :class:`~pyro.optim.optim.ClippedAdam`. Note this is the total decay
+        over all ``num_steps``, not the per-step decay factor.
+    :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
+    :param float init_scale: Initial uncertainty scale of the
+        :class:`~pyro.infer.autoguide.AutoNormal` guide.
+    :param int num_particles: Number of particles used to compute the
+        :class:`~pyro.infer.elbo.ELBO`.
+    :param bool vectorize_particles: If ``num_particles > 1``, determines
+        whether to vectorize computation of the :class:`~pyro.infer.elbo.ELBO`.
+        Defaults to True. Set to False for models with dynamic control flow.
     """
     def __init__(self, model, data, covariates, *,
                  learning_rate=0.01,
