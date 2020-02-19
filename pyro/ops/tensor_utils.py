@@ -61,7 +61,7 @@ def periodic_repeat(tensor, size, dim):
     """
     assert isinstance(size, int) and size >= 0
     assert isinstance(dim, int)
-    if dim > 0:
+    if dim >= 0:
         dim -= tensor.dim()
 
     period = tensor.size(dim)
@@ -89,7 +89,7 @@ def periodic_cumsum(tensor, period, dim):
     """
     assert isinstance(period, int) and period > 0
     assert isinstance(dim, int)
-    if dim > 0:
+    if dim >= 0:
         dim -= tensor.dim()
 
     # Pad to even size.
