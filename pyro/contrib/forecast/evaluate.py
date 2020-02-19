@@ -110,6 +110,8 @@ def backtest(data, covariates, model, *,
     :rtype: dict
     """
     assert data.size(-2) == covariates.size(-2)
+    assert isinstance(min_train_window, int) and min_train_window >= 1
+    assert isinstance(min_test_window, int) and min_test_window >= 1
     if metrics is None:
         metrics = DEFAULT_METRICS
     assert metrics, "no metrics specified"
