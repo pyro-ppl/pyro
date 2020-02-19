@@ -39,6 +39,76 @@ def block_diagonal(mat, block_size):
     return mat[..., ::B + 1, :, :]
 
 
+def periodic_repeat(tensor, size, dim):
+    """
+    Repeat a ``period``-sized tensor up to given ``size``. For example::
+
+        >>> x = torch.tensor([[1, 2, 3], [4, 5, 6]])
+        >>> periodic_repeat(x, 4, 0)
+        tensor([[1, 2, 3],
+                [4, 5, 6],
+                [1, 2, 3],
+                [4, 5, 6]])
+        >>> periodic_repeat(x, 4, 1)
+        tensor([[1, 2, 3, 1],
+                [4, 5, 6, 4]])
+
+    This is useful for computing static seasonality in time series models.
+
+    :param torch.Tensor tensor: A tensor of differences.
+    :param int size: Desired size of the result along dimension ``dim``.
+    :param int dim: The tensor dimension along which to repeat.
+    """
+    assert isinstance(size, int) and size >= 0
+    assert isinstance(dim, int)
+    if dim > 0:
+        dim -= tensor.dim()
+
+    period = tensor.size(dim)
+    repeats = [1] * tensor.dim()
+    repeats[dim] = (size + period - 1) // period
+    result = tensor.repeat(*repeats)
+    result = result[(Ellipsis, slice(None, size)) + (slice(None),) * (-1 - dim)]
+    return result
+
+
+def periodic_cumsum(tensor, period, dim):
+    """
+    Compute periodic cumsum along a given dimension. For example if dim=0::
+
+        for t in range(period):
+            assert result[t] == tensor[t]
+        for t in range(period, len(tensor)):
+            assert result[t] == tensor[t] + result[t - period]
+
+    This is useful for computing drifting seasonality in time series models.
+
+    :param torch.Tensor tensor: A tensor of differences.
+    :param int period: The period of repetition.
+    :param int dim: The tensor dimension along which to accumulate.
+    """
+    assert isinstance(period, int) and period > 0
+    assert isinstance(dim, int)
+    if dim > 0:
+        dim -= tensor.dim()
+
+    # Pad to even size.
+    size = tensor.size(dim)
+    repeats = (size + period - 1) // period
+    padding = repeats * period - size
+    if torch._C._get_tracing_state() or padding:
+        tensor = torch.nn.functional.pad(tensor, (0, 0) * (-1 - dim) + (0, padding))
+
+    # Accumulate.
+    shape = tensor.shape[:dim] + (repeats, period) + tensor.shape[tensor.dim() + dim + 1:]
+    result = tensor.reshape(shape).cumsum(dim=dim - 1).reshape(tensor.shape)
+
+    # Truncate to original size.
+    if torch._C._get_tracing_state() or padding:
+        result = result[(Ellipsis, slice(None, size)) + (slice(None),) * (-1 - dim)]
+    return result
+
+
 def _complex_mul(a, b):
     ar, ai = a.unbind(-1)
     br, bi = b.unbind(-1)
