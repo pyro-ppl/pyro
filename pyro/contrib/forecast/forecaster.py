@@ -69,9 +69,20 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
     def predict(self, noise_dist, prediction):
         """
         Prediction function, to be called by :meth:`model` implementations.
-        This should be called outside of the :meth:`time_plate`.
 
-        :param noise_dist: A noise distribution with ``.event_dim == 2``.
+        This should be called outside of the  :meth:`time_plate`.
+
+        This is similar to an observe statement in Pyro::
+
+            pyro.sample("residual", noise_dist,
+                        obs=(data - prediction))
+
+        but with (1) additional reshaping logic to allow time-dependent
+        ``noise_dist`` (most often a :class:`~pyro.distributions.GaussianHMM`
+        or variant); and (2) additional logic to allow only a partial
+        observation and forecast the remaining data.
+
+        :param noise_dist: A noise distribution with ``.event_dim in {0,1,2}``.
             ``noise_dist`` is typically zero-mean or zero-median or zero-mode
             or somehow centered.
         :type noise_dist: ~pyro.distributions.Distribution
@@ -84,7 +95,10 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         assert self._forecast is None, ".predict() called twice"
         assert isinstance(noise_dist, dist.Distribution)
         assert isinstance(prediction, torch.Tensor)
-        assert noise_dist.event_shape == prediction.shape[-2:]
+        assert len(noise_dist.shape()) >= 2
+        assert noise_dist.shape()[-2:] == prediction.shape[-2:]
+        assert noise_dist.event_dim in {0, 1, 2}
+        noise_dist = noise_dist.to_event(2 - noise_dist.event_dim)
 
         # The following reshaping logic is required to reconcile batch and
         # event shapes. This would be unnecessary if Pyro used name dimensions
@@ -182,14 +196,17 @@ class Forecaster(nn.Module):
                  learning_rate_decay=0.1,
                  num_steps=1001,
                  log_every=100,
-                 init_scale=0.1):
+                 init_scale=0.1,
+                 num_particles=1,
+                 vectorize_particles=True):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
         self.guide = AutoNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale)
         optim = ClippedAdam({"lr": learning_rate, "betas": betas,
                              "lrd": learning_rate_decay ** (1 / num_steps)})
-        elbo = Trace_ELBO()
+        elbo = Trace_ELBO(num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
         elbo._guess_max_plate_nesting(self.model, self.guide, (data, covariates), {})
         elbo.max_plate_nesting = max(elbo.max_plate_nesting, 1)  # force a time plate
 

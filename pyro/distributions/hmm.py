@@ -599,10 +599,10 @@ class GaussianHMM(HiddenMarkovModel):
     def prefix_condition(self, data):
         """
         EXPERIMENTAL Given self has ``event_shape == (t+f, d)`` and data ``x``
-        of shape ``batch_shape + (t, d)``, find a conditional distribution of
-        event_shape ``(f, d)``. Typically ``t`` is the number of training time
-        steps, ``f`` is the number of forecast time steps, and ``d`` is the
-        data dimension.
+        of shape ``batch_shape + (t, d)``, compute a conditional distribution
+        of event_shape ``(f, d)``. Typically ``t`` is the number of training
+        time steps, ``f`` is the number of forecast time steps, and ``d`` is
+        the data dimension.
 
         :param data: data of dimension at least 2.
         :type data: ~torch.Tensor

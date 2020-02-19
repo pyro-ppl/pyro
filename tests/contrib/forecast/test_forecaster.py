@@ -21,7 +21,7 @@ class Model0(ForecastingModel):
                 jumps = pyro.sample("jumps", dist.Normal(0, scale))
             prediction = jumps.cumsum(-1).unsqueeze(-1) + zero_data
 
-            noise_dist = dist.Laplace(zero_data, 1).to_event(2)
+            noise_dist = dist.Laplace(zero_data, 1)
             self.predict(noise_dist, prediction)
 
 
@@ -35,7 +35,7 @@ class Model1(ForecastingModel):
                 jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
             prediction = jumps.cumsum(-2)
 
-            noise_dist = dist.Laplace(zero_data, 1).to_event(2)
+            noise_dist = dist.Laplace(zero_data, 1)
             self.predict(noise_dist, prediction)
 
 
@@ -50,7 +50,7 @@ class Model2(ForecastingModel):
             prediction = jumps.cumsum(-2)
 
             scale_tril = torch.eye(zero_data.size(-1))
-            noise_dist = dist.MultivariateNormal(zero_data, scale_tril=scale_tril).to_event(1)
+            noise_dist = dist.MultivariateNormal(zero_data, scale_tril=scale_tril)
             self.predict(noise_dist, prediction)
 
 

@@ -87,7 +87,7 @@ UNIVARIATE_DISTS = {
 def prefix_condition(d, data):
     """
     EXPERIMENTAL Given a distribution ``d`` of shape ``batch_shape + (t+f, d)``
-    and data ``x`` of shape ``batch_shape + (t, d)``, find a conditional
+    and data ``x`` of shape ``batch_shape + (t, d)``, compute a conditional
     distribution of shape ``batch_shape + (f, d)``. Typically ``t`` is the
     number of training time steps, ``f`` is the number of forecast time steps,
     and ``d`` is the data dimension.
