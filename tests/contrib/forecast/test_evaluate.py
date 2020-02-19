@@ -26,15 +26,16 @@ class Model(ForecastingModel):
 
 
 WINDOWS = [
-    (None, None, 8),
-    (10, None, 5),
-    (None, 10, 5),
-    (7, 7, 7),
+    (None, 1, None, 1, 8),
+    (None, 4, None, 4, 8),
+    (10, 1, None, 3, 5),
+    (None, 5, 10, 1, 5),
+    (7, 1, 7, 1, 7),
 ]
 
 
-@pytest.mark.parametrize("train_window,test_window,stride", WINDOWS)
-def test_simple(train_window, test_window, stride):
+@pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
+def test_simple(train_window, min_train_window, test_window, min_test_window, stride):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
@@ -52,8 +53,8 @@ def test_simple(train_window, test_window, stride):
             assert 0 < window[name] < math.inf
 
 
-@pytest.mark.parametrize("train_window,test_window,stride", WINDOWS)
-def test_poisson(train_window, test_window, stride):
+@pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
+def test_poisson(train_window, min_train_window, test_window, min_test_window, stride):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)

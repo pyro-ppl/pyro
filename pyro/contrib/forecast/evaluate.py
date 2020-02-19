@@ -64,7 +64,9 @@ def backtest(data, covariates, model, *,
              metrics=None,
              transform=None,
              train_window=None,
+             min_train_window=1,
              test_window=None,
+             min_test_window=1,
              stride=1,
              seed=1234567890,
              num_samples=100,
@@ -90,8 +92,12 @@ def backtest(data, covariates, model, *,
         ``pred, truth = transform(pred, truth)``.
     :param int train_window: Size of the training window. Be default trains
         from beginning of data.
-    :param int test_window: Size of the test window. By defaults forecast to
+    :param int min_train_window: If ``train_window`` is None, this specifies
+        the min training window size. Defaults to 1.
+    :param int test_window: Size of the test window. By default forecasts to
         end of data.
+    :param int min_test_window: If ``test_window`` is None, this specifies
+        the min test window size. Defaults to 1.
     :param int stride: Optional stride for test/train split. Defaults to 1.
     :param int seed: Random number seed.
     :param int num_samples: Number of samples for forecast.
@@ -110,11 +116,11 @@ def backtest(data, covariates, model, *,
 
     duration = data.size(-2)
     if test_window is None:
-        stop = duration - 1
+        stop = duration - min_test_window
     else:
         stop = duration - test_window
     if train_window is None:
-        start = 1
+        start = min_train_window
     else:
         start = train_window
 

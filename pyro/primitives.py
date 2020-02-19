@@ -348,7 +348,7 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     r"""
     .. warning::
         The `random_module` primitive is deprecated, and will be removed
-        in a future release. Use :class:`~pyro.nn.PyroModule` instead to
+        in a future release. Use :class:`~pyro.nn.module.PyroModule` instead to
         to create Bayesian modules from :class:`torch.nn.Module` instances.
         See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
         for an example.
