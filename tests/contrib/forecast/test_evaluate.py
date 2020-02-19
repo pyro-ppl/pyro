@@ -43,7 +43,9 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
 
     metrics = backtest(data, covariates, Model(),
                        train_window=train_window,
+                       min_train_window=min_train_window,
                        test_window=test_window,
+                       min_test_window=min_test_window,
                        stride=stride,
                        forecaster_options={"num_steps": 2})
 
@@ -72,7 +74,9 @@ def test_poisson(train_window, min_train_window, test_window, min_test_window, s
     metrics = backtest(data, covariates, Model(),
                        transform=transform,
                        train_window=train_window,
+                       min_train_window=min_train_window,
                        test_window=test_window,
+                       min_test_window=min_test_window,
                        stride=stride,
                        forecaster_options={"num_steps": 2})
 
