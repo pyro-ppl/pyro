@@ -26,12 +26,19 @@ def preprocess(args):
     i = dataset["stations"].index("EMBR")
     arrivals = dataset["counts"][:, :, i].sum(-1)
     departures = dataset["counts"][:, i, :].sum(-1)
-    data = torch.stack([arrivals, departures], dim=-1).log1p()
-    covariates = torch.zeros(len(data), 0)
+    data = torch.stack([arrivals, departures], dim=-1)
+    covariates = torch.zeros(len(data), 0)  # Has correct len() but no elements.
     return data, covariates
 
 
+# We define a model by subclassing the ForecastingModel class and implementing
+# a single .model() method.
 class Model(ForecastingModel):
+    # The .model() method inputs two tensors: a fake tensor zero_data that is
+    # the same size and dtype as the real data (but of course the generative
+    # model shouldn't depend on the value of the data it generates!), and a
+    # tensor of covariates. Our simple model depends on no covariates, so we
+    # simply pass in an empty tensor (see  the preprocess() function above).
     def model(self, zero_data, covariates):
         duration = zero_data.size(-2)
         period = 24 * 7
@@ -45,6 +52,9 @@ class Model(ForecastingModel):
                                        dist.LogNormal(torch.zeros(2), 0.1).to_event(1))
         obs_dist_scale = pyro.sample("obs_dist_scale",
                                      dist.LogNormal(torch.zeros(2), 0.1).to_event(1))
+        # Note the initial seasonality should be sampled in a plate with the
+        # same dim as the time_plate, dim=-1. That way we can repeat the dim
+        # below using periodic_repeat().
         with pyro.plate("season_plate", period,  dim=-1):
             season_init = pyro.sample("season_init",
                                       dist.Normal(torch.zeros(2), 1).to_event(1))
@@ -54,12 +64,17 @@ class Model(ForecastingModel):
             season_noise = pyro.sample("season_noise",
                                        dist.Normal(0, noise_scale).to_event(1))
 
-        # Construct prediction.
+        # Construct a prediction. This prediction has an exactly repeated
+        # seasonal part plus slow seasonal drift. We use two deterministic,
+        # linear functions to transform our diagonal Normal noise to nontrivial
+        # samples from a Gaussian process.
         prediction = (periodic_repeat(season_init, duration, dim=-2) +
                       periodic_cumsum(season_noise, period, dim=-2))
 
-        # Construct a joint noise model.
-        init_dist = dist.Normal(torch.zeros(2), 10).to_event(1)
+        # Construct a joint noise model. This model is a GaussianHMM, whose
+        # .rsample() and .log_prob() methods are parallelized over time; this
+        # this entire model is parallelized over time.
+        init_dist = dist.Normal(torch.zeros(2), 100).to_event(1)
         trans_mat = trans_time_scale.neg().exp().diag_embed()
         trans_dist = dist.Normal(0, trans_dist_scale).to_event(1)
         obs_mat = torch.eye(2)
@@ -67,19 +82,29 @@ class Model(ForecastingModel):
         noise_model = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
                                        duration=duration)
 
+        # The final statement registers our noise model and prediction.
         self.predict(noise_model, prediction)
 
 
 def main(args):
     pyro.enable_validation(__debug__)
-
     data, covariates = preprocess(args)
+
+    # We will model positive count data by log1p-transforming it into real
+    # valued data.  But since we want to evaluate back in the count domain, we
+    # will also define a transform to apply during evaluation, transforming
+    # from real back to count-valued data. Truth is mapped by the log1p()
+    # inverse expm1(), but the prediction will be sampled from a Poisson
+    # distribution.
+    data = data.log1p()
 
     def transform(pred, truth):
         pred = torch.poisson(pred.clamp(min=1e-4).expm1())
         truth = truth.expm1()
         return pred, truth
 
+    # The backtest() function automatically trains and evaluates our model on
+    # different windows of data.
     forecaster_options = {
         "num_steps": args.num_steps,
         "learning_rate": args.learning_rate,
@@ -112,8 +137,4 @@ if __name__ == "__main__":
     parser.add_argument("--log-every", default=50, type=int)
     parser.add_argument("--seed", default=1234567890, type=int)
     args = parser.parse_args()
-    try:
-        main(args)
-    except Exception:
-        import pdb
-        pdb.post_mortem()
+    main(args)
