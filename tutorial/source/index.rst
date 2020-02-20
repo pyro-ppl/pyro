@@ -69,7 +69,7 @@ Welcome to Pyro Examples and Tutorials!
    sparse_gamma
    dkl
    einsum
-   forecast
+   forecast_simple
    timeseries
    smcfilter
 
