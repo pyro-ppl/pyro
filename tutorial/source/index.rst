@@ -69,8 +69,9 @@ Welcome to Pyro Examples and Tutorials!
    sparse_gamma
    dkl
    einsum
-   smcfilter
+   forecast
    timeseries
+   smcfilter
 
 
 Indices and tables
