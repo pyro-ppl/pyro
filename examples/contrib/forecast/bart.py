@@ -46,12 +46,21 @@ class Model(ForecastingModel):
         # Sample global parameters.
         noise_scale = pyro.sample("noise_scale",
                                   dist.LogNormal(torch.full((2,), -3), 1).to_event(1))
-        trans_time_scale = pyro.sample("trans_time_scale",
-                                       dist.LogNormal(torch.zeros(2), 1).to_event(1))
-        trans_dist_scale = pyro.sample("trans_dist_scale",
-                                       dist.LogNormal(torch.zeros(2), 0.1).to_event(1))
-        obs_dist_scale = pyro.sample("obs_dist_scale",
-                                     dist.LogNormal(torch.zeros(2), 0.1).to_event(1))
+        trans_timescale = pyro.sample("trans_timescale",
+                                      dist.LogNormal(torch.zeros(2), 1).to_event(1))
+
+        trans_scale = pyro.sample("trans_scale",
+                                  dist.LogNormal(torch.zeros(2), 0.1).to_event(1))
+        trans_corr = pyro.sample("trans_corr",
+                                 dist.LKJCorrCholesky(2, torch.ones(())))
+        trans_scale_tril = trans_scale.unsqueeze(-1) * trans_corr
+
+        obs_scale = pyro.sample("obs_scale",
+                                dist.LogNormal(torch.zeros(2), 0.1).to_event(1))
+        obs_corr = pyro.sample("obs_corr",
+                               dist.LKJCorrCholesky(2, torch.ones(())))
+        obs_scale_tril = obs_scale.unsqueeze(-1) * obs_corr
+
         # Note the initial seasonality should be sampled in a plate with the
         # same dim as the time_plate, dim=-1. That way we can repeat the dim
         # below using periodic_repeat().
@@ -75,10 +84,10 @@ class Model(ForecastingModel):
         # .rsample() and .log_prob() methods are parallelized over time; this
         # this entire model is parallelized over time.
         init_dist = dist.Normal(torch.zeros(2), 100).to_event(1)
-        trans_mat = trans_time_scale.neg().exp().diag_embed()
-        trans_dist = dist.Normal(0, trans_dist_scale).to_event(1)
+        trans_mat = trans_timescale.neg().exp().diag_embed()
+        trans_dist = dist.MultivariateNormal(torch.zeros(2), scale_tril=trans_scale_tril)
         obs_mat = torch.eye(2)
-        obs_dist = dist.Normal(0, obs_dist_scale).to_event(1)
+        obs_dist = dist.MultivariateNormal(torch.zeros(2), scale_tril=obs_scale_tril)
         noise_model = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
                                        duration=duration)
 
