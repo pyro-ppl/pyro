@@ -132,7 +132,8 @@ def backtest(data, covariates, model, *,
         t0 = 0 if train_window is None else t1 - train_window
         t2 = duration if test_window is None else t1 + test_window
         assert 0 <= t0 < t1 < t2 <= duration
-        logger.info("Evaluating on window ({}, {}, {})".format(t0, t1, t2))
+        logger.info("Training on window [{t0}:{t1}], testing on window [{t1}:{t2}]"
+                    .format(t0=t0, t1=t1, t2=t2))
 
         # Train a forecaster on the training window.
         pyro.set_rng_seed(seed)
