@@ -9,10 +9,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
 from pyro.contrib.examples.bart import load_bart_od
 from pyro.contrib.forecast import ForecastingModel, backtest
-from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.ops.tensor_utils import periodic_cumsum, periodic_repeat
 
 logging.getLogger("pyro").setLevel(logging.DEBUG)
@@ -41,8 +39,8 @@ class Model(ForecastingModel):
         # Sample global parameters.
         noise_scale = pyro.sample("noise_scale",
                                   dist.LogNormal(torch.full((2,), -3), 1).to_event(1))
-        trans_mat_noise = pyro.sample("trans_mat_noise",
-                                      dist.Normal(torch.zeros(2, 2), 0.1).to_event(2))
+        trans_time_scale = pyro.sample("trans_time_scale",
+                                       dist.LogNormal(torch.zeros(2), 1).to_event(1))
         trans_dist_scale = pyro.sample("trans_dist_scale",
                                        dist.LogNormal(torch.zeros(2), 0.1).to_event(1))
         obs_dist_scale = pyro.sample("obs_dist_scale",
@@ -56,26 +54,18 @@ class Model(ForecastingModel):
             season_noise = pyro.sample("season_noise",
                                        dist.Normal(0, noise_scale).to_event(1))
 
-        # TODO get DiscreteCosineReparam working.
-        # with poutine.reparam(config={"season_noise": DiscreteCosineReparam(dim=-2)}):
-        #     season_noise = pyro.sample("season_noise",
-        #                                dist.Normal(torch.zeros(duration, 2),
-        #                                            noise_scale.unsqueeze(-2)).to_event(2))
-        # if season_noise.dim() > 3:
-        #     season_noise = season_noise.squeeze(-3)
-
         # Construct prediction.
         prediction = (periodic_repeat(season_init, duration, dim=-2) +
                       periodic_cumsum(season_noise, period, dim=-2))
 
         # Construct a joint noise model.
-        noise_model = dist.GaussianHMM(
-            initial_dist=dist.Normal(torch.zeros(2), 100).to_event(1),
-            transition_matrix=torch.eye(2) + trans_mat_noise,
-            transition_dist=dist.Normal(0, trans_dist_scale).to_event(1),
-            observation_matrix=torch.eye(2),
-            observation_dist=dist.Normal(0, obs_dist_scale).to_event(1),
-            duration=duration)
+        init_dist = dist.Normal(torch.zeros(2), 10).to_event(1)
+        trans_mat = trans_time_scale.neg().exp().diag_embed()
+        trans_dist = dist.Normal(0, trans_dist_scale).to_event(1)
+        obs_mat = torch.eye(2)
+        obs_dist = dist.Normal(0, obs_dist_scale).to_event(1)
+        noise_model = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
+                                       duration=duration)
 
         self.predict(noise_model, prediction)
 
@@ -99,13 +89,14 @@ def main(args):
                        train_window=args.train_window,
                        test_window=args.test_window,
                        stride=args.stride,
+                       num_samples=args.num_samples,
                        forecaster_options=forecaster_options)
 
     for name in ["mae", "rmse", "crps"]:
         values = [m[name] for m in metrics]
         mean = np.mean(values)
         std = np.std(values)
-        print("{} = {:0.3g} +- {:0.3g}".format(mean, std))
+        print("{} = {:0.3g} +- {:0.3g}".format(name, mean, std))
     return metrics
 
 
@@ -117,7 +108,12 @@ if __name__ == "__main__":
     parser.add_argument("--stride", default=168, type=int)
     parser.add_argument("-n", "--num-steps", default=501, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
-    parser.add_argument("--log-every", default=50, type=float)
+    parser.add_argument("--num-samples", default=100, type=int)
+    parser.add_argument("--log-every", default=50, type=int)
     parser.add_argument("--seed", default=1234567890, type=int)
     args = parser.parse_args()
-    main(args)
+    try:
+        main(args)
+    except Exception:
+        import pdb
+        pdb.post_mortem()
