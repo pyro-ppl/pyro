@@ -319,6 +319,9 @@ class MaskedDistribution(TorchDistribution):
         return self.base_dist.variance
 
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         updated, log_normalizer = self.base_dist.conjugate_update(other)
         updated = updated.mask(self._mask)
         log_normalizer = torch.where(self._mask, log_normalizer, torch.zeros_like(log_normalizer))
@@ -429,6 +432,9 @@ class ExpandedDistribution(TorchDistribution):
         return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
 
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         updated, log_normalizer = self.base_dist.conjugate_update(other)
         updated = updated.expand(self.batch_shape)
         log_normalizer = log_normalizer.expand(self.batch_shape)

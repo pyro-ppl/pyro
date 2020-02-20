@@ -162,7 +162,7 @@ def test_stable_hmm_smoke(batch_shape, num_steps, hidden_dim, obs_dim):
     assert data.shape == batch_shape + (num_steps, obs_dim)
 
     def model(data):
-        hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+        hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps)
         with pyro.plate_stack("plates", batch_shape):
             z = pyro.sample("z", hmm)
             pyro.sample("x", dist.Normal(z, 1).to_event(2), obs=data)

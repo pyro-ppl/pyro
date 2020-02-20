@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Pyro includes an experimental class :class:`~pyro.nn.module.PyroModule`, a
-subclass of :class:`torch.nn.Module`, whose attributes can be modified by Pyro
-effects.  To create a poutine-aware attribute, use either the
-:class:`PyroParam` struct or the :class:`PyroSample` struct::
+Pyro includes a class :class:`~pyro.nn.module.PyroModule`, a subclass of
+:class:`torch.nn.Module`, whose attributes can be modified by Pyro effects.  To
+create a poutine-aware attribute, use either the :class:`PyroParam` struct or
+the :class:`PyroSample` struct::
 
     my_module = PyroModule()
     my_module.x = PyroParam(torch.tensor(1.), constraint=constraints.positive)
@@ -111,10 +111,9 @@ class _PyroModuleMeta(type):
 
 class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     """
-    EXPERIMENTAL Subclass of :class:`torch.nn.Module` whose attributes can be
-    modified by Pyro effects. Attributes can be set using helpers
-    :class:`PyroParam` and :class:`PyroSample` , and methods can be decorated
-    by :func:`pyro_method` .
+    Subclass of :class:`torch.nn.Module` whose attributes can be modified by
+    Pyro effects. Attributes can be set using helpers :class:`PyroParam` and
+    :class:`PyroSample` , and methods can be decorated by :func:`pyro_method` .
 
     **Parameters**
 

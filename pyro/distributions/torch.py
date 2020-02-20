@@ -12,6 +12,9 @@ from pyro.distributions.util import sum_rightmost
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         assert isinstance(other, Beta)
         concentration1 = self.concentration1 + other.concentration1 - 1
         concentration0 = self.concentration0 + other.concentration0 - 1
@@ -57,6 +60,9 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         assert isinstance(other, Dirichlet)
         concentration = self.concentration + other.concentration - 1
         updated = Dirichlet(concentration)
@@ -71,6 +77,9 @@ class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
 
 class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         assert isinstance(other, Gamma)
         concentration = self.concentration + other.concentration - 1
         rate = self.rate + other.rate
@@ -109,6 +118,9 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         self.base_dist._validate_args = value
 
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         n = self.reintepreted_batch_ndims
         updated, log_normalizer = self.base_dist.conjugate_update(other.to_event(-n))
         updated = updated.to_event(n)
