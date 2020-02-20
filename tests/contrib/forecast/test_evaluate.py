@@ -27,10 +27,11 @@ class Model(ForecastingModel):
 
 WINDOWS = [
     (None, 1, None, 1, 8),
-    (None, 4, None, 4, 8),
+    (None, 10, None, 10, 1),
     (10, 1, None, 3, 5),
     (None, 5, 10, 1, 5),
     (7, 1, 7, 1, 7),
+    (14, 1, 7, 1, 1),
 ]
 
 
@@ -41,7 +42,7 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
     covariates = torch.zeros(duration, 0)
     data = torch.randn(duration, obs_dim) + 4
 
-    metrics = backtest(data, covariates, Model(),
+    windows = backtest(data, covariates, Model(),
                        train_window=train_window,
                        min_train_window=min_train_window,
                        test_window=test_window,
@@ -49,8 +50,11 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
                        stride=stride,
                        forecaster_options={"num_steps": 2})
 
+    assert any(window["t0"] == 0 for window in windows)
+    if stride == 1:
+        assert any(window["t2"] == duration for window in windows)
     for name in DEFAULT_METRICS:
-        for window in metrics.values():
+        for window in windows:
             assert name in window
             assert 0 < window[name] < math.inf
 
@@ -71,7 +75,7 @@ def test_poisson(train_window, min_train_window, test_window, min_test_window, s
         truth = truth.expm1()
         return pred, truth
 
-    metrics = backtest(data, covariates, Model(),
+    windows = backtest(data, covariates, Model(),
                        transform=transform,
                        train_window=train_window,
                        min_train_window=min_train_window,
@@ -80,7 +84,11 @@ def test_poisson(train_window, min_train_window, test_window, min_test_window, s
                        stride=stride,
                        forecaster_options={"num_steps": 2})
 
+    assert any(window["t0"] == 0 for window in windows)
+    if stride == 1:
+        assert any(window["t0"] == 0 for window in windows)
+        assert any(window["t2"] == duration for window in windows)
     for name in DEFAULT_METRICS:
-        for window in metrics.values():
+        for window in windows:
             assert name in window
             assert 0 < window[name] < math.inf

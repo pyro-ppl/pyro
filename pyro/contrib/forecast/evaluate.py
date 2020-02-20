@@ -104,10 +104,11 @@ def backtest(data, covariates, model, *,
     :param dict forecaster_options: Options to pass to forecaster. See
         :class:`~pyro.contrib.forecaster.Forecaster` for details.
 
-    :returns: A dict mapping (train_begin, split, test_end) triples to
-        dictionaries of evaluation data. Caller is responsible for aggregating
-        the per-window metrics.
-    :rtype: dict
+    :returns: A list of dictionaries of evaluation data. Caller is responsible
+        for aggregating the per-window metrics. Dictionary keys include: train
+        begin time "t0", train/test split time "t1", test end  time "t2",
+        "seed", "num_samples" and one key for each metric.
+    :rtype: list
     """
     assert data.size(-2) == covariates.size(-2)
     assert isinstance(min_train_window, int) and min_train_window >= 1
@@ -118,15 +119,15 @@ def backtest(data, covariates, model, *,
 
     duration = data.size(-2)
     if test_window is None:
-        stop = duration - min_test_window
+        stop = duration - min_test_window + 1
     else:
-        stop = duration - test_window
+        stop = duration - test_window + 1
     if train_window is None:
         start = min_train_window
     else:
         start = train_window
 
-    result = {}
+    results = []
     for t1 in range(start, stop, stride):
         t0 = 0 if train_window is None else t1 - train_window
         t2 = duration if test_window is None else t1 + test_window
@@ -152,12 +153,18 @@ def backtest(data, covariates, model, *,
         # Evaluate the forecasts.
         if transform is not None:
             pred, truth = transform(pred, truth)
-        result_t = {"seed": seed, "num_samples": num_samples}
-        result[t0, t1, t2] = result_t
+        result = {
+            "t0": t0,
+            "t1": t1,
+            "t2": t2,
+            "seed": seed,
+            "num_samples": num_samples,
+        }
+        results.append(result)
         for name, fn in metrics.items():
-            result_t[name] = fn(pred, truth)
-            logger.debug("{} = {}".format(name, result_t[name]))
+            result[name] = fn(pred, truth)
+            logger.debug("{} = {}".format(name, result[name]))
 
         del pred
 
-    return result
+    return results
