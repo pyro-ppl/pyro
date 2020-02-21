@@ -70,10 +70,10 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000, Trace_ELBO())
 
     def test_renyi_reparameterized(self):
-        self.do_elbo_test(True, 2500, RenyiELBO(num_particles=3))
+        self.do_elbo_test(True, 2500, RenyiELBO(num_particles=3, vectorize_particles=False))
 
     def test_renyi_nonreparameterized(self):
-        self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3))
+        self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3, vectorize_particles=True))
 
     def test_rws_reparameterized(self):
         self.do_elbo_test(True, 2500, ReweightedWakeSleep(num_particles=3))
