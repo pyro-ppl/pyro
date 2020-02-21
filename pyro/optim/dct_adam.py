@@ -14,8 +14,10 @@ def _transform_forward(x, dim, duration):
     time_domain = x
     new_size = next_fast_len(duration)
     if new_size == duration:
+        freq_domain = x
+    else:
         freq_domain = pad(x, (0, 0) * (-1 - dim) + (0, new_size - duration))
-        freq_domain = idct(freq_domain, dim)
+    freq_domain = dct(freq_domain, dim)
     return torch.cat([time_domain, freq_domain], dim=dim)
 
 
@@ -25,7 +27,7 @@ def _transform_inverse(x, dim, duration):
     dots = (slice(None),) * (x.dim() + dim)
     left = dots + (slice(None, duration),)
     right = dots + (slice(duration, None),)
-    return dct(x[right], dim)[left].add_(x[left])
+    return idct(x[right], dim)[left].add_(x[left])
 
 
 class DCTAdam(Optimizer):

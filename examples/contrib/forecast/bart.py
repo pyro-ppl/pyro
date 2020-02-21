@@ -60,6 +60,9 @@ class Model(ForecastingModel):
                                       dist.LogNormal(torch.zeros(dim), 1).to_event(1))
         assert trans_timescale.shape[-1:] == (dim,)
 
+        trans_loc = pyro.sample("trans_loc", dist.Cauchy(0, 0.1 / period))
+        trans_loc = trans_loc.unsqueeze(-1).expand(trans_loc.shape + (dim,))
+        assert trans_loc.shape[-1:] == (dim,)
         trans_scale = pyro.sample("trans_scale",
                                   dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         trans_corr = pyro.sample("trans_corr",
@@ -101,7 +104,7 @@ class Model(ForecastingModel):
         # this entire model is parallelized over time.
         init_dist = dist.Normal(torch.zeros(dim), 100).to_event(1)
         trans_mat = trans_timescale.neg().exp().diag_embed()
-        trans_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=trans_scale_tril)
+        trans_dist = dist.MultivariateNormal(trans_loc, scale_tril=trans_scale_tril)
         obs_mat = torch.eye(dim)
         obs_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=obs_scale_tril)
         noise_model = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
