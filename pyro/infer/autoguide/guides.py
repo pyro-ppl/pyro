@@ -400,8 +400,8 @@ class AutoNormal(AutoGuide):
 
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
-
             init_scale = torch.full_like(init_loc, self._init_scale)
+
             _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
             _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive, event_dim))
 
@@ -434,7 +434,9 @@ class AutoNormal(AutoGuide):
                 site_loc, site_scale = self._get_loc_and_scale(name)
                 unconstrained_latent = pyro.sample(
                     name + "_unconstrained",
-                    dist.Normal(site_loc, site_scale).to_event(self._event_dims[name]),
+                    dist.Normal(
+                        site_loc, site_scale,
+                    ).to_event(self._event_dims[name]),
                     infer={"is_auxiliary": True}
                 )
 
