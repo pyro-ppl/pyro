@@ -135,6 +135,7 @@ def main(args):
         "num_steps": args.num_steps,
         "learning_rate": args.learning_rate,
         "log_every": args.log_every,
+        "dct_gradients": args.dct,
     }
     metrics = backtest(data, covariates, Model,
                        train_window=args.train_window,
@@ -159,6 +160,7 @@ if __name__ == "__main__":
     parser.add_argument("--stride", default=168, type=int)
     parser.add_argument("-n", "--num-steps", default=501, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
+    parser.add_argument("--dct", action="store_true")
     parser.add_argument("--num-samples", default=100, type=int)
     parser.add_argument("--log-every", default=50, type=int)
     parser.add_argument("--seed", default=1234567890, type=int)

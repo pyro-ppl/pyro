@@ -228,6 +228,8 @@ class Forecaster(nn.Module):
     :param float learning_rate_decay: Learning rate decay used by
         :class:`~pyro.optim.optim.DCTAdam`. Note this is the total decay
         over all ``num_steps``, not the per-step decay factor.
+    :param bool dct_gradients: Whether to discrete cosine transform gradients
+        in :class:`~pyro.optim.optim.DCTAdam`. Defaults to False.
     :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
     :param float init_scale: Initial uncertainty scale of the
         :class:`~pyro.infer.autoguide.AutoNormal` guide.
@@ -242,6 +244,7 @@ class Forecaster(nn.Module):
                  learning_rate=0.01,
                  betas=(0.9, 0.99),
                  learning_rate_decay=0.1,
+                 dct_gradients=False,
                  num_steps=1001,
                  log_every=100,
                  init_scale=0.1,
@@ -259,7 +262,7 @@ class Forecaster(nn.Module):
                           vectorize_particles=vectorize_particles)
 
         # Initialize.
-        mark_dct = MarkDCTParamMessenger("time")
+        mark_dct = MarkDCTParamMessenger("time") if dct_gradients else lambda m: m
         elbo._guess_max_plate_nesting(mark_dct(self.model),
                                       mark_dct(self.guide),
                                       (data, covariates), {})
