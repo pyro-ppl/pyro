@@ -17,6 +17,14 @@ Forecaster Interface
     :show-inheritance:
     :member-order: bysource
 
+Guides
+------
+.. automodule:: pyro.contrib.forecast.guides
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Evaluation
 ----------
 .. automodule:: pyro.contrib.forecast.evaluate

@@ -60,7 +60,7 @@ DEFAULT_METRICS = {
 }
 
 
-def backtest(data, covariates, model, *,
+def backtest(data, covariates, model_fn, guide_fn=None, *,
              metrics=None,
              transform=None,
              train_window=None,
@@ -80,8 +80,9 @@ def backtest(data, covariates, model, *,
         For models not using covariates, pass a shaped empty tensor
         ``torch.empty(duration, 0)``.
     :type covariates: ~torch.Tensor
-    :param model:
-    :type model: ~pyro.contrib.forecast.forecaster.ForecastingModel
+    :param callable model_fn: Function that returns an
+        ~pyro.contrib.forecast.forecaster.ForecastingModel object.
+    :param callable guide_fn: Function that returns a guide object.
 
     :param dict metrics: A dictionary mapping metric name to metric function.
         The metric function should input a forecast ``pred`` and ground
@@ -140,7 +141,10 @@ def backtest(data, covariates, model, *,
         pyro.clear_param_store()
         train_data = data[..., t0:t1, :]
         train_covariates = covariates[..., t0:t1, :]
-        forecaster = Forecaster(model, train_data, train_covariates, **forecaster_options)
+        model = model_fn()
+        guide = None if guide_fn is None else guide_fn()
+        forecaster = Forecaster(model, train_data, train_covariates,
+                                guide=guide, **forecaster_options)
 
         # Forecast forward to testing window.
         test_covariates = covariates[..., t0:t2, :]

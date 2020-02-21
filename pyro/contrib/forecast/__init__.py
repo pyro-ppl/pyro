@@ -3,8 +3,10 @@
 
 from .evaluate import backtest, eval_crps, eval_mae, eval_rmse
 from .forecaster import Forecaster, ForecastingModel
+from .guides import AutoTemporal
 
 __all__ = [
+    "AutoTemporal",
     "Forecaster",
     "ForecastingModel",
     "backtest",

@@ -188,7 +188,7 @@ def _real_of_complex_mul(a, b):
     return ar * br - ai * bi
 
 
-def dct(x):
+def dct(x, dim=-1):
     """
     Discrete cosine transform of type II, scaled to be orthonormal.
 
@@ -198,6 +198,12 @@ def dct(x):
     :param Tensor x:
     :rtype: Tensor
     """
+    if dim >= 0:
+        dim -= x.dim()
+    if dim != -1:
+        y = x.reshape(x.shape[:dim + 1] + (-1,)).transpose(-1, -2)
+        return dct(y).transpose(-1, -2).reshape(x.shape)
+
     # Ref: http://fourier.eng.hmc.edu/e161/lectures/dct/node2.html
     N = x.size(-1)
     # Step 1
@@ -223,6 +229,12 @@ def idct(x):
     :param Tensor x: The input signal
     :rtype: Tensor
     """
+    if dim >= 0:
+        dim -= x.dim()
+    if dim != -1:
+        y = x.reshape(x.shape[:dim + 1] + (-1,)).transpose(-1, -2)
+        return idct(y).transpose(-1, -2).reshape(x.shape)
+
     N = x.size(-1)
     scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
     x = x * scale
