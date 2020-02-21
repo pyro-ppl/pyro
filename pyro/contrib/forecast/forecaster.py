@@ -11,9 +11,10 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoDiagonalNormal, init_to_sample
+from pyro.infer.autoguide import AutoNormal, init_to_sample
 from pyro.nn.module import PyroModule
-from pyro.optim import ClippedAdam
+from pyro.optim import DCTAdam
+from pyro.poutine.messenger import Messenger
 
 from .util import PrefixConditionMessenger, PrefixReplayMessenger, reshape_batch
 
@@ -170,6 +171,32 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
             self._forecast = None
 
 
+class MarkDCTParamMessenger(Messenger):
+    """
+    EXPERIMENTAL Messenger to mark DCT dimension of parameter, for use with
+    :class:`pyro.optim.optim.DCTAdam`.
+
+    :param str name: The name of the plate along which to apply discrete cosine
+        transforms on gradients.
+    """
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+
+    def _postprocess_message(self, msg):
+        if msg["type"] != "param":
+            return
+        event_dim = msg["kwargs"].get("event_dim")
+        if event_dim is None:
+            return
+        for frame in msg["cond_indep_stack"]:
+            if frame.name == self.name:
+                value = msg["value"]
+                event_dim += value.unconstrained().dim() - value.dim()
+                value.unconstrained()._pyro_dct_dim = frame.dim - event_dim
+                return
+
+
 class Forecaster(nn.Module):
     """
     Forecaster for a :class:`ForecastingModel`.
@@ -192,18 +219,18 @@ class Forecaster(nn.Module):
     :type covariates: ~torch.Tensor
 
     :param guide: Optional guide instance. Defaults to a
-        :class:`~pyro.infer.autoguide.AutoDiagonalNormal`.
+        :class:`~pyro.infer.autoguide.AutoNormal`.
     :type guide: ~pyro.nn.module.PyroModule
     :param float learning_rate: Learning rate used by
-        :class:`~pyro.optim.optim.ClippedAdam`.
+        :class:`~pyro.optim.optim.DCTAdam`.
     :param tuple betas: Coefficients for running averages used by
-        :class:`~pyro.optim.optim.ClippedAdam`.
+        :class:`~pyro.optim.optim.DCTAdam`.
     :param float learning_rate_decay: Learning rate decay used by
-        :class:`~pyro.optim.optim.ClippedAdam`. Note this is the total decay
+        :class:`~pyro.optim.optim.DCTAdam`. Note this is the total decay
         over all ``num_steps``, not the per-step decay factor.
     :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
     :param float init_scale: Initial uncertainty scale of the
-        :class:`~pyro.infer.autoguide.AutoDiagonalNormal` guide.
+        :class:`~pyro.infer.autoguide.AutoNormal` guide.
     :param int num_particles: Number of particles used to compute the
         :class:`~pyro.infer.elbo.ELBO`.
     :param bool vectorize_particles: If ``num_particles > 1``, determines
@@ -224,13 +251,18 @@ class Forecaster(nn.Module):
         super().__init__()
         self.model = model
         if guide is None:
-            guide = AutoDiagonalNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale)
+            guide = AutoNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale)
         self.guide = guide
-        optim = ClippedAdam({"lr": learning_rate, "betas": betas,
-                             "lrd": learning_rate_decay ** (1 / num_steps)})
+        optim = DCTAdam({"lr": learning_rate, "betas": betas,
+                         "lrd": learning_rate_decay ** (1 / num_steps)})
         elbo = Trace_ELBO(num_particles=num_particles,
                           vectorize_particles=vectorize_particles)
-        elbo._guess_max_plate_nesting(self.model, self.guide, (data, covariates), {})
+
+        # Initialize.
+        mark_dct = MarkDCTParamMessenger("time")
+        elbo._guess_max_plate_nesting(mark_dct(self.model),
+                                      mark_dct(self.guide),
+                                      (data, covariates), {})
         elbo.max_plate_nesting = max(elbo.max_plate_nesting, 1)  # force a time plate
 
         svi = SVI(self.model, self.guide, optim, elbo)

@@ -109,6 +109,37 @@ def periodic_cumsum(tensor, period, dim):
     return result
 
 
+_NEXT_FAST_LEN = {}
+
+
+def next_fast_len(size):
+    """
+    Returns the next largest number ``n >= size`` whose prime factors are all
+    2, 3, or 5. These sizes are efficient for fast fourier transforms.
+    Equivalent to :func:`scipy.fftpack.next_fast_len`.
+
+    :param int size: A positive number.
+    :returns: A possibly larger number.
+    :rtype int:
+    """
+    try:
+        return _NEXT_FAST_LEN[size]
+    except KeyError:
+        pass
+
+    assert isinstance(size, int) and size > 0
+    next_size = size
+    while True:
+        remaining = next_size
+        for n in (2, 3, 5):
+            while remaining % n == 0:
+                remaining //= n
+        if remaining == 1:
+            _NEXT_FAST_LEN[size] = next_size
+            return next_size
+        next_size += 1
+
+
 def _complex_mul(a, b):
     ar, ai = a.unbind(-1)
     br, bi = b.unbind(-1)
@@ -144,8 +175,8 @@ def convolve(signal, kernel, mode='full'):
 
     # Compute convolution using fft.
     padded_size = m + n - 1
-    # Round up to next power of 2 for cheaper fft.
-    fast_ftt_size = 2 ** math.ceil(math.log2(padded_size))
+    # Round up for cheaper fft.
+    fast_ftt_size = next_fast_len(padded_size)
     f_signal = torch.rfft(torch.nn.functional.pad(signal, (0, fast_ftt_size - m)), 1, onesided=False)
     f_kernel = torch.rfft(torch.nn.functional.pad(kernel, (0, fast_ftt_size - n)), 1, onesided=False)
     f_result = _complex_mul(f_signal, f_kernel)
@@ -195,7 +226,8 @@ def dct(x, dim=-1):
     This is the inverse of :func:`idct_ii` , and is equivalent to
     :func:`scipy.fftpack.dct` with ``norm="ortho"``.
 
-    :param Tensor x:
+    :param Tensor x: The input signal.
+    :param int dim: Dimension along which to compute DCT.
     :rtype: Tensor
     """
     if dim >= 0:
@@ -219,14 +251,15 @@ def dct(x, dim=-1):
     return X / scale
 
 
-def idct(x):
+def idct(x, dim=-1):
     """
     Inverse discrete cosine transform of type II, scaled to be orthonormal.
 
     This is the inverse of :func:`dct_ii` , and is equivalent to
     :func:`scipy.fftpack.idct` with ``norm="ortho"``.
 
-    :param Tensor x: The input signal
+    :param Tensor x: The input signal.
+    :param int dim: Dimension along which to compute DCT.
     :rtype: Tensor
     """
     if dim >= 0:

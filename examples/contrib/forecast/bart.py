@@ -136,7 +136,7 @@ def main(args):
         "learning_rate": args.learning_rate,
         "log_every": args.log_every,
     }
-    metrics = backtest(data, covariates, Model(),
+    metrics = backtest(data, covariates, Model,
                        train_window=args.train_window,
                        test_window=args.test_window,
                        stride=args.stride,
