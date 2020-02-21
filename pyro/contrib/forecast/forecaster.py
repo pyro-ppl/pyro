@@ -11,7 +11,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoNormal, init_to_sample
+from pyro.infer.autoguide import AutoDiagonalNormal, init_to_sample
 from pyro.nn.module import PyroModule
 from pyro.optim import ClippedAdam
 
@@ -192,7 +192,7 @@ class Forecaster(nn.Module):
     :type covariates: ~torch.Tensor
 
     :param guide: Optional guide instance. Defaults to a
-        :class:`~pyro.infer.autoguide.AutoNormal`.
+        :class:`~pyro.infer.autoguide.AutoDiagonalNormal`.
     :type guide: ~pyro.nn.module.PyroModule
     :param float learning_rate: Learning rate used by
         :class:`~pyro.optim.optim.ClippedAdam`.
@@ -203,7 +203,7 @@ class Forecaster(nn.Module):
         over all ``num_steps``, not the per-step decay factor.
     :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
     :param float init_scale: Initial uncertainty scale of the
-        :class:`~pyro.infer.autoguide.AutoNormal` guide.
+        :class:`~pyro.infer.autoguide.AutoDiagonalNormal` guide.
     :param int num_particles: Number of particles used to compute the
         :class:`~pyro.infer.elbo.ELBO`.
     :param bool vectorize_particles: If ``num_particles > 1``, determines
@@ -224,7 +224,7 @@ class Forecaster(nn.Module):
         super().__init__()
         self.model = model
         if guide is None:
-            guide = AutoNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale)
+            guide = AutoDiagonalNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale)
         self.guide = guide
         optim = ClippedAdam({"lr": learning_rate, "betas": betas,
                              "lrd": learning_rate_decay ** (1 / num_steps)})
