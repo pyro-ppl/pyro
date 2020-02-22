@@ -37,6 +37,7 @@ Welcome to Pyro Examples and Tutorials!
    dmm
    air
    ss-vae
+   forecasting
    stable
 
 .. toctree::
