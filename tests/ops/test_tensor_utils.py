@@ -6,8 +6,8 @@ import pytest
 import scipy.fftpack as fftpack
 import torch
 
-from pyro.ops.tensor_utils import (block_diag_embed, block_diagonal, convolve, dct, idct, periodic_cumsum,
-                                   periodic_repeat, repeated_matmul)
+from pyro.ops.tensor_utils import (block_diag_embed, block_diagonal, convolve, dct, idct, next_fast_len,
+                                   periodic_cumsum, periodic_repeat, repeated_matmul)
 from tests.common import assert_close, assert_equal
 
 pytestmark = pytest.mark.stage('unit')
@@ -134,3 +134,8 @@ def test_dct_dim(fn, dim):
     else:
         expected = fn(x.transpose(-1, dim)).transpose(-1, dim)
     assert_close(actual, expected)
+
+
+def test_next_fast_len():
+    for size in range(1, 1000):
+        assert next_fast_len(size) == fftpack.next_fast_len(size)
