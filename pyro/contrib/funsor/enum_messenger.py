@@ -35,7 +35,7 @@ class IndepMessenger(GlobalNamedMessenger):
         self.size = size
         self.dim = dim
 
-        import funsor
+        import funsor; funsor.set_backend("torch")  # noqa: E702
 
         self._indices = funsor.Tensor(
             torch.arange(self.size, dtype=torch.long),  # TODO use funsor.Arange for backend independence
@@ -77,7 +77,7 @@ class EnumMessenger(GlobalNamedMessenger):
     """
     def _pyro_sample(self, msg):
 
-        import funsor
+        import funsor; funsor.set_backend("torch")  # noqa: E702
 
         if msg["done"] or msg["is_observed"] or msg.get("expand", False) or \
                 msg["infer"].get("enumerate") != "parallel":

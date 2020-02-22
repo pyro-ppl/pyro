@@ -10,7 +10,7 @@ from .named_messenger import _DIM_STACK, LocalNamedMessenger
 def to_funsor(x, output=None, dim_to_name=None):
     if pyro.poutine.runtime.am_i_wrapped() and not dim_to_name:
         dim_to_name = _DIM_STACK.global_frame.dim_to_name.copy()
-    import funsor
+    import funsor; funsor.set_backend("torch")  # noqa: E702
     return funsor.to_funsor(x, output=output, dim_to_name=dim_to_name)
 
 
@@ -18,7 +18,7 @@ def to_funsor(x, output=None, dim_to_name=None):
 def to_data(x, name_to_dim=None):
     if pyro.poutine.runtime.am_i_wrapped() and not name_to_dim:
         name_to_dim = _DIM_STACK.global_frame.name_to_dim.copy()
-    import funsor
+    import funsor; funsor.set_backend("torch")  # noqa: E702
     return funsor.to_data(x, name_to_dim=name_to_dim)
 
 

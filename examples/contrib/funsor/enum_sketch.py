@@ -9,7 +9,7 @@ from pyro.contrib.funsor.enum_messenger import EnumMessenger, TraceMessenger
 
 def simple_ve_1(model, *args):
 
-    import funsor
+    import funsor; funsor.set_backend("torch")  # noqa: E702
 
     with TraceMessenger() as tr:
         with EnumMessenger():
@@ -27,7 +27,7 @@ class FunsorLogJointMessenger(Messenger):
         return super().__enter__()
 
     def _pyro_post_sample(self, msg):
-        import funsor
+        import funsor; funsor.set_backend("torch")  # noqa: E702
         with funsor.interpretation(funsor.terms.lazy):
             self.log_joint += msg["infer"].get("funsor_fn", to_funsor(msg["fn"]))(
                 value=msg["infer"].get("funsor_value", to_funsor(msg["value"]))
@@ -36,7 +36,7 @@ class FunsorLogJointMessenger(Messenger):
 
 def simple_ve_2(model, *args):
 
-    import funsor
+    import funsor; funsor.set_backend("torch")  # noqa: E702
 
     with FunsorLogJointMessenger() as tr:
         with EnumMessenger():

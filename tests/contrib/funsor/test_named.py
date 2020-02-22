@@ -78,6 +78,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
 
 
 def test_iteration():
+    import funsor; funsor.set_backend("torch")  # noqa: E702
     from funsor.domains import bint, reals
     from funsor.tensor import Tensor
 
@@ -102,6 +103,7 @@ def test_iteration():
 
 
 def test_nesting():
+    import funsor; funsor.set_backend("torch")  # noqa: E702
     from funsor.domains import bint
     from funsor.tensor import Tensor
 
@@ -133,6 +135,7 @@ def test_nesting():
 
 
 def test_staggered():
+    import funsor; funsor.set_backend("torch")  # noqa: E702
     from funsor.domains import bint, reals
     from funsor.tensor import Tensor
 
