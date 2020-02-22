@@ -60,7 +60,7 @@ class Model(ForecastingModel):
                                       dist.LogNormal(torch.zeros(dim), 1).to_event(1))
         assert trans_timescale.shape[-1:] == (dim,)
 
-        trans_loc = pyro.sample("trans_loc", dist.Cauchy(0, 0.1 / period))
+        trans_loc = pyro.sample("trans_loc", dist.Cauchy(0, 1 / period))
         trans_loc = trans_loc.unsqueeze(-1).expand(trans_loc.shape + (dim,))
         assert trans_loc.shape[-1:] == (dim,)
         trans_scale = pyro.sample("trans_scale",
