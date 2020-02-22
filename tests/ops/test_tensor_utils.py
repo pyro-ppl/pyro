@@ -122,3 +122,15 @@ def test_idct(shape):
     actual = idct(x)
     expected = torch.from_numpy(fftpack.idct(x.numpy(), norm='ortho'))
     assert_close(actual, expected)
+
+
+@pytest.mark.parametrize("dim", [-4, -3, -2, -1, 0, 1, 2, 3])
+@pytest.mark.parametrize("fn", [dct, idct])
+def test_dct_dim(fn, dim):
+    x = torch.randn(4, 5, 6, 7)
+    actual = fn(x, dim=dim)
+    if dim == -1 or dim == 3:
+        expected = fn(x)
+    else:
+        expected = fn(x.transpose(-1, dim)).transpose(-1, dim)
+    assert_close(actual, expected)

@@ -105,14 +105,15 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("cov_dim", [0, 1, 6])
 @pytest.mark.parametrize("obs_dim", [1, 2])
+@pytest.mark.parametrize("dct_gradients", [False, True])
 @pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
-def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim):
+def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_gradients):
     model = Model()
     data = torch.randn(batch_shape + (t_obs, obs_dim))
     covariates = torch.randn(batch_shape + (t_obs + t_forecast, cov_dim))
 
     forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
-                            num_steps=2, log_every=1)
+                            num_steps=2, log_every=1, dct_gradients=dct_gradients)
 
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
