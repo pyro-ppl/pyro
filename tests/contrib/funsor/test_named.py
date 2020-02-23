@@ -86,7 +86,17 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
             pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
             funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
             assert pyro_names == funsor_names
+    except AssertionError:
+        for name, pyro_node in tr_pyro.trace.nodes.items():
+            if pyro_node['type'] != 'sample':
+                continue
+            funsor_node = tr_funsor.trace.nodes[name]
+            pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
+            funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
+            print(name, f"Pyro: {sorted(tuple(pyro_names))} vs Funsor: {sorted(tuple(funsor_names))}")
+        raise
 
+    try:
         # finer check: exact match with unpacked Pyro shapes
         for name, pyro_node in tr_pyro.trace.nodes.items():
             if pyro_node['type'] != 'sample':
@@ -289,33 +299,6 @@ def test_enum_recycling_grid(use_vindex):
                                       dist.Categorical(probs))
 
     assert_ok(model, max_plate_nesting=0)
-
-
-def test_enum_recycling_reentrant():
-    data = (True, False)
-    for i in range(5):
-        data = (data, data, False)
-
-    def model_(**kwargs):
-
-        @pyro_markov
-        def model(data, state=0, address=""):
-            if isinstance(data, bool):
-                p = pyro.param("p_leaf", torch.ones(10))
-                pyro.sample("leaf_{}".format(address),
-                            dist.Bernoulli(p[state]),
-                            obs=torch.tensor(1. if data else 0.))
-            else:
-                p = pyro.param("p_branch", torch.ones(10, 10))
-                for branch, letter in zip(data, "abcdefg"):
-                    next_state = pyro.sample("branch_{}".format(address + letter),
-                                             dist.Categorical(p[state]),
-                                             infer={"enumerate": "parallel"})
-                    model(branch, next_state, address + letter)
-
-        return model(**kwargs)
-
-    assert_ok(model_, max_plate_nesting=0, data=data)
 
 
 @pytest.mark.parametrize('history', [1, 2])
