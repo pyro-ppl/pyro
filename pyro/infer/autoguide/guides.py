@@ -79,14 +79,20 @@ class AutoGuide(PyroModule):
     Auto guides can be used individually or combined in an
     :class:`AutoGuideList` object.
 
-    :param callable model: a pyro model
+    :param callable model: A pyro model.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a dictionary mapping
+        plate name to :class:`pyro.plate` instance. Plates not in this
+        dictionary will be created automatically as usual. This is useful for
+        data subsampling.
     """
 
-    def __init__(self, model):
+    def __init__(self, model, *, create_plates=None):
         super().__init__(name=type(self).__name__)
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
+        self.create_plates = create_plates
         self.prototype_trace = None
         self._plates = {}
 
@@ -125,11 +131,20 @@ class AutoGuide(PyroModule):
             value._update_master(weakref.ref(master_ref))
         super().__setattr__(name, value)
 
-    def _create_plates(self):
+    def _create_plates(self, *args, **kwargs):
         if self.master is None:
-            self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
-                           for frame in sorted(self._plates.values())}
+            if self.create_plates is None:
+                self.plates = {}
+            else:
+                self.plates = self.create_plates(*args, **kwargs)
+                assert isinstance(self.plates, dict), "create_plates() returned a non-dict"
+                assert all(isinstance(p, pyro.plate) for p in self.plates.values()), \
+                    "create_plates() returned a non-plate"
+            for name, frame in sorted(self._plates.items()):
+                if name not in self.plates:
+                    self.plates[name] = pyro.plate(name, frame.size, dim=frame.dim)
         else:
+            assert self.create_plates is None, "Cannot pass create_plates() to non-master guide"
             self.plates = self.master().plates
         return self.plates
 
@@ -218,7 +233,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
             self._setup_prototype(*args, **kwargs)
 
         # create all plates
-        self._create_plates()
+        self._create_plates(*args, **kwargs)
 
         # run slave guides
         result = {}
@@ -306,18 +321,35 @@ class AutoDelta(AutoGuide):
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a dictionary mapping
+        plate name to :class:`pyro.plate` instance. Plates not in this
+        dictionary will be created automatically as usual. This is useful for
+        data subsampling.
     """
-    def __init__(self, model, init_loc_fn=init_to_median):
+    def __init__(self, model, init_loc_fn=init_to_median, *,
+                 create_plates=None):
         self.init_loc_fn = init_loc_fn
         model = InitMessenger(self.init_loc_fn)(model)
-        super().__init__(model)
+        super().__init__(model, create_plates=create_plates)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
+            value = site["value"].detach()
+            event_dim = site["fn"].event_dim
+
+            # If subsampling, repeat init_value to full size.
+            for frame in site["cond_indep_stack"]:
+                plate = self._plates[frame.name]
+                if plate.subsample_size < plate.size:
+                    dim = plate.dim - event_dim
+                    assert value.size(dim) == plate.subsample_size
+                    value = periodic_repeat(value, plate.size, dim).contiguous()
+
+            value = PyroParam(value, site["fn"].support, event_dim)
             _deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
@@ -331,7 +363,7 @@ class AutoDelta(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        plates = self._create_plates()
+        plates = self._create_plates(*args, **kwargs)
         result = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             with ExitStack() as stack:
@@ -372,8 +404,20 @@ class AutoNormal(AutoGuide):
 
         guide = AutoNormal(model)
         svi = SVI(model, guide, ...)
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a dictionary mapping
+        plate name to :class:`pyro.plate` instance. Plates not in this
+        dictionary will be created automatically as usual. This is useful for
+        data subsampling.
     """
-    def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1):
+    def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1, *,
+                 create_plates=None):
         self.init_loc_fn = init_loc_fn
 
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -381,7 +425,7 @@ class AutoNormal(AutoGuide):
         self._init_scale = init_scale
 
         model = InitMessenger(self.init_loc_fn)(model)
-        super().__init__(model)
+        super().__init__(model, create_plates=create_plates)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -394,12 +438,20 @@ class AutoNormal(AutoGuide):
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect unconstrained event_dims, which may differ from constrained event_dims.
-            init_loc = biject_to(site["fn"].support).inv(site["value"].detach())
+            init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
             event_dim = site["fn"].event_dim + init_loc.dim() - site["value"].dim()
             self._event_dims[name] = event_dim
 
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
+
+            # If subsampling, repeat init_value to full size.
+            for frame in site["cond_indep_stack"]:
+                plate = self._plates[frame.name]
+                if plate.subsample_size < plate.size:
+                    dim = plate.dim - event_dim
+                    assert init_loc.size(dim) == plate.subsample_size
+                    init_loc = periodic_repeat(init_loc, plate.size, dim).contiguous()
             init_scale = torch.full_like(init_loc, self._init_scale)
 
             _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
@@ -421,7 +473,7 @@ class AutoNormal(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        plates = self._create_plates()
+        plates = self._create_plates(*args, **kwargs)
         result = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             transform = biject_to(site["fn"].support)
@@ -627,7 +679,7 @@ class AutoContinuous(AutoGuide):
             self._setup_prototype(*args, **kwargs)
 
         latent = self.sample_latent(*args, **kwargs)
-        plates = self._create_plates()
+        plates = self._create_plates(*args, **kwargs)
 
         # unpack continuous latent samples
         result = {}
@@ -1044,7 +1096,7 @@ class AutoDiscreteParallel(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        plates = self._create_plates()
+        plates = self._create_plates(*args, **kwargs)
 
         # enumerate discrete latent samples
         result = {}
