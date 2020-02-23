@@ -110,7 +110,7 @@ class GaussianChainTests(GaussianChain):
 
     def test_elbo_reparameterized_N_is_8(self):
         self.setup_chain(8)
-        self.do_elbo_test(True, 5000, 0.0015, 0.03, difficulty=1.0)
+        self.do_elbo_test(True, 1000, 0.008, 0.03, difficulty=1.0)
 
     @pytest.mark.skip("CI" in os.environ and os.environ["CI"] == "true",
                       "Skip slow test in travis.")
