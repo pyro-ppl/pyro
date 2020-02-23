@@ -100,6 +100,13 @@ class EnumMessenger(GlobalNamedMessenger):
         msg["value"] = to_data(msg["infer"]["funsor_value"])
         msg["done"] = True
 
+    def _pyro_post_sample(self, msg):
+        import funsor; funsor.set_backend("torch")  # noqa: E702
+        # for debugging only
+        if "funsor_log_prob" not in msg["infer"]:
+            msg["infer"]["funsor_log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]),
+                                                        funsor.reals())
+
 
 class TraceMessenger(OrigTraceMessenger):
     """

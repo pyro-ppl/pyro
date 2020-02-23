@@ -62,6 +62,13 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     tr_funsor.trace.compute_log_prob()
     tr_pyro.trace.pack_tensors()
 
+    symbol_to_name = {
+        node['infer']['_enumerate_symbol']: name
+        for name, node in tr_pyro.trace.nodes.items()
+        if node['type'] == 'sample' and not node['is_observed']
+        and node['infer'].get('enumerate') == 'parallel'
+    }
+
     try:
         # coarser check: number of elements and squeezed shapes
         for name, pyro_node in tr_pyro.trace.nodes.items():
@@ -71,7 +78,16 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
             assert pyro_node['packed']['log_prob'].numel() == funsor_node['log_prob'].numel()
             assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
 
-        # finer check: exact match with Pyro shapes
+        # medium check: unordered packed shapes match
+        for name, pyro_node in tr_pyro.trace.nodes.items():
+            if pyro_node['type'] != 'sample':
+                continue
+            funsor_node = tr_funsor.trace.nodes[name]
+            pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
+            funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
+            assert pyro_names == funsor_names
+
+        # finer check: exact match with unpacked Pyro shapes
         for name, pyro_node in tr_pyro.trace.nodes.items():
             if pyro_node['type'] != 'sample':
                 continue
