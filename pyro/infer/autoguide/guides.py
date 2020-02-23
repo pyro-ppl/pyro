@@ -386,24 +386,24 @@ class AutoNormal(AutoGuide):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
 
-        self._unconstrained_shapes = {}
+        self._event_dims = {}
         self._cond_indep_stacks = {}
         self.locs = PyroModule()
         self.scales = PyroModule()
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            # Collect the shapes of unconstrained values.
-            # These may differ from the shapes of constrained values.
+            # Collect unconstrained event_dims, which may differ from constrained event_dims.
             init_loc = biject_to(site["fn"].support).inv(site["value"].detach())
-            self._unconstrained_shapes[name] = init_loc.shape
+            event_dim = site["fn"].event_dim + init_loc.dim() - site["value"].dim()
+            self._event_dims[name] = event_dim
 
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
             init_scale = torch.full_like(init_loc, self._init_scale)
 
-            _deep_setattr(self.locs, name, nn.Parameter(init_loc))
-            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive))
+            _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
+            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive, event_dim))
 
     def _get_loc_and_scale(self, name):
         site_loc = _deep_getattr(self.locs, name)
@@ -436,7 +436,7 @@ class AutoNormal(AutoGuide):
                     name + "_unconstrained",
                     dist.Normal(
                         site_loc, site_scale,
-                    ).to_event(site["fn"].event_dim),
+                    ).to_event(self._event_dims[name]),
                     infer={"is_auxiliary": True}
                 )
 

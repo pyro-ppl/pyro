@@ -42,7 +42,7 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
     covariates = torch.zeros(duration, 0)
     data = torch.randn(duration, obs_dim) + 4
 
-    windows = backtest(data, covariates, Model(),
+    windows = backtest(data, covariates, Model,
                        train_window=train_window,
                        min_train_window=min_train_window,
                        test_window=test_window,
@@ -75,7 +75,7 @@ def test_poisson(train_window, min_train_window, test_window, min_test_window, s
         truth = truth.expm1()
         return pred, truth
 
-    windows = backtest(data, covariates, Model(),
+    windows = backtest(data, covariates, Model,
                        transform=transform,
                        train_window=train_window,
                        min_train_window=min_train_window,
