@@ -1,10 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 import numbers
 
 import torch
-import math
+
+from .tensor_utils import next_fast_len
 
 
 def _compute_chain_variance_stats(input):
@@ -78,23 +80,6 @@ def split_gelman_rubin(input, chain_dim=0, sample_dim=1):
     return split_rhat.squeeze(max(sample_dim, chain_dim)).squeeze(min(sample_dim, chain_dim))
 
 
-def _fft_next_good_size(N):
-    # find the smallest number >= N such that the only divisors are 2, 3, 5
-    if N <= 2:
-        return 2
-    while True:
-        m = N
-        while m % 2 == 0:
-            m //= 2
-        while m % 3 == 0:
-            m //= 3
-        while m % 5 == 0:
-            m //= 5
-        if m == 1:
-            return N
-        N += 1
-
-
 def autocorrelation(input, dim=0):
     """
     Computes the autocorrelation of samples at dimension ``dim``.
@@ -112,7 +97,7 @@ def autocorrelation(input, dim=0):
     # Adapted from Stan implementation
     # https://github.com/stan-dev/math/blob/develop/stan/math/prim/mat/fun/autocorrelation.hpp
     N = input.size(dim)
-    M = _fft_next_good_size(N)
+    M = next_fast_len(N)
     M2 = 2 * M
 
     # transpose dim with -1 for Fourier transform
