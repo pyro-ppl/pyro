@@ -62,19 +62,28 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     tr_funsor.trace.compute_log_prob()
     tr_pyro.trace.pack_tensors()
 
-    for name, pyro_node in tr_pyro.trace.nodes.items():
-        if pyro_node['type'] != 'sample':
-            continue
-        funsor_node = tr_funsor.trace.nodes[name]
-        print(name, pyro_node['log_prob'].shape, funsor_node['log_prob'].shape)
+    try:
+        # coarser check: number of elements and squeezed shapes
+        for name, pyro_node in tr_pyro.trace.nodes.items():
+            if pyro_node['type'] != 'sample':
+                continue
+            funsor_node = tr_funsor.trace.nodes[name]
+            assert pyro_node['packed']['log_prob'].numel() == funsor_node['log_prob'].numel()
+            assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
 
-    for name, pyro_node in tr_pyro.trace.nodes.items():
-        if pyro_node['type'] != 'sample':
-            continue
-        funsor_node = tr_funsor.trace.nodes[name]
-        assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
-        assert pyro_node['log_prob'].shape == funsor_node['log_prob'].shape
-        assert pyro_node['value'].shape == funsor_node['value'].shape
+        # finer check: exact match with Pyro shapes
+        for name, pyro_node in tr_pyro.trace.nodes.items():
+            if pyro_node['type'] != 'sample':
+                continue
+            assert pyro_node['log_prob'].shape == funsor_node['log_prob'].shape
+            assert pyro_node['value'].shape == funsor_node['value'].shape
+    except AssertionError:
+        for name, pyro_node in tr_pyro.trace.nodes.items():
+            if pyro_node['type'] != 'sample':
+                continue
+            funsor_node = tr_funsor.trace.nodes[name]
+            print(name, pyro_node['log_prob'].shape, funsor_node['log_prob'].shape)
+        raise
 
 
 def test_iteration():
