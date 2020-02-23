@@ -344,11 +344,10 @@ class AutoDelta(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                plate = self._plates[frame.name]
-                if plate.subsample_size < plate.size:
-                    dim = plate.dim - event_dim
-                    assert value.size(dim) == plate.subsample_size
-                    value = periodic_repeat(value, plate.size, dim).contiguous()
+                dim = frame.dim - event_dim
+                if value.size(dim) != frame.size:
+                    assert value.size(dim) < frame.size
+                    value = periodic_repeat(value, frame.size, dim).contiguous()
 
             value = PyroParam(value, site["fn"].support, event_dim)
             _deep_setattr(self, name, value)
@@ -417,7 +416,9 @@ class AutoNormal(AutoGuide):
         dictionary will be created automatically as usual. This is useful for
         data subsampling.
     """
-    def __init__(self, model, init_loc_fn=init_to_feasible, init_scale=0.1, *,
+    def __init__(self, model, *,
+                 init_loc_fn=init_to_feasible,
+                 init_scale=0.1,
                  create_plates=None):
         self.init_loc_fn = init_loc_fn
 
@@ -448,11 +449,10 @@ class AutoNormal(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                plate = self._plates[frame.name]
-                if plate.subsample_size < plate.size:
-                    dim = plate.dim - event_dim
-                    assert init_loc.size(dim) == plate.subsample_size
-                    init_loc = periodic_repeat(init_loc, plate.size, dim).contiguous()
+                dim = frame.dim - event_dim
+                if init_loc.size(dim) != frame.size:
+                    assert init_loc.size(dim) < frame.size
+                    init_loc = periodic_repeat(init_loc, frame.size, dim).contiguous()
             init_scale = torch.full_like(init_loc, self._init_scale)
 
             _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
