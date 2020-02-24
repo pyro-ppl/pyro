@@ -8,7 +8,7 @@ from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.tensor_utils import cholesky, matmul, triangular_solve
+from pyro.ops.tensor_utils import cholesky, matmul, matvecmul, triangular_solve
 
 
 class Gaussian:
@@ -129,7 +129,7 @@ class Gaussian:
         if value.size(-1) == 0:
             batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
             return self.log_normalizer.expand(batch_shape)
-        result = (-0.5) * matmul(self.precision, value.unsqueeze(-1)).squeeze(-1)
+        result = (-0.5) * matvecmul(self.precision, value)
         result = result + self.info_vec
         result = (value * result).sum(-1)
         return result + self.log_normalizer
@@ -171,10 +171,10 @@ class Gaussian:
         P_bb = self.precision[..., n:, n:]
         b = value
 
-        info_vec = info_a - matmul(P_ab, b.unsqueeze(-1)).squeeze(-1)
+        info_vec = info_a - matvecmul(P_ab, b)
         precision = P_aa
         log_normalizer = (self.log_normalizer +
-                          -0.5 * matmul(P_bb, b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) +
+                          -0.5 * matvecmul(P_bb, b).mul(b).sum(-1) +
                           b.mul(info_b).sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
@@ -270,7 +270,7 @@ class AffineNormal:
         prec_sqrt = self.matrix / self.scale.unsqueeze(-2)
         precision = matmul(prec_sqrt, prec_sqrt.transpose(-1, -2))
         delta = (value - self.loc) / self.scale
-        info_vec = matmul(prec_sqrt, delta.unsqueeze(-1)).squeeze(-1)
+        info_vec = matvecmul(prec_sqrt, delta)
         log_normalizer = (-0.5 * self.loc.size(-1) * math.log(2 * math.pi)
                           - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
@@ -327,7 +327,7 @@ def mvn_to_gaussian(mvn):
         scale_diag = mvn.scale
     else:
         precision = mvn.precision_matrix
-        info_vec = matmul(precision, mvn.loc.unsqueeze(-1)).squeeze(-1)
+        info_vec = matvecmul(precision, mvn.loc)
         scale_diag = mvn.scale_tril.diagonal(dim1=-2, dim2=-1)
 
     n = mvn.loc.size(-1)
@@ -371,7 +371,7 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
     info_y = y_gaussian.info_vec
-    info_x = -matmul(matrix, info_y.unsqueeze(-1)).squeeze(-1)
+    info_x = -matvecmul(matrix, info_y)
     info_vec = torch.cat([info_x, info_y], -1)
     log_normalizer = y_gaussian.log_normalizer
 

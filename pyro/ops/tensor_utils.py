@@ -291,7 +291,7 @@ def idct(x, dim=-1):
 
 
 def cholesky(x):
-    if (x.size(-1) == 1) and (x.dim() >= 2):
+    if x.size(-1) == 1:
         return x.sqrt()
     return x.cholesky()
 
@@ -304,8 +304,14 @@ def cholesky_solve(x, y):
 
 def matmul(x, y):
     if x.size(-1) == 1:
-        return x.unsqueeze(-1).mul(y.unsqueeze(-3)).squeeze(-2)
+        return x.mul(y)
     return x.matmul(y)
+
+
+def matvecmul(x, y):
+    if x.size(-1) == 1:
+        return x.squeeze(-1).mul(y)
+    return x.matmul(y.unsqueeze(-1)).squeeze(-1)
 
 
 def triangular_solve(x, y, upper=False, transpose=False):
