@@ -118,3 +118,29 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+
+
+@pytest.mark.parametrize("t_obs", [1, 7])
+@pytest.mark.parametrize("t_forecast", [1, 3])
+@pytest.mark.parametrize("cov_dim", [0, 6])
+@pytest.mark.parametrize("obs_dim", [1, 2])
+@pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
+def test_subsample_smoke(Model, t_obs, t_forecast, obs_dim, cov_dim):
+    batch_shape = (4,)
+    model = Model()
+    data = torch.randn(batch_shape + (t_obs, obs_dim))
+    covariates = torch.randn(batch_shape + (t_obs + t_forecast, cov_dim))
+
+    def create_plates(zero_data, covariates):
+        size = len(zero_data)
+        subsample_size = 2 if training else size
+        return pyro.plate("batch_0", size, subsample_size=subsample_size, dim=-2)
+
+    training = True
+    forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
+                            num_steps=2, log_every=1, create_plates=create_plates)
+
+    training = False
+    num_samples = 5
+    samples = forecaster(data, covariates, num_samples)
+    assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
