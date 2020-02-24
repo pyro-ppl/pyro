@@ -149,7 +149,7 @@ def deterministic(name, value, event_dim=None):
 
 
 @effectful(type="subsample")
-def subsample(data, *, event_dim=0):
+def subsample(data, event_dim):
     """
     EXPERIMENTAL Subsampling statement to subsample data based on enclosing
     :class:`~pyro.primitives.plate` s.
@@ -168,7 +168,7 @@ def subsample(data, *, event_dim=0):
         # Version 2. using indexing
         def model(data):
             with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()):
-                data = pyro.subsample(data)
+                data = pyro.subsample(data, event_dim=0)
                 # ...
 
     :param data: A tensor of batched data.
