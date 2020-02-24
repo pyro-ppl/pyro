@@ -120,11 +120,65 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
 
 
+class SubsampleModel3(ForecastingModel):
+    def model(self, zero_data, covariates):
+        with pyro.plate("batch", len(zero_data), dim=-2) as i:
+            zero_data = zero_data[i]
+            covariates = covariates[i]
+
+            loc = zero_data[..., :1, :]
+            scale = pyro.sample("scale", dist.LogNormal(loc, 1).to_event(1))
+
+            with self.time_plate:
+                jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
+            prediction = jumps.cumsum(-2)
+
+            duration, obs_dim = zero_data.shape[-2:]
+            noise_dist = dist.GaussianHMM(
+                dist.Normal(0, 1).expand([obs_dim]).to_event(1),
+                torch.eye(obs_dim),
+                dist.Normal(0, 1).expand([obs_dim]).to_event(1),
+                torch.eye(obs_dim),
+                dist.Normal(0, 1).expand([obs_dim]).to_event(1),
+                duration=duration,
+            )
+            # FIXME Data and covariates need to be subsampled.
+            self.predict(noise_dist, prediction)
+
+
+class SubsampleModel4(ForecastingModel):
+    def model(self, zero_data, covariates):
+        with pyro.plate("batch", len(zero_data), dim=-2) as i:
+            zero_data = zero_data[i]
+            covariates = covariates[i]
+
+            loc = zero_data[..., :1, :]
+            scale = pyro.sample("scale", dist.LogNormal(loc, 1).to_event(1))
+
+            with self.time_plate:
+                jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
+            prediction = jumps.cumsum(-2)
+
+            # FIXME Expansion of constraints.interval breaks guide shapes.
+            duration, obs_dim = zero_data.shape[-2:]
+            noise_dist = dist.LinearHMM(
+                dist.Stable(1.9, 0).expand([obs_dim]).to_event(1),
+                torch.eye(obs_dim),
+                dist.Stable(1.9, 0).expand([obs_dim]).to_event(1),
+                torch.eye(obs_dim),
+                dist.Stable(1.9, 0).expand([obs_dim]).to_event(1),
+                duration=duration,
+            )
+            rep = StableReparam()
+            with poutine.reparam(config={"residual": LinearHMMReparam(rep, rep, rep)}):
+                self.predict(noise_dist, prediction)
+
+
 @pytest.mark.parametrize("t_obs", [1, 7])
 @pytest.mark.parametrize("t_forecast", [1, 3])
 @pytest.mark.parametrize("cov_dim", [0, 6])
 @pytest.mark.parametrize("obs_dim", [1, 2])
-@pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
+@pytest.mark.parametrize("Model", [SubsampleModel3, SubsampleModel4])
 def test_subsample_smoke(Model, t_obs, t_forecast, obs_dim, cov_dim):
     batch_shape = (4,)
     model = Model()
@@ -134,7 +188,7 @@ def test_subsample_smoke(Model, t_obs, t_forecast, obs_dim, cov_dim):
     def create_plates(zero_data, covariates):
         size = len(zero_data)
         subsample_size = 2 if training else size
-        return pyro.plate("batch_0", size, subsample_size=subsample_size, dim=-2)
+        return pyro.plate("batch", size, subsample_size=subsample_size, dim=-2)
 
     training = True
     forecaster = Forecaster(model, data, covariates[..., :t_obs, :],

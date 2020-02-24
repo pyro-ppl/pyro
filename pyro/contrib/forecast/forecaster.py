@@ -221,6 +221,10 @@ class Forecaster(nn.Module):
     :param guide: Optional guide instance. Defaults to a
         :class:`~pyro.infer.autoguide.AutoNormal`.
     :type guide: ~pyro.nn.module.PyroModule
+    :param float init_scale: Initial uncertainty scale of the
+        :class:`~pyro.infer.autoguide.AutoNormal` guide.
+    :param callable create_plates: An optional function to create plates for
+        subsampling with the :class:`~pyro.infer.autoguide.AutoNormal` guide.
     :param float learning_rate: Learning rate used by
         :class:`~pyro.optim.optim.DCTAdam`.
     :param tuple betas: Coefficients for running averages used by
@@ -231,10 +235,6 @@ class Forecaster(nn.Module):
     :param bool dct_gradients: Whether to discrete cosine transform gradients
         in :class:`~pyro.optim.optim.DCTAdam`. Defaults to False.
     :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
-    :param float init_scale: Initial uncertainty scale of the
-        :class:`~pyro.infer.autoguide.AutoNormal` guide.
-    :param callable create_plates: An optional function to create plates for
-        subsampling with the :class:`~pyro.infer.autoguide.AutoNormal` guide.
     :param int num_particles: Number of particles used to compute the
         :class:`~pyro.infer.elbo.ELBO`.
     :param bool vectorize_particles: If ``num_particles > 1``, determines
@@ -243,14 +243,14 @@ class Forecaster(nn.Module):
     """
     def __init__(self, model, data, covariates, *,
                  guide=None,
+                 init_scale=0.1,
+                 create_plates=None,
                  learning_rate=0.01,
                  betas=(0.9, 0.99),
                  learning_rate_decay=0.1,
                  dct_gradients=False,
                  num_steps=1001,
                  log_every=100,
-                 init_scale=0.1,
-                 create_plates=None,
                  num_particles=1,
                  vectorize_particles=True):
         assert data.size(-2) == covariates.size(-2)

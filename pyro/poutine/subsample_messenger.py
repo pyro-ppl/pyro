@@ -124,6 +124,7 @@ class SubsampleMessenger(IndepMessenger):
 
     def _process_message(self, msg):
         frame = CondIndepStackFrame(self.name, self.dim, self.subsample_size, self.counter)
+        frame.full_size = self.size  # Used for param initialization.
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         if isinstance(self.size, torch.Tensor) or isinstance(self.subsample_size, torch.Tensor):
             if not isinstance(msg["scale"], torch.Tensor):

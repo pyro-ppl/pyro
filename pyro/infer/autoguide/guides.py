@@ -343,12 +343,11 @@ class AutoDelta(AutoGuide):
             event_dim = site["fn"].event_dim
 
             # If subsampling, repeat init_value to full size.
-            # FIXME in cond_indep_stack, frame.size == plate.subsample_size and plate.size is unavailable.
             for frame in site["cond_indep_stack"]:
-                dim = frame.dim - event_dim
-                if value.size(dim) != frame.size:
-                    assert value.size(dim) < frame.size
-                    value = periodic_repeat(value, frame.size, dim).contiguous()
+                full_size = getattr(frame, "full_size", frame.size)
+                if full_size != frame.size:
+                    dim = frame.dim - event_dim
+                    value = periodic_repeat(value, full_size, dim).contiguous()
 
             value = PyroParam(value, site["fn"].support, event_dim)
             _deep_setattr(self, name, value)
@@ -449,10 +448,10 @@ class AutoNormal(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                dim = frame.dim - event_dim
-                if init_loc.size(dim) != frame.size:
-                    assert init_loc.size(dim) < frame.size
-                    init_loc = periodic_repeat(init_loc, frame.size, dim).contiguous()
+                full_size = getattr(frame, "full_size", frame.size)
+                if full_size != frame.size:
+                    dim = frame.dim - event_dim
+                    init_loc = periodic_repeat(init_loc, full_size, dim).contiguous()
             init_scale = torch.full_like(init_loc, self._init_scale)
 
             _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
