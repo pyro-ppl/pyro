@@ -133,7 +133,7 @@ class SubsampleMessenger(IndepMessenger):
         msg["scale"] = msg["scale"] * self.size / self.subsample_size
 
     def _postprocess_message(self, msg):
-        if msg["type"] == "param" and self.dim is not None:
+        if msg["type"] in ("param", "subsample") and self.dim is not None:
             event_dim = msg["kwargs"].get("event_dim")
             if event_dim is not None:
                 assert event_dim >= 0

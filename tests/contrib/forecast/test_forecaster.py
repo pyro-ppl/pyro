@@ -122,9 +122,9 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
 
 class SubsampleModel3(ForecastingModel):
     def model(self, zero_data, covariates):
-        with pyro.plate("batch", len(zero_data), dim=-2) as i:
-            zero_data = zero_data[i]
-            covariates = covariates[i]
+        with pyro.plate("batch", len(zero_data), dim=-2):
+            zero_data = pyro.subsample(zero_data, event_dim=1)
+            covariates = pyro.subsample(covariates, event_dim=1)
 
             loc = zero_data[..., :1, :]
             scale = pyro.sample("scale", dist.LogNormal(loc, 1).to_event(1))
@@ -148,9 +148,9 @@ class SubsampleModel3(ForecastingModel):
 
 class SubsampleModel4(ForecastingModel):
     def model(self, zero_data, covariates):
-        with pyro.plate("batch", len(zero_data), dim=-2) as i:
-            zero_data = zero_data[i]
-            covariates = covariates[i]
+        with pyro.plate("batch", len(zero_data), dim=-2):
+            zero_data = pyro.subsample(zero_data, event_dim=1)
+            covariates = pyro.subsample(covariates, event_dim=1)
 
             loc = zero_data[..., :1, :]
             scale = pyro.sample("scale", dist.LogNormal(loc, 1).to_event(1))

@@ -94,7 +94,7 @@ class AutoGuide(PyroModule):
         self._model = (model,)
         self.create_plates = create_plates
         self.prototype_trace = None
-        self._plates = {}
+        self._prototype_frames = {}
 
     @property
     def model(self):
@@ -142,7 +142,7 @@ class AutoGuide(PyroModule):
                 assert all(isinstance(p, pyro.plate) for p in plates), \
                     "create_plates() returned a non-plate"
                 self.plates = {p.name: p for p in plates}
-            for name, frame in sorted(self._plates.items()):
+            for name, frame in sorted(self._prototype_frames.items()):
                 if name not in self.plates:
                     self.plates[name] = pyro.plate(name, frame.size, dim=frame.dim)
         else:
@@ -157,11 +157,11 @@ class AutoGuide(PyroModule):
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 
-        self._plates = {}
+        self._prototype_frames = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._plates[frame.name] = frame
+                    self._prototype_frames[frame.name] = frame
                 else:
                     raise NotImplementedError("AutoGuide does not support sequential pyro.plate")
 
@@ -1056,7 +1056,7 @@ class AutoDiscreteParallel(AutoGuide):
 
         self._discrete_sites = []
         self._cond_indep_stacks = {}
-        self._plates = {}
+        self._prototype_frames = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             if site["infer"].get("enumerate") != "parallel":
                 raise NotImplementedError('Expected sample site "{}" to be discrete and '
@@ -1075,7 +1075,7 @@ class AutoDiscreteParallel(AutoGuide):
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._plates[frame.name] = frame
+                    self._prototype_frames[frame.name] = frame
                 else:
                     raise NotImplementedError("AutoDiscreteParallel does not support sequential pyro.plate")
         # Initialize guide params

@@ -61,6 +61,14 @@ def param(name, *args, **kwargs):
     return _param(name, *args, **kwargs)
 
 
+@effectful(type="subsample")
+def subsample(data, *, event_dim=0):
+    """
+    EXPERIMENTAL.
+    """
+    return data
+
+
 def sample(name, fn, *args, **kwargs):
     """
     Calls the stochastic function `fn` with additional side-effects depending

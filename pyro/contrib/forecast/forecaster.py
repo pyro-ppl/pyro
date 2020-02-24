@@ -118,7 +118,7 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         # resulting in correctly aligned shapes 3. Note the "time" dimension is
         # effectively moved from a batch dimension to an event dimension.
         noise_dist = reshape_batch(noise_dist, noise_dist.batch_shape + (1,))
-        data = self._data.unsqueeze(-3)
+        data = pyro.subsample(self._data.unsqueeze(-3), event_dim=2)
         prediction = prediction.unsqueeze(-3)
 
         # Create a sample site.
