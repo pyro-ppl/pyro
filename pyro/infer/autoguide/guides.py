@@ -82,10 +82,9 @@ class AutoGuide(PyroModule):
 
     :param callable model: A pyro model.
     :param callable create_plates: An optional function inputing the same
-        ``*args,**kwargs`` as ``model()`` and returning a dictionary mapping
-        plate name to :class:`pyro.plate` instance. Plates not in this
-        dictionary will be created automatically as usual. This is useful for
-        data subsampling.
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
     """
 
     def __init__(self, model, *, create_plates=None):
@@ -137,10 +136,12 @@ class AutoGuide(PyroModule):
             if self.create_plates is None:
                 self.plates = {}
             else:
-                self.plates = self.create_plates(*args, **kwargs)
-                assert isinstance(self.plates, dict), "create_plates() returned a non-dict"
-                assert all(isinstance(p, pyro.plate) for p in self.plates.values()), \
+                plates = self.create_plates(*args, **kwargs)
+                if isinstance(plates, pyro.plate):
+                    plates = [plates]
+                assert all(isinstance(p, pyro.plate) for p in plates), \
                     "create_plates() returned a non-plate"
+                self.plates = {p.name: p for p in plates}
             for name, frame in sorted(self._plates.items()):
                 if name not in self.plates:
                     self.plates[name] = pyro.plate(name, frame.size, dim=frame.dim)
@@ -323,10 +324,9 @@ class AutoDelta(AutoGuide):
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param callable create_plates: An optional function inputing the same
-        ``*args,**kwargs`` as ``model()`` and returning a dictionary mapping
-        plate name to :class:`pyro.plate` instance. Plates not in this
-        dictionary will be created automatically as usual. This is useful for
-        data subsampling.
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
     """
     def __init__(self, model, init_loc_fn=init_to_median, *,
                  create_plates=None):
@@ -343,6 +343,7 @@ class AutoDelta(AutoGuide):
             event_dim = site["fn"].event_dim
 
             # If subsampling, repeat init_value to full size.
+            # FIXME in cond_indep_stack, frame.size == plate.subsample_size and plate.size is unavailable.
             for frame in site["cond_indep_stack"]:
                 dim = frame.dim - event_dim
                 if value.size(dim) != frame.size:
@@ -411,10 +412,9 @@ class AutoNormal(AutoGuide):
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
     :param callable create_plates: An optional function inputing the same
-        ``*args,**kwargs`` as ``model()`` and returning a dictionary mapping
-        plate name to :class:`pyro.plate` instance. Plates not in this
-        dictionary will be created automatically as usual. This is useful for
-        data subsampling.
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
     """
     def __init__(self, model, *,
                  init_loc_fn=init_to_feasible,
