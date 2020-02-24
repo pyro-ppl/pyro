@@ -292,7 +292,7 @@ class Forecaster(nn.Module):
 
         with poutine.trace() as tr:
             with pyro.plate("particles", num_samples, dim=dim):
-                self.guide()
+                self.guide(data, covariates)
         with PrefixReplayMessenger(tr.trace):
             with PrefixConditionMessenger(self.model._prefix_condition_data):
                 with pyro.plate("particles", num_samples, dim=dim):

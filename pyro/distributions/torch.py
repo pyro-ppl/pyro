@@ -128,6 +128,24 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         return updated, log_normalizer
 
 
+class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
+    def __init__(self, low, high, validate_args=None):
+        self._unbroadcasted_low = low
+        self._unbroadcasted_high = high
+        super().__init__(low, high, validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(Uniform, _instance)
+        new = super().expand(batch_shape, _instance=new)
+        new._unbroadcasted_low = self._unbroadcasted_low
+        new._unbroadcasted_high = self._unbroadcasted_high
+        return new
+
+    @constraints.dependent_property
+    def support(self):
+        return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
+
+
 # Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
