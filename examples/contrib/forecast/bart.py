@@ -157,7 +157,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.2.1')
-    parser = argparse.ArgumentParser(description="Causal Effect Variational Autoencoder")
+    parser = argparse.ArgumentParser(description="Bart Ridership Forecasting Example")
     parser.add_argument("--train-window", default=2160, type=int)
     parser.add_argument("--test-window", default=336, type=int)
     parser.add_argument("--stride", default=168, type=int)
