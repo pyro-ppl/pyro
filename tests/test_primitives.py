@@ -6,6 +6,8 @@ import pyro
 import pyro.distributions as dist
 import torch
 
+pytestmark = pytest.mark.stage('unit')
+
 
 def test_sample_ok():
     x = pyro.sample("x", dist.Normal(0, 1))
