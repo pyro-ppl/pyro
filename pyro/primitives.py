@@ -149,6 +149,40 @@ def deterministic(name, value, event_dim=None):
                   obs=value, infer={"_deterministic": True})
 
 
+@effectful(type="subsample")
+def subsample(data, event_dim):
+    """
+    EXPERIMENTAL Subsampling statement to subsample data based on enclosing
+    :class:`~pyro.primitives.plate` s.
+
+    This is typically called on arguments to ``model()`` when subsampling is
+    performed automatically by :class:`~pyro.primitives.plate` s by passing
+    either the ``subsample`` or ``subsample_size`` kwarg. For example the
+    following are equivalent::
+
+        # Version 1. using pyro.subsample()
+        def model(data):
+            with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()) as ind:
+                data = data[ind]
+                # ...
+
+        # Version 2. using indexing
+        def model(data):
+            with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()):
+                data = pyro.subsample(data, event_dim=0)
+                # ...
+
+    :param data: A tensor of batched data.
+    :type data: ~torch.Tensor
+    :param int event_dim: The event dimension of the data tensor. Dimensions to
+        the left are considered batch dimensions.
+    :returns: A subsampled version of ``data``
+    :rtype: ~torch.Tensor
+    """
+    assert isinstance(event_dim, int) and event_dim >= 0
+    return data  # May be intercepted by SubsampleMessenger.
+
+
 class plate(PlateMessenger):
     """
     Construct for conditionally independent sequences of variables.
