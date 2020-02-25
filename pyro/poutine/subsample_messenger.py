@@ -141,10 +141,13 @@ class SubsampleMessenger(IndepMessenger):
                 shape = msg["value"].shape
                 if len(shape) >= -dim and shape[dim] != 1:
                     if is_validation_enabled() and shape[dim] != self.size:
+                        if msg["type"] == "param":
+                            statement = "pyro.param({}, ..., event_dim={})".format(msg["name"], event_dim)
+                        else:
+                            statement = "pyro.subsample(..., event_dim={})".format(event_dim)
                         raise ValueError(
-                            "Inside pyro.plate({}, {}, dim={}) "
-                            "invalid shape of pyro.param({}, ..., event_dim={}): {}"
-                            .format(self.name, self.size, self.dim, msg["name"], event_dim, shape))
+                            "Inside pyro.plate({}, {}, dim={}) invalid shape of {}: {}"
+                            .format(self.name, self.size, self.dim, statement, shape))
                     # Subsample parameters with known batch semantics.
                     if self.subsample_size < self.size:
                         msg["value"] = msg["value"].index_select(dim, self._indices)

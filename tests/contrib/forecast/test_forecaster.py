@@ -142,7 +142,6 @@ class SubsampleModel3(ForecastingModel):
                 dist.Normal(0, 1).expand([obs_dim]).to_event(1),
                 duration=duration,
             )
-            # FIXME Data and covariates need to be subsampled.
             self.predict(noise_dist, prediction)
 
 
@@ -159,7 +158,6 @@ class SubsampleModel4(ForecastingModel):
                 jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
             prediction = jumps.cumsum(-2)
 
-            # FIXME Expansion of constraints.interval breaks guide shapes.
             duration, obs_dim = zero_data.shape[-2:]
             noise_dist = dist.LinearHMM(
                 dist.Stable(1.9, 0).expand([obs_dim]).to_event(1),
