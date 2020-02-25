@@ -1,5 +1,6 @@
 Forecasting
 ===========
+.. automodule:: pyro.contrib.forecast
 
 ``pyro.contrib.forecast`` is a lightweight framework for experimenting with a
 restricted class of time series models and inference algorithms using familiar
@@ -12,7 +13,7 @@ variational inference with Gaussian variable elimination based on the
 joint posterior samples at multiple future time steps.
 
 Hierarchical models use the familiar :class:`~pyro.plate` syntax for
-general hierarchical modeling in Pyro. Plates can be subsamplined, enabling
+general hierarchical modeling in Pyro. Plates can be subsampled, enabling
 training of joint models over thousands of time series. Multivariate
 observations are handled via multivariate likelihoods like
 :class:`~pyro.distributions.MultivariateNormal`, :class:`~pyro.distributions.GaussianHMM`, or
@@ -23,6 +24,8 @@ using :class:`~pyro.distributions.StudentT` or
 :class:`~pyro.infer.reparam.studentt.StudentTReparam`,
 :class:`~pyro.infer.reparam.stable.StableReparam`, and
 :class:`~pyro.infer.reparam.hmm.LinearHMMReparam`.
+
+See :mod:`pyro.contrib.timeseries` for ways to construct temporal Gaussian processes useful as likelihoods.
 
 See the `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_ for example usage. 
 

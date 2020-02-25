@@ -1,5 +1,6 @@
 Time Series
 ===========
+.. automodule:: pyro.contrib.timeseries
 
 See the `GP example <http://pyro.ai/examples/independent_gps.html>`_ for example usage. 
 
