@@ -288,3 +288,33 @@ def idct(x, dim=-1):
     y = torch.irfft(Y, 1, onesided=True, signal_sizes=(N,))
     # Step 3
     return torch.stack([y, y.flip(-1)], axis=-1).reshape(x.shape[:-1] + (-1,))[..., :N]
+
+
+def cholesky(x):
+    if x.size(-1) == 1:
+        return x.sqrt()
+    return x.cholesky()
+
+
+def cholesky_solve(x, y):
+    if y.size(-1) == 1:
+        return x / (y * y)
+    return x.cholesky_solve(y)
+
+
+def matmul(x, y):
+    if x.size(-1) == 1:
+        return x.mul(y)
+    return x.matmul(y)
+
+
+def matvecmul(x, y):
+    if x.size(-1) == 1:
+        return x.squeeze(-1).mul(y)
+    return x.matmul(y.unsqueeze(-1)).squeeze(-1)
+
+
+def triangular_solve(x, y, upper=False, transpose=False):
+    if y.size(-1) == 1:
+        return x / y
+    return x.triangular_solve(y, upper=upper, transpose=transpose).solution

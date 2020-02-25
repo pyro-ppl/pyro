@@ -10,6 +10,7 @@ from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
                                      matrix_and_mvn_to_gamma_gaussian)
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
+from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
 
 @torch.jit.script
@@ -547,7 +548,7 @@ class GaussianHMM(HiddenMarkovModel):
 
         # Convert to a distribution
         precision = logp.precision
-        loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
+        loc = cholesky_solve(logp.info_vec.unsqueeze(-1), cholesky(precision)).squeeze(-1)
         return MultivariateNormal(loc, precision_matrix=precision,
                                   validate_args=self._validate_args)
 
@@ -810,8 +811,8 @@ class GammaGaussianHMM(HiddenMarkovModel):
         scale_post = Gamma(gamma_dist.concentration, gamma_dist.rate,
                            validate_args=self._validate_args)
         # Conditional of last state on unit scale
-        scale_tril = logp.precision.cholesky()
-        loc = logp.info_vec.unsqueeze(-1).cholesky_solve(scale_tril).squeeze(-1)
+        scale_tril = cholesky(logp.precision)
+        loc = cholesky_solve(logp.info_vec.unsqueeze(-1), scale_tril).squeeze(-1)
         mvn = MultivariateNormal(loc, scale_tril=scale_tril,
                                  validate_args=self._validate_args)
         return scale_post, mvn
