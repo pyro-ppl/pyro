@@ -14,9 +14,8 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal, init_to_sample
 from pyro.nn.module import PyroModule
 from pyro.optim import DCTAdam
-from pyro.poutine.messenger import Messenger
 
-from .util import PrefixConditionMessenger, PrefixReplayMessenger, reshape_batch
+from .util import MarkDCTParamMessenger, PrefixConditionMessenger, PrefixReplayMessenger, reshape_batch
 
 logger = logging.getLogger(__name__)
 
@@ -169,32 +168,6 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
             self._data = None
             self._time_plate = None
             self._forecast = None
-
-
-class MarkDCTParamMessenger(Messenger):
-    """
-    EXPERIMENTAL Messenger to mark DCT dimension of parameter, for use with
-    :class:`pyro.optim.optim.DCTAdam`.
-
-    :param str name: The name of the plate along which to apply discrete cosine
-        transforms on gradients.
-    """
-    def __init__(self, name):
-        super().__init__()
-        self.name = name
-
-    def _postprocess_message(self, msg):
-        if msg["type"] != "param":
-            return
-        event_dim = msg["kwargs"].get("event_dim")
-        if event_dim is None:
-            return
-        for frame in msg["cond_indep_stack"]:
-            if frame.name == self.name:
-                value = msg["value"]
-                event_dim += value.unconstrained().dim() - value.dim()
-                value.unconstrained()._pyro_dct_dim = frame.dim - event_dim
-                return
 
 
 class Forecaster(nn.Module):
