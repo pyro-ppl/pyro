@@ -81,7 +81,7 @@ def sample(name, fn, *args, **kwargs):
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if not am_i_wrapped():
-        if obs is not None:
+        if obs is not None and not infer.get("_deterministic"):
             warnings.warn("trying to observe a value outside of inference at " + name,
                           RuntimeWarning)
             return obs
@@ -145,7 +145,8 @@ def deterministic(name, value, event_dim=None):
     :param int event_dim: Optional event dimension, defaults to `value.ndim`.
     """
     event_dim = value.ndim if event_dim is None else event_dim
-    return sample(name, dist.Delta(value, event_dim=event_dim).mask(False), obs=value)
+    return sample(name, dist.Delta(value, event_dim=event_dim).mask(False),
+                  obs=value, infer={"_deterministic": True})
 
 
 class plate(PlateMessenger):
