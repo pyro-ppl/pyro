@@ -89,7 +89,11 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 funsor_node = tr_funsor.trace.nodes[name]
                 pyro_packed_shape = pyro_node['packed']['log_prob'].shape
                 funsor_packed_shape = funsor_node['log_prob'].squeeze().shape
-                print(name, f"Pyro: {pyro_packed_shape} vs Funsor: {funsor_packed_shape}")
+                if pyro_packed_shape != funsor_packed_shape:
+                    err_str = f"==> (dep mismatch) {name}"
+                else:
+                    err_str = name
+                print(err_str, f"Pyro: {pyro_packed_shape} vs Funsor: {funsor_packed_shape}")
             raise
 
     if _NAMED_TEST_STRENGTH >= 2 or _NAMED_TEST_STRENGTH == 0:
@@ -109,7 +113,11 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 funsor_node = tr_funsor.trace.nodes[name]
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
                 funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
-                print(name, f"Pyro: {sorted(tuple(pyro_names))} vs Funsor: {sorted(tuple(funsor_names))}")
+                if pyro_names != funsor_names:
+                    err_str = f"==> (packed mismatch) {name}"
+                else:
+                    err_str = name
+                print(err_str, f"Pyro: {sorted(tuple(pyro_names))} vs Funsor: {sorted(tuple(funsor_names))}")
             raise
 
     if _NAMED_TEST_STRENGTH >= 3 or _NAMED_TEST_STRENGTH == 0:
@@ -125,7 +133,11 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 if pyro_node['type'] != 'sample':
                     continue
                 funsor_node = tr_funsor.trace.nodes[name]
-                print(name, pyro_node['log_prob'].shape, funsor_node['log_prob'].shape)
+                if pyro_node['log_prob'].shape != funsor_node['log_prob'].shape:
+                    err_str = f"==> (unpacked mismatch) {name}"
+                else:
+                    err_str = name
+                print(err_str, pyro_node['log_prob'].shape, funsor_node['log_prob'].shape)
             raise
 
 
@@ -318,10 +330,11 @@ def test_enum_recycling_grid(use_vindex):
     assert_ok(model, max_plate_nesting=0)
 
 
+@pytest.mark.parametrize("depth", [3, 5, 7])
 @pytest.mark.parametrize('history', [1, 2])
-def test_enum_recycling_reentrant_history(history):
+def test_enum_recycling_reentrant_history(depth, history):
     data = (True, False)
-    for i in range(5):
+    for i in range(depth):
         data = (data, data, False)
 
     def model_(**kwargs):
@@ -347,9 +360,10 @@ def test_enum_recycling_reentrant_history(history):
     assert_ok(model_, max_plate_nesting=0, data=data)
 
 
-def test_enum_recycling_mutual_recursion():
+@pytest.mark.parametrize("depth", [3, 5, 7])
+def test_enum_recycling_mutual_recursion(depth):
     data = (True, False)
-    for i in range(5):
+    for i in range(depth):
         data = (data, data, False)
 
     def model_(**kwargs):
