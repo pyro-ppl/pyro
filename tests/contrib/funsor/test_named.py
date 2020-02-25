@@ -301,8 +301,9 @@ def test_enum_recycling_nested():
     assert_ok(model, max_plate_nesting=0)
 
 
+@pytest.mark.parametrize("grid_size", [4, 10])
 @pytest.mark.parametrize('use_vindex', [False, True])
-def test_enum_recycling_grid(use_vindex):
+def test_enum_recycling_grid(grid_size, use_vindex):
     #  x---x---x---x    -----> i
     #  |   |   |   |   |
     #  x---x---x---x   |
@@ -315,8 +316,8 @@ def test_enum_recycling_grid(use_vindex):
     def model():
         p = pyro.param("p_leaf", torch.ones(2, 2, 2))
         x = defaultdict(lambda: torch.tensor(0))
-        y_axis = pyro_markov(range(4), keep=True)
-        for i in pyro_markov(range(4)):
+        y_axis = pyro_markov(range(grid_size), keep=True)
+        for i in pyro_markov(range(grid_size)):
             for j in y_axis:
                 if use_vindex:
                     probs = Vindex(p)[x[i - 1, j], x[i, j - 1]]
