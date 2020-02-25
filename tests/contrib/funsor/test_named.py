@@ -4,6 +4,7 @@
 from collections import OrderedDict, defaultdict
 import contextlib
 import logging
+import os
 
 import pytest
 import torch
@@ -21,6 +22,9 @@ from pyro.contrib.funsor.enum_messenger import EnumMessenger
 logger = logging.getLogger(__name__)
 
 _ENUM_BACKEND_VERSION = "pyro"
+
+# TODO remove this when all tests pass
+_NAMED_TEST_STRENGTH = int(os.environ.get("NAMED_TEST_STRENGTH", 0))
 
 
 @contextlib.contextmanager
@@ -69,47 +73,60 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
         and node['infer'].get('enumerate') == 'parallel'
     }
 
-    try:
-        # coarser check: number of elements and squeezed shapes
-        for name, pyro_node in tr_pyro.trace.nodes.items():
-            if pyro_node['type'] != 'sample':
-                continue
-            funsor_node = tr_funsor.trace.nodes[name]
-            assert pyro_node['packed']['log_prob'].numel() == funsor_node['log_prob'].numel()
-            assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
+    if _NAMED_TEST_STRENGTH >= 1 or _NAMED_TEST_STRENGTH == 0:
+        try:
+            # coarser check: number of elements and squeezed shapes
+            for name, pyro_node in tr_pyro.trace.nodes.items():
+                if pyro_node['type'] != 'sample':
+                    continue
+                funsor_node = tr_funsor.trace.nodes[name]
+                assert pyro_node['packed']['log_prob'].numel() == funsor_node['log_prob'].numel()
+                assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
+        except AssertionError:
+            for name, pyro_node in tr_pyro.trace.nodes.items():
+                if pyro_node['type'] != 'sample':
+                    continue
+                funsor_node = tr_funsor.trace.nodes[name]
+                pyro_packed_shape = pyro_node['packed']['log_prob'].shape
+                funsor_packed_shape = funsor_node['log_prob'].squeeze().shape
+                print(name, f"Pyro: {pyro_packed_shape} vs Funsor: {funsor_packed_shape}")
+            raise
 
-        # medium check: unordered packed shapes match
-        for name, pyro_node in tr_pyro.trace.nodes.items():
-            if pyro_node['type'] != 'sample':
-                continue
-            funsor_node = tr_funsor.trace.nodes[name]
-            pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
-            funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
-            assert pyro_names == funsor_names
-    except AssertionError:
-        for name, pyro_node in tr_pyro.trace.nodes.items():
-            if pyro_node['type'] != 'sample':
-                continue
-            funsor_node = tr_funsor.trace.nodes[name]
-            pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
-            funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
-            print(name, f"Pyro: {sorted(tuple(pyro_names))} vs Funsor: {sorted(tuple(funsor_names))}")
-        raise
+    if _NAMED_TEST_STRENGTH >= 2 or _NAMED_TEST_STRENGTH == 0:
+        try:
+            # medium check: unordered packed shapes match
+            for name, pyro_node in tr_pyro.trace.nodes.items():
+                if pyro_node['type'] != 'sample':
+                    continue
+                funsor_node = tr_funsor.trace.nodes[name]
+                pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
+                funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
+                assert pyro_names == funsor_names
+        except AssertionError:
+            for name, pyro_node in tr_pyro.trace.nodes.items():
+                if pyro_node['type'] != 'sample':
+                    continue
+                funsor_node = tr_funsor.trace.nodes[name]
+                pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
+                funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
+                print(name, f"Pyro: {sorted(tuple(pyro_names))} vs Funsor: {sorted(tuple(funsor_names))}")
+            raise
 
-    try:
-        # finer check: exact match with unpacked Pyro shapes
-        for name, pyro_node in tr_pyro.trace.nodes.items():
-            if pyro_node['type'] != 'sample':
-                continue
-            assert pyro_node['log_prob'].shape == funsor_node['log_prob'].shape
-            assert pyro_node['value'].shape == funsor_node['value'].shape
-    except AssertionError:
-        for name, pyro_node in tr_pyro.trace.nodes.items():
-            if pyro_node['type'] != 'sample':
-                continue
-            funsor_node = tr_funsor.trace.nodes[name]
-            print(name, pyro_node['log_prob'].shape, funsor_node['log_prob'].shape)
-        raise
+    if _NAMED_TEST_STRENGTH >= 3 or _NAMED_TEST_STRENGTH == 0:
+        try:
+            # finer check: exact match with unpacked Pyro shapes
+            for name, pyro_node in tr_pyro.trace.nodes.items():
+                if pyro_node['type'] != 'sample':
+                    continue
+                assert pyro_node['log_prob'].shape == funsor_node['log_prob'].shape
+                assert pyro_node['value'].shape == funsor_node['value'].shape
+        except AssertionError:
+            for name, pyro_node in tr_pyro.trace.nodes.items():
+                if pyro_node['type'] != 'sample':
+                    continue
+                funsor_node = tr_funsor.trace.nodes[name]
+                print(name, pyro_node['log_prob'].shape, funsor_node['log_prob'].shape)
+            raise
 
 
 def test_iteration():
