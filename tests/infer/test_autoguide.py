@@ -695,3 +695,53 @@ def test_predictive(auto_class):
     samples_deser = predictive_deser.call(x)
     # Note that the site values are different in the serialized guide
     assert len(samples) == len(samples_deser)
+
+
+@pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
+@pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal, AutoGuideList])
+def test_subsample_guide(auto_class, init_fn):
+
+    # The model from tutorial/source/easyguide.ipynb
+    def model(batch, subsample, full_size):
+        num_time_steps = len(batch)
+        result = [None] * num_time_steps
+        drift = pyro.sample("drift", dist.LogNormal(-1, 0.5))
+        plate = pyro.plate("data", full_size, subsample=subsample)
+        assert plate.size == 50
+        with plate:
+            z = 0.
+            for t in range(num_time_steps):
+                z = pyro.sample("state_{}".format(t), dist.Normal(z, drift))
+                result[t] = pyro.sample("obs_{}".format(t), dist.Bernoulli(logits=z),
+                                        obs=batch[t])
+
+        return torch.stack(result)
+
+    def create_plates(batch, subsample, full_size):
+        return pyro.plate("data", full_size, subsample=subsample)
+
+    if auto_class == AutoGuideList:
+        guide = AutoGuideList(model, create_plates=create_plates)
+        guide.add(AutoDelta(poutine.block(model, expose=["drift"])))
+        guide.add(AutoNormal(poutine.block(model, hide=["drift"])))
+    else:
+        guide = auto_class(model, create_plates=create_plates)
+
+    full_size = 50
+    batch_size = 20
+    num_time_steps = 8
+    pyro.set_rng_seed(123456789)
+    data = model([None] * num_time_steps, torch.arange(full_size), full_size)
+    assert data.shape == (num_time_steps, full_size)
+
+    pyro.get_param_store().clear()
+    pyro.set_rng_seed(123456789)
+    svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
+    for epoch in range(2):
+        beg = 0
+        while beg < full_size:
+            end = min(full_size, beg + batch_size)
+            subsample = torch.arange(beg, end)
+            batch = data[:, beg:end]
+            beg = end
+            svi.step(batch, subsample, full_size=full_size)

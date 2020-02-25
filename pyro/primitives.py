@@ -81,7 +81,7 @@ def sample(name, fn, *args, **kwargs):
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if not am_i_wrapped():
-        if obs is not None:
+        if obs is not None and not infer.get("_deterministic"):
             warnings.warn("trying to observe a value outside of inference at " + name,
                           RuntimeWarning)
             return obs
@@ -145,7 +145,42 @@ def deterministic(name, value, event_dim=None):
     :param int event_dim: Optional event dimension, defaults to `value.ndim`.
     """
     event_dim = value.ndim if event_dim is None else event_dim
-    return sample(name, dist.Delta(value, event_dim=event_dim).mask(False), obs=value)
+    return sample(name, dist.Delta(value, event_dim=event_dim).mask(False),
+                  obs=value, infer={"_deterministic": True})
+
+
+@effectful(type="subsample")
+def subsample(data, event_dim):
+    """
+    EXPERIMENTAL Subsampling statement to subsample data based on enclosing
+    :class:`~pyro.primitives.plate` s.
+
+    This is typically called on arguments to ``model()`` when subsampling is
+    performed automatically by :class:`~pyro.primitives.plate` s by passing
+    either the ``subsample`` or ``subsample_size`` kwarg. For example the
+    following are equivalent::
+
+        # Version 1. using pyro.subsample()
+        def model(data):
+            with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()) as ind:
+                data = data[ind]
+                # ...
+
+        # Version 2. using indexing
+        def model(data):
+            with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()):
+                data = pyro.subsample(data, event_dim=0)
+                # ...
+
+    :param data: A tensor of batched data.
+    :type data: ~torch.Tensor
+    :param int event_dim: The event dimension of the data tensor. Dimensions to
+        the left are considered batch dimensions.
+    :returns: A subsampled version of ``data``
+    :rtype: ~torch.Tensor
+    """
+    assert isinstance(event_dim, int) and event_dim >= 0
+    return data  # May be intercepted by SubsampleMessenger.
 
 
 class plate(PlateMessenger):

@@ -124,6 +124,7 @@ class SubsampleMessenger(IndepMessenger):
 
     def _process_message(self, msg):
         frame = CondIndepStackFrame(self.name, self.dim, self.subsample_size, self.counter)
+        frame.full_size = self.size  # Used for param initialization.
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         if isinstance(self.size, torch.Tensor) or isinstance(self.subsample_size, torch.Tensor):
             if not isinstance(msg["scale"], torch.Tensor):
@@ -132,7 +133,7 @@ class SubsampleMessenger(IndepMessenger):
         msg["scale"] = msg["scale"] * self.size / self.subsample_size
 
     def _postprocess_message(self, msg):
-        if msg["type"] == "param" and self.dim is not None:
+        if msg["type"] in ("param", "subsample") and self.dim is not None:
             event_dim = msg["kwargs"].get("event_dim")
             if event_dim is not None:
                 assert event_dim >= 0
@@ -140,10 +141,13 @@ class SubsampleMessenger(IndepMessenger):
                 shape = msg["value"].shape
                 if len(shape) >= -dim and shape[dim] != 1:
                     if is_validation_enabled() and shape[dim] != self.size:
+                        if msg["type"] == "param":
+                            statement = "pyro.param({}, ..., event_dim={})".format(msg["name"], event_dim)
+                        else:
+                            statement = "pyro.subsample(..., event_dim={})".format(event_dim)
                         raise ValueError(
-                            "Inside pyro.plate({}, {}, dim={}) "
-                            "invalid shape of pyro.param({}, ..., event_dim={}): {}"
-                            .format(self.name, self.size, self.dim, msg["name"], event_dim, shape))
+                            "Inside pyro.plate({}, {}, dim={}) invalid shape of {}: {}"
+                            .format(self.name, self.size, self.dim, statement, shape))
                     # Subsample parameters with known batch semantics.
                     if self.subsample_size < self.size:
                         msg["value"] = msg["value"].index_select(dim, self._indices)
