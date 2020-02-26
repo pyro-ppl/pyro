@@ -356,6 +356,33 @@ def test_plate_subsample_param_ok(subsample_size, Elbo):
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
+def test_plate_subsample_primitive_ok(subsample_size, Elbo):
+
+    def model():
+        p = torch.tensor(0.5)
+        with pyro.plate("plate", 10, subsample_size):
+            pyro.sample("x", dist.Bernoulli(p))
+
+    def guide():
+        with pyro.plate("plate", 10, subsample_size) as ind:
+            p0 = torch.tensor(0.)
+            p0 = pyro.subsample(p0, event_dim=0)
+            assert p0.shape == ()
+            p = 0.5 * torch.ones(10)
+            p = pyro.subsample(p, event_dim=0)
+            assert len(p) == len(ind)
+            pyro.sample("x", dist.Bernoulli(p))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+    elif Elbo is TraceTMC_ELBO:
+        guide = config_enumerate(guide, num_samples=2)
+
+    assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize("shape,ok", [
     ((), True),
     ((1,), True),

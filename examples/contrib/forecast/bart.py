@@ -60,6 +60,9 @@ class Model(ForecastingModel):
                                       dist.LogNormal(torch.zeros(dim), 1).to_event(1))
         assert trans_timescale.shape[-1:] == (dim,)
 
+        trans_loc = pyro.sample("trans_loc", dist.Cauchy(0, 1 / period))
+        trans_loc = trans_loc.unsqueeze(-1).expand(trans_loc.shape + (dim,))
+        assert trans_loc.shape[-1:] == (dim,)
         trans_scale = pyro.sample("trans_scale",
                                   dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         trans_corr = pyro.sample("trans_corr",
@@ -101,7 +104,7 @@ class Model(ForecastingModel):
         # this entire model is parallelized over time.
         init_dist = dist.Normal(torch.zeros(dim), 100).to_event(1)
         trans_mat = trans_timescale.neg().exp().diag_embed()
-        trans_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=trans_scale_tril)
+        trans_dist = dist.MultivariateNormal(trans_loc, scale_tril=trans_scale_tril)
         obs_mat = torch.eye(dim)
         obs_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=obs_scale_tril)
         noise_model = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
@@ -135,8 +138,9 @@ def main(args):
         "num_steps": args.num_steps,
         "learning_rate": args.learning_rate,
         "log_every": args.log_every,
+        "dct_gradients": args.dct,
     }
-    metrics = backtest(data, covariates, Model(),
+    metrics = backtest(data, covariates, Model,
                        train_window=args.train_window,
                        test_window=args.test_window,
                        stride=args.stride,
@@ -153,12 +157,13 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.2.1')
-    parser = argparse.ArgumentParser(description="Causal Effect Variational Autoencoder")
+    parser = argparse.ArgumentParser(description="Bart Ridership Forecasting Example")
     parser.add_argument("--train-window", default=2160, type=int)
     parser.add_argument("--test-window", default=336, type=int)
     parser.add_argument("--stride", default=168, type=int)
     parser.add_argument("-n", "--num-steps", default=501, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
+    parser.add_argument("--dct", action="store_true")
     parser.add_argument("--num-samples", default=100, type=int)
     parser.add_argument("--log-every", default=50, type=int)
     parser.add_argument("--seed", default=1234567890, type=int)

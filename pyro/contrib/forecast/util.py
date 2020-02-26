@@ -10,6 +10,32 @@ from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 
 
+class MarkDCTParamMessenger(Messenger):
+    """
+    EXPERIMENTAL Messenger to mark DCT dimension of parameter, for use with
+    :class:`pyro.optim.optim.DCTAdam`.
+
+    :param str name: The name of the plate along which to apply discrete cosine
+        transforms on gradients.
+    """
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+
+    def _postprocess_message(self, msg):
+        if msg["type"] != "param":
+            return
+        event_dim = msg["kwargs"].get("event_dim")
+        if event_dim is None:
+            return
+        for frame in msg["cond_indep_stack"]:
+            if frame.name == self.name:
+                value = msg["value"]
+                event_dim += value.unconstrained().dim() - value.dim()
+                value.unconstrained()._pyro_dct_dim = frame.dim - event_dim
+                return
+
+
 class PrefixReplayMessenger(Messenger):
     """
     EXPERIMENTAL Given a trace of training data, replay a model with batched

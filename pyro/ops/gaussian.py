@@ -8,6 +8,7 @@ from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
 from pyro.distributions.util import broadcast_shape
+from pyro.ops.tensor_utils import cholesky, matmul, matvecmul, triangular_solve
 
 
 class Gaussian:
@@ -128,7 +129,7 @@ class Gaussian:
         if value.size(-1) == 0:
             batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
             return self.log_normalizer.expand(batch_shape)
-        result = (-0.5) * self.precision.matmul(value.unsqueeze(-1)).squeeze(-1)
+        result = (-0.5) * matvecmul(self.precision, value)
         result = result + self.info_vec
         result = (value * result).sum(-1)
         return result + self.log_normalizer
@@ -137,11 +138,11 @@ class Gaussian:
         """
         Reparameterized sampler.
         """
-        P_chol = self.precision.cholesky()
+        P_chol = cholesky(self.precision)
         loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
         shape = sample_shape + self.batch_shape + (self.dim(), 1)
         noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
-        noise = noise.triangular_solve(P_chol, upper=False, transpose=True).solution.squeeze(-1)
+        noise = triangular_solve(noise, P_chol, upper=False, transpose=True).squeeze(-1)
         return loc + noise
 
     def condition(self, value):
@@ -170,10 +171,10 @@ class Gaussian:
         P_bb = self.precision[..., n:, n:]
         b = value
 
-        info_vec = info_a - P_ab.matmul(b.unsqueeze(-1)).squeeze(-1)
+        info_vec = info_a - matvecmul(P_ab, b)
         precision = P_aa
         log_normalizer = (self.log_normalizer +
-                          -0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) +
+                          -0.5 * matvecmul(P_bb, b).mul(b).sum(-1) +
                           b.mul(info_b).sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
@@ -201,15 +202,15 @@ class Gaussian:
         P_aa = self.precision[..., a, a]
         P_ba = self.precision[..., b, a]
         P_bb = self.precision[..., b, b]
-        P_b = P_bb.cholesky()
-        P_a = P_ba.triangular_solve(P_b, upper=False).solution
+        P_b = cholesky(P_bb)
+        P_a = triangular_solve(P_ba, P_b, upper=False)
         P_at = P_a.transpose(-1, -2)
-        precision = P_aa - P_at.matmul(P_a)
+        precision = P_aa - matmul(P_at, P_a)
 
         info_a = self.info_vec[..., a]
         info_b = self.info_vec[..., b]
-        b_tmp = info_b.unsqueeze(-1).triangular_solve(P_b, upper=False).solution
-        info_vec = info_a - P_at.matmul(b_tmp).squeeze(-1)
+        b_tmp = triangular_solve(info_b.unsqueeze(-1), P_b, upper=False)
+        info_vec = info_a - matmul(P_at, b_tmp).squeeze(-1)
 
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
@@ -222,8 +223,8 @@ class Gaussian:
         Integrates out all latent state (i.e. operating on event dimensions).
         """
         n = self.dim()
-        chol_P = self.precision.cholesky()
-        chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
+        chol_P = cholesky(self.precision)
+        chol_P_u = triangular_solve(self.info_vec.unsqueeze(-1), chol_P, upper=False).squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
         return (self.log_normalizer + 0.5 * n * math.log(2 * math.pi) + 0.5 * u_P_u -
                 chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
@@ -267,9 +268,9 @@ class AffineNormal:
         """
         assert value.size(-1) == self.loc.size(-1)
         prec_sqrt = self.matrix / self.scale.unsqueeze(-2)
-        precision = prec_sqrt.matmul(prec_sqrt.transpose(-1, -2))
+        precision = matmul(prec_sqrt, prec_sqrt.transpose(-1, -2))
         delta = (value - self.loc) / self.scale
-        info_vec = prec_sqrt.matmul(delta.unsqueeze(-1)).squeeze(-1)
+        info_vec = matvecmul(prec_sqrt, delta)
         log_normalizer = (-0.5 * self.loc.size(-1) * math.log(2 * math.pi)
                           - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
@@ -326,7 +327,7 @@ def mvn_to_gaussian(mvn):
         scale_diag = mvn.scale
     else:
         precision = mvn.precision_matrix
-        info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
+        info_vec = matvecmul(precision, mvn.loc)
         scale_diag = mvn.scale_tril.diagonal(dim1=-2, dim2=-1)
 
     n = mvn.loc.size(-1)
@@ -363,14 +364,14 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
 
     y_gaussian = mvn_to_gaussian(mvn)
     P_yy = y_gaussian.precision
-    neg_P_xy = matrix.matmul(P_yy)
+    neg_P_xy = matmul(matrix, P_yy)
     P_xy = -neg_P_xy
     P_yx = P_xy.transpose(-1, -2)
-    P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
+    P_xx = matmul(neg_P_xy, matrix.transpose(-1, -2))
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
     info_y = y_gaussian.info_vec
-    info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
+    info_x = -matvecmul(matrix, info_y)
     info_vec = torch.cat([info_x, info_y], -1)
     log_normalizer = y_gaussian.log_normalizer
 
@@ -415,15 +416,15 @@ def gaussian_tensordot(x, y, dims=0):
         b = xb + yb
 
         # Pbb + Qbb needs to be positive definite, so that we can malginalize out `b` (to have a finite integral)
-        L = torch.cholesky(Pbb + Qbb)
-        LinvB = torch.triangular_solve(B, L, upper=False)[0]
+        L = cholesky(Pbb + Qbb)
+        LinvB = triangular_solve(B, L, upper=False)
         LinvBt = LinvB.transpose(-2, -1)
-        Linvb = torch.triangular_solve(b.unsqueeze(-1), L, upper=False)[0]
+        Linvb = triangular_solve(b.unsqueeze(-1), L, upper=False)
 
-        precision = precision - torch.matmul(LinvBt, LinvB)
+        precision = precision - matmul(LinvBt, LinvB)
         # NB: precision might not be invertible for getting mean = precision^-1 @ info_vec
         if na + nc > 0:
-            info_vec = info_vec - torch.matmul(LinvBt, Linvb).squeeze(-1)
+            info_vec = info_vec - matmul(LinvBt, Linvb).squeeze(-1)
         logdet = torch.diagonal(L, dim1=-2, dim2=-1).log().sum(-1)
         diff = 0.5 * nb * math.log(2 * math.pi) + 0.5 * Linvb.squeeze(-1).pow(2).sum(-1) - logdet
         log_normalizer = log_normalizer + diff
