@@ -3,6 +3,7 @@
 
 from collections import OrderedDict, namedtuple
 from contextlib import ExitStack  # python 3
+from enum import Enum
 
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 
@@ -15,6 +16,13 @@ StackFrame = namedtuple('StackFrame', [
     'iter_parents',
     'keep',
 ])
+
+
+class DimType(Enum):
+    """Enumerates the possible types of dimensions to allocate"""
+    LOCAL = 1
+    GLOBAL = 2
+    VISIBLE = 3
 
 
 class DimStack:
@@ -59,27 +67,25 @@ class DimStack:
         for name in frozenset(names).intersection(global_frame.name_to_dim):
             global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
 
-    def _gendim(self, name, fresh_dim_to_name, visible=False):
+    def _gendim(self, name, fresh_dim_to_name, dim_type=DimType.LOCAL):
         """generate a unique fresh positional dimension using the allocator state"""
-        dim = self._first_available_dim if not visible else -1
-        frames = [self.global_frame] if visible else \
-            [self.current_frame, self.global_frame] + self.current_frame.parents + self.current_frame.iter_parents
+        dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
+        dim = -1 if dim is None else dim
+        frames = [self.current_frame, self.global_frame] + \
+            self.current_frame.parents + self.current_frame.iter_parents
         while dim in fresh_dim_to_name or any(dim in p.dim_to_name for p in frames):
             dim -= 1
-        if dim < self.MAX_DIM or (visible and dim <= self._first_available_dim):
+        if dim < self.MAX_DIM or (dim_type == DimType.VISIBLE and dim <= self._first_available_dim):
             raise ValueError(f"Ran out of free dims during allocation for {name}")
         return dim
 
-    def _gensym(self, dim, fresh_name_to_dim, visible=False):
+    def _gensym(self, dim, fresh_name_to_dim, dim_type=DimType.LOCAL):
         """deterministically generate a name following funsor.pyro.convert convention"""
         name = f"_pyro_dim_{-dim}"  # XXX -dim-1? dim? check this
         assert dim < 0 and name not in fresh_name_to_dim
         return name
 
-    def allocate_dims(self, fresh_names, visible=False):
-
-        if visible:
-            raise NotImplementedError("TODO implement plate dimension allocation")
+    def allocate_dims(self, fresh_names, dim_type=DimType.LOCAL):
 
         fresh_name_to_dim = OrderedDict()
         fresh_dim_to_name = OrderedDict()
@@ -88,17 +94,17 @@ class DimStack:
 
             # allocation
             dim = None
-            for parent_frame in self.current_frame.parents:  # don't read iter_parents
+            for parent_frame in self.current_frame.parents + [self.global_frame]:
                 dim = parent_frame.name_to_dim.get(name, dim)
 
             if dim is None:
-                dim = self._gendim(name, fresh_dim_to_name, visible=visible)
+                dim = self._gendim(name, fresh_dim_to_name, dim_type=dim_type)
 
             fresh_dim_to_name[dim] = name
             fresh_name_to_dim[name] = dim
 
         # copy fresh variables down the stack
-        frames = [self.current_frame] + \
+        frames = [self.global_frame] if dim_type != DimType.LOCAL else [self.current_frame] + \
             (self.current_frame.parents if self.current_frame.keep else [])
         for frame in frames:
             frame.name_to_dim.update(fresh_name_to_dim)
@@ -120,7 +126,8 @@ class NamedMessenger(ReentrantMessenger):
         funsor_value, name_to_dim = msg["args"]
 
         # handling non-fresh vars: just look at the deepest context they appear in
-        for frame in [_DIM_STACK.current_frame] + _DIM_STACK.current_frame.parents:
+        for frame in [_DIM_STACK.current_frame] + \
+                _DIM_STACK.current_frame.parents + _DIM_STACK.current_frame.iter_parents:
             name_to_dim.update({name: frame.name_to_dim[name]
                                 for name in funsor_value.inputs
                                 if name in frame.name_to_dim
@@ -147,7 +154,8 @@ class NamedMessenger(ReentrantMessenger):
 
         # handling non-fresh dims: just look at the deepest context they appear in
         # TODO support fresh dims
-        for frame in [_DIM_STACK.current_frame] + _DIM_STACK.current_frame.parents:
+        for frame in [_DIM_STACK.current_frame] + \
+                _DIM_STACK.current_frame.parents + _DIM_STACK.current_frame.iter_parents:
             dim_to_name.update({dim: frame.dim_to_name[dim]
                                 for dim in range(-batch_dim, 0)
                                 if raw_value.shape[dim - event_dim] > 1

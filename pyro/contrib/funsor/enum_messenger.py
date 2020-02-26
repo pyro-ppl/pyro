@@ -13,7 +13,7 @@ from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
-from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger, LocalNamedMessenger
+from pyro.contrib.funsor.named_messenger import DimType, GlobalNamedMessenger, LocalNamedMessenger
 
 
 class MarkovMessenger(LocalNamedMessenger):
@@ -46,7 +46,7 @@ class IndepMessenger(GlobalNamedMessenger):
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
         name_to_dim = OrderedDict([(self.name, self.dim)]) if self.dim is not None else self.dim
-        indices = to_data(self._indices, name_to_dim=name_to_dim, visible=True)
+        indices = to_data(self._indices, name_to_dim=name_to_dim, dim_type=DimType.VISIBLE)
         # extract the dimension allocated by to_data to match plate's current behavior
         self.dim, self.indices = -indices.dim(), indices.squeeze()
         return self
@@ -68,6 +68,10 @@ class PlateMessenger(IndepMessenger):
     def _pyro_sample(self, msg):
         super()._pyro_sample(msg)
         BroadcastMessenger._pyro_sample(msg)
+
+    def __iter__(self):
+        # return MarkovMessenger(history=0, keep=False).generator(self._iterable)
+        raise NotImplementedError("TODO")
 
 
 class EnumMessenger(GlobalNamedMessenger):
@@ -122,7 +126,11 @@ class TraceMessenger(OrigTraceMessenger):
 
 
 class ReplayMessenger(OrigReplayMessenger):
-
+    """
+    This version of ReplayMessenger is almost identical to the original version,
+    except that it calls to_data on the replayed funsor values.
+    This may result in different unpacked shapes, but should produce correct allocations.
+    """
     def _pyro_sample(self, msg):
         name = msg["name"]
         if self.trace is not None and name in self.trace:

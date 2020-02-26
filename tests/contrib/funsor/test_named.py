@@ -40,6 +40,7 @@ def toggle_backend(backend):
 
 def pyro_plate(*args, **kwargs):
     global _ENUM_BACKEND_VERSION
+    # TODO update to plate wrapper from pyro.contrib.funsor.__init__
     return (PlateMessenger if _ENUM_BACKEND_VERSION == "funsor" else pyro.plate)(*args, **kwargs)
 
 
