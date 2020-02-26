@@ -219,38 +219,41 @@ def test_staggered():
         testing()
 
 
-def test_enum_recycling_chain_iter():
-
-    @config_enumerate
-    def model():
-        p = torch.tensor([[0.2, 0.8], [0.1, 0.9]])
-
-        x = 0
-        for t in pyro_markov(range(100)):
-            x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
-            assert x.dim() <= 2
-
-    assert_ok(model, max_plate_nesting=0)
-
-
-def test_enum_recycling_chain_while():
+@pytest.mark.parametrize("history", [1, 2, 3])
+def test_enum_recycling_chain_iter(history):
 
     @config_enumerate
     def model():
         p = torch.tensor([[0.2, 0.8], [0.1, 0.9]])
 
         xs = [0]
-        c = pyro_markov()
-        with contextlib.ExitStack() as stack:
-            for t in range(100):
-                stack.enter_context(c)
-                xs.append(pyro.sample("x_{}".format(t), dist.Categorical(p[xs[-1]])))
-            assert all(x.dim() <= 2 for x in xs[1:])
+        for t in pyro_markov(range(100), history=history):
+            xs.append(pyro.sample("x_{}".format(t), dist.Categorical(p[xs[-1]])))
+        assert all(x.dim() <= history + 1 for x in xs[1:])
 
     assert_ok(model, max_plate_nesting=0)
 
 
-def test_enum_recycling_chain_recur():
+@pytest.mark.parametrize("history", [1, 2, 3])
+def test_enum_recycling_chain_while(history):
+
+    @config_enumerate
+    def model():
+        p = torch.tensor([[0.2, 0.8], [0.1, 0.9]])
+
+        xs = [0]
+        c = pyro_markov(history=history)
+        with contextlib.ExitStack() as stack:
+            for t in range(100):
+                stack.enter_context(c)
+                xs.append(pyro.sample("x_{}".format(t), dist.Categorical(p[xs[-1]])))
+            assert all(x.dim() <= history + 1 for x in xs[1:])
+
+    assert_ok(model, max_plate_nesting=0)
+
+
+@pytest.mark.parametrize("history", [1, 2, 3])
+def test_enum_recycling_chain_recur(history):
 
     @config_enumerate
     def model():
@@ -258,7 +261,7 @@ def test_enum_recycling_chain_recur():
 
         x = 0
 
-        @pyro_markov
+        @pyro_markov(history=history)
         def fn(t, x):
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             assert x.dim() <= 2
