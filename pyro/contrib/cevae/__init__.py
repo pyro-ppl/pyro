@@ -290,14 +290,14 @@ class Model(PyroModule):
         self.latent_dim = config["latent_dim"]
         super().__init__()
         self.x_nn = DiagNormalNet([config["latent_dim"]] +
-                                  [config["hidden_dim"]] * config["num_layers"] +
+                                  [config["hidden_dim"]] * config["model_zx_layers"] +
                                   [config["feature_dim"]])
         OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
         # The y network is split between the two t values.
         self.y0_nn = OutcomeNet([config["latent_dim"]] +
-                                [config["hidden_dim"]] * config["num_layers"])
+                                [config["hidden_dim"]] * config["model_zy_layers"])
         self.y1_nn = OutcomeNet([config["latent_dim"]] +
-                                [config["hidden_dim"]] * config["num_layers"])
+                                [config["hidden_dim"]] * config["model_zy_layers"])
         self.t_nn = BernoulliNet([config["latent_dim"]])
 
     def forward(self, x, t=None, y=None, size=None):
@@ -363,12 +363,12 @@ class Guide(PyroModule):
         # layers are shared for t in {0,1}, but the final layer is split
         # between the two t values.
         self.y_nn = FullyConnected([config["feature_dim"]] +
-                                   [config["hidden_dim"]] * (config["num_layers"] - 1),
+                                   [config["hidden_dim"]] * (config["guide_xy_layers"] - 1),
                                    final_activation=nn.ELU())
         self.y0_nn = OutcomeNet([config["hidden_dim"]])
         self.y1_nn = OutcomeNet([config["hidden_dim"]])
         self.z_nn = FullyConnected([1 + config["feature_dim"]] +
-                                   [config["hidden_dim"]] * (config["num_layers"] - 1),
+                                   [config["hidden_dim"]] * (config["guide_xz_layers"] - 1),
                                    final_activation=nn.ELU())
         self.z0_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
         self.z1_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
@@ -482,10 +482,29 @@ class CEVAE(nn.Module):
     :param int num_samples: Default number of samples for the :meth:`ite`
         method. Defaults to 100.
     """
-    def __init__(self, feature_dim, outcome_dist="bernoulli",
-                 latent_dim=20, hidden_dim=200, num_layers=3, num_samples=100):
-        config = dict(feature_dim=feature_dim, latent_dim=latent_dim,
-                      hidden_dim=hidden_dim, num_layers=num_layers,
+    def __init__(self, feature_dim, *,
+                 outcome_dist="bernoulli",
+                 latent_dim=20,
+                 hidden_dim=200,
+                 model_zx_layers=4,
+                 model_zy_layers=4,
+                 guide_xy_layers=4,
+                 guide_xz_layers=4,
+                 num_layers=None,
+                 num_samples=100):
+        if num_layers is not None:
+            model_zx_layers = num_layers
+            model_zy_layers = num_layers
+            model_yz_layers = num_layers
+            model_xz_layers = num_layers
+
+        config = dict(feature_dim=feature_dim,
+                      latent_dim=latent_dim,
+                      hidden_dim=hidden_dim,
+                      model_zx_layers=model_zx_layers,
+                      model_zy_layers=model_zy_layers,
+                      guide_xy_layers=guide_xy_layers,
+                      guide_xz_layers=guide_xz_layers,
                       num_samples=num_samples)
         for name, size in config.items():
             if not (isinstance(size, int) and size > 0):
@@ -496,7 +515,10 @@ class CEVAE(nn.Module):
 
         super().__init__()
         self.model = Model(config)
-        self.guide = Guide(config)
+        if cofig["x_layers"] is None:
+            self.guide = lambda *args, **kwargs: None
+        else:
+            self.guide = Guide(config)
 
     def fit(self, x, t, y,
             num_epochs=100,
