@@ -264,7 +264,7 @@ def test_enum_recycling_chain_recur(history):
         @pyro_markov(history=history)
         def fn(t, x):
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
-            assert x.dim() <= 2
+            assert x.dim() <= history + 1
             return x if t >= 100 else fn(t + 1, x)
 
         return fn(0, x)
