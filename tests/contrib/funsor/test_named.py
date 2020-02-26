@@ -343,7 +343,8 @@ def test_enum_recycling_nested():
     assert_ok(model, max_plate_nesting=0)
 
 
-@pytest.mark.parametrize("grid_size", [4, 10])
+@pytest.mark.xfail(reason="Pyro behavior here appears to be incorrect")
+@pytest.mark.parametrize("grid_size", [4, 20])
 @pytest.mark.parametrize('use_vindex', [False, True])
 def test_enum_recycling_grid(grid_size, use_vindex):
     #  x---x---x---x    -----> i
