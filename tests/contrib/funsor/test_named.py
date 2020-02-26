@@ -58,8 +58,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
 
     with toggle_backend("funsor"), poutine.trace() as tr_funsor:
         with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
-            with markov():
-                model(**kwargs)
+            model(**kwargs)
 
     assert tr_pyro.trace.nodes.keys() == tr_funsor.trace.nodes.keys()
     tr_pyro.trace.compute_log_prob()
