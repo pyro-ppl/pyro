@@ -29,10 +29,14 @@ class DimStack:
             name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
             parents=[], iter_parents=[], keep=False,
         )]
-        self._first_available_dim = None  # TODO default to -1?
+        self._first_available_dim = -1
+
+    MAX_DIM = -25
 
     def set_first_available_dim(self, dim):
-        self._first_available_dim = dim
+        assert dim is None or (self.MAX_DIM < dim < 0)
+        old_dim, self._first_available_dim = self._first_available_dim, dim
+        return old_dim
 
     def push(self, frame):
         self._stack.append(frame)
@@ -55,7 +59,24 @@ class DimStack:
         for name in frozenset(names).intersection(global_frame.name_to_dim):
             global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
 
-    def allocate_dims(self, fresh, visible=False):
+    def _gendim(self, name, fresh_dim_to_name, visible=False):
+        """generate a unique fresh positional dimension using the allocator state"""
+        dim = self._first_available_dim if not visible else -1
+        frames = [self.global_frame] if visible else \
+            [self.current_frame, self.global_frame] + self.current_frame.parents + self.current_frame.iter_parents
+        while dim in fresh_dim_to_name or any(dim in p.dim_to_name for p in frames):
+            dim -= 1
+        if dim < self.MAX_DIM or (visible and dim <= self._first_available_dim):
+            raise ValueError(f"Ran out of free dims during allocation for {name}")
+        return dim
+
+    def _gensym(self, dim, fresh_name_to_dim, visible=False):
+        """deterministically generate a name following funsor.pyro.convert convention"""
+        name = f"_pyro_dim_{-dim}"  # XXX -dim-1? dim? check this
+        assert dim < 0 and name not in fresh_name_to_dim
+        return name
+
+    def allocate_dims(self, fresh_names, visible=False):
 
         if visible:
             raise NotImplementedError("TODO implement plate dimension allocation")
@@ -63,27 +84,22 @@ class DimStack:
         fresh_name_to_dim = OrderedDict()
         fresh_dim_to_name = OrderedDict()
 
-        for name in fresh:
+        for name in fresh_names:
 
             # allocation
             dim = None
             for parent_frame in self.current_frame.parents:  # don't read iter_parents
-                dim = parent_frame.name_to_dim.get(name, None)
+                dim = parent_frame.name_to_dim.get(name, dim)
 
-            if dim is None:  # find a unique dimension
-                dim = -1
-                while dim in fresh_dim_to_name or \
-                        dim in self.current_frame.dim_to_name or \
-                        any(dim in p.dim_to_name for p in self.current_frame.parents) or \
-                        any(dim in p.dim_to_name for p in self.current_frame.iter_parents):
-                    dim -= 1
+            if dim is None:
+                dim = self._gendim(name, fresh_dim_to_name, visible=visible)
 
             fresh_dim_to_name[dim] = name
             fresh_name_to_dim[name] = dim
 
         # copy fresh variables down the stack
-        frames = [self.current_frame]
-        frames += self.current_frame.parents if self.current_frame.keep else []
+        frames = [self.current_frame] + \
+            (self.current_frame.parents if self.current_frame.keep else [])
         for frame in frames:
             frame.name_to_dim.update(fresh_name_to_dim)
             frame.dim_to_name.update(fresh_dim_to_name)
@@ -111,13 +127,13 @@ class NamedMessenger(ReentrantMessenger):
                                 and name not in name_to_dim})
 
         # handling fresh vars: pass responsibility for allocation up the _DIM_STACK
-        fresh = frozenset(name for name in funsor_value.inputs
-                          if name not in name_to_dim
-                          and name not in _DIM_STACK.current_frame.name_to_dim)
+        fresh_names = tuple(name for name in funsor_value.inputs
+                            if name not in name_to_dim
+                            and name not in _DIM_STACK.current_frame.name_to_dim)
 
         # allocate fresh dimensions in the parent frame
-        if fresh:
-            name_to_dim.update(_DIM_STACK.allocate_dims(fresh))
+        if fresh_names:
+            name_to_dim.update(_DIM_STACK.allocate_dims(fresh_names))
 
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_funsor(msg):
@@ -134,8 +150,9 @@ class NamedMessenger(ReentrantMessenger):
         for frame in [_DIM_STACK.current_frame] + _DIM_STACK.current_frame.parents:
             dim_to_name.update({dim: frame.dim_to_name[dim]
                                 for dim in range(-batch_dim, 0)
-                                if dim not in dim_to_name
-                                and dim in frame.dim_to_name})
+                                if raw_value.shape[dim - event_dim] > 1
+                                and dim in frame.dim_to_name
+                                and dim not in dim_to_name})
 
 
 class LocalNamedMessenger(NamedMessenger):
@@ -162,10 +179,6 @@ class LocalNamedMessenger(NamedMessenger):
         self._iterable = iterable
         return self
 
-    def _get_parents(self, frame):
-        # TODO get this right to match Pyro allocation order
-        return reversed(_DIM_STACK._stack[len(_DIM_STACK._stack) - self.history:])
-
     def _get_iter_parents(self, frame):
         iter_parents = [frame]
         frontier = [frame]
@@ -189,9 +202,9 @@ class LocalNamedMessenger(NamedMessenger):
             frame = StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
                                parents=[], iter_parents=[], keep=self.keep)
 
-        frame.iter_parents[:] = self._iter_parents[:]
+        frame.iter_parents[:] = self._iter_parents[:] + [_DIM_STACK.global_frame]
         if self.history > 0:
-            frame.parents[:] = self._get_parents(_DIM_STACK.current_frame)
+            frame.parents[:] = reversed(_DIM_STACK._stack[len(_DIM_STACK._stack) - self.history:])
 
         _DIM_STACK.push(frame)
         return super().__enter__()
@@ -212,19 +225,17 @@ class GlobalNamedMessenger(NamedMessenger):
 
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
-        if first_available_dim is not None and first_available_dim < -1:
-            raise NotImplementedError("TODO support plates")  # TODO
-        self.first_available_dim = first_available_dim  # TODO store this in _DIM_STACK
+        self.first_available_dim = first_available_dim
         super().__init__()
 
     def __enter__(self):
         if self._ref_count == 0:
-            # TODO set _DIM_STACK._first_available_dim
+            self._prev_first_dim = _DIM_STACK.set_first_available_dim(self.first_available_dim)
             self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self._ref_count == 1:
-            # TODO unset _DIM_STACK._first_available_dim
+            _DIM_STACK.set_first_available_dim(self._prev_first_dim)
             _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
         return super().__exit__(*args, **kwargs)

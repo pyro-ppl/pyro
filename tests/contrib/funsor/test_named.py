@@ -39,7 +39,8 @@ def toggle_backend(backend):
 
 
 def pyro_plate(*args, **kwargs):
-    return pyro.plate(*args, **kwargs)  # PlateMessenger(*args, **kwargs)
+    global _ENUM_BACKEND_VERSION
+    return (PlateMessenger if _ENUM_BACKEND_VERSION == "funsor" else pyro.plate)(*args, **kwargs)
 
 
 def pyro_markov(*args, **kwargs):
@@ -373,9 +374,10 @@ def test_enum_recycling_grid(grid_size, use_vindex):
     assert_ok(model, max_plate_nesting=0)
 
 
+@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2])
 @pytest.mark.parametrize("depth", [3, 5, 7])
 @pytest.mark.parametrize('history', [1, 2])
-def test_enum_recycling_reentrant_history(depth, history):
+def test_enum_recycling_reentrant_history(max_plate_nesting, depth, history):
     data = (True, False)
     for i in range(depth):
         data = (data, data, False)
@@ -400,11 +402,12 @@ def test_enum_recycling_reentrant_history(depth, history):
 
         return model(**kwargs)
 
-    assert_ok(model_, max_plate_nesting=0, data=data)
+    assert_ok(model_, max_plate_nesting=max_plate_nesting, data=data)
 
 
+@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2])
 @pytest.mark.parametrize("depth", [3, 5, 7])
-def test_enum_recycling_mutual_recursion(depth):
+def test_enum_recycling_mutual_recursion(max_plate_nesting, depth):
     data = (True, False)
     for i in range(depth):
         data = (data, data, False)
@@ -446,7 +449,8 @@ def test_enum_recycling_mutual_recursion(depth):
     assert_ok(model_, max_plate_nesting=0, data=data)
 
 
-def test_enum_recycling_interleave():
+@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2])
+def test_enum_recycling_interleave(max_plate_nesting):
 
     def model():
         with pyro_markov() as m:
@@ -455,11 +459,12 @@ def test_enum_recycling_interleave():
                     pyro.sample("x", dist.Categorical(torch.ones(4)),
                                 infer={"enumerate": "parallel"})
 
-    assert_ok(model, max_plate_nesting=0)
+    assert_ok(model, max_plate_nesting=max_plate_nesting)
 
 
+@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2])
 @pytest.mark.parametrize('history', [2, 3])
-def test_markov_history(history):
+def test_markov_history(max_plate_nesting, history):
 
     @config_enumerate
     def model():
@@ -473,7 +478,7 @@ def test_markov_history(history):
             pyro.sample("y_{}".format(t), dist.Bernoulli(q[x_curr]),
                         obs=torch.tensor(0.))
 
-    assert_ok(model, max_plate_nesting=0)
+    assert_ok(model, max_plate_nesting=max_plate_nesting)
 
 
 @pytest.mark.xfail(reason="plate not supported yet")
