@@ -126,6 +126,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
             for name, pyro_node in tr_pyro.trace.nodes.items():
                 if pyro_node['type'] != 'sample':
                     continue
+                funsor_node = tr_funsor.trace.nodes[name]
                 assert pyro_node['log_prob'].shape == funsor_node['log_prob'].shape
                 assert pyro_node['value'].shape == funsor_node['value'].shape
         except AssertionError:
@@ -133,11 +134,13 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 if pyro_node['type'] != 'sample':
                     continue
                 funsor_node = tr_funsor.trace.nodes[name]
-                if pyro_node['log_prob'].shape != funsor_node['log_prob'].shape:
+                pyro_shape = pyro_node['log_prob'].shape
+                funsor_shape = funsor_node['log_prob'].shape
+                if pyro_shape != funsor_shape:
                     err_str = f"==> (unpacked mismatch) {name}"
                 else:
                     err_str = name
-                print(err_str, pyro_node['log_prob'].shape, funsor_node['log_prob'].shape)
+                print(err_str, f"Pyro: {pyro_shape} vs Funsor: {funsor_shape}")
             raise
 
 
@@ -216,7 +219,7 @@ def test_staggered():
         testing()
 
 
-def test_enum_recycling_chain():
+def test_enum_recycling_chain_iter():
 
     @config_enumerate
     def model():
@@ -226,6 +229,42 @@ def test_enum_recycling_chain():
         for t in pyro_markov(range(100)):
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             assert x.dim() <= 2
+
+    assert_ok(model, max_plate_nesting=0)
+
+
+def test_enum_recycling_chain_while():
+
+    @config_enumerate
+    def model():
+        p = torch.tensor([[0.2, 0.8], [0.1, 0.9]])
+
+        xs = [0]
+        c = pyro_markov()
+        with contextlib.ExitStack() as stack:
+            for t in range(100):
+                stack.enter_context(c)
+                xs.append(pyro.sample("x_{}".format(t), dist.Categorical(p[xs[-1]])))
+            assert all(x.dim() <= 2 for x in xs[1:])
+
+    assert_ok(model, max_plate_nesting=0)
+
+
+def test_enum_recycling_chain_recur():
+
+    @config_enumerate
+    def model():
+        p = torch.tensor([[0.2, 0.8], [0.1, 0.9]])
+
+        x = 0
+
+        @pyro_markov
+        def fn(t, x):
+            x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
+            assert x.dim() <= 2
+            return x if t >= 100 else fn(t + 1, x)
+
+        return fn(0, x)
 
     assert_ok(model, max_plate_nesting=0)
 
