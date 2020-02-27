@@ -13,9 +13,9 @@ import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal, init_to_sample
 from pyro.nn.module import PyroModule
-from pyro.optim import DCTAdam
+from pyro.optim import ClippedAdam, DCTAdam
 
-from .util import MarkDCTParamMessenger, PrefixConditionMessenger, PrefixReplayMessenger, reshape_batch
+from .util import MarkTimeDimMessenger, PrefixConditionMessenger, PrefixReplayMessenger, reshape_batch
 
 logger = logging.getLogger(__name__)
 
@@ -233,15 +233,16 @@ class Forecaster(nn.Module):
             guide = AutoNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale,
                                create_plates=create_plates)
         self.guide = guide
-        optim = DCTAdam({"lr": learning_rate, "betas": betas,
-                         "lrd": learning_rate_decay ** (1 / num_steps)})
+        Optim = DCTAdam if dct_gradients else ClippedAdam
+        optim = Optim({"lr": learning_rate, "betas": betas,
+                       "lrd": learning_rate_decay ** (1 / num_steps)})
         elbo = Trace_ELBO(num_particles=num_particles,
                           vectorize_particles=vectorize_particles)
 
         # Initialize.
-        mark_dct = MarkDCTParamMessenger("time") if dct_gradients else lambda m: m
-        elbo._guess_max_plate_nesting(mark_dct(self.model),
-                                      mark_dct(self.guide),
+        mark_time_dim = MarkTimeDimMessenger("time")
+        elbo._guess_max_plate_nesting(mark_time_dim(self.model),
+                                      mark_time_dim(self.guide),
                                       (data, covariates), {})
         elbo.max_plate_nesting = max(elbo.max_plate_nesting, 1)  # force a time plate
 

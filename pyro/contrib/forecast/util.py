@@ -10,10 +10,11 @@ from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 
 
-class MarkDCTParamMessenger(Messenger):
+class MarkTimeDimMessenger(Messenger):
     """
-    EXPERIMENTAL Messenger to mark DCT dimension of parameter, for use with
-    :class:`pyro.optim.optim.DCTAdam`.
+    EXPERIMENTAL Messenger to mark time dimension of parameter. This is used by
+    :class:`pyro.optim.optim.DCTAdam` and
+    :func:`~pyro.contrib.forecast.evaluate.backtest`.
 
     :param str name: The name of the plate along which to apply discrete cosine
         transforms on gradients.
@@ -32,7 +33,7 @@ class MarkDCTParamMessenger(Messenger):
             if frame.name == self.name:
                 value = msg["value"]
                 event_dim += value.unconstrained().dim() - value.dim()
-                value.unconstrained()._pyro_dct_dim = frame.dim - event_dim
+                value.unconstrained()._pyro_time_dim = frame.dim - event_dim
                 return
 
 

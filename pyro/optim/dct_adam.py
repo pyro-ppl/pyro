@@ -39,7 +39,7 @@ class DCTAdam(Optimizer):
     :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
 
     This acts like :class:`~pyro.optim.clipped_adam.ClippedAdam` on most
-    parameters, but if a parameter has an attribute ``._pyro_dct_dim``
+    parameters, but if a parameter has an attribute ``._pyro_time_dim``
     indicating a time dimension, this creates a secondary optimize in the
     frequency domain. This is useful for parameters of time series models.
 
@@ -77,7 +77,7 @@ class DCTAdam(Optimizer):
                 grad.clamp_(-group['clip_norm'], group['clip_norm'])
 
                 # Transform selected parameters via dct.
-                time_dim = getattr(p, "_pyro_dct_dim", None)
+                time_dim = getattr(p, "_pyro_time_dim", None)
                 if time_dim is not None:
                     duration = p.size(time_dim)
                     grad = _transform_forward(grad, time_dim, duration)

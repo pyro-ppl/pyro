@@ -36,7 +36,8 @@ WINDOWS = [
 
 
 @pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
-def test_simple(train_window, min_train_window, test_window, min_test_window, stride):
+@pytest.mark.parametrize("warm_start", [False, True], ids=["cold", "warm"])
+def test_simple(train_window, min_train_window, test_window, min_test_window, stride, warm_start):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
@@ -48,6 +49,7 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
                        test_window=test_window,
                        min_test_window=min_test_window,
                        stride=stride,
+                       warm_start=warm_start,
                        forecaster_options={"num_steps": 2})
 
     assert any(window["t0"] == 0 for window in windows)
