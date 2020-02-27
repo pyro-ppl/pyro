@@ -60,9 +60,9 @@ class IndependentMaternGP(TimeSeriesModel):
 
     def _get_obs_dist(self):
         return dist.Normal(self.obs_matrix.new_zeros(self.obs_dim, 1, 1),
-                           self.obs_noise_scale.unsqueeze(-1).unsqueeze(-1)).to_event(1)
+                                  self.obs_noise_scale.unsqueeze(-1).unsqueeze(-1)).to_event(1)
 
-    def get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to ``obs_dim``-many independent Matern GPs.
@@ -72,7 +72,7 @@ class IndependentMaternGP(TimeSeriesModel):
                                         process_covar.unsqueeze(-3))
         trans_matrix = trans_matrix.unsqueeze(-3)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                self.obs_matrix, self._get_obs_dist())
+                                self.obs_matrix, self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
@@ -197,7 +197,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         loc = self.A.new_zeros(self.obs_dim)
         return dist.Normal(loc, self.obs_noise_scale).to_event(1)
 
-    def get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to a :class:`LinearlyCoupledMaternGP`.
@@ -208,7 +208,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         loc = self.A.new_zeros(self.full_state_dim)
         trans_dist = MultivariateNormal(loc, process_covar)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                self._get_obs_matrix(), self._get_obs_dist())
+                                self._get_obs_matrix(), self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
