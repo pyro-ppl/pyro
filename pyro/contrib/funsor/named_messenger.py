@@ -123,6 +123,7 @@ class NamedMessenger(ReentrantMessenger):
 
         if len(msg["args"]) < 2:
             msg["args"] = msg["args"] + (OrderedDict(),)
+        msg.setdefault("dim_type", msg["kwargs"].pop("dim_type", DimType.LOCAL))
         funsor_value, name_to_dim = msg["args"]
 
         # handling non-fresh vars: just look at the deepest context they appear in
@@ -140,13 +141,14 @@ class NamedMessenger(ReentrantMessenger):
 
         # allocate fresh dimensions in the parent frame
         if fresh_names:
-            name_to_dim.update(_DIM_STACK.allocate_dims(fresh_names))
+            name_to_dim.update(_DIM_STACK.allocate_dims(fresh_names, dim_type=msg["dim_type"]))
 
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_funsor(msg):
 
         if len(msg["args"]) < 3:
             msg["args"] = msg["args"] + (OrderedDict(),)
+        msg.setdefault("dim_type", msg["kwargs"].pop("dim_type", DimType.LOCAL))
         raw_value, output, dim_to_name = msg["args"]
 
         event_dim = len(output.shape)
