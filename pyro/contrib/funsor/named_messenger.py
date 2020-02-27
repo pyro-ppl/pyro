@@ -20,9 +20,9 @@ StackFrame = namedtuple('StackFrame', [
 
 class DimType(Enum):
     """Enumerates the possible types of dimensions to allocate"""
-    LOCAL = 1
-    GLOBAL = 2
-    VISIBLE = 3
+    LOCAL = 0
+    GLOBAL = 1
+    VISIBLE = 2
 
 
 class DimStack:
