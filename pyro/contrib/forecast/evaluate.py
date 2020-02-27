@@ -102,8 +102,10 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
     :param int stride: Optional stride for test/train split. Defaults to 1.
     :param int seed: Random number seed.
     :param int num_samples: Number of samples for forecast.
-    :param dict forecaster_options: Options to pass to forecaster. See
+    :param forecaster_options: Options dict to pass to forecaster, or callable
+        inputting time window ``t0,t1,t2`` and returning such a dict. See
         :class:`~pyro.contrib.forecaster.Forecaster` for details.
+    :type forecaster_options: dict or callable
 
     :returns: A list of dictionaries of evaluation data. Caller is responsible
         for aggregating the per-window metrics. Dictionary keys include: train
@@ -117,6 +119,9 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
     if metrics is None:
         metrics = DEFAULT_METRICS
     assert metrics, "no metrics specified"
+    forecaster_options_fn = None
+    if callable(forecaster_options):
+        forecaster_options_fn = forecaster_options
 
     duration = data.size(-2)
     if test_window is None:
@@ -128,6 +133,7 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
     else:
         start = train_window
 
+    pyro.clear_param_store()
     results = []
     for t1 in range(start, stop, stride):
         t0 = 0 if train_window is None else t1 - train_window
@@ -138,7 +144,10 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
 
         # Train a forecaster on the training window.
         pyro.set_rng_seed(seed)
-        pyro.clear_param_store()
+        if forecaster_options_fn is not None:
+            forecaster_options = forecaster_options_fn(t0=t0, t1=t1, t2=t2)
+        if not forecaster_options.get("warm_start"):
+            pyro.clear_param_store()
         train_data = data[..., t0:t1, :]
         train_covariates = covariates[..., t0:t1, :]
         model = model_fn()
@@ -152,7 +161,6 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
         truth = data[..., t1:t2, :]
 
         # We aggressively garbage collect because Monte Carlo forecast are memory intensive.
-        pyro.clear_param_store()
         del forecaster
 
         # Evaluate the forecasts.
