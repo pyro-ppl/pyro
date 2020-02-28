@@ -216,7 +216,7 @@ class Forecaster(nn.Module):
         Defaults to True. Set to False for models with dynamic control flow.
     :param bool warm_start: Whether to warm start parameters from a smaller
         time window. Note this may introduce statistical leakage; usage is
-        recommended for model expoloration purposes only and should be disabled
+        recommended for model exploration purposes only and should be disabled
         when publishing metrics.
     :param int log_every: Number of training steps between logging messages.
     """
