@@ -571,8 +571,10 @@ def test_enum_recycling_plate(reuse_plate):
     assert_ok(model, max_plate_nesting=2)
 
 
-def test_enum_discrete_plates_dependency_ok():
+@pytest.mark.parametrize("enumerate_", [None, "parallel"])
+def test_enum_discrete_plates_dependency_ok(enumerate_):
 
+    @config_enumerate(default=enumerate_)
     def model():
         x_plate = pyro_plate("x_plate", 10, dim=-1)
         y_plate = pyro_plate("y_plate", 11, dim=-2)
