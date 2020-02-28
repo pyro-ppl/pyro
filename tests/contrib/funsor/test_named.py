@@ -508,6 +508,8 @@ def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
 @pytest.mark.parametrize("plate_dims", [
     (None, None, None, None),
     (-3, None, None, None),
+    (None, -3, None, None),
+    (-2, -3, None, None),
 ])
 def test_plate_dim_allocation_ok(plate_dims):
 
