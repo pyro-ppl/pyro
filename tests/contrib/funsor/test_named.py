@@ -525,3 +525,62 @@ def test_enum_recycling_plate():
         return a, b, c, d, e
 
     assert_ok(model, max_plate_nesting=2)
+
+
+def test_plate_dim_allocation_ok():
+
+    def model():
+        p = torch.tensor(0.5, requires_grad=True)
+        with pyro_plate("plate_outer", 5, dim=-3):
+            x = pyro.sample("x", dist.Bernoulli(p))
+            with pyro_plate("plate_inner_1", 6):
+                y = pyro.sample("y", dist.Bernoulli(p))
+                # allocated dim is rightmost available, i.e. -1
+                with pyro_plate("plate_inner_2", 7):
+                    z = pyro.sample("z", dist.Bernoulli(p))
+                    # allocated dim is next rightmost available, i.e. -2
+                    # since dim -3 is already allocated, use dim=-4
+                    with pyro_plate("plate_inner_3", 8):
+                        q = pyro.sample("q", dist.Bernoulli(p))
+
+        # check shapes
+        assert x.shape == (5, 1, 1)
+        assert y.shape == (5, 1, 6)
+        assert z.shape == (5, 7, 6)
+        assert q.shape == (8, 5, 7, 6)
+
+    assert_ok(model, max_plate_nesting=4)
+
+
+def test_enum_discrete_plates_dependency_ok():
+
+    def model():
+        x_plate = pyro_plate("x_plate", 10, dim=-1)
+        y_plate = pyro_plate("y_plate", 11, dim=-2)
+        pyro.sample("a", dist.Bernoulli(0.5))
+        with x_plate:
+            pyro.sample("b", dist.Bernoulli(0.5))
+        with y_plate:
+            # Note that it is difficult to check that c does not depend on b.
+            pyro.sample("c", dist.Bernoulli(0.5))
+        with x_plate, y_plate:
+            pyro.sample("d", dist.Bernoulli(0.5))
+
+    assert_ok(model, max_plate_nesting=2)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "parallel"])
+def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
+
+    def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
+
+        with pyro_plate("non_enum", 2):
+            a = pyro.sample("a", dist.Bernoulli(0.5), infer={'enumerate': None})
+
+        p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
+
+        with pyro_plate("enum_1", 3):
+            pyro.sample("b", dist.Bernoulli(p), infer={'enumerate': enumerate_})
+
+    assert_ok(model, max_plate_nesting=1)
