@@ -118,10 +118,11 @@ class TraceMessenger(OrigTraceMessenger):
     converting all distributions and values to Funsors as soon as they are available.
     """
     def _pyro_post_sample(self, msg):
+        import funsor; funsor.set_backend("torch")  # noqa: E702
         if "funsor_fn" not in msg["infer"]:
-            msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
+            msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
         if "funsor_value" not in msg["infer"]:
-            msg["infer"]["funsor_value"] = to_funsor(msg["value"])
+            msg["infer"]["funsor_value"] = to_funsor(msg["value"], funsor.reals(*msg["fn"].event_shape))
         return super()._pyro_post_sample(msg)
 
 

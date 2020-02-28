@@ -487,7 +487,43 @@ def test_markov_history(max_plate_nesting, history):
     assert_ok(model, max_plate_nesting=max_plate_nesting)
 
 
-@pytest.mark.xfail(reason="plate not supported yet")
+@pytest.mark.parametrize('enumerate_', [None, "parallel"])
+def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
+
+    def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
+
+        with pyro_plate("non_enum", 2):
+            a = pyro.sample("a", dist.Bernoulli(0.5), infer={'enumerate': None})
+
+        p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
+
+        with pyro_plate("enum_1", 3):
+            pyro.sample("b", dist.Bernoulli(p), infer={'enumerate': enumerate_})
+
+    assert_ok(model, max_plate_nesting=1)
+
+
+@pytest.mark.parametrize("plate_dims", [
+    (None, None, None, None),
+    (-3, None, None, None),
+])
+def test_plate_dim_allocation_ok(plate_dims):
+
+    def model():
+        p = torch.tensor(0.5, requires_grad=True)
+        with pyro_plate("plate_outer", 5, dim=plate_dims[0]):
+            pyro.sample("x", dist.Bernoulli(p))
+            with pyro_plate("plate_inner_1", 6, dim=plate_dims[1]):
+                pyro.sample("y", dist.Bernoulli(p))
+                with pyro_plate("plate_inner_2", 7, dim=plate_dims[2]):
+                    pyro.sample("z", dist.Bernoulli(p))
+                    with pyro_plate("plate_inner_3", 8, dim=plate_dims[3]):
+                        pyro.sample("q", dist.Bernoulli(p))
+
+    assert_ok(model, max_plate_nesting=4)
+
+
 def test_enum_recycling_plate():
 
     @config_enumerate
@@ -532,26 +568,6 @@ def test_enum_recycling_plate():
     assert_ok(model, max_plate_nesting=2)
 
 
-@pytest.mark.parametrize("plate_dims", [
-    (None, None, None, None),
-    (-3, None, None, None),
-])
-def test_plate_dim_allocation_ok(plate_dims):
-
-    def model():
-        p = torch.tensor(0.5, requires_grad=True)
-        with pyro_plate("plate_outer", 5, dim=plate_dims[0]):
-            pyro.sample("x", dist.Bernoulli(p))
-            with pyro_plate("plate_inner_1", 6, dim=plate_dims[1]):
-                pyro.sample("y", dist.Bernoulli(p))
-                with pyro_plate("plate_inner_2", 7, dim=plate_dims[2]):
-                    pyro.sample("z", dist.Bernoulli(p))
-                    with pyro_plate("plate_inner_3", 8, dim=plate_dims[3]):
-                        pyro.sample("q", dist.Bernoulli(p))
-
-    assert_ok(model, max_plate_nesting=4)
-
-
 def test_enum_discrete_plates_dependency_ok():
 
     def model():
@@ -567,20 +583,3 @@ def test_enum_discrete_plates_dependency_ok():
             pyro.sample("d", dist.Bernoulli(0.5))
 
     assert_ok(model, max_plate_nesting=2)
-
-
-@pytest.mark.parametrize('enumerate_', [None, "parallel"])
-def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
-
-    def model():
-        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
-
-        with pyro_plate("non_enum", 2):
-            a = pyro.sample("a", dist.Bernoulli(0.5), infer={'enumerate': None})
-
-        p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
-
-        with pyro_plate("enum_1", 3):
-            pyro.sample("b", dist.Bernoulli(p), infer={'enumerate': enumerate_})
-
-    assert_ok(model, max_plate_nesting=1)
