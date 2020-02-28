@@ -90,9 +90,6 @@ class EnumMessenger(GlobalNamedMessenger):
         if msg["infer"].get("num_samples", None) is not None:
             raise NotImplementedError("TODO implement multiple sampling")
 
-        # TODO reinstate these when we have enough to_funsor implementations
-        # msg["infer"]["funsor_fn"] = to_funsor(msg["fn"])
-        # size = msg["infer"]["funsor_fn"].inputs["value"].dtype
         raw_value = msg["fn"].enumerate_support(expand=msg.get("expand", False)).squeeze()
         size = raw_value.numel()
         msg["infer"]["funsor_value"] = funsor.Tensor(
@@ -104,13 +101,6 @@ class EnumMessenger(GlobalNamedMessenger):
         msg["value"] = to_data(msg["infer"]["funsor_value"])
         msg["done"] = True
 
-    def _pyro_post_sample(self, msg):
-        import funsor; funsor.set_backend("torch")  # noqa: E702
-        # for debugging only
-        if "funsor_log_prob" not in msg["infer"]:
-            msg["infer"]["funsor_log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]),
-                                                        funsor.reals())
-
 
 class TraceMessenger(OrigTraceMessenger):
     """
@@ -119,10 +109,15 @@ class TraceMessenger(OrigTraceMessenger):
     """
     def _pyro_post_sample(self, msg):
         import funsor; funsor.set_backend("torch")  # noqa: E702
-        if "funsor_fn" not in msg["infer"]:
-            msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
+        # TODO reinstate this when we have enough to_funsor implementations
+        # if "funsor_fn" not in msg["infer"]:
+        #     msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
+        if "funsor_log_prob" not in msg["infer"]:
+            msg["infer"]["funsor_log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]),
+                                                        funsor.reals())
         if "funsor_value" not in msg["infer"]:
-            msg["infer"]["funsor_value"] = to_funsor(msg["value"], funsor.reals(*msg["fn"].event_shape))
+            value_output = funsor.reals(*msg["fn"].event_shape)
+            msg["infer"]["funsor_value"] = to_funsor(msg["value"], value_output)
         return super()._pyro_post_sample(msg)
 
 

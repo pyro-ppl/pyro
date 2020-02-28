@@ -17,7 +17,7 @@ from pyro.ops.indexing import Vindex
 
 from pyro.contrib.funsor import to_data, to_funsor, markov
 from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger
+from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger, TraceMessenger
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
         with poutine.enum(first_available_dim=-max_plate_nesting - 1):
             model(**kwargs)
 
-    with toggle_backend("funsor"), poutine.trace() as tr_funsor:
+    with toggle_backend("funsor"), TraceMessenger() as tr_funsor:
         with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
             model(**kwargs)
 
