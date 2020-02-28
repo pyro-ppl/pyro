@@ -238,12 +238,14 @@ class GlobalNamedMessenger(NamedMessenger):
 
     def __enter__(self):
         if self._ref_count == 0:
-            self._prev_first_dim = _DIM_STACK.set_first_available_dim(self.first_available_dim)
+            if self.first_available_dim is not None:
+                self._prev_first_dim = _DIM_STACK.set_first_available_dim(self.first_available_dim)
             self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self._ref_count == 1:
-            _DIM_STACK.set_first_available_dim(self._prev_first_dim)
+            if self.first_available_dim is not None:
+                _DIM_STACK.set_first_available_dim(self._prev_first_dim)
             _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
         return super().__exit__(*args, **kwargs)

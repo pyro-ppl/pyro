@@ -62,32 +62,37 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
         with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
             model(**kwargs)
 
-    assert tr_pyro.trace.nodes.keys() == tr_funsor.trace.nodes.keys()
-    tr_pyro.trace.compute_log_prob()
-    tr_funsor.trace.compute_log_prob()
-    tr_pyro.trace.pack_tensors()
+    tr_pyro = poutine.util.prune_subsample_sites(tr_pyro.trace)
+    tr_funsor = poutine.util.prune_subsample_sites(tr_funsor.trace)
+
+    assert tr_pyro.nodes.keys() == tr_funsor.nodes.keys()
+    tr_pyro.compute_log_prob()
+    tr_funsor.compute_log_prob()
+    tr_pyro.pack_tensors()
 
     symbol_to_name = {
         node['infer']['_enumerate_symbol']: name
-        for name, node in tr_pyro.trace.nodes.items()
+        for name, node in tr_pyro.nodes.items()
         if node['type'] == 'sample' and not node['is_observed']
         and node['infer'].get('enumerate') == 'parallel'
     }
+    symbol_to_name.update({
+        symbol: name for name, symbol in tr_pyro.plate_to_symbol.items()})
 
     if _NAMED_TEST_STRENGTH >= 1 or _NAMED_TEST_STRENGTH == 0:
         try:
             # coarser check: number of elements and squeezed shapes
-            for name, pyro_node in tr_pyro.trace.nodes.items():
+            for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
                     continue
-                funsor_node = tr_funsor.trace.nodes[name]
+                funsor_node = tr_funsor.nodes[name]
                 assert pyro_node['packed']['log_prob'].numel() == funsor_node['log_prob'].numel()
                 assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
         except AssertionError:
-            for name, pyro_node in tr_pyro.trace.nodes.items():
+            for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
                     continue
-                funsor_node = tr_funsor.trace.nodes[name]
+                funsor_node = tr_funsor.nodes[name]
                 pyro_packed_shape = pyro_node['packed']['log_prob'].shape
                 funsor_packed_shape = funsor_node['log_prob'].squeeze().shape
                 if pyro_packed_shape != funsor_packed_shape:
@@ -100,18 +105,18 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     if _NAMED_TEST_STRENGTH >= 2 or _NAMED_TEST_STRENGTH == 0:
         try:
             # medium check: unordered packed shapes match
-            for name, pyro_node in tr_pyro.trace.nodes.items():
+            for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
                     continue
-                funsor_node = tr_funsor.trace.nodes[name]
+                funsor_node = tr_funsor.nodes[name]
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
                 funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
                 assert pyro_names == funsor_names
         except AssertionError:
-            for name, pyro_node in tr_pyro.trace.nodes.items():
+            for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
                     continue
-                funsor_node = tr_funsor.trace.nodes[name]
+                funsor_node = tr_funsor.nodes[name]
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
                 funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
                 if pyro_names != funsor_names:
@@ -124,17 +129,17 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     if _NAMED_TEST_STRENGTH >= 3 or _NAMED_TEST_STRENGTH == 0:
         try:
             # finer check: exact match with unpacked Pyro shapes
-            for name, pyro_node in tr_pyro.trace.nodes.items():
+            for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
                     continue
-                funsor_node = tr_funsor.trace.nodes[name]
+                funsor_node = tr_funsor.nodes[name]
                 assert pyro_node['log_prob'].shape == funsor_node['log_prob'].shape
                 assert pyro_node['value'].shape == funsor_node['value'].shape
         except AssertionError:
-            for name, pyro_node in tr_pyro.trace.nodes.items():
+            for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
                     continue
-                funsor_node = tr_funsor.trace.nodes[name]
+                funsor_node = tr_funsor.nodes[name]
                 pyro_shape = pyro_node['log_prob'].shape
                 funsor_shape = funsor_node['log_prob'].shape
                 if pyro_shape != funsor_shape:
@@ -527,27 +532,22 @@ def test_enum_recycling_plate():
     assert_ok(model, max_plate_nesting=2)
 
 
-def test_plate_dim_allocation_ok():
+@pytest.mark.parametrize("plate_dims", [
+    (None, None, None, None),
+    (-3, None, None, None),
+])
+def test_plate_dim_allocation_ok(plate_dims):
 
     def model():
         p = torch.tensor(0.5, requires_grad=True)
-        with pyro_plate("plate_outer", 5, dim=-3):
-            x = pyro.sample("x", dist.Bernoulli(p))
-            with pyro_plate("plate_inner_1", 6):
-                y = pyro.sample("y", dist.Bernoulli(p))
-                # allocated dim is rightmost available, i.e. -1
-                with pyro_plate("plate_inner_2", 7):
-                    z = pyro.sample("z", dist.Bernoulli(p))
-                    # allocated dim is next rightmost available, i.e. -2
-                    # since dim -3 is already allocated, use dim=-4
-                    with pyro_plate("plate_inner_3", 8):
-                        q = pyro.sample("q", dist.Bernoulli(p))
-
-        # check shapes
-        assert x.shape == (5, 1, 1)
-        assert y.shape == (5, 1, 6)
-        assert z.shape == (5, 7, 6)
-        assert q.shape == (8, 5, 7, 6)
+        with pyro_plate("plate_outer", 5, dim=plate_dims[0]):
+            pyro.sample("x", dist.Bernoulli(p))
+            with pyro_plate("plate_inner_1", 6, dim=plate_dims[1]):
+                pyro.sample("y", dist.Bernoulli(p))
+                with pyro_plate("plate_inner_2", 7, dim=plate_dims[2]):
+                    pyro.sample("z", dist.Bernoulli(p))
+                    with pyro_plate("plate_inner_3", 8, dim=plate_dims[3]):
+                        pyro.sample("q", dist.Bernoulli(p))
 
     assert_ok(model, max_plate_nesting=4)
 
