@@ -124,9 +124,6 @@ class NamedMessenger(ReentrantMessenger):
     @staticmethod
     def _pyro_to_data(msg):
 
-        if msg["done"]:
-            return
-
         funsor_value, = msg["args"]
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
         dim_type = msg.setdefault("dim_type", msg["kwargs"].pop("dim_type", DimType.LOCAL))
@@ -148,14 +145,10 @@ class NamedMessenger(ReentrantMessenger):
         if fresh_names:
             name_to_dim.update(_DIM_STACK.allocate_dims(fresh_names, dim_type=dim_type))
 
-        msg["value"] = msg["fn"](*msg["args"], name_to_dim=name_to_dim)
-        msg["done"] = True
+        msg["stop"] = True  # only need to run this once per to_data call
 
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_funsor(msg):
-
-        if msg["done"]:
-            return
 
         raw_value, output = msg["args"]
         dim_to_name = msg["kwargs"].setdefault("dim_to_name", OrderedDict())
@@ -174,8 +167,7 @@ class NamedMessenger(ReentrantMessenger):
                                 and dim in frame.dim_to_name
                                 and dim not in dim_to_name})
 
-        msg["value"] = msg["fn"](*msg["args"], dim_to_name=dim_to_name)
-        msg["done"] = True
+        msg["stop"] = True  # only need to run this once per to_funsor call
 
 
 class LocalNamedMessenger(NamedMessenger):
