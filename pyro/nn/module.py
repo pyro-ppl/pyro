@@ -377,8 +377,6 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     unconstrained_value = torch.nn.Parameter(unconstrained_value)
                     _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
                     _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
-                else:
-                    unconstrained_value = _unconstrain(constrained_value, constraint)
             else:  # Cannot determine supermodule and hence cannot compute fullname.
                 unconstrained_value = _unconstrain(constrained_value, constraint)
             super().__setattr__(name + "_unconstrained", unconstrained_value)
