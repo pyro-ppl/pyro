@@ -572,19 +572,21 @@ def test_enum_recycling_plate(reuse_plate):
 
 
 @pytest.mark.parametrize("enumerate_", [None, "parallel"])
-def test_enum_discrete_plates_dependency_ok(enumerate_):
+@pytest.mark.parametrize("reuse_plate", [False, True])
+def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
 
     @config_enumerate(default=enumerate_)
     def model():
         x_plate = pyro_plate("x_plate", 10, dim=-1)
         y_plate = pyro_plate("y_plate", 11, dim=-2)
+        q = pyro.param("q", torch.tensor([[0.5, 0.5], [0.5, 0.5]]))
         pyro.sample("a", dist.Bernoulli(0.5))
         with x_plate:
-            pyro.sample("b", dist.Bernoulli(0.5))
+            b = pyro.sample("b", dist.Bernoulli(0.5)).long()
         with y_plate:
             # Note that it is difficult to check that c does not depend on b.
-            pyro.sample("c", dist.Bernoulli(0.5))
+            c = pyro.sample("c", dist.Bernoulli(0.5)).long()
         with x_plate, y_plate:
-            pyro.sample("d", dist.Bernoulli(0.5))
+            pyro.sample("d", dist.Bernoulli(Vindex(q)[c, b] if reuse_plate else 0.5))
 
     assert_ok(model, max_plate_nesting=2)

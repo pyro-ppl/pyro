@@ -147,7 +147,7 @@ class NamedMessenger(ReentrantMessenger):
 
         funsor_value, = msg["args"]
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
-        dim_type = msg["kwargs"].pop("dim_type", DimType.LOCAL)
+        dim_type = msg["kwargs"].setdefault("dim_type", DimType.LOCAL)
 
         # interpret all names/dims as requests since we only run this function once
         for name in funsor_value.inputs:
@@ -165,7 +165,7 @@ class NamedMessenger(ReentrantMessenger):
 
         raw_value, output = msg["args"]
         dim_to_name = msg["kwargs"].setdefault("dim_to_name", OrderedDict())
-        dim_type = msg["kwargs"].pop("dim_type", DimType.LOCAL)
+        dim_type = msg["kwargs"].setdefault("dim_type", DimType.LOCAL)
 
         event_dim = len(output.shape)
         batch_dim = len(raw_value.shape) - event_dim
