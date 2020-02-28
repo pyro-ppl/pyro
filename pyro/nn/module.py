@@ -369,8 +369,8 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             self._pyro_params[name] = constraint, event_dim
             if self._pyro_context.active:
                 fullname = self._pyro_get_fullname(name)
-                constrained_value = pyro.param(fullname, constrained_value,
-                                               constraint=constraint, event_dim=event_dim)
+                pyro.param(fullname, constrained_value, constraint=constraint, event_dim=event_dim)
+                constrained_value = pyro.param(fullname)
                 unconstrained_value = constrained_value.unconstrained()
                 if not isinstance(unconstrained_value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
