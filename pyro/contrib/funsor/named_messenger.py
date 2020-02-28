@@ -9,13 +9,21 @@ from pyro.poutine.reentrant_messenger import ReentrantMessenger
 
 
 # name_to_dim : dict, dim_to_name : dict, parents : List, iter_parents : List
-StackFrame = namedtuple('StackFrame', [
-    'name_to_dim',
-    'dim_to_name',
-    'parents',
-    'iter_parents',
-    'keep',
-])
+class StackFrame(namedtuple('StackFrame', [
+            'name_to_dim',
+            'dim_to_name',
+            'parents',
+            'iter_parents',
+            'keep',
+        ])):
+
+    def read(self, name, dim):
+        return self.dim_to_name.get(dim, name), self.name_to_dim.get(name, dim)
+
+    def write(self, name, dim):
+        assert name is not None and dim is not None
+        self.dim_to_name[dim] = name
+        self.name_to_dim[name] = dim
 
 
 class DimType(Enum):
@@ -25,7 +33,8 @@ class DimType(Enum):
     VISIBLE = 2
 
 
-DimRequest = namedtuple('DimRequest', ['dim'])
+DimRequest = namedtuple('DimRequest', ['dim', 'dim_type'], defaults=(None, DimType.LOCAL))
+NameRequest = namedtuple('NameRequest', ['name', 'dim_type'], defaults=(None, DimType.LOCAL))
 
 
 class DimStack:
@@ -70,50 +79,52 @@ class DimStack:
         for name in frozenset(names).intersection(global_frame.name_to_dim):
             global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
 
-    def _gendim(self, name, fresh_dim_to_name, dim_type=DimType.LOCAL):
-        """generate a unique fresh positional dimension using the allocator state"""
-        dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
-        dim = -1 if dim is None else dim
-        frames = [self.current_frame, self.global_frame] + \
-            self.current_frame.parents + self.current_frame.iter_parents
-        while dim in fresh_dim_to_name or any(dim in p.dim_to_name for p in frames):
-            dim -= 1
-        if dim < self.MAX_DIM or (dim_type == DimType.VISIBLE and dim <= self._first_available_dim):
-            raise ValueError(f"Ran out of free dims during allocation for {name}")
-        return dim
+    def _gendim(self, name, dim, dim_type=DimType.LOCAL):
+        assert (name is None) ^ (dim is None)
 
-    def _gensym(self, dim, fresh_name_to_dim, dim_type=DimType.LOCAL):
-        """deterministically generate a name following funsor.pyro.convert convention"""
-        name = f"_pyro_dim_{-dim}"  # XXX -dim-1? dim? check this
-        assert dim < 0 and name not in fresh_name_to_dim
-        return name
+        if name is None:
+            name = f"_pyro_dim_{-dim}"
 
-    def allocate_dims(self, fresh_names, dim_type=DimType.LOCAL):
+        elif dim is None:
+            dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
+            dim = -1 if dim is None else dim
+            conflict_frames = [self.current_frame, self.global_frame] + \
+                self.current_frame.parents + self.current_frame.iter_parents
+            while any(dim in p.dim_to_name for p in conflict_frames):
+                dim -= 1
+            if dim < self.MAX_DIM or (dim_type == DimType.VISIBLE and dim <= self._first_available_dim):
+                raise ValueError(f"Ran out of free dims during allocation for {name}")
 
-        fresh_name_to_dim = OrderedDict()
-        fresh_dim_to_name = OrderedDict()
+        return name, dim
 
-        for name in fresh_names:
+    def request(self, name, dim):
+        assert isinstance(name, NameRequest) ^ isinstance(dim, DimRequest)
+        if isinstance(dim, DimRequest):
+            dim, dim_type = dim.dim, dim.dim_type
+        elif isinstance(name, NameRequest):
+            name, dim_type = name.name, name.dim_type
 
-            # allocation
-            dim = None
-            for parent_frame in self.current_frame.parents + [self.global_frame]:
-                dim = parent_frame.name_to_dim.get(name, dim)
+        read_frames = [self.global_frame] if dim_type != DimType.LOCAL else \
+            [self.current_frame] + self.current_frame.parents + self.current_frame.iter_parents
 
-            if dim is None:
-                dim = self._gendim(name, fresh_dim_to_name, dim_type=dim_type)
+        # read dimensions
+        for frame in read_frames:
+            name, dim = frame.read(name, dim)
+            if name is not None and dim is not None:
+                break
 
-            fresh_dim_to_name[dim] = name
-            fresh_name_to_dim[name] = dim
+        # generate fresh values
+        if name is None or dim is None:
+            name, dim = self._gendim(name, dim, dim_type=dim_type)
 
-        # copy fresh variables down the stack
-        frames = [self.global_frame] if dim_type != DimType.LOCAL else [self.current_frame] + \
-            (self.current_frame.parents if self.current_frame.keep else [])
-        for frame in frames:
-            frame.name_to_dim.update(fresh_name_to_dim)
-            frame.dim_to_name.update(fresh_dim_to_name)
+            write_frames = [self.global_frame] if dim_type != DimType.LOCAL else \
+                [self.current_frame] + (self.current_frame.parents if self.current_frame.keep else [])
 
-        return fresh_name_to_dim
+            # store the fresh dimension
+            for frame in write_frames:
+                frame.write(name, dim)
+
+        return name, dim
 
 
 _DIM_STACK = DimStack()  # only one global instance
@@ -121,29 +132,21 @@ _DIM_STACK = DimStack()  # only one global instance
 
 class NamedMessenger(ReentrantMessenger):
 
-    @staticmethod
+    @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_data(msg):
 
         funsor_value, = msg["args"]
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
-        dim_type = msg.setdefault("dim_type", msg["kwargs"].pop("dim_type", DimType.LOCAL))
+        dim_type = msg["kwargs"].pop("dim_type", DimType.LOCAL)
 
-        # handling non-fresh vars: just look at the deepest context they appear in
-        for frame in [_DIM_STACK.current_frame] + \
-                _DIM_STACK.current_frame.parents + _DIM_STACK.current_frame.iter_parents:
-            name_to_dim.update({name: frame.name_to_dim[name]
-                                for name in funsor_value.inputs
-                                if name in frame.name_to_dim
-                                and name not in name_to_dim})
+        # interpret all names/dims as requests since we only run this function once
+        for name in funsor_value.inputs:
+            dim = name_to_dim.get(name, None)
+            name_to_dim[name] = dim if isinstance(dim, DimRequest) else DimRequest(dim, dim_type)
 
-        # handling fresh vars: pass responsibility for allocation up the _DIM_STACK
-        fresh_names = tuple(name for name in funsor_value.inputs
-                            if name not in name_to_dim
-                            and name not in _DIM_STACK.current_frame.name_to_dim)
-
-        # allocate fresh dimensions in the parent frame
-        if fresh_names:
-            name_to_dim.update(_DIM_STACK.allocate_dims(fresh_names, dim_type=dim_type))
+        # read dimensions and allocate fresh dimensions as necessary
+        for name, dim_request in name_to_dim.items():
+            name_to_dim[name] = _DIM_STACK.request(name, dim_request)[1]
 
         msg["stop"] = True  # only need to run this once per to_data call
 
@@ -152,20 +155,20 @@ class NamedMessenger(ReentrantMessenger):
 
         raw_value, output = msg["args"]
         dim_to_name = msg["kwargs"].setdefault("dim_to_name", OrderedDict())
-        dim_type = msg.setdefault("dim_type", msg["kwargs"].pop("dim_type", DimType.LOCAL))  # noqa: F841
+        dim_type = msg["kwargs"].pop("dim_type", DimType.LOCAL)
 
         event_dim = len(output.shape)
         batch_dim = len(raw_value.shape) - event_dim
 
-        # handling non-fresh dims: just look at the deepest context they appear in
-        # TODO support fresh dims
-        for frame in [_DIM_STACK.current_frame] + \
-                _DIM_STACK.current_frame.parents + _DIM_STACK.current_frame.iter_parents:
-            dim_to_name.update({dim: frame.dim_to_name[dim]
-                                for dim in range(-batch_dim, 0)
-                                if raw_value.shape[dim - event_dim] > 1
-                                and dim in frame.dim_to_name
-                                and dim not in dim_to_name})
+        # interpret all names/dims as requests since we only run this function once
+        for dim in range(-batch_dim, 0):
+            if raw_value.shape[dim - event_dim] == 1:
+                continue
+            name = dim_to_name.get(dim, None)
+            dim_to_name[dim] = name if isinstance(name, NameRequest) else NameRequest(name, dim_type)
+
+        for dim, name_request in dim_to_name.items():
+            dim_to_name[dim] = _DIM_STACK.request(name_request, dim)[0]
 
         msg["stop"] = True  # only need to run this once per to_funsor call
 
@@ -217,7 +220,8 @@ class LocalNamedMessenger(NamedMessenger):
             frame = StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
                                parents=[], iter_parents=[], keep=self.keep)
 
-        frame.iter_parents[:] = self._iter_parents[:] + [_DIM_STACK.global_frame]
+        # TODO make iter_parents and parents into tuples
+        frame.iter_parents[:] = self._iter_parents[:]
         if self.history > 0:
             frame.parents[:] = reversed(_DIM_STACK._stack[len(_DIM_STACK._stack) - self.history:])
 
