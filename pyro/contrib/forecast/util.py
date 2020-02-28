@@ -76,8 +76,7 @@ class PrefixWarmStartMessenger(Messenger):
         assert new.shape[dim + 1:] == old.shape[dim + 1:]
         split = old.size(dim)
         index = (slice(None),) * dim + (slice(split, None),)
-        print("{}.dim = {}".format(name, dim))
-        new = torch.cat([new, old[index]], dim=dim)
+        new = torch.cat([old, new[index]], dim=dim)
         store[name] = t(new)
 
 
