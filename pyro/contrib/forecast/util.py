@@ -101,11 +101,16 @@ class PrefixConditionMessenger(Messenger):
 # replace by much simpler Funsor logic.
 
 UNIVARIATE_DISTS = {
+    dist.Bernoulli: ("logits",),
     dist.Cauchy: ("loc", "scale"),
+    dist.GammaPoisson: ("concentration", "rate"),
     dist.Laplace: ("loc", "scale"),
+    dist.LogNormal: ("loc", "scale"),
     dist.Normal: ("loc", "scale"),
+    dist.Poisson: ("rate",),
     dist.Stable: ("stability", "skew", "scale", "loc"),
     dist.StudentT: ("df", "loc", "scale"),
+    dist.ZeroInflatedPoisson: ("gate", "rate"),
 }
 
 
@@ -133,6 +138,12 @@ def prefix_condition(d, data):
 def _(d, data):
     base_dist = prefix_condition(d.base_dist, data)
     return base_dist.to_event(d.reinterpreted_batch_ndims)
+
+
+@prefix_condition.register(dist.FoldedDistribution)
+def _(d, data):
+    base_dist = prefix_condition(d.base_dist, data)
+    return dist.FoldedDistribution(base_dist)
 
 
 def _prefix_condition_univariate(d, data):
@@ -170,7 +181,7 @@ def reshape_batch(d, batch_shape):
     :returns: A distribution with the same type but given batch shape.
     :rtype: ~pyro.distributions.Distribution
     """
-    raise NotImplementedError
+    raise NotImplementedError("reshape_batch() does not suport {}".format(type(d)))
 
 
 @reshape_batch.register(dist.Independent)
@@ -178,6 +189,12 @@ def _(d, batch_shape):
     base_shape = batch_shape + d.event_shape[:d.reinterpreted_batch_ndims]
     base_dist = reshape_batch(d.base_dist, base_shape)
     return base_dist.to_event(d.reinterpreted_batch_ndims)
+
+
+@reshape_batch.register(dist.FoldedDistribution)
+def _(d, batch_shape):
+    base_dist = reshape_batch(d.base_dist, batch_shape)
+    return dist.FoldedDistribution(base_dist)
 
 
 def _reshape_batch_univariate(d, batch_shape):
