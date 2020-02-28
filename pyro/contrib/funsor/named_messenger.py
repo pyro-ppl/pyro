@@ -8,7 +8,7 @@ from enum import Enum
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 
 
-# name_to_dim : dict, dim_to_name : dict, parents : List, iter_parents : List
+# name_to_dim : dict, dim_to_name : dict, parents : tuple, iter_parents : tuple
 class StackFrame(namedtuple('StackFrame', [
             'name_to_dim',
             'dim_to_name',
@@ -47,7 +47,7 @@ class DimStack:
     def __init__(self):
         self._stack = [StackFrame(
             name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
-            parents=[], iter_parents=[], keep=False,
+            parents=(), iter_parents=(), keep=False,
         )]
         self._first_available_dim = -1
 
@@ -88,7 +88,7 @@ class DimStack:
         elif dim is None:
             dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
             dim = -1 if dim is None else dim
-            conflict_frames = [self.current_frame, self.global_frame] + \
+            conflict_frames = (self.current_frame, self.global_frame) + \
                 self.current_frame.parents + self.current_frame.iter_parents
             while any(dim in p.dim_to_name for p in conflict_frames):
                 dim -= 1
@@ -104,8 +104,8 @@ class DimStack:
         elif isinstance(name, NameRequest):
             name, dim_type = name.name, name.dim_type
 
-        read_frames = [self.global_frame] if dim_type != DimType.LOCAL else \
-            [self.current_frame] + self.current_frame.parents + self.current_frame.iter_parents
+        read_frames = (self.global_frame,) if dim_type != DimType.LOCAL else \
+            (self.current_frame,) + self.current_frame.parents + self.current_frame.iter_parents
 
         # read dimensions
         for frame in read_frames:
@@ -117,8 +117,8 @@ class DimStack:
         if name is None or dim is None:
             name, dim = self._gendim(name, dim, dim_type=dim_type)
 
-            write_frames = [self.global_frame] if dim_type != DimType.LOCAL else \
-                [self.current_frame] + (self.current_frame.parents if self.current_frame.keep else [])
+            write_frames = (self.global_frame,) if dim_type != DimType.LOCAL else \
+                (self.current_frame,) + (self.current_frame.parents if self.current_frame.keep else ())
 
             # store the fresh dimension
             for frame in write_frames:
@@ -190,7 +190,7 @@ class LocalNamedMessenger(NamedMessenger):
         self.keep = keep
         self._iterable = None
         self._saved_frames = []
-        self._iter_parents = []
+        self._iter_parents = ()
         super().__init__()
 
     def generator(self, iterable):
@@ -199,11 +199,11 @@ class LocalNamedMessenger(NamedMessenger):
 
     def _get_iter_parents(self, frame):
         iter_parents = [frame]
-        frontier = [frame]
+        frontier = (frame,)
         while frontier:
-            frontier = sum([p.iter_parents for p in frontier], [])
+            frontier = sum([p.iter_parents for p in frontier], ())
             iter_parents += frontier
-        return iter_parents
+        return tuple(iter_parents)
 
     def __iter__(self):
         assert self._iterable is not None
@@ -215,15 +215,17 @@ class LocalNamedMessenger(NamedMessenger):
 
     def __enter__(self):
         if self.keep and self._saved_frames:
-            frame = self._saved_frames.pop()
+            saved_frame = self._saved_frames.pop()
+            name_to_dim, dim_to_name = saved_frame.name_to_dim, saved_frame.dim_to_name
         else:
-            frame = StackFrame(name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
-                               parents=[], iter_parents=[], keep=self.keep)
+            name_to_dim, dim_to_name = OrderedDict(), OrderedDict()
 
-        # TODO make iter_parents and parents into tuples
-        frame.iter_parents[:] = self._iter_parents[:]
-        if self.history > 0:
-            frame.parents[:] = reversed(_DIM_STACK._stack[len(_DIM_STACK._stack) - self.history:])
+        frame = StackFrame(
+            name_to_dim=name_to_dim, dim_to_name=dim_to_name,
+            parents=tuple(reversed(_DIM_STACK._stack[len(_DIM_STACK._stack) - self.history:])),
+            iter_parents=tuple(self._iter_parents),
+            keep=self.keep
+        )
 
         _DIM_STACK.push(frame)
         return super().__enter__()
@@ -231,9 +233,11 @@ class LocalNamedMessenger(NamedMessenger):
     def __exit__(self, *args, **kwargs):
         if self.keep:
             # don't keep around references to other frames
-            saved_frame = _DIM_STACK.pop()
-            saved_frame.parents[:] = []
-            saved_frame.iter_parents[:] = []
+            old_frame = _DIM_STACK.pop()
+            saved_frame = StackFrame(
+                name_to_dim=old_frame.name_to_dim, dim_to_name=old_frame.dim_to_name,
+                parents=(), iter_parents=(), keep=self.keep
+            )
             self._saved_frames.append(saved_frame)
         else:
             _DIM_STACK.pop()
