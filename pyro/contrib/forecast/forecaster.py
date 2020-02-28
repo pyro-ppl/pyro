@@ -240,10 +240,6 @@ class Forecaster(nn.Module):
             guide = AutoNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale,
                                create_plates=create_plates)
         self.guide = guide
-        optim = DCTAdam({"lr": learning_rate, "betas": betas,
-                         "lrd": learning_rate_decay ** (1 / num_steps)})
-        elbo = Trace_ELBO(num_particles=num_particles,
-                          vectorize_particles=vectorize_particles)
 
         # Initialize.
         if warm_start:
@@ -252,17 +248,21 @@ class Forecaster(nn.Module):
         if dct_gradients:
             model = MarkDCTParamMessenger("time")(model)
             guide = MarkDCTParamMessenger("time")(guide)
+        elbo = Trace_ELBO(num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
         elbo._guess_max_plate_nesting(model, guide, (data, covariates), {})
         elbo.max_plate_nesting = max(elbo.max_plate_nesting, 1)  # force a time plate
 
-        svi = SVI(self.model, self.guide, optim, elbo)
-
         losses = []
-        for step in range(num_steps):
-            loss = svi.step(data, covariates) / data.numel()
-            if log_every and step % log_every == 0:
-                logger.info("step {: >4d} loss = {:0.6g}".format(step, loss))
-            losses.append(loss)
+        if num_steps:
+            optim = DCTAdam({"lr": learning_rate, "betas": betas,
+                             "lrd": learning_rate_decay ** (1 / num_steps)})
+            svi = SVI(self.model, self.guide, optim, elbo)
+            for step in range(num_steps):
+                loss = svi.step(data, covariates) / data.numel()
+                if log_every and step % log_every == 0:
+                    logger.info("step {: >4d} loss = {:0.6g}".format(step, loss))
+                losses.append(loss)
 
         self.max_plate_nesting = elbo.max_plate_nesting
         self.losses = losses

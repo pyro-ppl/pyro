@@ -97,3 +97,22 @@ def test_poisson(train_window, min_train_window, test_window, min_test_window, s
         for window in windows:
             assert name in window
             assert 0 < window[name] < math.inf
+
+
+def test_custom_warm_start():
+    duration = 30
+    obs_dim = 2
+    covariates = torch.zeros(duration, 0)
+    data = torch.randn(duration, obs_dim) + 4
+    min_train_window = 10
+
+    def forecaster_options(t0, t1, t2):
+        if t1 == min_train_window:
+            return {"num_steps": 2, "warm_start": True}
+        else:
+            return {"num_steps": 0, "warm_start": True}
+
+    backtest(data, covariates, Model,
+             min_train_window=min_train_window,
+             test_window=10,
+             forecaster_options=forecaster_options)
