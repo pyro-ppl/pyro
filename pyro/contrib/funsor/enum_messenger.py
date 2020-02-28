@@ -13,7 +13,7 @@ from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
-from pyro.contrib.funsor.named_messenger import DimType, GlobalNamedMessenger, LocalNamedMessenger
+from pyro.contrib.funsor.named_messenger import DimRequest, DimType, GlobalNamedMessenger, LocalNamedMessenger
 
 
 class MarkovMessenger(LocalNamedMessenger):
@@ -45,7 +45,7 @@ class IndepMessenger(GlobalNamedMessenger):
 
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
-        name_to_dim = OrderedDict([(self.name, self.dim)]) if self.dim is not None else OrderedDict()
+        name_to_dim = OrderedDict([(self.name, DimRequest(dim=self.dim))]) if self.dim is not None else OrderedDict()
         indices = to_data(self._indices, name_to_dim=name_to_dim, dim_type=DimType.VISIBLE)
         # extract the dimension allocated by to_data to match plate's current behavior
         self.dim, self.indices = -indices.dim(), indices.squeeze()

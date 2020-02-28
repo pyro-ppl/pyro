@@ -25,6 +25,9 @@ class DimType(Enum):
     VISIBLE = 2
 
 
+DimRequest = namedtuple('DimRequest', ['dim'])
+
+
 class DimStack:
     """
     Single piece of global state to keep track of the mapping between names and dimensions.
@@ -121,6 +124,9 @@ class NamedMessenger(ReentrantMessenger):
     @staticmethod
     def _pyro_to_data(msg):
 
+        if msg["done"]:
+            return
+
         funsor_value, = msg["args"]
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
         dim_type = msg.setdefault("dim_type", msg["kwargs"].pop("dim_type", DimType.LOCAL))
@@ -142,8 +148,14 @@ class NamedMessenger(ReentrantMessenger):
         if fresh_names:
             name_to_dim.update(_DIM_STACK.allocate_dims(fresh_names, dim_type=dim_type))
 
+        msg["value"] = msg["fn"](*msg["args"], name_to_dim=name_to_dim)
+        msg["done"] = True
+
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_funsor(msg):
+
+        if msg["done"]:
+            return
 
         raw_value, output = msg["args"]
         dim_to_name = msg["kwargs"].setdefault("dim_to_name", OrderedDict())
@@ -161,6 +173,9 @@ class NamedMessenger(ReentrantMessenger):
                                 if raw_value.shape[dim - event_dim] > 1
                                 and dim in frame.dim_to_name
                                 and dim not in dim_to_name})
+
+        msg["value"] = msg["fn"](*msg["args"], dim_to_name=dim_to_name)
+        msg["done"] = True
 
 
 class LocalNamedMessenger(NamedMessenger):
