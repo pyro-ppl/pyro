@@ -150,8 +150,7 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
 
         # Train a forecaster on the training window.
         pyro.set_rng_seed(seed)
-        if forecaster_options_fn is not None:
-            forecaster_options = forecaster_options_fn(t0=t0, t1=t1, t2=t2)
+        forecaster_options = forecaster_options_fn(t0=t0, t1=t1, t2=t2)
         if not forecaster_options.get("warm_start"):
             pyro.clear_param_store()
         train_data = data[..., t0:t1, :]
