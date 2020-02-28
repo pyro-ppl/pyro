@@ -116,7 +116,7 @@ class TraceMessenger(OrigTraceMessenger):
             msg["infer"]["funsor_log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]),
                                                         funsor.reals())
         if "funsor_value" not in msg["infer"]:
-            value_output = funsor.reals(*msg["fn"].event_shape)
+            value_output = funsor.reals(*getattr(msg["fn"], "event_shape", ()))
             msg["infer"]["funsor_value"] = to_funsor(msg["value"], value_output)
         return super()._pyro_post_sample(msg)
 

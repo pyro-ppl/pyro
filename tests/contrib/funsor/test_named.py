@@ -592,3 +592,46 @@ def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
             pyro.sample("d", dist.Bernoulli(Vindex(q)[b] if reuse_plate else 0.5))
 
     assert_ok(model, max_plate_nesting=2)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "parallel"])
+def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_):
+
+    @config_enumerate(default=enumerate_)
+    def model():
+        x_plate = pyro_plate("x_plate", 5, dim=-1)
+        y_plate = pyro_plate("y_plate", 6, dim=-2)
+        with pyro_plate("num_particles", 50, dim=-3):
+            with x_plate:
+                b = pyro.sample("b", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
+            with y_plate:
+                c = pyro.sample("c", dist.Bernoulli(0.5))
+            with x_plate, y_plate:
+                d = pyro.sample("d", dist.Bernoulli(b))
+
+        # check shapes
+        if enumerate_ == "parallel":
+            assert b.shape == (50, 1, 5)
+            assert c.shape == (2, 1, 1, 1)
+            assert d.shape == (2, 1, 1, 1, 1)
+        else:
+            assert b.shape == (50, 1, 5)
+            assert c.shape == (50, 6, 1)
+            assert d.shape == (50, 6, 5)
+
+    assert_ok(model, max_plate_nesting=3)
+
+
+@pytest.mark.parametrize('enumerate_', [None, "parallel"])
+def test_enum_discrete_iplate_plate_dependency_ok(enumerate_):
+
+    def model():
+        pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
+        inner_plate = pyro_plate("plate", 10)
+        for i in pyro.plate("iplate", 3):  # use regular sequential plate here...
+            pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
+            with inner_plate:
+                pyro.sample("x_{}".format(i), dist.Bernoulli(0.5),
+                            infer={'enumerate': enumerate_})
+
+    assert_ok(model, max_plate_nesting=1)
