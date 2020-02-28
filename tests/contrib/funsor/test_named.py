@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 _ENUM_BACKEND_VERSION = "pyro"
 
-# TODO remove this when all tests pass
-_NAMED_TEST_STRENGTH = int(os.environ.get("NAMED_TEST_STRENGTH", 0))
+# default to 2, which checks that packed but not unpacked shapes match
+_NAMED_TEST_STRENGTH = int(os.environ.get("NAMED_TEST_STRENGTH", 2))
 
 
 @contextlib.contextmanager
@@ -79,7 +79,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     symbol_to_name.update({
         symbol: name for name, symbol in tr_pyro.plate_to_symbol.items()})
 
-    if _NAMED_TEST_STRENGTH >= 1 or _NAMED_TEST_STRENGTH == 0:
+    if _NAMED_TEST_STRENGTH >= 1:
         try:
             # coarser check: number of elements and squeezed shapes
             for name, pyro_node in tr_pyro.nodes.items():
@@ -103,7 +103,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 print(err_str, f"Pyro: {pyro_packed_shape} vs Funsor: {funsor_packed_shape}")
             raise
 
-    if _NAMED_TEST_STRENGTH >= 2 or _NAMED_TEST_STRENGTH == 0:
+    if _NAMED_TEST_STRENGTH >= 2:
         try:
             # medium check: unordered packed shapes match
             for name, pyro_node in tr_pyro.nodes.items():
@@ -127,7 +127,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 print(err_str, f"Pyro: {sorted(tuple(pyro_names))} vs Funsor: {sorted(tuple(funsor_names))}")
             raise
 
-    if _NAMED_TEST_STRENGTH >= 3 or _NAMED_TEST_STRENGTH == 0:
+    if _NAMED_TEST_STRENGTH >= 3:
         try:
             # finer check: exact match with unpacked Pyro shapes
             for name, pyro_node in tr_pyro.nodes.items():
