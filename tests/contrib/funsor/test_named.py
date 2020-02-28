@@ -88,6 +88,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 funsor_node = tr_funsor.nodes[name]
                 assert pyro_node['packed']['log_prob'].numel() == funsor_node['log_prob'].numel()
                 assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
+                assert frozenset(pyro_node['cond_indep_stack']) == frozenset(funsor_node['cond_indep_stack'])
         except AssertionError:
             for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
@@ -524,15 +525,16 @@ def test_plate_dim_allocation_ok(plate_dims):
     assert_ok(model, max_plate_nesting=4)
 
 
-def test_enum_recycling_plate():
+@pytest.mark.parametrize("reuse_plate", [False, True])
+def test_enum_recycling_plate(reuse_plate):
 
     @config_enumerate
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.tensor([0.5, 0.5]))
-        plate_x = pyro_plate("plate_x", 2, dim=-1)
-        plate_y = pyro_plate("plate_y", 3, dim=-1)
-        plate_z = pyro_plate("plate_z", 4, dim=-2)
+        plate_x = pyro_plate("plate_x", 4, dim=-1)
+        plate_y = pyro_plate("plate_y", 5, dim=-1)
+        plate_z = pyro_plate("plate_z", 6, dim=-2)
 
         a = pyro.sample("a", dist.Bernoulli(q[0])).long()
         w = 0
@@ -558,7 +560,8 @@ def test_enum_recycling_plate():
                 z = pyro.sample("z_{}".format(i), dist.Categorical(p[z]))
 
         with plate_x, plate_z:
-            e = pyro.sample("e", dist.Bernoulli(q[b])).long()
+            # this part is tricky: how do we know to preserve b's dimension?
+            e = pyro.sample("e", dist.Bernoulli(q[b if reuse_plate else a])).long()
             xz = 0
             for i in pyro_markov(range(9)):
                 xz = pyro.sample("xz_{}".format(i), dist.Categorical(p[xz]))

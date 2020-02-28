@@ -18,12 +18,20 @@ class StackFrame(namedtuple('StackFrame', [
         ])):
 
     def read(self, name, dim):
-        return self.dim_to_name.get(dim, name), self.name_to_dim.get(name, dim)
+        found_name = self.dim_to_name.get(dim, name)
+        found_dim = self.name_to_dim.get(name, dim)
+        found = name in self.name_to_dim or dim in self.dim_to_name
+        return found_name, found_dim, found
 
     def write(self, name, dim):
         assert name is not None and dim is not None
         self.dim_to_name[dim] = name
         self.name_to_dim[name] = dim
+
+    def free(self, name, dim):
+        self.dim_to_name.pop(dim, None)
+        self.name_to_dim.pop(name, None)
+        return name, dim
 
 
 class DimType(Enum):
@@ -73,29 +81,31 @@ class DimStack:
     def global_frame(self):
         return self._stack[0]
 
-    def free_globals(self, names=None):
-        global_frame = self.global_frame
-        names = frozenset(global_frame.name_to_dim.keys()) if names is None else names
-        for name in frozenset(names).intersection(global_frame.name_to_dim):
-            global_frame.dim_to_name.pop(global_frame.name_to_dim.pop(name))
+    def _gendim(self, name_request, dim_request):
+        assert isinstance(name_request, NameRequest) and isinstance(dim_request, DimRequest)
+        dim_type = dim_request.dim_type
 
-    def _gendim(self, name, dim, dim_type=DimType.LOCAL):
-        assert (name is None) ^ (dim is None)
+        if name_request.name is None:
+            fresh_name = f"_pyro_dim_{-dim_request.dim}"
+        else:
+            fresh_name = name_request.name
 
-        if name is None:
-            name = f"_pyro_dim_{-dim}"
+        conflict_frames = (self.current_frame, self.global_frame) + \
+            self.current_frame.parents + self.current_frame.iter_parents
+        if dim_request.dim is None:
+            fresh_dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
+            fresh_dim = -1 if fresh_dim is None else fresh_dim
+            while any(fresh_dim in p.dim_to_name for p in conflict_frames):
+                fresh_dim -= 1
+        else:
+            fresh_dim = dim_request.dim
 
-        elif dim is None:
-            dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
-            dim = -1 if dim is None else dim
-            conflict_frames = (self.current_frame, self.global_frame) + \
-                self.current_frame.parents + self.current_frame.iter_parents
-            while any(dim in p.dim_to_name for p in conflict_frames):
-                dim -= 1
-            if dim < self.MAX_DIM or (dim_type == DimType.VISIBLE and dim <= self._first_available_dim):
-                raise ValueError(f"Ran out of free dims during allocation for {name}")
+        if fresh_dim < self.MAX_DIM or \
+                any(fresh_dim in p.dim_to_name for p in conflict_frames) or \
+                (dim_type == DimType.VISIBLE and fresh_dim <= self._first_available_dim):
+            raise ValueError(f"Ran out of free dims during allocation for {fresh_name}")
 
-        return name, dim
+        return fresh_name, fresh_dim
 
     def request(self, name, dim):
         assert isinstance(name, NameRequest) ^ isinstance(dim, DimRequest)
@@ -105,17 +115,17 @@ class DimStack:
             name, dim_type = name.name, name.dim_type
 
         read_frames = (self.global_frame,) if dim_type != DimType.LOCAL else \
-            (self.current_frame,) + self.current_frame.parents + self.current_frame.iter_parents
+            (self.current_frame,) + self.current_frame.parents + self.current_frame.iter_parents + (self.global_frame,)
 
-        # read dimensions
+        # read dimension
         for frame in read_frames:
-            name, dim = frame.read(name, dim)
-            if name is not None and dim is not None:
+            name, dim, found = frame.read(name, dim)
+            if found:
                 break
 
-        # generate fresh values
-        if name is None or dim is None:
-            name, dim = self._gendim(name, dim, dim_type=dim_type)
+        # generate fresh name or dimension
+        if not found:
+            name, dim = self._gendim(NameRequest(name, dim_type), DimRequest(dim, dim_type))
 
             write_frames = (self.global_frame,) if dim_type != DimType.LOCAL else \
                 (self.current_frame,) + (self.current_frame.parents if self.current_frame.keep else ())
@@ -249,6 +259,8 @@ class GlobalNamedMessenger(NamedMessenger):
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
+        self._saved_globals = ()
+        self._extant_globals = ()
         super().__init__()
 
     def __enter__(self):
@@ -256,11 +268,15 @@ class GlobalNamedMessenger(NamedMessenger):
             if self.first_available_dim is not None:
                 self._prev_first_dim = _DIM_STACK.set_first_available_dim(self.first_available_dim)
             self._extant_globals = frozenset(_DIM_STACK.global_frame.name_to_dim)
+            for name, dim in self._saved_globals:
+                _DIM_STACK.global_frame.write(name, dim)
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self._ref_count == 1:
             if self.first_available_dim is not None:
                 _DIM_STACK.set_first_available_dim(self._prev_first_dim)
-            _DIM_STACK.free_globals(frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals)
+            for name in frozenset(_DIM_STACK.global_frame.name_to_dim) - self._extant_globals:
+                dim = _DIM_STACK.global_frame.name_to_dim[name]
+                self._saved_globals += (_DIM_STACK.global_frame.free(name, dim),)
         return super().__exit__(*args, **kwargs)
