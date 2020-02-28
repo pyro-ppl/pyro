@@ -489,9 +489,9 @@ def test_enum_recycling_plate():
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.tensor([0.5, 0.5]))
-        plate_x = pyro.plate("plate_x", 2, dim=-1)
-        plate_y = pyro.plate("plate_y", 3, dim=-1)
-        plate_z = pyro.plate("plate_z", 4, dim=-2)
+        plate_x = pyro_plate("plate_x", 2, dim=-1)
+        plate_y = pyro_plate("plate_y", 3, dim=-1)
+        plate_z = pyro_plate("plate_z", 4, dim=-2)
 
         a = pyro.sample("a", dist.Bernoulli(q[0])).long()
         w = 0
