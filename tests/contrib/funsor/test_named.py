@@ -585,8 +585,8 @@ def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
             b = pyro.sample("b", dist.Bernoulli(0.5)).long()
         with y_plate:
             # Note that it is difficult to check that c does not depend on b.
-            c = pyro.sample("c", dist.Bernoulli(0.5)).long()
+            pyro.sample("c", dist.Bernoulli(0.5))
         with x_plate, y_plate:
-            pyro.sample("d", dist.Bernoulli(Vindex(q)[c, b] if reuse_plate else 0.5))
+            pyro.sample("d", dist.Bernoulli(Vindex(q)[b] if reuse_plate else 0.5))
 
     assert_ok(model, max_plate_nesting=2)
