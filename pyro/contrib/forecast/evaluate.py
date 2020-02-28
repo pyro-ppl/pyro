@@ -83,7 +83,6 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
     :param callable model_fn: Function that returns an
         ~pyro.contrib.forecast.forecaster.ForecastingModel object.
     :param callable guide_fn: Function that returns a guide object.
-
     :param dict metrics: A dictionary mapping metric name to metric function.
         The metric function should input a forecast ``pred`` and ground
         ``truth`` and can output anything, often a number. Example metrics
@@ -92,7 +91,8 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
         metrics. If provided this will be applied as
         ``pred, truth = transform(pred, truth)``.
     :param int train_window: Size of the training window. Be default trains
-        from beginning of data.
+        from beginning of data. This must be None if
+        ``forecaster_options["warm_start"]`` is true.
     :param int min_train_window: If ``train_window`` is None, this specifies
         the min training window size. Defaults to 1.
     :param int test_window: Size of the test window. By default forecasts to
@@ -119,9 +119,15 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
     if metrics is None:
         metrics = DEFAULT_METRICS
     assert metrics, "no metrics specified"
-    forecaster_options_fn = None
+
     if callable(forecaster_options):
         forecaster_options_fn = forecaster_options
+    else:
+        def forecaster_options_fn(*args, **kwargs):
+            return forecaster_options
+    if train_window is not None and forecaster_options_fn().get("warm_start"):
+        raise ValueError("Cannot warm start with moving training window; "
+                         "either set warm_start=False or train_window=None")
 
     duration = data.size(-2)
     if test_window is None:

@@ -10,6 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib.forecast import ForecastingModel, backtest
 from pyro.contrib.forecast.evaluate import DEFAULT_METRICS
+from pyro.util import optional
 
 
 class Model(ForecastingModel):
@@ -44,21 +45,23 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
     data = torch.randn(duration, obs_dim) + 4
     forecaster_options = {"num_steps": 2, "warm_start": warm_start}
 
-    windows = backtest(data, covariates, Model,
-                       train_window=train_window,
-                       min_train_window=min_train_window,
-                       test_window=test_window,
-                       min_test_window=min_test_window,
-                       stride=stride,
-                       forecaster_options=forecaster_options)
-
-    assert any(window["t0"] == 0 for window in windows)
-    if stride == 1:
-        assert any(window["t2"] == duration for window in windows)
-    for name in DEFAULT_METRICS:
-        for window in windows:
-            assert name in window
-            assert 0 < window[name] < math.inf
+    expect_error = (warm_start and train_window is not None)
+    with optional(pytest.raises(ValueError), expect_error):
+        windows = backtest(data, covariates, Model,
+                           train_window=train_window,
+                           min_train_window=min_train_window,
+                           test_window=test_window,
+                           min_test_window=min_test_window,
+                           stride=stride,
+                           forecaster_options=forecaster_options)
+    if not expect_error:
+        assert any(window["t0"] == 0 for window in windows)
+        if stride == 1:
+            assert any(window["t2"] == duration for window in windows)
+        for name in DEFAULT_METRICS:
+            for window in windows:
+                assert name in window
+                assert 0 < window[name] < math.inf
 
 
 @pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
