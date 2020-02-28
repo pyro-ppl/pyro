@@ -78,11 +78,7 @@ class PrefixWarmStartMessenger(Messenger):
         index = (slice(None),) * dim + (slice(split, None),)
         print("{}.dim = {}".format(name, dim))
         new = torch.cat([new, old[index]], dim=dim)
-        new = t(new)
-
-        store[name] = new
-        msg["value"] = new
-        msg["done"] = True
+        store[name] = t(new)
 
 
 class PrefixReplayMessenger(Messenger):

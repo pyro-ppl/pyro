@@ -369,14 +369,14 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             self._pyro_params[name] = constraint, event_dim
             if self._pyro_context.active:
                 fullname = self._pyro_get_fullname(name)
-                if fullname in _PYRO_PARAM_STORE:
-                    # Update PyroModule <--- ParamStore.
-                    unconstrained_value = _PYRO_PARAM_STORE._params[fullname]
-                    if not isinstance(unconstrained_value, torch.nn.Parameter):
-                        # Update PyroModule ---> ParamStore (type only; data is preserved).
-                        unconstrained_value = torch.nn.Parameter(unconstrained_value)
-                        _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
-                        _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
+                constrained_value = pyro.param(fullname, constrained_value,
+                                               constraint=constraint, event_dim=event_dim)
+                unconstrained_value = constrained_value.unconstrained()
+                if not isinstance(unconstrained_value, torch.nn.Parameter):
+                    # Update PyroModule ---> ParamStore (type only; data is preserved).
+                    unconstrained_value = torch.nn.Parameter(unconstrained_value)
+                    _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
+                    _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
                 else:
                     unconstrained_value = _unconstrain(constrained_value, constraint)
             else:  # Cannot determine supermodule and hence cannot compute fullname.
