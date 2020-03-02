@@ -4,10 +4,12 @@
 from functools import singledispatch
 
 import torch
+from torch.distributions import transform_to
 
 import pyro.distributions as dist
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
+from pyro.primitives import get_param_store
 
 
 class MarkDCTParamMessenger(Messenger):
@@ -34,6 +36,48 @@ class MarkDCTParamMessenger(Messenger):
                 event_dim += value.unconstrained().dim() - value.dim()
                 value.unconstrained()._pyro_dct_dim = frame.dim - event_dim
                 return
+
+
+class PrefixWarmStartMessenger(Messenger):
+    """
+    EXPERIMENTAL Assuming the global param store has been populated with params
+    defined on a short time window, re-initialize by splicing old params with
+    new initial params defined on a longer time window.
+    """
+    def _pyro_param(self, msg):
+        store = get_param_store()
+        name = msg["name"]
+        if name not in store:
+            return
+
+        if len(msg["args"]) >= 2:
+            new = msg["args"][1]
+        elif "init_tensor" in msg["kwargs"]:
+            new = msg["kwargs"]["init_tensor"]
+        else:
+            return  # no init tensor specified
+
+        if callable(new):
+            new = new()
+        old = store[name]
+        assert new.dim() == old.dim()
+        if new.shape == old.shape:
+            return
+
+        # Splice old (warm start) and new (init) tensors.
+        # This only works for time-homogeneous constraints.
+        t = transform_to(store._constraints[name])
+        new = t.inv(new)
+        old = t.inv(old)
+        for dim in range(new.dim()):
+            if new.size(dim) != old.size(dim):
+                break
+        assert new.size(dim) > old.size(dim)
+        assert new.shape[dim + 1:] == old.shape[dim + 1:]
+        split = old.size(dim)
+        index = (slice(None),) * dim + (slice(split, None),)
+        new = torch.cat([old, new[index]], dim=dim)
+        store[name] = t(new)
 
 
 class PrefixReplayMessenger(Messenger):

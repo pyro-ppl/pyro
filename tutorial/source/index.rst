@@ -57,6 +57,7 @@ Welcome to Pyro Examples and Tutorials!
    working_memory
    elections
    dirichlet_process_mixture
+   boosting_bbvi	
 
 .. toctree::
    :maxdepth: 2

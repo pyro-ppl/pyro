@@ -15,7 +15,8 @@ from pyro.infer.autoguide import AutoNormal, init_to_sample
 from pyro.nn.module import PyroModule
 from pyro.optim import DCTAdam
 
-from .util import MarkDCTParamMessenger, PrefixConditionMessenger, PrefixReplayMessenger, reshape_batch
+from .util import (MarkDCTParamMessenger, PrefixConditionMessenger, PrefixReplayMessenger, PrefixWarmStartMessenger,
+                   reshape_batch)
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +214,11 @@ class Forecaster(nn.Module):
     :param bool vectorize_particles: If ``num_particles > 1``, determines
         whether to vectorize computation of the :class:`~pyro.infer.elbo.ELBO`.
         Defaults to True. Set to False for models with dynamic control flow.
+    :param bool warm_start: Whether to warm start parameters from a smaller
+        time window. Note this may introduce statistical leakage; usage is
+        recommended for model exploration purposes only and should be disabled
+        when publishing metrics.
+    :param int log_every: Number of training steps between logging messages.
     """
     def __init__(self, model, data, covariates, *,
                  guide=None,
@@ -223,9 +229,10 @@ class Forecaster(nn.Module):
                  learning_rate_decay=0.1,
                  dct_gradients=False,
                  num_steps=1001,
-                 log_every=100,
                  num_particles=1,
-                 vectorize_particles=True):
+                 vectorize_particles=True,
+                 warm_start=False,
+                 log_every=100):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
@@ -233,26 +240,29 @@ class Forecaster(nn.Module):
             guide = AutoNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale,
                                create_plates=create_plates)
         self.guide = guide
-        optim = DCTAdam({"lr": learning_rate, "betas": betas,
-                         "lrd": learning_rate_decay ** (1 / num_steps)})
-        elbo = Trace_ELBO(num_particles=num_particles,
-                          vectorize_particles=vectorize_particles)
 
         # Initialize.
-        mark_dct = MarkDCTParamMessenger("time") if dct_gradients else lambda m: m
-        elbo._guess_max_plate_nesting(mark_dct(self.model),
-                                      mark_dct(self.guide),
-                                      (data, covariates), {})
+        if warm_start:
+            model = PrefixWarmStartMessenger()(model)
+            guide = PrefixWarmStartMessenger()(guide)
+        if dct_gradients:
+            model = MarkDCTParamMessenger("time")(model)
+            guide = MarkDCTParamMessenger("time")(guide)
+        elbo = Trace_ELBO(num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
+        elbo._guess_max_plate_nesting(model, guide, (data, covariates), {})
         elbo.max_plate_nesting = max(elbo.max_plate_nesting, 1)  # force a time plate
 
-        svi = SVI(self.model, self.guide, optim, elbo)
-
         losses = []
-        for step in range(num_steps):
-            loss = svi.step(data, covariates) / data.numel()
-            if log_every and step % log_every == 0:
-                logger.info("step {: >4d} loss = {:0.6g}".format(step, loss))
-            losses.append(loss)
+        if num_steps:
+            optim = DCTAdam({"lr": learning_rate, "betas": betas,
+                             "lrd": learning_rate_decay ** (1 / num_steps)})
+            svi = SVI(self.model, self.guide, optim, elbo)
+            for step in range(num_steps):
+                loss = svi.step(data, covariates) / data.numel()
+                if log_every and step % log_every == 0:
+                    logger.info("step {: >4d} loss = {:0.6g}".format(step, loss))
+                losses.append(loss)
 
         self.max_plate_nesting = elbo.max_plate_nesting
         self.losses = losses
