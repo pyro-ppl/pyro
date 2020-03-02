@@ -13,7 +13,8 @@ from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
-from pyro.contrib.funsor.named_messenger import DimType, GlobalNamedMessenger, LocalNamedMessenger
+from pyro.contrib.funsor.named_messenger import DimType, \
+    BaseEnumMessenger, GlobalNamedMessenger, LocalNamedMessenger
 
 
 class MarkovMessenger(LocalNamedMessenger):
@@ -74,7 +75,7 @@ class PlateMessenger(IndepMessenger):
         raise NotImplementedError("TODO")
 
 
-class EnumMessenger(GlobalNamedMessenger):
+class EnumMessenger(BaseEnumMessenger):
     """
     This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
     for each discrete sample site.

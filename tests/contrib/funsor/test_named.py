@@ -17,7 +17,7 @@ from pyro.ops.indexing import Vindex
 from pyro.util import check_traceenum_requirements
 
 from pyro.contrib.funsor import to_data, to_funsor, markov
-from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger
+from pyro.contrib.funsor.named_messenger import _DIM_STACK, GlobalNamedMessenger
 from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger, TraceMessenger
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,11 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     with toggle_backend("funsor"), TraceMessenger() as tr_funsor:
         with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
             model(**kwargs)
+
+    # make sure all dimensions were cleaned up
+    assert len(_DIM_STACK._stack) == 1
+    assert not _DIM_STACK.global_frame.name_to_dim and not _DIM_STACK.global_frame.dim_to_name
+    assert _DIM_STACK.outermost is None
 
     tr_pyro = poutine.util.prune_subsample_sites(tr_pyro.trace)
     tr_funsor = poutine.util.prune_subsample_sites(tr_funsor.trace)
@@ -579,14 +584,14 @@ def test_enum_recycling_plate(reuse_plate):
 
 
 @pytest.mark.parametrize("enumerate_", [None, "parallel"])
-@pytest.mark.parametrize("reuse_plate", [False, True])
+@pytest.mark.parametrize("reuse_plate", [True, False])
 def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
 
     @config_enumerate(default=enumerate_)
     def model():
         x_plate = pyro_plate("x_plate", 10, dim=-1)
         y_plate = pyro_plate("y_plate", 11, dim=-2)
-        q = pyro.param("q", torch.tensor([[0.5, 0.5], [0.5, 0.5]]))
+        q = pyro.param("q", torch.tensor([0.5, 0.5]))
         pyro.sample("a", dist.Bernoulli(0.5))
         with x_plate:
             b = pyro.sample("b", dist.Bernoulli(0.5)).long()
