@@ -58,12 +58,15 @@ class GenericLGSSM(TimeSeriesModel):
         loc = self.obs_matrix.new_zeros(self.state_dim)
         return MultivariateNormal(loc, self.trans_noise_scale_sq.diag_embed())
 
-    def get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds to :class:`GenericLGSSM`.
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         return dist.GaussianHMM(self._get_init_dist(), self.trans_matrix, self._get_trans_dist(),
-                                self.obs_matrix, self._get_obs_dist())
+                                self.obs_matrix, self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
