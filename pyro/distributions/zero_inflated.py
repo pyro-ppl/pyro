@@ -15,7 +15,8 @@ class ZeroInflatedDistribution(TorchDistribution):
     :param torch.Tensor gate: probability of extra zeros given via a Bernoulli distribution.
     :param TorchDistribution base_dist: the base distribution.
     """
-    arg_constraints = {"gate": constraints.unit_interval}
+    arg_constraints = {"gate": constraints.unit_interval,
+                       "rate": constraints.positive}
 
     def __init__(self, gate, base_dist, validate_args=None):
         self.gate = gate
@@ -26,6 +27,10 @@ class ZeroInflatedDistribution(TorchDistribution):
         super().__init__(
             batch_shape, event_shape, validate_args
         )
+
+    @property
+    def rate(self):
+        return self.base_dist.rate
 
     def log_prob(self, value):
         if self._validate_args:

@@ -146,8 +146,15 @@ class PrefixConditionMessenger(Messenger):
 
 UNIVARIATE_DISTS = {
     dist.Bernoulli: ("logits",),
+    dist.Beta: ("concentration1", "concentration0"),
+    dist.BetaBinomial: ("concentration1", "concentration0"),
     dist.Cauchy: ("loc", "scale"),
+    dist.Dirichlet: ("concentration",),
+    dist.DirichletMultinomial: ("concentration",),
+    dist.Exponential: ("rate",),
+    dist.Gamma: ("concentration", "rate"),
     dist.GammaPoisson: ("concentration", "rate"),
+    dist.InverseGamma: ("concentration", "rate"),
     dist.Laplace: ("loc", "scale"),
     dist.LogNormal: ("loc", "scale"),
     dist.Normal: ("loc", "scale"),
@@ -192,9 +199,9 @@ def _(d, data):
 
 def _prefix_condition_univariate(d, data):
     t = data.size(-2)
-    params = [getattr(d, name)[..., t:, :]
-              for name in UNIVARIATE_DISTS[type(d)]]
-    return type(d)(*params)
+    params = {name: getattr(d, name)[..., t:, :]
+              for name in UNIVARIATE_DISTS[type(d)]}
+    return type(d)(**params)
 
 
 for _type in UNIVARIATE_DISTS:
@@ -242,9 +249,9 @@ def _(d, batch_shape):
 
 
 def _reshape_batch_univariate(d, batch_shape):
-    params = [getattr(d, name).reshape(batch_shape)
-              for name in UNIVARIATE_DISTS[type(d)]]
-    return type(d)(*params)
+    params = {name: getattr(d, name).reshape(batch_shape)
+              for name in UNIVARIATE_DISTS[type(d)]}
+    return type(d)(**params)
 
 
 for _type in UNIVARIATE_DISTS:
