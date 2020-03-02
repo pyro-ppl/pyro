@@ -14,6 +14,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.ops.indexing import Vindex
+from pyro.util import check_traceenum_requirements
 
 from pyro.contrib.funsor import to_data, to_funsor, markov
 from pyro.contrib.funsor.named_messenger import GlobalNamedMessenger
@@ -80,6 +81,9 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
         symbol: name for name, symbol in tr_pyro.plate_to_symbol.items()})
 
     if _NAMED_TEST_STRENGTH >= 1:
+        # coarser check: enumeration requirements satisfied
+        check_traceenum_requirements(tr_pyro, poutine.Trace())
+        check_traceenum_requirements(tr_funsor, poutine.Trace())
         try:
             # coarser check: number of elements and squeezed shapes
             for name, pyro_node in tr_pyro.nodes.items():
@@ -563,6 +567,7 @@ def test_enum_recycling_plate(reuse_plate):
 
         with plate_x, plate_z:
             # this part is tricky: how do we know to preserve b's dimension?
+            # also, how do we know how to make b and d have different dimensions?
             e = pyro.sample("e", dist.Bernoulli(q[b if reuse_plate else a])).long()
             xz = 0
             for i in pyro_markov(range(9)):
@@ -587,9 +592,11 @@ def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
             b = pyro.sample("b", dist.Bernoulli(0.5)).long()
         with y_plate:
             # Note that it is difficult to check that c does not depend on b.
-            pyro.sample("c", dist.Bernoulli(0.5))
+            c = pyro.sample("c", dist.Bernoulli(0.5)).long()
         with x_plate, y_plate:
             pyro.sample("d", dist.Bernoulli(Vindex(q)[b] if reuse_plate else 0.5))
+
+        assert c.shape != b.shape
 
     assert_ok(model, max_plate_nesting=2)
 
