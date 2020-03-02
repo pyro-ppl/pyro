@@ -1015,6 +1015,7 @@ class IndependentHMM(TorchDistribution):
         batch_shape = base_dist.batch_shape[:-1]
         event_shape = base_dist.event_shape[:-1] + base_dist.batch_shape[-1:]
         super().__init__(batch_shape, event_shape)
+        self.base_dist = base_dist
 
     @constraints.dependent_property
     def support(self):
@@ -1031,13 +1032,13 @@ class IndependentHMM(TorchDistribution):
         new._validate_args = self.__dict__.get('_validate_args')
         return new
 
-    def rsample(self, sample_shape):
+    def rsample(self, sample_shape=torch.Size()):
         base_value = self.base_dist.rsample(sample_shape)
         return base_value.squeeze(-1).transpose(-1, -2)
 
     def log_prob(self, value):
         base_value = value.transpose(-1, -2).unsqueeze(-1)
-        return self.base_dist.log_prob(base_value)
+        return self.base_dist.log_prob(base_value).sum(-1)
 
 
 class GaussianMRF(TorchDistribution):
