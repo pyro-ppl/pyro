@@ -71,8 +71,8 @@ class PlateMessenger(IndepMessenger):
         BroadcastMessenger._pyro_sample(msg)
 
     def __iter__(self):
-        # return MarkovMessenger(history=0, keep=False).generator(self._iterable)
-        raise NotImplementedError("TODO")
+        for i in MarkovMessenger(history=0, keep=False).generator(iterable=range(self.size)):
+            yield i
 
 
 class EnumMessenger(BaseEnumMessenger):

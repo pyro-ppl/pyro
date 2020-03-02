@@ -97,7 +97,8 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                 funsor_node = tr_funsor.nodes[name]
                 assert pyro_node['packed']['log_prob'].numel() == funsor_node['log_prob'].numel()
                 assert pyro_node['packed']['log_prob'].shape == funsor_node['log_prob'].squeeze().shape
-                assert frozenset(pyro_node['cond_indep_stack']) == frozenset(funsor_node['cond_indep_stack'])
+                assert frozenset(f for f in pyro_node['cond_indep_stack'] if f.vectorized) == \
+                    frozenset(f for f in funsor_node['cond_indep_stack'] if f.vectorized)
         except AssertionError:
             for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
@@ -634,14 +635,13 @@ def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_):
     assert_ok(model, max_plate_nesting=3)
 
 
-@pytest.mark.xfail(reason="sequential plate not yet supported")
 @pytest.mark.parametrize('enumerate_', [None, "parallel"])
 def test_enum_discrete_iplate_plate_dependency_ok(enumerate_):
 
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
         inner_plate = pyro_plate("plate", 10)
-        for i in pyro.plate("iplate", 3):  # use regular sequential plate here...
+        for i in pyro_plate("iplate", 3):  # use regular sequential plate here...
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
             with inner_plate:
                 pyro.sample("x_{}".format(i), dist.Bernoulli(0.5),
