@@ -402,9 +402,9 @@ class RaoBlackwellizationTests(TestCase):
     # inside of a sequential plate with superfluous random torch.tensors to complexify the
     # graph structure and introduce additional baselines
     def test_plate_in_elbo_with_superfluous_rvs(self):
-        self._test_plate_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
+        self._test_plate_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=1800, lr=0.0112)
 
-    def _test_plate_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
+    def _test_plate_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps, lr=0.0012):
         pyro.clear_param_store()
         self.data_tensor = torch.zeros(9, 2)
         for _out in range(self.n_outer):
@@ -467,7 +467,7 @@ class RaoBlackwellizationTests(TestCase):
             if 'baseline' in param_name or 'baseline' in module_name:
                 return {"lr": 0.010, "betas": (0.95, 0.999)}
             else:
-                return {"lr": 0.0012, "betas": (0.95, 0.999)}
+                return {"lr": lr, "betas": (0.95, 0.999)}
 
         adam = optim.Adam(per_param_callable)
         svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
