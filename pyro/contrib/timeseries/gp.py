@@ -62,17 +62,21 @@ class IndependentMaternGP(TimeSeriesModel):
         return dist.Normal(self.obs_matrix.new_zeros(self.obs_dim, 1, 1),
                            self.obs_noise_scale.unsqueeze(-1).unsqueeze(-1)).to_event(1)
 
-    def get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to ``obs_dim``-many independent Matern GPs.
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_dist = MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
                                         process_covar.unsqueeze(-3))
         trans_matrix = trans_matrix.unsqueeze(-3)
         base_dist = dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                     self.obs_matrix, self._get_obs_dist())
+                                     self.obs_matrix, self._get_obs_dist(), duration=duration)
         return dist.IndependentHMM(base_dist)
 
     @pyro_method
@@ -198,10 +202,14 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         loc = self.A.new_zeros(self.obs_dim)
         return dist.Normal(loc, self.obs_noise_scale).to_event(1)
 
-    def get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to a :class:`LinearlyCoupledMaternGP`.
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_matrix = block_diag_embed(trans_matrix)
@@ -209,7 +217,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         loc = self.A.new_zeros(self.full_state_dim)
         trans_dist = MultivariateNormal(loc, process_covar)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                self._get_obs_matrix(), self._get_obs_dist())
+                                self._get_obs_matrix(), self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
@@ -381,13 +389,17 @@ class DependentMaternGP(TimeSeriesModel):
         trans_dist = self._get_trans_dist(trans_matrix, stationary_covariance)
         return trans_matrix, trans_dist, stationary_covariance
 
-    def get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds to a :class:`DependentMaternGP`
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         trans_matrix, trans_dist, stat_covar = self._trans_matrix_distribution_stat_covar(self.dt)
         return dist.GaussianHMM(self._get_init_dist(stat_covar), trans_matrix,
-                                trans_dist, self._get_obs_matrix(), self._get_obs_dist())
+                                trans_dist, self._get_obs_matrix(), self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
