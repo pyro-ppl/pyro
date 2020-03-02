@@ -66,6 +66,7 @@ class IndependentMaternGP(TimeSeriesModel):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to ``obs_dim``-many independent Matern GPs.
+
         :param int duration: Optional size of the time axis ``event_shape[0]``.
             This is required when sampling from homogeneous HMMs whose parameters
             are not expanded along the time axis.
@@ -204,6 +205,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to a :class:`LinearlyCoupledMaternGP`.
+
         :param int duration: Optional size of the time axis ``event_shape[0]``.
             This is required when sampling from homogeneous HMMs whose parameters
             are not expanded along the time axis.
@@ -389,6 +391,7 @@ class DependentMaternGP(TimeSeriesModel):
     def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds to a :class:`DependentMaternGP`
+
         :param int duration: Optional size of the time axis ``event_shape[0]``.
             This is required when sampling from homogeneous HMMs whose parameters
             are not expanded along the time axis.

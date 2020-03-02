@@ -99,6 +99,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to :class:`GenericLGSSMWithGPNoiseModel`.
+
         :param int duration: Optional size of the time axis ``event_shape[0]``.
             This is required when sampling from homogeneous HMMs whose parameters
             are not expanded along the time axis.
