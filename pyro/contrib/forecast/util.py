@@ -179,6 +179,13 @@ def _(d, data):
     return base_dist.to_event(d.reinterpreted_batch_ndims)
 
 
+@prefix_condition.register(dist.IndependentHMM)
+def _(d, data):
+    base_data = data.transpose(-1, -2).unsqueeze(-1)
+    base_dist = prefix_condition(d.base_dist, base_data)
+    return dist.IndependentHMM(base_dist)
+
+
 def _prefix_condition_univariate(d, data):
     t = data.size(-2)
     params = [getattr(d, name)[..., t:, :]
@@ -222,6 +229,13 @@ def _(d, batch_shape):
     base_shape = batch_shape + d.event_shape[:d.reinterpreted_batch_ndims]
     base_dist = reshape_batch(d.base_dist, base_shape)
     return base_dist.to_event(d.reinterpreted_batch_ndims)
+
+
+@reshape_batch.register(dist.IndependentHMM)
+def _(d, batch_shape):
+    base_shape = batch_shape + d.event_shape[-1:]
+    base_dist = reshape_batch(d.base_dist, base_shape)
+    return dist.IndependentHMM(base_dist)
 
 
 def _reshape_batch_univariate(d, batch_shape):
