@@ -145,11 +145,23 @@ class PrefixConditionMessenger(Messenger):
 # replace by much simpler Funsor logic.
 
 UNIVARIATE_DISTS = {
+    dist.Bernoulli: ("logits",),
+    dist.Beta: ("concentration1", "concentration0"),
+    dist.BetaBinomial: ("concentration1", "concentration0"),
     dist.Cauchy: ("loc", "scale"),
+    dist.Dirichlet: ("concentration",),
+    dist.DirichletMultinomial: ("concentration",),
+    dist.Exponential: ("rate",),
+    dist.Gamma: ("concentration", "rate"),
+    dist.GammaPoisson: ("concentration", "rate"),
+    dist.InverseGamma: ("concentration", "rate"),
     dist.Laplace: ("loc", "scale"),
+    dist.LogNormal: ("loc", "scale"),
     dist.Normal: ("loc", "scale"),
+    dist.Poisson: ("rate",),
     dist.Stable: ("stability", "skew", "scale", "loc"),
     dist.StudentT: ("df", "loc", "scale"),
+    dist.ZeroInflatedPoisson: ("gate", "rate"),
 }
 
 
@@ -179,11 +191,17 @@ def _(d, data):
     return base_dist.to_event(d.reinterpreted_batch_ndims)
 
 
+@prefix_condition.register(dist.FoldedDistribution)
+def _(d, data):
+    base_dist = prefix_condition(d.base_dist, data)
+    return dist.FoldedDistribution(base_dist)
+
+
 def _prefix_condition_univariate(d, data):
     t = data.size(-2)
-    params = [getattr(d, name)[..., t:, :]
-              for name in UNIVARIATE_DISTS[type(d)]]
-    return type(d)(*params)
+    params = {name: getattr(d, name)[..., t:, :]
+              for name in UNIVARIATE_DISTS[type(d)]}
+    return type(d)(**params)
 
 
 for _type in UNIVARIATE_DISTS:
@@ -214,7 +232,7 @@ def reshape_batch(d, batch_shape):
     :returns: A distribution with the same type but given batch shape.
     :rtype: ~pyro.distributions.Distribution
     """
-    raise NotImplementedError
+    raise NotImplementedError("reshape_batch() does not suport {}".format(type(d)))
 
 
 @reshape_batch.register(dist.Independent)
@@ -224,10 +242,16 @@ def _(d, batch_shape):
     return base_dist.to_event(d.reinterpreted_batch_ndims)
 
 
+@reshape_batch.register(dist.FoldedDistribution)
+def _(d, batch_shape):
+    base_dist = reshape_batch(d.base_dist, batch_shape)
+    return dist.FoldedDistribution(base_dist)
+
+
 def _reshape_batch_univariate(d, batch_shape):
-    params = [getattr(d, name).reshape(batch_shape)
-              for name in UNIVARIATE_DISTS[type(d)]]
-    return type(d)(*params)
+    params = {name: getattr(d, name).reshape(batch_shape)
+              for name in UNIVARIATE_DISTS[type(d)]}
+    return type(d)(**params)
 
 
 for _type in UNIVARIATE_DISTS:

@@ -71,6 +71,8 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
     :param torch.Tensor gate: probability of extra zeros.
     :param torch.Tensor rate: rate of poisson distribution.
     """
+    arg_constraints = {"gate": constraints.unit_interval,
+                       "rate": constraints.positive}
     support = constraints.nonnegative_integer
 
     def __init__(self, gate, rate, validate_args=None):
@@ -79,6 +81,10 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
         super().__init__(
             gate, base_dist, validate_args=validate_args
         )
+
+    @property
+    def rate(self):
+        return self.base_dist.rate
 
 
 class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
