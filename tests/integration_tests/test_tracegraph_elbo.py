@@ -402,7 +402,7 @@ class RaoBlackwellizationTests(TestCase):
     # inside of a sequential plate with superfluous random torch.tensors to complexify the
     # graph structure and introduce additional baselines
     def test_plate_in_elbo_with_superfluous_rvs(self):
-        self._test_plate_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=1800, lr=0.0112)
+        self._test_plate_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=2000, lr=0.0113)
 
     def _test_plate_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps, lr=0.0012):
         pyro.clear_param_store()
