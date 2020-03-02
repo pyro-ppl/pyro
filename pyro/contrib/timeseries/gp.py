@@ -75,9 +75,8 @@ class IndependentMaternGP(TimeSeriesModel):
         trans_dist = MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
                                         process_covar.unsqueeze(-3))
         trans_matrix = trans_matrix.unsqueeze(-3)
-        base_dist = dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                     self.obs_matrix, self._get_obs_dist(), duration=duration)
-        return dist.IndependentHMM(base_dist)
+        return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
+                                self.obs_matrix, self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
