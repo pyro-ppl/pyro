@@ -27,7 +27,7 @@ def test_elbo_mapdata(batch_size, map_type):
     lam = torch.tensor([6.0, 4.0])
     data = []
     sum_data = torch.zeros(2)
-
+    params = {("iplate", 8) : (100, 0.018), ("iplate", None): (100, 0.013), ("range", 3) : (100, 0.018), ("range", 8): (100, 0.01), ("range", None): (100, 0.011)}
     def add_data_point(x, y):
         data.append(torch.tensor([x, y]))
         sum_data.data.add_(data[-1].data)
@@ -47,7 +47,7 @@ def test_elbo_mapdata(batch_size, map_type):
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
     analytic_loc_n = sum_data * (lam / analytic_lam_n) +\
         loc0 * (lam0 / analytic_lam_n)
-    n_steps = 7000
+    n_steps = 7000 if (map_type, batch_size) not in params else params[(map_type, batch_size)][0]
 
     logger.debug("DOING ELBO TEST [bs = {}, map_type = {}]".format(batch_size, map_type))
     pyro.clear_param_store()
@@ -86,7 +86,7 @@ def test_elbo_mapdata(batch_size, map_type):
         else:
             pass
 
-    adam = optim.Adam({"lr": 0.0008, "betas": (0.95, 0.999)})
+    adam = optim.Adam({"lr": 0.0008 if (map_type, batch_size) not in params else params[(map_type, batch_size)][1], "betas": (0.95, 0.999)})
     svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
     for k in range(n_steps):
