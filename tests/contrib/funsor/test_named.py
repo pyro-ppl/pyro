@@ -497,7 +497,7 @@ def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
         with pyro_plate("non_enum", 2):
             a = pyro.sample("a", dist.Bernoulli(0.5), infer={'enumerate': None})
 
-        p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
+        p = (1.0 + a.sum(-1)) / (2.0 + a.shape[0])  # introduce dependency of b on a
 
         with pyro_plate("enum_1", 3):
             pyro.sample("b", dist.Bernoulli(p), infer={'enumerate': enumerate_})
@@ -622,6 +622,7 @@ def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_):
     assert_ok(model, max_plate_nesting=3)
 
 
+@pytest.mark.xfail(reason="sequential plate not yet supported")
 @pytest.mark.parametrize('enumerate_', [None, "parallel"])
 def test_enum_discrete_iplate_plate_dependency_ok(enumerate_):
 
