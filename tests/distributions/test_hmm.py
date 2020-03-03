@@ -759,3 +759,62 @@ def test_studentt_hmm_shape(init_shape, trans_mat_shape, trans_dist_shape,
     assert x.shape == (6,) + d.shape()
     x = d.expand((6, 5)).rsample()
     assert x.shape == (6, 5) + d.event_shape
+
+
+@pytest.mark.parametrize('obs_dim', [1, 3])
+@pytest.mark.parametrize('hidden_dim', [1, 2])
+@pytest.mark.parametrize('init_shape,trans_mat_shape,trans_mvn_shape,obs_mat_shape,obs_mvn_shape', [
+    ((), (), (), (), ()),
+    ((), (6,), (), (), ()),
+    ((), (), (6,), (), ()),
+    ((), (), (), (6,), ()),
+    ((), (), (), (), (6,)),
+    ((), (6,), (6,), (6,), (6,)),
+    ((5,), (6,), (), (), ()),
+    ((), (5, 1), (6,), (), ()),
+    ((), (), (5, 1), (6,), ()),
+    ((), (), (), (5, 1), (6,)),
+    ((), (6,), (5, 1), (), ()),
+    ((), (), (6,), (5, 1), ()),
+    ((), (), (), (6,), (5, 1)),
+    ((5,), (), (), (), (6,)),
+    ((5,), (5, 6), (5, 6), (5, 6), (5, 6)),
+], ids=str)
+def test_independent_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
+                               obs_mat_shape, obs_mvn_shape, hidden_dim, obs_dim):
+    base_init_shape = init_shape + (obs_dim,)
+    base_trans_mat_shape = trans_mat_shape[:-1] + (obs_dim, trans_mat_shape[-1] if trans_mat_shape else 6)
+    base_trans_mvn_shape = trans_mvn_shape[:-1] + (obs_dim, trans_mvn_shape[-1] if trans_mvn_shape else 6)
+    base_obs_mat_shape = obs_mat_shape[:-1] + (obs_dim, obs_mat_shape[-1] if obs_mat_shape else 6)
+    base_obs_mvn_shape = obs_mvn_shape[:-1] + (obs_dim, obs_mvn_shape[-1] if obs_mvn_shape else 6)
+
+    init_dist = random_mvn(base_init_shape, hidden_dim)
+    trans_mat = torch.randn(base_trans_mat_shape + (hidden_dim, hidden_dim))
+    trans_dist = random_mvn(base_trans_mvn_shape, hidden_dim)
+    obs_mat = torch.randn(base_obs_mat_shape + (hidden_dim, 1))
+    obs_dist = random_mvn(base_obs_mvn_shape, 1)
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=6)
+    d = dist.IndependentHMM(d)
+
+    shape = broadcast_shape(init_shape + (6,),
+                            trans_mat_shape,
+                            trans_mvn_shape,
+                            obs_mat_shape,
+                            obs_mvn_shape)
+    expected_batch_shape, time_shape = shape[:-1], shape[-1:]
+    expected_event_shape = time_shape + (obs_dim,)
+    assert d.batch_shape == expected_batch_shape
+    assert d.event_shape == expected_event_shape
+
+    data = torch.randn(shape + (obs_dim,))
+    assert data.shape == d.shape()
+    actual = d.log_prob(data)
+    assert actual.shape == expected_batch_shape
+    check_expand(d, data)
+
+    x = d.rsample()
+    assert x.shape == d.shape()
+    x = d.rsample((6,))
+    assert x.shape == (6,) + d.shape()
+    x = d.expand((6, 5)).rsample()
+    assert x.shape == (6, 5) + d.event_shape

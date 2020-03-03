@@ -11,7 +11,9 @@ from tests.ops.gaussian import random_mvn
 
 
 def random_dist(Dist, shape):
-    if Dist is dist.GaussianHMM:
+    if Dist is dist.FoldedDistribution:
+        return Dist(random_dist(dist.Normal, shape))
+    elif Dist is dist.GaussianHMM:
         batch_shape, duration, dim = shape[:-2], shape[-2], shape[-1]
         init_dist = random_dist(dist.Normal, batch_shape + (dim,)).to_event(1)
         trans_mat = torch.randn(batch_shape + (duration, dim, dim))
@@ -20,6 +22,11 @@ def random_dist(Dist, shape):
         obs_dist = random_dist(dist.Normal, batch_shape + (duration, dim)).to_event(1)
         return Dist(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
                     duration=duration)
+    elif Dist is dist.IndependentHMM:
+        batch_shape, duration, dim = shape[:-2], shape[-2], shape[-1]
+        base_shape = batch_shape + (dim, duration, 1)
+        base_dist = random_dist(dist.GaussianHMM, base_shape)
+        return Dist(base_dist)
     elif Dist is dist.MultivariateNormal:
         return random_mvn(shape[:-1], shape[-1])
     else:
@@ -40,9 +47,11 @@ def random_dist(Dist, shape):
     dist.Dirichlet,
     dist.DirichletMultinomial,
     dist.Exponential,
+    dist.FoldedDistribution,
     dist.Gamma,
     dist.GammaPoisson,
     dist.GaussianHMM,
+    dist.IndependentHMM,
     dist.InverseGamma,
     dist.Laplace,
     dist.LogNormal,

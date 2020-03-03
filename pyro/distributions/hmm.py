@@ -991,6 +991,57 @@ class LinearHMM(HiddenMarkovModel):
         return x
 
 
+class IndependentHMM(TorchDistribution):
+    """
+    Wrapper class to treat a batch of independent univariate HMMs as a single
+    multivariate distribution. This converts distribution shapes as follows:
+
+    +-----------+--------------------+---------------------+
+    |           |       .batch_shape | .event_shape        |
+    +===========+====================+=====================+
+    | base_dist | shape + (obs_dim,) | (duration, 1)       |
+    +-----------+--------------------+---------------------+
+    |    result |              shape | (duration, obs_dim) |
+    +-----------+--------------------+---------------------+
+
+    :param HiddenMarkovModel base_dist: A base hidden Markov model instance.
+    """
+    arg_constraints = {}
+
+    def __init__(self, base_dist):
+        assert base_dist.batch_shape
+        assert base_dist.event_dim == 2
+        assert base_dist.event_shape[-1] == 1
+        batch_shape = base_dist.batch_shape[:-1]
+        event_shape = base_dist.event_shape[:-1] + base_dist.batch_shape[-1:]
+        super().__init__(batch_shape, event_shape)
+        self.base_dist = base_dist
+
+    @constraints.dependent_property
+    def support(self):
+        return self.base_dist.support
+
+    @property
+    def has_rsample(self):
+        return self.base_dist.has_rsample
+
+    def expand(self, batch_shape, _instance=None):
+        batch_shape = torch.Size(batch_shape)
+        new = self._get_checked_instance(IndependentHMM, _instance)
+        new.base_dist = self.base_dist.expand(batch_shape + self.base_dist.batch_shape[-1:])
+        super(IndependentHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self.__dict__.get('_validate_args')
+        return new
+
+    def rsample(self, sample_shape=torch.Size()):
+        base_value = self.base_dist.rsample(sample_shape)
+        return base_value.squeeze(-1).transpose(-1, -2)
+
+    def log_prob(self, value):
+        base_value = value.transpose(-1, -2).unsqueeze(-1)
+        return self.base_dist.log_prob(base_value).sum(-1)
+
+
 class GaussianMRF(TorchDistribution):
     """
     Temporal Markov Random Field with Gaussian factors for initial, transition,
