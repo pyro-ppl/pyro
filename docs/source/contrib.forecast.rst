@@ -25,9 +25,14 @@ using :class:`~pyro.distributions.StudentT` or
 :class:`~pyro.infer.reparam.stable.StableReparam`, and
 :class:`~pyro.infer.reparam.hmm.LinearHMMReparam`.
 
+Seasonality can be handled using the helpers
+:func:`~pyro.ops.tensor_utils.periodic_repeat`,
+:func:`~pyro.ops.tensor_utils.periodic_cumsum`, and
+:func:`~pyro.ops.tensor_utils.periodic_features`.
+
 See :mod:`pyro.contrib.timeseries` for ways to construct temporal Gaussian processes useful as likelihoods.
 
-See the `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_ for example usage. 
+See the `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_ for example usage.
 
 Forecaster Interface
 ---------------------

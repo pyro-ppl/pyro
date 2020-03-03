@@ -109,6 +109,46 @@ def periodic_cumsum(tensor, period, dim):
     return result
 
 
+def periodic_features(duration, max_period=None, min_period=None, **options):
+    r"""
+    Create periodic (sin,cos) features from ``max_period`` down to
+    ``min_period``.
+
+    This is useful in time series models where long uneven seasonality can be
+    treated via regression. When only ``max_period`` is specified this
+    generates periodic features at all length scales. When also ``min_period``
+    is specified this generates periodic features at large length scales, but
+    omits high frequency features. This is useful when combining regression for
+    long seasonality with other techniques like :func:`periodic_repeat` and
+    :func:`periodic_cumsum` for short time scales. For example, to combine
+    regress yearly seasonality down to the scale of one week one could set
+    ``max_period=365.25`` and ``min_period=7``.
+
+    :param int duration: Number of discrete time steps.
+    :param float max_period: Optional max period, defaults to ``duration``.
+    :param float min_period: Optional min period (exclusive), defaults to
+        2 = Nyquist cutoff.
+    :param \*\*options: Tensor construction options, e.g. ``dtype`` and
+        ``device``.
+    :returns: A ``(duration, 2 * ceil(max_period / min_period) - 2)``-shaped
+        tensor of features normalized to lie in [-1,1].
+    :rtype: ~torch.Tensor
+    """
+    assert isinstance(duration, int) and duration >= 0
+    if max_period is None:
+        max_period = duration
+    if min_period is None:
+        min_period = 2
+    assert 2 <= min_period, "min_period is below Nyquist cutoff"
+    assert min_period <= max_period
+
+    t = torch.arange(float(duration), **options).unsqueeze(-1).unsqueeze(-1)
+    phase = torch.tensor([0, math.pi / 2], **options).unsqueeze(-1)
+    freq = torch.arange(1, max_period / min_period, **options).mul_(2 * math.pi / max_period)
+    result = (freq * t + phase).cos_().reshape(duration, -1).contiguous()
+    return result
+
+
 _NEXT_FAST_LEN = {}
 
 
