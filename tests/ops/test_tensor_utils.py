@@ -1,13 +1,16 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import numpy as np
 import pytest
 import scipy.fftpack as fftpack
 import torch
 
+import pyro
 from pyro.ops.tensor_utils import (block_diag_embed, block_diagonal, convolve, dct, idct, next_fast_len,
-                                   periodic_cumsum, periodic_repeat, repeated_matmul)
+                                   periodic_cumsum, periodic_features, periodic_repeat, repeated_matmul)
 from tests.common import assert_close, assert_equal
 
 pytestmark = pytest.mark.stage('unit')
@@ -51,6 +54,19 @@ def test_periodic_repeat(period, size, left_shape, right_shape):
     dots = (slice(None),) * len(left_shape)
     for t in range(size):
         assert_equal(actual[dots + (t,)], tensor[dots + (t % period,)])
+
+
+@pytest.mark.parametrize("duration", range(3, 100))
+def test_periodic_features(duration):
+    pyro.set_rng_seed(duration)
+    max_period = torch.distributions.Uniform(2, duration).sample().item()
+    for max_period in [max_period, duration]:
+        min_period = torch.distributions.Uniform(2, max_period).sample().item()
+        for min_period in [min_period, 2]:
+            actual = periodic_features(duration, max_period, min_period)
+            assert actual.shape == (duration, 2 * math.ceil(max_period / min_period) - 2)
+            assert (-1 <= actual).all()
+            assert (actual <= 1).all()
 
 
 @pytest.mark.parametrize("size", [5, 6, 7, 8])
