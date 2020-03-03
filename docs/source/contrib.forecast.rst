@@ -28,7 +28,7 @@ using :class:`~pyro.distributions.StudentT` or
 Seasonality can be handled using the helpers
 :func:`~pyro.ops.tensor_utils.periodic_repeat`,
 :func:`~pyro.ops.tensor_utils.periodic_cumsum`, and
-:func:`~pyro.ops.tennsor_utils.periodic_features`.
+:func:`~pyro.ops.tensor_utils.periodic_features`.
 
 See :mod:`pyro.contrib.timeseries` for ways to construct temporal Gaussian processes useful as likelihoods.
 
