@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=161)
-@pytest.mark.parametrize("map_type, batch_size, params", [("iplate", 3, (7000, 0.0008)), ("iplate", 8, (100, 0.018)),
-                                                          ("iplate", None, (100, 0.013)), ("range", 3, (100, 0.018)),
-                                                          ("range", 8, (100, 0.01)), ("range", None, (100, 0.011)),
-                                                          ("plate", 3, (7000, 0.0008)), ("plate", 8, (7000, 0.0008)),
-                                                          ("plate", None, (7000, 0.0008))])
-def test_elbo_mapdata(map_type, batch_size, params):
+@pytest.mark.parametrize("map_type,batch_size,n_steps,lr",  [("iplate", 3, 7000, 0.0008), ("iplate", 8, 100, 0.018),
+                                                             ("iplate", None, 100, 0.013), ("range", 3, 100, 0.018),
+                                                             ("range", 8, 100, 0.01), ("range", None, 100, 0.011),
+                                                             ("plate", 3, 7000, 0.0008), ("plate", 8, 7000, 0.0008),
+                                                             ("plate", None, 7000, 0.0008)])
+def test_elbo_mapdata(map_type, batch_size, n_steps, lr):
     # normal-normal: known covariance
     lam0 = torch.tensor([0.1, 0.1])   # precision of prior
     loc0 = torch.tensor([0.0, 0.5])   # prior mean
@@ -50,7 +50,6 @@ def test_elbo_mapdata(map_type, batch_size, params):
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
     analytic_loc_n = sum_data * (lam / analytic_lam_n) +\
         loc0 * (lam0 / analytic_lam_n)
-    n_steps = params[0]
 
     logger.debug("DOING ELBO TEST [bs = {}, map_type = {}]".format(batch_size, map_type))
     pyro.clear_param_store()
@@ -89,7 +88,7 @@ def test_elbo_mapdata(map_type, batch_size, params):
         else:
             pass
 
-    adam = optim.Adam({"lr": params[1]})
+    adam = optim.Adam({"lr": lr})
     svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
 
     for k in range(n_steps):
