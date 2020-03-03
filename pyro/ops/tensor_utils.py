@@ -118,8 +118,8 @@ def periodic_features(duration, max_period=None, min_period=None, **options):
     treated via regression. When only ``max_period`` is specified this
     generates periodic features at all length scales. When also ``min_period``
     is specified this generates periodic features at large length scales, but
-    omits high frequecy features. This is useful when combining regression for
-    long seasonality with other techinques like :func:`periodic_repeat` and
+    omits high frequency features. This is useful when combining regression for
+    long seasonality with other techniques like :func:`periodic_repeat` and
     :func:`periodic_cumsum` for short time scales. For example, to combine
     regress yearly seasonality down to the scale of one week one could set
     ``max_period=365.25`` and ``min_period=7``.
