@@ -1026,6 +1026,7 @@ class IndependentHMM(TorchDistribution):
         return self.base_dist.has_rsample
 
     def expand(self, batch_shape, _instance=None):
+        batch_shape = torch.Size(batch_shape)
         new = self._get_checked_instance(IndependentHMM, _instance)
         new.base_dist = self.base_dist.expand(batch_shape + self.base_dist.batch_shape[-1:])
         super(IndependentHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
