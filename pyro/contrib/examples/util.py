@@ -23,12 +23,12 @@ class _MNIST(getattr(MNIST, '_pyro_unpatched', MNIST)):
         "https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/t10k-labels-idx1-ubyte.gz",
     ]
     # For newer torchvision.
-    resources = [
-        ("https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/train-images-idx3-ubyte.gz", "f68b3c2dcbeaaa9fbdd348bbdeb94873"),
-        ("https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/train-labels-idx1-ubyte.gz", "d53e105ee54ea40749a09fcbcd1e9432"),
-        ("https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/t10k-images-idx3-ubyte.gz", "9fb629c4189551a2d022fa330f9573f3"),
-        ("https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/t10k-labels-idx1-ubyte.gz", "ec29112dd5afa0611ce80d1b7f02629c")
-    ]
+    resources = list(zip(urls, [
+        "f68b3c2dcbeaaa9fbdd348bbdeb94873",
+        "d53e105ee54ea40749a09fcbcd1e9432",
+        "9fb629c4189551a2d022fa330f9573f3",
+        "ec29112dd5afa0611ce80d1b7f02629c"
+    ]))
 
 
 def get_data_loader(dataset_name,
