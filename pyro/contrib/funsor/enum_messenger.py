@@ -110,7 +110,6 @@ class TraceMessenger(OrigTraceMessenger):
     """
     def _pyro_post_sample(self, msg):
         import funsor; funsor.set_backend("torch")  # noqa: E702
-        # TODO reinstate this when we have enough to_funsor implementations
         if "funsor_fn" not in msg["infer"]:
             msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
         if "funsor_log_prob" not in msg["infer"]:
