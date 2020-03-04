@@ -61,6 +61,7 @@ class LinearHMMReparam(Reparam):
         self.obs = obs
 
     def __call__(self, name, fn, obs):
+        fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, (dist.LinearHMM, dist.IndependentHMM))
         if fn.duration is None:
             raise ValueError("LinearHMMReparam requires duration to be specified "
@@ -70,8 +71,8 @@ class LinearHMMReparam(Reparam):
         if isinstance(fn, dist.IndependentHMM):
             if obs is not None:
                 obs = obs.transpose(-1, -2).unsqueeze(-1)
-            hmm, obs = self(name, fn.base_dist, obs)
-            hmm = dist.IndependentHMM(hmm)
+            hmm, obs = self(name, fn.base_dist.to_event(1), obs)
+            hmm = dist.IndependentHMM(hmm.to_event(-1))
             if obs is not None:
                 obs = obs.squeeze(-1).transpose(-1, -2)
             return hmm, obs
@@ -79,27 +80,32 @@ class LinearHMMReparam(Reparam):
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist = fn.initial_dist
         if self.init is not None:
-            init_dist, _ = self.init("{}_init".format(name), init_dist, None)
+            init_dist, _ = self.init("{}_init".format(name),
+                                     self._wrap(init_dist, event_dim - 1), None)
+            init_dist = init_dist.to_event(1 - init_dist.event_dim)
 
         # Reparameterize the transition distribution as conditionally Gaussian.
         trans_dist = fn.transition_dist
         if self.trans is not None:
             if trans_dist.batch_shape[-1] != fn.duration:
                 trans_dist = trans_dist.expand(trans_dist.batch_shape[:-1] + (fn.duration,))
-            trans_dist, _ = self.trans("{}_trans".format(name), trans_dist.to_event(1), None)
-            trans_dist = trans_dist.to_event(-1)
+            trans_dist, _ = self.trans("{}_trans".format(name),
+                                       self._wrap(trans_dist, event_dim), None)
+            trans_dist = trans_dist.to_event(1 - trans_dist.event_dim)
 
         # Reparameterize the observation distribution as conditionally Gaussian.
         obs_dist = fn.observation_dist
         if self.obs is not None:
             if obs_dist.batch_shape[-1] != fn.duration:
                 obs_dist = obs_dist.expand(obs_dist.batch_shape[:-1] + (fn.duration,))
-            obs_dist, obs = self.obs("{}_obs".format(name), obs_dist.to_event(1), obs)
-            obs_dist = obs_dist.to_event(-1)
+            obs_dist, obs = self.obs("{}_obs".format(name),
+                                     self._wrap(obs_dist, event_dim), obs)
+            obs_dist = obs_dist.to_event(1 - obs_dist.event_dim)
 
         # Reparameterize the entire HMM as conditionally Gaussian.
         hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
                                fn.observation_matrix, obs_dist, duration=fn.duration)
+        hmm = self._wrap(hmm, event_dim)
 
         # Apply any observation transforms.
         if fn.transforms:
