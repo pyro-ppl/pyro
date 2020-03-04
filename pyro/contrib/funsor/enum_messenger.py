@@ -39,7 +39,7 @@ class IndepMessenger(GlobalNamedMessenger):
         import funsor; funsor.set_backend("torch")  # noqa: E702
 
         self._indices = funsor.Tensor(
-            torch.arange(self.size, dtype=torch.long),  # TODO use funsor.Arange for backend independence
+            funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size),
             OrderedDict([(self.name, funsor.bint(self.size))]),
             self.size
         )
@@ -111,8 +111,8 @@ class TraceMessenger(OrigTraceMessenger):
     def _pyro_post_sample(self, msg):
         import funsor; funsor.set_backend("torch")  # noqa: E702
         # TODO reinstate this when we have enough to_funsor implementations
-        # if "funsor_fn" not in msg["infer"]:
-        #     msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
+        if "funsor_fn" not in msg["infer"]:
+            msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
         if "funsor_log_prob" not in msg["infer"]:
             msg["infer"]["funsor_log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]),
                                                         funsor.reals())

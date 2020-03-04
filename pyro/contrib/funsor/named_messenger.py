@@ -188,11 +188,15 @@ class NamedMessenger(ReentrantMessenger):
         dim_type = msg["kwargs"].setdefault("dim_type", DimType.LOCAL)
 
         event_dim = len(output.shape)
-        batch_dim = len(raw_value.shape) - event_dim
+        try:
+            batch_shape = raw_value.batch_shape  # TODO make make this more robust
+        except AttributeError:
+            batch_shape = raw_value.shape[:len(raw_value.shape) - event_dim]
+        batch_dim = len(batch_shape)
 
         # interpret all names/dims as requests since we only run this function once
         for dim in range(-batch_dim, 0):
-            if raw_value.shape[dim - event_dim] == 1:
+            if batch_shape[dim] == 1:
                 continue
             name = dim_to_name.get(dim, None)
             dim_to_name[dim] = name if isinstance(name, NameRequest) else NameRequest(name, dim_type)
