@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.distributions as dist
-from pyro.distributions.hmm import LinearHMM
 
 from .reparam import Reparam
 
@@ -62,10 +61,16 @@ class LinearHMMReparam(Reparam):
         self.obs = obs
 
     def __call__(self, name, fn, obs):
-        assert isinstance(fn, LinearHMM)
+        assert isinstance(fn, (dist.LinearHMM, dist.IndependentHMM))
         if fn.duration is None:
             raise ValueError("LinearHMMReparam requires duration to be specified "
                              "on targeted LinearHMM distributions")
+
+        # Unwrap IndependentHMM.
+        if isinstance(fn, dist.IndependentHMM):
+            hmm, obs = self(name, fn.base_dist, obs)
+            hmm = dist.IndependentHMM(hmm)
+            return hmm, obs
 
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist = fn.initial_dist
