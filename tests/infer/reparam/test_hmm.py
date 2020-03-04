@@ -115,6 +115,43 @@ def test_stable_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
     tr.trace.compute_log_prob()  # smoke test only
 
 
+@pytest.mark.parametrize("duration", [1, 2, 3, 4, 5, 6])
+@pytest.mark.parametrize("obs_dim", [1, 2])
+@pytest.mark.parametrize("hidden_dim", [1, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("skew", [0, None], ids=["symmetric", "skewed"])
+def test_independent_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
+    base_batch_shape = batch_shape + (obs_dim,)
+    stability = dist.Uniform(0.5, 2).sample(base_batch_shape)
+    init_dist = random_stable(base_batch_shape + (hidden_dim,),
+                              stability.unsqueeze(-1), skew=skew).to_event(1)
+    trans_mat = torch.randn(base_batch_shape + (duration, hidden_dim, hidden_dim))
+    trans_dist = random_stable(base_batch_shape + (duration, hidden_dim),
+                               stability.unsqueeze(-1).unsqueeze(-1), skew=skew).to_event(1)
+    obs_mat = torch.randn(base_batch_shape + (duration, hidden_dim, 1))
+    obs_dist = random_stable(base_batch_shape + (duration, 1),
+                             stability.unsqueeze(-1).unsqueeze(-1), skew=skew).to_event(1)
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
+    assert hmm.batch_shape == base_batch_shape
+    assert hmm.event_shape == (duration, 1)
+
+    hmm = dist.IndependentHMM(hmm)
+    assert hmm.batch_shape == batch_shape
+    assert hmm.event_shape == (duration, obs_dim)
+
+    def model(data=None):
+        with pyro.plate_stack("plates", batch_shape):
+            return pyro.sample("x", hmm, obs=data)
+
+    data = torch.randn(duration, obs_dim)
+    rep = SymmetricStableReparam() if skew == 0 else StableReparam()
+    with poutine.trace() as tr:
+        with poutine.reparam(config={"x": LinearHMMReparam(rep, rep, rep)}):
+            model(data)
+    assert isinstance(tr.trace.nodes["x"]["fn"], dist.IndependentHMM)
+    tr.trace.compute_log_prob()  # smoke test only
+
+
 # Test helper to extract a few fractional moments from joint samples.
 # This uses fractional moments because Stable variance is infinite.
 def get_hmm_moments(samples):
