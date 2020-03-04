@@ -68,8 +68,12 @@ class LinearHMMReparam(Reparam):
 
         # Unwrap IndependentHMM.
         if isinstance(fn, dist.IndependentHMM):
+            if obs is not None:
+                obs = obs.transpose(-1, -2).unsqueeze(-1)
             hmm, obs = self(name, fn.base_dist, obs)
             hmm = dist.IndependentHMM(hmm)
+            if obs is not None:
+                obs = obs.squeeze(-1).transpose(-1, -2)
             return hmm, obs
 
         # Reparameterize the initial distribution as conditionally Gaussian.
