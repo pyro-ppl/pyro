@@ -49,7 +49,7 @@ Welcome to Pyro Examples and Tutorials!
    gplvm
    bo
    easyguide
-   forecast_i
+   forecasting_i
    tracking_1d
    csis
    RSA-implicature
