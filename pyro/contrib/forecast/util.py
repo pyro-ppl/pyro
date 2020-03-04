@@ -263,6 +263,7 @@ def _(d, batch_shape):
 
 
 def _reshape_batch_univariate(d, batch_shape):
+    batch_shape = batch_shape + (-1,) * d.event_dim
     params = {name: getattr(d, name).reshape(batch_shape)
               for name in UNIVARIATE_DISTS[type(d)]}
     return type(d)(**params)
