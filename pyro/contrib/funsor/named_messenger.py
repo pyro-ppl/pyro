@@ -141,7 +141,7 @@ class DimStack:
 _DIM_STACK = DimStack()  # only one global instance
 
 
-class NamedMessenger(ReentrantMessenger):
+class DimStackCleanupMessenger(ReentrantMessenger):
 
     def __init__(self):
         self._saved_dims = ()
@@ -161,6 +161,9 @@ class NamedMessenger(ReentrantMessenger):
             for name, dim in reversed(tuple(_DIM_STACK.global_frame.name_to_dim.items())):
                 self._saved_dims += (_DIM_STACK.global_frame.free(name, dim),)
         return super().__exit__(*args, **kwargs)
+
+
+class NamedMessenger(DimStackCleanupMessenger):
 
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_data(msg):
