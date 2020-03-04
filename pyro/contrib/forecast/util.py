@@ -327,8 +327,8 @@ def _(d, batch_shape):
 
     obs_mat = d.observation_matrix
     if obs_mat.dim() > 3:
-        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.hidden_dim))
-        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.obs_dim))
+        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.obs_dim))
 
     obs_dist = d.observation_dist
     if len(obs_dist.batch_shape) > 1:
