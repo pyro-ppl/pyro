@@ -2,6 +2,9 @@ Forecasting
 ===========
 .. automodule:: pyro.contrib.forecast
 
+.. warning:: Code in ``pyro.contrib.forecast`` is under development.
+    This code makes no guarantee about maintaining backwards compatibility.
+
 ``pyro.contrib.forecast`` is a lightweight framework for experimenting with a
 restricted class of time series models and inference algorithms using familiar
 Pyro modeling syntax and PyTorch neural networks.
@@ -32,7 +35,9 @@ Seasonality can be handled using the helpers
 
 See :mod:`pyro.contrib.timeseries` for ways to construct temporal Gaussian processes useful as likelihoods.
 
-See the `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_ for example usage.
+For example usage see
+- The `univariate forecasting tutorial <http://pyro.ai/examples/forecasting_i.html>`_ .
+- The `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_ .
 
 Forecaster Interface
 ---------------------
