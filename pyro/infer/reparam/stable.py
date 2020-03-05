@@ -79,7 +79,13 @@ class SymmetricStableReparam(Reparam):
     [1] Alvaro Cartea and Sam Howison (2009)
         "Option Pricing with Levy-Stable Processes"
         https://pdfs.semanticscholar.org/4d66/c91b136b2a38117dd16c2693679f5341c616.pdf
+
+    :param float epsilon: Small numerical factor that helps with stability at the price of a
+        small bias in the auxiliary sampler. Defaults to 1.0e-4. Set to 0.0 to avoid bias.
     """
+    def __init__(self, epsilon=1.0e-4):
+        self.epsilon = epsilon
+
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
@@ -94,7 +100,7 @@ class SymmetricStableReparam(Reparam):
         half_pi = proto.new_full(proto.shape, math.pi / 2)
         one = proto.new_ones(proto.shape)
         u = pyro.sample("{}_uniform".format(name),
-                        self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
+                        self._wrap(dist.Uniform(-half_pi + self.epsilon, half_pi - self.epsilon), event_dim))
         e = pyro.sample("{}_exponential".format(name),
                         self._wrap(dist.Exponential(one), event_dim))
 
