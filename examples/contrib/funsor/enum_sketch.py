@@ -53,7 +53,7 @@ def model(data):
     x = 0
     for i in markov(range(len(data))):
         x = pyro.sample(f"x{i}", dist.Categorical(p[x]))
-        y = pyro.sample(f"y{i}", dist.Normal(locs[x], 1.), obs=data[i])
+        pyro.sample(f"y{i}", dist.Normal(locs[x], 1.), obs=data[i])
 
 
 def main():
