@@ -10,10 +10,16 @@ from torch.distributions.utils import broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
-def _unsafe_standard_stable(alpha, beta, V, W, coords):
+def _unsafe_standard_stable(alpha, beta, V, W, coords, tol=1e-6):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
     # by Nolan [4]. This will fail if alpha is close to 1.
+
+    # Numerically stabilize.
+    if tol:
+        assert 0 < tol < 1
+        V = V.mul(1 - tol)
+        W = W + tol
 
     # Differentiably transform noise via parameters.
     assert V.shape == W.shape
