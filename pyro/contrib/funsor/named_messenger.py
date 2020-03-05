@@ -186,11 +186,15 @@ class NamedMessenger(DimStackCleanupMessenger):
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_funsor(msg):
 
-        raw_value, output = msg["args"]
+        if len(msg["args"]) == 2:
+            raw_value, output = msg["args"]
+        else:
+            raw_value = msg["args"][0]
+            output = msg["kwargs"].setdefault("output", None)
         dim_to_name = msg["kwargs"].setdefault("dim_to_name", OrderedDict())
         dim_type = msg["kwargs"].setdefault("dim_type", DimType.LOCAL)
 
-        event_dim = len(output.shape)
+        event_dim = len(output.shape) if output else 0
         try:
             batch_shape = raw_value.batch_shape  # TODO make make this more robust
         except AttributeError:

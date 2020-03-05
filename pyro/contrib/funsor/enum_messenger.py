@@ -4,7 +4,6 @@
 This file contains reimplementations of some of Pyro's core enumeration machinery,
 which should eventually be drop-in replacements for the current versions.
 """
-import torch
 from collections import OrderedDict
 
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
@@ -84,17 +83,20 @@ class EnumMessenger(BaseEnumMessenger):
 
         import funsor; funsor.set_backend("torch")  # noqa: E702
 
-        if msg["done"] or msg["is_observed"] or msg.get("expand", False) or \
+        if msg["done"] or msg["is_observed"] or msg["infer"].get("expand", False) or \
                 msg["infer"].get("enumerate") != "parallel":
             return
 
         if msg["infer"].get("num_samples", None) is not None:
             raise NotImplementedError("TODO implement multiple sampling")
 
-        raw_value = msg["fn"].enumerate_support(expand=msg.get("expand", False)).squeeze()
+        if msg["infer"].get("expand", False):
+            raise NotImplementedError("expand=True not implemented")
+
+        raw_value = msg["fn"].enumerate_support(expand=False).squeeze()
         size = raw_value.numel()
         msg["infer"]["funsor_value"] = funsor.Tensor(
-            raw_value,  # TODO use funsor.Arange for backend independence
+            raw_value,
             OrderedDict([(msg["name"], funsor.bint(size))]),
             size
         )
