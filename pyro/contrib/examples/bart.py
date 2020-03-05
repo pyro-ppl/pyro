@@ -47,7 +47,6 @@ def _load_hourly_od(basename):
         return filename
 
     # Download source files.
-    _mkdir_p(DATA)
     gz_filename = os.path.join(DATA, basename)
     if not os.path.exists(gz_filename):
         url = SOURCE_DIR + basename
@@ -115,6 +114,7 @@ def load_bart_od():
         -   "counts": a ``torch.FloatTensor`` of ridership counts, with shape
             ``(num_hours, len(stations), len(stations))``.
     """
+    _mkdir_p(DATA)
     filename = os.path.join(DATA, "bart_full.pkl.bz2")
     # Work around apparent bug in torch.load(),torch.save().
     pkl_file = filename.rsplit(".", 1)[0]
