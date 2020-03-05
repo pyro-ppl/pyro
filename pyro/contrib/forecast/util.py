@@ -263,6 +263,7 @@ def _(d, batch_shape):
 
 
 def _reshape_batch_univariate(d, batch_shape):
+    batch_shape = batch_shape + (-1,) * d.event_dim
     params = {name: getattr(d, name).reshape(batch_shape)
               for name in UNIVARIATE_DISTS[type(d)]}
     return type(d)(**params)
@@ -327,8 +328,8 @@ def _(d, batch_shape):
 
     obs_mat = d.observation_matrix
     if obs_mat.dim() > 3:
-        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.hidden_dim))
-        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.obs_dim))
+        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.obs_dim))
 
     obs_dist = d.observation_dist
     if len(obs_dist.batch_shape) > 1:
