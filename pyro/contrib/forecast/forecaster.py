@@ -219,6 +219,7 @@ class Forecaster(nn.Module):
         recommended for model exploration purposes only and should be disabled
         when publishing metrics.
     :param int log_every: Number of training steps between logging messages.
+    :param float clip_norm: Norm used for gradient clipping during optimization. Defaults to 10.0.
     """
     def __init__(self, model, data, covariates, *,
                  guide=None,
@@ -232,7 +233,8 @@ class Forecaster(nn.Module):
                  num_particles=1,
                  vectorize_particles=True,
                  warm_start=False,
-                 log_every=100):
+                 log_every=100,
+                 clip_norm=10.0):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
@@ -256,7 +258,8 @@ class Forecaster(nn.Module):
         losses = []
         if num_steps:
             optim = DCTAdam({"lr": learning_rate, "betas": betas,
-                             "lrd": learning_rate_decay ** (1 / num_steps)})
+                             "lrd": learning_rate_decay ** (1 / num_steps),
+                             "clip_norm": clip_norm})
             svi = SVI(self.model, self.guide, optim, elbo)
             for step in range(num_steps):
                 loss = svi.step(data, covariates) / data.numel()
