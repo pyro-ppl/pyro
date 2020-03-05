@@ -49,6 +49,7 @@ Welcome to Pyro Examples and Tutorials!
    bo
    easyguide
    forecasting_i
+   forecasting_ii
    tracking_1d
    csis
    RSA-implicature
