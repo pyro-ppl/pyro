@@ -35,10 +35,11 @@ Seasonality can be handled using the helpers
 
 See :mod:`pyro.contrib.timeseries` for ways to construct temporal Gaussian processes useful as likelihoods.
 
-For example usage see
-- The `univariate forecasting tutorial <http://pyro.ai/examples/forecasting_i.html>`_ .
-- The `state space modeling tutorial <http://pyro.ai/examples/forecasting_ii.html>`_ .
-- The `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_ .
+For example usage see:
+
+- The `univariate forecasting tutorial <http://pyro.ai/examples/forecasting_i.html>`_
+- The `state space modeling tutorial <http://pyro.ai/examples/forecasting_ii.html>`_
+- The `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_
 
 Forecaster Interface
 ---------------------
