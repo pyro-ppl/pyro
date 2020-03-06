@@ -823,12 +823,12 @@ class LinearHMM(HiddenMarkovModel):
     Hidden Markov Model with linear dynamics and observations and arbitrary
     noise for initial, transition, and observation distributions.  Each of
     those distributions can be e.g.
-    `:class:`~pyro.distributions.MultivariateNormal` or
-    `:class:`~pyro.distributions.Independent` of
-    `:class:`~pyro.distributions.Normal`,
-    `:class:`~pyro.distributions.StudentT`, or `~pyro.distributions.Stable` .
+    :class:`~pyro.distributions.MultivariateNormal` or
+    :class:`~pyro.distributions.Independent` of
+    :class:`~pyro.distributions.Normal`,
+    :class:`~pyro.distributions.StudentT`, or :class:`~pyro.distributions.Stable` .
     Additionally the observation distribution may be constrained, e.g.
-    `~pyro.distributions.LogNormal`
+    :class:`~pyro.distributions.LogNormal`
 
     This corresponds to the generative model::
 
