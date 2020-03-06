@@ -400,10 +400,11 @@ def crps_empirical(pred, truth):
 
     Note that for a single sample this reduces to absolute error.
 
-    References
-    [1] `Strictly Proper Scoring Rules, Prediction, and Estimation`
-    Tilmann Gneiting, Adrian E. Raftery (2007)
-    https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+    **References**
+
+    [1] Tilmann Gneiting, Adrian E. Raftery (2007)
+        `Strictly Proper Scoring Rules, Prediction, and Estimation`
+        https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
 
     :param torch.Tensor pred: A set of sample predictions batched on rightmost dim.
         This should have shape ``(num_samples,) + truth.shape``.

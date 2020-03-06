@@ -46,6 +46,12 @@ def eval_crps(pred, truth):
     Evaluate continuous ranked probability score, averaged over all data
     elements.
 
+    **References**
+
+    [1] Tilmann Gneiting, Adrian E. Raftery (2007)
+        `Strictly Proper Scoring Rules, Prediction, and Estimation`
+        https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+
     :param torch.Tensor pred: Forecasted samples.
     :param torch.Tensor truth: Ground truth.
     :rtype: float
