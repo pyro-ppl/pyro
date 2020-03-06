@@ -10,24 +10,24 @@ from torch.distributions.utils import broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
-def _unsafe_standard_stable(alpha, beta, V, W, coords, tol=1e-6):
+def _unsafe_standard_stable(alpha, beta, V, W, coords):
     # Implements a noisily reparametrized version of the sampler
     # Chambers-Mallows-Stuck method as corrected by Weron [1,3] and simplified
     # by Nolan [4]. This will fail if alpha is close to 1.
 
-    # Numerically stabilize.
-    if tol:
-        assert 0 < tol < 1
-        V = V.mul(1 - tol)
-        W = W + tol
-
     # Differentiably transform noise via parameters.
     assert V.shape == W.shape
     inv_alpha = alpha.reciprocal()
-    b = beta * (math.pi / 2 * alpha).tan()
-    v = b.atan() + alpha * V
+    half_pi = math.pi / 2
+    eps = torch.finfo(V.dtype).eps
+    # make V belong to the open interval (-pi/2, pi/2)
+    V = V.clamp(min=2 * eps - half_pi, max=half_pi - 2 * eps)
+    ha = half_pi * alpha
+    b = beta * ha.tan()
+    # +/- `ha` term to keep the precision of alpha * (V + half_pi) when V ~ -half_pi
+    v = b.atan() - ha + alpha * (V + half_pi)
     Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) \
-        * ((v - V).cos() / W).pow(inv_alpha - 1)
+        * ((v - V).cos().clamp(min=eps) / W).pow(inv_alpha - 1)
     Z.data[Z.data != Z.data] = 0  # drop occasional NANs
 
     # Optionally convert to Nolan's parametrization S^0 where samples depend
