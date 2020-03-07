@@ -306,13 +306,13 @@ class HMCForecaster(nn.Module):
     :param int num_warmup: number of MCMC warmup steps.
     :param int num_samples: number of MCMC samples.
     :param int num_chains: number of parallel MCMC chains.
-    :param bool dense_mass: a flag to decide if mass matrix is dense or diagonal.
-        Default to False.
+    :param bool dense_mass: a flag to control whether the mass matrix is dense or diagonal.
+        Defaults to False.
     :param bool jit_compile: whether to use the PyTorch JIT to trace the log
         density computation, and use this optimized executable trace in the
-        integrator. Default to False.
+        integrator. Defaults to False.
     :param int max_tree_depth: Max depth of the binary tree created during the doubling
-        scheme of :class:`~pyro.infer.mcmc.nuts.NUTS` sampler. Default to 10.
+        scheme of the :class:`~pyro.infer.mcmc.nuts.NUTS` sampler. Defaults to 10.
     """
     def __init__(self, model, data, covariates=None, *,
                  num_warmup=1000, num_samples=1000, num_chains=1,
@@ -351,7 +351,7 @@ class HMCForecaster(nn.Module):
         dim = -1 - self.max_plate_nesting
 
         weights = torch.ones(self._num_samples, device=data.device)
-        indices = torch.multinomial(weights, num_samples, replacement=True)
+        indices = torch.multinomial(weights, num_samples, replacement=num_samples > self._num_samples)
         for name, node in list(self._trace.nodes.items()):
             sample = self._samples[name].index_select(0, indices)
             node['value'] = sample.reshape(
