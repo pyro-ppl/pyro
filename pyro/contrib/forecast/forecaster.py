@@ -319,7 +319,6 @@ class HMCForecaster(nn.Module):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
-        self.num_samples = num_samples * num_chains
         max_plate_nesting = _guess_max_plate_nesting(model, (data, covariates), {})
         self.max_plate_nesting = max(max_plate_nesting, 1)  # force a time plate
 
@@ -327,7 +326,9 @@ class HMCForecaster(nn.Module):
                       max_tree_depth=max_tree_depth, max_plate_nesting=max_plate_nesting)
         mcmc = MCMC(kernel, warmup_steps=num_warmup, num_samples=num_samples, num_chains=num_chains)
         mcmc.run(data, covariates)
-        mcmc.summary()
+        # conditions to compute rhat
+        if (num_chains == 1 and num_samples >= 4) or (num_chains > 1 and num_samples >= 2):
+            mcmc.summary()
 
         # inspect the model with particles plate = 1, so that we can reshape samples to
         # add any missing plate dim in front.
@@ -336,22 +337,27 @@ class HMCForecaster(nn.Module):
                 model(data, covariates)
 
         self._trace = tr.trace
-        samples = mcmc.get_samples()
+        self._samples = mcmc.get_samples()
+        self._num_samples = num_samples * num_chains
         for name, node in list(self._trace.nodes.items()):
-            if name not in samples:
+            if name not in self._samples:
                 del self._trace.nodes[name]
-            else:
-                sample = samples[name]
-                node['value'] = sample.reshape(
-                    (self.num_samples,) + (1,) * (node['value'].dim() - sample.dim()) + sample.shape[1:])
+        print(self._trace.nodes.keys())
 
     @torch.no_grad()
-    def forward(self, data, covariates):
+    def forward(self, data, covariates, num_samples):
         assert data.size(-2) < covariates.size(-2)
         assert self.max_plate_nesting >= 1
         dim = -1 - self.max_plate_nesting
 
+        weights = torch.ones(self._num_samples, device=data.device)
+        indices = torch.multinomial(weights, num_samples, replacement=True)
+        for name, node in list(self._trace.nodes.items()):
+            sample = self._samples[name].index_select(0, indices)
+            node['value'] = sample.reshape(
+                (num_samples,) + (1,) * (node['value'].dim() - sample.dim()) + sample.shape[1:])
+
         with PrefixReplayMessenger(self._trace):
             with PrefixConditionMessenger(self.model._prefix_condition_data):
-                with pyro.plate("particles", self.num_samples, dim=dim):
+                with pyro.plate("particles", num_samples, dim=dim):
                     return self.model(data, covariates)

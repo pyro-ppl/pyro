@@ -113,15 +113,15 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
     data = torch.randn(batch_shape + (t_obs, obs_dim))
     covariates = torch.randn(batch_shape + (t_obs + t_forecast, cov_dim))
 
-    num_samples = 5
     if engine == "svi":
         forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
                                 num_steps=2, log_every=1, dct_gradients=dct_gradients)
-        samples = forecaster(data, covariates, num_samples)
     else:
         forecaster = HMCForecaster(model, data, covariates[..., :t_obs, :],
-                                   num_warmup=2, num_samples=num_samples)
-        samples = forecaster(data, covariates)
+                                   num_warmup=2, num_samples=4)
+
+    num_samples = 5
+    samples = forecaster(data, covariates, num_samples)
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
 
 
