@@ -290,7 +290,8 @@ class HMCForecaster(nn.Module):
     """
     Forecaster for a :class:`ForecastingModel` using Hamiltonian Monte Carlo.
 
-    On initialization, this will run MCMC to get posterior samples of the model.
+    On initialization, this will run :class:`~pyro.infer.mcmc.nuts.NUTS` sampler
+    to get posterior samples of the model.
 
     After construction, this can be called to generate sample forecasts.
 
@@ -311,7 +312,7 @@ class HMCForecaster(nn.Module):
         density computation, and use this optimized executable trace in the
         integrator. Default to True.
     :param int max_tree_depth: Max depth of the binary tree created during the doubling
-        scheme of NUTS sampler. Default to 10.
+        scheme of :class:`~pyro.infer.mcmc.nuts.NUTS` sampler. Default to 10.
     """
     def __init__(self, model, data, covariates=None, *,
                  num_warmup=1000, num_samples=1000, num_chains=1,
