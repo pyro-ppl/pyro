@@ -310,13 +310,13 @@ class HMCForecaster(nn.Module):
         Default to False.
     :param bool jit_compile: whether to use the PyTorch JIT to trace the log
         density computation, and use this optimized executable trace in the
-        integrator. Default to True.
+        integrator. Default to False.
     :param int max_tree_depth: Max depth of the binary tree created during the doubling
         scheme of :class:`~pyro.infer.mcmc.nuts.NUTS` sampler. Default to 10.
     """
     def __init__(self, model, data, covariates=None, *,
                  num_warmup=1000, num_samples=1000, num_chains=1,
-                 dense_mass=False, jit_compile=True, max_tree_depth=10):
+                 dense_mass=False, jit_compile=False, max_tree_depth=10):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
