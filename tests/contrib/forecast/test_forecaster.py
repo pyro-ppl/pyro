@@ -103,7 +103,7 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("t_obs", [1, 7])
 @pytest.mark.parametrize("t_forecast", [1, 3])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("cov_dim", [0, 1, 5])
+@pytest.mark.parametrize("cov_dim", [0, 1, 6])
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("dct_gradients", [False, True])
 @pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
