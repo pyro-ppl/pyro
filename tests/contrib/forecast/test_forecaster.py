@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.forecast import Forecaster, ForecastingModel
+from pyro.contrib.forecast import Forecaster, ForecastingModel, HMCForecaster
 from pyro.infer.reparam import LinearHMMReparam, StableReparam
 
 
@@ -107,13 +107,20 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("dct_gradients", [False, True])
 @pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
-def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_gradients):
+@pytest.mark.parametrize("engine", ["svi", "hmc"])
+def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_gradients, engine):
     model = Model()
     data = torch.randn(batch_shape + (t_obs, obs_dim))
     covariates = torch.randn(batch_shape + (t_obs + t_forecast, cov_dim))
 
-    forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
-                            num_steps=2, log_every=1, dct_gradients=dct_gradients)
+    if engine == "svi":
+        forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
+                                num_steps=2, log_every=1, dct_gradients=dct_gradients)
+    else:
+        if dct_gradients is True:
+            pytest.skip("Duplicated test.")
+        forecaster = HMCForecaster(model, data, covariates[..., :t_obs, :], max_tree_depth=1,
+                                   num_warmup=1, num_samples=1, jit_compile=False)
 
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)

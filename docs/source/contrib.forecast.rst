@@ -12,8 +12,9 @@ Pyro modeling syntax and PyTorch neural networks.
 Models include hierarchical multivariate heavy-tailed time series of ~1000 time
 steps and ~1000 separate series. Inference combines subsample-compatible
 variational inference with Gaussian variable elimination based on the
-:class:`~pyro.distributions.GaussianHMM` class. Forecasts are in the form of
-joint posterior samples at multiple future time steps.
+:class:`~pyro.distributions.GaussianHMM` class. Inference using Hamiltonian Monte Carlo
+sampling is also supported with :class:`~pyro.contrib.forecast.forecaster.HMCForecaster`.
+Forecasts are in the form of joint posterior samples at multiple future time steps.
 
 Hierarchical models use the familiar :class:`~pyro.plate` syntax for
 general hierarchical modeling in Pyro. Plates can be subsampled, enabling
