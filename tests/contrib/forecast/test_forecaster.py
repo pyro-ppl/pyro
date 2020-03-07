@@ -103,7 +103,7 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("t_obs", [1, 7])
 @pytest.mark.parametrize("t_forecast", [1, 3])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("cov_dim", [0, 1, 6])
+@pytest.mark.parametrize("cov_dim", [0, 1, 5])
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("dct_gradients", [False, True])
 @pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
@@ -117,8 +117,10 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
         forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
                                 num_steps=2, log_every=1, dct_gradients=dct_gradients)
     else:
+        if dct_gradients is True:
+            pytest.skip("Duplicated test.")
         forecaster = HMCForecaster(model, data, covariates[..., :t_obs, :],
-                                   num_warmup=2, num_samples=4)
+                                   num_warmup=1, num_samples=1, jit_compile=False)
 
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
