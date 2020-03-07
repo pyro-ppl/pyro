@@ -294,10 +294,14 @@ class HMCForecaster(nn.Module):
 
     After construction, this can be called to generate sample forecasts.
 
-    :param callable model: A forecasting model.
-    :param data: A 1D time series data.
-    :param covariates: An array of covariates with time dimension -2. For models not
-        using covariates, pass a shaped empty array ``np.empty((duration, 0))``.
+    :param ForecastingModel model: A forecasting model subclass instance.
+    :param data: A tensor dataset with time dimension -2.
+    :type data: ~torch.Tensor
+    :param covariates: A tensor of covariates with time dimension -2.
+        For models not using covariates, pass a shaped empty tensor
+        ``torch.empty(duration, 0)``.
+    :type covariates: ~torch.Tensor
+
     :param int num_warmup: number of MCMC warmup steps.
     :param int num_samples: number of MCMC samples.
     :param int num_chains: number of parallel MCMC chains.
@@ -307,17 +311,16 @@ class HMCForecaster(nn.Module):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
-        self.data = data
-        self.covariates = covariates
         self.num_samples = num_samples * num_chains
         max_plate_nesting = _guess_max_plate_nesting(model, (data, covariates), {})
         self.max_plate_nesting = max(max_plate_nesting, 1)  # force a time plate
 
-        mcmc = MCMC(NUTS(model), num_warmup, num_samples, num_chains=num_chains)
+        mcmc = MCMC(NUTS(model), warmup_steps=num_warmup, num_samples=num_samples, num_chains=num_chains)
         mcmc.run(data, covariates)
         mcmc.summary()
 
-        # inspect the model with particles plate = 1
+        # inspect the model with particles plate = 1, so that we can reshape samples to
+        # add any missing plate dim in front.
         with poutine.trace() as tr:
             with pyro.plate("particles", 1, dim=-self.max_plate_nesting - 1):
                 model(data, covariates)
