@@ -69,6 +69,7 @@ Welcome to Pyro Examples and Tutorials!
    hmm
    lda
    mcmc
+   neutra
    sparse_gamma
    dkl
    einsum
