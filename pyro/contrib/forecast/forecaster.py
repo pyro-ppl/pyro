@@ -305,9 +305,17 @@ class HMCForecaster(nn.Module):
     :param int num_warmup: number of MCMC warmup steps.
     :param int num_samples: number of MCMC samples.
     :param int num_chains: number of parallel MCMC chains.
+    :param bool dense_mass: a flag to decide if mass matrix is dense or diagonal.
+        Default to False.
+    :param bool jit_compile: whether to use the PyTorch JIT to trace the log
+        density computation, and use this optimized executable trace in the
+        integrator. Default to True.
+    :param int max_tree_depth: Max depth of the binary tree created during the doubling
+        scheme of NUTS sampler. Default to 10.
     """
     def __init__(self, model, data, covariates=None, *,
-                 num_warmup=1000, num_samples=1000, num_chains=1):
+                 num_warmup=1000, num_samples=1000, num_chains=1,
+                 dense_mass=False, jit_compile=True, max_tree_depth=10):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
@@ -315,7 +323,9 @@ class HMCForecaster(nn.Module):
         max_plate_nesting = _guess_max_plate_nesting(model, (data, covariates), {})
         self.max_plate_nesting = max(max_plate_nesting, 1)  # force a time plate
 
-        mcmc = MCMC(NUTS(model), warmup_steps=num_warmup, num_samples=num_samples, num_chains=num_chains)
+        kernel = NUTS(model, full_mass=dense_mass, jit_compile=jit_compile, ignore_jit_warnings=True,
+                      max_tree_depth=max_tree_depth, max_plate_nesting=max_plate_nesting)
+        mcmc = MCMC(kernel, warmup_steps=num_warmup, num_samples=num_samples, num_chains=num_chains)
         mcmc.run(data, covariates)
         mcmc.summary()
 
