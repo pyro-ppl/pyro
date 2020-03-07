@@ -219,7 +219,8 @@ class Forecaster(nn.Module):
         recommended for model exploration purposes only and should be disabled
         when publishing metrics.
     :param int log_every: Number of training steps between logging messages.
-    :param float clip_norm: Norm used for gradient clipping during optimization. Defaults to 10.0.
+    :param float clip_norm: Norm used for gradient clipping during
+        optimization. Defaults to 10.0.
     """
     def __init__(self, model, data, covariates, *,
                  guide=None,
