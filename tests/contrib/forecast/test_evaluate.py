@@ -8,7 +8,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.forecast import ForecastingModel, backtest
+from pyro.contrib.forecast import Forecaster, ForecastingModel, HMCForecaster, backtest
 from pyro.contrib.forecast.evaluate import DEFAULT_METRICS
 from pyro.util import optional
 
@@ -65,7 +65,8 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
 
 
 @pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
-def test_poisson(train_window, min_train_window, test_window, min_test_window, stride):
+@pytest.mark.parametrize("engine", ["svi", "hmc"])
+def test_poisson(train_window, min_train_window, test_window, min_test_window, stride, engine):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
@@ -80,14 +81,22 @@ def test_poisson(train_window, min_train_window, test_window, min_test_window, s
         truth = truth.expm1()
         return pred, truth
 
+    if engine == "svi":
+        forecaster_fn = Forecaster
+        forecaster_options = {"num_steps": 2}
+    else:
+        forecaster_fn = HMCForecaster
+        forecaster_options = {"num_warmup": 1, "num_samples": 1}
+
     windows = backtest(data, covariates, Model,
+                       forecaster_fn=forecaster_fn,
                        transform=transform,
                        train_window=train_window,
                        min_train_window=min_train_window,
                        test_window=test_window,
                        min_test_window=min_test_window,
                        stride=stride,
-                       forecaster_options={"num_steps": 2})
+                       forecaster_options=forecaster_options)
 
     assert any(window["t0"] == 0 for window in windows)
     if stride == 1:

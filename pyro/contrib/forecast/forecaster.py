@@ -10,8 +10,9 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal, init_to_sample
+from pyro.infer.predictive import _guess_max_plate_nesting
 from pyro.nn.module import PyroModule
 from pyro.optim import DCTAdam
 
@@ -288,6 +289,83 @@ class Forecaster(nn.Module):
             with pyro.plate("particles", num_samples, dim=dim):
                 self.guide(data, covariates)
         with PrefixReplayMessenger(tr.trace):
+            with PrefixConditionMessenger(self.model._prefix_condition_data):
+                with pyro.plate("particles", num_samples, dim=dim):
+                    return self.model(data, covariates)
+
+
+class HMCForecaster(nn.Module):
+    """
+    Forecaster for a :class:`ForecastingModel` using Hamiltonian Monte Carlo.
+
+    On initialization, this will run :class:`~pyro.infer.mcmc.nuts.NUTS` sampler
+    to get posterior samples of the model.
+
+    After construction, this can be called to generate sample forecasts.
+
+    :param ForecastingModel model: A forecasting model subclass instance.
+    :param data: A tensor dataset with time dimension -2.
+    :type data: ~torch.Tensor
+    :param covariates: A tensor of covariates with time dimension -2.
+        For models not using covariates, pass a shaped empty tensor
+        ``torch.empty(duration, 0)``.
+    :type covariates: ~torch.Tensor
+
+    :param int num_warmup: number of MCMC warmup steps.
+    :param int num_samples: number of MCMC samples.
+    :param int num_chains: number of parallel MCMC chains.
+    :param bool dense_mass: a flag to control whether the mass matrix is dense or diagonal.
+        Defaults to False.
+    :param bool jit_compile: whether to use the PyTorch JIT to trace the log
+        density computation, and use this optimized executable trace in the
+        integrator. Defaults to False.
+    :param int max_tree_depth: Max depth of the binary tree created during the doubling
+        scheme of the :class:`~pyro.infer.mcmc.nuts.NUTS` sampler. Defaults to 10.
+    """
+    def __init__(self, model, data, covariates=None, *,
+                 num_warmup=1000, num_samples=1000, num_chains=1,
+                 dense_mass=False, jit_compile=False, max_tree_depth=10):
+        assert data.size(-2) == covariates.size(-2)
+        super().__init__()
+        self.model = model
+        max_plate_nesting = _guess_max_plate_nesting(model, (data, covariates), {})
+        self.max_plate_nesting = max(max_plate_nesting, 1)  # force a time plate
+
+        kernel = NUTS(model, full_mass=dense_mass, jit_compile=jit_compile, ignore_jit_warnings=True,
+                      max_tree_depth=max_tree_depth, max_plate_nesting=max_plate_nesting)
+        mcmc = MCMC(kernel, warmup_steps=num_warmup, num_samples=num_samples, num_chains=num_chains)
+        mcmc.run(data, covariates)
+        # conditions to compute rhat
+        if (num_chains == 1 and num_samples >= 4) or (num_chains > 1 and num_samples >= 2):
+            mcmc.summary()
+
+        # inspect the model with particles plate = 1, so that we can reshape samples to
+        # add any missing plate dim in front.
+        with poutine.trace() as tr:
+            with pyro.plate("particles", 1, dim=-self.max_plate_nesting - 1):
+                model(data, covariates)
+
+        self._trace = tr.trace
+        self._samples = mcmc.get_samples()
+        self._num_samples = num_samples * num_chains
+        for name, node in list(self._trace.nodes.items()):
+            if name not in self._samples:
+                del self._trace.nodes[name]
+
+    @torch.no_grad()
+    def forward(self, data, covariates, num_samples):
+        assert data.size(-2) < covariates.size(-2)
+        assert self.max_plate_nesting >= 1
+        dim = -1 - self.max_plate_nesting
+
+        weights = torch.ones(self._num_samples, device=data.device)
+        indices = torch.multinomial(weights, num_samples, replacement=num_samples > self._num_samples)
+        for name, node in list(self._trace.nodes.items()):
+            sample = self._samples[name].index_select(0, indices)
+            node['value'] = sample.reshape(
+                (num_samples,) + (1,) * (node['value'].dim() - sample.dim()) + sample.shape[1:])
+
+        with PrefixReplayMessenger(self._trace):
             with PrefixConditionMessenger(self.model._prefix_condition_data):
                 with pyro.plate("particles", num_samples, dim=dim):
                     return self.model(data, covariates)

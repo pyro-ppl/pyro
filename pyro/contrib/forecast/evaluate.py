@@ -66,7 +66,8 @@ DEFAULT_METRICS = {
 }
 
 
-def backtest(data, covariates, model_fn, guide_fn=None, *,
+def backtest(data, covariates, model_fn, *,
+             forecaster_fn=Forecaster,
              metrics=None,
              transform=None,
              train_window=None,
@@ -87,8 +88,12 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
         ``torch.empty(duration, 0)``.
     :type covariates: ~torch.Tensor
     :param callable model_fn: Function that returns an
-        ~pyro.contrib.forecast.forecaster.ForecastingModel object.
-    :param callable guide_fn: Function that returns a guide object.
+        :class:`~pyro.contrib.forecast.forecaster.ForecastingModel` object.
+    :param callable forecaster_fn: Function that returns a forecaster object
+        (for example, :class:`~pyro.contrib.forecast.forecaster.Forecaster`
+        or :class:`~pyro.contrib.forecast.forecaster.HMCForecaster`)
+        given arguments model, training data, training covariates and
+        keyword arguments defined in `forecaster_options`.
     :param dict metrics: A dictionary mapping metric name to metric function.
         The metric function should input a forecast ``pred`` and ground
         ``truth`` and can output anything, often a number. Example metrics
@@ -97,7 +102,8 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
         metrics. If provided this will be applied as
         ``pred, truth = transform(pred, truth)``.
     :param int train_window: Size of the training window. Be default trains
-        from beginning of data. This must be None if
+        from beginning of data. This must be None if forecaster is
+        :class:`~pyro.contrib.forecast.forecaster.Forecaster` and
         ``forecaster_options["warm_start"]`` is true.
     :param int min_train_window: If ``train_window`` is None, this specifies
         the min training window size. Defaults to 1.
@@ -162,9 +168,8 @@ def backtest(data, covariates, model_fn, guide_fn=None, *,
         train_data = data[..., t0:t1, :]
         train_covariates = covariates[..., t0:t1, :]
         model = model_fn()
-        guide = None if guide_fn is None else guide_fn()
-        forecaster = Forecaster(model, train_data, train_covariates,
-                                guide=guide, **forecaster_options)
+        forecaster = forecaster_fn(model, train_data, train_covariates,
+                                   **forecaster_options)
 
         # Forecast forward to testing window.
         test_covariates = covariates[..., t0:t2, :]
