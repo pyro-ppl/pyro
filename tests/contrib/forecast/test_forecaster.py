@@ -35,7 +35,7 @@ class Model1(ForecastingModel):
                 jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
             prediction = jumps.cumsum(-2)
 
-            noise_dist = dist.Laplace(zero_data, 1)
+            noise_dist = dist.Laplace(0, 1)
             self.predict(noise_dist, prediction)
 
 
