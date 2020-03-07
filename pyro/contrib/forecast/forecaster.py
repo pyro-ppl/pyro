@@ -10,8 +10,9 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal, init_to_sample
+from pyro.infer.predictive import _guess_max_plate_nesting
 from pyro.nn.module import PyroModule
 from pyro.optim import DCTAdam
 
@@ -282,4 +283,62 @@ class Forecaster(nn.Module):
         with PrefixReplayMessenger(tr.trace):
             with PrefixConditionMessenger(self.model._prefix_condition_data):
                 with pyro.plate("particles", num_samples, dim=dim):
+                    return self.model(data, covariates)
+
+
+class HMCForecaster(nn.Module):
+    """
+    Forecaster for a :class:`ForecastingModel` using Hamiltonian Monte Carlo.
+
+    On initialization, this will run MCMC to get posterior samples of the model.
+
+    After construction, this can be called to generate sample forecasts.
+
+    :param callable model: A forecasting model.
+    :param data: A 1D time series data.
+    :param covariates: An array of covariates with time dimension -2. For models not
+        using covariates, pass a shaped empty array ``np.empty((duration, 0))``.
+    :param int num_warmup: number of MCMC warmup steps.
+    :param int num_samples: number of MCMC samples.
+    :param int num_chains: number of parallel MCMC chains.
+    """
+    def __init__(self, model, data, covariates=None, *,
+                 num_warmup=1000, num_samples=1000, num_chains=1, seed=0):
+        assert data.size(-2) == covariates.size(-2)
+        super().__init__()
+        self.model = model
+        self.data = data
+        self.covariates = covariates
+        self.num_samples = num_samples * num_chains
+        max_plate_nesting = _guess_max_plate_nesting(model, (data, covariates), {})
+        self.max_plate_nesting = max(max_plate_nesting, 1)  # force a time plate
+
+        mcmc = MCMC(NUTS(model), num_warmup, num_samples, num_chains=num_chains)
+        mcmc.run(data, covariates)
+        mcmc.summary()
+
+        # inspect the model with particles plate = 1
+        with poutine.trace() as tr:
+            with pyro.plate("particles", 1, dim=-self.max_plate_nesting - 1):
+                model(data, covariates)
+
+        self._trace = tr.trace
+        samples = mcmc.get_samples()
+        for name, node in list(self._trace.nodes.items()):
+            if name not in samples:
+                del self._trace.nodes[name]
+            else:
+                sample = samples[name]
+                node['value'] = sample.reshape(
+                    (self.num_samples,) + (1,) * (node['value'].dim() - sample.dim()) + sample.shape[1:])
+
+    @torch.no_grad()
+    def forward(self, data, covariates):
+        assert data.size(-2) < covariates.size(-2)
+        assert self.max_plate_nesting >= 1
+        dim = -1 - self.max_plate_nesting
+
+        with PrefixReplayMessenger(self._trace):
+            with PrefixConditionMessenger(self.model._prefix_condition_data):
+                with pyro.plate("particles", self.num_samples, dim=dim):
                     return self.model(data, covariates)
