@@ -97,12 +97,12 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         assert isinstance(noise_dist, dist.Distribution)
         assert isinstance(prediction, torch.Tensor)
         if noise_dist.event_dim == 0:
-            if len(noise_dist.batch_shape) < 2 or noise_dist.batch_shape[-2] == 1:
+            if noise_dist.batch_shape[-2:] != prediction.shape[-2:]:
                 noise_dist = noise_dist.expand(
                     noise_dist.batch_shape[:-2] + prediction.shape[-2:])
             noise_dist = noise_dist.to_event(2)
         elif noise_dist.event_dim == 1:
-            if len(noise_dist.batch_shape) < 1 or noise_dist.batch_shape[-1] == 1:
+            if noise_dist.batch_shape[-1:] != prediction.shape[-2:-1]:
                 noise_dist = noise_dist.expand(
                     noise_dist.batch_shape[:-1] + prediction.shape[-2:-1])
             noise_dist = noise_dist.to_event(1)
