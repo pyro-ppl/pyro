@@ -88,7 +88,7 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
             or somehow centered.
         :type noise_dist: ~pyro.distributions.Distribution
         :param prediction: A prediction for the data. This should have the same
-            shape as ``data``, but extended to full duration of the
+            shape as ``data``, but broadcastable to full duration of the
             ``covariates``.
         :type prediction: ~torch.Tensor
         """
@@ -96,10 +96,18 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
         assert self._forecast is None, ".predict() called twice"
         assert isinstance(noise_dist, dist.Distribution)
         assert isinstance(prediction, torch.Tensor)
-        assert len(noise_dist.shape()) >= 2
-        assert noise_dist.shape()[-2:] == prediction.shape[-2:]
-        assert noise_dist.event_dim in {0, 1, 2}
-        noise_dist = noise_dist.to_event(2 - noise_dist.event_dim)
+        if noise_dist.event_dim == 0:
+            if len(noise_dist.batch_shape) < 2 or noise_dist.batch_shape[-2] == 1:
+                noise_dist = noise_dist.expand(
+                    noise_dist.batch_shape[:-2] + prediction.shape[-2:])
+            noise_dist = noise_dist.to_event(2)
+        elif noise_dist.event_dim == 1:
+            if len(noise_dist.batch_shape) < 1 or noise_dist.batch_shape[-1] == 1:
+                noise_dist = noise_dist.expand(
+                    noise_dist.batch_shape[:-1] + prediction.shape[-2:-1])
+            noise_dist = noise_dist.to_event(1)
+        assert noise_dist.event_dim == 2
+        assert noise_dist.event_shape == prediction.shape[-2:]
 
         # The following reshaping logic is required to reconcile batch and
         # event shapes. This would be unnecessary if Pyro used name dimensions
