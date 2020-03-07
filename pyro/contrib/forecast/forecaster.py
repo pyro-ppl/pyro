@@ -307,7 +307,7 @@ class HMCForecaster(nn.Module):
     :param int num_chains: number of parallel MCMC chains.
     """
     def __init__(self, model, data, covariates=None, *,
-                 num_warmup=1000, num_samples=1000, num_chains=1, seed=0):
+                 num_warmup=1000, num_samples=1000, num_chains=1):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
