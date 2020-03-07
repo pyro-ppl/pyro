@@ -342,7 +342,6 @@ class HMCForecaster(nn.Module):
         for name, node in list(self._trace.nodes.items()):
             if name not in self._samples:
                 del self._trace.nodes[name]
-        print(self._trace.nodes.keys())
 
     @torch.no_grad()
     def forward(self, data, covariates, num_samples):
