@@ -268,6 +268,7 @@ class Forecaster(nn.Module):
                     logger.info("step {: >4d} loss = {:0.6g}".format(step, loss))
                 losses.append(loss)
 
+        self.guide.create_plates = None  # Disable subsampling after training.
         self.max_plate_nesting = elbo.max_plate_nesting
         self.losses = losses
 

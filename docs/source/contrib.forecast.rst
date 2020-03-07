@@ -39,7 +39,7 @@ For example usage see:
 
 - The `univariate forecasting tutorial <http://pyro.ai/examples/forecasting_i.html>`_
 - The `state space modeling tutorial <http://pyro.ai/examples/forecasting_ii.html>`_
-- The `multivariate and hierarchical forecasting tutorial <http://pyro.ai/examples/forecasting_iii.html>`_
+- The `hierarchical forecasting tutorial <http://pyro.ai/examples/forecasting_iii.html>`_
 - The `forecasting example <http://pyro.ai/examples/forecasting_simple.html>`_
 
 Forecaster Interface
