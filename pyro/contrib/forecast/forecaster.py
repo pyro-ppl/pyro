@@ -228,7 +228,8 @@ class Forecaster(nn.Module):
         recommended for model exploration purposes only and should be disabled
         when publishing metrics.
     :param int log_every: Number of training steps between logging messages.
-    :param float clip_norm: Norm used for gradient clipping during optimization. Defaults to 10.0.
+    :param float clip_norm: Norm used for gradient clipping during
+        optimization. Defaults to 10.0.
     """
     def __init__(self, model, data, covariates, *,
                  guide=None,
@@ -276,6 +277,7 @@ class Forecaster(nn.Module):
                     logger.info("step {: >4d} loss = {:0.6g}".format(step, loss))
                 losses.append(loss)
 
+        self.guide.create_plates = None  # Disable subsampling after training.
         self.max_plate_nesting = elbo.max_plate_nesting
         self.losses = losses
 
