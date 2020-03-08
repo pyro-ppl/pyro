@@ -3,10 +3,10 @@ NeuTraReparam
 
 `View neutra.py on github`__
 
-.. _github: https://github.com/pyro-ppl/pyro/blob/dev/examples/contrib/neutra/synthetic.py
+.. _github: https://github.com/pyro-ppl/pyro/blob/dev/examples/neutra.py
 
 __ github_
 
-.. literalinclude:: ../../examples/contrib/neutra/synthetic.py
+.. literalinclude:: ../../examples/neutra.py
     :language: python
 
