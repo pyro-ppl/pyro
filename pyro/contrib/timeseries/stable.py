@@ -80,9 +80,9 @@ class LogNormalCoxGuide:
 
     def __call__(self, data):
         # See https://en.wikipedia.org/wiki/Gamma_distribution#Logarithmic_expectation_and_variance
-        data = data.clamp(min=0.5)  # Work around asymptote at data==0.
-        loc = data.digamma()
-        scale = 1.2825498301618641  # = sqrt(trigamma(1))
+        shape = data + 1
+        loc = shape.digamma()
+        scale = shape.polygamma(1).sqrt()
         return dist.Normal(loc, scale).to_event(self.event_dim)
 
 
