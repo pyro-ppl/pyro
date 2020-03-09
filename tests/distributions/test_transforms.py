@@ -110,6 +110,10 @@ class TransformTests(TestCase):
         for input_dim in [2, 5, 10]:
             self._test_jacobian(input_dim, T.tanh())
 
+    def test_spline_jacobians(self):
+        for input_dim in [2, 5, 10]:
+            self._test_jacobian(input_dim, T.spline(input_dim))
+
     def test_dct_jacobians(self):
         for input_dim in [2, 5, 10]:
             self._test_jacobian(input_dim, T.DiscreteCosineTransform())
@@ -193,6 +197,10 @@ class TransformTests(TestCase):
         for input_dim in [2, 5, 10]:
             self._test_inverse(input_dim, T.tanh())
 
+    def test_spline_inverses(self):
+        for input_dim in [2, 5, 10]:
+            self._test_inverse(input_dim, T.spline(input_dim))
+
     def test_dct_inverses(self):
         for input_dim in [2, 5, 10]:
             self._test_inverse(input_dim, T.DiscreteCosineTransform())
@@ -270,6 +278,11 @@ class TransformTests(TestCase):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             input_dim = shape[-1]
             self._test_shape(shape, T.sylvester(input_dim))
+
+    def test_spline_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            input_dim = shape[-1]
+            self._test_shape(shape, T.spline(input_dim))
 
     def test_elu_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:

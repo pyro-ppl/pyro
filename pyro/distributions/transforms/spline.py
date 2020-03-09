@@ -224,9 +224,9 @@ class Spline(TransformModule):
     bijective = True
     event_dim = 0
 
-    def __init__(self, dim, count_bins=5, bounding_box=3., order='linear'):
+    def __init__(self, input_dim, count_bins=5, bounding_box=3., order='linear'):
         super(Spline, self).__init__(cache_size=1)
-        self.dim = dim
+        self.input_dim = input_dim
         self.order = order
 
         # K rational quadratic segments, 2K rational linear segments...
@@ -236,13 +236,14 @@ class Spline(TransformModule):
         self.B = bounding_box
 
         # Parameters for each dimension
-        self.unnormalized_widths = nn.Parameter(torch.randn(self.dim, self.K))
-        self.unnormalized_heights = nn.Parameter(torch.randn(self.dim, self.K))
-        self.unnormalized_derivatives = nn.Parameter(torch.randn(self.dim, self.K - 1))
+        # TODO: What should the initialization scheme be?
+        self.unnormalized_widths = nn.Parameter(torch.randn(self.input_dim, self.K))
+        self.unnormalized_heights = nn.Parameter(torch.randn(self.input_dim, self.K))
+        self.unnormalized_derivatives = nn.Parameter(torch.randn(self.input_dim, self.K - 1))
 
         # Rational linear splines have additional lambda parameters
         if self.order == "linear":
-            self.unnormalized_lambdas = nn.Parameter(torch.rand(self.dim, self.K))
+            self.unnormalized_lambdas = nn.Parameter(torch.rand(self.input_dim, self.K))
         elif self.order != "quadratic":
             raise ValueError(
                 f"Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{self.order}' was found!")
@@ -289,10 +290,23 @@ class Spline(TransformModule):
         return self._cache_log_detJ
 
 
+def spline(input_dim, **kwargs):
+    """
+    A helper function to create a :class:`~pyro.distributions.transforms.Spline` object for consistency with other
+    helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+
+    """
+
+    # TODO: A useful heuristic for choosing number of bins from input dimension like: count_bins=min(5, math.log(input_dim))?
+    return Spline(input_dim, **kwargs)
+
 # TODO: Remove the following and create a Pyro tests!
 if __name__ == "__main__":
-    sc = Spline(dim=3)
-    x = torch.randn(2, 3)
+    sc = spline(input_dim=3)
+    x = torch.randn(1,3)
     y = sc._call(x)
     x2 = sc._inverse(y)
     print(x - x2)
