@@ -12,25 +12,22 @@ import numpy as np
 
 from pyro.distributions.util import copy_docs_from
 
-# Searches for which bin an input belongs to (in a way that is parallelizable and amenable to autodiff)
-
 
 def search_sorted(bin_locations, inputs, eps=1e-6):
+    # Searches for which bin an input belongs to (in a way that is parallelizable and amenable to autodiff)
     bin_locations[..., -1] += eps
     return torch.sum(
         inputs[..., None] >= bin_locations,
         dim=-1
     ) - 1
 
-# Performs gather to select the bin in the correct way on batched inputs
-
 
 def select_bins(x, idx):
+    # Performs gather to select the bin in the correct way on batched inputs
+    idx = idx.clamp(min=0, max=x.size(-1) - 1)
     extra_dims = len(idx.shape) - len(x.shape)
     expanded_x = x.expand(idx.shape[:extra_dims] + (-1,) * len(x.shape))
     return expanded_x.gather(-1, idx).squeeze(-1)
-
-# Calculating a monotonic rational (linear for now) spline or its inverse, plus the log(abs(detJ))
 
 
 def monotonic_rational_spline(inputs, unnormalized_widths, unnormalized_heights,
@@ -42,6 +39,7 @@ def monotonic_rational_spline(inputs, unnormalized_widths, unnormalized_heights,
                               min_bin_width=1e-3,
                               min_bin_height=1e-3,
                               min_derivative=1e-3):
+    # Calculating a monotonic rational (linear for now) spline or its inverse, plus the log(abs(detJ))
 
     num_bins = unnormalized_widths.shape[-1]
     # if min_bin_width * num_bins > 1.0:
@@ -102,6 +100,11 @@ def monotonic_rational_spline(inputs, unnormalized_widths, unnormalized_heights,
     cumheights[..., -1] = top
     heights = cumheights[..., 1:] - cumheights[..., :-1]
 
+    # TODO: Work around this quick hack
+    # TODO: Check that second line doesn't effect outputs as well!
+    #outputs = inputs
+    #inputs[outside_interval_mask] = 0.0
+
     # Get the index of the bin that each input is in
     bin_idx = search_sorted(cumheights if inverse else cumwidths, inputs)[..., None]
 
@@ -159,9 +162,6 @@ def monotonic_rational_spline(inputs, unnormalized_widths, unnormalized_heights,
     ya = input_cumheights
     yb = input_heights + input_cumheights
     yc = ((1.0 - lam) * wa * ya + lam * wb * yb) / ((1.0 - lam) * wa + lam * wb)
-
-    # TODO: Work around this quick hack
-    inputs[outside_interval_mask] = 0.0
 
     # The core monotonic rational spline equation
     if inverse:
@@ -253,13 +253,13 @@ class Spline(TransformModule):
 
     def _call(self, x):
         y, log_detJ = monotonic_rational_spline(
-                        x,
-                        self.unnormalized_widths,
-                        self.unnormalized_heights,
-                        self.unnormalized_derivatives,
-                        self.unnormalized_lambdas,
-                        inverse=False,
-                        left=-self.B, right=self.B, bottom=-self.B, top=self.B)
+            x,
+            self.unnormalized_widths,
+            self.unnormalized_heights,
+            self.unnormalized_derivatives,
+            self.unnormalized_lambdas,
+            inverse=False,
+            left=-self.B, right=self.B, bottom=-self.B, top=self.B)
         self._cache_log_detJ = log_detJ
 
         return y
@@ -272,13 +272,13 @@ class Spline(TransformModule):
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
         """
         x, log_detJ = monotonic_rational_spline(
-                        y,
-                        self.unnormalized_widths,
-                        self.unnormalized_heights,
-                        self.unnormalized_derivatives,
-                        self.unnormalized_lambdas,
-                        inverse=True,
-                        left=-self.B, right=self.B, bottom=-self.B, top=self.B)
+            y,
+            self.unnormalized_widths,
+            self.unnormalized_heights,
+            self.unnormalized_derivatives,
+            self.unnormalized_lambdas,
+            inverse=True,
+            left=-self.B, right=self.B, bottom=-self.B, top=self.B)
         self._cache_log_detJ = -log_detJ
 
         return x
@@ -300,13 +300,6 @@ def spline(input_dim, **kwargs):
 
     """
 
-    # TODO: A useful heuristic for choosing number of bins from input dimension like: count_bins=min(5, math.log(input_dim))?
+    # TODO: A useful heuristic for choosing number of bins from input
+    # dimension like: count_bins=min(5, math.log(input_dim))?
     return Spline(input_dim, **kwargs)
-
-# TODO: Remove the following and create a Pyro tests!
-if __name__ == "__main__":
-    sc = spline(input_dim=3)
-    x = torch.randn(1,3)
-    y = sc._call(x)
-    x2 = sc._inverse(y)
-    print(x - x2)
