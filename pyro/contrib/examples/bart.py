@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import bz2
 import csv
 import datetime
 import logging
@@ -122,7 +123,8 @@ def load_bart_od():
         try:
             urllib.request.urlretrieve(CACHE_URL, filename)
             logging.debug("cache hit, uncompressing")
-            subprocess.check_call(["bunzip2", "-k", filename])
+            with bz2.BZ2File(filename) as src, open(filename[:-4], "wb") as dst:
+                dst.write(src.read())
         except urllib.error.HTTPError:
             logging.debug("cache miss, preprocessing from scratch")
     if os.path.exists(pkl_file):
