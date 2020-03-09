@@ -128,7 +128,7 @@ def test_dynamic_lr(scheduler):
             assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.04
 
 
-@pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
+@pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.DCTAdam, optim.RMSprop, optim.SGD])
 def test_autowrap(factory):
     instance = factory({})
     assert instance.pt_optim_constructor.__name__ == factory.__name__

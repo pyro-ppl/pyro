@@ -231,6 +231,7 @@ def effectful(fn=None, type=None):
     assert type is not None, "must provide a type label for operation {}".format(fn)
     assert type != "message", "cannot use 'message' as keyword"
 
+    @functools.wraps(fn)
     def _fn(*args, **kwargs):
 
         name = kwargs.pop("name", None)

@@ -60,7 +60,6 @@ EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'graphviz>=0.8',
     'matplotlib>=1.3',
-    'pillow-simd',
     'torchvision>=0.5.0',
     'visdom>=0.1.4',
     'pandas',

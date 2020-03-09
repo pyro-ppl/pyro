@@ -62,17 +62,21 @@ class IndependentMaternGP(TimeSeriesModel):
         return dist.Normal(self.obs_matrix.new_zeros(self.obs_dim, 1, 1),
                            self.obs_noise_scale.unsqueeze(-1).unsqueeze(-1)).to_event(1)
 
-    def _get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to ``obs_dim``-many independent Matern GPs.
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_dist = MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
                                         process_covar.unsqueeze(-3))
         trans_matrix = trans_matrix.unsqueeze(-3)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                self.obs_matrix, self._get_obs_dist())
+                                self.obs_matrix, self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
@@ -83,7 +87,7 @@ class IndependentMaternGP(TimeSeriesModel):
         :returns torch.Tensor: A 1-dimensional tensor of log probabilities of shape ``(obs_dim,)``
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().log_prob(targets.t().unsqueeze(-1))
+        return self.get_dist().log_prob(targets.t().unsqueeze(-1))
 
     @torch.no_grad()
     def _filter(self, targets):
@@ -91,7 +95,7 @@ class IndependentMaternGP(TimeSeriesModel):
         Return the filtering state for the associated state space model.
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().filter(targets.t().unsqueeze(-1))
+        return self.get_dist().filter(targets.t().unsqueeze(-1))
 
     @torch.no_grad()
     def _forecast(self, dts, filtering_state, include_observation_noise=True):
@@ -197,10 +201,14 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         loc = self.A.new_zeros(self.obs_dim)
         return dist.Normal(loc, self.obs_noise_scale).to_event(1)
 
-    def _get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to a :class:`LinearlyCoupledMaternGP`.
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_matrix = block_diag_embed(trans_matrix)
@@ -208,7 +216,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         loc = self.A.new_zeros(self.full_state_dim)
         trans_dist = MultivariateNormal(loc, process_covar)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                self._get_obs_matrix(), self._get_obs_dist())
+                                self._get_obs_matrix(), self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
@@ -219,7 +227,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         :returns torch.Tensor: a (scalar) log probability
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().log_prob(targets)
+        return self.get_dist().log_prob(targets)
 
     @torch.no_grad()
     def _filter(self, targets):
@@ -227,7 +235,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         Return the filtering state for the associated state space model.
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().filter(targets)
+        return self.get_dist().filter(targets)
 
     @torch.no_grad()
     def _forecast(self, dts, filtering_state, include_observation_noise=True, full_covar=True):
@@ -380,13 +388,17 @@ class DependentMaternGP(TimeSeriesModel):
         trans_dist = self._get_trans_dist(trans_matrix, stationary_covariance)
         return trans_matrix, trans_dist, stationary_covariance
 
-    def _get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds to a :class:`DependentMaternGP`
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         trans_matrix, trans_dist, stat_covar = self._trans_matrix_distribution_stat_covar(self.dt)
         return dist.GaussianHMM(self._get_init_dist(stat_covar), trans_matrix,
-                                trans_dist, self._get_obs_matrix(), self._get_obs_dist())
+                                trans_dist, self._get_obs_matrix(), self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
@@ -397,7 +409,7 @@ class DependentMaternGP(TimeSeriesModel):
         :returns torch.Tensor: A (scalar) log probability
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().log_prob(targets)
+        return self.get_dist().log_prob(targets)
 
     @torch.no_grad()
     def _filter(self, targets):
@@ -405,7 +417,7 @@ class DependentMaternGP(TimeSeriesModel):
         Return the filtering state for the associated state space model.
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().filter(targets)
+        return self.get_dist().filter(targets)
 
     @torch.no_grad()
     def _forecast(self, dts, filtering_state, include_observation_noise=True):

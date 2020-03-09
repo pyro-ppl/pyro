@@ -1,7 +1,5 @@
 language: python
 
-sudo: true
-
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH

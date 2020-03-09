@@ -58,12 +58,16 @@ class GenericLGSSM(TimeSeriesModel):
         loc = self.obs_matrix.new_zeros(self.state_dim)
         return MultivariateNormal(loc, self.trans_noise_scale_sq.diag_embed())
 
-    def _get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds to :class:`GenericLGSSM`.
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         return dist.GaussianHMM(self._get_init_dist(), self.trans_matrix, self._get_trans_dist(),
-                                self.obs_matrix, self._get_obs_dist())
+                                self.obs_matrix, self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):
@@ -74,7 +78,7 @@ class GenericLGSSM(TimeSeriesModel):
         :returns torch.Tensor: A (scalar) log probability.
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().log_prob(targets)
+        return self.get_dist().log_prob(targets)
 
     @torch.no_grad()
     def _filter(self, targets):
@@ -82,7 +86,7 @@ class GenericLGSSM(TimeSeriesModel):
         Return the filtering state for the associated state space model.
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().filter(targets)
+        return self.get_dist().filter(targets)
 
     @torch.no_grad()
     def _forecast(self, N_timesteps, filtering_state, include_observation_noise=True):

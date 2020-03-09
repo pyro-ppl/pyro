@@ -6,9 +6,9 @@ import warnings
 import pytest
 import torch
 
-from pyro.ops.stats import (_cummin, _fft_next_good_size, autocorrelation, autocovariance, crps_empirical,
-                            effective_sample_size, fit_generalized_pareto, gelman_rubin, hpdi, pi, quantile, resample,
-                            split_gelman_rubin, waic)
+from pyro.ops.stats import (_cummin, autocorrelation, autocovariance, crps_empirical, effective_sample_size,
+                            fit_generalized_pareto, gelman_rubin, hpdi, pi, quantile, resample, split_gelman_rubin,
+                            waic)
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 
@@ -137,10 +137,6 @@ def test_statistics_B_ok_with_sample_shape(statistics, sample_shape):
     if statistics is not _cummin:
         a = xs.transpose(0, -1)
         assert_equal(statistics(a, dim=-1), y.transpose(0, -1))
-
-
-def test_fft_next_good_size():
-    assert_equal(_fft_next_good_size(433), 450)
 
 
 def test_gelman_rubin():
