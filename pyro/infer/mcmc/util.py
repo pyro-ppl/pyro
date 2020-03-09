@@ -274,11 +274,11 @@ class _PEMaker:
             return self._compiled_fn(*vals)
 
         with pyro.validation_enabled(False):
-            tmp = {}
-            for name, v in pyro.get_param_store().named_parameters():
+            tmp = []
+            for _, v in pyro.get_param_store().named_parameters():
                 if v.requires_grad:
                     v.requires_grad_(False)
-                    tmp[name] = v
+                    tmp.append(v)
 
             def _pe_jit(*zi):
                 params = dict(zip(names, zi))
@@ -288,7 +288,7 @@ class _PEMaker:
                 _pe_jit = ignore_jit_warnings()(_pe_jit)
             self._compiled_fn = torch.jit.trace(_pe_jit, vals, **jit_options)
 
-            for n, v in tmp.items():
+            for v in tmp:
                 v.requires_grad_(True)
             return self._compiled_fn(*vals)
 
