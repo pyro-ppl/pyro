@@ -303,10 +303,23 @@ def spline(input_dim, **kwargs):
     # TODO: A useful heuristic for choosing number of bins from input dimension like: count_bins=min(5, math.log(input_dim))?
     return Spline(input_dim, **kwargs)
 
+import torch.distributions as dist
+def _test_inverse(input_dim, transform):
+    base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+
+    x_true = base_dist.sample(torch.Size([10]))
+    y = transform._call(x_true)
+
+    # Cache is empty, hence must be calculating inverse afresh
+    x_calculated = transform._inverse(y)
+
+    assert torch.norm(x_true - x_calculated, dim=-1).max().item() < 1e-4
+
 # TODO: Remove the following and create a Pyro tests!
 if __name__ == "__main__":
-    sc = spline(input_dim=3)
-    x = torch.randn(1,3)
-    y = sc._call(x)
-    x2 = sc._inverse(y)
-    print(x - x2)
+    #sc = spline(input_dim=3)
+    #x = torch.randn(1,3)
+    #y = sc._call(x)
+    #x2 = sc._inverse(y)
+    #print(x - x2)
+    _test_inverse(5, spline(5))
