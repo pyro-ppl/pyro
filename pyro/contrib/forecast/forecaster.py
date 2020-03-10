@@ -281,27 +281,61 @@ class Forecaster(nn.Module):
         self.max_plate_nesting = elbo.max_plate_nesting
         self.losses = losses
 
-    @torch.no_grad()
-    def forward(self, data, covariates, num_samples):
+    def __call__(self, data, covariates, num_samples, batch_size=None):
+        """
+        Samples forecasted values of data for time steps in ``[t1,t2)``, where
+        ``t1 = data.size(-2)`` is the duration of observed data and ``t2 =
+        covariates.size(-2)`` is the extended duration of covariates. For
+        example to forecast 7 days forward conditioned on 30 days of
+        observations, set ``t1=30`` and ``t2=37``.
+
+        :param data: A tensor dataset with time dimension -2.
+        :type data: ~torch.Tensor
+        :param covariates: A tensor of covariates with time dimension -2.
+            For models not using covariates, pass a shaped empty tensor
+            ``torch.empty(duration, 0)``.
+        :type covariates: ~torch.Tensor
+        :param int num_samples: The number of samples to generate.
+        :param int batch_size: Optional batch size for sampling. This is useful
+            for generating many samples from models with large memory
+            footprint. By defaults to ``num_samples``.
+        :returns: A batch of joint posterior samples of shape
+            ``(num_samples, 1, ..., 1, t2 - t1, data.size(-1))``, where the
+            ``1``'s are inserted to avoid conflict with model plates.
+        :rtype: ~torch.Tensor
+        """
+        return super().__call__(data, covariates, num_samples, batch_size)
+
+    def forward(self, data, covariates, num_samples, batch_size=None):
         assert data.size(-2) < covariates.size(-2)
+        assert isinstance(num_samples, int) and num_samples > 0
+        if batch_size is not None:
+            batches = []
+            while num_samples > 0:
+                batch = self(data, covariates, min(num_samples, batch_size))
+                batches.append(batch)
+                num_samples -= batch_size
+            return torch.cat(batches)
+
         assert self.max_plate_nesting >= 1
         dim = -1 - self.max_plate_nesting
 
-        with poutine.trace() as tr:
-            with pyro.plate("particles", num_samples, dim=dim):
-                self.guide(data, covariates)
-        with PrefixReplayMessenger(tr.trace):
-            with PrefixConditionMessenger(self.model._prefix_condition_data):
+        with torch.no_grad():
+            with poutine.trace() as tr:
                 with pyro.plate("particles", num_samples, dim=dim):
-                    return self.model(data, covariates)
+                    self.guide(data, covariates)
+            with PrefixReplayMessenger(tr.trace):
+                with PrefixConditionMessenger(self.model._prefix_condition_data):
+                    with pyro.plate("particles", num_samples, dim=dim):
+                        return self.model(data, covariates)
 
 
 class HMCForecaster(nn.Module):
     """
     Forecaster for a :class:`ForecastingModel` using Hamiltonian Monte Carlo.
 
-    On initialization, this will run :class:`~pyro.infer.mcmc.nuts.NUTS` sampler
-    to get posterior samples of the model.
+    On initialization, this will run :class:`~pyro.infer.mcmc.nuts.NUTS`
+    sampler to get posterior samples of the model.
 
     After construction, this can be called to generate sample forecasts.
 
@@ -316,13 +350,14 @@ class HMCForecaster(nn.Module):
     :param int num_warmup: number of MCMC warmup steps.
     :param int num_samples: number of MCMC samples.
     :param int num_chains: number of parallel MCMC chains.
-    :param bool dense_mass: a flag to control whether the mass matrix is dense or diagonal.
-        Defaults to False.
+    :param bool dense_mass: a flag to control whether the mass matrix is dense
+        or diagonal. Defaults to False.
     :param bool jit_compile: whether to use the PyTorch JIT to trace the log
         density computation, and use this optimized executable trace in the
         integrator. Defaults to False.
-    :param int max_tree_depth: Max depth of the binary tree created during the doubling
-        scheme of the :class:`~pyro.infer.mcmc.nuts.NUTS` sampler. Defaults to 10.
+    :param int max_tree_depth: Max depth of the binary tree created during the
+        doubling scheme of the :class:`~pyro.infer.mcmc.nuts.NUTS` sampler.
+        Defaults to 10.
     """
     def __init__(self, model, data, covariates=None, *,
                  num_warmup=1000, num_samples=1000, num_chains=1,
@@ -354,20 +389,54 @@ class HMCForecaster(nn.Module):
             if name not in self._samples:
                 del self._trace.nodes[name]
 
-    @torch.no_grad()
-    def forward(self, data, covariates, num_samples):
+    def __call__(self, data, covariates, num_samples, batch_size=None):
+        """
+        Samples forecasted values of data for time steps in ``[t1,t2)``, where
+        ``t1 = data.size(-2)`` is the duration of observed data and ``t2 =
+        covariates.size(-2)`` is the extended duration of covariates. For
+        example to forecast 7 days forward conditioned on 30 days of
+        observations, set ``t1=30`` and ``t2=37``.
+
+        :param data: A tensor dataset with time dimension -2.
+        :type data: ~torch.Tensor
+        :param covariates: A tensor of covariates with time dimension -2.
+            For models not using covariates, pass a shaped empty tensor
+            ``torch.empty(duration, 0)``.
+        :type covariates: ~torch.Tensor
+        :param int num_samples: The number of samples to generate.
+        :param int batch_size: Optional batch size for sampling. This is useful
+            for generating many samples from models with large memory
+            footprint. By defaults to ``num_samples``.
+        :returns: A batch of joint posterior samples of shape
+            ``(num_samples, 1, ..., 1, t2 - t1, data.size(-1))``, where the
+            ``1``'s are inserted to avoid conflict with model plates.
+        :rtype: ~torch.Tensor
+        """
+        return super().__call__(data, covariates, num_samples, batch_size)
+
+    def forward(self, data, covariates, num_samples, batch_size=None):
         assert data.size(-2) < covariates.size(-2)
+        assert isinstance(num_samples, int) and num_samples > 0
+        if batch_size is not None:
+            batches = []
+            while num_samples > 0:
+                batch = self(data, covariates, min(num_samples, batch_size))
+                batches.append(batch)
+                num_samples -= batch_size
+            return torch.cat(batches)
+
         assert self.max_plate_nesting >= 1
         dim = -1 - self.max_plate_nesting
 
-        weights = torch.ones(self._num_samples, device=data.device)
-        indices = torch.multinomial(weights, num_samples, replacement=num_samples > self._num_samples)
-        for name, node in list(self._trace.nodes.items()):
-            sample = self._samples[name].index_select(0, indices)
-            node['value'] = sample.reshape(
-                (num_samples,) + (1,) * (node['value'].dim() - sample.dim()) + sample.shape[1:])
+        with torch.no_grad():
+            weights = torch.ones(self._num_samples, device=data.device)
+            indices = torch.multinomial(weights, num_samples, replacement=num_samples > self._num_samples)
+            for name, node in list(self._trace.nodes.items()):
+                sample = self._samples[name].index_select(0, indices)
+                node['value'] = sample.reshape(
+                    (num_samples,) + (1,) * (node['value'].dim() - sample.dim()) + sample.shape[1:])
 
-        with PrefixReplayMessenger(self._trace):
-            with PrefixConditionMessenger(self.model._prefix_condition_data):
-                with pyro.plate("particles", num_samples, dim=dim):
-                    return self.model(data, covariates)
+            with PrefixReplayMessenger(self._trace):
+                with PrefixConditionMessenger(self.model._prefix_condition_data):
+                    with pyro.plate("particles", num_samples, dim=dim):
+                        return self.model(data, covariates)
