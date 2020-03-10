@@ -178,11 +178,12 @@ class StableReparam(Reparam):
         z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
         t = _standard_stable(a, one, tu, te, coords="S0")
         a_inv = a.reciprocal()
+        eps = torch.finfo(a.dtype).tiny
         skew_abs = fn.skew.abs()
-        t_scale = skew_abs.clamp(min=torch.finfo(a.dtype).tiny).pow(a_inv)
+        t_scale = skew_abs.pow(a_inv)
         s_scale = (1 - skew_abs).pow(a_inv)
-        shift = _safe_shift(a, skew_abs, t_scale)
-        loc = fn.loc + fn.scale * fn.skew.sign() * (t * t_scale + shift)
+        shift = _unsafe_shift(a, fn.skew, t_scale)
+        loc = fn.loc + fn.scale * (fn.skew.sign() * t_scale * t + shift)
         scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
@@ -191,18 +192,18 @@ class StableReparam(Reparam):
         return new_fn, obs
 
 
-def _unsafe_shift(a, skew_abs, t_scale):
+def _unsafe_shift(a, skew, t_scale):
     # At a=1 the lhs has a root and the rhs has an asymptote.
-    return (t_scale - skew_abs) * (math.pi / 2 * a).tan()
+    return (skew.sign() * t_scale - skew) * (math.pi / 2 * a).tan()
 
 
-def _safe_shift(a, skew_abs, t_scale):
+def _safe_shift(a, skew, t_scale):
     radius = 0.005
     hole = 1.0
     with torch.no_grad():
         near_hole = (a - hole).abs() <= radius
     if not near_hole.any():
-        return _unsafe_shift(a, skew_abs, t_scale)
+        return _unsafe_shift(a, skew, t_scale)
 
     # Avoid the hole at a=1 by interpolating between points on either side.
     a_ = a.unsqueeze(-1).expand(a.shape + (2,)).contiguous()
@@ -214,7 +215,7 @@ def _safe_shift(a, skew_abs, t_scale):
         # a_ is reparametrized, even though we've clamped some values.
         weights = (a_ - a.unsqueeze(-1)).abs_().mul_(-1 / (2 * radius)).add_(1)
         weights[~near_hole] = 0.5
-    skew_abs_ = skew_abs.unsqueeze(-1)
-    t_scale_ = skew_abs_.pow(a_.reciprocal())
-    pairs = _unsafe_shift(a_, skew_abs_, t_scale_)
+    skew_ = skew.unsqueeze(-1)
+    t_scale_ = skew_.pow(a_.reciprocal())
+    pairs = _unsafe_shift(a_, skew_, t_scale_)
     return (pairs * weights).sum(-1)
