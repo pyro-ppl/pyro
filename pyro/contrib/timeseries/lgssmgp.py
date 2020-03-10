@@ -95,10 +95,14 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
     def _get_obs_dist(self):
         return dist.Normal(self.obs_loc, self.obs_noise_scale).to_event(1)
 
-    def get_dist(self):
+    def get_dist(self, duration=None):
         """
         Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
         to :class:`GenericLGSSMWithGPNoiseModel`.
+
+        :param int duration: Optional size of the time axis ``event_shape[0]``.
+            This is required when sampling from homogeneous HMMs whose parameters
+            are not expanded along the time axis.
         """
         gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
 
@@ -112,7 +116,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         full_trans_mat[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.z_trans_matrix
 
         return dist.GaussianHMM(self._get_init_dist(), full_trans_mat, trans_dist,
-                                self._get_obs_matrix(), self._get_obs_dist())
+                                self._get_obs_matrix(), self._get_obs_dist(), duration=duration)
 
     @pyro_method
     def log_prob(self, targets):

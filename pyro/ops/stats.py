@@ -400,10 +400,11 @@ def crps_empirical(pred, truth):
 
     Note that for a single sample this reduces to absolute error.
 
-    References
-    [1] `Strictly Proper Scoring Rules, Prediction, and Estimation`
-    Tilmann Gneiting, Adrian E. Raftery (2007)
-    https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+    **References**
+
+    [1] Tilmann Gneiting, Adrian E. Raftery (2007)
+        `Strictly Proper Scoring Rules, Prediction, and Estimation`
+        https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
 
     :param torch.Tensor pred: A set of sample predictions batched on rightmost dim.
         This should have shape ``(num_samples,) + truth.shape``.
@@ -411,7 +412,7 @@ def crps_empirical(pred, truth):
     :return: A tensor of shape ``truth.shape``.
     :rtype: torch.Tensor
     """
-    if pred.dim() != 1 + truth.dim() or pred.shape[1:] != truth.shape:
+    if pred.shape[1:] != (1,) * (pred.dim() - truth.dim() - 1) + truth.shape:
         raise ValueError("Expected pred to have one extra sample dim on left. "
                          "Actual shapes: {} versus {}".format(pred.shape, truth.shape))
     opts = dict(device=pred.device, dtype=pred.dtype)
@@ -423,6 +424,6 @@ def crps_empirical(pred, truth):
     diff = pred[1:] - pred[:-1]
     weight = (torch.arange(1, num_samples, **opts) *
               torch.arange(num_samples - 1, 0, -1, **opts))
-    weight = weight.reshape(weight.shape + (1,) * truth.dim())
+    weight = weight.reshape(weight.shape + (1,) * (diff.dim() - 1))
 
     return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2

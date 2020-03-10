@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.forecast import Forecaster, ForecastingModel
+from pyro.contrib.forecast import Forecaster, ForecastingModel, HMCForecaster
 from pyro.infer.reparam import LinearHMMReparam, StableReparam
 
 
@@ -35,7 +35,7 @@ class Model1(ForecastingModel):
                 jumps = pyro.sample("jumps", dist.Normal(0, scale).to_event(1))
             prediction = jumps.cumsum(-2)
 
-            noise_dist = dist.Laplace(zero_data, 1)
+            noise_dist = dist.Laplace(0, 1)
             self.predict(noise_dist, prediction)
 
 
@@ -107,13 +107,20 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("dct_gradients", [False, True])
 @pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
-def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_gradients):
+@pytest.mark.parametrize("engine", ["svi", "hmc"])
+def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_gradients, engine):
     model = Model()
     data = torch.randn(batch_shape + (t_obs, obs_dim))
     covariates = torch.randn(batch_shape + (t_obs + t_forecast, cov_dim))
 
-    forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
-                            num_steps=2, log_every=1, dct_gradients=dct_gradients)
+    if engine == "svi":
+        forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
+                                num_steps=2, log_every=1, dct_gradients=dct_gradients)
+    else:
+        if dct_gradients is True:
+            pytest.skip("Duplicated test.")
+        forecaster = HMCForecaster(model, data, covariates[..., :t_obs, :], max_tree_depth=1,
+                                   num_warmup=1, num_samples=1, jit_compile=False)
 
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
@@ -185,14 +192,11 @@ def test_subsample_smoke(Model, t_obs, t_forecast, obs_dim, cov_dim):
 
     def create_plates(zero_data, covariates):
         size = len(zero_data)
-        subsample_size = 2 if training else size
-        return pyro.plate("batch", size, subsample_size=subsample_size, dim=-2)
+        return pyro.plate("batch", size, subsample_size=2, dim=-2)
 
-    training = True
     forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
                             num_steps=2, log_every=1, create_plates=create_plates)
 
-    training = False
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)

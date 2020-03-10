@@ -95,12 +95,12 @@ class NormalNormalTests(TestCase):
     def test_mmd_nonvectorized(self):
         z_size = self.loc0.shape[0]
         self.do_fit_prior_test(
-            True, 1000, Trace_MMD(
+            True, 100, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
                 ), vectorize_particles=False, num_particles=100
-            )
+            ), lr=0.0146
         )
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
@@ -135,7 +135,7 @@ class NormalNormalTests(TestCase):
         assert_equal(0.0, loc_error, prec=0.05)
         assert_equal(0.0, log_sig_error, prec=0.05)
 
-    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False):
+    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False, lr=0.001):
         pyro.clear_param_store()
 
         def model():
@@ -160,7 +160,7 @@ class NormalNormalTests(TestCase):
                     ).to_event(1)
                 )
 
-        adam = optim.Adam({"lr": .001})
+        adam = optim.Adam({"lr": lr})
         svi = SVI(model, guide, adam, loss=loss)
 
         alpha = 0.99
@@ -288,12 +288,12 @@ class PoissonGammaTests(TestCase):
     def test_mmd_vectorized(self):
         z_size = 1
         self.do_fit_prior_test(
-            True, 25000, Trace_MMD(
+            True, 500, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
                 ), vectorize_particles=True, num_particles=100
-            ), debug=True
+            ), debug=True, lr=0.09
         )
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
@@ -324,7 +324,7 @@ class PoissonGammaTests(TestCase):
         assert_equal(pyro.param("beta_q"), self.beta_n, prec=0.15, msg='{} vs {}'.format(
             pyro.param("beta_q").detach().cpu().numpy(), self.beta_n.detach().cpu().numpy()))
 
-    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False):
+    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False, lr=0.0002):
         pyro.clear_param_store()
         Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
 
@@ -350,7 +350,7 @@ class PoissonGammaTests(TestCase):
                     ).to_event(1)
                 )
 
-        adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
+        adam = optim.Adam({"lr": lr, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss)
 
         alpha = 0.99

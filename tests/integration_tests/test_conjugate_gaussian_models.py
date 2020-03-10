@@ -106,31 +106,31 @@ class GaussianChainTests(GaussianChain):
 
     def test_elbo_reparameterized_N_is_3(self):
         self.setup_chain(3)
-        self.do_elbo_test(True, 4000, 0.0015, 0.03, difficulty=1.0)
+        self.do_elbo_test(True, 1100, 0.0058, 0.03, difficulty=1.0)
 
     def test_elbo_reparameterized_N_is_8(self):
         self.setup_chain(8)
-        self.do_elbo_test(True, 5000, 0.0015, 0.03, difficulty=1.0)
+        self.do_elbo_test(True, 1100, 0.0059, 0.03, difficulty=1.0)
 
     @pytest.mark.skip("CI" in os.environ and os.environ["CI"] == "true",
                       "Skip slow test in travis.")
     def test_elbo_reparameterized_N_is_17(self):
         self.setup_chain(17)
-        self.do_elbo_test(True, 5000, 0.0015, 0.03, difficulty=1.0)
+        self.do_elbo_test(True, 2700, 0.0044, 0.03, difficulty=1.0)
 
     def test_elbo_nonreparameterized_N_is_3(self):
         self.setup_chain(3)
-        self.do_elbo_test(False, 5000, 0.001, 0.04, difficulty=0.6)
+        self.do_elbo_test(False, 1700, 0.0049, 0.04, difficulty=0.6)
 
     def test_elbo_nonreparameterized_N_is_5(self):
         self.setup_chain(5)
-        self.do_elbo_test(False, 5000, 0.001, 0.06, difficulty=0.6)
+        self.do_elbo_test(False, 1000, 0.0061, 0.06, difficulty=0.6)
 
     @pytest.mark.skip("CI" in os.environ and os.environ["CI"] == "true",
                       "Skip slow test in travis.")
     def test_elbo_nonreparameterized_N_is_7(self):
         self.setup_chain(7)
-        self.do_elbo_test(False, 5000, 0.001, 0.05, difficulty=0.6)
+        self.do_elbo_test(False, 1800, 0.0035, 0.05, difficulty=0.6)
 
     def do_elbo_test(self, reparameterized, n_steps, lr, prec, difficulty=1.0):
         n_repa_nodes = torch.sum(self.which_nodes_reparam) if not reparameterized else self.N
@@ -238,7 +238,7 @@ class GaussianPyramidTests(TestCase):
 
     def test_elbo_reparameterized_three_layers(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(True, 10000, 0.0015, 0.04, 0.92,
+        self.do_elbo_test(True, 1700, 0.01, 0.04, 0.92,
                           difficulty=0.8, model_permutation=False)
 
     @pytest.mark.skipif("CI" in os.environ, reason="slow test")
@@ -250,21 +250,21 @@ class GaussianPyramidTests(TestCase):
     @pytest.mark.stage("integration", "integration_batch_1")
     def test_elbo_nonreparameterized_two_layers(self):
         self.setup_pyramid(2)
-        self.do_elbo_test(False, 8000, 0.001, 0.04, 0.95, difficulty=0.5, model_permutation=False)
+        self.do_elbo_test(False, 500, 0.012, 0.04, 0.95, difficulty=0.5, model_permutation=False)
 
     def test_elbo_nonreparameterized_three_layers(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(False, 15000, 0.001, 0.04, 0.95, difficulty=0.5, model_permutation=False)
+        self.do_elbo_test(False, 9100, 0.00506, 0.04, 0.95, difficulty=0.5, model_permutation=False)
 
     def test_elbo_nonreparameterized_two_layers_model_permuted(self):
         self.setup_pyramid(2)
-        self.do_elbo_test(False, 10000, 0.0007, 0.05, 0.96, difficulty=0.5, model_permutation=True)
+        self.do_elbo_test(False, 700, 0.018, 0.05, 0.96, difficulty=0.5, model_permutation=True)
 
     @pytest.mark.skip("CI" in os.environ and os.environ["CI"] == "true",
                       "Skip slow test in travis.")
     def test_elbo_nonreparameterized_three_layers_model_permuted(self):
         self.setup_pyramid(3)
-        self.do_elbo_test(False, 15000, 0.0007, 0.05, 0.96, difficulty=0.4, model_permutation=True)
+        self.do_elbo_test(False, 6500, 0.0071, 0.05, 0.96, difficulty=0.4, model_permutation=True)
 
     def calculate_variational_targets(self):
         # calculate (some of the) variational parameters corresponding to exact posterior

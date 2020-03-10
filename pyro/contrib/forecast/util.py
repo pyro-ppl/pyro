@@ -4,10 +4,12 @@
 from functools import singledispatch
 
 import torch
+from torch.distributions import transform_to
 
 import pyro.distributions as dist
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
+from pyro.primitives import get_param_store
 
 
 class MarkDCTParamMessenger(Messenger):
@@ -34,6 +36,48 @@ class MarkDCTParamMessenger(Messenger):
                 event_dim += value.unconstrained().dim() - value.dim()
                 value.unconstrained()._pyro_dct_dim = frame.dim - event_dim
                 return
+
+
+class PrefixWarmStartMessenger(Messenger):
+    """
+    EXPERIMENTAL Assuming the global param store has been populated with params
+    defined on a short time window, re-initialize by splicing old params with
+    new initial params defined on a longer time window.
+    """
+    def _pyro_param(self, msg):
+        store = get_param_store()
+        name = msg["name"]
+        if name not in store:
+            return
+
+        if len(msg["args"]) >= 2:
+            new = msg["args"][1]
+        elif "init_tensor" in msg["kwargs"]:
+            new = msg["kwargs"]["init_tensor"]
+        else:
+            return  # no init tensor specified
+
+        if callable(new):
+            new = new()
+        old = store[name]
+        assert new.dim() == old.dim()
+        if new.shape == old.shape:
+            return
+
+        # Splice old (warm start) and new (init) tensors.
+        # This only works for time-homogeneous constraints.
+        t = transform_to(store._constraints[name])
+        new = t.inv(new)
+        old = t.inv(old)
+        for dim in range(new.dim()):
+            if new.size(dim) != old.size(dim):
+                break
+        assert new.size(dim) > old.size(dim)
+        assert new.shape[dim + 1:] == old.shape[dim + 1:]
+        split = old.size(dim)
+        index = (slice(None),) * dim + (slice(split, None),)
+        new = torch.cat([old, new[index]], dim=dim)
+        store[name] = t(new)
 
 
 class PrefixReplayMessenger(Messenger):
@@ -101,11 +145,23 @@ class PrefixConditionMessenger(Messenger):
 # replace by much simpler Funsor logic.
 
 UNIVARIATE_DISTS = {
+    dist.Bernoulli: ("logits",),
+    dist.Beta: ("concentration1", "concentration0"),
+    dist.BetaBinomial: ("concentration1", "concentration0"),
     dist.Cauchy: ("loc", "scale"),
+    dist.Dirichlet: ("concentration",),
+    dist.DirichletMultinomial: ("concentration",),
+    dist.Exponential: ("rate",),
+    dist.Gamma: ("concentration", "rate"),
+    dist.GammaPoisson: ("concentration", "rate"),
+    dist.InverseGamma: ("concentration", "rate"),
     dist.Laplace: ("loc", "scale"),
+    dist.LogNormal: ("loc", "scale"),
     dist.Normal: ("loc", "scale"),
+    dist.Poisson: ("rate",),
     dist.Stable: ("stability", "skew", "scale", "loc"),
     dist.StudentT: ("df", "loc", "scale"),
+    dist.ZeroInflatedPoisson: ("gate", "rate"),
 }
 
 
@@ -135,11 +191,24 @@ def _(d, data):
     return base_dist.to_event(d.reinterpreted_batch_ndims)
 
 
+@prefix_condition.register(dist.IndependentHMM)
+def _(d, data):
+    base_data = data.transpose(-1, -2).unsqueeze(-1)
+    base_dist = prefix_condition(d.base_dist, base_data)
+    return dist.IndependentHMM(base_dist)
+
+
+@prefix_condition.register(dist.FoldedDistribution)
+def _(d, data):
+    base_dist = prefix_condition(d.base_dist, data)
+    return dist.FoldedDistribution(base_dist)
+
+
 def _prefix_condition_univariate(d, data):
     t = data.size(-2)
-    params = [getattr(d, name)[..., t:, :]
-              for name in UNIVARIATE_DISTS[type(d)]]
-    return type(d)(*params)
+    params = {name: getattr(d, name)[..., t:, :]
+              for name in UNIVARIATE_DISTS[type(d)]}
+    return type(d)(**params)
 
 
 for _type in UNIVARIATE_DISTS:
@@ -170,7 +239,7 @@ def reshape_batch(d, batch_shape):
     :returns: A distribution with the same type but given batch shape.
     :rtype: ~pyro.distributions.Distribution
     """
-    raise NotImplementedError
+    raise NotImplementedError("reshape_batch() does not suport {}".format(type(d)))
 
 
 @reshape_batch.register(dist.Independent)
@@ -180,10 +249,24 @@ def _(d, batch_shape):
     return base_dist.to_event(d.reinterpreted_batch_ndims)
 
 
+@reshape_batch.register(dist.IndependentHMM)
+def _(d, batch_shape):
+    base_shape = batch_shape + d.event_shape[-1:]
+    base_dist = reshape_batch(d.base_dist, base_shape)
+    return dist.IndependentHMM(base_dist)
+
+
+@reshape_batch.register(dist.FoldedDistribution)
+def _(d, batch_shape):
+    base_dist = reshape_batch(d.base_dist, batch_shape)
+    return dist.FoldedDistribution(base_dist)
+
+
 def _reshape_batch_univariate(d, batch_shape):
-    params = [getattr(d, name).reshape(batch_shape)
-              for name in UNIVARIATE_DISTS[type(d)]]
-    return type(d)(*params)
+    batch_shape = batch_shape + (-1,) * d.event_dim
+    params = {name: getattr(d, name).reshape(batch_shape)
+              for name in UNIVARIATE_DISTS[type(d)]}
+    return type(d)(**params)
 
 
 for _type in UNIVARIATE_DISTS:
@@ -245,8 +328,8 @@ def _(d, batch_shape):
 
     obs_mat = d.observation_matrix
     if obs_mat.dim() > 3:
-        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.hidden_dim))
-        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.obs_dim))
+        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.obs_dim))
 
     obs_dist = d.observation_dist
     if len(obs_dist.batch_shape) > 1:

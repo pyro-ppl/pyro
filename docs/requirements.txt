@@ -5,6 +5,5 @@ graphviz>=0.8
 numpy>=1.7
 observations>=0.1.4
 opt_einsum>=2.3.2
-pillow-simd
 pyro-api>=0.1.1
 tqdm>=4.36

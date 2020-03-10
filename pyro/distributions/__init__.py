@@ -13,7 +13,7 @@ from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.folded import FoldedDistribution
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
-from pyro.distributions.hmm import DiscreteHMM, GammaGaussianHMM, GaussianHMM, GaussianMRF, LinearHMM
+from pyro.distributions.hmm import DiscreteHMM, GammaGaussianHMM, GaussianHMM, GaussianMRF, IndependentHMM, LinearHMM
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJCorrCholesky
 from pyro.distributions.mixture import MaskedMixture
@@ -55,6 +55,7 @@ __all__ = [
     "GaussianHMM",
     "GaussianMRF",
     "GaussianScaleMixture",
+    "IndependentHMM",
     "InverseGamma",
     "LinearHMM",
     "LKJCorrCholesky",
