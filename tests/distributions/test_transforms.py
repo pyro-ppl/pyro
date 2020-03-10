@@ -136,14 +136,14 @@ class TransformTests(TestCase):
 
     def test_elu(self):
         # NOTE: Need following hack since helper function mistakenly doesn't take input dim
-        self._test(lambda input_dim: T.elu(), jacobian=False)
+        self._test(lambda input_dim: T.elu())
 
     def test_householder(self):
-        self._test(partial(T.householder, count_transforms=2), jacobian=False)
+        self._test(partial(T.householder, count_transforms=2))
 
     def test_leaky_relu(self):
         # NOTE: Need following hack since helper function mistakenly doesn't take input dim
-        self._test(lambda input_dim: T.leaky_relu(), jacobian=False)
+        self._test(lambda input_dim: T.leaky_relu())
 
     def test_lower_cholesky_affine(self):
         # NOTE: Need following hack since helper function unimplemented
