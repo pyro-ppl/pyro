@@ -160,7 +160,7 @@ class TransformTests(TestCase):
             self._test(partial(T.neural_autoregressive, activation=activation), inverse=False)
 
     def test_permute(self):
-        self._test(T.permute, jacobian=False)
+        self._test(T.permute)
 
     def test_planar(self):
         self._test(T.planar, inverse=False)
