@@ -178,11 +178,11 @@ class StableReparam(Reparam):
         z = _unsafe_standard_stable(a / 2, 1, zu, ze, coords="S")
         t = _standard_stable(a, one, tu, te, coords="S0")
         a_inv = a.reciprocal()
-        eps = torch.finfo(a.dtype).tiny
-        skew_abs = fn.skew.abs()
+        eps = torch.finfo(a.dtype).eps
+        skew_abs = fn.skew.abs().clamp(min=eps, max=1 - eps)
         t_scale = skew_abs.pow(a_inv)
         s_scale = (1 - skew_abs).pow(a_inv)
-        shift = _unsafe_shift(a, fn.skew, t_scale)
+        shift = _safe_shift(a, fn.skew, t_scale, skew_abs)
         loc = fn.loc + fn.scale * (fn.skew.sign() * t_scale * t + shift)
         scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
@@ -197,7 +197,7 @@ def _unsafe_shift(a, skew, t_scale):
     return (skew.sign() * t_scale - skew) * (math.pi / 2 * a).tan()
 
 
-def _safe_shift(a, skew, t_scale):
+def _safe_shift(a, skew, t_scale, skew_abs):
     radius = 0.005
     hole = 1.0
     with torch.no_grad():
@@ -216,6 +216,7 @@ def _safe_shift(a, skew, t_scale):
         weights = (a_ - a.unsqueeze(-1)).abs_().mul_(-1 / (2 * radius)).add_(1)
         weights[~near_hole] = 0.5
     skew_ = skew.unsqueeze(-1)
-    t_scale_ = skew_.pow(a_.reciprocal())
+    skew_abs_ = skew_abs.unsqueeze(-1)
+    t_scale_ = skew_abs_.pow(a_.reciprocal())
     pairs = _unsafe_shift(a_, skew_, t_scale_)
     return (pairs * weights).sum(-1)

@@ -36,7 +36,7 @@ def test_stable(Reparam, shape):
 
     def model():
         with pyro.plate_stack("plates", shape):
-            with pyro.plate("particles", 1000000):
+            with pyro.plate("particles", 100000):
                 return pyro.sample("x", dist.Stable(stability, skew, scale, loc))
 
     value = model()
@@ -58,8 +58,8 @@ def test_stable(Reparam, shape):
         expected_grads = grad(expected_m.sum(), params, retain_graph=True)
         actual_grads = grad(actual_m.sum(), params, retain_graph=True)
         assert_close(actual_grads[0], expected_grads[0], atol=0.2)
-        print(actual_grads[1], expected_grads[1])
-        assert_close(actual_grads[1], expected_grads[1], atol=0.1)
+        assert_close(actual_grads[1][skew != 0], expected_grads[1][skew != 0], atol=0.1)
+        assert_close(actual_grads[1][skew == 0], expected_grads[1][skew == 0], atol=0.3)
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
         assert_close(actual_grads[3], expected_grads[3], atol=0.1)
 
