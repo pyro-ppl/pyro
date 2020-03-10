@@ -312,7 +312,7 @@ class Forecaster(nn.Module):
         if batch_size is not None:
             batches = []
             while num_samples > 0:
-                batch = self(data, covariates, min(num_samples, batch_size))
+                batch = self.forward(data, covariates, min(num_samples, batch_size))
                 batches.append(batch)
                 num_samples -= batch_size
             return torch.cat(batches)
@@ -420,7 +420,7 @@ class HMCForecaster(nn.Module):
         if batch_size is not None:
             batches = []
             while num_samples > 0:
-                batch = self(data, covariates, min(num_samples, batch_size))
+                batch = self.forward(data, covariates, min(num_samples, batch_size))
                 batches.append(batch)
                 num_samples -= batch_size
             return torch.cat(batches)
