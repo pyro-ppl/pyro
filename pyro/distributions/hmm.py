@@ -597,7 +597,7 @@ class GaussianHMM(HiddenMarkovModel):
 
         batch_shape = log_normalizer.shape
         event_shape = broadcast_shape(self.event_shape, other.event_shape)
-        super(GaussianHMM, new).__init__(batch_shape, event_shape, validate_args=False)
+        super(GaussianHMM, new).__init__(duration, batch_shape, event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new, log_normalizer
 

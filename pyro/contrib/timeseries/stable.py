@@ -63,7 +63,8 @@ class StableModel(PyroModule):
         obs_dist = dist.Stable(self.stability, self.obs_skew, self.obs_scale, self.obs_loc)
         hmm = dist.LinearHMM(init_dist.to_event(1),
                              self.trans_matrix, trans_dist.to_event(1),
-                             self.obs_matrix, obs_dist.to_event(1))
+                             self.obs_matrix, obs_dist.to_event(1),
+                             duration=data.shape[0])
         self.hmm = hmm
         log_rate = pyro.sample(self.name, hmm)
         rate = bounded_exp(log_rate, self.max_rate)
