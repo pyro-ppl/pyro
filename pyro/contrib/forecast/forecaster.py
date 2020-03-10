@@ -298,10 +298,10 @@ class Forecaster(nn.Module):
         :param int num_samples: The number of samples to generate.
         :param int batch_size: Optional batch size for sampling. This is useful
             for generating many samples from models with large memory
-            footprint. By defaults to ``num_samples``.
+            footprint. Defaults to ``num_samples``.
         :returns: A batch of joint posterior samples of shape
-            ``(num_samples, 1, ..., 1, t2 - t1, data.size(-1))``, where the
-            ``1``'s are inserted to avoid conflict with model plates.
+            ``(num_samples,1,...,1) + data.shape[:-2] + (t2-t1,data.size(-1))``,
+            where the ``1``'s are inserted to avoid conflict with model plates.
         :rtype: ~torch.Tensor
         """
         return super().__call__(data, covariates, num_samples, batch_size)
@@ -406,10 +406,10 @@ class HMCForecaster(nn.Module):
         :param int num_samples: The number of samples to generate.
         :param int batch_size: Optional batch size for sampling. This is useful
             for generating many samples from models with large memory
-            footprint. By defaults to ``num_samples``.
+            footprint. Defaults to ``num_samples``.
         :returns: A batch of joint posterior samples of shape
-            ``(num_samples, 1, ..., 1, t2 - t1, data.size(-1))``, where the
-            ``1``'s are inserted to avoid conflict with model plates.
+            ``(num_samples,1,...,1) + data.shape[:-2] + (t2-t1,data.size(-1))``,
+            where the ``1``'s are inserted to avoid conflict with model plates.
         :rtype: ~torch.Tensor
         """
         return super().__call__(data, covariates, num_samples, batch_size)
