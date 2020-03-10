@@ -179,7 +179,7 @@ class StableReparam(Reparam):
         t = _standard_stable(a, one, tu, te, coords="S0")
         a_inv = a.reciprocal()
         skew_abs = fn.skew.abs()
-        t_scale = skew_abs.pow(a_inv)
+        t_scale = skew_abs.clamp(min=torch.finfo(a.dtype).tiny).pow(a_inv)
         s_scale = (1 - skew_abs).pow(a_inv)
         shift = _safe_shift(a, skew_abs, t_scale)
         loc = fn.loc + fn.scale * fn.skew.sign() * (t * t_scale + shift)

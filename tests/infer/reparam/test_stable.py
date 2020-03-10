@@ -27,6 +27,9 @@ def get_moments(x):
 def test_stable(Reparam, shape):
     stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
     skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
+    # test edge case when skew is 0
+    if skew.dim() > 0 and skew.shape[-1] > 0:
+        skew.data[..., 0] = 0.
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
     loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
     params = [stability, skew, scale, loc]
@@ -55,7 +58,7 @@ def test_stable(Reparam, shape):
         expected_grads = grad(expected_m.sum(), params, retain_graph=True)
         actual_grads = grad(actual_m.sum(), params, retain_graph=True)
         assert_close(actual_grads[0], expected_grads[0], atol=0.2)
-        assert_close(actual_grads[1], expected_grads[1], atol=0.1)
+        assert_close(actual_grads[1][skew != 0], expected_grads[1][skew != 0], atol=0.1)
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
         assert_close(actual_grads[3], expected_grads[3], atol=0.1)
 
