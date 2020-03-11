@@ -188,6 +188,7 @@ def backtest(data, covariates, model_fn, *,
             "t2": t2,
             "seed": seed,
             "num_samples": num_samples,
+            "pred": pred.clone()
         }
         results.append(result)
         for name, fn in metrics.items():
