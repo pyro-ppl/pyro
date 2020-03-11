@@ -176,7 +176,7 @@ def backtest(data, covariates, model_fn, *,
         pred = forecaster(train_data, test_covariates, num_samples=num_samples)
         truth = data[..., t1:t2, :]
 
-        forecaster_samples = forecaster._samples
+        forecaster_samples = None if isinstance(forecaster, Forecaster) else forecaster._samples
 
         # We aggressively garbage collect because Monte Carlo forecast are memory intensive.
         del forecaster
