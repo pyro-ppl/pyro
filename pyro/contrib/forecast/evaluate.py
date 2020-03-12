@@ -78,6 +78,7 @@ def backtest(data, covariates, model_fn, *,
              stride=1,
              seed=1234567890,
              num_samples=100,
+             batch_size=None,
              forecaster_options={}):
     """
     Backtest a forecasting model on a moving window of (train,test) data.
@@ -114,7 +115,9 @@ def backtest(data, covariates, model_fn, *,
         the min test window size. Defaults to 1.
     :param int stride: Optional stride for test/train split. Defaults to 1.
     :param int seed: Random number seed.
-    :param int num_samples: Number of samples for forecast.
+    :param int num_samples: Number of samples for forecast. Defaults to 100.
+    :param int batch_size: Batch size for forecast sampling. Defaults to
+        ``num_samples``.
     :param forecaster_options: Options dict to pass to forecaster, or callable
         inputting time window ``t0,t1,t2`` and returning such a dict. See
         :class:`~pyro.contrib.forecaster.Forecaster` for details.
@@ -178,7 +181,8 @@ def backtest(data, covariates, model_fn, *,
         # Forecast forward to testing window.
         test_covariates = covariates[..., t0:t2, :]
         start_time = default_timer()
-        pred = forecaster(train_data, test_covariates, num_samples=num_samples)
+        pred = forecaster(train_data, test_covariates, num_samples=num_samples,
+                          batch_size=batch_size)
         test_walltime = default_timer() - start_time
         truth = data[..., t1:t2, :]
 
