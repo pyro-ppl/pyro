@@ -14,6 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 @torch.no_grad()
+def eval_mae_fine(pred, truth):
+    pred = pred.median(0).values  # test_window  obs_dim
+    return (pred - truth).abs().cpu()
+
+
+@torch.no_grad()
+def eval_crps_fine(pred, truth):
+    return crps_empirical(pred, truth).cpu()
+
+
+@torch.no_grad()
 def eval_mae(pred, truth):
     """
     Evaluate mean absolute error, using sample median as point estimate.
@@ -61,8 +72,10 @@ def eval_crps(pred, truth):
 
 DEFAULT_METRICS = {
     "mae": eval_mae,
+    "mae_fine": eval_mae_fine,
     "rmse": eval_rmse,
     "crps": eval_crps,
+    "crps_fine": eval_crps_fine,
 }
 
 
