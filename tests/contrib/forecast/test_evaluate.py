@@ -58,8 +58,10 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
         assert any(window["t0"] == 0 for window in windows)
         if stride == 1:
             assert any(window["t2"] == duration for window in windows)
-        for name in DEFAULT_METRICS:
-            for window in windows:
+        for window in windows:
+            assert window["train_walltime"] >= 0
+            assert window["test_walltime"] >= 0
+            for name in DEFAULT_METRICS:
                 assert name in window
                 assert 0 < window[name] < math.inf
 

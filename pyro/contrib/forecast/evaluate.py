@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from timeit import default_timer
 
 import torch
 
@@ -122,7 +123,8 @@ def backtest(data, covariates, model_fn, *,
     :returns: A list of dictionaries of evaluation data. Caller is responsible
         for aggregating the per-window metrics. Dictionary keys include: train
         begin time "t0", train/test split time "t1", test end  time "t2",
-        "seed", "num_samples" and one key for each metric.
+        "seed", "num_samples", "train_walltime", "test_walltime", and one key
+        for each metric.
     :rtype: list
     """
     assert data.size(-2) == covariates.size(-2)
@@ -167,13 +169,17 @@ def backtest(data, covariates, model_fn, *,
             pyro.clear_param_store()
         train_data = data[..., t0:t1, :]
         train_covariates = covariates[..., t0:t1, :]
+        start_time = default_timer()
         model = model_fn()
         forecaster = forecaster_fn(model, train_data, train_covariates,
                                    **forecaster_options)
+        train_walltime = default_timer() - start_time
 
         # Forecast forward to testing window.
         test_covariates = covariates[..., t0:t2, :]
+        start_time = default_timer()
         pred = forecaster(train_data, test_covariates, num_samples=num_samples)
+        test_walltime = default_timer() - start_time
         truth = data[..., t1:t2, :]
 
         # We aggressively garbage collect because Monte Carlo forecast are memory intensive.
@@ -188,6 +194,8 @@ def backtest(data, covariates, model_fn, *,
             "t2": t2,
             "seed": seed,
             "num_samples": num_samples,
+            "train_walltime": train_walltime,
+            "test_walltime": test_walltime,
         }
         results.append(result)
         for name, fn in metrics.items():
