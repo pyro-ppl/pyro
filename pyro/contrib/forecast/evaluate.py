@@ -204,7 +204,8 @@ def backtest(data, covariates, model_fn, *,
         results.append(result)
         for name, fn in metrics.items():
             result[name] = fn(pred, truth)
-            logger.debug("{} = {}".format(name, result[name]))
+            if isinstance(result[name], (int, float)):
+                logger.debug("{} = {}".format(name, result[name]))
 
         del pred
 
