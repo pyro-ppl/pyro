@@ -8,15 +8,16 @@ from pyro.distributions.torch_transform import TransformModule
 from torch.distributions import constraints
 import torch.nn.functional as F
 
-import numpy as np
-
 from pyro.distributions.util import copy_docs_from
 
 # TODO: Move the spline functions to a pyro.numerics or torch.numerics module?
 # This would be a good place for e.g. numerical ODE solvers as well...
 
+
 def search_sorted(bin_locations, inputs, eps=1e-6):
-    # Searches for which bin an input belongs to (in a way that is parallelizable and amenable to autodiff)
+    """
+    Searches for which bin an input belongs to (in a way that is parallelizable and amenable to autodiff)
+    """
     bin_locations[..., -1] += eps
     return torch.sum(
         inputs[..., None] >= bin_locations,
@@ -25,11 +26,37 @@ def search_sorted(bin_locations, inputs, eps=1e-6):
 
 
 def select_bins(x, idx):
-    # Performs gather to select the bin in the correct way on batched inputs
+    """
+    Performs gather to select the bin in the correct way on batched inputs
+    """
     idx = idx.clamp(min=0, max=x.size(-1) - 1)
     extra_dims = len(idx.shape) - len(x.shape)
     expanded_x = x.expand(idx.shape[:extra_dims] + (-1,) * len(x.shape))
     return expanded_x.gather(-1, idx).squeeze(-1)
+
+
+def calculate_knots(lengths, lower, upper):
+    """
+    Given a tensor of unscaled bin lengths that sum to 1, plus the lower and upper limits,
+    returns the shifted and scaled lengths plus knot positions
+    """
+
+    # Cumulative widths gives x (y for inverse) position of knots
+    knots = torch.cumsum(lengths, dim=-1)
+
+    # Pad left of last dimension with 1 zero to compensate for dim lost to cumsum
+    knots = F.pad(knots, pad=(1, 0), mode='constant', value=0.0)
+
+    # Translate [0,1] knot points to [-B, B]
+    knots = (upper - lower) * knots + lower
+
+    # Convert the knot points back to lengths
+    # NOTE: Are following two lines a necessary fix for accumulation (round-off) error?
+    knots[..., 0] = lower
+    knots[..., -1] = upper
+    lengths = knots[..., 1:] - knots[..., :-1]
+
+    return lengths, knots
 
 
 def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
@@ -39,8 +66,11 @@ def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
                               min_bin_height=1e-3,
                               min_derivative=1e-3,
                               min_lambda=0.025):
-    # Calculating a monotonic rational spline (linear for now) or its inverse, plus the log(abs(detJ)) required
-    # for normalizing flows
+    """
+    Calculating a monotonic rational spline (linear for now) or its inverse, plus the log(abs(detJ)) required
+    for normalizing flows.
+    NOTE: I omit the docstring with parameter descriptions for this method since it is not considered "public" yet!
+    """
 
     # Ensure bound is positive
     # NOTE: For simplicity, we apply the identity function outside [-B, B] X [-B, B] rather than allowing arbitrary
@@ -71,48 +101,27 @@ def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
     widths = min_bin_width + (1.0 - min_bin_width * num_bins) * widths
     heights = min_bin_height + (1.0 - min_bin_height * num_bins) * heights
     derivatives = min_derivative + derivatives
-    lambdas = (1-2*min_lambda) * lambdas + min_lambda
-    
-    # *** TODO: Make a helper function so avoid code repeat for calculating cumwidths etc. ***
+    lambdas = (1 - 2 * min_lambda) * lambdas + min_lambda
 
-    # Cumulative widths gives x (y for inverse) position of knots
-    cumwidths = torch.cumsum(widths, dim=-1)
-
-    # Pad left of last dimension with 1 zero
-    # TODO: Why???
-    cumwidths = F.pad(cumwidths, pad=(1, 0), mode='constant', value=0.0)
-
-    # Translate [0,1] knot points to [-B, B]
-    cumwidths = (right - left) * cumwidths + left
-
-    # Are following necessary?
-    cumwidths[..., 0] = left
-    cumwidths[..., -1] = right
-    widths = cumwidths[..., 1:] - cumwidths[..., :-1]
-
-    # TODO: I think I can remove padding, and simplify searchsorted
-    cumheights = torch.cumsum(heights, dim=-1)
-    cumheights = F.pad(cumheights, pad=(1, 0), mode='constant', value=0.0)
-    cumheights = (top - bottom) * cumheights + bottom
-    cumheights[..., 0] = bottom
-    cumheights[..., -1] = top
-    heights = cumheights[..., 1:] - cumheights[..., :-1]
+    # Cumulative widths are x (y for inverse) position of knots
+    # Similarly, cumulative heights are y (x for inverse) position of knots
+    widths, cumwidths = calculate_knots(widths, left, right)
+    heights, cumheights = calculate_knots(heights, bottom, top)
 
     # Pad left and right derivatives with fixed values at first and last knots
     # These are 1 since the function is the identity outside the bounding box and the derivative is continuous
     # NOTE: Not sure why this is 1.0 - min_derivative rather than 1.0. I've copied this from original implementation
-    derivatives = F.pad(derivatives, pad=(1, 1), mode='constant', value=1.0-min_derivative)
+    derivatives = F.pad(derivatives, pad=(1, 1), mode='constant', value=1.0 - min_derivative)
 
     # Get the index of the bin that each input is in
     # bin_idx ~ (batch_dim, input_dim, 1)
     bin_idx = search_sorted(cumheights if inverse else cumwidths, inputs)[..., None]
 
     # Select the value for the relevant bin for the variables used in the main calculation
-    # cum_widths ~ (input_dim, num_bins+1)
     input_widths = select_bins(widths, bin_idx)
     input_cumwidths = select_bins(cumwidths, bin_idx)
     input_cumheights = select_bins(cumheights, bin_idx)
-    input_delta = select_bins(heights/widths, bin_idx)
+    input_delta = select_bins(heights / widths, bin_idx)
     input_derivatives = select_bins(derivatives, bin_idx)
     input_derivatives_plus_one = select_bins(derivatives[..., 1:], bin_idx)
     input_heights = select_bins(heights, bin_idx)
@@ -138,7 +147,7 @@ def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     # The core monotonic rational spline equation
     if inverse:
-        # TODO: Comments for inverse calculation
+        # TODO: Comments!
         numerator = (input_lambdas * wa * (ya - inputs)) * (inputs <= yc).float() \
             + ((wc - input_lambdas * wb) * inputs + input_lambdas * wb * yb - wc * yc) * (inputs > yc).float()
 
@@ -156,7 +165,6 @@ def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     else:
         # TODO: Comments!
-        # phi in notation of paper
         theta = (inputs - input_cumwidths) / input_widths
 
         numerator = (wa * ya * (input_lambdas - theta) + wc * yc * theta) * (theta <= input_lambdas).float()\
@@ -167,8 +175,9 @@ def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
         outputs = numerator / denominator
 
-        derivative_numerator = (wa * wc * input_lambdas * (yc - ya) * (theta <= input_lambdas).float()
-                                + wb * wc * (1 - input_lambdas) * (yb - yc) * (theta > input_lambdas).float()) / input_widths
+        derivative_numerator = (wa * wc * input_lambdas * (yc - ya) * (theta <= input_lambdas).float() +
+                                wb * wc * (1 - input_lambdas) * (yb - yc) * (theta > input_lambdas).float()) \
+            / input_widths
 
         logabsdet = torch.log(derivative_numerator) - 2 * torch.log(torch.abs(denominator))
 
@@ -182,6 +191,7 @@ class SplineLayer(nn.Module):
     """
     Helper class to manage learnable spline. One could imagine this as a standard layer in PyTorch...
     """
+
     def __init__(self, input_dim, count_bins=8, bound=3., order='linear'):
         super().__init__()
 
@@ -228,7 +238,7 @@ class SplineLayer(nn.Module):
     def lambdas(self):
         # TODO: Dims?
         return torch.sigmoid(self.unnormalized_lambdas)
-    
+
     def __call__(self, x, jacobian=False, **kwargs):
         y, log_detJ = monotonic_rational_spline(
             x,
@@ -265,8 +275,6 @@ class Spline(TransformModule):
     event_dim = 0
 
     def __init__(self, *args, **kwargs):
-        # TODO: Better way to do this???
-        # The problem is essentially how to initialize multiple parent classes with different signatures
         super(Spline, self).__init__(cache_size=1)
 
         self.layer = SplineLayer(*args, **kwargs)

@@ -427,6 +427,13 @@ Radial
     :undoc-members:
     :show-inheritance:
 
+Spline
+------
+.. autoclass:: pyro.distributions.transforms.Spline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Sylvester
 ---------
 .. autoclass:: pyro.distributions.transforms.Sylvester
