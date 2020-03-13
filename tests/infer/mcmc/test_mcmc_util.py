@@ -54,3 +54,17 @@ def test_predictive(num_samples, parallel):
 
     # check sample mean
     assert_close(predictive_samples["obs"].reshape([-1, 5]).mean(0), true_probs, rtol=0.1)
+
+
+def model_with_param():
+    x = pyro.param("x", torch.tensor(1.))
+    pyro.sample("y", dist.Normal(x, 1))
+
+
+@pytest.mark.parametrize("jit_compile", [False, True])
+@pytest.mark.parametrize("num_chains", [1, 2])
+@pytest.mark.filterwarnings("ignore:num_chains")
+def test_model_with_param(jit_compile, num_chains):
+    kernel = NUTS(model_with_param, jit_compile=jit_compile, ignore_jit_warnings=True)
+    mcmc = MCMC(kernel, 10, num_chains=num_chains, mp_context="spawn")
+    mcmc.run()

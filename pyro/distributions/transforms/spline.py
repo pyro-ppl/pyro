@@ -100,11 +100,6 @@ def monotonic_rational_spline(inputs, unnormalized_widths, unnormalized_heights,
     cumheights[..., -1] = top
     heights = cumheights[..., 1:] - cumheights[..., :-1]
 
-    # TODO: Work around this quick hack
-    # TODO: Check that second line doesn't effect outputs as well!
-    #outputs = inputs
-    #inputs[outside_interval_mask] = 0.0
-
     # Get the index of the bin that each input is in
     bin_idx = search_sorted(cumheights if inverse else cumwidths, inputs)[..., None]
 
