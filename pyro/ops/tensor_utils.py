@@ -373,7 +373,6 @@ def psd_safe_cholesky(A, upper=False, out=None, jitter=None):
 def cholesky(x):
     if x.size(-1) == 1:
         return x.sqrt()
-    print("PSD SAFE CHOLESKY")
     return psd_safe_cholesky(x)
     #return x.cholesky()
 
