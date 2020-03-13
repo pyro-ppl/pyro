@@ -200,12 +200,19 @@ def backtest(data, covariates, model_fn, *,
             "num_samples": num_samples,
             "train_walltime": train_walltime,
             "test_walltime": test_walltime,
+            "params": {},
         }
         results.append(result)
         for name, fn in metrics.items():
             result[name] = fn(pred, truth)
-            if isinstance(result[name], (int, float)):
-                logger.debug("{} = {}".format(name, result[name]))
+        for name, value in pyro.get_param_store().items():
+            if value.numel() == 1:
+                value = value.cpu().item()
+                result["params"][name] = value
+        for dct in (result, result["params"]):
+            for key, value in sorted(dct.items()):
+                if isinstance(value, (int, float)):
+                    logger.debug("{} = {:0.6g}".format(key, value))
 
         del pred
 
