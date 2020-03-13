@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from timeit import default_timer
 
 import torch
 
@@ -90,6 +91,7 @@ def backtest(data, covariates, model_fn, *,
              stride=1,
              seed=1234567890,
              num_samples=100,
+             batch_size=None,
              forecaster_options={}):
     """
     Backtest a forecasting model on a moving window of (train,test) data.
@@ -126,7 +128,9 @@ def backtest(data, covariates, model_fn, *,
         the min test window size. Defaults to 1.
     :param int stride: Optional stride for test/train split. Defaults to 1.
     :param int seed: Random number seed.
-    :param int num_samples: Number of samples for forecast.
+    :param int num_samples: Number of samples for forecast. Defaults to 100.
+    :param int batch_size: Batch size for forecast sampling. Defaults to
+        ``num_samples``.
     :param forecaster_options: Options dict to pass to forecaster, or callable
         inputting time window ``t0,t1,t2`` and returning such a dict. See
         :class:`~pyro.contrib.forecaster.Forecaster` for details.
@@ -135,7 +139,8 @@ def backtest(data, covariates, model_fn, *,
     :returns: A list of dictionaries of evaluation data. Caller is responsible
         for aggregating the per-window metrics. Dictionary keys include: train
         begin time "t0", train/test split time "t1", test end  time "t2",
-        "seed", "num_samples" and one key for each metric.
+        "seed", "num_samples", "train_walltime", "test_walltime", and one key
+        for each metric.
     :rtype: list
     """
     assert data.size(-2) == covariates.size(-2)
@@ -180,13 +185,18 @@ def backtest(data, covariates, model_fn, *,
             pyro.clear_param_store()
         train_data = data[..., t0:t1, :]
         train_covariates = covariates[..., t0:t1, :]
+        start_time = default_timer()
         model = model_fn()
         forecaster = forecaster_fn(model, train_data, train_covariates,
                                    **forecaster_options)
+        train_walltime = default_timer() - start_time
 
         # Forecast forward to testing window.
         test_covariates = covariates[..., t0:t2, :]
-        pred = forecaster(train_data, test_covariates, num_samples=num_samples)
+        start_time = default_timer()
+        pred = forecaster(train_data, test_covariates, num_samples=num_samples,
+                          batch_size=batch_size)
+        test_walltime = default_timer() - start_time
         truth = data[..., t1:t2, :]
 
         forecaster_samples = None if isinstance(forecaster, Forecaster) else forecaster._samples
@@ -204,12 +214,22 @@ def backtest(data, covariates, model_fn, *,
             "seed": seed,
             "num_samples": num_samples,
             "pred": pred.clone(),
-            "samples": forecaster_samples
+            "samples": forecaster_samples,
+            "train_walltime": train_walltime,
+            "test_walltime": test_walltime,
+            "params": {},
         }
         results.append(result)
         for name, fn in metrics.items():
             result[name] = fn(pred, truth)
-            logger.debug("{} = {}".format(name, result[name]))
+        for name, value in pyro.get_param_store().items():
+            if value.numel() == 1:
+                value = value.cpu().item()
+                result["params"][name] = value
+        for dct in (result, result["params"]):
+            for key, value in sorted(dct.items()):
+                if isinstance(value, (int, float)):
+                    logger.debug("{} = {:0.6g}".format(key, value))
 
         del pred
 
