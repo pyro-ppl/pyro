@@ -9,10 +9,10 @@ from pyro.distributions.torch_transform import TransformModule
 @copy_docs_from(TransformModule)
 class GeneralizedChannelPermute(TransformModule):
     """
-    A bijection that generalizes a permutation on the channels of a batch of 2D image in `[...,C,H,W]` format.
+    A bijection that generalizes a permutation on the channels of a batch of 2D image in :math:`[\ldots,C,H,W]` format.
     Specifically this transform performs the operation,
 
-        :math:`\\mathbf{y} = \\mathtext{\\ttfamily torch.nn.functional.conv2d}(\\mathbf{x}, W)`
+        :math:`\\mathbf{y} = \\text{torch.nn.functional.conv2d}(\\mathbf{x}, W)`
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and
     :math:`W\\sim C\\times C\\times 1\\times 1` is the filter matrix for a 1x1 convolution with :math:`C` input and
