@@ -43,9 +43,6 @@ class TransformTests(TestCase):
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
         # Apply permutation for autoregressive flows with a network
-        # TODO: This is relying on the convention that an autoregressive transform with an autoregressive network has an 'arn' member.
-        # Should we instead use a flag? This could be False or absent by default in the parent class, and an autoregressive transform
-        # defines it at the class level.
         if hasattr(transform, 'arn'):
             permutation = transform.arn.get_permutation()
             permuted_jacobian = jacobian.clone()
@@ -71,7 +68,7 @@ class TransformTests(TestCase):
             assert lower_sum == float(0.0)
 
     def _test_inverse(self, shape, transform):
-        base_dist = dist.Normal(torch.zeros(*shape), torch.ones(*shape))
+        base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
 
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
@@ -136,6 +133,26 @@ class TransformTests(TestCase):
     def test_elu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
         self._test(lambda input_dim: T.elu())
+
+    def test_generalized_channel_permute(self):
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
+            transform = T.generalized_channel_permute(channels=shape[-3])
+            self._test_shape(shape, transform)
+            self._test_inverse(shape, transform)
+
+        for width_dim in [2, 4, 6]:
+            # Do a bit of a hack until we merge in Reshape transform
+            class Flatten(T.GeneralizedChannelPermute):
+                event_dim = 1
+
+                def _call(self, x):
+                    return super(Flatten, self)._call(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+
+                def _inverse(self, x):
+                    return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+
+            input_dim = (width_dim**2)*3
+            self._test_jacobian(input_dim, Flatten())
 
     def test_householder(self):
         self._test(partial(T.householder, count_transforms=2))
