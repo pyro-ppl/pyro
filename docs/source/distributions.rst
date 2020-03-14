@@ -517,6 +517,10 @@ radial
 ------
 .. autofunction:: pyro.distributions.transforms.radial
 
+spline
+------
+.. autofunction:: pyro.distributions.transforms.spline
+
 sylvester
 ---------
 .. autofunction:: pyro.distributions.transforms.sylvester
