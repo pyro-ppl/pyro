@@ -10,6 +10,8 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
+from pyro.infer import Trace_ELBO
+from pyro.infer.autoguide import AutoNormal
 from pyro.infer.reparam import LatentStableReparam, StableReparam, SymmetricStableReparam
 from tests.common import assert_close
 
@@ -112,3 +114,18 @@ def test_distribution(stability, skew, Reparam):
     with poutine.reparam(config={"x": Reparam()}):
         actual = model()
     assert ks_2samp(expected, actual).pvalue > 0.05
+
+
+@pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
+def test_subsample_smoke(Reparam, subsample):
+    def model():
+        with pyro.plate("plate", 10):
+            with poutine.reparam(config={"x": Reparam()}):
+                return pyro.sample("x", dist.Stable(1.5, 0))
+
+    def create_plates():
+        return pyro.plate("plate", 10, subsample_size=3)
+
+    guide = AutoNormal(model, create_plates=create_plates if subsample else None)
+    Trace_ELBO().loss(model, guide)  # smoke test
