@@ -392,6 +392,13 @@ ConditionalTransformModule
     :undoc-members:
     :show-inheritance:
 
+GeneralizedChannelPermute
+-------------------------
+.. autoclass:: pyro.distributions.transforms.GeneralizedChannelPermute
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Householder
 -----------
 .. autoclass:: pyro.distributions.transforms.Householder
@@ -481,6 +488,10 @@ conditional_planar
 elu
 ---
 .. autofunction:: pyro.distributions.transforms.elu
+
+generalized_channel_permute
+---------------------------
+.. autofunction:: pyro.distributions.transforms.generalized_channel_permute
 
 householder
 -----------
