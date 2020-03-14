@@ -260,12 +260,12 @@ class Spline(TransformModule):
     """
     An implementation of the element-wise rational spline bijections of linear and quadratic order (Durkan et
     al., 2019; Dolatabadi et al., 2020). Rational splines are functions that are comprised of segments that are
-    the ratio of two polynomials. For instance, for the :math:'d'th dimension and the :math:'k'th segment on
+    the ratio of two polynomials. For instance, for the :math:`d`-th dimension and the :math:`k`-th segment on
     the spline, the function will take the form,
 
         :math:`y_d = \\frac{\\alpha^{(k)}(x_d)}{\\beta^{(k)}(x_d)},`
 
-    where :math:'\\alpha^{(k)}' and :math:'\\beta^{(k)}' are two polynomials of order :math:`d`. For :math:`d=1`,
+    where :math:`\\alpha^{(k)}` and :math:`\\beta^{(k)}` are two polynomials of order :math:`d`. For :math:`d=1`,
     we say that the spline is linear, and for :math:`d=2`, quadratic. The spline is constructed on the specified
     bounding box, :math:`[-K,K]\\times[-K,K]`, with the identity function used elsewhere.
 
@@ -276,7 +276,7 @@ class Spline(TransformModule):
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> transform = Spline(10, )
+    >>> transform = Spline(10, count_bins=4, bound=3.)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
@@ -284,13 +284,13 @@ class Spline(TransformModule):
                 0.1389, -0.4629,  0.0986])
 
     :param input_dim: Dimension of the input vector. Despite operating element-wise, this is required so we know
-    how many parameters to store.
+        how many parameters to store.
     :type input_dim: int
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
     :param bound: The quantity :math:`K` determining the bounding box, :math:`[-K,K]\\times[-K,K]`, of the spline.
     :type bound: float
-    :param order: One of ['linear', 'quadratic'] that specifies the order of the spline.
+    :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
     :type order: string
 
     References:
@@ -307,10 +307,10 @@ class Spline(TransformModule):
     bijective = True
     event_dim = 0
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, input_dim, count_bins=8, bound=3., order='linear'):
         super(Spline, self).__init__(cache_size=1)
 
-        self.layer = SplineLayer(*args, **kwargs)
+        self.layer = SplineLayer(input_dim, count_bins=count_bins, bound=bound, order=order)
         self._cache_log_detJ = None
 
     def _call(self, x):
