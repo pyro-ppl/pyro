@@ -130,8 +130,7 @@ class GeneralizedChannelPermute(TransformModule):
 
         # Solve L(Ux) = P^1y
         U = torch.triu(self.LU)
-        L = self.LU.tril()
-        L.diagonal(dim1=-2, dim2=-1).fill_(1)
+        L = self.LU.tril(-1) + torch.eye(self.LU.size(-1), dtype=self.LU.dtype, device=self.LU.device)
         Ux, _ = torch.triangular_solve(LUx, L, upper=False)
 
         # Solve Ux = (PL)^-1y
@@ -146,7 +145,7 @@ class GeneralizedChannelPermute(TransformModule):
         """
 
         h, w = x.shape[-2:]
-        log_det = h * w * torch.log(torch.abs(torch.diag(self.LU))).sum()
+        log_det = h * w * self.LU.diag().abs().log().sum()
 
         return log_det * torch.ones(x.size()[:-3], dtype=x.dtype, layout=x.layout, device=x.device)
 
