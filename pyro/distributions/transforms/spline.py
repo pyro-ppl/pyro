@@ -271,7 +271,7 @@ class Spline(TransformModule):
 
     Rational splines offer an excellent combination of functional flexibility whilst maintaining a numerically
     stable inverse that is of the same computational and space complexities as the forward operation. This
-    element-wise transforms permits the accurate represention of complex univariate distributions.
+    element-wise transform permits the accurate represention of complex univariate distributions.
 
     Example usage:
 
