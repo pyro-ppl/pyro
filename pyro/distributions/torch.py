@@ -12,6 +12,9 @@ from pyro.distributions.util import sum_rightmost
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         assert isinstance(other, Beta)
         concentration1 = self.concentration1 + other.concentration1 - 1
         concentration0 = self.concentration0 + other.concentration0 - 1
@@ -57,6 +60,9 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         assert isinstance(other, Dirichlet)
         concentration = self.concentration + other.concentration - 1
         updated = Dirichlet(concentration)
@@ -71,6 +77,9 @@ class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
 
 class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         assert isinstance(other, Gamma)
         concentration = self.concentration + other.concentration - 1
         rate = self.rate + other.rate
@@ -109,11 +118,32 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         self.base_dist._validate_args = value
 
     def conjugate_update(self, other):
+        """
+        EXPERIMENTAL.
+        """
         n = self.reintepreted_batch_ndims
         updated, log_normalizer = self.base_dist.conjugate_update(other.to_event(-n))
         updated = updated.to_event(n)
         log_normalizer = sum_rightmost(log_normalizer, n)
         return updated, log_normalizer
+
+
+class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
+    def __init__(self, low, high, validate_args=None):
+        self._unbroadcasted_low = low
+        self._unbroadcasted_high = high
+        super().__init__(low, high, validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(Uniform, _instance)
+        new = super().expand(batch_shape, _instance=new)
+        new._unbroadcasted_low = self._unbroadcasted_low
+        new._unbroadcasted_high = self._unbroadcasted_high
+        return new
+
+    @constraints.dependent_property
+    def support(self):
+        return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 
 
 # Programmatically load all distributions from PyTorch.

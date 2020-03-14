@@ -48,6 +48,9 @@ Welcome to Pyro Examples and Tutorials!
    gplvm
    bo
    easyguide
+   forecasting_i
+   forecasting_ii
+   forecasting_iii
    tracking_1d
    csis
    RSA-implicature
@@ -56,6 +59,7 @@ Welcome to Pyro Examples and Tutorials!
    working_memory
    elections
    dirichlet_process_mixture
+   boosting_bbvi	
 
 .. toctree::
    :maxdepth: 2
@@ -66,11 +70,13 @@ Welcome to Pyro Examples and Tutorials!
    hmm
    lda
    mcmc
+   neutra
    sparse_gamma
    dkl
    einsum
-   smcfilter
+   forecast_simple
    timeseries
+   smcfilter
 
 
 Indices and tables

@@ -9,6 +9,8 @@ import torch
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
 
+from functools import partial
+
 pytestmark = pytest.mark.init(rng_seed=123)
 
 
@@ -17,7 +19,7 @@ class TransformTests(TestCase):
         # Epsilon is used to compare numerical gradient to analytical one
         self.epsilon = 1e-4
 
-        # Delta is tolerance for testing f(f^{-1}(x)) = x
+        # Delta is tolerance for testing inverse, f(f^{-1}(x)) = x
         self.delta = 1e-6
 
     def _test_jacobian(self, input_dim, transform):
@@ -41,6 +43,9 @@ class TransformTests(TestCase):
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
         # Apply permutation for autoregressive flows with a network
+        # TODO: This is relying on the convention that an autoregressive transform with an autoregressive network has an 'arn' member.
+        # Should we instead use a flag? This could be False or absent by default in the parent class, and an autoregressive transform
+        # defines it at the class level.
         if hasattr(transform, 'arn'):
             permutation = transform.arn.get_permutation()
             permuted_jacobian = jacobian.clone()
@@ -81,228 +86,93 @@ class TransformTests(TestCase):
         sample = dist.TransformedDistribution(base_dist, [transform]).sample()
         assert sample.shape == base_shape
 
-    def test_batchnorm_jacobians(self):
+    def _test(self, transform_factory, shape=True, jacobian=True, inverse=True):
         for input_dim in [2, 5, 10]:
+            transform = transform_factory(input_dim)
+            if jacobian:
+                self._test_jacobian(input_dim, transform)
+            if inverse:
+                self._test_inverse(input_dim, transform)
+            if shape:
+                for shape in [(3,), (3, 4)]:
+                    self._test_shape(shape + (input_dim,), transform)
+
+    def _test_conditional(self, conditional_transform_factory, context_dim=3, **kwargs):
+        def transform_factory(input_dim, context_dim=context_dim):
+            z = torch.rand(context_dim)
+            return conditional_transform_factory(input_dim, context_dim).condition(z)
+        self._test(transform_factory, **kwargs)
+
+    def test_affine_autoregressive(self):
+        for stable in [True, False]:
+            self._test(partial(T.affine_autoregressive, stable=stable))
+
+    def test_affine_coupling(self):
+        self._test(T.affine_coupling)
+
+    def test_batchnorm(self):
+        def transform_factory(input_dim):
             transform = T.batchnorm(input_dim)
             transform._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
             transform.eval()
-            self._test_jacobian(input_dim, transform)
+            return transform
+
+        self._test(transform_factory)
 
     def test_block_autoregressive_jacobians(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
-            for input_dim in [2, 5, 10]:
-                self._test_jacobian(
-                    input_dim,
-                    T.block_autoregressive(input_dim, activation=activation))
+            self._test(partial(T.block_autoregressive, activation=activation), inverse=False)
 
         for residual in [None, 'normal', 'gated']:
-            for input_dim in [2, 5, 10]:
-                self._test_jacobian(
-                    input_dim,
-                    T.block_autoregressive(input_dim, residual=residual))
+            self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
 
-    def test_affine_autoregressive_jacobians(self):
-        for stable in [True, False]:
-            for input_dim in [2, 5, 10]:
-                self._test_jacobian(input_dim, T.affine_autoregressive(input_dim, stable=stable))
+    def test_conditional_planar(self):
+        self._test_conditional(T.conditional_planar, inverse=False)
 
-    def test_tanh_jacobians(self):
-        for input_dim in [2, 5, 10]:
-            self._test_jacobian(input_dim, T.tanh())
+    def test_discrete_cosine(self):
+        # NOTE: Need following since helper function unimplemented
+        self._test(lambda input_dim: T.DiscreteCosineTransform())
 
-    def test_dct_jacobians(self):
-        for input_dim in [2, 5, 10]:
-            self._test_jacobian(input_dim, T.DiscreteCosineTransform())
+    def test_elu(self):
+        # NOTE: Need following since helper function mistakenly doesn't take input dim
+        self._test(lambda input_dim: T.elu())
 
-    def test_neural_autoregressive_jacobians(self):
-        for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
-            for input_dim in [2, 5, 10]:
-                self._test_jacobian(input_dim, T.neural_autoregressive(input_dim, activation=activation))
+    def test_householder(self):
+        self._test(partial(T.householder, count_transforms=2))
 
-    def test_planar_jacobians(self):
-        for input_dim in [2, 5, 10]:
-            self._test_jacobian(input_dim, T.planar(input_dim))
-
-    def test_cond_planar_jacobians(self):
-        observed_dim = 3
-        for input_dim in [2, 5, 10]:
-            z = torch.rand(observed_dim)
-            transform = T.conditional_planar(input_dim, observed_dim)
-            self._test_jacobian(input_dim, transform.condition(z))
-
-    def test_poly_jacobians(self):
-        for input_dim in [2, 5, 10]:
-            self._test_jacobian(input_dim, T.polynomial(input_dim))
-
-    def test_householder_inverses(self):
-        for input_dim in [2, 5, 10]:
-            self._test_inverse([input_dim], T.householder(input_dim, count_transforms=2))
-
-    def test_affine_coupling_inverses(self):
-        for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.affine_coupling(input_dim))
+    def test_leaky_relu(self):
+        # NOTE: Need following since helper function mistakenly doesn't take input dim
+        self._test(lambda input_dim: T.leaky_relu())
 
     def test_lower_cholesky_affine(self):
-        for input_dim in [2, 3]:
+        # NOTE: Need following since helper function unimplemented
+        def transform_factory(input_dim):
             loc = torch.randn(input_dim)
             scale_tril = torch.randn(input_dim).exp().diag() + 0.03 * torch.randn(input_dim, input_dim)
             scale_tril = scale_tril.tril(0)
-            transform = T.LowerCholeskyAffine(loc, scale_tril)
-            self._test_inverse([input_dim], transform)
-            self._test_jacobian(input_dim, transform)
-            for shape in [(3,), (3, 4)]:
-                self._test_shape(shape + (input_dim,), transform)
+            return T.LowerCholeskyAffine(loc, scale_tril)
 
-    def test_batchnorm_inverses(self):
-        for input_dim in [2, 5, 10]:
-            transform = T.batchnorm(input_dim)
-            transform._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
-            transform.eval()
-            self._test_inverse([input_dim], transform)
+        self._test(transform_factory)
 
-    def test_radial_jacobians(self):
-        for input_dim in [2, 5, 10]:
-            self._test_jacobian(input_dim, T.radial(input_dim))
-
-    def test_sylvester_jacobians(self):
-        for input_dim in [2, 5, 10]:
-            self._test_jacobian(input_dim, T.sylvester(input_dim))
-
-    def test_affine_autoregressive_inverses(self):
-        for stable in [True, False]:
-            for input_dim in [2, 5, 10]:
-                self._test_inverse([input_dim], T.affine_autoregressive(input_dim, stable=stable))
-
-    def test_affine_coupling_jacobians(self):
-        for input_dim in [2, 5, 10]:
-            self._test_jacobian(input_dim, T.affine_coupling(input_dim))
-
-    def test_permute_inverses(self):
-        for input_dim in [2, 5, 10]:
-            self._test_inverse([input_dim], T.permute(input_dim))
-
-    def test_elu_inverses(self):
-        for input_dim in [2, 5, 10]:
-            self._test_inverse([input_dim], T.elu())
-
-    def test_leaky_relu_inverses(self):
-        for input_dim in [2, 5, 10]:
-            self._test_inverse([input_dim], T.leaky_relu())
-
-    def test_tanh_inverses(self):
-        for input_dim in [2, 5, 10]:
-            self._test_inverse([input_dim], T.tanh())
-
-    def test_1x1_inv_conv(self):
-        for shape in [(3, 16, 16), (1, 3, 32, 32), (10, 9, 64, 64)]:
-            self._test_inverse(shape, T.generalized_channel_permute(channels=shape[-3]))
-            self._test_shape(shape, T.generalized_channel_permute(channels=shape[-3]))
-
-    def test_1x1_inv_conv_jacobian(self):
-        for width_dim in [2, 4, 6]:
-            # Do a bit of a hack until we merge in Reshape transform
-            class Flatten(T.GeneralizedChannelPermute):
-                event_dim = 1
-
-                def _call(self, x):
-                    return super(Flatten, self)._call(x.view(-1, 3, width_dim, width_dim)).view_as(x)
-
-                def _inverse(self, x):
-                    return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
-
-            input_dim = (width_dim**2)*3
-            self._test_jacobian(input_dim, Flatten())
-
-    def test_dct_inverses(self):
-        for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.DiscreteCosineTransform())
-
-    def test_householder_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            self._test_shape(shape, T.householder(input_dim))
-
-    def test_batchnorm_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            transform = T.batchnorm(input_dim)
-            transform._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
-            transform.eval()
-            self._test_shape(shape, transform)
-
-    def test_block_autoregressive_shapes(self):
-        for residual in [None, 'normal', 'gated']:
-            for shape in [(3,), (3, 4), (3, 4, 2)]:
-                input_dim = shape[-1]
-                self._test_shape(shape, T.block_autoregressive(input_dim, residual=residual))
-
+    def test_neural_autoregressive(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
-            for shape in [(3,), (3, 4), (3, 4, 2)]:
-                input_dim = shape[-1]
-                self._test_shape(shape, T.block_autoregressive(input_dim, activation=activation))
+            self._test(partial(T.neural_autoregressive, activation=activation), inverse=False)
 
-    def test_affine_autoregressive_shapes(self):
-        for stable in [True, False]:
-            for shape in [(3,), (3, 4), (3, 4, 2)]:
-                input_dim = shape[-1]
-                self._test_shape(shape, T.affine_autoregressive(input_dim, stable=stable))
+    def test_permute(self):
+        self._test(T.permute)
 
-    def test_neural_autoregressive_shapes(self):
-        for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
-            for shape in [(3,), (3, 4), (3, 4, 2)]:
-                input_dim = shape[-1]
-                self._test_shape(shape, T.neural_autoregressive(input_dim, activation=activation))
+    def test_planar(self):
+        self._test(T.planar, inverse=False)
 
-    def test_permute_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            self._test_shape(shape, T.permute(input_dim))
+    def test_polynomial(self):
+        self._test(T.polynomial, inverse=False)
 
-    def test_planar_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            self._test_shape(shape, T.planar(input_dim))
+    def test_radial(self):
+        self._test(T.radial, inverse=False)
 
-    def test_cond_planar_shapes(self):
-        observed_dim = 3
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            z = torch.rand(observed_dim)
-            transform = T.conditional_planar(input_dim, observed_dim)
-            self._test_shape(shape, transform.condition(z))
+    def test_sylvester(self):
+        self._test(T.sylvester, inverse=False)
 
-    def test_poly_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            self._test_shape(shape, T.polynomial(input_dim))
-
-    def test_radial_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            self._test_shape(shape, T.radial(input_dim))
-
-    def test_affine_coupling_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            self._test_shape(shape, T.affine_coupling(input_dim))
-
-    def test_sylvester_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            input_dim = shape[-1]
-            self._test_shape(shape, T.sylvester(input_dim))
-
-    def test_elu_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, T.elu())
-
-    def test_leaky_relu_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, T.leaky_relu())
-
-    def test_tanh_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, T.tanh())
-
-    def test_dct_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, T.DiscreteCosineTransform())
+    def test_tanh(self):
+        # NOTE: Need following since helper function mistakenly doesn't take input dim
+        self._test(lambda input_dim: T.tanh())

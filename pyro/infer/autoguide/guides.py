@@ -30,11 +30,12 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_median, init_to_feasible
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_feasible, init_to_median
 from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
+from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
 
 
@@ -58,6 +59,12 @@ def _deep_setattr(obj, key, val):
     setattr(obj, rpart, val)
 
 
+def _deep_getattr(obj, key):
+    for part in key.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
 def prototype_hide_fn(msg):
     # Record only stochastic sites in the prototype_trace.
     return msg["type"] != "sample" or msg["is_observed"] or site_is_subsample(msg)
@@ -73,16 +80,21 @@ class AutoGuide(PyroModule):
     Auto guides can be used individually or combined in an
     :class:`AutoGuideList` object.
 
-    :param callable model: a pyro model
+    :param callable model: A pyro model.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
     """
 
-    def __init__(self, model):
+    def __init__(self, model, *, create_plates=None):
         super().__init__(name=type(self).__name__)
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
+        self.create_plates = create_plates
         self.prototype_trace = None
-        self._plates = {}
+        self._prototype_frames = {}
 
     @property
     def model(self):
@@ -119,11 +131,22 @@ class AutoGuide(PyroModule):
             value._update_master(weakref.ref(master_ref))
         super().__setattr__(name, value)
 
-    def _create_plates(self):
+    def _create_plates(self, *args, **kwargs):
         if self.master is None:
-            self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
-                           for frame in sorted(self._plates.values())}
+            if self.create_plates is None:
+                self.plates = {}
+            else:
+                plates = self.create_plates(*args, **kwargs)
+                if isinstance(plates, pyro.plate):
+                    plates = [plates]
+                assert all(isinstance(p, pyro.plate) for p in plates), \
+                    "create_plates() returned a non-plate"
+                self.plates = {p.name: p for p in plates}
+            for name, frame in sorted(self._prototype_frames.items()):
+                if name not in self.plates:
+                    self.plates[name] = pyro.plate(name, frame.size, dim=frame.dim)
         else:
+            assert self.create_plates is None, "Cannot pass create_plates() to non-master guide"
             self.plates = self.master().plates
         return self.plates
 
@@ -134,11 +157,11 @@ class AutoGuide(PyroModule):
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 
-        self._plates = {}
+        self._prototype_frames = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._plates[frame.name] = frame
+                    self._prototype_frames[frame.name] = frame
                 else:
                     raise NotImplementedError("AutoGuide does not support sequential pyro.plate")
 
@@ -212,7 +235,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
             self._setup_prototype(*args, **kwargs)
 
         # create all plates
-        self._create_plates()
+        self._create_plates(*args, **kwargs)
 
         # run slave guides
         result = {}
@@ -300,18 +323,33 @@ class AutoDelta(AutoGuide):
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
     """
-    def __init__(self, model, init_loc_fn=init_to_median):
+    def __init__(self, model, init_loc_fn=init_to_median, *,
+                 create_plates=None):
         self.init_loc_fn = init_loc_fn
         model = InitMessenger(self.init_loc_fn)(model)
-        super().__init__(model)
+        super().__init__(model, create_plates=create_plates)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
+            value = site["value"].detach()
+            event_dim = site["fn"].event_dim
+
+            # If subsampling, repeat init_value to full size.
+            for frame in site["cond_indep_stack"]:
+                full_size = getattr(frame, "full_size", frame.size)
+                if full_size != frame.size:
+                    dim = frame.dim - event_dim
+                    value = periodic_repeat(value, full_size, dim).contiguous()
+
+            value = PyroParam(value, site["fn"].support, event_dim)
             _deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
@@ -325,7 +363,7 @@ class AutoDelta(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        plates = self._create_plates()
+        plates = self._create_plates(*args, **kwargs)
         result = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             with ExitStack() as stack:
@@ -345,6 +383,164 @@ class AutoDelta(AutoGuide):
         :rtype: dict
         """
         return self(*args, **kwargs)
+
+
+class AutoNormal(AutoGuide):
+    """This implementation of :class:`AutoGuide` uses Normal(0, 1) distributions
+    to construct a guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
+
+    It should be equivalent to :class: `AutoDiagonalNormal` , but with
+    more convenient site names and with better support for
+    :class:`~pyro.infer.trace_mean_field_elbo.TraceMeanField_ELBO` .
+
+    In :class:`AutoDiagonalNormal` , if your model has N named
+    parameters with dimensions k_i and sum k_i = D, you get a single
+    vector of length D for your mean, and a single vector of length D
+    for sigmas.  This guide gives you N distinct normals that you can
+    call by name.
+
+    Usage::
+
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, ...)
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
+    """
+    def __init__(self, model, *,
+                 init_loc_fn=init_to_feasible,
+                 init_scale=0.1,
+                 create_plates=None):
+        self.init_loc_fn = init_loc_fn
+
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
+
+        model = InitMessenger(self.init_loc_fn)(model)
+        super().__init__(model, create_plates=create_plates)
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+
+        self._event_dims = {}
+        self._cond_indep_stacks = {}
+        self.locs = PyroModule()
+        self.scales = PyroModule()
+
+        # Initialize guide params
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            # Collect unconstrained event_dims, which may differ from constrained event_dims.
+            init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
+            event_dim = site["fn"].event_dim + init_loc.dim() - site["value"].dim()
+            self._event_dims[name] = event_dim
+
+            # Collect independence contexts.
+            self._cond_indep_stacks[name] = site["cond_indep_stack"]
+
+            # If subsampling, repeat init_value to full size.
+            for frame in site["cond_indep_stack"]:
+                full_size = getattr(frame, "full_size", frame.size)
+                if full_size != frame.size:
+                    dim = frame.dim - event_dim
+                    init_loc = periodic_repeat(init_loc, full_size, dim).contiguous()
+            init_scale = torch.full_like(init_loc, self._init_scale)
+
+            _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
+            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive, event_dim))
+
+    def _get_loc_and_scale(self, name):
+        site_loc = _deep_getattr(self.locs, name)
+        site_scale = _deep_getattr(self.scales, name)
+        return site_loc, site_scale
+
+    def forward(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        plates = self._create_plates(*args, **kwargs)
+        result = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            transform = biject_to(site["fn"].support)
+
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(plates[frame.name])
+
+                site_loc, site_scale = self._get_loc_and_scale(name)
+                unconstrained_latent = pyro.sample(
+                    name + "_unconstrained",
+                    dist.Normal(
+                        site_loc, site_scale,
+                    ).to_event(self._event_dims[name]),
+                    infer={"is_auxiliary": True}
+                )
+
+                value = transform(unconstrained_latent)
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_latent)
+                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
+                delta_dist = dist.Delta(value, log_density=log_density,
+                                        event_dim=site["fn"].event_dim)
+
+                result[name] = pyro.sample(name, delta_dist)
+
+        return result
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        medians = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            site_loc, _ = self._get_loc_and_scale(name)
+            median = biject_to(site["fn"].support)(site_loc)
+            if median is site_loc:
+                median = median.clone()
+            medians[name] = median
+
+        return medians
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns posterior quantiles each latent variable. Example::
+
+            print(guide.quantiles([0.05, 0.5, 0.95]))
+
+        :param quantiles: A list of requested quantiles between 0 and 1.
+        :type quantiles: torch.Tensor or list
+        :return: A dict mapping sample site name to a list of quantile values.
+        :rtype: dict
+        """
+        results = {}
+
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            site_loc, site_scale = self._get_loc_and_scale(name)
+
+            site_quantiles = torch.tensor(quantiles, dtype=site_loc.dtype, device=site_loc.device)
+            site_quantiles_values = dist.Normal(site_loc, site_scale).icdf(site_quantiles)
+            constrained_site_quantiles = biject_to(site["fn"].support)(site_quantiles_values)
+            results[name] = constrained_site_quantiles
+
+        return results
 
 
 class AutoContinuous(AutoGuide):
@@ -483,7 +679,7 @@ class AutoContinuous(AutoGuide):
             self._setup_prototype(*args, **kwargs)
 
         latent = self.sample_latent(*args, **kwargs)
-        plates = self._create_plates()
+        plates = self._create_plates(*args, **kwargs)
 
         # unpack continuous latent samples
         result = {}
@@ -860,7 +1056,7 @@ class AutoDiscreteParallel(AutoGuide):
 
         self._discrete_sites = []
         self._cond_indep_stacks = {}
-        self._plates = {}
+        self._prototype_frames = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             if site["infer"].get("enumerate") != "parallel":
                 raise NotImplementedError('Expected sample site "{}" to be discrete and '
@@ -879,7 +1075,7 @@ class AutoDiscreteParallel(AutoGuide):
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._plates[frame.name] = frame
+                    self._prototype_frames[frame.name] = frame
                 else:
                     raise NotImplementedError("AutoDiscreteParallel does not support sequential pyro.plate")
         # Initialize guide params
@@ -900,7 +1096,7 @@ class AutoDiscreteParallel(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        plates = self._create_plates()
+        plates = self._create_plates(*args, **kwargs)
 
         # enumerate discrete latent samples
         result = {}

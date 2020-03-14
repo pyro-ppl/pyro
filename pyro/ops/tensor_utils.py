@@ -39,6 +39,147 @@ def block_diagonal(mat, block_size):
     return mat[..., ::B + 1, :, :]
 
 
+def periodic_repeat(tensor, size, dim):
+    """
+    Repeat a ``period``-sized tensor up to given ``size``. For example::
+
+        >>> x = torch.tensor([[1, 2, 3], [4, 5, 6]])
+        >>> periodic_repeat(x, 4, 0)
+        tensor([[1, 2, 3],
+                [4, 5, 6],
+                [1, 2, 3],
+                [4, 5, 6]])
+        >>> periodic_repeat(x, 4, 1)
+        tensor([[1, 2, 3, 1],
+                [4, 5, 6, 4]])
+
+    This is useful for computing static seasonality in time series models.
+
+    :param torch.Tensor tensor: A tensor of differences.
+    :param int size: Desired size of the result along dimension ``dim``.
+    :param int dim: The tensor dimension along which to repeat.
+    """
+    assert isinstance(size, int) and size >= 0
+    assert isinstance(dim, int)
+    if dim >= 0:
+        dim -= tensor.dim()
+
+    period = tensor.size(dim)
+    repeats = [1] * tensor.dim()
+    repeats[dim] = (size + period - 1) // period
+    result = tensor.repeat(*repeats)
+    result = result[(Ellipsis, slice(None, size)) + (slice(None),) * (-1 - dim)]
+    return result
+
+
+def periodic_cumsum(tensor, period, dim):
+    """
+    Compute periodic cumsum along a given dimension. For example if dim=0::
+
+        for t in range(period):
+            assert result[t] == tensor[t]
+        for t in range(period, len(tensor)):
+            assert result[t] == tensor[t] + result[t - period]
+
+    This is useful for computing drifting seasonality in time series models.
+
+    :param torch.Tensor tensor: A tensor of differences.
+    :param int period: The period of repetition.
+    :param int dim: The tensor dimension along which to accumulate.
+    """
+    assert isinstance(period, int) and period > 0
+    assert isinstance(dim, int)
+    if dim >= 0:
+        dim -= tensor.dim()
+
+    # Pad to even size.
+    size = tensor.size(dim)
+    repeats = (size + period - 1) // period
+    padding = repeats * period - size
+    if torch._C._get_tracing_state() or padding:
+        tensor = torch.nn.functional.pad(tensor, (0, 0) * (-1 - dim) + (0, padding))
+
+    # Accumulate.
+    shape = tensor.shape[:dim] + (repeats, period) + tensor.shape[tensor.dim() + dim + 1:]
+    result = tensor.reshape(shape).cumsum(dim=dim - 1).reshape(tensor.shape)
+
+    # Truncate to original size.
+    if torch._C._get_tracing_state() or padding:
+        result = result[(Ellipsis, slice(None, size)) + (slice(None),) * (-1 - dim)]
+    return result
+
+
+def periodic_features(duration, max_period=None, min_period=None, **options):
+    r"""
+    Create periodic (sin,cos) features from ``max_period`` down to
+    ``min_period``.
+
+    This is useful in time series models where long uneven seasonality can be
+    treated via regression. When only ``max_period`` is specified this
+    generates periodic features at all length scales. When also ``min_period``
+    is specified this generates periodic features at large length scales, but
+    omits high frequency features. This is useful when combining regression for
+    long seasonality with other techniques like :func:`periodic_repeat` and
+    :func:`periodic_cumsum` for short time scales. For example, to combine
+    regress yearly seasonality down to the scale of one week one could set
+    ``max_period=365.25`` and ``min_period=7``.
+
+    :param int duration: Number of discrete time steps.
+    :param float max_period: Optional max period, defaults to ``duration``.
+    :param float min_period: Optional min period (exclusive), defaults to
+        2 = Nyquist cutoff.
+    :param \*\*options: Tensor construction options, e.g. ``dtype`` and
+        ``device``.
+    :returns: A ``(duration, 2 * ceil(max_period / min_period) - 2)``-shaped
+        tensor of features normalized to lie in [-1,1].
+    :rtype: ~torch.Tensor
+    """
+    assert isinstance(duration, int) and duration >= 0
+    if max_period is None:
+        max_period = duration
+    if min_period is None:
+        min_period = 2
+    assert 2 <= min_period, "min_period is below Nyquist cutoff"
+    assert min_period <= max_period
+
+    t = torch.arange(float(duration), **options).unsqueeze(-1).unsqueeze(-1)
+    phase = torch.tensor([0, math.pi / 2], **options).unsqueeze(-1)
+    freq = torch.arange(1, max_period / min_period, **options).mul_(2 * math.pi / max_period)
+    result = (freq * t + phase).cos_().reshape(duration, -1).contiguous()
+    return result
+
+
+_NEXT_FAST_LEN = {}
+
+
+def next_fast_len(size):
+    """
+    Returns the next largest number ``n >= size`` whose prime factors are all
+    2, 3, or 5. These sizes are efficient for fast fourier transforms.
+    Equivalent to :func:`scipy.fftpack.next_fast_len`.
+
+    :param int size: A positive number.
+    :returns: A possibly larger number.
+    :rtype int:
+    """
+    try:
+        return _NEXT_FAST_LEN[size]
+    except KeyError:
+        pass
+
+    assert isinstance(size, int) and size > 0
+    next_size = size
+    while True:
+        remaining = next_size
+        for n in (2, 3, 5):
+            while remaining % n == 0:
+                remaining //= n
+        if remaining == 1:
+            _NEXT_FAST_LEN[size] = next_size
+            return next_size
+        next_size += 1
+
+
 def _complex_mul(a, b):
     ar, ai = a.unbind(-1)
     br, bi = b.unbind(-1)
@@ -74,8 +215,8 @@ def convolve(signal, kernel, mode='full'):
 
     # Compute convolution using fft.
     padded_size = m + n - 1
-    # Round up to next power of 2 for cheaper fft.
-    fast_ftt_size = 2 ** math.ceil(math.log2(padded_size))
+    # Round up for cheaper fft.
+    fast_ftt_size = next_fast_len(padded_size)
     f_signal = torch.rfft(torch.nn.functional.pad(signal, (0, fast_ftt_size - m)), 1, onesided=False)
     f_kernel = torch.rfft(torch.nn.functional.pad(kernel, (0, fast_ftt_size - n)), 1, onesided=False)
     f_result = _complex_mul(f_signal, f_kernel)
@@ -118,16 +259,23 @@ def _real_of_complex_mul(a, b):
     return ar * br - ai * bi
 
 
-def dct(x):
+def dct(x, dim=-1):
     """
     Discrete cosine transform of type II, scaled to be orthonormal.
 
     This is the inverse of :func:`idct_ii` , and is equivalent to
     :func:`scipy.fftpack.dct` with ``norm="ortho"``.
 
-    :param Tensor x:
+    :param Tensor x: The input signal.
+    :param int dim: Dimension along which to compute DCT.
     :rtype: Tensor
     """
+    if dim >= 0:
+        dim -= x.dim()
+    if dim != -1:
+        y = x.reshape(x.shape[:dim + 1] + (-1,)).transpose(-1, -2)
+        return dct(y).transpose(-1, -2).reshape(x.shape)
+
     # Ref: http://fourier.eng.hmc.edu/e161/lectures/dct/node2.html
     N = x.size(-1)
     # Step 1
@@ -143,16 +291,23 @@ def dct(x):
     return X / scale
 
 
-def idct(x):
+def idct(x, dim=-1):
     """
     Inverse discrete cosine transform of type II, scaled to be orthonormal.
 
     This is the inverse of :func:`dct_ii` , and is equivalent to
     :func:`scipy.fftpack.idct` with ``norm="ortho"``.
 
-    :param Tensor x: The input signal
+    :param Tensor x: The input signal.
+    :param int dim: Dimension along which to compute DCT.
     :rtype: Tensor
     """
+    if dim >= 0:
+        dim -= x.dim()
+    if dim != -1:
+        y = x.reshape(x.shape[:dim + 1] + (-1,)).transpose(-1, -2)
+        return idct(y).transpose(-1, -2).reshape(x.shape)
+
     N = x.size(-1)
     scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
     x = x * scale
@@ -173,3 +328,33 @@ def idct(x):
     y = torch.irfft(Y, 1, onesided=True, signal_sizes=(N,))
     # Step 3
     return torch.stack([y, y.flip(-1)], axis=-1).reshape(x.shape[:-1] + (-1,))[..., :N]
+
+
+def cholesky(x):
+    if x.size(-1) == 1:
+        return x.sqrt()
+    return x.cholesky()
+
+
+def cholesky_solve(x, y):
+    if y.size(-1) == 1:
+        return x / (y * y)
+    return x.cholesky_solve(y)
+
+
+def matmul(x, y):
+    if x.size(-1) == 1:
+        return x.mul(y)
+    return x.matmul(y)
+
+
+def matvecmul(x, y):
+    if x.size(-1) == 1:
+        return x.squeeze(-1).mul(y)
+    return x.matmul(y.unsqueeze(-1)).squeeze(-1)
+
+
+def triangular_solve(x, y, upper=False, transpose=False):
+    if y.size(-1) == 1:
+        return x / y
+    return x.triangular_solve(y, upper=upper, transpose=transpose).solution

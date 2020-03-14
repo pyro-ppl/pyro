@@ -1,14 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
+
 import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transforms import ComposeTransform
-from pyro.infer import SVI, Trace_ELBO, NUTS, MCMC
-from pyro.infer.autoguide import AutoIAFNormal
 from pyro import optim
+from pyro.distributions.transforms import ComposeTransform
+from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
+from pyro.infer.autoguide import AutoIAFNormal
 from pyro.infer.mcmc.util import initialize_model
 from pyro.infer.reparam import NeuTraReparam
 from tests.common import assert_close, xfail_param

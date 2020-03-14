@@ -10,6 +10,7 @@ from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
                                      matrix_and_mvn_to_gamma_gaussian)
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
+from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
 
 @torch.jit.script
@@ -506,13 +507,21 @@ class GaussianHMM(HiddenMarkovModel):
         obs_dim = self.obs_dim
         hidden_dim = self.hidden_dim
         trans = self._trans + self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
-        if trans.batch_shape[-1] != self.duration:
-            trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
+        trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
         z = _sequential_gaussian_filter_sample(self._init, trans, sample_shape)
         perm = torch.cat([torch.arange(hidden_dim, hidden_dim + obs_dim, device=z.device),
                           torch.arange(hidden_dim, device=z.device)])
         x = self._obs.event_permute(perm).condition(z).rsample()
         return x
+
+    def rsample_posterior(self, value, sample_shape=torch.Size()):
+        """
+        EXPERIMENTAL Sample from the latent state conditioned on observation.
+        """
+        trans = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
+        trans = trans.expand(trans.batch_shape)
+        z = _sequential_gaussian_filter_sample(self._init, trans, sample_shape)
+        return z
 
     def filter(self, value):
         """
@@ -539,14 +548,14 @@ class GaussianHMM(HiddenMarkovModel):
 
         # Convert to a distribution
         precision = logp.precision
-        loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
+        loc = cholesky_solve(logp.info_vec.unsqueeze(-1), cholesky(precision)).squeeze(-1)
         return MultivariateNormal(loc, precision_matrix=precision,
                                   validate_args=self._validate_args)
 
     def conjugate_update(self, other):
         """
-        Creates an updated :class:`GaussianHMM` fusing information from another
-        compatible distribution.
+        EXPERIMENTAL Creates an updated :class:`GaussianHMM` fusing information
+        from another compatible distribution.
 
         This should satisfy::
 
@@ -587,6 +596,55 @@ class GaussianHMM(HiddenMarkovModel):
         super(GaussianHMM, new).__init__(duration, batch_shape, event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new, log_normalizer
+
+    def prefix_condition(self, data):
+        """
+        EXPERIMENTAL Given self has ``event_shape == (t+f, d)`` and data ``x``
+        of shape ``batch_shape + (t, d)``, compute a conditional distribution
+        of event_shape ``(f, d)``. Typically ``t`` is the number of training
+        time steps, ``f`` is the number of forecast time steps, and ``d`` is
+        the data dimension.
+
+        :param data: data of dimension at least 2.
+        :type data: ~torch.Tensor
+        """
+        assert data.dim() >= 2
+        assert data.size(-1) == self.event_shape[-1]
+        assert data.size(-2) < self.duration
+        t = data.size(-2)
+        f = self.duration - t
+
+        left = self._get_checked_instance(GaussianHMM)
+        left.hidden_dim = self.hidden_dim
+        left.obs_dim = self.obs_dim
+        left._init = self._init
+
+        right = self._get_checked_instance(GaussianHMM)
+        right.hidden_dim = self.hidden_dim
+        right.obs_dim = self.obs_dim
+
+        if self._obs.batch_shape == () or self._obs.batch_shape[-1] == 1:  # homogeneous
+            left._obs = self._obs
+            right._obs = self._obs
+        else:  # heterogeneous
+            left._obs = self._obs[..., :t]
+            right._obs = self._obs[..., t:]
+
+        if self._trans.batch_shape == () or self._trans.batch_shape[-1] == 1:  # homogeneous
+            left._trans = self._trans
+            right._trans = self._trans
+        else:  # heterogeneous
+            left._trans = self._trans[..., :t]
+            right._trans = self._trans[..., t:]
+
+        super(GaussianHMM, left).__init__(t, self.batch_shape, (t, self.obs_dim),
+                                          validate_args=self._validate_args)
+        initial_dist = left.filter(data)
+        right._init = mvn_to_gaussian(initial_dist)
+        batch_shape = broadcast_shape(right._init.batch_shape, self.batch_shape)
+        super(GaussianHMM, right).__init__(f, batch_shape, (f, self.obs_dim),
+                                           validate_args=self._validate_args)
+        return right
 
 
 class GammaGaussianHMM(HiddenMarkovModel):
@@ -753,8 +811,8 @@ class GammaGaussianHMM(HiddenMarkovModel):
         scale_post = Gamma(gamma_dist.concentration, gamma_dist.rate,
                            validate_args=self._validate_args)
         # Conditional of last state on unit scale
-        scale_tril = logp.precision.cholesky()
-        loc = logp.info_vec.unsqueeze(-1).cholesky_solve(scale_tril).squeeze(-1)
+        scale_tril = cholesky(logp.precision)
+        loc = cholesky_solve(logp.info_vec.unsqueeze(-1), scale_tril).squeeze(-1)
         mvn = MultivariateNormal(loc, scale_tril=scale_tril,
                                  validate_args=self._validate_args)
         return scale_post, mvn
@@ -765,12 +823,12 @@ class LinearHMM(HiddenMarkovModel):
     Hidden Markov Model with linear dynamics and observations and arbitrary
     noise for initial, transition, and observation distributions.  Each of
     those distributions can be e.g.
-    `:class:`~pyro.distributions.MultivariateNormal` or
-    `:class:`~pyro.distributions.Independent` of
-    `:class:`~pyro.distributions.Normal`,
-    `:class:`~pyro.distributions.StudentT`, or `~pyro.distributions.Stable` .
+    :class:`~pyro.distributions.MultivariateNormal` or
+    :class:`~pyro.distributions.Independent` of
+    :class:`~pyro.distributions.Normal`,
+    :class:`~pyro.distributions.StudentT`, or :class:`~pyro.distributions.Stable` .
     Additionally the observation distribution may be constrained, e.g.
-    `~pyro.distributions.LogNormal`
+    :class:`~pyro.distributions.LogNormal`
 
     This corresponds to the generative model::
 
@@ -925,11 +983,67 @@ class LinearHMM(HiddenMarkovModel):
         init = self.initial_dist.rsample(sample_shape)
         trans = self.transition_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
         obs = self.observation_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
-        z = _linear_integrate(init, self.transition_matrix, trans)
+        trans_matrix = self.transition_matrix.expand(self.batch_shape + (self.duration, -1, -1))
+        z = _linear_integrate(init, trans_matrix, trans)
         x = (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
         for t in self.transforms:
             x = t(x)
         return x
+
+
+class IndependentHMM(TorchDistribution):
+    """
+    Wrapper class to treat a batch of independent univariate HMMs as a single
+    multivariate distribution. This converts distribution shapes as follows:
+
+    +-----------+--------------------+---------------------+
+    |           |       .batch_shape | .event_shape        |
+    +===========+====================+=====================+
+    | base_dist | shape + (obs_dim,) | (duration, 1)       |
+    +-----------+--------------------+---------------------+
+    |    result |              shape | (duration, obs_dim) |
+    +-----------+--------------------+---------------------+
+
+    :param HiddenMarkovModel base_dist: A base hidden Markov model instance.
+    """
+    arg_constraints = {}
+
+    def __init__(self, base_dist):
+        assert base_dist.batch_shape
+        assert base_dist.event_dim == 2
+        assert base_dist.event_shape[-1] == 1
+        batch_shape = base_dist.batch_shape[:-1]
+        event_shape = base_dist.event_shape[:-1] + base_dist.batch_shape[-1:]
+        super().__init__(batch_shape, event_shape)
+        self.base_dist = base_dist
+
+    @constraints.dependent_property
+    def support(self):
+        return self.base_dist.support
+
+    @property
+    def has_rsample(self):
+        return self.base_dist.has_rsample
+
+    @property
+    def duration(self):
+        return self.base_dist.duration
+
+    def expand(self, batch_shape, _instance=None):
+        batch_shape = torch.Size(batch_shape)
+        new = self._get_checked_instance(IndependentHMM, _instance)
+        new.base_dist = self.base_dist.expand(batch_shape + self.base_dist.batch_shape[-1:])
+        super(IndependentHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self.__dict__.get('_validate_args')
+        return new
+
+    def rsample(self, sample_shape=torch.Size()):
+        base_value = self.base_dist.rsample(sample_shape)
+        return base_value.squeeze(-1).transpose(-1, -2)
+
+    def log_prob(self, value):
+        base_value = value.transpose(-1, -2).unsqueeze(-1)
+        return self.base_dist.log_prob(base_value).sum(-1)
 
 
 class GaussianMRF(TorchDistribution):

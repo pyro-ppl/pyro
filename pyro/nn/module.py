@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Pyro includes an experimental class :class:`~pyro.nn.module.PyroModule`, a
-subclass of :class:`torch.nn.Module`, whose attributes can be modified by Pyro
-effects.  To create a poutine-aware attribute, use either the
-:class:`PyroParam` struct or the :class:`PyroSample` struct::
+Pyro includes a class :class:`~pyro.nn.module.PyroModule`, a subclass of
+:class:`torch.nn.Module`, whose attributes can be modified by Pyro effects.  To
+create a poutine-aware attribute, use either the :class:`PyroParam` struct or
+the :class:`PyroSample` struct::
 
     my_module = PyroModule()
     my_module.x = PyroParam(torch.tensor(1.), constraint=constraints.positive)
@@ -111,10 +111,9 @@ class _PyroModuleMeta(type):
 
 class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     """
-    EXPERIMENTAL Subclass of :class:`torch.nn.Module` whose attributes can be
-    modified by Pyro effects. Attributes can be set using helpers
-    :class:`PyroParam` and :class:`PyroSample` , and methods can be decorated
-    by :func:`pyro_method` .
+    Subclass of :class:`torch.nn.Module` whose attributes can be modified by
+    Pyro effects. Attributes can be set using helpers :class:`PyroParam` and
+    :class:`PyroSample` , and methods can be decorated by :func:`pyro_method` .
 
     **Parameters**
 
@@ -370,16 +369,14 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             self._pyro_params[name] = constraint, event_dim
             if self._pyro_context.active:
                 fullname = self._pyro_get_fullname(name)
-                if fullname in _PYRO_PARAM_STORE:
-                    # Update PyroModule <--- ParamStore.
-                    unconstrained_value = _PYRO_PARAM_STORE._params[fullname]
-                    if not isinstance(unconstrained_value, torch.nn.Parameter):
-                        # Update PyroModule ---> ParamStore (type only; data is preserved).
-                        unconstrained_value = torch.nn.Parameter(unconstrained_value)
-                        _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
-                        _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
-                else:
-                    unconstrained_value = _unconstrain(constrained_value, constraint)
+                pyro.param(fullname, constrained_value, constraint=constraint, event_dim=event_dim)
+                constrained_value = pyro.param(fullname)
+                unconstrained_value = constrained_value.unconstrained()
+                if not isinstance(unconstrained_value, torch.nn.Parameter):
+                    # Update PyroModule ---> ParamStore (type only; data is preserved).
+                    unconstrained_value = torch.nn.Parameter(unconstrained_value)
+                    _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
+                    _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
             else:  # Cannot determine supermodule and hence cannot compute fullname.
                 unconstrained_value = _unconstrain(constrained_value, constraint)
             super().__setattr__(name + "_unconstrained", unconstrained_value)

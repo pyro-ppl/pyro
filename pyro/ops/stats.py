@@ -1,10 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 import numbers
 
 import torch
-import math
+
+from .tensor_utils import next_fast_len
 
 
 def _compute_chain_variance_stats(input):
@@ -78,23 +80,6 @@ def split_gelman_rubin(input, chain_dim=0, sample_dim=1):
     return split_rhat.squeeze(max(sample_dim, chain_dim)).squeeze(min(sample_dim, chain_dim))
 
 
-def _fft_next_good_size(N):
-    # find the smallest number >= N such that the only divisors are 2, 3, 5
-    if N <= 2:
-        return 2
-    while True:
-        m = N
-        while m % 2 == 0:
-            m //= 2
-        while m % 3 == 0:
-            m //= 3
-        while m % 5 == 0:
-            m //= 5
-        if m == 1:
-            return N
-        N += 1
-
-
 def autocorrelation(input, dim=0):
     """
     Computes the autocorrelation of samples at dimension ``dim``.
@@ -112,7 +97,7 @@ def autocorrelation(input, dim=0):
     # Adapted from Stan implementation
     # https://github.com/stan-dev/math/blob/develop/stan/math/prim/mat/fun/autocorrelation.hpp
     N = input.size(dim)
-    M = _fft_next_good_size(N)
+    M = next_fast_len(N)
     M2 = 2 * M
 
     # transpose dim with -1 for Fourier transform
@@ -415,10 +400,11 @@ def crps_empirical(pred, truth):
 
     Note that for a single sample this reduces to absolute error.
 
-    References
-    [1] `Strictly Proper Scoring Rules, Prediction, and Estimation`
-    Tilmann Gneiting, Adrian E. Raftery (2007)
-    https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+    **References**
+
+    [1] Tilmann Gneiting, Adrian E. Raftery (2007)
+        `Strictly Proper Scoring Rules, Prediction, and Estimation`
+        https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
 
     :param torch.Tensor pred: A set of sample predictions batched on rightmost dim.
         This should have shape ``(num_samples,) + truth.shape``.
@@ -426,7 +412,7 @@ def crps_empirical(pred, truth):
     :return: A tensor of shape ``truth.shape``.
     :rtype: torch.Tensor
     """
-    if pred.dim() != 1 + truth.dim() or pred.shape[1:] != truth.shape:
+    if pred.shape[1:] != (1,) * (pred.dim() - truth.dim() - 1) + truth.shape:
         raise ValueError("Expected pred to have one extra sample dim on left. "
                          "Actual shapes: {} versus {}".format(pred.shape, truth.shape))
     opts = dict(device=pred.device, dtype=pred.dtype)
@@ -438,6 +424,6 @@ def crps_empirical(pred, truth):
     diff = pred[1:] - pred[:-1]
     weight = (torch.arange(1, num_samples, **opts) *
               torch.arange(num_samples - 1, 0, -1, **opts))
-    weight = weight.reshape(weight.shape + (1,) * truth.dim())
+    weight = weight.reshape(weight.shape + (1,) * (diff.dim() - 1))
 
     return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2

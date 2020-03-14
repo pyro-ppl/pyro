@@ -148,6 +148,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+IndependentHMM
+--------------
+.. autoclass:: pyro.distributions.IndependentHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 InverseGamma
 ------------
 .. autoclass:: pyro.distributions.InverseGamma

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import bz2
 import csv
 import datetime
 import logging
@@ -47,7 +48,6 @@ def _load_hourly_od(basename):
         return filename
 
     # Download source files.
-    _mkdir_p(DATA)
     gz_filename = os.path.join(DATA, basename)
     if not os.path.exists(gz_filename):
         url = SOURCE_DIR + basename
@@ -115,6 +115,7 @@ def load_bart_od():
         -   "counts": a ``torch.FloatTensor`` of ridership counts, with shape
             ``(num_hours, len(stations), len(stations))``.
     """
+    _mkdir_p(DATA)
     filename = os.path.join(DATA, "bart_full.pkl.bz2")
     # Work around apparent bug in torch.load(),torch.save().
     pkl_file = filename.rsplit(".", 1)[0]
@@ -122,7 +123,8 @@ def load_bart_od():
         try:
             urllib.request.urlretrieve(CACHE_URL, filename)
             logging.debug("cache hit, uncompressing")
-            subprocess.check_call(["bunzip2", "-k", filename])
+            with bz2.BZ2File(filename) as src, open(filename[:-4], "wb") as dst:
+                dst.write(src.read())
         except urllib.error.HTTPError:
             logging.debug("cache miss, preprocessing from scratch")
     if os.path.exists(pkl_file):
