@@ -217,7 +217,8 @@ class SplineLayer(nn.Module):
             raise ValueError("Monotonic rational quadratic splines not yet implemented!")
         else:
             raise ValueError(
-                f"Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{self.order}' was found!")
+                "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
+                    self.order))
 
     @property
     def widths(self):
