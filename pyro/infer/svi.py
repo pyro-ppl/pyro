@@ -18,7 +18,7 @@ class SVI(TracePosterior):
     :param model: the model (callable containing Pyro primitives)
     :param guide: the guide (callable containing Pyro primitives)
     :param optim: a wrapper a for a PyTorch optimizer
-    :type optim: pyro.optim.PyroOptim
+    :type optim: ~pyro.optim.optim.PyroOptim
     :param loss: an instance of a subclass of :class:`~pyro.infer.elbo.ELBO`.
         Pyro provides three built-in losses:
         :class:`~pyro.infer.trace_elbo.Trace_ELBO`,

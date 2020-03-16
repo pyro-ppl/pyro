@@ -182,7 +182,7 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
 
 class Forecaster(nn.Module):
     """
-    Forecaster for a :class:`ForecastingModel`.
+    Forecaster for a :class:`ForecastingModel` using variational inference.
 
     On initialization, this fits a distribution using variational inference
     over latent variables and exact inference over the noise distribution,
@@ -204,10 +204,17 @@ class Forecaster(nn.Module):
     :param guide: Optional guide instance. Defaults to a
         :class:`~pyro.infer.autoguide.AutoNormal`.
     :type guide: ~pyro.nn.module.PyroModule
+    :param callable init_loc_fn: A per-site initialization function for the
+        :class:`~pyro.infer.autoguide.AutoNormal` guide. Defaults to
+        :func:`~pyro.infer.autoguide.initialization.init_to_sample`. See
+        :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial uncertainty scale of the
         :class:`~pyro.infer.autoguide.AutoNormal` guide.
     :param callable create_plates: An optional function to create plates for
         subsampling with the :class:`~pyro.infer.autoguide.AutoNormal` guide.
+    :param optim: An optional Pyro optimizer. Defaults to a freshly constructed
+        :class:`~pyro.optim.optim.DCTAdam`.
+    :type optim: ~pyro.optim.optim.PyroOptim
     :param float learning_rate: Learning rate used by
         :class:`~pyro.optim.optim.DCTAdam`.
     :param tuple betas: Coefficients for running averages used by
@@ -215,6 +222,8 @@ class Forecaster(nn.Module):
     :param float learning_rate_decay: Learning rate decay used by
         :class:`~pyro.optim.optim.DCTAdam`. Note this is the total decay
         over all ``num_steps``, not the per-step decay factor.
+    :param float clip_norm: Norm used for gradient clipping during
+        optimization. Defaults to 10.0.
     :param bool dct_gradients: Whether to discrete cosine transform gradients
         in :class:`~pyro.optim.optim.DCTAdam`. Defaults to False.
     :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
@@ -228,28 +237,28 @@ class Forecaster(nn.Module):
         recommended for model exploration purposes only and should be disabled
         when publishing metrics.
     :param int log_every: Number of training steps between logging messages.
-    :param float clip_norm: Norm used for gradient clipping during
-        optimization. Defaults to 10.0.
     """
     def __init__(self, model, data, covariates, *,
                  guide=None,
+                 init_loc_fn=init_to_sample,
                  init_scale=0.1,
                  create_plates=None,
+                 optim=None,
                  learning_rate=0.01,
                  betas=(0.9, 0.99),
                  learning_rate_decay=0.1,
+                 clip_norm=10.0,
                  dct_gradients=False,
                  num_steps=1001,
                  num_particles=1,
                  vectorize_particles=True,
                  warm_start=False,
-                 log_every=100,
-                 clip_norm=10.0):
+                 log_every=100):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
         if guide is None:
-            guide = AutoNormal(self.model, init_loc_fn=init_to_sample, init_scale=init_scale,
+            guide = AutoNormal(self.model, init_loc_fn=init_loc_fn, init_scale=init_scale,
                                create_plates=create_plates)
         self.guide = guide
 
@@ -267,9 +276,10 @@ class Forecaster(nn.Module):
 
         losses = []
         if num_steps:
-            optim = DCTAdam({"lr": learning_rate, "betas": betas,
-                             "lrd": learning_rate_decay ** (1 / num_steps),
-                             "clip_norm": clip_norm})
+            if optim is None:
+                optim = DCTAdam({"lr": learning_rate, "betas": betas,
+                                 "lrd": learning_rate_decay ** (1 / num_steps),
+                                 "clip_norm": clip_norm})
             svi = SVI(self.model, self.guide, optim, elbo)
             for step in range(num_steps):
                 loss = svi.step(data, covariates) / data.numel()
