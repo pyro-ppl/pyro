@@ -43,10 +43,10 @@ class LatentStableReparam(Reparam):
 
         # Draw parameter-free noise.
         proto = fn.stability
-        half_pi = proto.new_full(proto.shape, math.pi / 2)
+        half_pi = proto.new_tensor(math.pi / 2)
         one = proto.new_ones(proto.shape)
         u = pyro.sample("{}_uniform".format(name),
-                        self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
+                        self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
         e = pyro.sample("{}_exponential".format(name),
                         self._wrap(dist.Exponential(one), event_dim))
 
@@ -91,10 +91,10 @@ class SymmetricStableReparam(Reparam):
 
         # Draw parameter-free noise.
         proto = fn.stability
-        half_pi = proto.new_full(proto.shape, math.pi / 2)
+        half_pi = proto.new_tensor(math.pi / 2)
         one = proto.new_ones(proto.shape)
         u = pyro.sample("{}_uniform".format(name),
-                        self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
+                        self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
         e = pyro.sample("{}_exponential".format(name),
                         self._wrap(dist.Exponential(one), event_dim))
 
@@ -162,14 +162,14 @@ class StableReparam(Reparam):
 
         # Draw parameter-free noise.
         proto = fn.stability
-        half_pi = proto.new_full(proto.shape, math.pi / 2)
+        half_pi = proto.new_tensor(math.pi / 2)
         one = proto.new_ones(proto.shape)
         zu = pyro.sample("{}_z_uniform".format(name),
-                         self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
+                         self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
         ze = pyro.sample("{}_z_exponential".format(name),
                          self._wrap(dist.Exponential(one), event_dim))
         tu = pyro.sample("{}_t_uniform".format(name),
-                         self._wrap(dist.Uniform(-half_pi, half_pi), event_dim))
+                         self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
         te = pyro.sample("{}_t_exponential".format(name),
                          self._wrap(dist.Exponential(one), event_dim))
 

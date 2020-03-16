@@ -19,7 +19,7 @@ class TransformTests(TestCase):
         # Epsilon is used to compare numerical gradient to analytical one
         self.epsilon = 1e-4
 
-        # Delta is tolerance for testing f(f^{-1}(x)) = x
+        # Delta is tolerance for testing inverse, f(f^{-1}(x)) = x
         self.delta = 1e-6
 
     def _test_jacobian(self, input_dim, transform):
@@ -67,8 +67,8 @@ class TransformTests(TestCase):
             assert diag_sum == float(input_dim)
             assert lower_sum == float(0.0)
 
-    def _test_inverse(self, input_dim, transform):
-        base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    def _test_inverse(self, shape, transform):
+        base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
 
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
@@ -100,16 +100,13 @@ class TransformTests(TestCase):
             return conditional_transform_factory(input_dim, context_dim).condition(z)
         self._test(transform_factory, **kwargs)
 
-    # Affine autoregressive
     def test_affine_autoregressive(self):
         for stable in [True, False]:
             self._test(partial(T.affine_autoregressive, stable=stable))
 
-    # Affine Coupling
     def test_affine_coupling(self):
         self._test(T.affine_coupling)
 
-    # Batchnorm
     def test_batchnorm(self):
         def transform_factory(input_dim):
             transform = T.batchnorm(input_dim)
@@ -119,7 +116,6 @@ class TransformTests(TestCase):
 
         self._test(transform_factory)
 
-    # Block autoregresive
     def test_block_autoregressive_jacobians(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             self._test(partial(T.block_autoregressive, activation=activation), inverse=False)
@@ -131,22 +127,42 @@ class TransformTests(TestCase):
         self._test_conditional(T.conditional_planar, inverse=False)
 
     def test_discrete_cosine(self):
-        # NOTE: Need following hack since helper function unimplemented
+        # NOTE: Need following since helper function unimplemented
         self._test(lambda input_dim: T.DiscreteCosineTransform())
 
     def test_elu(self):
-        # NOTE: Need following hack since helper function mistakenly doesn't take input dim
+        # NOTE: Need following since helper function mistakenly doesn't take input dim
         self._test(lambda input_dim: T.elu())
+
+    def test_generalized_channel_permute(self):
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
+            transform = T.generalized_channel_permute(channels=shape[-3])
+            self._test_shape(shape, transform)
+            self._test_inverse(shape, transform)
+
+        for width_dim in [2, 4, 6]:
+            # Do a bit of a hack until we merge in Reshape transform
+            class Flatten(T.GeneralizedChannelPermute):
+                event_dim = 1
+
+                def _call(self, x):
+                    return super(Flatten, self)._call(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+
+                def _inverse(self, x):
+                    return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+
+            input_dim = (width_dim**2)*3
+            self._test_jacobian(input_dim, Flatten())
 
     def test_householder(self):
         self._test(partial(T.householder, count_transforms=2))
 
     def test_leaky_relu(self):
-        # NOTE: Need following hack since helper function mistakenly doesn't take input dim
+        # NOTE: Need following since helper function mistakenly doesn't take input dim
         self._test(lambda input_dim: T.leaky_relu())
 
     def test_lower_cholesky_affine(self):
-        # NOTE: Need following hack since helper function unimplemented
+        # NOTE: Need following since helper function unimplemented
         def transform_factory(input_dim):
             loc = torch.randn(input_dim)
             scale_tril = torch.randn(input_dim).exp().diag() + 0.03 * torch.randn(input_dim, input_dim)
@@ -175,5 +191,5 @@ class TransformTests(TestCase):
         self._test(T.sylvester, inverse=False)
 
     def test_tanh(self):
-        # NOTE: Need following hack since helper function mistakenly doesn't take input dim
+        # NOTE: Need following since helper function mistakenly doesn't take input dim
         self._test(lambda input_dim: T.tanh())

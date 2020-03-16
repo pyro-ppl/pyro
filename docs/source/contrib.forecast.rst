@@ -47,7 +47,7 @@ Forecaster Interface
 ---------------------
 .. automodule:: pyro.contrib.forecast.forecaster
     :members:
-    :undoc-members:
+    :special-members: __call__
     :show-inheritance:
     :member-order: bysource
 

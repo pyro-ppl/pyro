@@ -125,6 +125,8 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+    samples = forecaster(data, covariates, num_samples, batch_size=2)
+    assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
 
 
 class SubsampleModel3(ForecastingModel):
@@ -199,4 +201,6 @@ def test_subsample_smoke(Model, t_obs, t_forecast, obs_dim, cov_dim):
 
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
+    assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+    samples = forecaster(data, covariates, num_samples, batch_size=2)
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)

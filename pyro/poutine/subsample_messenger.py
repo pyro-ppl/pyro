@@ -5,7 +5,7 @@ import torch
 
 from pyro.distributions.distribution import Distribution
 from pyro.poutine.util import is_validation_enabled
-from pyro.util import ignore_jit_warnings, jit_compatible_arange
+from pyro.util import ignore_jit_warnings
 
 from .indep_messenger import CondIndepStackFrame, IndepMessenger
 from .runtime import apply_stack
@@ -47,7 +47,7 @@ class _Subsample(Distribution):
             raise NotImplementedError
         subsample_size = self.subsample_size
         if subsample_size is None or subsample_size >= self.size:
-            result = jit_compatible_arange(self.size, device=self.device)
+            result = torch.arange(self.size, device=self.device)
         else:
             result = torch.multinomial(torch.ones(self.size), self.subsample_size,
                                        replacement=False).to(self.device)
@@ -87,7 +87,7 @@ class SubsampleMessenger(IndepMessenger):
             assert subsample is None
             size = -1  # This is PyTorch convention for "arbitrary size"
             subsample_size = -1
-        elif subsample is None:
+        else:
             msg = {
                 "type": "sample",
                 "name": name,
@@ -95,7 +95,7 @@ class SubsampleMessenger(IndepMessenger):
                 "is_observed": False,
                 "args": (),
                 "kwargs": {},
-                "value": None,
+                "value": subsample,
                 "infer": {},
                 "scale": 1.0,
                 "mask": None,
