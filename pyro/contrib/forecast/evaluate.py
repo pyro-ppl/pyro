@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import warnings
 from timeit import default_timer
 
 import torch
@@ -181,8 +182,19 @@ def backtest(data, covariates, model_fn, *,
         # Forecast forward to testing window.
         test_covariates = covariates[..., t0:t2, :]
         start_time = default_timer()
-        pred = forecaster(train_data, test_covariates, num_samples=num_samples,
-                          batch_size=batch_size)
+        # Gradually reduce batch_size to avoid OOM errors.
+        while True:
+            try:
+                pred = forecaster(train_data, test_covariates, num_samples=num_samples,
+                                  batch_size=batch_size)
+                break
+            except RuntimeError as e:
+                if "out of memory" in str(e) and batch_size > 1:
+                    batch_size = (batch_size + 1) // 2
+                    warnings.warn("out of memory, decreasing batch_size to {}"
+                                  .format(batch_size), RuntimeWarning)
+                else:
+                    raise
         test_walltime = default_timer() - start_time
         truth = data[..., t1:t2, :]
 
