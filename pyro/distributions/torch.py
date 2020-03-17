@@ -97,6 +97,7 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
 
 
 class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
+    # TODO: move upstream
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
