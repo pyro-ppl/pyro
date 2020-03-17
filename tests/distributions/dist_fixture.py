@@ -74,7 +74,7 @@ class Fixture:
     def _convert_logits_to_ps(self, dist_params):
         if 'logits' in dist_params:
             logits = torch.tensor(dist_params.pop('logits'))
-            is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
+            is_multidimensional = self.get_test_distribution_name() not in ['Bernoulli', 'Geometric']
             probs = logits_to_probs(logits, is_binary=not is_multidimensional)
             dist_params['probs'] = list(probs.detach().cpu().numpy())
         return dist_params
