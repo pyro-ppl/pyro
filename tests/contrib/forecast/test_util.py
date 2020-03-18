@@ -21,6 +21,7 @@ DISTS = [
     dist.Gamma,
     dist.GammaPoisson,
     dist.GaussianHMM,
+    dist.Geometric,
     dist.IndependentHMM,
     dist.InverseGamma,
     dist.Laplace,
