@@ -3,6 +3,7 @@
 
 import torch
 from torch.distributions import constraints
+from torch.distributions.utils import lazy_property
 
 from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
@@ -92,16 +93,23 @@ class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
         return updated, log_normalizer
 
 
-class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
-    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
-
-
 class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
     # TODO: move upstream
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
         return (-value - 1) * torch.nn.functional.softplus(self.logits) + self.logits
+
+
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
+
+    # TODO: remove this in the PyTorch release > 1.4.0
+    @lazy_property
+    def precision_matrix(self):
+        identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
+        return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
+            self._batch_shape + self._event_shape + self._event_shape)
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
