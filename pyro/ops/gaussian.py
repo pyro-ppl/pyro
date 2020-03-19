@@ -308,10 +308,20 @@ class AffineNormal:
         """
         if value.size(-1) == self.matrix.size(-2):
             loc = matvecmul(self.matrix.transpose(-1, -2), value) + self.loc
-            return torch.distributions.Independent(
-                torch.distributions.Normal(loc, scale=self.scale), 1)
+            matrix = value.new_zeros(loc.shape[:-1] + (0, loc.size(-1)))
+            scale = self.scale.expand(loc.shape)
+            return AffineNormal(matrix, loc, scale)
         else:
             return self.to_gaussian().left_condition(value)
+
+    def rsample(self, sample_shape=torch.Size()):
+        """
+        Reparameterized sampler.
+        """
+        assert self.matrix.size(-2) == 0
+        shape = sample_shape + self.batch_shape + self.loc.shape[-1:]
+        noise = torch.randn(shape, dtype=self.loc.dtype, device=self.loc.device)
+        return self.loc + noise * self.scale
 
     def to_gaussian(self):
         if self._gaussian is None:

@@ -244,9 +244,8 @@ def test_affine_normal(batch_shape, x_dim, y_dim):
 
     x = torch.randn(batch_shape + (x_dim,))
     permute_actual = actual.left_condition(x)
-    assert (isinstance(permute_actual, torch.distributions.Independent) and
-            isinstance(permute_actual.base_dist, torch.distributions.Normal))
-    permute_actual = mvn_to_gaussian(permute_actual)
+    assert isinstance(permute_actual, AffineNormal)
+    permute_actual = permute_actual.to_gaussian()
 
     permute_expected = expected.left_condition(y)
     assert isinstance(permute_expected, Gaussian)
