@@ -171,6 +171,7 @@ def backtest(data, covariates, model_fn, *,
 
     pyro.clear_param_store()
     results = []
+
     for t1 in range(start, stop, stride):
         t0 = 0 if train_window is None else t1 - train_window
         t2 = duration if test_window is None else t1 + test_window
@@ -197,6 +198,7 @@ def backtest(data, covariates, model_fn, *,
         pred = forecaster(train_data, test_covariates, num_samples=num_samples,
                           batch_size=batch_size)
         test_walltime = default_timer() - start_time
+        print("train_walltime, test_walltime", train_walltime, test_walltime)
         truth = data[..., t1:t2, :]
 
         forecaster_samples = None if isinstance(forecaster, Forecaster) else forecaster._samples

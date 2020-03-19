@@ -139,6 +139,7 @@ class Gaussian:
         Reparameterized sampler.
         """
         P_chol = cholesky(self.precision)
+        #loc = self.info_vec.squeeze(0).squeeze(0).squeeze(0).unsqueeze(-1).cholesky_solve(P_chol.squeeze(0)).squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0)
         loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
         shape = sample_shape + self.batch_shape + (self.dim(), 1)
         noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
