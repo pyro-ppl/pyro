@@ -3,6 +3,7 @@
 
 import logging
 import operator
+import os
 from functools import reduce
 
 import opt_einsum
@@ -332,6 +333,25 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
         d2 = d.prefix_condition(data[..., :t, :])
         assert d2.batch_shape == d.batch_shape
         assert d2.event_shape == (f, obs_dim)
+
+
+@pytest.mark.skipif("CI" in os.environ, reason="slow and high memory consumption test")
+def test_gaussian_hmm_high_obs_dim():
+    hidden_dim = 1
+    obs_dim = 5000
+    duration = 1000
+    sample_shape = (100,)
+    init_dist = random_mvn((), hidden_dim)
+    trans_mat = torch.randn((duration,) + (hidden_dim, hidden_dim))
+    trans_dist = random_mvn((duration,), hidden_dim)
+    obs_mat = torch.randn((duration,) + (hidden_dim, obs_dim))
+    loc = torch.randn((duration, obs_dim))
+    scale = torch.randn((duration, obs_dim)).exp()
+    obs_dist = dist.Normal(loc, scale).to_event(1)
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
+                         duration=duration)
+    x = d.rsample(sample_shape)
+    assert x.shape == sample_shape + (duration, obs_dim)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)

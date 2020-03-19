@@ -7,7 +7,6 @@ import torch
 from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
-import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.tensor_utils import cholesky, matmul, matvecmul, triangular_solve
 
@@ -302,15 +301,22 @@ class AffineNormal:
             return self.to_gaussian().condition(value)
 
     def left_condition(self, value):
+        """
+        If ``value.size(-1) == x_dim``, this returns a Normal distribution with
+        ``event_dim=1``. After applying this method, the cost to draw a sample is
+        ``O(y_dim)`` instead of ``O(y_dim ** 3)``.
+        """
         if value.size(-1) == self.matrix.size(-2):
             loc = matvecmul(self.matrix.transpose(-1, -2), value) + self.loc
-            return dist.Normal(loc, self.scale).to_event(1)
+            return torch.distributions.Independent(
+                torch.distributions.Normal(loc, scale=self.scale), 1)
         else:
             return self.to_gaussian().left_condition(value)
 
     def to_gaussian(self):
         if self._gaussian is None:
-            mvn = dist.Normal(self.loc, scale=self.scale).to_event(1)
+            mvn = torch.distributions.Independent(
+                torch.distributions.Normal(self.loc, scale=self.scale), 1)
             y_gaussian = mvn_to_gaussian(mvn)
             self._gaussian = _matrix_and_gaussian_to_gaussian(self.matrix, y_gaussian)
         return self._gaussian
