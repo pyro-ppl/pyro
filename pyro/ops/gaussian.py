@@ -162,9 +162,11 @@ class Gaussian:
             g.log_density(x) == g.condition(right).log_density(left)
         """
         assert isinstance(value, torch.Tensor)
-        assert value.size(-1) <= self.info_vec.size(-1)
+        right = value.size(-1)
+        dim = self.dim()
+        assert right <= dim
 
-        n = self.dim() - value.size(-1)
+        n = dim - right
         info_a = self.info_vec[..., :n]
         info_b = self.info_vec[..., n:]
         P_aa = self.precision[..., :n, :n]
@@ -178,6 +180,30 @@ class Gaussian:
                           -0.5 * matvecmul(P_bb, b).mul(b).sum(-1) +
                           b.mul(info_b).sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
+
+    def left_condition(self, value):
+        """
+        Condition this Gaussian on a leading subset of its state.
+        This should satisfy::
+
+            g.condition(y).dim() == g.dim() - y.size(-1)
+
+        Note that since this is a non-normalized Gaussian, we include the
+        density of ``y`` in the result. Thus :meth:`condition` is similar to a
+        ``functools.partial`` binding of arguments::
+
+            left = x[..., :n]
+            right = x[..., n:]
+            g.log_density(x) == g.left_condition(left).log_density(right)
+        """
+        assert isinstance(value, torch.Tensor)
+        left = value.size(-1)
+        dim = self.dim()
+        assert left <= dim
+
+        perm = torch.cat([torch.arange(left, dim, device=value.device),
+                          torch.arange(left, device=value.device)])
+        return self.event_permute(perm).condition(value)
 
     def marginalize(self, left=0, right=0):
         """
@@ -252,33 +278,49 @@ class AffineNormal:
     """
     def __init__(self, matrix, loc, scale):
         assert loc.shape == scale.shape
+        assert matrix.shape[:-2] == loc.shape[:-1]
+        assert matrix.size(-1) == loc.size(-1)
         self.matrix = matrix
         self.loc = loc
         self.scale = scale
+        self._gaussian = None
 
-    @property
+    @lazy_property
     def batch_shape(self):
         return self.matrix.shape[:-2]
 
     def condition(self, value):
-        """
-        Condition on a ``Y`` value.
+        if value.size(-1) == self.loc.size(-1):
+            prec_sqrt = self.matrix / self.scale.unsqueeze(-2)
+            precision = matmul(prec_sqrt, prec_sqrt.transpose(-1, -2))
+            delta = (value - self.loc) / self.scale
+            info_vec = matvecmul(prec_sqrt, delta)
+            log_normalizer = (-0.5 * self.loc.size(-1) * math.log(2 * math.pi)
+                              - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
+            return Gaussian(log_normalizer, info_vec, precision)
+        else:
+            return self.to_gaussian().condition(value)
 
-        :param torch.Tensor value: A value of ``Y``.
-        :return Gaussian: A gaussian likelihood over ``X``.
+    def left_condition(self, value):
         """
-        assert value.size(-1) == self.loc.size(-1)
-        prec_sqrt = self.matrix / self.scale.unsqueeze(-2)
-        precision = matmul(prec_sqrt, prec_sqrt.transpose(-1, -2))
-        delta = (value - self.loc) / self.scale
-        info_vec = matvecmul(prec_sqrt, delta)
-        log_normalizer = (-0.5 * self.loc.size(-1) * math.log(2 * math.pi)
-                          - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
-        return Gaussian(log_normalizer, info_vec, precision)
+        If ``value.size(-1) == x_dim``, this returns a Normal distribution with
+        ``event_dim=1``. After applying this method, the cost to draw a sample is
+        ``O(y_dim)`` instead of ``O(y_dim ** 3)``.
+        """
+        if value.size(-1) == self.matrix.size(-2):
+            loc = matvecmul(self.matrix.transpose(-1, -2), value) + self.loc
+            return torch.distributions.Independent(
+                torch.distributions.Normal(loc, scale=self.scale), 1)
+        else:
+            return self.to_gaussian().left_condition(value)
 
     def to_gaussian(self):
-        mvn = torch.distributions.MultivariateNormal(self.loc, scale_tril=self.scale.diag_embed())
-        return matrix_and_mvn_to_gaussian(self.matrix, mvn)
+        if self._gaussian is None:
+            mvn = torch.distributions.Independent(
+                torch.distributions.Normal(self.loc, scale=self.scale), 1)
+            y_gaussian = mvn_to_gaussian(mvn)
+            self._gaussian = _matrix_and_gaussian_to_gaussian(self.matrix, y_gaussian)
+        return self._gaussian
 
     def expand(self, batch_shape):
         matrix = self.matrix.expand(batch_shape + self.matrix.shape[-2:])
@@ -306,7 +348,15 @@ class AffineNormal:
         return self.to_gaussian() + other
 
     def marginalize(self, left=0, right=0):
-        return self.to_gaussian().marginalize(left, right)
+        assert left == 0
+        if right == self.loc.size(-1):
+            n = self.matrix.size(-2)
+            precision = self.scale.new_zeros(self.batch_shape + (n, n))
+            info_vec = self.scale.new_zeros(self.batch_shape + (n,))
+            log_normalizer = self.scale.new_zeros(self.batch_shape)
+            return Gaussian(log_normalizer, info_vec, precision)
+        else:
+            return self.to_gaussian().marginalize(left, right)
 
 
 def mvn_to_gaussian(mvn):
@@ -338,6 +388,23 @@ def mvn_to_gaussian(mvn):
     return Gaussian(log_normalizer, info_vec, precision)
 
 
+def _matrix_and_gaussian_to_gaussian(matrix, y_gaussian):
+    P_yy = y_gaussian.precision
+    neg_P_xy = matmul(matrix, P_yy)
+    P_xy = -neg_P_xy
+    P_yx = P_xy.transpose(-1, -2)
+    P_xx = matmul(neg_P_xy, matrix.transpose(-1, -2))
+    precision = torch.cat([torch.cat([P_xx, P_xy], -1),
+                           torch.cat([P_yx, P_yy], -1)], -2)
+    info_y = y_gaussian.info_vec
+    info_x = -matvecmul(matrix, info_y)
+    info_vec = torch.cat([info_x, info_y], -1)
+    log_normalizer = y_gaussian.log_normalizer
+
+    result = Gaussian(log_normalizer, info_vec, precision)
+    return result
+
+
 def matrix_and_mvn_to_gaussian(matrix, mvn):
     """
     Convert a noisy affine function to a Gaussian. The noisy affine function is defined as::
@@ -364,19 +431,7 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
         return AffineNormal(matrix, mvn.base_dist.loc, mvn.base_dist.scale)
 
     y_gaussian = mvn_to_gaussian(mvn)
-    P_yy = y_gaussian.precision
-    neg_P_xy = matmul(matrix, P_yy)
-    P_xy = -neg_P_xy
-    P_yx = P_xy.transpose(-1, -2)
-    P_xx = matmul(neg_P_xy, matrix.transpose(-1, -2))
-    precision = torch.cat([torch.cat([P_xx, P_xy], -1),
-                           torch.cat([P_yx, P_yy], -1)], -2)
-    info_y = y_gaussian.info_vec
-    info_x = -matvecmul(matrix, info_y)
-    info_vec = torch.cat([info_x, info_y], -1)
-    log_normalizer = y_gaussian.log_normalizer
-
-    result = Gaussian(log_normalizer, info_vec, precision)
+    result = _matrix_and_gaussian_to_gaussian(matrix, y_gaussian)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result

@@ -8,7 +8,9 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.forecast import Forecaster, ForecastingModel, HMCForecaster
+from pyro.infer.autoguide import AutoDelta
 from pyro.infer.reparam import LinearHMMReparam, StableReparam
+from pyro.optim import Adam
 
 
 class Model0(ForecastingModel):
@@ -127,6 +129,22 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
     samples = forecaster(data, covariates, num_samples, batch_size=2)
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+
+
+def test_svi_custom_smoke():
+    t_obs = 5
+    t_forecast = 4
+    cov_dim = 3
+    obs_dim = 2
+
+    model = Model0()
+    data = torch.randn(t_obs, obs_dim)
+    covariates = torch.randn(t_obs + t_forecast, cov_dim)
+    guide = AutoDelta(model)
+    optim = Adam({})
+
+    Forecaster(model, data, covariates[..., :t_obs, :],
+               guide=guide, optim=optim, num_steps=2, log_every=1)
 
 
 class SubsampleModel3(ForecastingModel):
