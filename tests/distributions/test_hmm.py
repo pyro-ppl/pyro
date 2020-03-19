@@ -335,11 +335,10 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
         assert d2.event_shape == (f, obs_dim)
 
 
-@pytest.mark.skipif("CI" in os.environ, reason="slow and high memory consumption test")
 def test_gaussian_hmm_high_obs_dim():
     hidden_dim = 1
-    obs_dim = 5000
-    duration = 1000
+    obs_dim = 1000
+    duration = 10
     sample_shape = (100,)
     init_dist = random_mvn((), hidden_dim)
     trans_mat = torch.randn((duration,) + (hidden_dim, hidden_dim))
