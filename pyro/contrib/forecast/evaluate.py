@@ -210,7 +210,6 @@ def backtest(data, covariates, model_fn, *,
                 else:
                     raise
         test_walltime = default_timer() - start_time
-        print("train_walltime, test_walltime", train_walltime, test_walltime)
         truth = data[..., t1:t2, :]
 
         forecaster_samples = None if isinstance(forecaster, Forecaster) else forecaster._samples
