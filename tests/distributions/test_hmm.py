@@ -3,7 +3,6 @@
 
 import logging
 import operator
-import os
 from functools import reduce
 
 import opt_einsum
