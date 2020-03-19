@@ -318,7 +318,8 @@ class AffineNormal:
         """
         Reparameterized sampler.
         """
-        assert self.matrix.size(-2) == 0
+        if self.matrix.size(-2) > 0:
+            raise NotImplementedError
         shape = sample_shape + self.batch_shape + self.loc.shape[-1:]
         noise = torch.randn(shape, dtype=self.loc.dtype, device=self.loc.device)
         return self.loc + noise * self.scale
@@ -357,8 +358,7 @@ class AffineNormal:
         return self.to_gaussian() + other
 
     def marginalize(self, left=0, right=0):
-        assert left == 0
-        if right == self.loc.size(-1):
+        if left == 0 and right == self.loc.size(-1):
             n = self.matrix.size(-2)
             precision = self.scale.new_zeros(self.batch_shape + (n, n))
             info_vec = self.scale.new_zeros(self.batch_shape + (n,))
