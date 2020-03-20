@@ -66,7 +66,7 @@ class ConditionedPlanar(Transform):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("ConditionalPlanar object expected to find key in intermediates cache but didn't")
+        raise KeyError("ConditionedPlanar object expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """

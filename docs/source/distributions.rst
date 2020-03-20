@@ -385,6 +385,13 @@ ConditionalPlanar
     :undoc-members:
     :show-inheritance:
 
+ConditionalRadial
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalRadial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransformModule
 --------------------------
 .. autoclass:: pyro.distributions.ConditionalTransformModule
@@ -484,6 +491,10 @@ block_autoregressive
 conditional_planar
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_planar
+
+conditional_radial
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_radial
 
 elu
 ---

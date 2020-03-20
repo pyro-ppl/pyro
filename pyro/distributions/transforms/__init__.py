@@ -22,7 +22,7 @@ from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, L
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.planar import Planar, ConditionalPlanar, planar, conditional_planar
-from pyro.distributions.transforms.radial import Radial, radial
+from pyro.distributions.transforms.radial import Radial, ConditionalRadial, radial, conditional_radial
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
@@ -63,6 +63,7 @@ __all__ = [
     'BlockAutoregressive',
     'ComposeTransformModule',
     'ConditionalPlanar',
+    'ConditionalRadial',
     'CorrLCholeskyTransform',
     'DiscreteCosineTransform',
     'ELUTransform',
@@ -82,6 +83,7 @@ __all__ = [
     'batchnorm',
     'block_autoregressive',
     'conditional_planar',
+    'conditional_radial',
     'elu',
     'generalized_channel_permute',
     'householder',
