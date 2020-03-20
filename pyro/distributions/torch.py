@@ -101,6 +101,17 @@ class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
         return (-value - 1) * torch.nn.functional.softplus(self.logits) + self.logits
 
 
+class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
+    def __init__(self, loc, scale, validate_args=None):
+        base_dist = Normal(loc, scale)
+        super(torch.distributions.LogNormal, self).__init__(
+            base_dist, torch.distributions.transforms.ExpTransform(), validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(LogNormal, _instance)
+        return super(torch.distributions.LogNormal, self).expand(batch_shape, _instance=new)
+
+
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 
@@ -110,6 +121,10 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
         identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
         return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
             self._batch_shape + self._event_shape + self._event_shape)
+
+
+class Normal(torch.distributions.Normal, TorchDistributionMixin):
+    pass
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):

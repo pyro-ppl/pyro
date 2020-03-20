@@ -4,8 +4,8 @@
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal, Normal
-from pyro.distributions.torch_distribution import TorchDistribution, TorchDistributionMixin
+from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal
+from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
                                      matrix_and_mvn_to_gamma_gaussian)
@@ -942,9 +942,6 @@ class LinearHMM(HiddenMarkovModel):
             else:
                 break
         if not observation_dist.event_shape:
-            if isinstance(observation_dist, torch.distributions.Normal) and \
-                    not isinstance(observation_dist, TorchDistributionMixin):
-                observation_dist = Normal(observation_dist.loc, observation_dist.scale)
             observation_dist = Independent(observation_dist, 1)
 
         self.hidden_dim = hidden_dim
