@@ -44,7 +44,8 @@ def random_dist(Dist, shape):
         trans_mat = torch.randn(batch_shape + (duration, hidden_dim, hidden_dim))
         trans_dist = random_dist(dist.Normal, batch_shape + (duration, hidden_dim)).to_event(1)
         obs_mat = torch.randn(batch_shape + (duration, hidden_dim, obs_dim))
-        obs_dist = random_dist(dist.Normal, batch_shape + (duration, obs_dim)).to_event(1)
+        obs_class = dist.LogNormal if Dist is dist.LinearHMM else dist.Normal
+        obs_dist = random_dist(obs_class, batch_shape + (duration, obs_dim)).to_event(1)
         return Dist(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
                     duration=duration)
     elif Dist is dist.IndependentHMM:
@@ -90,8 +91,7 @@ def test_reshape_batch(Dist, batch_shape, duration, dim):
 
     actual = reshape_batch(d, batch_shape + (1,))
     assert type(actual) is type(d)
-    if batch_shape:
-        assert actual.batch_shape == batch_shape + (1,)
-    else:
-        assert actual.batch_shape in ((), batch_shape + (1,))
+    assert actual.batch_shape == batch_shape + (1,)
     assert actual.event_shape == (duration, dim)
+    if Dist is dist.LinearHMM:
+        assert actual.transforms is d.transforms

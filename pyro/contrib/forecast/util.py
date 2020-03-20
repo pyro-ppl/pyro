@@ -312,30 +312,21 @@ def _(d, batch_shape):
 
 @reshape_batch.register(dist.LinearHMM)
 def _(d, batch_shape):
-    init_dist = d.initial_dist
-    if init_dist.batch_shape:
-        init_dist = init_dist.expand(d.batch_shape)
-        init_dist = reshape_batch(init_dist, batch_shape)
+    init_dist = reshape_batch(d.initial_dist, batch_shape)
+    trans_mat = d.transition_matrix.reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim))
+    trans_dist = reshape_batch(d.transition_dist, batch_shape + (-1,))
+    obs_mat = d.observation_matrix.reshape(batch_shape + (-1, d.hidden_dim, d.obs_dim))
+    obs_dist = reshape_batch(d.observation_dist, batch_shape + (-1,))
 
-    trans_mat = d.transition_matrix
-    if trans_mat.dim() > 3:
-        trans_mat = trans_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.hidden_dim))
-        trans_mat = trans_mat.reshape(batch_shape + (-1, d.hidden_dim, d.hidden_dim))
-
-    trans_dist = d.transition_dist
-    if len(trans_dist.batch_shape) > 1:
-        trans_dist = trans_dist.expand(d.batch_shape + (-1,))
-        trans_dist = reshape_batch(trans_dist, batch_shape + (-1,))
-
-    obs_mat = d.observation_matrix
-    if obs_mat.dim() > 3:
-        obs_mat = obs_mat.expand(d.batch_shape + (-1, d.hidden_dim, d.obs_dim))
-        obs_mat = obs_mat.reshape(batch_shape + (-1, d.hidden_dim, d.obs_dim))
-
-    obs_dist = d.observation_dist
-    if len(obs_dist.batch_shape) > 1:
-        obs_dist = obs_dist.expand(d.batch_shape + (-1,))
-        obs_dist = reshape_batch(obs_dist, batch_shape + (-1,))
-
-    return dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist,
-                          duration=d.duration)
+    new = d._get_checked_instance(dist.LinearHMM)
+    new.hidden_dim = d.hidden_dim
+    new.obs_dim = d.obs_dim
+    new.initial_dist = init_dist
+    new.transition_matrix = trans_mat
+    new.transition_dist = trans_dist
+    new.observation_matrix = obs_mat
+    new.observation_dist = obs_dist
+    new.transforms = d.transforms
+    super(dist.LinearHMM, new).__init__(d.duration, batch_shape, d.event_shape,
+                                        validate_args=d._validate_args)
+    return new
