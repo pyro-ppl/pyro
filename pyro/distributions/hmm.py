@@ -983,7 +983,8 @@ class LinearHMM(HiddenMarkovModel):
 
     def rsample(self, sample_shape=torch.Size()):
         assert self.duration is not None
-        init = self.initial_dist.rsample(sample_shape)
+        # XXX we might not need to expand here because we already expand eagerly in the construction
+        init = self.initial_dist.expand(self.batch_shape).rsample(sample_shape)
         trans = self.transition_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
         obs = self.observation_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
         trans_matrix = self.transition_matrix.expand(self.batch_shape + (self.duration, -1, -1))
