@@ -26,9 +26,9 @@ from pyro.distributions import validation_enabled
 # Pyro keeps track of two kinds of global state:
 # i)  The effect handler stack, which enables non-standard interpretations of
 #     Pyro primitives like sample();
-#     See http://docs.pyro.ai/en/0.3.1/poutine.html
+#     See http://docs.pyro.ai/en/1.3.0/poutine.html
 # ii) Trainable parameters in the Pyro ParamStore;
-#     See http://docs.pyro.ai/en/0.3.1/parameters.html
+#     See http://docs.pyro.ai/en/1.3.0/parameters.html
 
 PYRO_STACK = []
 PARAM_STORE = {}  # maps name -> (unconstrained_value, constraint)
@@ -251,7 +251,7 @@ def plate(name, size, dim=None):
 
 # This is a thin wrapper around the `torch.optim.Adam` class that
 # dynamically generates optimizers for dynamically generated parameters.
-# See http://docs.pyro.ai/en/0.3.1/optimization.html
+# See http://docs.pyro.ai/en/1.3.0/optimization.html
 class Adam:
     def __init__(self, optim_args):
         self.optim_args = optim_args
@@ -276,7 +276,7 @@ class Adam:
 
 # This is a unified interface for stochastic variational inference in Pyro.
 # The actual construction of the loss is taken care of by `loss`.
-# See http://docs.pyro.ai/en/0.3.1/inference_algos.html
+# See http://docs.pyro.ai/en/1.3.0/inference_algos.html
 class SVI:
     def __init__(self, model, guide, optim, loss):
         self.model = model
