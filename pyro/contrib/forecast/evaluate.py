@@ -93,6 +93,7 @@ def backtest(data, covariates, model_fn, *,
              seed=1234567890,
              num_samples=100,
              batch_size=None,
+             amortized=False,
              forecaster_options={}):
     """
     Backtest a forecasting model on a moving window of (train,test) data.
@@ -173,6 +174,8 @@ def backtest(data, covariates, model_fn, *,
     pyro.clear_param_store()
     results = []
 
+    model = None if not amortized else model_fn()
+
     for t1 in range(start, stop, stride):
         t0 = 0 if train_window is None else t1 - train_window
         t2 = duration if test_window is None else t1 + test_window
@@ -188,7 +191,10 @@ def backtest(data, covariates, model_fn, *,
         train_data = data[..., t0:t1, :]
         train_covariates = covariates[..., t0:t1, :]
         start_time = default_timer()
-        model = model_fn()
+
+        if not amortized:
+            model = model_fn()
+
         forecaster = forecaster_fn(model, train_data, train_covariates,
                                    **forecaster_options)
         train_walltime = default_timer() - start_time
