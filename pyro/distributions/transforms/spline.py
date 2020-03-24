@@ -144,7 +144,6 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     # The core monotonic rational spline equation
     if inverse:
-        # TODO: Comments!
         numerator = (input_lambdas * wa * (ya - inputs)) * (inputs <= yc).float() \
             + ((wc - input_lambdas * wb) * inputs + input_lambdas * wb * yb - wc * yc) * (inputs > yc).float()
 
@@ -161,7 +160,6 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
         logabsdet = torch.log(derivative_numerator) - 2 * torch.log(torch.abs(denominator))
 
     else:
-        # TODO: Comments!
         theta = (inputs - input_cumwidths) / input_widths
 
         numerator = (wa * ya * (input_lambdas - theta) + wc * yc * theta) * (theta <= input_lambdas).float()\
