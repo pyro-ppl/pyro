@@ -154,6 +154,7 @@ UNIVARIATE_DISTS = {
     dist.Exponential: ("rate",),
     dist.Gamma: ("concentration", "rate"),
     dist.GammaPoisson: ("concentration", "rate"),
+    dist.Geometric: ("logits",),
     dist.InverseGamma: ("concentration", "rate"),
     dist.Laplace: ("loc", "scale"),
     dist.LogNormal: ("loc", "scale"),

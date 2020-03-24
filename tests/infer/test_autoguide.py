@@ -745,3 +745,36 @@ def test_subsample_guide(auto_class, init_fn):
             batch = data[:, beg:end]
             beg = end
             svi.step(batch, subsample, full_size=full_size)
+
+
+@pytest.mark.parametrize("independent", [True, False], ids=["independent", "dependent"])
+@pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal])
+def test_subsample_guide_2(auto_class, independent):
+
+    # Simplified from Model2 in tutorial/source/forecasting_iii.ipynb
+    def model(data):
+        size, size = data.shape
+        origin_plate = pyro.plate("origin", size, dim=-2)
+        destin_plate = pyro.plate("destin", size, dim=-1)
+        with origin_plate, destin_plate:
+            batch = pyro.subsample(data, event_dim=0)
+            assert batch.size(0) == batch.size(1), batch.shape
+            pyro.sample("obs", dist.Normal(0, 1), obs=batch)
+
+    def create_plates(data):
+        size, size = data.shape
+        origin_plate = pyro.plate("origin", size, subsample_size=5, dim=-2)
+        if independent:
+            destin_plate = pyro.plate("destin", size, subsample_size=5, dim=-1)
+        else:
+            with origin_plate as subsample:
+                pass
+            destin_plate = pyro.plate("destin", size, subsample=subsample, dim=-1)
+        return origin_plate, destin_plate
+
+    guide = auto_class(model, create_plates=create_plates)
+    svi = SVI(model, guide, Adam({"lr": 0.01}), Trace_ELBO())
+
+    data = torch.randn(10, 10)
+    for step in range(2):
+        svi.step(data)

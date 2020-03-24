@@ -385,9 +385,23 @@ ConditionalPlanar
     :undoc-members:
     :show-inheritance:
 
+ConditionalRadial
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalRadial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransformModule
 --------------------------
 .. autoclass:: pyro.distributions.ConditionalTransformModule
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+GeneralizedChannelPermute
+-------------------------
+.. autoclass:: pyro.distributions.transforms.GeneralizedChannelPermute
     :members:
     :undoc-members:
     :show-inheritance:
@@ -485,9 +499,17 @@ conditional_planar
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_planar
 
+conditional_radial
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_radial
+
 elu
 ---
 .. autofunction:: pyro.distributions.transforms.elu
+
+generalized_channel_permute
+---------------------------
+.. autofunction:: pyro.distributions.transforms.generalized_channel_permute
 
 householder
 -----------

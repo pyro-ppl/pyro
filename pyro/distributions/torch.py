@@ -93,6 +93,14 @@ class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
         return updated, log_normalizer
 
 
+class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
+    # TODO: move upstream
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        return (-value - 1) * torch.nn.functional.softplus(self.logits) + self.logits
+
+
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 

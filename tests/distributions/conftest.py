@@ -427,6 +427,23 @@ discrete_dists = [
             scipy_arg_fn=lambda rate: ((np.array(rate),), {}),
             prec=0.08,
             is_discrete=True),
+    Fixture(pyro_dist=dist.Geometric,
+            scipy_dist=sp.geom,
+            examples=[
+                {'logits': [2.0],
+                 'test_data': [0.]},
+                {'logits': [3.0],
+                 'test_data': [1.]},
+                {'logits': [-6.0],
+                 'test_data': [4.]},
+                {'logits': [2.0, 3.0, -6.0],
+                 'test_data': [[0., 1., 4.], [0., 1., 4.]]},
+                {'logits': [[2.0], [3.0], [-6.0]],
+                 'test_data': [[0.], [1.], [4.]]}
+            ],
+            scipy_arg_fn=lambda probs: ((np.array(probs), -1), {}),
+            prec=0.08,
+            is_discrete=True),
 ]
 
 

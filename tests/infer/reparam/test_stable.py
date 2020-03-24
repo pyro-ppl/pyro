@@ -10,6 +10,8 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
+from pyro.infer import Trace_ELBO
+from pyro.infer.autoguide import AutoNormal
 from pyro.infer.reparam import LatentStableReparam, StableReparam, SymmetricStableReparam
 from tests.common import assert_close
 
@@ -27,6 +29,9 @@ def get_moments(x):
 def test_stable(Reparam, shape):
     stability = torch.empty(shape).uniform_(1.5, 2.).requires_grad_()
     skew = torch.empty(shape).uniform_(-0.5, 0.5).requires_grad_()
+    # test edge case when skew is 0
+    if skew.dim() > 0 and skew.shape[-1] > 0:
+        skew.data[..., 0] = 0.
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
     loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
     params = [stability, skew, scale, loc]
@@ -55,7 +60,8 @@ def test_stable(Reparam, shape):
         expected_grads = grad(expected_m.sum(), params, retain_graph=True)
         actual_grads = grad(actual_m.sum(), params, retain_graph=True)
         assert_close(actual_grads[0], expected_grads[0], atol=0.2)
-        assert_close(actual_grads[1], expected_grads[1], atol=0.1)
+        assert_close(actual_grads[1][skew != 0], expected_grads[1][skew != 0], atol=0.1)
+        assert_close(actual_grads[1][skew == 0], expected_grads[1][skew == 0], atol=0.3)
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
         assert_close(actual_grads[3], expected_grads[3], atol=0.1)
 
@@ -108,3 +114,18 @@ def test_distribution(stability, skew, Reparam):
     with poutine.reparam(config={"x": Reparam()}):
         actual = model()
     assert ks_2samp(expected, actual).pvalue > 0.05
+
+
+@pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
+def test_subsample_smoke(Reparam, subsample):
+    def model():
+        with pyro.plate("plate", 10):
+            with poutine.reparam(config={"x": Reparam()}):
+                return pyro.sample("x", dist.Stable(1.5, 0))
+
+    def create_plates():
+        return pyro.plate("plate", 10, subsample_size=3)
+
+    guide = AutoNormal(model, create_plates=create_plates if subsample else None)
+    Trace_ELBO().loss(model, guide)  # smoke test

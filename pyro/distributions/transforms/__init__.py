@@ -11,6 +11,8 @@ from pyro.distributions.transforms.affine_coupling import AffineCoupling, affine
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
+from pyro.distributions.transforms.generalized_channel_permute import (GeneralizedChannelPermute,
+                                                                       generalized_channel_permute)
 from pyro.distributions.transforms.householder import Householder, householder
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
 from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, LeakyReLUTransform,
@@ -20,7 +22,7 @@ from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, L
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.planar import Planar, ConditionalPlanar, planar, conditional_planar
-from pyro.distributions.transforms.radial import Radial, radial
+from pyro.distributions.transforms.radial import Radial, ConditionalRadial, radial, conditional_radial
 from pyro.distributions.transforms.spline import Spline, spline
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
@@ -62,9 +64,11 @@ __all__ = [
     'BlockAutoregressive',
     'ComposeTransformModule',
     'ConditionalPlanar',
+    'ConditionalRadial',
     'CorrLCholeskyTransform',
     'DiscreteCosineTransform',
     'ELUTransform',
+    'GeneralizedChannelPermute',
     'Householder',
     'LeakyReLUTransform',
     'LowerCholeskyAffine',
@@ -81,7 +85,9 @@ __all__ = [
     'batchnorm',
     'block_autoregressive',
     'conditional_planar',
+    'conditional_radial',
     'elu',
+    'generalized_channel_permute',
     'householder',
     'leaky_relu',
     'neural_autoregressive',
