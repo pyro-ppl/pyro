@@ -1,3 +1,9 @@
+# Copyright Contributors to the Pyro project.
+# Copyright (c) 2020 Hadi M. Dolatabadi, Sarah Erfani, Christopher Leckie
+# Copyright (c) 2019 Conor Durkan, Artur Bekasov, Iain Murray, George Papamakarios
+# Copyright (c) 2019 Tony Duan
+# SPDX-License-Identifier: MIT
+
 # This implementation is adapted in part from:
 # * https://github.com/tonyduan/normalizing-flows/blob/master/nf/flows.py; and,
 # * https://github.com/hmdolatabadi/LRS_NF/blob/master/nde/transforms/nonlinearities.py,
