@@ -15,16 +15,28 @@ Pyro Modules
 
 AutoRegressiveNN
 ----------------
-
 .. autoclass:: pyro.nn.auto_reg_nn.AutoRegressiveNN
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+DenseNN
+-------
+.. autoclass:: pyro.nn.dense_nn.DenseNN
     :members:
     :undoc-members:
     :show-inheritance:
 
 ConditionalAutoRegressiveNN
 ---------------------------
-
 .. autoclass:: pyro.nn.auto_reg_nn.ConditionalAutoRegressiveNN
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalDenseNN
+------------------
+.. autoclass:: pyro.nn.dense_nn.ConditionalDenseNN
     :members:
     :undoc-members:
     :show-inheritance:

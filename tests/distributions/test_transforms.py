@@ -96,7 +96,7 @@ class TransformTests(TestCase):
 
     def _test_conditional(self, conditional_transform_factory, context_dim=3, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
-            z = torch.rand(context_dim)
+            z = torch.rand(1, context_dim)
             return conditional_transform_factory(input_dim, context_dim).condition(z)
         self._test(transform_factory, **kwargs)
 
@@ -122,6 +122,9 @@ class TransformTests(TestCase):
 
         for residual in [None, 'normal', 'gated']:
             self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
+
+    def test_conditional_affine_coupling(self):
+        self._test_conditional(T.conditional_affine_coupling)
 
     def test_conditional_planar(self):
         self._test_conditional(T.conditional_planar, inverse=False)
@@ -154,7 +157,7 @@ class TransformTests(TestCase):
                 def _inverse(self, x):
                     return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
 
-            input_dim = (width_dim**2)*3
+            input_dim = (width_dim**2) * 3
             self._test_jacobian(input_dim, Flatten())
 
     def test_householder(self):
