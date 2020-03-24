@@ -11,7 +11,7 @@ class ConditionalDenseNN(torch.nn.Module):
 
     Example usage:
 
-    >>> index_dim = 10
+    >>> input_dim = 10
     >>> context_dim = 5
     >>> x = torch.rand(100, input_dim)
     >>> z = torch.rand(100, context_dim)
