@@ -10,11 +10,8 @@ from torch.distributions import constraints
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
-# TODO: Move the spline functions to a pyro.numerics or torch.numerics module?
-# This would be a good place for e.g. numerical ODE solvers as well...
 
-
-def search_sorted(bin_locations, inputs, eps=1e-6):
+def _search_sorted(bin_locations, inputs, eps=1e-6):
     """
     Searches for which bin an input belongs to (in a way that is parallelizable and amenable to autodiff)
     """
@@ -25,7 +22,7 @@ def search_sorted(bin_locations, inputs, eps=1e-6):
     ) - 1
 
 
-def select_bins(x, idx):
+def _select_bins(x, idx):
     """
     Performs gather to select the bin in the correct way on batched inputs
     """
@@ -35,7 +32,7 @@ def select_bins(x, idx):
     return expanded_x.gather(-1, idx).squeeze(-1)
 
 
-def calculate_knots(lengths, lower, upper):
+def _calculate_knots(lengths, lower, upper):
     """
     Given a tensor of unscaled bin lengths that sum to 1, plus the lower and upper limits,
     returns the shifted and scaled lengths plus knot positions
@@ -59,13 +56,13 @@ def calculate_knots(lengths, lower, upper):
     return lengths, knots
 
 
-def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
-                              inverse=False,
-                              bound=3.,
-                              min_bin_width=1e-3,
-                              min_bin_height=1e-3,
-                              min_derivative=1e-3,
-                              min_lambda=0.025):
+def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
+                               inverse=False,
+                               bound=3.,
+                               min_bin_width=1e-3,
+                               min_bin_height=1e-3,
+                               min_derivative=1e-3,
+                               min_lambda=0.025):
     """
     Calculating a monotonic rational spline (linear for now) or its inverse, plus the log(abs(detJ)) required
     for normalizing flows.
@@ -105,8 +102,8 @@ def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     # Cumulative widths are x (y for inverse) position of knots
     # Similarly, cumulative heights are y (x for inverse) position of knots
-    widths, cumwidths = calculate_knots(widths, left, right)
-    heights, cumheights = calculate_knots(heights, bottom, top)
+    widths, cumwidths = _calculate_knots(widths, left, right)
+    heights, cumheights = _calculate_knots(heights, bottom, top)
 
     # Pad left and right derivatives with fixed values at first and last knots
     # These are 1 since the function is the identity outside the bounding box and the derivative is continuous
@@ -115,17 +112,17 @@ def monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     # Get the index of the bin that each input is in
     # bin_idx ~ (batch_dim, input_dim, 1)
-    bin_idx = search_sorted(cumheights if inverse else cumwidths, inputs)[..., None]
+    bin_idx = _search_sorted(cumheights if inverse else cumwidths, inputs)[..., None]
 
     # Select the value for the relevant bin for the variables used in the main calculation
-    input_widths = select_bins(widths, bin_idx)
-    input_cumwidths = select_bins(cumwidths, bin_idx)
-    input_cumheights = select_bins(cumheights, bin_idx)
-    input_delta = select_bins(heights / widths, bin_idx)
-    input_derivatives = select_bins(derivatives, bin_idx)
-    input_derivatives_plus_one = select_bins(derivatives[..., 1:], bin_idx)
-    input_heights = select_bins(heights, bin_idx)
-    input_lambdas = select_bins(lambdas, bin_idx)
+    input_widths = _select_bins(widths, bin_idx)
+    input_cumwidths = _select_bins(cumwidths, bin_idx)
+    input_cumheights = _select_bins(cumheights, bin_idx)
+    input_delta = _select_bins(heights / widths, bin_idx)
+    input_derivatives = _select_bins(derivatives, bin_idx)
+    input_derivatives_plus_one = _select_bins(derivatives[..., 1:], bin_idx)
+    input_heights = _select_bins(heights, bin_idx)
+    input_lambdas = _select_bins(lambdas, bin_idx)
 
     # The weight, w_a, at the left-hand-side of each bin
     # We are free to choose w_a, so set it to 1
@@ -241,7 +238,7 @@ class SplineLayer(nn.Module):
         return torch.sigmoid(self.unnormalized_lambdas)
 
     def __call__(self, x, jacobian=False, **kwargs):
-        y, log_detJ = monotonic_rational_spline(
+        y, log_detJ = _monotonic_rational_spline(
             x,
             self.widths,
             self.heights,
