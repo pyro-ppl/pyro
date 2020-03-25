@@ -6,6 +6,13 @@ MCMC
     :undoc-members:
     :show-inheritance:
 
+MCMCKernel
+----------
+.. autoclass:: pyro.infer.mcmc.mcmc_kernel.MCMCKernel
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 HMC
 ---
 
