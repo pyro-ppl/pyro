@@ -104,7 +104,7 @@ def _make_handler(msngr_cls):
             raise ValueError(
                 "{} is not callable, did you mean to pass it as a keyword arg?".format(fn))
         msngr = msngr_cls(*args, **kwargs)
-        return functools.update_wrapper(msngr(fn), fn) if fn is not None else msngr
+        return functools.update_wrapper(msngr(fn), fn, updated=()) if fn is not None else msngr
 
     return handler
 
