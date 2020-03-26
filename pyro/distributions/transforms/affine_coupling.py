@@ -157,20 +157,22 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
     >>> from pyro.nn import DenseNN
     >>> input_dim = 10
     >>> split_dim = 6
+    >>> context_dim = 5
+    >>> batch_size = 3
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
-    >>> hypernet = DenseNN(split_dim, [10*input_dim], [input_dim-split_dim, input_dim-split_dim])
-    >>> transform = AffineCoupling(split_dim, hypernet)
+    >>> hypernet = ConditionalDenseNN(split_dim, context_dim, [10*input_dim], [input_dim-split_dim, input_dim-split_dim])
+    >>> transform = ConditionalAffineCoupling(split_dim, hypernet)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
-    >>> flow_dist.sample()  # doctest: +SKIP
-        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
-                0.1389, -0.4629,  0.0986])
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist, [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size]))  # doctest: +SKIP
 
     The inverse of the Bijector is required when, e.g., scoring the log density of a sample with
     :class:`~pyro.distributions.ConditionalTransformedDistribution`. This implementation caches the inverse of the
     Bijector when its forward operation is called, e.g., when sampling from
-    :class:`~pyro.distributions.TransformedDistribution`. However, if the cached value isn't available, either because
-    it was overwritten during sampling a new value or an arbitary value is being scored, it will calculate it manually.
+    :class:`~pyro.distributions.ConditionalTransformedDistribution`. However, if the cached value isn't available, either
+    because it was overwritten during sampling a new value or an arbitary value is being scored, it will calculate it
+    manually.
 
     This is an operation that scales as O(1), i.e. constant in the input dimension. So in general, it is cheap
     to sample *and* score (an arbitrary value) from :class:`~pyro.distributions.transforms.ConditionalAffineCoupling`.
@@ -179,7 +181,7 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
     :type split_dim: int
     :param hypernet: A neural network whose forward call returns a real-valued mean and logit-scale as a tuple. The input
         should have final dimension split_dim and the output final dimension input_dim-split_dim for each member of
-        the tuple.
+        the tuple. The network also inputs a context variable as a keyword argument in order to condition the output upon it.
     :type hypernet: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from the NN
     :type log_scale_min_clip: float
