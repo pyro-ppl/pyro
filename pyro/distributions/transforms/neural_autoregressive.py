@@ -42,7 +42,8 @@ class ELUTransform(Transform):
 
 def elu():
     """
-    A helper function to create an :class:`~pyro.distributions.transform.ELUTransform` object for consistency with
+    A helper function to create an
+    :class:`~pyro.distributions.transform.ELUTransform` object for consistency with
     other helpers.
     """
     return ELUTransform()
@@ -72,8 +73,9 @@ class LeakyReLUTransform(Transform):
 
 def leaky_relu():
     """
-    A helper function to create a :class:`~pyro.distributions.transforms.LeakyReLUTransform` object for consistency
-    with other helpers.
+    A helper function to create a
+    :class:`~pyro.distributions.transforms.LeakyReLUTransform` object for
+    consistency with other helpers.
     """
     return LeakyReLUTransform()
 
@@ -107,8 +109,9 @@ class TanhTransform(Transform):
 
 def tanh():
     """
-    A helper function to create a :class:`~pyro.distributions.transforms.TanhTransform` object for consistency with
-    other helpers.
+    A helper function to create a
+    :class:`~pyro.distributions.transforms.TanhTransform` object for consistency
+    with other helpers.
     """
     return TanhTransform()
 
@@ -116,8 +119,9 @@ def tanh():
 @copy_docs_from(TransformModule)
 class NeuralAutoregressive(TransformModule):
     """
-    An implementation of the deep Neural Autoregressive Flow (NAF) bijective transform of the
-    "IAF flavour" that can be used for sampling and scoring samples drawn from it (but not arbitrary ones).
+    An implementation of the deep Neural Autoregressive Flow (NAF) bijective
+    transform of the "IAF flavour" that can be used for sampling and scoring samples
+    drawn from it (but not arbitrary ones).
 
     Example usage:
 
@@ -128,25 +132,27 @@ class NeuralAutoregressive(TransformModule):
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
-        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
-                0.1389, -0.4629,  0.0986])
 
-    The inverse operation is not implemented. This would require numerical inversion, e.g., using a
-    root finding method - a possibility for a future implementation.
+    The inverse operation is not implemented. This would require numerical
+    inversion, e.g., using a root finding method - a possibility for a future
+    implementation.
 
-    :param autoregressive_nn: an autoregressive neural network whose forward call returns a tuple of three
-        real-valued tensors, whose last dimension is the input dimension, and whose penultimate dimension
-        is equal to hidden_units.
+    :param autoregressive_nn: an autoregressive neural network whose forward call
+        returns a tuple of three real-valued tensors, whose last dimension is the
+        input dimension, and whose penultimate dimension is equal to hidden_units.
     :type autoregressive_nn: nn.Module
-    :param hidden_units: the number of hidden units to use in the NAF transformation (see Eq (8) in reference)
+    :param hidden_units: the number of hidden units to use in the NAF transformation
+        (see Eq (8) in reference)
     :type hidden_units: int
-    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU', 'sigmoid', or 'tanh'.
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU',
+        'sigmoid', or 'tanh'.
     :type activation: string
 
     Reference:
 
-    Neural Autoregressive Flows [arXiv:1804.00779]
-    Chin-Wei Huang, David Krueger, Alexandre Lacoste, Aaron Courville
+    [1] Chin-Wei Huang, David Krueger, Alexandre Lacoste, Aaron Courville. Neural
+    Autoregressive Flows. [arXiv:1804.00779]
+
 
     """
 
@@ -183,8 +189,8 @@ class NeuralAutoregressive(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a
-        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
-        of a previous transform)
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
+        the base distribution (or the output of a previous transform)
         """
         # A, W, b ~ batch_shape x hidden_units x event_shape
         A, W_pre, b = self.arn(x)
@@ -227,17 +233,21 @@ class NeuralAutoregressive(TransformModule):
 
 def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', width=16):
     """
-    A helper function to create a :class:`~pyro.distributions.transforms.NeuralAutoregressive` object that takes care
-    of constructing an autoregressive network with the correct input/output dimensions.
+    A helper function to create a
+    :class:`~pyro.distributions.transforms.NeuralAutoregressive` object that takes
+    care of constructing an autoregressive network with the correct input/output
+    dimensions.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
-    :param hidden_dims: The desired hidden dimensions of the autoregressive network. Defaults
-        to using [3*input_dim + 1]
+    :param hidden_dims: The desired hidden dimensions of the autoregressive network.
+        Defaults to using [3*input_dim + 1]
     :type hidden_dims: list[int]
-    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU', 'sigmoid', or 'tanh'.
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU',
+        'sigmoid', or 'tanh'.
     :type activation: string
-    :param width: The width of the "multilayer perceptron" in the transform (see paper). Defaults to 16
+    :param width: The width of the "multilayer perceptron" in the transform (see
+        paper). Defaults to 16
     :type width: int
 
     """

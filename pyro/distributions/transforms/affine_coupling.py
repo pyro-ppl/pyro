@@ -24,16 +24,14 @@ class AffineCoupling(TransformModule):
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
     e.g. :math:`\\mathbf{x}_{1:d}` represents the first :math:`d` elements of the
-    inputs, and :math:`\\mu,\\sigma` are shift and translation parameters
-    calculated as the output of a function inputting only
-    :math:`\\mathbf{x}_{1:d}`.
+    inputs, and :math:`\\mu,\\sigma` are shift and translation parameters calculated
+    as the output of a function inputting only :math:`\\mathbf{x}_{1:d}`.
 
     That is, the first :math:`d` components remain unchanged, and the subsequent
-    :math:`D-d` are shifted and translated by a function of the previous
-    components.
+    :math:`D-d` are shifted and translated by a function of the previous components.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` this
-    provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
+    a way to create richer variational approximations.
 
     Example usage:
 
@@ -48,10 +46,10 @@ class AffineCoupling(TransformModule):
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
 
-    The inverse of the Bijector is required when, e.g., scoring the log density of
-    a sample with :class:`~pyro.distributions.TransformedDistribution`. This
-    implementation caches the inverse of the Bijector when
-    its forward operation is called, e.g., when sampling from
+    The inverse of the Bijector is required when, e.g., scoring the log density of a
+    sample with :class:`~pyro.distributions.TransformedDistribution`. This
+    implementation caches the inverse of the Bijector when its forward operation is
+    called, e.g., when sampling from
     :class:`~pyro.distributions.TransformedDistribution`. However, if the cached
     value isn't available, either because it was overwritten during sampling a new
     value or an arbitary value is being scored, it will calculate it manually.
@@ -63,22 +61,22 @@ class AffineCoupling(TransformModule):
     :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/
         output split for transformation.
     :type split_dim: int
-    :param hypernet: a neural network whose forward call returns a real-valued mean
-        and logit-scale as a tuple. The input should have final dimension split_dim
-        and the output final dimension input_dim-split_dim for each member of the
-        tuple.
+    :param hypernet: an autoregressive neural network whose forward call returns a
+        real-valued mean and logit-scale as a tuple. The input should have final
+        dimension split_dim and the output final dimension input_dim-split_dim for
+        each member of the tuple.
     :type hypernet: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from
-        the NN
+        the autoregressive NN
     :type log_scale_min_clip: float
     :param log_scale_max_clip: The maximum value for clipping the log(scale) from
-        the NN
+        the autoregressive NN
     :type log_scale_max_clip: float
 
     References:
 
-    Laurent Dinh, Jascha Sohl-Dickstein, and Samy Bengio. Density estimation using
-    Real NVP. ICLR 2017.
+    [1] Laurent Dinh, Jascha Sohl-Dickstein, and Samy Bengio. Density estimation
+    using Real NVP. ICLR 2017.
 
     """
 
@@ -102,7 +100,7 @@ class AffineCoupling(TransformModule):
 
         Invokes the bijection x=>y; in the prototypical context of a
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
-            the base distribution (or the output of a previous transform)
+        the base distribution (or the output of a previous transform)
         """
         x1, x2 = x[..., :self.split_dim], x[..., self.split_dim:]
 
