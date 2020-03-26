@@ -13,7 +13,7 @@ from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_ga
 from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
 
-@torch.jit.script
+@torch.jit._script_if_tracing
 def _linear_integrate(init, trans, shift):
     """
     Integrate the inhomogeneous linear shifterence equation::
@@ -43,7 +43,7 @@ def _logmatmulexp(x, y):
     return xy + x_shift + y_shift
 
 
-@torch.jit.script
+@torch.jit._script_if_tracing
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::
