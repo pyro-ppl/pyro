@@ -34,12 +34,14 @@ class CorrLCholeskyTransform(Transform):
     """
     Transforms a vector into the cholesky factor of a correlation matrix.
 
-    The input should have shape `[batch_shape] + [d * (d-1)/2]`. The output will have
-    shape `[batch_shape] + [d, d]`.
+    The input should have shape `[batch_shape] + [d * (d-1)/2]`. The output will
+    have shape `[batch_shape] + [d, d]`.
 
-    Reference:
+    References:
 
-    [1] `Cholesky Factors of Correlation Matrices`, Stan Reference Manual v2.18, Section 10.12
+    [1] Cholesky Factors of Correlation Matrices. Stan Reference Manual v2.18,
+    Section 10.12.
+
     """
     domain = constraints.real
     codomain = corr_cholesky_constraint

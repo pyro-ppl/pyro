@@ -13,20 +13,23 @@ from pyro.distributions.util import copy_docs_from
 @copy_docs_from(TransformModule)
 class Sylvester(Householder):
     """
-    An implementation of the Sylvester bijective transform of the Householder variety (Van den Berg Et Al., 2018),
+    An implementation of the Sylvester bijective transform of the Householder
+    variety (Van den Berg Et Al., 2018),
 
         :math:`\\mathbf{y} = \\mathbf{x} + QR\\tanh(SQ^T\\mathbf{x}+\\mathbf{b})`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, :math:`R,S\\sim D\\times D`
-    are upper triangular matrices for input dimension :math:`D`, :math:`Q\\sim D\\times D` is an orthogonal
-    matrix, and :math:`\\mathbf{b}\\sim D` is learnable bias term.
+    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
+    :math:`R,S\\sim D\\times D` are upper triangular matrices for input dimension
+    :math:`D`, :math:`Q\\sim D\\times D` is an orthogonal matrix, and
+    :math:`\\mathbf{b}\\sim D` is learnable bias term.
 
-    The Sylvester transform is a generalization of :class:`~pyro.distributions.transforms.Planar`. In the
-    Householder type of the Sylvester transform, the orthogonality of :math:`Q` is enforced by representing it as
-    the product of Householder transformations.
+    The Sylvester transform is a generalization of
+    :class:`~pyro.distributions.transforms.Planar`. In the Householder type of the
+    Sylvester transform, the orthogonality of :math:`Q` is enforced by representing
+    it as the product of Householder transformations.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` it provides a way to create richer
-    variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` it provides a
+    way to create richer variational approximations.
 
     Example usage:
 
@@ -38,15 +41,15 @@ class Sylvester(Householder):
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
-    The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
-    the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    the Sylvester transform can be scored.
+    The inverse of this transform does not possess an analytical solution and is
+    left unimplemented. However, the inverse is cached when the forward operation is
+    called during sampling, and so samples drawn using the Sylvester transform can
+    be scored.
 
     References:
 
-    Rianne van den Berg, Leonard Hasenclever, Jakub M. Tomczak, Max Welling. Sylvester Normalizing Flows for
-    Variational Inference. In proceedings of The 34th Conference on Uncertainty in Artificial Intelligence
-    (UAI 2018).
+    [1] Rianne van den Berg, Leonard Hasenclever, Jakub M. Tomczak, Max Welling.
+    Sylvester Normalizing Flows for Variational Inference. UAI 2018.
 
     """
 
@@ -107,8 +110,8 @@ class Sylvester(Householder):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a
-        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
-        of a previous transform)
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
+        the base distribution (or the output of a previous transform)
         """
         Q = self.Q(x)
         R = self.R()
@@ -127,9 +130,10 @@ class Sylvester(Householder):
         """
         :param y: the output of the bijection
         :type y: torch.Tensor
-        Inverts y => x. As noted above, this implementation is incapable of inverting arbitrary values
-        `y`; rather it assumes `y` is the result of a previously computed application of the bijector
-        to some `x` (which was cached on the forward call)
+        Inverts y => x. As noted above, this implementation is incapable of
+        inverting arbitrary values `y`; rather it assumes `y` is the result of a
+        previously computed application of the bijector to some `x` (which was
+        cached on the forward call)
         """
 
         raise KeyError("Sylvester object expected to find key in intermediates cache but didn't")
@@ -149,13 +153,13 @@ class Sylvester(Householder):
 
 def sylvester(input_dim, count_transforms=None):
     """
-    A helper function to create a :class:`~pyro.distributions.transforms.Sylvester` object for consistency with
-    other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.Sylvester`
+    object for consistency with other helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
-    :param count_transforms: Number of Sylvester operations to apply. Defaults to input_dim // 2 + 1.
-    :type count_transforms: int
+    :param count_transforms: Number of Sylvester operations to apply. Defaults to
+        input_dim // 2 + 1. :type count_transforms: int
 
     """
 

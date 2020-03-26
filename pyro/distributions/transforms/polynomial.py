@@ -15,16 +15,19 @@ from pyro.nn import AutoRegressiveNN
 @copy_docs_from(TransformModule)
 class Polynomial(TransformModule):
     """
-    An autoregressive bijective transform as described in Jaini et al. (2019) applying following equation element-wise,
+    An autoregressive bijective transform as described in Jaini et al. (2019)
+    applying following equation element-wise,
 
         :math:`y_n = c_n + \\int^{x_n}_0\\sum^K_{k=1}\\left(\\sum^R_{r=0}a^{(n)}_{r,k}u^r\\right)du`
 
-    where :math:`x_n` is the :math:`n`th input, :math:`y_n` is the :math:`n`th output, and :math:`c_n\\in\\mathbb{R}`,
-    :math:`\\left\\{a^{(n)}_{r,k}\\in\\mathbb{R}\\right\\}` are learnable parameters that are the output of an
-    autoregressive NN inputting :math:`x_{\\prec n}={x_1,x_2,\\ldots,x_{n-1}}`.
+    where :math:`x_n` is the :math:`n`th input, :math:`y_n` is the :math:`n`th
+    output, and :math:`c_n\\in\\mathbb{R}`,
+    :math:`\\left\\{a^{(n)}_{r,k}\\in\\mathbb{R}\\right\\}` are learnable parameters
+    that are the output of an autoregressive NN inputting
+    :math:`x_{\\prec n}={x_1,x_2,\\ldots,x_{n-1}}`.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
-    variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
+    a way to create richer variational approximations.
 
     Example usage:
 
@@ -33,30 +36,35 @@ class Polynomial(TransformModule):
     >>> count_degree = 4
     >>> count_sum = 3
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
-    >>> arn = AutoRegressiveNN(input_dim, [input_dim*10], param_dims=[(count_degree + 1)*count_sum])
-    >>> transform = Polynomial(arn, input_dim=input_dim, count_degree=count_degree, count_sum=count_sum)
+    >>> param_dims = [(count_degree + 1)*count_sum]
+    >>> arn = AutoRegressiveNN(input_dim, [input_dim*10], param_dims)
+    >>> transform = Polynomial(arn, input_dim=input_dim, count_degree=count_degree,
+    ... count_sum=count_sum)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
-        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
-                0.1389, -0.4629,  0.0986])
 
-    The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
-    the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    a polynomial transform can be scored.
+    The inverse of this transform does not possess an analytical solution and is
+    left unimplemented. However, the inverse is cached when the forward operation is
+    called during sampling, and so samples drawn using a polynomial transform can be
+    scored.
 
-    :param autoregressive_nn: an autoregressive neural network whose forward call returns a tensor of real-valued
+    :param autoregressive_nn: an autoregressive neural network whose forward call
+        returns a tensor of real-valued
         numbers of size (batch_size, (count_degree+1)*count_sum, input_dim)
     :type autoregressive_nn: nn.Module
-    :param count_degree: The degree of the polynomial to use for each element-wise transformation.
+    :param count_degree: The degree of the polynomial to use for each element-wise
+        transformation.
     :type count_degree: int
-    :param count_sum: The number of polynomials to sum in each element-wise transformation.
+    :param count_sum: The number of polynomials to sum in each element-wise
+        transformation.
     :type count_sum: int
 
     References:
 
-    Sum-of-squares polynomial flow. [arXiv:1905.02325]
-    Priyank Jaini, Kira A. Shelby, Yaoliang Yu
+    [1] Priyank Jaini, Kira A. Shelby, Yaoliang Yu. Sum-of-squares polynomial flow.
+    [arXiv:1905.02325]
+
     """
 
     domain = constraints.real
@@ -99,8 +107,8 @@ class Polynomial(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a
-        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
-        of a previous transform)
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
+        the base distribution (or the output of a previous transform)
         """
         # Calculate the polynomial coefficients
         # ~ (batch_size, count_sum, count_degree+1, input_dim)
@@ -130,9 +138,10 @@ class Polynomial(TransformModule):
         :param y: the output of the bijection
         :type y: torch.Tensor
 
-        Inverts y => x. As noted above, this implementation is incapable of inverting arbitrary values
-        `y`; rather it assumes `y` is the result of a previously computed application of the bijector
-        to some `x` (which was cached on the forward call)
+        Inverts y => x. As noted above, this implementation is incapable of
+        inverting arbitrary values `y`; rather it assumes `y` is the result of a
+        previously computed application of the bijector to some `x` (which was
+        cached on the forward call)
         """
 
         raise KeyError("Polynomial object expected to find key in intermediates cache but didn't")
@@ -152,13 +161,14 @@ class Polynomial(TransformModule):
 
 def polynomial(input_dim, hidden_dims=None):
     """
-    A helper function to create a :class:`~pyro.distributions.transforms.Polynomial` object that takes care of
-    constructing an autoregressive network with the correct input/output dimensions.
+    A helper function to create a :class:`~pyro.distributions.transforms.Polynomial`
+    object that takes care of constructing an autoregressive network with the
+    correct input/output dimensions.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
-    :param hidden_dims: The desired hidden dimensions of of the autoregressive network. Defaults
-        to using [input_dim * 10]
+    :param hidden_dims: The desired hidden dimensions of of the autoregressive
+        network. Defaults to using [input_dim * 10]
 
     """
 
