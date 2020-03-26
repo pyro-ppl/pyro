@@ -108,6 +108,8 @@ class TransformTests(TestCase):
         self._test(T.affine_coupling)
 
     def test_batchnorm(self):
+        # Need to make moving average statistics non-zeros/ones and set to eval so inverse is valid
+        # (see the docs about the differing behaviour of BatchNorm in train and eval modes)
         def transform_factory(input_dim):
             transform = T.batchnorm(input_dim)
             transform._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
@@ -192,6 +194,9 @@ class TransformTests(TestCase):
 
     def test_radial(self):
         self._test(T.radial, inverse=False)
+
+    def test_spline(self):
+        self._test(T.spline)
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
