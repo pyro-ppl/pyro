@@ -229,5 +229,5 @@ def conditional_planar(input_dim, context_dim, hidden_dims=None):
 
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
-    hypernet = DenseNN(context_dim, hidden_dims, param_dims=[1, input_dim, input_dim])
-    return ConditionalPlanar(hypernet)
+    nn = DenseNN(context_dim, hidden_dims, param_dims=[1, input_dim, input_dim])
+    return ConditionalPlanar(nn)
