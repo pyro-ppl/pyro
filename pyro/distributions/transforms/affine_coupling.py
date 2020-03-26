@@ -56,10 +56,10 @@ class AffineCoupling(TransformModule):
 
     :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/output split for transformation.
     :type split_dim: int
-    :param nn: a neural network whose forward call returns a real-valued mean and logit-scale as a tuple. The
+    :param hypernet: a neural network whose forward call returns a real-valued mean and logit-scale as a tuple. The
         input should have final dimension split_dim and the output final dimension input_dim-split_dim for each
         member of the tuple.
-    :type nn: callable
+    :type hypernet: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from the NN
     :type log_scale_min_clip: float
     :param log_scale_max_clip: The maximum value for clipping the log(scale) from the NN
@@ -76,10 +76,10 @@ class AffineCoupling(TransformModule):
     bijective = True
     event_dim = 1
 
-    def __init__(self, split_dim, nn, log_scale_min_clip=-5., log_scale_max_clip=3.):
+    def __init__(self, split_dim, hypernet, log_scale_min_clip=-5., log_scale_max_clip=3.):
         super().__init__(cache_size=1)
         self.split_dim = split_dim
-        self.nn = nn
+        self.nn = hypernet
         self._cached_log_scale = None
         self.log_scale_min_clip = log_scale_min_clip
         self.log_scale_max_clip = log_scale_max_clip
@@ -177,10 +177,10 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
 
     :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/output split for transformation.
     :type split_dim: int
-    :param nn: A neural network whose forward call returns a real-valued mean and logit-scale as a tuple. The input
+    :param hypernet: A neural network whose forward call returns a real-valued mean and logit-scale as a tuple. The input
         should have final dimension split_dim and the output final dimension input_dim-split_dim for each member of
         the tuple.
-    :type nn: callable
+    :type hypernet: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from the NN
     :type log_scale_min_clip: float
     :param log_scale_max_clip: The maximum value for clipping the log(scale) from the NN
@@ -197,10 +197,10 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
     bijective = True
     event_dim = 1
 
-    def __init__(self, split_dim, nn, **kwargs):
+    def __init__(self, split_dim, hypernet, **kwargs):
         super().__init__()
         self.split_dim = split_dim
-        self.nn = nn
+        self.nn = hypernet
         self.kwargs = kwargs
 
     def condition(self, context):
