@@ -142,6 +142,11 @@ class Sylvester(Householder):
         """
         Calculates the elementwise determinant of the log Jacobian
         """
+        x_old, y_old = self._cached_x_y
+        if x is not x_old or y is not y_old:
+            # This call to the parent class Transform will update the cache
+            # as well as calling self._call and recalculating y and log_detJ
+            self(x)
 
         return self._cached_logDetJ
 
