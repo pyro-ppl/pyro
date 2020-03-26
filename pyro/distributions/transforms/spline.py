@@ -287,8 +287,6 @@ class Spline(TransformModule):
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
-        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
-                0.1389, -0.4629,  0.0986])
 
     :param input_dim: Dimension of the input vector. Despite operating
         element-wise, this is required so we know how many parameters to store.
@@ -344,6 +342,12 @@ class Spline(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian
         """
+        x_old, y_old = self._cached_x_
+        if x is not x_old or y is not y_old:
+            # This call to the parent class Transform will update the cache
+            # as well as calling self._call and recalculating y and log_detJ
+            self(x)
+
         return self._cache_log_detJ
 
 
