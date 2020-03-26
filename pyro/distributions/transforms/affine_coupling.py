@@ -172,7 +172,7 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
     >>> from pyro.nn import DenseNN
     >>> input_dim = 10
     >>> split_dim = 6
-    >>> context_dim = 5
+    >>> context_dim = 4
     >>> batch_size = 3
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
     >>> param_dims = [input_dim-split_dim, input_dim-split_dim]
