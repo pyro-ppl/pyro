@@ -177,12 +177,12 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
     >>> param_dims = [input_dim-split_dim, input_dim-split_dim]
     >>> hypernet = ConditionalDenseNN(split_dim, context_dim, [10*input_dim],
-    >>> param_dims)
+    ... param_dims)
     >>> transform = ConditionalAffineCoupling(split_dim, hypernet)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> z = torch.rand(batch_size, context_dim)
     >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
-    >>> [transform]).condition(z)
+    ... [transform]).condition(z)
     >>> flow_dist.sample(sample_shape=torch.Size([batch_size]))  # doctest: +SKIP
 
     The inverse of the Bijector is required when, e.g., scoring the log density of a
