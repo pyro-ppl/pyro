@@ -14,25 +14,27 @@ from pyro.nn import AutoRegressiveNN
 @copy_docs_from(TransformModule)
 class AffineAutoregressive(TransformModule):
     """
-    An implementation of the bijective transform of Inverse Autoregressive Flow (IAF), using by default Eq (10)
-    from Kingma Et Al., 2016,
+    An implementation of the bijective transform of Inverse Autoregressive Flow
+    (IAF), using by default Eq (10) from Kingma Et Al., 2016,
 
         :math:`\\mathbf{y} = \\mu_t + \\sigma_t\\odot\\mathbf{x}`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, :math:`\\mu_t,\\sigma_t`
-    are calculated from an autoregressive network on :math:`\\mathbf{x}`, and :math:`\\sigma_t>0`.
+    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
+    :math:`\\mu_t,\\sigma_t` are calculated from an autoregressive network on
+    :math:`\\mathbf{x}`, and :math:`\\sigma_t>0`.
 
     If the stable keyword argument is set to True then the transformation used is,
 
         :math:`\\mathbf{y} = \\sigma_t\\odot\\mathbf{x} + (1-\\sigma_t)\\odot\\mu_t`
 
-    where :math:`\\sigma_t` is restricted to :math:`(0,1)`. This variant of IAF is claimed by the authors to
-    be more numerically stable than one using Eq (10), although in practice it leads to a restriction on the
-    distributions that can be represented, presumably since the input is restricted to rescaling by a number
+    where :math:`\\sigma_t` is restricted to :math:`(0,1)`. This variant of IAF is
+    claimed by the authors to be more numerically stable than one using Eq (10),
+    although in practice it leads to a restriction on the distributions that can be
+    represented, presumably since the input is restricted to rescaling by a number
     on :math:`(0,1)`.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
-    variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
+    a way to create richer variational approximations.
 
     Example usage:
 
@@ -42,40 +44,47 @@ class AffineAutoregressive(TransformModule):
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
-        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
-                0.1389, -0.4629,  0.0986])
 
-    The inverse of the Bijector is required when, e.g., scoring the log density of a sample with
-    :class:`~pyro.distributions.TransformedDistribution`. This implementation caches the inverse of the Bijector
-    when its forward operation is called, e.g., when sampling from
-    :class:`~pyro.distributions.TransformedDistribution`. However, if the cached value isn't available, either because
-    it was overwritten during sampling a new value or an arbitary value is being scored, it will calculate it manually.
-    Note that this is an operation that scales as O(D) where D is the input dimension, and so should be avoided for
-    large dimensional uses. So in general, it is cheap to sample from IAF and score a value that was sampled by IAF,
-    but expensive to score an arbitrary value.
+    The inverse of the Bijector is required when, e.g., scoring the log density of a
+    sample with :class:`~pyro.distributions.TransformedDistribution`. This
+    implementation caches the inverse of the Bijector when its forward operation is
+    called, e.g., when sampling from
+    :class:`~pyro.distributions.TransformedDistribution`. However, if the cached
+    value isn't available, either because it was overwritten during sampling a new
+    value or an arbitary value is being scored, it will calculate it manually. Note
+    that this is an operation that scales as O(D) where D is the input dimension,
+    and so should be avoided for large dimensional uses. So in general, it is cheap
+    to sample from IAF and score a value that was sampled by IAF, but expensive to
+    score an arbitrary value.
 
-    :param autoregressive_nn: an autoregressive neural network whose forward call returns a real-valued
-        mean and logit-scale as a tuple
+    :param autoregressive_nn: an autoregressive neural network whose forward call
+        returns a real-valued mean and logit-scale as a tuple
     :type autoregressive_nn: nn.Module
-    :param log_scale_min_clip: The minimum value for clipping the log(scale) from the autoregressive NN
+    :param log_scale_min_clip: The minimum value for clipping the log(scale) from
+        the autoregressive NN
     :type log_scale_min_clip: float
-    :param log_scale_max_clip: The maximum value for clipping the log(scale) from the autoregressive NN
+    :param log_scale_max_clip: The maximum value for clipping the log(scale) from
+        the autoregressive NN
     :type log_scale_max_clip: float
-    :param sigmoid_bias: A term to add the logit of the input when using the stable tranform.
+    :param sigmoid_bias: A term to add the logit of the input when using the stable
+        tranform.
     :type sigmoid_bias: float
-    :param stable: When true, uses the alternative "stable" version of the transform (see above).
+    :param stable: When true, uses the alternative "stable" version of the transform
+        (see above).
     :type stable: bool
 
     References:
 
-    1. Improving Variational Inference with Inverse Autoregressive Flow [arXiv:1606.04934]
-    Diederik P. Kingma, Tim Salimans, Rafal Jozefowicz, Xi Chen, Ilya Sutskever, Max Welling
+    [1] Diederik P. Kingma, Tim Salimans, Rafal Jozefowicz, Xi Chen, Ilya Sutskever,
+    Max Welling. Improving Variational Inference with Inverse Autoregressive Flow.
+    [arXiv:1606.04934]
 
-    2. Variational Inference with Normalizing Flows [arXiv:1505.05770]
-    Danilo Jimenez Rezende, Shakir Mohamed
+    [2] Danilo Jimenez Rezende, Shakir Mohamed. Variational Inference with
+    Normalizing Flows. [arXiv:1505.05770]
 
-    3. MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
-    Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
+    [3] Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle. MADE: Masked
+    Autoencoder for Distribution Estimation. [arXiv:1502.03509]
+
     """
 
     domain = constraints.real
@@ -113,8 +122,8 @@ class AffineAutoregressive(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a
-        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
-        of a previous transform)
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
+        the base distribution (or the output of a previous transform)
         """
         mean, log_scale = self.arn(x)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
@@ -129,7 +138,8 @@ class AffineAutoregressive(TransformModule):
         :param y: the output of the bijection
         :type y: torch.Tensor
 
-        Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
+        Inverts y => x. Uses a previously cached inverse if available, otherwise
+        performs the inversion afresh.
         """
         x_size = y.size()[:-1]
         perm = self.arn.permutation
@@ -169,8 +179,8 @@ class AffineAutoregressive(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a
-        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
-        of a previous transform)
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
+        the base distribution (or the output of a previous transform)
         """
         mean, logit_scale = self.arn(x)
         logit_scale = logit_scale + self.sigmoid_bias
@@ -206,21 +216,27 @@ class AffineAutoregressive(TransformModule):
 
 def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
     """
-    A helper function to create an :class:`~pyro.distributions.transforms.AffineAutoregressive` object that takes care
-    of constructing an autoregressive network with the correct input/output dimensions.
+    A helper function to create an
+    :class:`~pyro.distributions.transforms.AffineAutoregressive` object that takes
+    care of constructing an autoregressive network with the correct input/output
+    dimensions.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
-    :param hidden_dims: The desired hidden dimensions of the autoregressive network. Defaults
-        to using [3*input_dim + 1]
+    :param hidden_dims: The desired hidden dimensions of the autoregressive network.
+        Defaults to using [3*input_dim + 1]
     :type hidden_dims: list[int]
-    :param log_scale_min_clip: The minimum value for clipping the log(scale) from the autoregressive NN
+    :param log_scale_min_clip: The minimum value for clipping the log(scale) from
+        the autoregressive NN
     :type log_scale_min_clip: float
-    :param log_scale_max_clip: The maximum value for clipping the log(scale) from the autoregressive NN
+    :param log_scale_max_clip: The maximum value for clipping the log(scale) from
+        the autoregressive NN
     :type log_scale_max_clip: float
-    :param sigmoid_bias: A term to add the logit of the input when using the stable tranform.
+    :param sigmoid_bias: A term to add the logit of the input when using the stable
+        tranform.
     :type sigmoid_bias: float
-    :param stable: When true, uses the alternative "stable" version of the transform (see above).
+    :param stable: When true, uses the alternative "stable" version of the transform
+        (see above).
     :type stable: bool
 
     """

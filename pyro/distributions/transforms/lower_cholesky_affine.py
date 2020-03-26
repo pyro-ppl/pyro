@@ -11,13 +11,17 @@ from pyro.distributions.util import copy_docs_from
 @copy_docs_from(Transform)
 class LowerCholeskyAffine(Transform):
     """
-    A bijection of the form :math:`\\mathbf{y} = \\mathbf{L} \\mathbf{x} + \\mathbf{r}`
+    A bijection of the form,
+
+        :math:`\\mathbf{y} = \\mathbf{L} \\mathbf{x} + \\mathbf{r}`
+
     where `\\mathbf{L}` is a lower triangular matrix and `\\mathbf{r}` is a vector.
 
     :param loc: the fixed D-dimensional vector to shift the input by.
     :type loc: torch.tensor
     :param scale_tril: the D x D lower triangular matrix used in the transformation.
     :type scale_tril: torch.tensor
+
     """
     codomain = constraints.real_vector
     bijective = True
@@ -38,8 +42,8 @@ class LowerCholeskyAffine(Transform):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a
-        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
-        of a previous transform)
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
+        the base distribution (or the output of a previous transform)
         """
         return torch.matmul(self.scale_tril, x.unsqueeze(-1)).squeeze(-1) + self.loc
 
@@ -55,7 +59,8 @@ class LowerCholeskyAffine(Transform):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log Jacobian, i.e. log(abs(dy/dx)).
+        Calculates the elementwise determinant of the log Jacobian, i.e.
+        log(abs(dy/dx)).
         """
         return torch.ones(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device) * \
             self.scale_tril.diag().log().sum()
