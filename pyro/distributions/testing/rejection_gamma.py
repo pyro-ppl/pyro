@@ -39,7 +39,8 @@ class RejectionStandardGamma(Rejector):
         # Compute log scale using Gamma.log_prob().
         x = new._d.detach()  # just an arbitrary x.
         log_scale = new.propose_log_prob(x) + new.log_prob_accept(x) - new.log_prob(x)
-        super(RejectionStandardGamma, new).__init__(new.propose, new.log_prob_accept, log_scale)
+        super(RejectionStandardGamma, new).__init__(new.propose, new.log_prob_accept, log_scale,
+                                                    batch_shape=batch_shape, event_shape=())
         new._validate_args = self._validate_args
         return new
 
