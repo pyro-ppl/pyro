@@ -26,7 +26,8 @@ class RejectionStandardGamma(Rejector):
         # Compute log scale using Gamma.log_prob().
         x = self._d.detach()  # just an arbitrary x.
         log_scale = self.propose_log_prob(x) + self.log_prob_accept(x) - self.log_prob(x)
-        super().__init__(self.propose, self.log_prob_accept, log_scale)
+        super().__init__(self.propose, self.log_prob_accept, log_scale,
+                         batch_shape=concentration.shape, event_shape=())
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(RejectionStandardGamma, _instance)

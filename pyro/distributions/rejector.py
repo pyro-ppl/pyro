@@ -18,12 +18,19 @@ class Rejector(TorchDistribution):
         proposals and returns a batch of log acceptance probabilities.
     :param log_scale: Total log probability of acceptance.
     """
+    arg_constraints = {}
     has_rsample = True
 
-    def __init__(self, propose, log_prob_accept, log_scale):
+    def __init__(self, propose, log_prob_accept, log_scale, *,
+                 batch_shape=None, event_shape=None):
         self.propose = propose
         self.log_prob_accept = log_prob_accept
         self._log_scale = log_scale
+        if batch_shape is None:
+            batch_shape = propose.batch_shape
+        if event_shape is None:
+            event_shape = propose.event_shape
+        super().__init__(batch_shape, event_shape)
 
         # These LRU(1) caches allow work to be shared across different method calls.
         self._log_prob_accept_cache = None, None
