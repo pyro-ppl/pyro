@@ -6,6 +6,8 @@ which should eventually be drop-in replacements for the current versions.
 """
 from collections import OrderedDict
 
+import funsor
+
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
@@ -14,6 +16,8 @@ from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 from pyro.contrib.funsor import to_funsor, to_data
 from pyro.contrib.funsor.named_messenger import DimType, \
     BaseEnumMessenger, GlobalNamedMessenger, LocalNamedMessenger
+
+funsor.set_backend("torch")
 
 
 class MarkovMessenger(LocalNamedMessenger):
@@ -34,8 +38,6 @@ class IndepMessenger(GlobalNamedMessenger):
         self.name = name
         self.size = size
         self.dim = dim
-
-        import funsor; funsor.set_backend("torch")  # noqa: E702
 
         self._indices = funsor.Tensor(
             funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size),
@@ -81,8 +83,6 @@ class EnumMessenger(BaseEnumMessenger):
     """
     def _pyro_sample(self, msg):
 
-        import funsor; funsor.set_backend("torch")  # noqa: E702
-
         if msg["done"] or msg["is_observed"] or msg["infer"].get("expand", False) or \
                 msg["infer"].get("enumerate") != "parallel":
             return
@@ -93,6 +93,7 @@ class EnumMessenger(BaseEnumMessenger):
         if msg["infer"].get("expand", False):
             raise NotImplementedError("expand=True not implemented")
 
+        msg["infer"]["funsor_log_measure"] = to_funsor(msg["fn"], funsor.reals())(value=msg["name"])
         raw_value = msg["fn"].enumerate_support(expand=False).squeeze()
         size = raw_value.numel()
         msg["infer"]["funsor_value"] = funsor.Tensor(
@@ -111,7 +112,6 @@ class TraceMessenger(OrigTraceMessenger):
     converting all distributions and values to Funsors as soon as they are available.
     """
     def _pyro_post_sample(self, msg):
-        import funsor; funsor.set_backend("torch")  # noqa: E702
         if "funsor_fn" not in msg["infer"]:
             msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
         if "funsor_log_prob" not in msg["infer"]:
