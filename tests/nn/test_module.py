@@ -504,3 +504,28 @@ def test_pyro_serialize():
     actual_names = {name for name, _ in actual.named_parameters()}
     expected_names = {name for name, _ in module.named_parameters()}
     assert actual_names == expected_names
+
+
+def test_bayesian_gru():
+    input_size = 2
+    hidden_size = 3
+    batch_size = 4
+    seq_len = 5
+
+    # Construct a simple GRU.
+    gru = nn.GRU(input_size, hidden_size)
+    input_ = torch.randn(seq_len, batch_size, input_size)
+    output, _ = gru(input_)
+    assert output.shape == (seq_len, batch_size, hidden_size)
+    output2, _ = gru(input_)
+    assert torch.allclose(output2, output)
+
+    # Make it Bayesian.
+    to_pyro_module_(gru)
+    for name, value in list(gru.named_parameters(recurse=False)):
+        prior = dist.Normal(0, 1).expand(value.shape).to_event(value.dim())
+        setattr(gru, name, PyroSample(prior=prior))
+    output, _ = gru(input_)
+    assert output.shape == (seq_len, batch_size, hidden_size)
+    output2, _ = gru(input_)
+    assert not torch.allclose(output2, output)
