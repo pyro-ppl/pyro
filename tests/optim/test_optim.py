@@ -214,7 +214,7 @@ def test_dctadam_param_subsample():
                            torch.randn(outer_size, middle_size, inner_size, event_size),
                            event_dim=1)
 
-    optimizer = optim.DCTAdam({"lr": 1.})
+    optimizer = optim.DCTAdam({"lr": 1., "aware_subsample": True})
     model()
     param = pyro.param("loc").unconstrained()
     param.sum().backward()
