@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import torch
 from torch.nn.functional import pad
 from torch.optim.optimizer import Optimizer
@@ -32,15 +34,19 @@ def _transform_inverse(x, dim, duration):
 
 
 def _get_mask(x, indices):
-    # create a bollean mask from subsample indices
+    # create a boolean mask from subsample indices:
+    #   + start with a zero tensor
+    #   + at a specific `dim`, we increase by 1
+    #     all entries which have index at `dim`
+    #     belong to `indices[dim]`
+    #   + at the end, we will get a tensor whose
+    #     values at `indices` are `len(indices)`
     mask = x.new_zeros(x.shape, dtype=torch.long, device=x.device)
     if len(indices) > 0:
-        size = x.dim()
         idx = []
-        for dim in range(size):
-            neg_dim = dim - size
-            if neg_dim in indices:
-                mask[idx + [indices[neg_dim]]] += 1
+        for dim in range(-x.dim(), 0):
+            if dim in indices:
+                mask[idx + [indices[dim]]] += 1
             idx.append(slice(None))
     return mask == len(indices)
 
@@ -86,51 +92,94 @@ class DCTAdam(Optimizer):
                 if p.grad is None:
                     continue
 
-                mask = _get_mask(p, getattr(p, "_pyro_subsample", {}))
-
-                grad = p.grad.data[mask]
-                grad.clamp_(-group['clip_norm'], group['clip_norm'])
-
-                # Transform selected parameters via dct.
-                time_dim = getattr(p, "_pyro_dct_dim", None)
-                if time_dim is not None:
-                    duration = p.size(time_dim)
-                    grad = _transform_forward(grad, time_dim, duration)
-
-                state = self.state[p]
-
-                # State initialization
-                if len(state) == 0:
-                    state['step'] = torch.zeros_like(p)
-                    # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p)
-                    # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p)
-
-                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
-                beta1, beta2 = group['betas']
-
-                state['step'][mask] += 1
-
-                # Decay the first and second moment running average coefficient
-                exp_avg.masked_scatter_(mask, exp_avg[mask].mul_(beta1).add_(1 - beta1, grad))
-                exp_avg_sq.masked_scatter_(
-                    mask, exp_avg_sq[mask].mul_(beta2).addcmul_(1 - beta2, grad, grad))
-
-                denom = exp_avg_sq[mask].sqrt().add_(group['eps'])
-
-                bias_correction1 = 1 - beta1 ** state['step'][mask]
-                bias_correction2 = 1 - beta2 ** state['step'][mask]
-                step_size = group['lr'] * torch.sqrt(bias_correction2) / bias_correction1
-
-                if time_dim is None:
-                    step = exp_avg[mask] / denom
-                    p.data[mask] += (step.mul_(-step_size))
+                subsample = getattr(p, "_pyro_subsample", {})
+                if subsample:
+                    self._step_param_subsample(group, p, subsample)
                 else:
-                    step = _transform_inverse(exp_avg[mask] / denom, time_dim, duration)
-                    p.data[mask] += (step.mul_(-step_size))
-
-                if hasattr(p, "_pyro_subsample"):
-                    p._pyro_subsample = {}
+                    self._step_param(group, p)
 
         return loss
+
+    def _step_param(self, group, p):
+        grad = p.grad.data
+        grad.clamp_(-group['clip_norm'], group['clip_norm'])
+
+        # Transform selected parameters via dct.
+        time_dim = getattr(p, "_pyro_dct_dim", None)
+        if time_dim is not None:
+            duration = p.size(time_dim)
+            grad = _transform_forward(grad, time_dim, duration)
+
+        state = self.state[p]
+
+        # State initialization
+        if len(state) == 0:
+            state['step'] = 0
+            # Exponential moving average of gradient values
+            state['exp_avg'] = torch.zeros_like(grad)
+            # Exponential moving average of squared gradient values
+            state['exp_avg_sq'] = torch.zeros_like(grad)
+
+        exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+        beta1, beta2 = group['betas']
+
+        state['step'] += 1
+
+        # Decay the first and second moment running average coefficient
+        exp_avg.mul_(beta1).add_(1 - beta1, grad)
+        exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+
+        denom = exp_avg_sq.sqrt().add_(group['eps'])
+
+        bias_correction1 = 1 - beta1 ** state['step']
+        bias_correction2 = 1 - beta2 ** state['step']
+        step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
+
+        if time_dim is None:
+            p.data.addcdiv_(-step_size, exp_avg, denom)
+        else:
+            step = _transform_inverse(exp_avg / denom, time_dim, duration)
+            p.data.add_(step.mul_(-step_size))
+
+    def _step_param_subsample(self, group, p, subsample):
+        mask = _get_mask(p, subsample)
+
+        grad = p.grad.data[mask]
+        grad.clamp_(-group['clip_norm'], group['clip_norm'])
+
+        # Transform selected parameters via dct.
+        time_dim = getattr(p, "_pyro_dct_dim", None)
+        if time_dim is not None:
+            duration = p.size(time_dim)
+            grad = _transform_forward(grad, time_dim, duration)
+
+        state = self.state[p]
+
+        # State initialization
+        if len(state) == 0:
+            state['step'] = torch.zeros_like(p)
+            # Exponential moving average of gradient values
+            state['exp_avg'] = torch.zeros_like(p)
+            # Exponential moving average of squared gradient values
+            state['exp_avg_sq'] = torch.zeros_like(p)
+
+        exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+        beta1, beta2 = group['betas']
+
+        state['step'][mask] += 1
+
+        # Decay the first and second moment running average coefficient
+        exp_avg.masked_scatter_(mask, exp_avg[mask].mul_(beta1).add_(1 - beta1, grad))
+        exp_avg_sq.masked_scatter_(
+            mask, exp_avg_sq[mask].mul_(beta2).addcmul_(1 - beta2, grad, grad))
+
+        denom = exp_avg_sq[mask].sqrt().add_(group['eps'])
+
+        bias_correction1 = 1 - beta1 ** state['step'][mask]
+        bias_correction2 = 1 - beta2 ** state['step'][mask]
+        step_size = group['lr'] * (torch.sqrt(bias_correction2) / bias_correction1)
+
+        step = exp_avg[mask] / denom
+        if time_dim is not None:
+            step = _transform_inverse(step, time_dim, duration)
+        p.data[mask] -= step.mul_(step_size)

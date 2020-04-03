@@ -197,3 +197,37 @@ def test_clippedadam_lrd(lrd):
         x1.backward(g)
         opt_ca.step()
         assert opt_ca.param_groups[0]['lr'] == orig_lr * lrd**(step + 1)
+
+
+def test_dctadam_param_subsample():
+    outer_size = 7
+    middle_size = 2
+    inner_size = 11
+    outer_subsize = 3
+    inner_subsize = 4
+    event_size = 5
+
+    def model():
+        with pyro.plate("outer", outer_size, subsample_size=outer_subsize, dim=-3):
+            with pyro.plate("inner", inner_size, subsample_size=inner_subsize, dim=-1):
+                pyro.param("loc",
+                           torch.randn(outer_size, middle_size, inner_size, event_size),
+                           event_dim=1)
+
+    optimizer = optim.DCTAdam({"lr": 1.})
+    model()
+    param = pyro.param("loc").unconstrained()
+    param.sum().backward()
+    pre_optimized_value = param.detach().clone()
+    optimizer({param})
+    expected_num_changes = outer_subsize * middle_size * inner_subsize * event_size
+    actual_num_changes = ((param - pre_optimized_value) != 0).sum().item()
+    assert actual_num_changes == expected_num_changes
+
+    for i in range(1000):
+        pyro.infer.util.zero_grads({param})
+        model()  # generate new subsample indices
+        param.pow(2).sum().backward()
+        optimizer({param})
+
+    assert_equal(param, param.new_zeros(param.shape), prec=1e-2)
