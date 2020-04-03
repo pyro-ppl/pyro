@@ -51,6 +51,8 @@ def test_heavy_tail(stability):
             logging.info("step {} loss = {:0.4g}".format(step, loss / data.numel()))
 
     # Evaluate.
-    actual = guide.median()
+    median = guide.median()
     for name, expected in truth.items():
-        assert_close(actual[name].item(), expected, atol=0.1)
+        actual = median[name].item()
+        logging.info("{}: {:0.3g} vs {:0.3g}".format(name, actual, expected))
+        assert_close(actual, expected, atol=0.1)

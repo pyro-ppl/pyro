@@ -5,25 +5,22 @@ import operator
 from collections import OrderedDict
 from functools import reduce
 
-import torch
-
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions.util import scale_and_mask
 from pyro.infer.elbo import ELBO
-from pyro.infer.util import is_validation_enabled, validation_enabled
+from pyro.infer.util import get_dependent_plate_dims, is_validation_enabled, validation_enabled
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
 
 
-def _squared_error(x, y, scale, mask):
+def _squared_error(x, y, scale, mask, sum_dims):
     diff = x - y
-    if getattr(scale, 'shape', ()) or getattr(mask, 'shape', ()):
-        error = torch.einsum("nbe,nbe->nb", diff, diff)
-        return scale_and_mask(error, scale, mask).sum(-1)
-    else:
-        error = torch.einsum("nbe,nbe->n", diff, diff)
-        return scale_and_mask(error, scale, mask)
+    result = (diff * diff).sum(-1)
+    result = scale_and_mask(result, scale, mask)
+    if sum_dims:
+        result = result.sum(sum_dims)
+    return result
 
 
 class EnergyDistance:
@@ -154,15 +151,18 @@ class EnergyDistance:
         guide_trace, model_trace = self._get_traces(model, guide, args, kwargs)
 
         # Extract observations and posterior predictive samples.
+        obs_sites = []
         data = OrderedDict()
         samples = OrderedDict()
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample" and site["is_observed"]:
+                obs_sites.append(site)
                 data[name] = site["infer"]["obs"]
                 samples[name] = site["value"]
         assert list(data.keys()) == list(samples.keys())
         if not data:
             raise ValueError("Found no observations")
+        sum_dims = get_dependent_plate_dims(obs_sites)
 
         # Compute energy distance from mean average error and generalized entropy.
         squared_error = []  # E[ (X - x)^2 ]
@@ -177,16 +177,15 @@ class EnergyDistance:
             # Flatten to subshapes of (num_particles, batch_size, event_size).
             event_dim = model_trace.nodes[name]["fn"].event_dim
             batch_shape = obs.shape[:obs.dim() - event_dim]
-            event_shape = obs.shape[obs.dim() - event_dim:]
             if getattr(scale, 'shape', ()):
-                scale = scale.expand(batch_shape).reshape(-1)
+                scale = scale.expand(batch_shape)
             if getattr(mask, 'shape', ()):
-                mask = mask.expand(batch_shape).reshape(-1)
-            obs = obs.reshape(batch_shape.numel(), event_shape.numel())
-            sample = sample.reshape(self.num_particles, batch_shape.numel(), event_shape.numel())
+                mask = mask.expand(batch_shape)
+            obs = obs.reshape(batch_shape + (-1,))
+            sample = sample.reshape((self.num_particles,) + obs.shape)
 
-            squared_error.append(_squared_error(sample, obs, scale, mask))
-            squared_entropy.append(_squared_error(*sample[pairs].unbind(1), scale, mask))
+            squared_error.append(_squared_error(sample, obs, scale, mask, sum_dims))
+            squared_entropy.append(_squared_error(*sample[pairs].unbind(1), scale, mask, sum_dims))
 
         squared_error = reduce(operator.add, squared_error)
         squared_entropy = reduce(operator.add, squared_entropy)
