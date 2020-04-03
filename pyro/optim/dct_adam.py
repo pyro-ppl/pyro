@@ -144,7 +144,7 @@ class DCTAdam(Optimizer):
     def _step_param_subsample(self, group, p, subsample):
         mask = _get_mask(p, subsample)
 
-        grad = p.grad.data[mask]
+        grad = p.grad.data.masked_select(mask)
         grad.clamp_(-group['clip_norm'], group['clip_norm'])
 
         # Transform selected parameters via dct.
@@ -163,23 +163,26 @@ class DCTAdam(Optimizer):
             # Exponential moving average of squared gradient values
             state['exp_avg_sq'] = torch.zeros_like(p)
 
-        exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
         beta1, beta2 = group['betas']
 
-        state['step'][mask] += 1
+        state_step = state['step'].masked_select(mask).add_(1)
+        state['step'].masked_scatter_(mask, state_step)
 
         # Decay the first and second moment running average coefficient
-        exp_avg.masked_scatter_(mask, exp_avg[mask].mul_(beta1).add_(1 - beta1, grad))
-        exp_avg_sq.masked_scatter_(
-            mask, exp_avg_sq[mask].mul_(beta2).addcmul_(1 - beta2, grad, grad))
+        exp_avg = state['exp_avg'].masked_select(mask).mul_(beta1).add_(1 - beta1, grad)
+        state['exp_avg'].masked_scatter_(mask, exp_avg)
 
-        denom = exp_avg_sq[mask].sqrt().add_(group['eps'])
+        exp_avg_sq = state['exp_avg_sq'].masked_select(mask).mul_(beta2).addcmul_(1 - beta2, grad, grad)
+        state['exp_avg_sq'].masked_scatter_(mask, exp_avg_sq)
 
-        bias_correction1 = 1 - beta1 ** state['step'][mask]
-        bias_correction2 = 1 - beta2 ** state['step'][mask]
-        step_size = group['lr'] * (torch.sqrt(bias_correction2) / bias_correction1)
+        denom = exp_avg_sq.sqrt_().add_(group['eps'])
 
-        step = exp_avg[mask] / denom
+        bias_correction1 = 1 - beta1 ** state_step
+        bias_correction2 = 1 - beta2 ** state_step
+        step_size = bias_correction2.sqrt_().div_(bias_correction1).mul_(group['lr'])
+
+        step = exp_avg.div_(denom)
         if time_dim is not None:
             step = _transform_inverse(step, time_dim, duration)
-        p.data[mask] -= step.mul_(step_size)
+        p_data = p.data.masked_select(mask).sub_(step.mul_(step_size))
+        p.data.masked_scatter_(mask, p_data)
