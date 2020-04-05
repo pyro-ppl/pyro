@@ -97,6 +97,10 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
     :param torch.Tensor probs: Event probabilities of success in the half open interval [0, 1).
     :param torch.Tensor logits: Event log-odds for probabilities of success.
     """
+    arg_constraints = {"gate": constraints.unit_interval,
+                       "total_count": constraints.greater_than_eq(0),
+                       "probs": constraints.half_open_interval(0., 1.),
+                       "logits": constraints.real}
     support = constraints.nonnegative_integer
 
     def __init__(self, gate, total_count, probs=None, logits=None, validate_args=None):
@@ -110,3 +114,15 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
         super().__init__(
             gate, base_dist, validate_args=validate_args
         )
+
+    @property
+    def total_count(self):
+        return self.base_dist.total_count
+
+    @property
+    def probs(self):
+        return self.base_dist.probs
+
+    @property
+    def logits(self):
+        return self.base_dist.logits
