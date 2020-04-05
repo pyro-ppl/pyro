@@ -226,6 +226,9 @@ class Forecaster(nn.Module):
         optimization. Defaults to 10.0.
     :param bool dct_gradients: Whether to discrete cosine transform gradients
         in :class:`~pyro.optim.optim.DCTAdam`. Defaults to False.
+    :param bool subsample_aware: whether to update gradient statistics only
+        for those elements that appear in a subsample. This is used
+        by :class:`~pyro.optim.optim.DCTAdam`.
     :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
     :param int num_particles: Number of particles used to compute the
         :class:`~pyro.infer.elbo.ELBO`.
@@ -249,6 +252,7 @@ class Forecaster(nn.Module):
                  learning_rate_decay=0.1,
                  clip_norm=10.0,
                  dct_gradients=False,
+                 subsample_aware=False,
                  num_steps=1001,
                  num_particles=1,
                  vectorize_particles=True,
@@ -279,7 +283,8 @@ class Forecaster(nn.Module):
             if optim is None:
                 optim = DCTAdam({"lr": learning_rate, "betas": betas,
                                  "lrd": learning_rate_decay ** (1 / num_steps),
-                                 "clip_norm": clip_norm})
+                                 "clip_norm": clip_norm,
+                                 "subsample_aware": subsample_aware})
             svi = SVI(self.model, self.guide, optim, elbo)
             for step in range(num_steps):
                 loss = svi.step(data, covariates) / data.numel()
