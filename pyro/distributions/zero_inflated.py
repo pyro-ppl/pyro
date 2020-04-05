@@ -75,6 +75,7 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
 
     def __init__(self, gate, rate, validate_args=None):
         base_dist = Poisson(rate=rate, validate_args=False)
+        base_dist._validate_args = validate_args
 
         super().__init__(
             gate, base_dist, validate_args=validate_args
@@ -108,6 +109,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
             logits=logits,
             validate_args=False,
         )
+        base_dist._validate_args = validate_args
 
         super().__init__(
             gate, base_dist, validate_args=validate_args
