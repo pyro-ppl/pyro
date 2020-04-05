@@ -96,7 +96,7 @@ class TransformTests(TestCase):
 
     def _test_conditional(self, conditional_transform_factory, context_dim=3, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
-            z = torch.rand(context_dim)
+            z = torch.rand(1, context_dim)
             return conditional_transform_factory(input_dim, context_dim).condition(z)
         self._test(transform_factory, **kwargs)
 
@@ -108,6 +108,8 @@ class TransformTests(TestCase):
         self._test(T.affine_coupling)
 
     def test_batchnorm(self):
+        # Need to make moving average statistics non-zeros/ones and set to eval so inverse is valid
+        # (see the docs about the differing behaviour of BatchNorm in train and eval modes)
         def transform_factory(input_dim):
             transform = T.batchnorm(input_dim)
             transform._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
@@ -123,8 +125,14 @@ class TransformTests(TestCase):
         for residual in [None, 'normal', 'gated']:
             self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
 
+    def test_conditional_affine_coupling(self):
+        self._test_conditional(T.conditional_affine_coupling)
+
     def test_conditional_planar(self):
         self._test_conditional(T.conditional_planar, inverse=False)
+
+    def test_conditional_radial(self):
+        self._test_conditional(T.conditional_radial, inverse=False)
 
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
@@ -151,7 +159,7 @@ class TransformTests(TestCase):
                 def _inverse(self, x):
                     return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
 
-            input_dim = (width_dim**2)*3
+            input_dim = (width_dim**2) * 3
             self._test_jacobian(input_dim, Flatten())
 
     def test_householder(self):
@@ -186,6 +194,9 @@ class TransformTests(TestCase):
 
     def test_radial(self):
         self._test(T.radial, inverse=False)
+
+    def test_spline(self):
+        self._test(T.spline)
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)

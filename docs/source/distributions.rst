@@ -378,9 +378,23 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
+ConditionalAffineCoupling
+-------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalAffineCoupling
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalPlanar
 -----------------
 .. autoclass:: pyro.distributions.transforms.ConditionalPlanar
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalRadial
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalRadial
     :members:
     :undoc-members:
     :show-inheritance:
@@ -434,6 +448,13 @@ Radial
     :undoc-members:
     :show-inheritance:
 
+Spline
+------
+.. autoclass:: pyro.distributions.transforms.Spline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Sylvester
 ---------
 .. autoclass:: pyro.distributions.transforms.Sylvester
@@ -481,9 +502,17 @@ block_autoregressive
 --------------------
 .. autofunction:: pyro.distributions.transforms.block_autoregressive
 
+conditional_affine_coupling
+---------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_affine_coupling
+
 conditional_planar
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_planar
+
+conditional_radial
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_radial
 
 elu
 ---
@@ -520,6 +549,10 @@ polynomial
 radial
 ------
 .. autofunction:: pyro.distributions.transforms.radial
+
+spline
+------
+.. autofunction:: pyro.distributions.transforms.spline
 
 sylvester
 ---------

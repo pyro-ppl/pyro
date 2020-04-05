@@ -273,7 +273,7 @@ class MCMC:
         excluding the samples discarded during the warmup phase.
     :param int warmup_steps: Number of warmup iterations. The samples generated
         during the warmup phase are discarded. If not provided, default is
-        half of `num_samples`.
+        is the same as `num_samples`.
     :param int num_chains: Number of MCMC chains to run in parallel. Depending on
         whether `num_chains` is 1 or more than 1, this class internally dispatches
         to either `_UnarySampler` or `_MultiSampler`.
@@ -350,6 +350,26 @@ class MCMC:
 
     @poutine.block
     def run(self, *args, **kwargs):
+        """
+        Run MCMC to generate samples and populate `self._samples`.
+
+        Example usage:
+
+        .. code-block:: python
+
+            def model(data):
+                ...
+
+            nuts_kernel = NUTS(model)
+            mcmc = MCMC(nuts_kernel, num_samples=500)
+            mcmc.run(data)
+            samples = mcmc.get_samples()
+
+        :param args: optional arguments taken by
+            :meth:`MCMCKernel.setup <pyro.infer.mcmc.mcmc_kernel.MCMCKernel.setup>`.
+        :param kwargs: optional keywords arguments taken by
+            :meth:`MCMCKernel.setup <pyro.infer.mcmc.mcmc_kernel.MCMCKernel.setup>`.
+        """
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]

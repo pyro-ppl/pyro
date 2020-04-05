@@ -97,8 +97,10 @@ class _PyroModuleMeta(type):
             return PyroModule
         if Module in _PyroModuleMeta._pyro_mixin_cache:
             return _PyroModuleMeta._pyro_mixin_cache[Module]
+        bases = [PyroModule[b] for b in Module.__bases__
+                 if issubclass(b, torch.nn.Module)]
 
-        class result(Module, PyroModule):
+        class result(Module, *bases):
             # Unpickling helper to load an object of type PyroModule[Module].
             def __reduce__(self):
                 state = getattr(self, '__getstate__', self.__dict__.copy)()
@@ -542,3 +544,20 @@ def to_pyro_module_(m, recurse=True):
         if recurse:
             to_pyro_module_(value)
         setattr(m, name, value)
+
+
+# The following descriptor disables the ._flat_weights cache of
+# torch.nn.RNNBase, forcing recomputation on each access of the ._flat_weights
+# attribute. This is required if any attribute is set to a PyroParam or
+# PyroSample. For motivation, see https://github.com/pyro-ppl/pyro/issues/2390
+class _FlatWeightsDescriptor:
+    def __get__(self, obj, obj_type=None):
+        if obj is None:
+            return self
+        return [getattr(obj, name) for name in obj._flat_weights_names]
+
+    def __set__(self, obj, value):
+        pass  # Ignore value.
+
+
+PyroModule[torch.nn.RNNBase]._flat_weights = _FlatWeightsDescriptor()

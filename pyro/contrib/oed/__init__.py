@@ -6,8 +6,8 @@ strategy, and deciding which compounds to synthesize and test in biological scie
 same question: how do we design an experiment to maximize the information gathered?  Pyro is designed to support
 automated optimal experiment design: specifying a model and guide is enough to obtain optimal designs for many different
 kinds of experiment scenarios. Check out our experimental design tutorials that use Pyro to
-[design an adaptive psychology study](https://pyro.ai/examples/working_memory.html) that uses past data to
-select the next question, and [design an election polling strategy](https://pyro.ai/examples/elections.html) that
+`design an adaptive psychology study <https://pyro.ai/examples/working_memory.html>`_ that uses past data to
+select the next question, and `design an election polling strategy <https://pyro.ai/examples/elections.html>`_ that
 aims to give the strongest prediction about the eventual winner of the election.
 
 Bayesian optimal experimental design (BOED) is a powerful methodology for tackling experimental design problems and

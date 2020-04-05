@@ -193,6 +193,14 @@ def test_condition(sample_shape, batch_shape, left, right):
     expected = gaussian.log_density(value)
     assert_close(actual, expected)
 
+    # test left_condition
+    permute_conditioned = gaussian.left_condition(left_value)
+    assert permute_conditioned.batch_shape == sample_shape + gaussian.batch_shape
+    assert permute_conditioned.dim() == right
+
+    permute_actual = permute_conditioned.log_density(right_value)
+    assert_close(permute_actual, expected)
+
 
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
@@ -233,6 +241,18 @@ def test_affine_normal(batch_shape, x_dim, y_dim):
     assert_close(actual_like.log_normalizer, expected_like.log_normalizer)
     assert_close(actual_like.info_vec, expected_like.info_vec)
     assert_close(actual_like.precision, expected_like.precision)
+
+    x = torch.randn(batch_shape + (x_dim,))
+    permute_actual = actual.left_condition(x)
+    assert isinstance(permute_actual, AffineNormal)
+    permute_actual = permute_actual.to_gaussian()
+
+    permute_expected = expected.left_condition(y)
+    assert isinstance(permute_expected, Gaussian)
+
+    assert_close(permute_actual.log_normalizer, permute_actual.log_normalizer)
+    assert_close(permute_actual.info_vec, permute_actual.info_vec)
+    assert_close(permute_actual.precision, permute_actual.precision)
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
