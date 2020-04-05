@@ -69,13 +69,13 @@ class DCTAdam(Optimizer):
         numerical stability (default: 1e-8)
     :param float clip_norm: magnitude of norm to which gradients are clipped (default: 10.0)
     :param float lrd: rate at which learning rate decays (default: 1.0)
-    :param bool aware_subsample: whether to update gradient statistics only for
+    :param bool subsample_aware: whether to update gradient statistics only for
         those elements that appear in a subsample (default: False).
     """
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
-                 clip_norm=10.0, lrd=1.0, aware_subsample=False):
+                 clip_norm=10.0, lrd=1.0, subsample_aware=False):
         defaults = dict(lr=lr, betas=betas, eps=eps, clip_norm=clip_norm, lrd=lrd,
-                        aware_subsample=aware_subsample)
+                        subsample_aware=subsample_aware)
         super().__init__(params, defaults)
 
     def step(self, closure=None):
@@ -96,7 +96,7 @@ class DCTAdam(Optimizer):
                     continue
 
                 subsample = getattr(p, "_pyro_subsample", {})
-                if subsample and group['aware_subsample']:
+                if subsample and group['subsample_aware']:
                     self._step_param_subsample(group, p, subsample)
                 else:
                     self._step_param(group, p)

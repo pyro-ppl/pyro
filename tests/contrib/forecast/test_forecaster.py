@@ -131,7 +131,8 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, dct_grad
     assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
 
 
-def test_svi_custom_smoke():
+@pytest.mark.parametrize("subsample_aware", [False, True])
+def test_svi_custom_smoke(subsample_aware):
     t_obs = 5
     t_forecast = 4
     cov_dim = 3
@@ -144,7 +145,8 @@ def test_svi_custom_smoke():
     optim = Adam({})
 
     Forecaster(model, data, covariates[..., :t_obs, :],
-               guide=guide, optim=optim, num_steps=2, log_every=1)
+               guide=guide, optim=optim, subsample_aware=subsample_aware,
+               num_steps=2, log_every=1)
 
 
 class SubsampleModel3(ForecastingModel):
