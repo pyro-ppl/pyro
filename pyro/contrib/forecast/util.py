@@ -326,13 +326,54 @@ def _(d, batch_shape):
     new.transition_dist = trans_dist
     new.observation_matrix = obs_mat
     new.observation_dist = obs_dist
+    transforms = []
     for transform in d.transforms:
-        assert isinstance(transform, (transforms.AbsTransform,
-                                      transforms.ExpTransform,
-                                      transforms.SigmoidTransform)), \
+        assert type(transform) in UNIVARIATE_TRANSFORMS, \
             "Currently, reshape_batch only supports AbsTransform, " + \
             "ExpTransform, SigmoidTransform transform"
-    new.transforms = d.transforms
+        current_shape = d.observation_dist.shape()
+        new_shape = obs_dist.shape()
+        transforms.append(reshape_transform_batch(transform, current_shape, new_shape))
+    new.transforms = transforms
     super(dist.LinearHMM, new).__init__(d.duration, batch_shape, d.event_shape,
                                         validate_args=d._validate_args)
     return new
+
+
+UNIVARIATE_TRANSFORMS = {
+    transforms.AbsTransform: (),
+    transforms.AffineTransform: ("loc", "scale"),
+    transforms.ExpTransform: (),
+    transforms.PowerTransform: ("exponent",),
+    transforms.SigmoidTransform: (),
+}
+
+
+@singledispatch
+def reshape_transform_batch(t, current_batch_shape, new_batch_shape):
+    """
+    EXPERIMENTAL Given a transform ``t``, reshape to different batch shape
+    of same number of elements.
+
+    This is typically used to correct the transform parameters' shapes after
+    reshaping the base distribution of a transformed distribution.
+
+    :param t: A transform.
+    :type t: ~torch.distributions.transforms.Transform
+    :param tuple current_batch_shape: The current batch shape.
+    :param tuple new_batch_shape: A new batch shape.
+    :returns: A transform with the same type but given new batch shape.
+    :rtype: ~torch.distributions.transforms.Transform
+    """
+    raise NotImplementedError("reshape_transform_batch() does not suport {}".format(type(t)))
+
+
+def _reshape_batch_univariate_transform(t, current_batch_shape, new_batch_shape):
+    params = {name: getattr(t, name).expand(current_batch_shape).reshape(new_batch_shape)
+              for name in UNIVARIATE_TRANSFORMS[type(t)]}
+    params["cache_size"] = t._cache_size
+    return type(t)(**params)
+
+
+for _type in UNIVARIATE_TRANSFORMS:
+    reshape_transform_batch.register(_type)(_reshape_batch_univariate_transform)
