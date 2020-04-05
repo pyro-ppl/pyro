@@ -70,12 +70,18 @@ def test_model_with_param(jit_compile, num_chains):
     mcmc.run()
 
 
-def test_model_with_subsample():
+@pytest.mark.parametrize("subsample_size", [10, 5])
+def test_model_with_subsample(subsample_size):
+    size = 10
+
     def model():
-        with pyro.plate("J", 10, subsample_size=5):
+        with pyro.plate("J", size, subsample_size=subsample_size):
             pyro.sample("x", dist.Normal(0, 1))
 
     kernel = NUTS(model)
     mcmc = MCMC(kernel, 10)
-    with pytest.raises(RuntimeError, match="subsample"):
+    if subsample_size < size:
+        with pytest.raises(RuntimeError, match="subsample"):
+            mcmc.run()
+    else:
         mcmc.run()

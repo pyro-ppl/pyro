@@ -383,8 +383,9 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     has_enumerable_sites = False
     prototype_samples = {}
     for name, node in model_trace.iter_stochastic_nodes():
-        if isinstance(node["fn"], _Subsample):
-            if node["fn"].subsample_size:
+        fn = node["fn"]
+        if isinstance(fn, _Subsample):
+            if fn.subsample_size is not None and fn.subsample_size < fn.size:
                 raise NotImplementedError("HMC/NUTS does not support model with subsample sites.")
             continue
         if node["fn"].has_enumerate_support:
