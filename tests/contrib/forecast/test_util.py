@@ -28,9 +28,11 @@ DISTS = [
     dist.LinearHMM,
     dist.LogNormal,
     dist.MultivariateNormal,
+    dist.NegativeBinomial,
     dist.Normal,
     dist.StudentT,
     dist.ZeroInflatedPoisson,
+    dist.ZeroInflatedNegativeBinomial,
 ]
 
 
