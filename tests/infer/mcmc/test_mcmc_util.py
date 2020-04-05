@@ -68,3 +68,14 @@ def test_model_with_param(jit_compile, num_chains):
     kernel = NUTS(model_with_param, jit_compile=jit_compile, ignore_jit_warnings=True)
     mcmc = MCMC(kernel, 10, num_chains=num_chains, mp_context="spawn")
     mcmc.run()
+
+
+def test_model_with_subsample():
+    def model():
+        with pyro.plate("J", 10, subsample_size=5):
+            pyro.sample("x", dist.Normal(0, 1))
+
+    kernel = NUTS(model)
+    mcmc = MCMC(kernel, 10)
+    with pytest.raises(RuntimeError, match="subsample"):
+        mcmc.run()
