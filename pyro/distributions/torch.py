@@ -104,6 +104,8 @@ class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
 class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
     def __init__(self, loc, scale, validate_args=None):
         base_dist = Normal(loc, scale)
+        # This differs from torch.distributions.LogNormal only in that base_dist is
+        # a pyro.distributions.Normal rather than a torch.distributions.Normal.
         super(torch.distributions.LogNormal, self).__init__(
             base_dist, torch.distributions.transforms.ExpTransform(), validate_args=validate_args)
 

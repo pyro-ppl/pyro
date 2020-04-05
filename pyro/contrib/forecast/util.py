@@ -4,7 +4,7 @@
 from functools import singledispatch
 
 import torch
-from torch.distributions import transform_to
+from torch.distributions import transform_to, transforms
 
 import pyro.distributions as dist
 from pyro.poutine.messenger import Messenger
@@ -326,6 +326,12 @@ def _(d, batch_shape):
     new.transition_dist = trans_dist
     new.observation_matrix = obs_mat
     new.observation_dist = obs_dist
+    for transform in d.transforms:
+        assert isinstance(transform, (transforms.AbsTransform,
+                                      transforms.ExpTransform,
+                                      transforms.SigmoidTransform)), \
+            "Currently, reshape_batch only supports AbsTransform, " + \
+            "ExpTransform, SigmoidTransform transform"
     new.transforms = d.transforms
     super(dist.LinearHMM, new).__init__(d.duration, batch_shape, d.event_shape,
                                         validate_args=d._validate_args)
