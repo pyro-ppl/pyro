@@ -23,9 +23,7 @@ class ZeroInflatedDistribution(TorchDistribution):
         batch_shape = self.gate.shape
         event_shape = torch.Size()
 
-        super().__init__(
-            batch_shape, event_shape, validate_args
-        )
+        super().__init__(batch_shape, event_shape, validate_args)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -76,7 +74,7 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
     support = constraints.nonnegative_integer
 
     def __init__(self, gate, rate, validate_args=None):
-        base_dist = Poisson(rate=rate, validate_args=validate_args)
+        base_dist = Poisson(rate=rate, validate_args=False)
 
         super().__init__(
             gate, base_dist, validate_args=validate_args
@@ -108,7 +106,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
             total_count=total_count,
             probs=probs,
             logits=logits,
-            validate_args=validate_args,
+            validate_args=False,
         )
 
         super().__init__(
