@@ -158,11 +158,13 @@ UNIVARIATE_DISTS = {
     dist.InverseGamma: ("concentration", "rate"),
     dist.Laplace: ("loc", "scale"),
     dist.LogNormal: ("loc", "scale"),
+    dist.NegativeBinomial: ("total_count", "logits"),
     dist.Normal: ("loc", "scale"),
     dist.Poisson: ("rate",),
     dist.Stable: ("stability", "skew", "scale", "loc"),
     dist.StudentT: ("df", "loc", "scale"),
     dist.ZeroInflatedPoisson: ("gate", "rate"),
+    dist.ZeroInflatedNegativeBinomial: ("gate", "total_count", "logits"),
 }
 
 

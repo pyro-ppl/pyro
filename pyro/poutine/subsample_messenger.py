@@ -149,4 +149,17 @@ class SubsampleMessenger(IndepMessenger):
                             .format(self.name, self.size, self.dim, statement, shape))
                     # Subsample parameters with known batch semantics.
                     if self.subsample_size < self.size:
-                        msg["value"] = msg["value"].index_select(dim, self._indices)
+                        value = msg["value"]
+                        new_value = value.index_select(dim, self._indices)
+                        if msg["type"] == "param":
+                            if hasattr(value, "_pyro_unconstrained_param"):
+                                param = value._pyro_unconstrained_param
+                            else:
+                                param = value.unconstrained()
+
+                            if not hasattr(param, "_pyro_subsample"):
+                                param._pyro_subsample = {}
+
+                            param._pyro_subsample[dim] = self._indices
+                            new_value._pyro_unconstrained_param = param
+                        msg["value"] = new_value
