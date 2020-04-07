@@ -186,7 +186,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.3.0')
+    assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(description='Example illustrating NeuTra Reparametrizer')
     parser.add_argument('-n', '--num-steps', default=10000, type=int,
                         help='number of SVI steps')
