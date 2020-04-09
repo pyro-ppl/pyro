@@ -28,8 +28,8 @@ class LowerCholeskyAffine(Transform):
     event_dim = 1
     volume_preserving = False
 
-    def __init__(self, loc, scale_tril):
-        super().__init__(cache_size=1)
+    def __init__(self, loc, scale_tril, cache_size=1):
+        super().__init__(cache_size=cache_size)
         self.loc = loc
         self.scale_tril = scale_tril
         assert loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2), \

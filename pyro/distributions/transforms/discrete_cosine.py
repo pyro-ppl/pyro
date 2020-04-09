@@ -21,7 +21,7 @@ class DiscreteCosineTransform(Transform):
     codomain = constraints.real
     bijective = True
 
-    def __init__(self, dim=-1, cache_size=0):
+    def __init__(self, dim=-1, cache_size=1):
         assert isinstance(dim, int) and dim < 0
         self.event_dim = -dim
         super().__init__(cache_size=cache_size)

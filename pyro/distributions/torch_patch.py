@@ -5,6 +5,8 @@ import functools
 import weakref
 
 import torch
+from torch.distributions.transforms import Transform, PowerTransform, AffineTransform
+from torch.distributions.utils import broadcast_all
 
 assert torch.__version__.startswith('1.')
 
@@ -43,6 +45,36 @@ def _Transform__getstate__(self):
         else:
             attrs[k] = v
     return attrs
+
+# Makes transforms cache by default
+# The cost of keeping a single-valued cache is low, and avoiding the case where
+# element-wise transforms don't compose well with e.g. AffineAutoregressive
+# will save a lot of debugging!
+@patch_dependency('torch.distributions.transforms.Transform.__init__')
+def _Transform__init__(self, cache_size=1):
+    self._cache_size = cache_size
+    self._inv = None
+    if cache_size == 0:
+        pass  # default behavior
+    elif cache_size == 1:
+        self._cached_x_y = None, None
+    else:
+        raise ValueError('cache_size must be 0 or 1')
+    super(Transform, self).__init__()
+
+
+@patch_dependency('torch.distributions.transforms.PowerTransform.__init__')
+def _PowerTransform__init__(self, exponent, cache_size=1):
+    super(PowerTransform, self).__init__(cache_size=cache_size)
+    self.exponent, = broadcast_all(exponent)
+
+
+@patch_dependency('torch.distributions.transforms.AffineTransform.__init__')
+def _AffineTransform__init__(self, loc, scale, event_dim=0, cache_size=1):
+    super(AffineTransform, self).__init__(cache_size=cache_size)
+    self.loc = loc
+    self.scale = scale
+    self.event_dim = event_dim
 
 
 # Fixes a shape error in Multinomial.support with inhomogeneous .total_count
