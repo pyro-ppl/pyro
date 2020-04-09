@@ -353,6 +353,71 @@ def test_cache():
         assert result1[0] is not result2[0], key
 
 
+class AttributeModel(PyroModule):
+    def __init__(self, size):
+        super().__init__()
+        self.x = PyroParam(torch.zeros(size))
+        self.y = PyroParam(lambda: torch.randn(size))
+        self.z = PyroParam(torch.ones(size),
+                           constraint=constraints.positive,
+                           event_dim=1)
+        self.s = PyroSample(dist.Normal(0, 1))
+        self.t = PyroSample(lambda self: dist.Normal(self.s, self.z))
+
+    def forward(self):
+        return self.x + self.y + self.t
+
+
+class DecoratorModel(PyroModule):
+    def __init__(self, size):
+        super().__init__()
+        self.size = size
+
+    @PyroParam
+    def x(self):
+        return torch.zeros(self.size)
+
+    @PyroParam
+    def y(self):
+        return torch.randn(self.size)
+
+    @PyroParam(constraint=constraints.positive, event_dim=1)
+    def z(self):
+        return torch.ones(self.size)
+
+    @PyroSample
+    def s(self):
+        return dist.Normal(0, 1)
+
+    @PyroSample
+    def t(self):
+        return dist.Normal(self.s, self.z).to_event(1)
+
+    def forward(self):
+        return self.x + self.y + self.t
+
+
+@pytest.mark.parametrize("Model", [AttributeModel, DecoratorModel])
+@pytest.mark.parametrize("size", [1, 2])
+def test_decorator(Model, size):
+    model = Model(size)
+    for i in range(2):
+        trace = poutine.trace(model).get_trace()
+        assert set(trace.nodes.keys()) == {"_INPUT", "x", "y", "z", "s", "t", "_RETURN"}
+
+        assert trace.nodes["x"]["type"] == "param"
+        assert trace.nodes["y"]["type"] == "param"
+        assert trace.nodes["z"]["type"] == "param"
+        assert trace.nodes["s"]["type"] == "sample"
+        assert trace.nodes["t"]["type"] == "sample"
+
+        assert trace.nodes["x"]["value"].shape == (size,)
+        assert trace.nodes["y"]["value"].shape == (size,)
+        assert trace.nodes["z"]["value"].shape == (size,)
+        assert trace.nodes["s"]["value"].shape == ()
+        assert trace.nodes["t"]["value"].shape == (size,)
+
+
 def test_mixin_factory():
     assert PyroModule[nn.Module] is PyroModule
     assert PyroModule[PyroModule] is PyroModule

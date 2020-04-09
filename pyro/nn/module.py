@@ -21,16 +21,107 @@ from torch.distributions import constraints, transform_to
 import pyro
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
-PyroParam = namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))
-PyroParam.__new__.__defaults__ = (constraints.real, None)
-PyroParam.__doc__ = """
-Structure to declare a Pyro-managed learnable parameter of a :class:`PyroModule`.
-"""
 
-PyroSample = namedtuple("PyroSample", ("prior",))
-PyroSample.__doc__ = """
-Structure to declare a Pyro-managed random parameter of a :class:`PyroModule`.
-"""
+class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
+    """
+    Declares a Pyro-managed learnable attribute of a :class:`PyroModule`,
+    similar to :func:`pyro.param`.
+
+    This can be used either to set attributes of :class:`PyroModule`
+    instances::
+
+        assert isinstance(my_module, PyroModule)
+        my_module.x = PyroParam(torch.zeros(4))                   # eager
+        my_module.y = PyroParam(lambda: torch.randn(4))           # lazy
+        my_module.z = PyroParam(torch.ones(4),                    # eager
+                                constraint=constraints.positive,
+                                event_dim=1)
+
+    or as a decorator on lazy initialization properties::
+
+        class MyModule(PyroModule):
+            @PyroParam
+            def x(self):
+                return torch.zeros(4)
+
+            @PyroParam
+            def y(self):
+                return torch.randn(4)
+
+            @PyroParam(constraint=constraints.real, event_dim=1)
+            def z(self):
+                return torch.ones(4)
+
+    :param init_value: Either a tensor for eager initialization, a callable for
+        lazy initialization, or None for use as a decorator.
+    :type init_value: torch.Tensor or callable returning a torch.Tensor or None
+    :param constraint: torch constraint, defaults to ``constraints.real``.
+    :type constraint: ~torch.distributions.constraints.Constraint
+    :param int event_dim: (optional) number of rightmost dimensions unrelated
+        to baching. Dimension to the left of this will be considered batch
+        dimensions; if the param statement is inside a subsampled plate, then
+        corresponding batch dimensions of the parameter will be correspondingly
+        subsampled. If unspecified, all dimensions will be considered event
+        dims and no subsampling will be performed.
+    """
+    # Support use as a decorator.
+    def __get__(self, obj, obj_type):
+        assert issubclass(obj_type, PyroModule)
+        if obj is None:
+            return self
+
+        name = self.init_value.__name__
+        if name not in obj.__dict__["_pyro_params"]:
+            init_value, constraint, event_dim = self
+            init_value = functools.partial(init_value, obj)  # bind method's self arg
+            setattr(obj, name, PyroParam(init_value, constraint, event_dim))
+        return obj.__getattr__(name)
+
+    # Support decoration with kwargs, like @PyroParam(event_dim=0).
+    def __call__(self, init_value):
+        assert self.init_value is None
+        return PyroParam(init_value, self.constraint, self.event_dim)
+
+
+PyroParam.__new__.__defaults__ = (None, constraints.real, None)
+
+
+class PyroSample(namedtuple("PyroSample", ("prior",))):
+    """
+    Declare a Pyro-managed random attribute of a :class:`PyroModule`, similar
+    to :func:`pyro.sample`.
+
+    This can be used either to set attributes of :class:`PyroModule`
+    instances::
+
+        assert isinstance(my_module, PyroModule)
+        my_module.x = PyroSample(Normal(0, 1))                    # independent
+        my_module.y = PyroSample(lambda self: Normal(self.x, 1))  # dependent
+
+    or as a decorator on lazy initialization methods::
+
+        class MyModule(PyroModule):
+            @PyroSample
+            def x(self):
+                return Normal(0, 1)
+
+            @PyroSample
+            def y(self):
+                return Normal(self.x, 1)
+
+    :param prior: distribution object or function that inputs the
+        :class:`PyroModule` instance ``self`` and returns a distribution
+        object.
+    """
+    # Support use as a decorator.
+    def __get__(self, obj, obj_type):
+        assert issubclass(obj_type, PyroModule)
+        if obj is None:
+            return self
+
+        name = self.prior.__name__
+        obj.__dict__["_pyro_samples"].setdefault(name, self.prior)
+        return obj.__getattr__(name)
 
 
 def _make_name(prefix, name):
@@ -39,6 +130,8 @@ def _make_name(prefix, name):
 
 def _unconstrain(constrained_value, constraint):
     with torch.no_grad():
+        if callable(constrained_value):
+            constrained_value = constrained_value()
         unconstrained_value = transform_to(constraint).inv(constrained_value.detach())
         return torch.nn.Parameter(unconstrained_value)
 
