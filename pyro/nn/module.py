@@ -77,7 +77,7 @@ class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"
             setattr(obj, name, PyroParam(init_value, constraint, event_dim))
         return obj.__getattr__(name)
 
-    # Support decoration with kwargs, like @PyroParam(event_dim=0).
+    # Support decoration with optional kwargs, e.g. @PyroParam(event_dim=0).
     def __call__(self, init_value):
         assert self.init_value is None
         return PyroParam(init_value, self.constraint, self.event_dim)
@@ -88,7 +88,7 @@ PyroParam.__new__.__defaults__ = (None, constraints.real, None)
 
 class PyroSample(namedtuple("PyroSample", ("prior",))):
     """
-    Declare a Pyro-managed random attribute of a :class:`PyroModule`, similar
+    Declares a Pyro-managed random attribute of a :class:`PyroModule`, similar
     to :func:`pyro.sample`.
 
     This can be used either to set attributes of :class:`PyroModule`
