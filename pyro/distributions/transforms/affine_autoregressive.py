@@ -5,10 +5,13 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
+from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.utils import clamp_preserve_gradients
-from pyro.nn import AutoRegressiveNN
+from pyro.nn import ConditionalAutoRegressiveNN, AutoRegressiveNN
+
+from functools import partial
 
 
 @copy_docs_from(TransformModule)
@@ -220,6 +223,106 @@ class AffineAutoregressive(TransformModule):
         return x
 
 
+@copy_docs_from(ConditionalTransformModule)
+class ConditionalAffineAutoregressive(ConditionalTransformModule):
+    """
+    An implementation of the bijective transform of Inverse Autoregressive Flow
+    (IAF) that conditions on an additional context variable and uses, by default,
+    Eq (10) from Kingma Et Al., 2016,
+
+        :math:`\\mathbf{y} = \\mu_t + \\sigma_t\\odot\\mathbf{x}`
+
+    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
+    :math:`\\mu_t,\\sigma_t` are calculated from an autoregressive network on
+    :math:`\\mathbf{x}` and context :math:`\\mathbf{z}\\in\\mathbb{R}^M`, and
+    :math:`\\sigma_t>0`.
+
+    If the stable keyword argument is set to True then the transformation used is,
+
+        :math:`\\mathbf{y} = \\sigma_t\\odot\\mathbf{x} + (1-\\sigma_t)\\odot\\mu_t`
+
+    where :math:`\\sigma_t` is restricted to :math:`(0,1)`. This variant of IAF is
+    claimed by the authors to be more numerically stable than one using Eq (10),
+    although in practice it leads to a restriction on the distributions that can be
+    represented, presumably since the input is restricted to rescaling by a number
+    on :math:`(0,1)`.
+
+    Together with :class:`~pyro.distributions.ConditionalTransformedDistribution`
+    this provides a way to create richer variational approximations.
+
+    Example usage:
+
+    >>> from pyro.nn import ConditionalAutoRegressiveNN
+    >>> input_dim = 10
+    >>> context_dim = 4
+    >>> batch_size = 3
+    >>> hidden_dims = [10*input_dim, 10*input_dim]
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> hypernet = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims)
+    >>> transform = ConditionalAffineAutoregressive(hypernet)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
+    ... [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size]))  # doctest: +SKIP
+
+    The inverse of the Bijector is required when, e.g., scoring the log density of a
+    sample with :class:`~pyro.distributions.TransformedDistribution`. This
+    implementation caches the inverse of the Bijector when its forward operation is
+    called, e.g., when sampling from
+    :class:`~pyro.distributions.TransformedDistribution`. However, if the cached
+    value isn't available, either because it was overwritten during sampling a new
+    value or an arbitary value is being scored, it will calculate it manually. Note
+    that this is an operation that scales as O(D) where D is the input dimension,
+    and so should be avoided for large dimensional uses. So in general, it is cheap
+    to sample from IAF and score a value that was sampled by IAF, but expensive to
+    score an arbitrary value.
+
+    :param autoregressive_nn: an autoregressive neural network whose forward call
+        returns a real-valued mean and logit-scale as a tuple
+    :type autoregressive_nn: nn.Module
+    :param log_scale_min_clip: The minimum value for clipping the log(scale) from
+        the autoregressive NN
+    :type log_scale_min_clip: float
+    :param log_scale_max_clip: The maximum value for clipping the log(scale) from
+        the autoregressive NN
+    :type log_scale_max_clip: float
+    :param sigmoid_bias: A term to add the logit of the input when using the stable
+        tranform.
+    :type sigmoid_bias: float
+    :param stable: When true, uses the alternative "stable" version of the transform
+        (see above).
+    :type stable: bool
+
+    References:
+
+    [1] Diederik P. Kingma, Tim Salimans, Rafal Jozefowicz, Xi Chen, Ilya Sutskever,
+    Max Welling. Improving Variational Inference with Inverse Autoregressive Flow.
+    [arXiv:1606.04934]
+
+    [2] Danilo Jimenez Rezende, Shakir Mohamed. Variational Inference with
+    Normalizing Flows. [arXiv:1505.05770]
+
+    [3] Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle. MADE: Masked
+    Autoencoder for Distribution Estimation. [arXiv:1502.03509]
+
+    """
+
+    domain = constraints.real
+    codomain = constraints.real
+    bijective = True
+    event_dim = 1
+
+    def __init__(self, hypernet, **kwargs):
+        super().__init__()
+        self.nn = hypernet
+        self.kwargs = kwargs
+
+    def condition(self, context):
+        cond_nn = partial(self.nn, context=context)
+        return AffineAutoregressive(cond_nn, **self.kwargs)
+
+
 def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
     """
     A helper function to create an
@@ -251,3 +354,37 @@ def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
         hidden_dims = [3 * input_dim + 1]
     arn = AutoRegressiveNN(input_dim, hidden_dims)
     return AffineAutoregressive(arn, **kwargs)
+
+
+def conditional_affine_autoregressive(input_dim, context_dim, hidden_dims=None, **kwargs):
+    """
+    A helper function to create an
+    :class:`~pyro.distributions.transforms.ConditionalAffineAutoregressive` object
+    that takes care of constructing a dense network with the correct input/output
+    dimensions.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param context_dim: Dimension of context variable
+    :type context_dim: int
+    :param hidden_dims: The desired hidden dimensions of the dense network. Defaults
+        to using [10*input_dim]
+    :type hidden_dims: list[int]
+    :param log_scale_min_clip: The minimum value for clipping the log(scale) from
+        the autoregressive NN
+    :type log_scale_min_clip: float
+    :param log_scale_max_clip: The maximum value for clipping the log(scale) from
+        the autoregressive NN
+    :type log_scale_max_clip: float
+    :param sigmoid_bias: A term to add the logit of the input when using the stable
+        tranform.
+    :type sigmoid_bias: float
+    :param stable: When true, uses the alternative "stable" version of the transform
+        (see above).
+    :type stable: bool
+
+    """
+    if hidden_dims is None:
+        hidden_dims = [10 * input_dim]
+    nn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims)
+    return ConditionalAffineAutoregressive(input_dim, nn, **kwargs)

@@ -378,6 +378,13 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
+ConditionalAffineAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalAffineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalAffineCoupling
 -------------------------
 .. autoclass:: pyro.distributions.transforms.ConditionalAffineCoupling
@@ -501,6 +508,10 @@ batchnorm
 block_autoregressive
 --------------------
 .. autofunction:: pyro.distributions.transforms.block_autoregressive
+
+conditional_affine_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_affine_autoregressive
 
 conditional_affine_coupling
 ---------------------------

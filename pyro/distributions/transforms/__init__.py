@@ -6,7 +6,9 @@ from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
 
 from pyro.distributions.torch_transform import ComposeTransformModule
-from pyro.distributions.transforms.affine_autoregressive import AffineAutoregressive, affine_autoregressive
+from pyro.distributions.transforms.affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive,
+                                                                 affine_autoregressive,
+                                                                 conditional_affine_autoregressive)
 from pyro.distributions.transforms.affine_coupling import (AffineCoupling, ConditionalAffineCoupling,
                                                            affine_coupling, conditional_affine_coupling)
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
@@ -64,6 +66,7 @@ __all__ = [
     'BatchNorm',
     'BlockAutoregressive',
     'ComposeTransformModule',
+    'ConditionalAffineAutoregressive',
     'ConditionalAffineCoupling',
     'ConditionalPlanar',
     'ConditionalRadial',
@@ -86,6 +89,7 @@ __all__ = [
     'affine_coupling',
     'batchnorm',
     'block_autoregressive',
+    'conditional_affine_autoregressive',
     'conditional_affine_coupling',
     'conditional_planar',
     'conditional_radial',

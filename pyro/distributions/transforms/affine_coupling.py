@@ -167,7 +167,7 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
 
     Example usage:
 
-    >>> from pyro.nn import DenseNN
+    >>> from pyro.nn import ConditionalDenseNN
     >>> input_dim = 10
     >>> split_dim = 6
     >>> context_dim = 4

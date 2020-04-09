@@ -125,6 +125,9 @@ class TransformTests(TestCase):
         for residual in [None, 'normal', 'gated']:
             self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
 
+    def test_conditional_affine_autoregressive(self):
+        self._test_conditional(T.conditional_affine_coupling)
+
     def test_conditional_affine_coupling(self):
         self._test_conditional(T.conditional_affine_coupling)
 
