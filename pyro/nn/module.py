@@ -25,7 +25,7 @@ from pyro.poutine.runtime import _PYRO_PARAM_STORE
 class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
     """
     Declares a Pyro-managed learnable attribute of a :class:`PyroModule`,
-    similar to :func:`pyro.param`.
+    similar to :func:`pyro.param <pyro.primitives.param>`.
 
     This can be used either to set attributes of :class:`PyroModule`
     instances::
@@ -89,7 +89,7 @@ PyroParam.__new__.__defaults__ = (None, constraints.real, None)
 class PyroSample(namedtuple("PyroSample", ("prior",))):
     """
     Declares a Pyro-managed random attribute of a :class:`PyroModule`, similar
-    to :func:`pyro.sample`.
+    to :func:`pyro.sample <pyro.primitives.sample>`.
 
     This can be used either to set attributes of :class:`PyroModule`
     instances::
@@ -215,7 +215,8 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     To create a Pyro-managed parameter attribute, set that attribute using
     either :class:`torch.nn.Parameter` (for unconstrained parameters) or
     :class:`PyroParam` (for constrained parameters). Reading that attribute
-    will then trigger a :func:`pyro.param` statement. For example::
+    will then trigger a :func:`pyro.param <pyro.primitives.param>` statement.
+    For example::
 
         # Create Pyro-managed parameter attributes.
         my_module = PyroModule()
@@ -227,13 +228,13 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         scale = my_module.scale  # Triggers another pyro.param statement.
 
     Note that, unlike normal :class:`torch.nn.Module` s, :class:`PyroModule` s
-    should not be registered with :func:`pyro.module` statements.
-    :class:`PyroModule` s can contain other :class:`PyroModule` s and normal
-    :class:`torch.nn.Module` s.  Accessing a normal :class:`torch.nn.Module`
-    attribute of a :class:`PyroModule` triggers a :func:`pyro.module`
-    statement.  If multiple :class:`PyroModule` s appear in a single Pyro model
-    or guide, they should be included in a single root :class:`PyroModule` for
-    that model.
+    should not be registered with :func:`pyro.module <pyro.primitives.module>`
+    statements.  :class:`PyroModule` s can contain other :class:`PyroModule` s
+    and normal :class:`torch.nn.Module` s.  Accessing a normal
+    :class:`torch.nn.Module` attribute of a :class:`PyroModule` triggers a
+    :func:`pyro.module <pyro.primitives.module>` statement.  If multiple
+    :class:`PyroModule` s appear in a single Pyro model or guide, they should
+    be included in a single root :class:`PyroModule` for that model.
 
     :class:`PyroModule` s synchronize data with the param store at each
     ``setattr``, ``getattr``, and ``delattr`` event, based on the nested name
@@ -268,7 +269,8 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
     To create a Pyro-managed random attribute, set that attribute using the
     :class:`PyroSample` helper, specifying a prior distribution. Reading that
-    attribute will then trigger a :func:`pyro.sample` statement. For example::
+    attribute will then trigger a :func:`pyro.sample <pyro.primitives.sample>`
+    statement. For example::
 
         # Create Pyro-managed random attributes.
         my_module.x = PyroSample(dist.Normal(0, 1))
