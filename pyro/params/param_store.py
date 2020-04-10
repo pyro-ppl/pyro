@@ -144,7 +144,7 @@ class ParamStoreDict:
         :param init_constrained_value: initial constrained value
         :type init_constrained_value: torch.Tensor or callable returning a torch.Tensor
         :param constraint: torch constraint object
-        :type constraint: torch.distributions.constraints.Constraint
+        :type constraint: ~torch.distributions.constraints.Constraint
         :returns: constrained parameter value
         :rtype: torch.Tensor
         """
