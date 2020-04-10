@@ -13,6 +13,7 @@ the :class:`PyroSample` struct::
 
 """
 import functools
+import inspect
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -122,12 +123,16 @@ class PyroSample(namedtuple("PyroSample", ("prior",))):
     def __init__(self, prior):
         super().__init__()
         if not hasattr(prior, "sample"):  # if not a distribution
-            # Ensure decorated function is accessible for pickling.
-            self.name = prior.__name__
-            prior.__name__ = "_pyro_prior_" + prior.__name__
-            qualname = prior.__qualname__.rsplit(".", 1)
-            qualname[-1] = prior.__name__
-            prior.__qualname__ = ".".join(qualname)
+            assert 1 == sum(1 for p in inspect.signature(prior).parameters.values()
+                            if p.default is inspect.Parameter.empty), \
+                "prior should take the single argument 'self'"
+            self.name = getattr(prior, "__name__", None)
+            if self.name is not None:
+                # Ensure decorated function is accessible for pickling.
+                prior.__name__ = "_pyro_prior_" + prior.__name__
+                qualname = prior.__qualname__.rsplit(".", 1)
+                qualname[-1] = prior.__name__
+                prior.__qualname__ = ".".join(qualname)
 
     # Support use as a decorator.
     def __get__(self, obj, obj_type):
@@ -135,7 +140,14 @@ class PyroSample(namedtuple("PyroSample", ("prior",))):
         if obj is None:
             return self
 
-        setattr(obj_type, self.prior.__name__, self.prior)  # for pickling
+        if self.name is None:
+            for name in dir(obj_type):
+                if getattr(obj_type, name) is self:
+                    self.name = name
+                    break
+        else:
+            setattr(obj_type, self.prior.__name__, self.prior)  # for pickling
+
         obj.__dict__["_pyro_samples"].setdefault(self.name, self.prior)
         return obj.__getattr__(self.name)
 
