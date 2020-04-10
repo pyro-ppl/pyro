@@ -13,6 +13,7 @@ the :class:`PyroSample` struct::
 
 """
 import functools
+import inspect
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -37,7 +38,7 @@ class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"
                                 constraint=constraints.positive,
                                 event_dim=1)
 
-    or as a decorator on lazy initialization properties::
+    or EXPERIMENTALLY as a decorator on lazy initialization properties::
 
         class MyModule(PyroModule):
             @PyroParam
@@ -51,6 +52,9 @@ class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"
             @PyroParam(constraint=constraints.real, event_dim=1)
             def z(self):
                 return torch.ones(4)
+
+            def forward(self):
+                return self.x + self.y + self.z  # accessed like a @property
 
     :param init_value: Either a tensor for eager initialization, a callable for
         lazy initialization, or None for use as a decorator.
@@ -98,30 +102,45 @@ class PyroSample(namedtuple("PyroSample", ("prior",))):
         my_module.x = PyroSample(Normal(0, 1))                    # independent
         my_module.y = PyroSample(lambda self: Normal(self.x, 1))  # dependent
 
-    or as a decorator on lazy initialization methods::
+    or EXPERIMENTALLY as a decorator on lazy initialization methods::
 
         class MyModule(PyroModule):
             @PyroSample
             def x(self):
-                return Normal(0, 1)
+                return Normal(0, 1)       # independent
 
             @PyroSample
             def y(self):
-                return Normal(self.x, 1)
+                return Normal(self.x, 1)  # dependent
+
+            def forward(self):
+                return self.y             # accessed like a @property
 
     :param prior: distribution object or function that inputs the
         :class:`PyroModule` instance ``self`` and returns a distribution
         object.
     """
+    def __init__(self, prior):
+        super().__init__()
+        if not hasattr(prior, "sample"):  # if not a distribution
+            assert len(inspect.signature(prior).parameters) == 1, \
+                "prior should take the single argument 'self'"
+            # Ensure decorated function is accessible for pickling.
+            self.name = prior.__name__
+            prior.__name__ = "_pyro_prior_" + prior.__name__
+            qualname = prior.__qualname__.rsplit(".", 1)
+            qualname[-1] = prior.__name__
+            prior.__qualname__ = ".".join(qualname)
+
     # Support use as a decorator.
     def __get__(self, obj, obj_type):
         assert issubclass(obj_type, PyroModule)
         if obj is None:
             return self
 
-        name = self.prior.__name__
-        obj.__dict__["_pyro_samples"].setdefault(name, self.prior)
-        return obj.__getattr__(name)
+        setattr(obj_type, self.prior.__name__, self.prior)  # for pickling
+        obj.__dict__["_pyro_samples"].setdefault(self.name, self.prior)
+        return obj.__getattr__(self.name)
 
 
 def _make_name(prefix, name):

@@ -513,7 +513,7 @@ def test_to_pyro_module_():
     assert_identical(actual, expected)
 
 
-def test_torch_serialize():
+def test_torch_serialize_attributes():
     module = PyroModule()
     module.x = PyroParam(torch.tensor(1.234), constraints.positive)
     module.y = nn.Parameter(torch.randn(3))
@@ -529,6 +529,29 @@ def test_torch_serialize():
         actual = torch.load(f)
 
     assert_equal(actual.x, module.x)
+    actual_names = {name for name, _ in actual.named_parameters()}
+    expected_names = {name for name, _ in module.named_parameters()}
+    assert actual_names == expected_names
+
+
+def test_torch_serialize_decorators():
+    module = DecoratorModel(3)
+    module()  # initialize
+
+    # Work around https://github.com/pytorch/pytorch/issues/27972
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        f = io.BytesIO()
+        torch.save(module, f)
+        pyro.clear_param_store()
+        f.seek(0)
+        actual = torch.load(f)
+
+    assert_equal(actual.x, module.x)
+    assert_equal(actual.y, module.y)
+    assert_equal(actual.z, module.z)
+    assert actual.s.shape == module.s.shape
+    assert actual.t.shape == module.t.shape
     actual_names = {name for name, _ in actual.named_parameters()}
     expected_names = {name for name, _ in module.named_parameters()}
     assert actual_names == expected_names
