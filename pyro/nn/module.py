@@ -13,7 +13,6 @@ the :class:`PyroSample` struct::
 
 """
 import functools
-import inspect
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -123,8 +122,6 @@ class PyroSample(namedtuple("PyroSample", ("prior",))):
     def __init__(self, prior):
         super().__init__()
         if not hasattr(prior, "sample"):  # if not a distribution
-            assert len(inspect.signature(prior).parameters) == 1, \
-                "prior should take the single argument 'self'"
             # Ensure decorated function is accessible for pickling.
             self.name = prior.__name__
             prior.__name__ = "_pyro_prior_" + prior.__name__
