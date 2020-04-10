@@ -26,6 +26,7 @@ Welcome to Pyro Examples and Tutorials!
    jit
    minipyro
    effect_handlers
+   modules
 
 .. toctree::
    :maxdepth: 2
