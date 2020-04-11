@@ -229,3 +229,97 @@ def test_gaussian_filter():
         assert_close(actual.variance ** 0.5, expected.variance ** 0.5, atol=0.1, rtol=0.5)
         sigma = actual.variance.max().item() ** 0.5
         assert_close(actual.mean, expected.mean, atol=3 * sigma)
+
+
+class SEIRModel:
+    def __init__(self, reporting_rate=0.1, is_guide=False):
+        self.reporting_rate = reporting_rate  # aka rho
+        self.Beta = 0.5
+        self.k = 1  # TODO infer this, this is piecewise constant
+        self.p_E2I = 0.5  # TODO infer this
+        self.p_I2R = 0.2  # TODO infer this
+        self.Rt = 2.0  # TODO compute at each time step, this is piecewise constant
+        self.is_guide = is_guide
+
+    def init(self, state, S_init, E_init, I_init, R_init=0):
+        self.t = 0
+        if not self.is_guide:
+            state["S"] = pyro.sample("S_init", dist.Delta(torch.tensor(float(S_init))))
+            state["E"] = pyro.sample("E_init", dist.Delta(torch.tensor(float(E_init))))
+            state["I"] = pyro.sample("I_init", dist.Delta(torch.tensor(float(I_init))))
+            state["R"] = pyro.sample("R_init", dist.Delta(torch.tensor(float(R_init))))
+            state["I_accum"] = torch.zeros_like(state["I"])
+
+    def step(self, state, I_obs=None):
+        t = self.t
+        k = self.k
+        Beta = self.Beta
+        Rt = self.Rt
+        p_E2I = self.p_E2I
+        p_I2R = self.p_I2R
+        rate_I2R = 0.2
+
+        S = state["S"]
+        E = state["E"]
+        I = state["I"]
+        R = state["R"]
+        I_accum = state["I_accum"]
+
+        # Becoming infectious: E --> I
+        E2I = pyro.sample("E2I_{}".format(t), dist.Binomial(E, p_E2I))
+
+        # Recoveries: I --> R
+        I2R = pyro.sample("I2R_{}".format(t), dist.Binomial(I, p_I2R))
+
+        # Infections: S --> E
+        Rt = Beta / rate_I2R * S
+        # FIXME The following is not truncated.
+        #       Consider refactoring to use make_beta_binomial(mean, dispersion).
+        # S2E = pyro.sample("S2E_{}".format(self.t),
+        #                   dist.NegativeBinomial(k * I2R, k / (k + Rt)))
+        S2E = pyro.sample("S2E_{}".format(self.t),
+                          dist.BetaBinomial(0.5, 0.5, total_count=S))
+
+        S = S - S2E
+        E = E + S2E - E2I
+        I = I + E2I - I2R
+        R = R + I2R
+        self.t += 1
+        if self.is_guide:
+            return
+
+        if I_obs is None:
+            I_accum = I_accum + I
+        else:
+            # FIXME This may error rather than returning -inf for large observations.
+            #       consider setting validate_args=False.
+            # TODO allow binomial distribution to return -inf out of its support.
+            supported = I_obs <= I_accum
+            with poutine.mask(mask=supported):
+                pyro.sample("obs_good_{}".format(t),
+                            dist.Binomial(I_accum, self.reporting_rate,
+                                          validate_args=False),
+                            obs=torch.tensor(float(I_obs)).masked_fill_(~supported, 0))
+            with poutine.mask(mask=~supported):
+                pyro.sample("obs_bad_{}".format(t),
+                            dist.Delta(I_accum),
+                            obs=torch.tensor(float(I_obs)))
+            I_accum = torch.zeros_like(I_accum)
+
+        state["S"] = S
+        state["E"] = E
+        state["I"] = I
+        state["R"] = R
+        state["I_accum"] = I_accum
+
+
+def test_seir():
+    data = [2, 10, None, None, 20, 50, 100, None, 500, None, 10, None, 10, 5, 1, 1]
+
+    model = SEIRModel()
+    # TODO if guide is None, sample from prior (i.e. model)
+    guide = SEIRModel(is_guide=True)  # proprose from prior
+    smc = SMCFilter(model, guide, num_particles=1000, max_plate_nesting=0)
+    smc.init(S_init=10000, E_init=1, I_init=1)
+    for t, datum in enumerate(data):
+        smc.step(datum)
