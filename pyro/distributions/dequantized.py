@@ -33,7 +33,7 @@ class DequantizedDistribution(TorchDistribution):
         b ~ Bernoulli(1 + floor(r) - r)      # Quantize.
         z = floor(r) + b
 
-    Earth mover distance error is upper bounded by 1/2.
+    Earth mover distance error is upper bounded by 1/3.
 
     :param base_dist: A distribution with
         ``.support == constraints.nonnegative_integer`` and
