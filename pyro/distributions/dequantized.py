@@ -60,9 +60,9 @@ class DequantizedDistribution(TorchDistribution):
     def sample(self, sample_shape=torch.Size()):
         value = self.base_dist.sample(sample_shape)
         # Add uniform triangular noise in [-1,1]
-        noise = value.new_empty(value.shape).uniform_(-0.25, 0.25)
+        noise = value.new_empty(value.shape).uniform_(-1, 1)
         sign = noise.sign()
-        noise.abs_().sqrt_().add_(-0.5).mul_(sign).add_(0.5)
+        noise.abs_().sqrt_().sub_(1).mul_(sign)
         # Ensure result is nonnegative.
         return noise.add_(value).abs_()
 
