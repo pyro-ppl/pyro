@@ -390,3 +390,79 @@ def test_reparam_stable(kernel, kwargs):
 
     mcmc_kernel = kernel(model, max_plate_nesting=0, **kwargs)
     assert_ok(mcmc_kernel)
+
+
+@pytest.mark.parametrize("kernel, kwargs", [
+    (HMC, {"adapt_step_size": True, "num_steps": 3}),
+    (NUTS, {"adapt_step_size": True}),
+])
+def test_dequantized_sequential(kernel, kwargs):
+    data = torch.tensor([1., 5., 10., 8., 2., 4., 2., 1., 0., 1.])
+
+    def model():
+        s2i_factor = pyro.sample("s2i_factor", dist.Uniform(0, 1))
+        i2r_factor = pyro.sample("i2r_factor", dist.Uniform(0, 1))
+        response_rate = pyro.sample("response_rate", dist.Uniform(0, 1))
+
+        s = torch.tensor(99.)
+        i = torch.tensor(1.)
+        r = torch.tensor(0.)
+        pop = s + i + r
+        for t, datum in enumerate(data):
+            s2i_prob = i / pop * s2i_factor
+            i2r_prob = i / pop * i2r_factor
+            s2i = pyro.sample("s2i_{}".format(t),
+                              dist.DequantizedDistribution(
+                                  dist.ContinuousBinomial(s, s2i_prob)))
+            i2r = pyro.sample("i2r_{}".format(t),
+                              dist.DequantizedDistribution(
+                                  dist.ContinuousBinomial(i, i2r_prob)))
+            s = s - s2i
+            i = i + s2i - i2r
+            pyro.sample("obs_{}".format(t),
+                        dist.ContinuousBinomial(i, response_rate),
+                        obs=datum)
+
+    mcmc_kernel = kernel(model, max_plate_nesting=1, **kwargs)
+    assert_ok(mcmc_kernel)
+
+
+@pytest.mark.parametrize("kernel, kwargs", [
+    (HMC, {"adapt_step_size": True, "num_steps": 3}),
+    (NUTS, {"adapt_step_size": True}),
+])
+def test_dequantized_vectorized(kernel, kwargs):
+    data = torch.tensor([1., 5., 10., 8., 2., 4., 2., 1., 0., 1.])
+
+    def model():
+        s2i_factor = pyro.sample("s2i_factor", dist.Beta(2, 2))
+        i2r_factor = pyro.sample("i2r_factor", dist.Uniform(0, 1))
+        response_rate = pyro.sample("response_rate", dist.Uniform(0, 1))
+
+        s0 = torch.tensor(99.)
+        i0 = torch.tensor(1.)
+        r0 = torch.tensor(0.)
+        pop = s0 + i0 + r0
+        with pyro.plate("time", len(data)):
+            # This is modeled as a factor graph so we can vectorize.
+            with poutine.mask(mask=False):
+                s2i = pyro.sample("s2i_support", dist.Exponential(1e-2))
+                i2r = pyro.sample("s2i_support", dist.Exponential(1e-2))
+
+            s = s0 - s2i.cumsum(dim=-1)
+            i = i0 + (s2i - i2r).cumsum(dim=-1)
+            s2i_prob = i / pop * s2i_factor
+            i2r_prob = i / pop * i2r_factor
+            pyro.sample("s2i",
+                        dist.DequantizedDistribution(
+                            dist.ContinuousBinomial(s, s2i_prob)),
+                        obs=s2i)
+            pyro.sample("i2r",
+                        dist.DequantizedDistribution(
+                            dist.ContinuousBinomial(i, i2r_prob)))
+            pyro.sample("obs",
+                        dist.ContinuousBinomial(i, response_rate),
+                        obs=data)
+
+    mcmc_kernel = kernel(model, max_plate_nesting=1, **kwargs)
+    assert_ok(mcmc_kernel)
