@@ -413,14 +413,14 @@ def test_dequantized_sequential(kernel, kwargs):
             i2r_prob = i / pop * i2r_factor
             s2i = pyro.sample("s2i_{}".format(t),
                               dist.DequantizedDistribution(
-                                  dist.ContinuousBinomial(s, s2i_prob)))
+                                  dist.ExtendedBinomial(s, s2i_prob)))
             i2r = pyro.sample("i2r_{}".format(t),
                               dist.DequantizedDistribution(
-                                  dist.ContinuousBinomial(i, i2r_prob)))
+                                  dist.ExtendedBinomial(i, i2r_prob)))
             s = s - s2i
             i = i + s2i - i2r
             pyro.sample("obs_{}".format(t),
-                        dist.ContinuousBinomial(i, response_rate),
+                        dist.ExtendedBinomial(i, response_rate),
                         obs=datum)
 
     mcmc_kernel = kernel(model, max_plate_nesting=1, **kwargs)
@@ -455,13 +455,13 @@ def test_dequantized_vectorized(kernel, kwargs):
             i2r_prob = i / pop * i2r_factor
             pyro.sample("s2i",
                         dist.DequantizedDistribution(
-                            dist.ContinuousBinomial(s, s2i_prob)),
+                            dist.ExtendedBinomial(s, s2i_prob)),
                         obs=s2i)
             pyro.sample("i2r",
                         dist.DequantizedDistribution(
-                            dist.ContinuousBinomial(i, i2r_prob)))
+                            dist.ExtendedBinomial(i, i2r_prob)))
             pyro.sample("obs",
-                        dist.ContinuousBinomial(i, response_rate),
+                        dist.ExtendedBinomial(i, response_rate),
                         obs=data)
 
     mcmc_kernel = kernel(model, max_plate_nesting=1, **kwargs)
