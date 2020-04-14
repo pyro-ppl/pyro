@@ -69,7 +69,7 @@ class ExtendedBinomial(TorchDistribution):
     def sample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         weights, quantized = self._mixture
-        bern = weights[..., 1].expand(shape + (1,)).bernoulli().byte()
+        bern = weights[..., 1].expand(shape).bernoulli().byte()
         lb, ub = quantized.expand(shape + (2,)).unbind(-1)
         total_count = torch.where(bern, ub, lb).squeeze(-1)
         return Binomial(total_count, self.probs).sample()
@@ -77,8 +77,8 @@ class ExtendedBinomial(TorchDistribution):
     def log_prob(self, value):
         value = value.unsqueeze(-1)
         weights, quantized = self._mixture
-        log_prob = Binomial(quantized,
-                            self.probs.unsqueeze(-1)).log_prob(value)
+        log_prob = Binomial(quantized, self.probs.unsqueeze(-1),
+                            validate_args=False).log_prob(value)
         log_prob = log_prob.masked_fill(value > quantized, -math.inf)
         log_prob = (log_prob + weights.log()).logsumexp(dim=-1)
         return log_prob

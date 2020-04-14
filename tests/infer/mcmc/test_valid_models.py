@@ -450,7 +450,7 @@ def test_dequantized_vectorized(kernel, kwargs):
                 i2r = pyro.sample("i2r_support", dist.Exponential(1e-2))
 
             s = (s0 - s2i.cumsum(dim=-1)).clamp(min=0)
-            i = (i0 + (s2i - i2r).cumsum(dim=-1).clamp(min=0, max=pop)
+            i = (i0 + s2i - i2r).cumsum(dim=-1).clamp(min=0, max=pop)
             s2i_prob = i / pop * s2i_factor
             i2r_prob = i / pop * i2r_factor
             pyro.sample("s2i",
