@@ -14,11 +14,10 @@ from .torch_distribution import TorchDistribution
 
 class ExtendedBinomial(TorchDistribution):
     """
-    Dequantized :class:`~pyro.distributions.Binomial` distribution whose
-    ``total_count`` is a positive real number, and whose random value is a
-    nonnegative integer.
+    Extension of a :class:`~pyro.distributions.Binomial` distribution to allow
+    positive real ``total_count`` and unbounded nonnegative integer samples.
 
-    This distribution is equivalent to a ``MixtureSameFamily`` over two mixture
+    This agrees in distribution with a ``MixtureSameFamily`` over two mixture
     components. If ``n = total_count`` then the two components are:
 
     - ``Binomial(floor(n), probs)`` with weight ``1 + floor(n) - n``, and
@@ -89,9 +88,9 @@ class ExtendedBinomial(TorchDistribution):
 
 class ExtendedBetaBinomial(TorchDistribution):
     """
-    Dequantized :class:`~pyro.distributions.BetaBinomial` distribution whose
-    ``total_count`` is a positive real number, and whose random value is a
-    nonnegative integer.
+    Extension of a :class:`~pyro.distributions.BetaBinomial` distribution to
+    allow positive real ``total_count`` and unbounded nonnegative integer
+    samples.
 
     The following three models result in identical distributions over ``z``,
     conditioned on inputs ``c1, c0, n``.
