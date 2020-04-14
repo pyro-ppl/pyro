@@ -13,12 +13,17 @@ class DequantizedDistribution(TorchDistribution):
     """
     Dequantized distribution over relaxed counts.
 
+    The density of this distribution linearly interpolates the density of
+    ``base_dist``, except in the interval ``[0,1]`` where the weight of 0 is
+    doubled to account for asymmetry.
+
     Given a distribution ``base_dist`` over nonnegative integers, this creates
     a distribution over positive reals such that randomly rounded samples from
-    this distribution will be distributed according to ``base_dist``.
+    this distribution will be distributed approximately according to
+    ``base_dist``.
 
-    For example the following two models result in identical distributions
-    over ``z``, conditioned on inputs ``n, p``.
+    For example the following two models result in approximately identical
+    distributions over ``z``, conditioned on inputs ``n, p``.
 
         # Model 1.
         z ~ Binomial(n, p)
@@ -28,9 +33,7 @@ class DequantizedDistribution(TorchDistribution):
         b ~ Bernoulli(1 + floor(r) - r)      # Quantize.
         z = floor(r) + b
 
-    The density of this distribution linearly interpolates the density of
-    ``base_dist``, except in the interval ``[0,1]`` where the weight of 0 is
-    doubled to account for asymmetry.
+    Earth mover distance error is upper bounded by 1/2.
 
     :param base_dist: A distribution with
         ``.support == constraints.nonnegative_integer`` and
@@ -39,7 +42,7 @@ class DequantizedDistribution(TorchDistribution):
     """
     arg_constraints = {}
     support = constraints.positive  # Note lack of upper bound.
-    has_rsample = False  # TODO implement .rsample() based on base_dist.cdf().
+    has_rsample = True
 
     def __init__(self, base_dist, validate_args=None):
         self.base_dist = base_dist
@@ -63,6 +66,14 @@ class DequantizedDistribution(TorchDistribution):
         # Ensure result is nonnegative.
         return noise.sub_(value).abs_()
 
+    def rsample(self, sample_shape=torch.Size()):
+        value = self.sample(sample_shape)
+        lb = value.floor()
+        quantized = torch.stack([lb, lb + 1])
+        p0, p1 = self.base_dist.log_prob(quantized).exp()
+        diff = p1 - p0
+        return value + (diff - diff.detach())
+
     def log_prob(self, value):
         missing_dims = len(self.batch_shape) - value.dim()
         if missing_dims:
@@ -76,6 +87,6 @@ class DequantizedDistribution(TorchDistribution):
         # Account for asymmetry at the interval [0,1].
         log_prob = torch.where(quantized == 0, log_prob, log_prob + math.log(2))
         # Allow unbounded support (required by many applications).
-        log_prob.masked_fill(quantized > ub, -math.inf)
+        log_prob = log_prob.masked_fill(quantized > ub, -math.inf)
         logits = torch.stack([ub - value, value - lb]).log()
         return (logits + log_prob).logsumexp(dim=0)  # Mixture.

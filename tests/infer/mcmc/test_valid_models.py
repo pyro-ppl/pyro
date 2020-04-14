@@ -397,7 +397,7 @@ def test_reparam_stable(kernel, kwargs):
     (NUTS, {"adapt_step_size": True}),
 ])
 def test_dequantized_sequential(kernel, kwargs):
-    data = torch.tensor([1., 5., 10., 8., 2., 4., 2., 1., 0., 1.])
+    data = torch.tensor([1., 5., 10., 4.])
 
     def model():
         s2i_factor = pyro.sample("s2i_factor", dist.Uniform(0, 1))
@@ -417,8 +417,8 @@ def test_dequantized_sequential(kernel, kwargs):
             i2r = pyro.sample("i2r_{}".format(t),
                               dist.DequantizedDistribution(
                                   dist.ExtendedBinomial(i, i2r_prob)))
-            s = s - s2i
-            i = i + s2i - i2r
+            s = (s - s2i).clamp(min=0)
+            i = (i + s2i - i2r).clamp(min=0, max=pop)
             pyro.sample("obs_{}".format(t),
                         dist.ExtendedBinomial(i, response_rate),
                         obs=datum)
@@ -447,10 +447,10 @@ def test_dequantized_vectorized(kernel, kwargs):
             # This is modeled as a factor graph so we can vectorize.
             with poutine.mask(mask=False):
                 s2i = pyro.sample("s2i_support", dist.Exponential(1e-2))
-                i2r = pyro.sample("s2i_support", dist.Exponential(1e-2))
+                i2r = pyro.sample("i2r_support", dist.Exponential(1e-2))
 
-            s = s0 - s2i.cumsum(dim=-1)
-            i = i0 + (s2i - i2r).cumsum(dim=-1)
+            s = (s0 - s2i.cumsum(dim=-1)).clamp(min=0)
+            i = (i0 + (s2i - i2r).cumsum(dim=-1).clamp(min=0, max=pop)
             s2i_prob = i / pop * s2i_factor
             i2r_prob = i / pop * i2r_factor
             pyro.sample("s2i",

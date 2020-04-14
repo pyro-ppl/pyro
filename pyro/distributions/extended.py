@@ -59,31 +59,29 @@ class ExtendedBinomial(TorchDistribution):
 
     @lazy_property
     def _mixture(self):
-        # Compare to MixtureSameFamily after it is released.
         n = self.total_count.unsqueeze(-1)
         lb = n.detach().floor()
         ub = lb + 1
-        weights = n - lb
+        weights = torch.cat([ub - n, n - lb], dim=-1)
         quantized = torch.cat([lb, ub], dim=-1)
         return weights, quantized
 
     def sample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
-        weights, total_count = self._mixture
-        bern = weights.expand(shape + (1,)).bernoulli()
-        lb, ub = total_count.expand(shape + (2,)).unbind(-1)
-        total_count = torch.where(bern, ub, lb)
+        weights, quantized = self._mixture
+        bern = weights[..., 1].expand(shape + (1,)).bernoulli().byte()
+        lb, ub = quantized.expand(shape + (2,)).unbind(-1)
+        total_count = torch.where(bern, ub, lb).squeeze(-1)
         return Binomial(total_count, self.probs).sample()
 
     def log_prob(self, value):
         value = value.unsqueeze(-1)
-        weights, total_count = self._mixture
-        base_dist = Binomial(total_count, self.probs.unsqueeze(-1), validate_args=False)
-        log_probs = base_dist.log_prob(value)
-        log_probs.masked_fill_(value > total_count, -math.inf)
-        logits = torch.cat([(-weights).log1p(), weights.log()], dim=-1)
-        log_probs = (log_probs + logits).logsumexp(dim=-1)
-        return log_probs
+        weights, quantized = self._mixture
+        log_prob = Binomial(quantized,
+                            self.probs.unsqueeze(-1)).log_prob(value)
+        log_prob = log_prob.masked_fill(value > quantized, -math.inf)
+        log_prob = (log_prob + weights.log()).logsumexp(dim=-1)
+        return log_prob
 
 
 class ExtendedBetaBinomial(TorchDistribution):
@@ -133,18 +131,25 @@ class ExtendedBetaBinomial(TorchDistribution):
         new._validate_args = self._validate_args
         return new
 
+    @lazy_property
+    def _mixture(self):
+        n = self.total_count.unsqueeze(-1)
+        lb = n.detach().floor()
+        ub = lb + 1
+        weights = torch.cat([ub - n, n - lb], dim=-1)
+        quantized = torch.cat([lb, ub], dim=-1)
+        return weights, quantized
+
     def sample(self, sample_shape=torch.Size()):
         probs = Beta(self.concentration1, self.concentration0).sample(sample_shape)
         return ExtendedBinomial(self.total_count, probs).sample()
 
     def log_prob(self, value):
         value = value.unsqueeze(-1)
-        weights, total_count = self._mixture
-        base_dist = BetaBinomial(self.concentration1.unsqueeze(-1),
-                                 self.concentration0.unsqueeze(-1),
-                                 total_count, validate_args=False)
-        log_probs = base_dist.log_prob(value)
-        log_probs.masked_fill_(value > total_count, -math.inf)
-        logits = torch.cat([(-weights).log1p(), weights.log()], dim=-1)
-        log_probs = (log_probs + logits).logsumexp(dim=-1)
-        return log_probs
+        weights, quantized = self._mixture
+        log_prob = BetaBinomial(self.concentration1.unsqueeze(-1),
+                                self.concentration0.unsqueeze(-1),
+                                quantized).log_prob(value)
+        log_prob = log_prob.masked_fill(value > quantized, -math.inf)
+        log_prob = (log_prob + weights.log()).logsumexp(dim=-1)
+        return log_prob
