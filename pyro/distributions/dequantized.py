@@ -70,7 +70,8 @@ class DequantizedDistribution(TorchDistribution):
         value = self.sample(sample_shape)
         lb = value.floor()
         quantized = torch.stack([lb, lb + 1])
-        p0, p1 = self.base_dist.log_prob(quantized).exp()
+        raise NotImplementedError("FIXME")
+        p0, p1 = self.base_dist.cdf(quantized)
         diff = p1 - p0
         return value + (diff - diff.detach())
 
