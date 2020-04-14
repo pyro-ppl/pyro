@@ -42,7 +42,7 @@ class DequantizedDistribution(TorchDistribution):
     """
     arg_constraints = {}
     support = constraints.positive  # Note lack of upper bound.
-    has_rsample = True
+    has_rsample = False  # TODO implement .rsample() based on base_dist.cdf().
 
     def __init__(self, base_dist, validate_args=None):
         self.base_dist = base_dist
@@ -62,18 +62,9 @@ class DequantizedDistribution(TorchDistribution):
         # Add uniform triangular noise in [-1,1]
         noise = value.new_empty(value.shape).uniform_(-0.25, 0.25)
         sign = noise.sign()
-        noise.abs_().sqrt_().mul_(sign).add_(0.5)
+        noise.abs_().sqrt_().add_(-0.5).mul_(sign).add_(0.5)
         # Ensure result is nonnegative.
-        return noise.sub_(value).abs_()
-
-    def rsample(self, sample_shape=torch.Size()):
-        value = self.sample(sample_shape)
-        lb = value.floor()
-        quantized = torch.stack([lb, lb + 1])
-        raise NotImplementedError("FIXME")
-        p0, p1 = self.base_dist.cdf(quantized)
-        diff = p1 - p0
-        return value + (diff - diff.detach())
+        return noise.add_(value).abs_()
 
     def log_prob(self, value):
         missing_dims = len(self.batch_shape) - value.dim()

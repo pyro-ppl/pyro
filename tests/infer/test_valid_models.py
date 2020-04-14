@@ -15,7 +15,6 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, EnergyDistance, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
                         TraceTailAdaptive_ELBO, config_enumerate)
-from pyro.infer.autoguide import AutoNormal
 from pyro.infer.reparam import LatentStableReparam
 from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import torch_item
@@ -2172,72 +2171,4 @@ def test_reparam_stable():
         pyro.sample("z_uniform", dist.Delta(torch.tensor(0.1)))
         pyro.sample("z_exponential", dist.Delta(torch.tensor(1.)))
 
-    assert_ok(model, guide, Trace_ELBO())
-
-
-def test_dequantized_sequential():
-    data = torch.tensor([1., 5., 10., 4.])
-
-    def model():
-        s2i_factor = pyro.sample("s2i_factor", dist.Uniform(0, 1))
-        i2r_factor = pyro.sample("i2r_factor", dist.Uniform(0, 1))
-        response_rate = pyro.sample("response_rate", dist.Uniform(0, 1))
-
-        s = torch.tensor(99.)
-        i = torch.tensor(1.)
-        r = torch.tensor(0.)
-        pop = s + i + r
-        for t, datum in enumerate(data):
-            s2i_prob = i / pop * s2i_factor
-            i2r_prob = i / pop * i2r_factor
-            s2i = pyro.sample("s2i_{}".format(t),
-                              dist.DequantizedDistribution(
-                                  dist.ExtendedBinomial(s, s2i_prob)))
-            i2r = pyro.sample("i2r_{}".format(t),
-                              dist.DequantizedDistribution(
-                                  dist.ExtendedBinomial(i, i2r_prob)))
-            s = (s - s2i).clamp(min=0)
-            i = (i + s2i - i2r).clamp(min=0, max=pop)
-            pyro.sample("obs_{}".format(t),
-                        dist.ExtendedBinomial(i, response_rate),
-                        obs=datum)
-
-    guide = AutoNormal(model)
-    assert_ok(model, guide, Trace_ELBO())
-
-
-def test_dequantized_vectorized():
-    data = torch.tensor([1., 5., 10., 8., 2., 4., 2., 1., 0., 1.])
-
-    def model():
-        s2i_factor = pyro.sample("s2i_factor", dist.Beta(2, 2))
-        i2r_factor = pyro.sample("i2r_factor", dist.Uniform(0, 1))
-        response_rate = pyro.sample("response_rate", dist.Uniform(0, 1))
-
-        s0 = torch.tensor(99.)
-        i0 = torch.tensor(1.)
-        r0 = torch.tensor(0.)
-        pop = s0 + i0 + r0
-        with pyro.plate("time", len(data)):
-            # This is modeled as a factor graph so we can vectorize.
-            with poutine.mask(mask=False):
-                s2i = pyro.sample("s2i_support", dist.Exponential(1e-2))
-                i2r = pyro.sample("i2r_support", dist.Exponential(1e-2))
-
-            s = (s0 - s2i.cumsum(dim=-1)).clamp(min=0)
-            i = (i0 + s2i - i2r).cumsum(dim=-1).clamp(min=0, max=pop)
-            s2i_prob = i / pop * s2i_factor
-            i2r_prob = i / pop * i2r_factor
-            pyro.sample("s2i",
-                        dist.DequantizedDistribution(
-                            dist.ExtendedBinomial(s, s2i_prob)),
-                        obs=s2i)
-            pyro.sample("i2r",
-                        dist.DequantizedDistribution(
-                            dist.ExtendedBinomial(i, i2r_prob)))
-            pyro.sample("obs",
-                        dist.ExtendedBinomial(i, response_rate),
-                        obs=data)
-
-    guide = AutoNormal(model)
     assert_ok(model, guide, Trace_ELBO())
