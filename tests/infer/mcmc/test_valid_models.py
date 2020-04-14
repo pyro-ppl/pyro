@@ -393,11 +393,12 @@ def test_reparam_stable(kernel, kwargs):
 
 
 @pytest.mark.parametrize("kernel, kwargs", [
-    (HMC, {"adapt_step_size": True, "num_steps": 3}),
+    (HMC, {"adapt_step_size": True, "num_steps": 2, "trajectory_length": 1}),
     (NUTS, {"adapt_step_size": True}),
 ])
 def test_dequantized_sequential(kernel, kwargs):
     data = torch.tensor([1., 5., 2.])
+    logger.debug("len(data) = {}".format(len(data)))
 
     def model():
         s2i_factor = pyro.sample("s2i_factor", dist.Uniform(0, 1))
@@ -426,18 +427,19 @@ def test_dequantized_sequential(kernel, kwargs):
                         dist.ExtendedBinomial(i, response_rate),
                         obs=datum)
             trajectory.append(i.item())
-        logger.debug(" ".join(map("{:0.3g}".format, trajectory)))
+        # logger.debug(" ".join(map("{:0.3g}".format, trajectory)))
 
     mcmc_kernel = kernel(model, max_plate_nesting=1, **kwargs)
     assert_ok(mcmc_kernel)
 
 
 @pytest.mark.parametrize("kernel, kwargs", [
-    (HMC, {"adapt_step_size": True, "num_steps": 3}),
+    (HMC, {"adapt_step_size": True, "num_steps": 2, "trajectory_length": 1}),
     (NUTS, {"adapt_step_size": True}),
 ])
 def test_dequantized_vectorized_1(kernel, kwargs):
     data = torch.tensor([1., 5., 10., 8., 2., 4., 2., 1., 0., 1.])
+    logger.debug("len(data) = {}".format(len(data)))
 
     def model():
         s2i_factor = pyro.sample("s2i_factor", dist.Beta(2, 2))
@@ -468,18 +470,19 @@ def test_dequantized_vectorized_1(kernel, kwargs):
             pyro.sample("obs",
                         dist.ExtendedBinomial(i, response_rate),
                         obs=data)
-        logger.debug(" ".join(map("{:0.3g}".format, i)))
+        # logger.debug(" ".join(map("{:0.3g}".format, i)))
 
     mcmc_kernel = kernel(model, max_plate_nesting=1, **kwargs)
     assert_ok(mcmc_kernel)
 
 
 @pytest.mark.parametrize("kernel, kwargs", [
-    (HMC, {"adapt_step_size": True, "num_steps": 3}),
+    (HMC, {"adapt_step_size": True, "num_steps": 2, "trajectory_length": 1}),
     (NUTS, {"adapt_step_size": True}),
 ])
 def test_dequantized_vectorized_2(kernel, kwargs):
     data = torch.tensor([1., 5., 10., 8., 2., 4., 2., 1., 0., 1.])
+    logger.debug("len(data) = {}".format(len(data)))
 
     def model():
         s2i_factor = pyro.sample("s2i_factor", dist.Beta(2, 2))
@@ -526,7 +529,7 @@ def test_dequantized_vectorized_2(kernel, kwargs):
             pyro.sample("obs",
                         dist.ExtendedBinomial(i, response_rate),
                         obs=data)
-        logger.debug(" ".join(map("{:0.3g}".format, i)))
+        # logger.debug(" ".join(map("{:0.3g}".format, i)))
 
     mcmc_kernel = kernel(model, max_plate_nesting=1, **kwargs)
     assert_ok(mcmc_kernel)
