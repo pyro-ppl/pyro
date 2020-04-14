@@ -77,7 +77,7 @@ class DequantizedDistribution(TorchDistribution):
 
         log_prob = self.base_dist.log_prob(quantized)
         # Account for asymmetry at the interval [0,1].
-        log_prob = torch.where(quantized == 0, log_prob, log_prob + math.log(2))
+        log_prob = torch.where(quantized == 0, log_prob + math.log(2), log_prob)
         # Allow unbounded support (required by many applications).
         log_prob = log_prob.masked_fill(quantized > ub, -math.inf)
         logits = torch.stack([ub - value, value - lb]).log()
