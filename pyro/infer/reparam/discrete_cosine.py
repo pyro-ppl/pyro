@@ -38,6 +38,8 @@ class DiscreteCosineReparam(Reparam):
                                            "try converting a batch dimension to an event dimension")
 
         # Draw noise from the base distribution.
+        # TODO Use biject_to(fn.support).inv.with_cache(1) once the following merges:
+        # https://github.com/probtorch/pytorch/pull/153
         transform = ComposeTransform([biject_to(fn.support).inv,
                                       DiscreteCosineTransform(dim=self.dim, cache_size=1)])
         x_dct = pyro.sample("{}_dct".format(name),
