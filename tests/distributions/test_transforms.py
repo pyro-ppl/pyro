@@ -128,6 +128,9 @@ class TransformTests(TestCase):
     def test_conditional_affine_coupling(self):
         self._test_conditional(T.conditional_affine_coupling)
 
+    def test_conditional_neural_autoregressive(self):
+        self._test_conditional(T.conditional_affine_coupling, inverse=False)
+
     def test_conditional_planar(self):
         self._test_conditional(T.conditional_planar, inverse=False)
 

@@ -7,13 +7,16 @@ import math
 
 import torch
 import torch.nn as nn
+from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform, SigmoidTransform
 import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
-from pyro.nn import AutoRegressiveNN
+from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
+
+from functools import partial
 
 eps = 1e-8
 
@@ -231,6 +234,68 @@ class NeuralAutoregressive(TransformModule):
         return log_det.sum(-1)
 
 
+@copy_docs_from(ConditionalTransformModule)
+class ConditionalNeuralAutoregressive(ConditionalTransformModule):
+    """
+    An implementation of the deep Neural Autoregressive Flow (NAF) bijective
+    transform of the "IAF flavour" conditioning on an additiona context variable
+    that can be used for sampling and scoring samples drawn from it (but not
+    arbitrary ones).
+
+    Example usage:
+
+    >>> from pyro.nn import ConditionalAutoRegressiveNN
+    >>> input_dim = 10
+    >>> context_dim = 5
+    >>> batch_size = 3
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> arn = ConditionalAutoRegressiveNN(input_dim, context_dim, [40],
+    ... param_dims=[16]*3)
+    >>> transform = ConditionalNeuralAutoregressive(arn, hidden_units=16)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
+    ... [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size]))  # doctest: +SKIP
+
+    The inverse operation is not implemented. This would require numerical
+    inversion, e.g., using a root finding method - a possibility for a future
+    implementation.
+
+    :param autoregressive_nn: an autoregressive neural network whose forward call
+        returns a tuple of three real-valued tensors, whose last dimension is the
+        input dimension, and whose penultimate dimension is equal to hidden_units.
+    :type autoregressive_nn: nn.Module
+    :param hidden_units: the number of hidden units to use in the NAF transformation
+        (see Eq (8) in reference)
+    :type hidden_units: int
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU',
+        'sigmoid', or 'tanh'.
+    :type activation: string
+
+    Reference:
+
+    [1] Chin-Wei Huang, David Krueger, Alexandre Lacoste, Aaron Courville. Neural
+    Autoregressive Flows. [arXiv:1804.00779]
+
+
+    """
+
+    domain = constraints.real
+    codomain = constraints.real
+    bijective = True
+    event_dim = 1
+
+    def __init__(self, autoregressive_nn, **kwargs):
+        super().__init__()
+        self.arn = autoregressive_nn
+        self.kwargs = kwargs
+
+    def condition(self, context):
+        cond_nn = partial(self.arn, context=context)
+        return NeuralAutoregressive(cond_nn, **self.kwargs)
+
+
 def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', width=16):
     """
     A helper function to create a
@@ -256,3 +321,32 @@ def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', wid
         hidden_dims = [3 * input_dim + 1]
     arn = AutoRegressiveNN(input_dim, hidden_dims, param_dims=[width] * 3)
     return NeuralAutoregressive(arn, hidden_units=width, activation=activation)
+
+
+def conditional_neural_autoregressive(input_dim, context_dim, hidden_dims=None, activation='sigmoid', width=16):
+    """
+    A helper function to create a
+    :class:`~pyro.distributions.transforms.ConditionalNeuralAutoregressive` object
+    that takes care of constructing an autoregressive network with the correct
+    input/output dimensions.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param context_dim: Dimension of context variable
+    :type context_dim: int
+    :param hidden_dims: The desired hidden dimensions of the autoregressive network.
+        Defaults to using [3*input_dim + 1]
+    :type hidden_dims: list[int]
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU',
+        'sigmoid', or 'tanh'.
+    :type activation: string
+    :param width: The width of the "multilayer perceptron" in the transform (see
+        paper). Defaults to 16
+    :type width: int
+
+    """
+
+    if hidden_dims is None:
+        hidden_dims = [3 * input_dim + 1]
+    arn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims, param_dims=[width] * 3)
+    return ConditionalNeuralAutoregressive(arn, hidden_units=width, activation=activation)

@@ -17,7 +17,10 @@ from pyro.distributions.transforms.generalized_channel_permute import (Generaliz
 from pyro.distributions.transforms.householder import Householder, householder
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
 from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, LeakyReLUTransform,
-                                                                 TanhTransform, NeuralAutoregressive,
+                                                                 TanhTransform,
+                                                                 ConditionalNeuralAutoregressive,
+                                                                 conditional_neural_autoregressive,
+                                                                 NeuralAutoregressive,
                                                                  neural_autoregressive,
                                                                  elu, leaky_relu, tanh)
 from pyro.distributions.transforms.permute import Permute, permute
@@ -65,6 +68,7 @@ __all__ = [
     'BlockAutoregressive',
     'ComposeTransformModule',
     'ConditionalAffineCoupling',
+    'ConditionalNeuralAutoregressive',
     'ConditionalPlanar',
     'ConditionalRadial',
     'CorrLCholeskyTransform',
@@ -87,6 +91,7 @@ __all__ = [
     'batchnorm',
     'block_autoregressive',
     'conditional_affine_coupling',
+    'conditional_neural_autoregressive',
     'conditional_planar',
     'conditional_radial',
     'elu',

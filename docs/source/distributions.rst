@@ -385,6 +385,13 @@ ConditionalAffineCoupling
     :undoc-members:
     :show-inheritance:
 
+ConditionalNeuralAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalNeuralAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalPlanar
 -----------------
 .. autoclass:: pyro.distributions.transforms.ConditionalPlanar
@@ -505,6 +512,10 @@ block_autoregressive
 conditional_affine_coupling
 ---------------------------
 .. autofunction:: pyro.distributions.transforms.conditional_affine_coupling
+
+conditional_neural_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_neural_autoregressive
 
 conditional_planar
 ------------------
