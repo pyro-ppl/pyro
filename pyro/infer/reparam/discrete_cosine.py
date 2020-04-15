@@ -1,6 +1,9 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+from torch.distributions import biject_to
+from torch.distributions.transforms import ComposeTransform
+
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
@@ -35,7 +38,8 @@ class DiscreteCosineReparam(Reparam):
                                            "try converting a batch dimension to an event dimension")
 
         # Draw noise from the base distribution.
-        transform = DiscreteCosineTransform(dim=self.dim, cache_size=1)
+        transform = ComposeTransform([biject_to(fn.support).inv,
+                                      DiscreteCosineTransform(dim=self.dim, cache_size=1)])
         x_dct = pyro.sample("{}_dct".format(name),
                             dist.TransformedDistribution(fn, transform))
 
