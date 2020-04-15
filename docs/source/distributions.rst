@@ -385,6 +385,13 @@ ConditionalAffineCoupling
     :undoc-members:
     :show-inheritance:
 
+ConditionalHouseholder
+----------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalHouseholder
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalPlanar
 -----------------
 .. autoclass:: pyro.distributions.transforms.ConditionalPlanar
@@ -505,6 +512,10 @@ block_autoregressive
 conditional_affine_coupling
 ---------------------------
 .. autofunction:: pyro.distributions.transforms.conditional_affine_coupling
+
+conditional_householder
+-----------------------
+.. autofunction:: pyro.distributions.transforms.conditional_householder
 
 conditional_planar
 ------------------
