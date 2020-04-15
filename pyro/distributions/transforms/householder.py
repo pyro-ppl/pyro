@@ -179,7 +179,7 @@ class ConditionalHouseholder(ConditionalTransformModule):
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
     >>> param_dims = [input_dim]
     >>> hypernet = DenseNN(context_dim, [50, 50], param_dims)
-    >>> transform = ConditionalHouseholder(hypernet)
+    >>> transform = ConditionalHouseholder(input_dim, hypernet)
     >>> z = torch.rand(batch_size, context_dim)
     >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
     ... [transform]).condition(z)
@@ -190,6 +190,9 @@ class ConditionalHouseholder(ConditionalTransformModule):
     :param nn: a function inputting the context variable and outputting a triplet of
         real-valued parameters of dimensions :math:`(1, D, D)`.
     :type nn: callable
+    :param count_transforms: number of applications of Householder transformation to
+        apply.
+    :type count_transforms: int
 
     References:
 
@@ -203,7 +206,7 @@ class ConditionalHouseholder(ConditionalTransformModule):
     bijective = True
     event_dim = 1
 
-    def __init__(self, input_dim, count_transforms, nn):
+    def __init__(self, input_dim, nn, count_transforms=1):
         super().__init__()
         self.nn = nn
         self.input_dim = input_dim
@@ -264,4 +267,4 @@ def conditional_householder(input_dim, context_dim, hidden_dims=None, count_tran
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
     nn = DenseNN(context_dim, hidden_dims, param_dims=[input_dim] * count_transforms)
-    return ConditionalHouseholder(input_dim, count_transforms, nn)
+    return ConditionalHouseholder(input_dim, nn, count_transforms)
