@@ -30,6 +30,18 @@ class IndependentConstraint(Constraint):
         return result
 
 
+# TODO move this upstream to torch.distributions
+class _Integer(Constraint):
+    """
+    Constrain to integers.
+    """
+    def check(self, value):
+        return value % 1 == 0
+
+    def __repr__(self):
+        return self.__class__.__name__[1:]
+
+
 class _CorrCholesky(Constraint):
     """
     Constrains to lower-triangular square matrices with positive diagonals and
@@ -43,10 +55,12 @@ class _CorrCholesky(Constraint):
 
 
 corr_cholesky_constraint = _CorrCholesky()
+integer = _Integer()
 
 __all__ = [
     'IndependentConstraint',
     'corr_cholesky_constraint',
+    'integer',
 ]
 
 __all__.extend(torch_constraints)

@@ -106,6 +106,20 @@ EmpiricalDistribution
     :undoc-members:
     :show-inheritance:
 
+ExtendedBetaBinomial
+--------------------
+.. autoclass:: pyro.distributions.ExtendedBetaBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ExtendedBinomial
+----------------
+.. autoclass:: pyro.distributions.ExtendedBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 FoldedDistribution
 ---------------------
 .. autoclass:: pyro.distributions.FoldedDistribution
