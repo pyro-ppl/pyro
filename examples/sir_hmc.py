@@ -3,14 +3,17 @@
 
 import argparse
 import logging
+import math
 
 import torch
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import MCMC, NUTS, config_enumerate
+from pyro.infer import MCMC, NUTS, SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
+from pyro.infer.autoguide import AutoNormal
 from pyro.infer.reparam import DiscreteCosineReparam
+from pyro.optim import ClippedAdam
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -22,12 +25,11 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Binomial.log_prob() will error, whereas ExtendedBinomial.log_prob() will
 # return -inf.
 
-def discrete_model(data, population=10000):
+def discrete_model(data, population):
     # Sample global parameters.
     prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
     rho = pyro.sample("rho", dist.Uniform(0, 1))
-    population = 10000
 
     # Sequentially filter.
     S = torch.tensor(population - 1.)
@@ -40,7 +42,7 @@ def discrete_model(data, population=10000):
         S = S - S2I
         I = I + S2I - I2R
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(I, rho),  # See Note 1 above.
+                    dist.ExtendedBinomial(S2I, rho),  # See Note 1 above.
                     obs=datum)
 
 
@@ -53,13 +55,17 @@ def generate_data(args):
               "rho": torch.tensor(args.response_rate)}
     empty_data = [None] * args.duration
 
-    with poutine.trace() as tr:
-        with poutine.condition(data=params):
-            discrete_model(empty_data, args.population)
+    # We'lll retry until we get an actual outbreak.
+    for attempt in range(100):
+        with poutine.trace() as tr:
+            with poutine.condition(data=params):
+                discrete_model(empty_data, args.population)
 
-    data = torch.stack([site["value"]
-                        for site in tr.trace.nodes.values()
-                        if site["name"].startswith("obs_")])
+        data = torch.stack([site["value"]
+                            for site in tr.trace.nodes.values()
+                            if site["name"].startswith("obs_")])
+        if data.sum() > 2:
+            break
     logging.info("Generated data:\n{}".format(" ".join([str(int(x)) for x in data])))
     return data
 
@@ -71,7 +77,7 @@ def generate_data(args):
 # The following model is equivalent:
 
 @config_enumerate
-def reparameterized_discrete_model(data, population=10000):
+def reparameterized_discrete_model(data, population):
     # Sample global parameters.
     prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
@@ -99,8 +105,11 @@ def reparameterized_discrete_model(data, population=10000):
         S = S_next
         I = I_next
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(I, rho),
+                    dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
+    import sys
+    sys.stderr.write(".")
+    sys.stderr.flush()
 
 
 # By reparameterizing, we have converted to coordinates to make the model
@@ -114,13 +123,21 @@ def reparameterized_discrete_model(data, population=10000):
 #
 # Here is an inference approch using the NUTS sampler.
 
-def infer_enum(args, data):
+def infer_nuts_enum(args, data):
     model = reparameterized_discrete_model
+    _infer_nuts(args, data, model)
+
+
+def _infer_nuts(args, data, model):
     kernel = NUTS(model, jit_compile=args.jit, ignore_jit_warnings=True)
     mcmc = MCMC(kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps)
-    mcmc.run(data)
+    mcmc.run(data, population=args.population)
+    samples = mcmc.get_samples()
+    for name, value in samples.items():
+        if value.shape[1:].numel() == 1:
+            logging.info("median {} = {:0.3g}".format(name, value.median(0).values.item()))
 
 
 # To perform exact inference on large populations, we'll continue to
@@ -144,7 +161,7 @@ def quantize(name, x_real):
 # Now we can define another equivalent model.
 
 @config_enumerate
-def continuous_model(data, population=10000):
+def continuous_model(data, population):
     # Sample global parameters.
     prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
@@ -166,15 +183,21 @@ def continuous_model(data, population=10000):
         S2I = S - S_next
         I2R = I - I_next + S2I
         # See Note 1 above.
-        pyro.sample("S2I_{}".format(t), dist.Binomial(S, prob_s * I / population),
+        pyro.sample("S2I_{}".format(t),
+                    dist.ExtendedBinomial(S, prob_s * I / population),
                     obs=S2I)
-        pyro.sample("I2R_{}".format(t), dist.Binomial(I, prob_i),
+        pyro.sample("I2R_{}".format(t),
+                    dist.ExtendedBinomial(I, prob_i),
                     obs=I2R)
         S = S_next
         I = I_next
         # See Note 1 above.
-        pyro.sample("obs_{}".format(t), dist.Binomial(I, rho),
+        pyro.sample("obs_{}".format(t),
+                    dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
+    import sys
+    sys.stderr.write(".")
+    sys.stderr.flush()
 
 
 # Now all latent variables in the continuous_model are either continuous or
@@ -185,17 +208,37 @@ def continuous_model(data, population=10000):
 # matrix to learn different step sizes for high- and low-frequency directions.
 # We can apply that outside of the model, during inference.
 
-def infer_cont(args, data):
+def infer_nuts_cont(args, data):
+    model = continuous_model
+    if args.dct:
+        model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
+                                        "I_aux": DiscreteCosineReparam()})
+    _infer_nuts(args, data, model)
+
+
+# Alternatively we could perform variational inference, which is approximate.
+
+def infer_svi_cont(args, data):
     model = continuous_model
     if args.dct:
         model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
                                         "I_aux": DiscreteCosineReparam()})
 
-    kernel = NUTS(model, jit_compile=args.jit, ignore_jit_warnings=True)
-    mcmc = MCMC(kernel,
-                num_samples=args.num_samples,
-                warmup_steps=args.warmup_steps)
-    mcmc.run(data)
+    continuous_sites = ["probs_s", "probs_i", "rho", "S_aux", "I_aux"]
+    guide = AutoNormal(poutine.block(model, expose=continuous_sites),
+                       init_scale=0.01)
+    optim = ClippedAdam({"lr": 0.01})
+    Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
+    svi = SVI(model, guide, optim, Elbo())
+    for step in range(1001):
+        loss = svi.step(data, population=args.population)
+        assert not math.isnan(loss)
+        if step % 50 == 0:
+            logging.info("step {: >4g} loss = {:0.4g}".format(step, loss))
+
+    for name, value in guide.median():
+        if value.numel() == 1:
+            logging.info("median {} = {:0.3g}".format(name, value.item()))
 
 
 # The next step is to vectorize. We can repurpose DiscreteHMM here, but we'll
@@ -209,10 +252,18 @@ def main(args):
     pyro.set_rng_seed(args.rng_seed)
 
     data = generate_data(args)
+
+    # Choose among inference methods.
     if args.enum:
-        infer_enum(args, data)
+        if args.svi:
+            raise NotImplementedError
+        else:
+            infer_nuts_enum(args, data)
     else:
-        infer_cont(args, data)
+        if args.svi:
+            infer_svi_cont(args, data)
+        else:
+            infer_nuts_cont(args, data)
 
 
 if __name__ == "__main__":
@@ -220,11 +271,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
     parser.add_argument("--population", default=10, type=int)
     parser.add_argument("--duration", default=10, type=int)
-    parser.add_argument("--infection-rate", default=0.2, type=float)
-    parser.add_argument("--recovery-rate", default=0.2, type=float)
-    parser.add_argument("--response-rate", default=0.2, type=float)
+    parser.add_argument("--infection-rate", default=0.3, type=float)
+    parser.add_argument("--recovery-rate", default=0.3, type=float)
+    parser.add_argument("--response-rate", default=0.5, type=float)
     parser.add_argument("--enum", action="store_true", default=False,
                         help="use the full enumeration model")
+    parser.add_argument("--svi", action="store_true", default=False,
+                        help="use SVI for inference in the complete model")
     parser.add_argument("--dct", action="store_true", default=False,
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
