@@ -17,7 +17,7 @@ Note 1. Even in this simple model we would need to fix Binomial.log_prob() to
 """
 
 
-def discrete_model(data):
+def discrete_model(data, population=10000):
     # Sample global parameters.
     prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
@@ -38,31 +38,27 @@ def discrete_model(data):
 
 
 """
-Consider reparameterizing in terms of the variables (S_aux, I_aux) rather than
+Consider reparameterizing in terms of the variables (S, I) rather than
 (S2I, I2R). The following model is equivalent:
 """
 
 
-def reparameterized_discrete_model(data):
+@config_enumerate
+def reparameterized_discrete_model(data, population=10000):
     # Sample global parameters.
     prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
     rho = pyro.sample("rho", dist.Uniform(0, 1))
-    population = 10000
-
-    # Sample reparametrizing variables.
-    with pyro.plate("time", len(data)):
-        # Note the density is ignored; distributions are used only for initialization.
-        with poutine.mask(mask=False):
-            S_aux = pyro.sample("S_aux", dist.Geometric(0.1))
-            I_aux = pyro.sample("I_aux", dist.Geometric(0.1))
 
     # Sequentially filter.
     S = torch.tensor(population - 1.)
     I = torch.tensor(1.)
     for t, datum in enumerate(data):
-        S_next = S_aux[t]
-        I_next = I_aux[t]
+        # Sample reparametrizing variables.
+        # Note the density is ignored; distributions are used only for initialization.
+        with poutine.mask(mask=False):
+            S_next = pyro.sample("S_{}".format(t), dist.Binomial(population, 0.5))
+            I_next = pyro.sample("I_{}".format(t), dist.Binomial(population, 0.5))
 
         # Now we reverse the computation.
         S2I = S - S_next
@@ -80,15 +76,17 @@ def reparameterized_discrete_model(data):
 
 
 """
-The above model still does not allow HMC inference because the (S_aux,I_aux)
-variables are discrete. However we have replaced dynamic integer_interval
-constraints with easier static nonnegative_integer constraints (although we'll
-still need good initialization to avoid NANs). More importantly, we have
-converted to coordinates where the model is Markov.
+By reparameterizing, we have converted to coordinates to make the the model is
+Markov. We have also replaced dynamic integer_interval constraints with easier
+static integer_interval constraints (although we'll still need good
+initialization to avoid NANs). Since the discrete latent variables are bounded
+(by population size), we can enumerate out discrete latent variables and
+perform HMC inference over the global latents. However enumeration complexity
+is O(population^4), so this is only feasible for very small populations.
 
-Next we'll continue to reparameterize, this time replacing each of
-(S_aux,I_aux) with a combination of a positive real variable and a Bernoulli
-variable.
+To perform exact inference on large populations, we'll continue to
+reparameterize, this time replacing each of (S_aux,I_aux) with a combination of
+a positive real variable and a Bernoulli variable.
 
 This is the crux: we can now perform HMC over the real variable and marginalize
 out the Bernoulli using variable elimination.
@@ -105,12 +103,11 @@ def quantize(name, x_real):
 
 
 @config_enumerate
-def continuous_model(data):
+def continuous_model(data, population=10000):
     # Sample global parameters.
     prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
     rho = pyro.sample("rho", dist.Uniform(0, 1))
-    population = 10000
 
     # Sample reparametrizing variables.
     with pyro.plate("time", len(data)):
