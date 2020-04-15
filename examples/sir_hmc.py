@@ -126,4 +126,9 @@ def continuous_model(data):
 """
 Tada :) All latent variables in the continuous_model are either continuous or
 enumerated, so we can use HMC.
+
+The next step is to vectorize. We can repurpose DiscreteHMM here, but we'll
+need to manually represent a Markov neihborhood of Bernoullis as Categorical
+(I think just 4 states).
 """
+# TODO
