@@ -59,8 +59,8 @@ integer = _Integer()
 
 __all__ = [
     'IndependentConstraint',
-    'Integer',
     'corr_cholesky_constraint',
+    'integer',
 ]
 
 __all__.extend(torch_constraints)
