@@ -11,6 +11,7 @@ from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
+from pyro.distributions.extended import ExtendedBetaBinomial, ExtendedBinomial
 from pyro.distributions.folded import FoldedDistribution
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
 from pyro.distributions.hmm import DiscreteHMM, GammaGaussianHMM, GaussianHMM, GaussianMRF, IndependentHMM, LinearHMM
@@ -49,6 +50,8 @@ __all__ = [
     "DiscreteHMM",
     "Distribution",
     "Empirical",
+    "ExtendedBetaBinomial",
+    "ExtendedBinomial",
     "FoldedDistribution",
     "GammaGaussianHMM",
     "GammaPoisson",

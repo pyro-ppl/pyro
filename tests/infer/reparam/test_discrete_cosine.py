@@ -55,3 +55,28 @@ def test_normal(shape, dim):
         actual_grads = grad(actual_m.sum(), [loc, scale], retain_graph=True)
         assert_close(actual_grads[0], expected_grads[0], atol=0.05)
         assert_close(actual_grads[1], expected_grads[1], atol=0.05)
+
+
+@pytest.mark.parametrize("shape,dim", [
+    ((6,), -1),
+    ((2, 5,), -1),
+    ((4, 2), -2),
+    ((2, 3, 1), -2),
+], ids=str)
+def test_uniform(shape, dim):
+
+    def model():
+        with pyro.plate_stack("plates", shape[:dim]):
+            with pyro.plate("particles", 10000):
+                pyro.sample("x", dist.Uniform(0, 1).expand(shape).to_event(-dim))
+
+    value = poutine.trace(model).get_trace().nodes["x"]["value"]
+    expected_probe = get_moments(value)
+
+    reparam_model = poutine.reparam(model, {"x": DiscreteCosineReparam(dim=dim)})
+    trace = poutine.trace(reparam_model).get_trace()
+    assert isinstance(trace.nodes["x_dct"]["fn"], dist.TransformedDistribution)
+    assert isinstance(trace.nodes["x"]["fn"], dist.Delta)
+    value = trace.nodes["x"]["value"]
+    actual_probe = get_moments(value)
+    assert_close(actual_probe, expected_probe, atol=0.1)

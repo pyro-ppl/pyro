@@ -106,6 +106,20 @@ EmpiricalDistribution
     :undoc-members:
     :show-inheritance:
 
+ExtendedBetaBinomial
+--------------------
+.. autoclass:: pyro.distributions.ExtendedBetaBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ExtendedBinomial
+----------------
+.. autoclass:: pyro.distributions.ExtendedBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 FoldedDistribution
 ---------------------
 .. autoclass:: pyro.distributions.FoldedDistribution
@@ -385,6 +399,13 @@ ConditionalAffineCoupling
     :undoc-members:
     :show-inheritance:
 
+ConditionalHouseholder
+----------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalHouseholder
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalPlanar
 -----------------
 .. autoclass:: pyro.distributions.transforms.ConditionalPlanar
@@ -505,6 +526,10 @@ block_autoregressive
 conditional_affine_coupling
 ---------------------------
 .. autofunction:: pyro.distributions.transforms.conditional_affine_coupling
+
+conditional_householder
+-----------------------
+.. autofunction:: pyro.distributions.transforms.conditional_householder
 
 conditional_planar
 ------------------
