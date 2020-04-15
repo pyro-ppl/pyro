@@ -14,7 +14,8 @@ from pyro.distributions.transforms.block_autoregressive import BlockAutoregressi
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
 from pyro.distributions.transforms.generalized_channel_permute import (GeneralizedChannelPermute,
                                                                        generalized_channel_permute)
-from pyro.distributions.transforms.householder import Householder, householder
+from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, householder,
+                                                       conditional_householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
 from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, LeakyReLUTransform,
                                                                  TanhTransform,
@@ -68,6 +69,7 @@ __all__ = [
     'BlockAutoregressive',
     'ComposeTransformModule',
     'ConditionalAffineCoupling',
+    'ConditionalHouseholder',
     'ConditionalNeuralAutoregressive',
     'ConditionalPlanar',
     'ConditionalRadial',
@@ -91,6 +93,7 @@ __all__ = [
     'batchnorm',
     'block_autoregressive',
     'conditional_affine_coupling',
+    'conditional_householder',
     'conditional_neural_autoregressive',
     'conditional_planar',
     'conditional_radial',
