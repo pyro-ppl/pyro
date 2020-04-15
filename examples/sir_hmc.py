@@ -83,7 +83,8 @@ out the Bernoulli using variable elimination.
 
 def quantize(name, x_real):
     """Randomly quantize in a way that preserves probability mass."""
-    lb = (x_real - 0.5).floor()
+    x_real = x_real - 0.5  # Handle edge case at zero.
+    lb = x_real.floor()
     bern = pyro.sample(name, dist.Bernoulli(x_real - lb))
     return (lb + bern).clamp(min=0)
 
