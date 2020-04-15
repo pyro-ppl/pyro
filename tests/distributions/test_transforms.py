@@ -127,7 +127,7 @@ class TransformTests(TestCase):
 
     def test_conditional_affine_coupling(self):
         self._test_conditional(T.conditional_affine_coupling)
-        
+
     def test_conditional_householder(self):
         self._test_conditional(T.conditional_householder)
         self._test_conditional(partial(T.conditional_householder, count_transforms=2))
