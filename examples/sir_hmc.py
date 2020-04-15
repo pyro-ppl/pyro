@@ -97,6 +97,8 @@ out the Bernoulli using variable elimination.
 
 def quantize(name, x_real):
     """Randomly quantize in a way that preserves probability mass."""
+    # Note this is a linear spline, but we could easily replace with a
+    # quadratic spline to ensure gradients are continuous.
     lb = x_real.floor()
     bern = pyro.sample(name, dist.Bernoulli(x_real - lb))
     return lb + bern
@@ -140,6 +142,10 @@ def continuous_model(data):
 """
 Tada :) All latent variables in the continuous_model are either continuous or
 enumerated, so we can use HMC.
+
+One potential enhancement would be to use DiscreteCosineReparam for the
+S_aux, I_aux variables, improving the geometry of the inference problem.
+That can easily be applied later, outside of the model.
 
 The next step is to vectorize. We can repurpose DiscreteHMM here, but we'll
 need to manually represent a Markov neighborhood of multiple Bernoullis as
