@@ -20,7 +20,7 @@ def quantize(real):
 @pytest.mark.parametrize("n", [2, 3, 5, 10])
 @pytest.mark.parametrize("p", [0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99])
 def test_binomial_approximation(n, p):
-    num_samples = 100000
+    num_samples = 20000
     d1 = dist.Binomial(n, p)
     d2 = dist.DequantizedDistribution(d1)
 
@@ -40,7 +40,7 @@ def test_binomial_approximation(n, p):
 
 @pytest.mark.parametrize("rate", [0.1, 0.5, 1.0, 2.0, 10.0])
 def test_poisson_approximation(rate):
-    num_samples = 100000
+    num_samples = 20000
     d1 = dist.Poisson(rate)
     d2 = dist.DequantizedDistribution(d1)
 

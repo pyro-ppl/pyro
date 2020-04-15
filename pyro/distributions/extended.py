@@ -27,7 +27,7 @@ class ExtendedBinomial(TorchDistribution):
     conditioned on inputs ``n, p``.
 
         # Model 1.
-        b ~ Bernoulli(1 + floor(n) - n)         # Quantize.
+        b ~ Bernoulli(n - floor(n))    # Quantize.
         z ~ Binomial(floor(n) + b, p)
 
         # Model 2.
@@ -66,12 +66,12 @@ class ExtendedBinomial(TorchDistribution):
         quantized = torch.cat([lb, ub], dim=-1)
         return weights, quantized
 
+    @torch.no_grad()
     def sample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         weights, quantized = self._mixture
-        bern = weights[..., 1].expand(shape).bernoulli().byte()
-        lb, ub = quantized.expand(shape + (2,)).unbind(-1)
-        total_count = torch.where(bern, ub, lb).squeeze(-1)
+        bern = weights[..., 1].expand(shape).bernoulli()
+        total_count = quantized[..., 0] + bern
         return Binomial(total_count, self.probs).sample()
 
     def log_prob(self, value):
@@ -94,7 +94,7 @@ class ExtendedBetaBinomial(TorchDistribution):
     conditioned on inputs ``c1, c0, n``.
 
         # Model 1.
-        b ~ Bernoulli(1 + floor(n) - n)         # Quantize.
+        b ~ Bernoulli(n + floor(n))             # Quantize.
         z ~ BetaBinomial(c1, c0, floor(n) + b)
 
         # Model 2.

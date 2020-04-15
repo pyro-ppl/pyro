@@ -29,11 +29,11 @@ class DequantizedDistribution(TorchDistribution):
         z ~ Binomial(n, p)
 
         # Model 2.
-        r ~ DequantizedDistribution(Binomial(n, p))
-        b ~ Bernoulli(1 + floor(r) - r)      # Quantize.
+        r ~ DequantizedDistribution(Binomial(n, p))  # Dequantize.
+        b ~ Bernoulli(r - floor(r))                  # Requantize.
         z = floor(r) + b
 
-    Earth mover distance error is upper bounded by 1/3.
+    The Wasserstein distance between the models is upper bounded by 1/3.
 
     :param base_dist: A distribution with
         ``.support == constraints.nonnegative_integer`` and
@@ -62,7 +62,7 @@ class DequantizedDistribution(TorchDistribution):
         # Add uniform triangular noise in [-1,1]
         noise = value.new_empty(value.shape + (2,)).uniform_(-0.5, 0.5).sum(-1)
         # Ensure result is nonnegative.
-        return noise.sub_(value).abs_()
+        return noise.add_(value).abs_()
 
     def log_prob(self, value):
         missing_dims = len(self.batch_shape) - value.dim()
