@@ -82,9 +82,10 @@ out the Bernoulli using variable elimination.
 """
 
 def quantize(name, x_real):
-    lb = x_real.floor()
+    """Randomly quantize in a way that preserves probability mass."""
+    lb = (x_real - 0.5).floor()
     bern = pyro.sample(name, dist.Bernoulli(x_real - lb))
-    return lb + bern
+    return (lb + bern).clamp(min=0)
 
 
 @config_enumerate
@@ -128,7 +129,7 @@ Tada :) All latent variables in the continuous_model are either continuous or
 enumerated, so we can use HMC.
 
 The next step is to vectorize. We can repurpose DiscreteHMM here, but we'll
-need to manually represent a Markov neihborhood of Bernoullis as Categorical
-(I think just 4 states).
+need to manually represent a Markov neighborhood of multiple Bernoullis as
+single joint Categorical (I think just 4 states).
 """
 # TODO
