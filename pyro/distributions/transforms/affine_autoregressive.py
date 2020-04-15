@@ -319,6 +319,10 @@ class ConditionalAffineAutoregressive(ConditionalTransformModule):
         self.kwargs = kwargs
 
     def condition(self, context):
+        """
+        Conditions on a context variable, returning a non-conditional transform of
+        of type :class:`~pyro.distributions.transforms.AffineAutoregressive`.
+        """
         cond_nn = partial(self.nn, context=context)
         return AffineAutoregressive(cond_nn, **self.kwargs)
 
