@@ -263,9 +263,7 @@ class _PEMaker:
         for name, t in self.transforms.items():
             log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
-        result = -log_joint
-        print("potential = {:0.3g}".format(result))
-        return result
+        return -log_joint
 
     def _potential_fn_jit(self, skip_jit_warnings, jit_options, params):
         if not params:

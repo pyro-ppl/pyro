@@ -16,15 +16,10 @@ from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransfor
 from pyro.infer import HMC, MCMC, NUTS, SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.infer.autoguide import AutoNormal, init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
+from pyro.ops.tensor_utils import convolve
 from pyro.optim import ClippedAdam
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-
-
-def print_dot(*args, **kwargs):
-    import sys
-    sys.stderr.write(".")
-    sys.stderr.flush()
 
 
 # First consider a simple SIR model (Susceptible Infected Recovered).
@@ -116,7 +111,6 @@ def reparameterized_discrete_model(data, population):
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
-    print_dot()
 
 
 # By reparameterizing, we have converted to coordinates to make the model
@@ -140,7 +134,11 @@ def _infer_hmc(args, data, model, init_values={}):
     kernel = Kernel(model,
                     init_strategy=init_to_value(values=init_values),
                     jit_compile=args.jit, ignore_jit_warnings=True)
-    mcmc = MCMC(kernel,
+
+    def logging_hook(kernel, *args):
+        print("potential = {:0.6g}".format(kernel._potential_energy_last))
+
+    mcmc = MCMC(kernel, hook_fn=logging_hook,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps)
     mcmc.run(data, population=args.population)
@@ -196,7 +194,6 @@ def continuous_model(data, population):
         # Now we reverse the computation.
         S2I = S - S_next
         I2R = I - I_next + S2I
-        # See Note 1 above.
         pyro.sample("S2I_{}".format(t),
                     dist.ExtendedBinomial(S, prob_s * I / population),
                     obs=S2I)
@@ -205,11 +202,9 @@ def continuous_model(data, population):
                     obs=I2R)
         S = S_next
         I = I_next
-        # See Note 1 above.
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
-    print_dot()
 
 
 # Now all latent variables in the continuous_model are either continuous or
@@ -226,8 +221,14 @@ def infer_hmc_cont(args, data):
         model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
                                         "I_aux": DiscreteCosineReparam()})
 
-    I_aux = (data.cumsum(-1) + 1.5).clamp(min=0, max=args.population)
-    S_aux = (args.population - I_aux - 0.5).clamp(min=0, max=args.population)
+    # Heuristically initialize to a good feasible point.
+    S0 = args.population - 1  # Start with a single infection.
+    S2I = data * min(2., S0 / data.sum())  # Assume 50% response rate.
+    S2I[0] += 1  # Account for the single infection.
+    S_aux = (S0 - S2I.cumsum(-1)).clamp_(min=0.5)
+    # Assume infection lasts a few days.
+    I_aux = convolve(S2I, torch.tensor([1., 0.8, 0.5, 0.3, 0.2]))[:len(data)].clamp_(min=0.5)
+    # Also initialze DCT coordinates.
     t = ComposeTransform([biject_to(constraints.interval(-0.5, 0.5 + args.population)).inv,
                           DiscreteCosineTransform(dim=-1)])
     init_values = {
