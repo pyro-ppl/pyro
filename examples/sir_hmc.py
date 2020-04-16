@@ -6,16 +6,23 @@ import logging
 import math
 
 import torch
+from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import MCMC, NUTS, SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
+from pyro.infer import HMC, MCMC, NUTS, SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.infer.autoguide import AutoNormal
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.optim import ClippedAdam
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
+
+
+def print_dot(*args, **kwargs):
+    import sys
+    sys.stderr.write(".")
+    sys.stderr.flush()
 
 
 # First consider a simple SIR model (Susceptible Infected Recovered).
@@ -107,9 +114,7 @@ def reparameterized_discrete_model(data, population):
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
-    import sys
-    sys.stderr.write(".")
-    sys.stderr.flush()
+    print_dot()
 
 
 # By reparameterizing, we have converted to coordinates to make the model
@@ -121,18 +126,21 @@ def reparameterized_discrete_model(data, population):
 # complexity is O(population^4), so this is only feasible for very small
 # populations.
 #
-# Here is an inference approch using the NUTS sampler.
+# Here is an inference approch using an MCMC sampler.
 
-def infer_nuts_enum(args, data):
+def infer_hmc_enum(args, data):
     model = reparameterized_discrete_model
-    _infer_nuts(args, data, model)
+    _infer_hmc(args, data, model)
 
 
-def _infer_nuts(args, data, model):
-    kernel = NUTS(model, jit_compile=args.jit, ignore_jit_warnings=True)
+def _infer_hmc(args, data, model, init_params=None):
+    Kernel = NUTS if args.nuts else HMC
+    kernel = Kernel(model, jit_compile=args.jit, ignore_jit_warnings=True)
     mcmc = MCMC(kernel,
+                initial_params=init_params,
                 num_samples=args.num_samples,
-                warmup_steps=args.warmup_steps)
+                warmup_steps=args.warmup_steps,
+                hook_fn=print_dot)
     mcmc.run(data, population=args.population)
     samples = mcmc.get_samples()
     for name, value in samples.items():
@@ -151,7 +159,7 @@ def _infer_nuts(args, data, model):
 
 def quantize(name, x_real):
     """Randomly quantize in a way that preserves probability mass."""
-    lb = x_real.floor()
+    lb = x_real.detach().floor()
     # This cubic spline guarantees gradients are continuous.
     t = x_real - lb
     prob = t * t * (3 - 2 * t)
@@ -169,9 +177,12 @@ def continuous_model(data, population):
     rho = pyro.sample("rho", dist.Uniform(0, 1))
 
     # Sample reparametrizing variables.
-    with pyro.plate("time", len(data)):
-        S_aux = pyro.sample("S_aux", dist.Uniform(-0.5, population + 0.5))
-        I_aux = pyro.sample("I_aux", dist.Uniform(-0.5, population + 0.5))
+    S_aux = pyro.sample("S_aux",
+                        dist.Uniform(-0.5, population + 0.5)
+                            .expand(data.shape).to_event(1))
+    I_aux = pyro.sample("I_aux",
+                        dist.Uniform(-0.5, population + 0.5)
+                            .expand(data.shape).to_event(1))
 
     # Sequentially filter.
     S = torch.tensor(population - 1.)
@@ -196,9 +207,7 @@ def continuous_model(data, population):
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
-    import sys
-    sys.stderr.write(".")
-    sys.stderr.flush()
+    print_dot()
 
 
 # Now all latent variables in the continuous_model are either continuous or
@@ -209,12 +218,26 @@ def continuous_model(data, population):
 # matrix to learn different step sizes for high- and low-frequency directions.
 # We can apply that outside of the model, during inference.
 
-def infer_nuts_cont(args, data):
+def infer_hmc_cont(args, data):
     model = continuous_model
     if args.dct:
         model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
                                         "I_aux": DiscreteCosineReparam()})
-    _infer_nuts(args, data, model)
+
+    # Note these are in unconstrained space.
+    if args.dct:
+        init_params = None  # TODO
+    else:
+        t = biject_to(constraints.interval(-0.5, args.population + 0.5)).inv
+        init_params = {
+            "prob_s": torch.tensor(0.),
+            "prob_i": torch.tensor(0.),
+            "rho": torch.tensor(0.),
+            "S_aux": t(args.population - 0.5 - torch.arange(float(args.duration))),
+            "I_aux": t(torch.full((args.duration,), 1.5)),
+        }
+
+    _infer_hmc(args, data, model, init_params=init_params)
 
 
 # Alternatively we could perform variational inference, which is approximate.
@@ -259,12 +282,12 @@ def main(args):
         if args.svi:
             raise NotImplementedError
         else:
-            infer_nuts_enum(args, data)
+            infer_hmc_enum(args, data)
     else:
         if args.svi:
             infer_svi_cont(args, data)
         else:
-            infer_nuts_cont(args, data)
+            infer_hmc_cont(args, data)
 
 
 if __name__ == "__main__":
@@ -277,6 +300,8 @@ if __name__ == "__main__":
     parser.add_argument("--response-rate", default=0.5, type=float)
     parser.add_argument("--enum", action="store_true", default=False,
                         help="use the full enumeration model")
+    parser.add_argument("--nuts", action="store_true", default=False,
+                        help="use NUTS rather than HMC for inference")
     parser.add_argument("--svi", action="store_true", default=False,
                         help="use SVI for inference in the complete model")
     parser.add_argument("--dct", action="store_true", default=False,

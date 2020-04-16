@@ -333,7 +333,8 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
 
 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
-                     jit_compile=False, jit_options=None, skip_jit_warnings=False, num_chains=1):
+                     jit_compile=False, jit_options=None, skip_jit_warnings=False, num_chains=1,
+                     initial_params=None):
     """
     Given a Python callable with Pyro primitives, generates the following model-specific
     properties needed for inference using HMC/NUTS kernels:
@@ -364,6 +365,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         tracer when ``jit_compile=True``. Default is False.
     :param int num_chains: Number of parallel chains. If `num_chains > 1`,
         the returned `initial_params` will be a list with `num_chains` elements.
+    :param dict initial_params: dict containing initial tensors in unconstrained
+        space to initiate the markov chain.
     :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
     """
     # XXX `transforms` domains are sites' supports
@@ -405,12 +408,15 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
 
     pe_maker = _PEMaker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
-    # Note that we deliberately do not exercise jit compilation here so as to
-    # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
-    init_params = _get_init_params(model, model_args, model_kwargs, transforms,
-                                   pe_maker.get_potential_fn(), prototype_params, num_chains=num_chains)
+    if initial_params is None:
+        # Note that we deliberately do not exercise jit compilation here so as to
+        # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
+        initial_params = _get_init_params(model, model_args, model_kwargs, transforms,
+                                          pe_maker.get_potential_fn(), prototype_params,
+                                          num_chains=num_chains)
+
     potential_fn = pe_maker.get_potential_fn(jit_compile, skip_jit_warnings, jit_options)
-    return init_params, potential_fn, transforms, model_trace
+    return initial_params, potential_fn, transforms, model_trace
 
 
 def _safe(fn):
