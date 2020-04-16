@@ -403,11 +403,11 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     trace_prob_evaluator = TraceEinsumEvaluator(model_trace,
                                                 has_enumerable_sites,
                                                 max_plate_nesting)
-    prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
 
     pe_maker = _PEMaker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
     if initial_params is None:
+        prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
         # Note that we deliberately do not exercise jit compilation here so as to
         # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
         initial_params = _find_valid_initial_params(model, model_args, model_kwargs, transforms,
