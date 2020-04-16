@@ -151,10 +151,11 @@ def _infer_nuts(args, data, model):
 
 def quantize(name, x_real):
     """Randomly quantize in a way that preserves probability mass."""
-    # Note this is a linear spline, but we could easily replace with a
-    # quadratic spline to ensure gradients are continuous.
     lb = x_real.floor()
-    bern = pyro.sample(name, dist.Bernoulli(x_real - lb))
+    # This cubic spline guarantees gradients are continuous.
+    t = x_real - lb
+    prob = t * t * (3 - 2 * t)
+    bern = pyro.sample(name, dist.Bernoulli(prob))
     return lb + bern
 
 
