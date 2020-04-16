@@ -304,32 +304,32 @@ def find_valid_initial_params(model, model_args, model_kwargs, transforms, poten
                               prototype_params, max_tries_initial_params=100, num_chains=1,
                               init_strategy=init_to_uniform):
     params = prototype_params
-    params_per_chain = defaultdict(list)
-    n = 0
 
     # For empty models, exit early
     if not params:
         return params
 
-    for i in range(max_tries_initial_params):
-        while n < num_chains:
-            if strategy == "uniform":
-                params = {k: dist.Uniform(v.new_full(v.shape, -2), v.new_full(v.shape, 2)).sample()
-                          for k, v in params.items()}
-            elif strategy == "prior":
-                trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-                samples = {name: trace.nodes[name]["value"].detach() for name in params}
-                params = {k: transforms[k](v) for k, v in samples.items()}
-            pe_grad, pe = potential_grad(potential_fn, params)
+    params_per_chain = defaultdict(list)
+    num_found = 0
+    for attempt in range(num_chains * max_tries_initial_params):
+        if strategy == "uniform":
+            params = {k: dist.Uniform(v.new_full(v.shape, -2), v.new_full(v.shape, 2)).sample()
+                      for k, v in params.items()}
+        elif strategy == "prior":
+            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+            samples = {name: trace.nodes[name]["value"].detach() for name in params}
+            params = {k: transforms[k](v) for k, v in samples.items()}
+        pe_grad, pe = potential_grad(potential_fn, params)
 
-            if torch.isfinite(pe) and all(map(torch.all, map(torch.isfinite, pe_grad.values()))):
-                for k, v in params.items():
-                    params_per_chain[k].append(v)
-                n += 1
-        if num_chains == 1:
-            return {k: v[0] for k, v in params_per_chain.items()}
-        else:
-            return {k: torch.stack(v) for k, v in params_per_chain.items()}
+        if torch.isfinite(pe) and all(map(torch.all, map(torch.isfinite, pe_grad.values()))):
+            for k, v in params.items():
+                params_per_chain[k].append(v)
+            num_found += 1
+            if num_found == num_chains:
+                if num_chains == 1:
+                    return {k: v[0] for k, v in params_per_chain.items()}
+                else:
+                    return {k: torch.stack(v) for k, v in params_per_chain.items()}
     raise ValueError("Model specification seems incorrect - cannot find valid initial params.")
 
 
