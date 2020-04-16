@@ -3,7 +3,6 @@
 
 import argparse
 import logging
-import math
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -13,11 +12,10 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
-from pyro.infer import HMC, MCMC, NUTS, SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
-from pyro.infer.autoguide import AutoNormal, init_to_value
+from pyro.infer import MCMC, NUTS, config_enumerate
+from pyro.infer.autoguide import init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.ops.tensor_utils import convolve
-from pyro.optim import ClippedAdam
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -126,26 +124,24 @@ def reparameterized_discrete_model(data, population):
 
 def infer_hmc_enum(args, data):
     model = reparameterized_discrete_model
-    _infer_hmc(args, data, model)
+    return _infer_hmc(args, data, model)
 
 
 def _infer_hmc(args, data, model, init_values={}):
-    Kernel = NUTS if args.nuts else HMC
-    kernel = Kernel(model,
-                    init_strategy=init_to_value(values=init_values),
-                    jit_compile=args.jit, ignore_jit_warnings=True)
+    kernel = NUTS(model,
+                  init_strategy=init_to_value(values=init_values),
+                  jit_compile=args.jit, ignore_jit_warnings=True)
 
     def logging_hook(kernel, *args):
         print("potential = {:0.6g}".format(kernel._potential_energy_last))
 
-    mcmc = MCMC(kernel, hook_fn=logging_hook,
+    mcmc = MCMC(kernel,
+                hook_fn=logging_hook if args.verbose else None,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps)
     mcmc.run(data, population=args.population)
     samples = mcmc.get_samples()
-    for name, value in samples.items():
-        if value.shape[1:].numel() == 1:
-            logging.info("median {} = {:0.3g}".format(name, value.median(0).values.item()))
+    return samples
 
 
 # To perform exact inference on large populations, we'll continue to
@@ -241,32 +237,7 @@ def infer_hmc_cont(args, data):
         "I_aux_dct": t(I_aux),
     }
 
-    _infer_hmc(args, data, model, init_values=init_values)
-
-
-# Alternatively we could perform variational inference, which is approximate.
-
-def infer_svi_cont(args, data):
-    model = continuous_model
-    if args.dct:
-        model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
-                                        "I_aux": DiscreteCosineReparam()})
-
-    continuous_sites = ["probs_s", "probs_i", "rho", "S_aux", "I_aux"]
-    guide = AutoNormal(poutine.block(model, expose=continuous_sites),
-                       init_scale=0.01)
-    optim = ClippedAdam({"lr": 0.01})
-    Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
-    svi = SVI(model, guide, optim, Elbo())
-    for step in range(1001):
-        loss = svi.step(data, population=args.population)
-        assert not math.isnan(loss)
-        if step % 50 == 0:
-            logging.info("step {: >4g} loss = {:0.4g}".format(step, loss))
-
-    for name, value in guide.median():
-        if value.numel() == 1:
-            logging.info("median {} = {:0.3g}".format(name, value.item()))
+    return _infer_hmc(args, data, model, init_values=init_values)
 
 
 # The next step is to vectorize. We can repurpose DiscreteHMM here, but we'll
@@ -278,21 +249,26 @@ def infer_svi_cont(args, data):
 def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
-    torch.autograd.set_detect_anomaly(args.debug_nan)
 
     data = generate_data(args)
 
     # Choose among inference methods.
     if args.enum:
-        if args.svi:
-            raise NotImplementedError
-        else:
-            infer_hmc_enum(args, data)
+        samples = infer_hmc_enum(args, data)
     else:
-        if args.svi:
-            infer_svi_cont(args, data)
-        else:
-            infer_hmc_cont(args, data)
+        samples = infer_hmc_cont(args, data)
+
+    # Evaluate results.
+    names = {"response_rate": "rho",
+             "infection_rate": "prob_s",
+             "recovery_rate": "prob_i"}
+    for name, key in names.items():
+        mean = samples[key].mean().item()
+        std = samples[key].std().item()
+        logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
+                     .format(name, getattr(args, name), mean, std))
+
+    return samples
 
 
 if __name__ == "__main__":
@@ -305,18 +281,14 @@ if __name__ == "__main__":
     parser.add_argument("--response-rate", default=0.5, type=float)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
-    parser.add_argument("--nuts", action="store_true",
-                        help="use NUTS rather than HMC for inference")
-    parser.add_argument("--svi", action="store_true",
-                        help="use SVI for inference in the complete model")
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
-    parser.add_argument("--warmup-steps", default=100, type=int)
+    parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("--rng-seed", nargs='?', default=0, type=int)
     parser.add_argument("--jit", action="store_true")
     parser.add_argument("--cuda", action="store_true")
-    parser.add_argument("--debug-nan", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     if args.cuda:
