@@ -103,8 +103,8 @@ def test_mcmc_interface(num_draws, group_by_chain, num_chains):
         samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
     sample_mean = samples['y'].mean()
     sample_std = samples['y'].std()
-    assert_close(sample_mean, torch.tensor(0.0), atol=0.05)
-    assert_close(sample_std, torch.tensor(1.0), atol=0.05)
+    assert_close(sample_mean, torch.tensor(0.0), atol=0.1)
+    assert_close(sample_std, torch.tensor(1.0), atol=0.1)
 
 
 @pytest.mark.parametrize("num_chains, cpu_count", [

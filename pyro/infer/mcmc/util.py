@@ -2,28 +2,28 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
-import traceback as tb
 import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial, reduce
 from itertools import product
+import traceback as tb
 
 import torch
-from opt_einsum import shared_intermediates
 from torch.distributions import biject_to
+from opt_einsum import shared_intermediates
 
 import pyro
-import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer import config_enumerate
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_uniform
 from pyro.infer.util import is_validation_enabled
 from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
 from pyro.ops.integrator import potential_grad
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings, warn_if_nan
+from pyro.util import check_site_shape, ignore_jit_warnings
 
 
 class TraceTreeEvaluator:
@@ -209,7 +209,6 @@ class TraceEinsumEvaluator:
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_plate_nesting)
-                    warn_if_nan(site["packed"]["log_prob"], site["name"])
                 log_probs.setdefault(self.ordering[name], []).append(site["packed"]["log_prob"])
         return log_probs
 
@@ -264,9 +263,7 @@ class _PEMaker:
         for name, t in self.transforms.items():
             log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
-        result = -log_joint
-        print("potential = {:0.3g}".format(result))
-        return result
+        return -log_joint
 
     def _potential_fn_jit(self, skip_jit_warnings, jit_options, params):
         if not params:
@@ -302,9 +299,9 @@ class _PEMaker:
         return self._potential_fn
 
 
-# TODO: expose init_strategy using separate functions.
-def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
-                     max_tries_initial_params=100, num_chains=1, strategy="uniform"):
+def _find_valid_initial_params(model, model_args, model_kwargs, transforms, potential_fn,
+                               prototype_params, max_tries_initial_params=100, num_chains=1,
+                               init_strategy=init_to_uniform):
     params = prototype_params
 
     # For empty models, exit early
@@ -313,14 +310,11 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
 
     params_per_chain = defaultdict(list)
     num_found = 0
+    model = InitMessenger(init_strategy)(model)
     for attempt in range(num_chains * max_tries_initial_params):
-        if strategy == "uniform":
-            params = {k: dist.Uniform(v.new_full(v.shape, -2), v.new_full(v.shape, 2)).sample()
-                      for k, v in params.items()}
-        elif strategy == "prior":
-            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-            samples = {name: trace.nodes[name]["value"].detach() for name in params}
-            params = {k: transforms[k](v) for k, v in samples.items()}
+        trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+        samples = {name: trace.nodes[name]["value"].detach() for name in params}
+        params = {k: transforms[k](v) for k, v in samples.items()}
         pe_grad, pe = potential_grad(potential_fn, params)
 
         if torch.isfinite(pe) and all(map(torch.all, map(torch.isfinite, pe_grad.values()))):
@@ -337,7 +331,7 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
                      jit_compile=False, jit_options=None, skip_jit_warnings=False, num_chains=1,
-                     initial_params=None):
+                     init_strategy=init_to_uniform):
     """
     Given a Python callable with Pyro primitives, generates the following model-specific
     properties needed for inference using HMC/NUTS kernels:
@@ -368,8 +362,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         tracer when ``jit_compile=True``. Default is False.
     :param int num_chains: Number of parallel chains. If `num_chains > 1`,
         the returned `initial_params` will be a list with `num_chains` elements.
-    :param dict initial_params: dict containing initial tensors in unconstrained
-        space to initiate the markov chain.
+    :param callable init_strategy: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
     """
     # XXX `transforms` domains are sites' supports
@@ -411,15 +405,13 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
 
     pe_maker = _PEMaker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
-    if initial_params is None:
-        # Note that we deliberately do not exercise jit compilation here so as to
-        # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
-        initial_params = _get_init_params(model, model_args, model_kwargs, transforms,
-                                          pe_maker.get_potential_fn(), prototype_params,
-                                          num_chains=num_chains)
-
+    # Note that we deliberately do not exercise jit compilation here so as to
+    # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
+    init_params = _find_valid_initial_params(model, model_args, model_kwargs, transforms,
+                                             pe_maker.get_potential_fn(), prototype_params,
+                                             num_chains=num_chains, init_strategy=init_strategy)
     potential_fn = pe_maker.get_potential_fn(jit_compile, skip_jit_warnings, jit_options)
-    return initial_params, potential_fn, transforms, model_trace
+    return init_params, potential_fn, transforms, model_trace
 
 
 def _safe(fn):

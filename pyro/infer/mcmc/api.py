@@ -412,8 +412,7 @@ class MCMC:
             elif self.kernel.model:
                 _, _, self.transforms, _ = initialize_model(self.kernel.model,
                                                             model_args=args,
-                                                            model_kwargs=kwargs,
-                                                            initial_params=self._initial_params)
+                                                            model_kwargs=kwargs)
             # Assign default value
             else:
                 self.transforms = {}
