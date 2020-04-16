@@ -100,7 +100,10 @@ def init_to_value(site, values={}):
 
     :param dict values: dictionary of initial values keyed by site name.
     """
-    return values[site["name"]] if site["name"] not in values else init_to_uniform(site)
+    if site["name"] in values:
+        return values[site["name"]]
+    else:
+        return init_to_uniform(site)
 
 
 class InitMessenger(Messenger):

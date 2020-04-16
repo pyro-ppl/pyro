@@ -6,7 +6,9 @@ from pyro.infer.autoguide.guides import (AutoCallable, AutoContinuous, AutoDelta
                                          AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                          AutoMultivariateNormal, AutoNormal, AutoNormalizingFlow)
 from pyro.infer.autoguide.utils import mean_field_entropy
-from pyro.infer.autoguide.initialization import init_to_feasible, init_to_mean, init_to_median, init_to_sample
+from pyro.infer.autoguide.initialization import (init_to_feasible, init_to_mean, init_to_median,
+                                                 init_to_sample, init_to_uniform, init_to_value)
+
 
 __all__ = [
     'AutoCallable',
