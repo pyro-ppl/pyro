@@ -9,6 +9,8 @@ The standard interface for initialization is a function that inputs a Pyro
 trace ``site`` dict and returns an appropriately sized ``value`` to serve
 as an initial constrained value for a guide estimate.
 """
+import functools
+
 import torch
 from torch.distributions import transform_to
 
@@ -19,34 +21,45 @@ from pyro.poutine.messenger import Messenger
 from pyro.util import torch_isnan
 
 
+# TODO: move this file out of `autoguide` in a minor release
+
 def _is_multivariate(d):
     while isinstance(d, (Independent, MaskedDistribution)):
         d = d.base_dist
     return any(size > 1 for size in d.event_shape)
 
 
-def init_to_feasible(site):
+def init_to_feasible(site=None):
     """
     Initialize to an arbitrary feasible point, ignoring distribution
     parameters.
     """
+    if site is None:
+        return init_to_feasible
+
     value = site["fn"].sample().detach()
     t = transform_to(site["fn"].support)
     return t(torch.zeros_like(t.inv(value)))
 
 
-def init_to_sample(site):
+def init_to_sample(site=None):
     """
     Initialize to a random sample from the prior.
     """
+    if site is None:
+        return init_to_sample
+
     return site["fn"].sample().detach()
 
 
-def init_to_median(site, num_samples=15):
+def init_to_median(site=None, num_samples=15):
     """
     Initialize to the prior median; fallback to a feasible point if median is
     undefined.
     """
+    if site is None:
+        return functools.partial(init_to_median, num_samples=num_samples)
+
     # The median undefined for multivariate distributions.
     if _is_multivariate(site["fn"]):
         return init_to_feasible(site)
@@ -64,10 +77,13 @@ def init_to_median(site, num_samples=15):
         return init_to_feasible(site)
 
 
-def init_to_mean(site):
+def init_to_mean(site=None):
     """
     Initialize to the prior mean; fallback to median if mean is undefined.
     """
+    if site is None:
+        return init_to_mean
+
     try:
         # Try .mean() method.
         value = site["fn"].mean.detach()
@@ -78,28 +94,34 @@ def init_to_mean(site):
         return value
     except (NotImplementedError, ValueError):
         # Fall back to a median.
-        # This is requred for distributions with infinite variance, e.g. Cauchy.
+        # This is required for distributions with infinite variance, e.g. Cauchy.
         return init_to_median(site)
 
 
-def init_to_uniform(site, radius=2):
+def init_to_uniform(site=None, radius=2):
     """
     Initialize to a random point in the area `(-radius, radius)` of unconstrained domain.
 
     :param float radius: specifies the range to draw an initial point in the unconstrained domain.
     """
+    if site is None:
+        return functools.partial(init_to_uniform, radius=radius)
+
     value = site["fn"].sample().detach()
     t = transform_to(site["fn"].support)
     return t(torch.rand_like(t.inv(value)) * (2 * radius) - radius)
 
 
-def init_to_value(site, values={}):
+def init_to_value(site=None, values={}):
     """
     Initialize to the value specified in `values`. We defer to
     :func:`init_to_uniform` strategy for sites which do not appear in `values`.
 
     :param dict values: dictionary of initial values keyed by site name.
     """
+    if site is None:
+        return functools.partial(init_to_value, values=values)
+
     if site["name"] in values:
         return values[site["name"]]
     else:
