@@ -6,9 +6,8 @@ import warnings
 
 import torch
 import torch.nn as nn
-from torch.distributions import constraints
+from torch.distributions import Transform, constraints
 
-from torch.distributions import Transform
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
