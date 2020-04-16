@@ -6,13 +6,12 @@ import logging
 import math
 
 import torch
-from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import HMC, MCMC, NUTS, SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
-from pyro.infer.autoguide import AutoNormal
+from pyro.infer.autoguide import AutoNormal, init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.optim import ClippedAdam
 
@@ -133,14 +132,14 @@ def infer_hmc_enum(args, data):
     _infer_hmc(args, data, model)
 
 
-def _infer_hmc(args, data, model, init_params=None):
+def _infer_hmc(args, data, model, init_values={}):
     Kernel = NUTS if args.nuts else HMC
-    kernel = Kernel(model, jit_compile=args.jit, ignore_jit_warnings=True)
+    kernel = Kernel(model,
+                    init_strategy=init_to_value(values=init_values),
+                    jit_compile=args.jit, ignore_jit_warnings=True)
     mcmc = MCMC(kernel,
-                initial_params=init_params,
                 num_samples=args.num_samples,
-                warmup_steps=args.warmup_steps,
-                hook_fn=print_dot)
+                warmup_steps=args.warmup_steps)
     mcmc.run(data, population=args.population)
     samples = mcmc.get_samples()
     for name, value in samples.items():
@@ -224,20 +223,17 @@ def infer_hmc_cont(args, data):
         model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
                                         "I_aux": DiscreteCosineReparam()})
 
-    # Note these are in unconstrained space.
-    if args.dct:
-        init_params = None  # TODO
-    else:
-        t = biject_to(constraints.interval(-0.5, args.population + 0.5)).inv
-        init_params = {
-            "prob_s": torch.tensor(0.),
-            "prob_i": torch.tensor(0.),
-            "rho": torch.tensor(0.),
-            "S_aux": t(args.population - 0.5 - torch.arange(float(args.duration))),
-            "I_aux": t(torch.full((args.duration,), 1.5)),
-        }
+    I_aux = (data.cumsum(-1) + 1.5).clamp(min=0, max=args.population)
+    S_aux = (args.population - I_aux - 0.5).clamp(min=0, max=args.population)
+    init_values = {
+        "prob_s": torch.tensor(0.5),
+        "prob_i": torch.tensor(0.5),
+        "rho": torch.tensor(0.5),
+        "S_aux": S_aux,
+        "I_aux": I_aux,
+    }
 
-    _infer_hmc(args, data, model, init_params=init_params)
+    _infer_hmc(args, data, model, init_values=init_values)
 
 
 # Alternatively we could perform variational inference, which is approximate.
