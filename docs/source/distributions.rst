@@ -406,6 +406,13 @@ ConditionalHouseholder
     :undoc-members:
     :show-inheritance:
 
+ConditionalNeuralAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalNeuralAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalPlanar
 -----------------
 .. autoclass:: pyro.distributions.transforms.ConditionalPlanar
@@ -530,6 +537,10 @@ conditional_affine_coupling
 conditional_householder
 -----------------------
 .. autofunction:: pyro.distributions.transforms.conditional_householder
+
+conditional_neural_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_neural_autoregressive
 
 conditional_planar
 ------------------

@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions import constraints
 import torch.nn.functional as F
+from torch.distributions import constraints
 
-from pyro.distributions.util import copy_docs_from
 from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
