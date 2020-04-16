@@ -4,19 +4,18 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributions import constraints
+from torch.distributions.transforms import SigmoidTransform, Transform
+
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
-from torch.distributions import constraints
-from torch.distributions.transforms import Transform, SigmoidTransform
-import torch.nn.functional as F
-
 from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
-
-from functools import partial
 
 eps = 1e-8
 

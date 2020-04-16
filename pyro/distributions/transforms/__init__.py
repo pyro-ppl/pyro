@@ -5,32 +5,29 @@ from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
 
+from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
 from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms.affine_autoregressive import AffineAutoregressive, affine_autoregressive
-from pyro.distributions.transforms.affine_coupling import (AffineCoupling, ConditionalAffineCoupling,
-                                                           affine_coupling, conditional_affine_coupling)
+from pyro.distributions.transforms.affine_coupling import (AffineCoupling, ConditionalAffineCoupling, affine_coupling,
+                                                           conditional_affine_coupling)
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
+from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
 from pyro.distributions.transforms.generalized_channel_permute import (GeneralizedChannelPermute,
                                                                        generalized_channel_permute)
 from pyro.distributions.transforms.householder import Householder, householder
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
-from pyro.distributions.transforms.neural_autoregressive import (ELUTransform, LeakyReLUTransform,
-                                                                 TanhTransform,
-                                                                 ConditionalNeuralAutoregressive,
-                                                                 conditional_neural_autoregressive,
-                                                                 NeuralAutoregressive,
-                                                                 neural_autoregressive,
-                                                                 elu, leaky_relu, tanh)
+from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, ELUTransform,
+                                                                 LeakyReLUTransform, NeuralAutoregressive,
+                                                                 TanhTransform, conditional_neural_autoregressive, elu,
+                                                                 leaky_relu, neural_autoregressive, tanh)
 from pyro.distributions.transforms.permute import Permute, permute
+from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
-from pyro.distributions.transforms.planar import Planar, ConditionalPlanar, planar, conditional_planar
-from pyro.distributions.transforms.radial import Radial, ConditionalRadial, radial, conditional_radial
+from pyro.distributions.transforms.radial import ConditionalRadial, Radial, conditional_radial, radial
 from pyro.distributions.transforms.spline import Spline, spline
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
-from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
-from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
 
 ########################################
 # register transforms
