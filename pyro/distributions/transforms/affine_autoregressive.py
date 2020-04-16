@@ -1,17 +1,17 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from functools import partial
+
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.utils import clamp_preserve_gradients
-from pyro.nn import ConditionalAutoRegressiveNN, AutoRegressiveNN
-
-from functools import partial
+from pyro.distributions.util import copy_docs_from
+from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
 
 
 @copy_docs_from(TransformModule)

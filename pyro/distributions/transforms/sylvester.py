@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
-from pyro.distributions.transforms.householder import Householder
 from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions.transforms.householder import Householder
 from pyro.distributions.util import copy_docs_from
 
 
