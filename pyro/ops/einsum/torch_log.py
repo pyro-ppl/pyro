@@ -4,6 +4,7 @@
 import torch
 
 from pyro.ops.einsum.util import Tensordot
+from pyro.util import warn_if_nan
 
 
 def transpose(a, axes):
@@ -46,7 +47,8 @@ def einsum(equation, *operands):
             shift = shift.permute(*(dims.index(dim) for dim in output))
         shifts.append(shift)
 
-    result = torch.einsum(equation, exp_operands).log()
+    result = warn_if_nan(torch.einsum(equation, exp_operands).log(),
+                         str(operands))
     return sum(shifts + [result])
 
 

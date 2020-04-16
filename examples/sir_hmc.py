@@ -62,7 +62,7 @@ def generate_data(args):
               "rho": torch.tensor(args.response_rate)}
     empty_data = [None] * args.duration
 
-    # We'lll retry until we get an actual outbreak.
+    # We'll retry until we get an actual outbreak.
     for attempt in range(100):
         with poutine.trace() as tr:
             with poutine.condition(data=params):
@@ -274,6 +274,7 @@ def infer_svi_cont(args, data):
 def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
+    torch.autograd.set_detect_anomaly(args.debug_nan)
 
     data = generate_data(args)
 
@@ -298,19 +299,20 @@ if __name__ == "__main__":
     parser.add_argument("--infection-rate", default=0.3, type=float)
     parser.add_argument("--recovery-rate", default=0.3, type=float)
     parser.add_argument("--response-rate", default=0.5, type=float)
-    parser.add_argument("--enum", action="store_true", default=False,
+    parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
-    parser.add_argument("--nuts", action="store_true", default=False,
+    parser.add_argument("--nuts", action="store_true",
                         help="use NUTS rather than HMC for inference")
-    parser.add_argument("--svi", action="store_true", default=False,
+    parser.add_argument("--svi", action="store_true",
                         help="use SVI for inference in the complete model")
-    parser.add_argument("--dct", action="store_true", default=False,
+    parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("--warmup-steps", default=100, type=int)
     parser.add_argument("--rng-seed", nargs='?', default=0, type=int)
-    parser.add_argument("--jit", action="store_true", default=False)
-    parser.add_argument("--cuda", action="store_true", default=False)
+    parser.add_argument("--jit", action="store_true")
+    parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--debug-nan", action="store_true")
     args = parser.parse_args()
 
     if args.cuda:

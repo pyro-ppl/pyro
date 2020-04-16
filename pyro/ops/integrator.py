@@ -82,6 +82,9 @@ def potential_grad(potential_fn, z):
             return grads, z_nodes[0].new_tensor(float('nan'))
         else:
             raise e
+    if not torch._C._get_tracing_state() and not torch.isfinite(potential_energy):
+        # Avoid computing gradient if it is known to be infinite.
+        return {}, potential_energy.detach()
 
     grads = grad(potential_energy, z_nodes)
     for node in z_nodes:

@@ -2,19 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import traceback as tb
 import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial, reduce
 from itertools import product
-import traceback as tb
 
 import torch
-from torch.distributions import biject_to
 from opt_einsum import shared_intermediates
+from torch.distributions import biject_to
 
 import pyro
-import pyro.poutine as poutine
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer import config_enumerate
 from pyro.infer.util import is_validation_enabled
@@ -23,7 +23,7 @@ from pyro.ops.contract import contract_to_tensor
 from pyro.ops.integrator import potential_grad
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings
+from pyro.util import check_site_shape, ignore_jit_warnings, warn_if_nan
 
 
 class TraceTreeEvaluator:
@@ -209,6 +209,7 @@ class TraceEinsumEvaluator:
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_plate_nesting)
+                    warn_if_nan(site["packed"]["log_prob"], site["name"])
                 log_probs.setdefault(self.ordering[name], []).append(site["packed"]["log_prob"])
         return log_probs
 
@@ -263,7 +264,9 @@ class _PEMaker:
         for name, t in self.transforms.items():
             log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
-        return -log_joint
+        result = -log_joint
+        print("potential = {:0.3g}".format(result))
+        return result
 
     def _potential_fn_jit(self, skip_jit_warnings, jit_options, params):
         if not params:
