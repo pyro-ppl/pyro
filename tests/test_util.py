@@ -16,7 +16,8 @@ def test_warn_if_nan():
         warnings.simplefilter("always")
         x = float('inf')
         msg = "example message"
-        util.warn_if_nan(x, msg)
+        y = util.warn_if_nan(x, msg)
+        assert y is x
         assert len(w) == 0
 
         x = float('nan')
@@ -53,7 +54,8 @@ def test_warn_if_inf():
         warnings.simplefilter("always")
         x = 3
         msg = "example message"
-        util.warn_if_inf(x, msg, allow_posinf=True, allow_neginf=True)
+        y = util.warn_if_inf(x, msg, allow_posinf=True, allow_neginf=True)
+        assert y is x
         assert len(w) == 0
         x = float('inf')
         util.warn_if_inf(x, msg, allow_posinf=True)

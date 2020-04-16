@@ -2,15 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import math
 import numbers
 import random
+import sys
 import timeit
 import warnings
 from collections import defaultdict
+from contextlib import contextmanager
 from itertools import zip_longest
 
 import torch
-from contextlib import contextmanager
 
 from pyro.poutine.util import site_is_subsample
 
@@ -62,34 +64,66 @@ def torch_isinf(x):
     A convenient function to check if a Tensor contains any +inf; also works with numbers
     """
     if isinstance(x, numbers.Number):
-        return x == float('inf') or x == -float('inf')
-    return (x == float('inf')).any() or (x == -float('inf')).any()
+        return x == math.inf or x == -math.inf
+    return (x == math.inf).any() or (x == -math.inf).any()
 
 
-def warn_if_nan(value, msg=""):
+def warn_if_nan(value, msg="", *, filename=None, lineno=None):
     """
     A convenient function to warn if a Tensor or its grad contains any nan,
     also works with numbers.
     """
+    if filename is None:
+        try:
+            frame = sys._getframe(1)
+        except ValueError:
+            filename = "sys"
+            lineno = 1
+        else:
+            filename = frame.f_code.co_filename
+            lineno = frame.f_lineno
+
     if torch.is_tensor(value) and value.requires_grad:
-        value.register_hook(lambda x: warn_if_nan(x, msg))
+        value.register_hook(lambda x: warn_if_nan(x, "backward " + msg, filename=filename, lineno=lineno))
+
     if torch_isnan(value):
-        warnings.warn("Encountered NaN{}".format((': ' if msg else '.') + msg), stacklevel=2)
+        warnings.warn_explicit("Encountered NaN{}".format(': ' + msg if msg else '.'),
+                               UserWarning, filename, lineno)
+
+    return value
 
 
-def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
+def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False, *,
+                filename=None, lineno=None):
     """
     A convenient function to warn if a Tensor or its grad contains any inf,
     also works with numbers.
     """
+    if filename is None:
+        try:
+            frame = sys._getframe(1)
+        except ValueError:
+            filename = "sys"
+            lineno = 1
+        else:
+            filename = frame.f_code.co_filename
+            lineno = frame.f_lineno
+
     if torch.is_tensor(value) and value.requires_grad:
-        value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
-    if (not allow_posinf) and (value == float('inf') if isinstance(value, numbers.Number)
-                               else (value == float('inf')).any()):
-        warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg), stacklevel=2)
-    if (not allow_neginf) and (value == -float('inf') if isinstance(value, numbers.Number)
-                               else (value == -float('inf')).any()):
-        warnings.warn("Encountered -inf{}".format((': ' if msg else '.') + msg), stacklevel=2)
+        value.register_hook(lambda x: warn_if_inf(x, "backward " + msg,
+                                                  allow_posinf, allow_neginf,
+                                                  filename=filename, lineno=lineno))
+
+    if (not allow_posinf) and (value == math.inf if isinstance(value, numbers.Number)
+                               else (value == math.inf).any()):
+        warnings.warn_explicit("Encountered +inf{}".format(': ' + msg if msg else '.'),
+                               UserWarning, filename, lineno)
+    if (not allow_neginf) and (value == -math.inf if isinstance(value, numbers.Number)
+                               else (value == -math.inf).any()):
+        warnings.warn_explicit("Encountered -inf{}".format(': ' + msg if msg else '.'),
+                               UserWarning, filename, lineno)
+
+    return value
 
 
 def save_visualization(trace, graph_output):
@@ -169,7 +203,7 @@ def check_traces_match(trace1, trace2):
                 raise ValueError("Site dims disagree at site '{}': {} vs {}".format(name, shape1, shape2))
 
 
-def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=float('inf')):
+def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
