@@ -331,7 +331,7 @@ def _find_valid_initial_params(model, model_args, model_kwargs, transforms, pote
 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
                      jit_compile=False, jit_options=None, skip_jit_warnings=False, num_chains=1,
-                     init_strategy=init_to_uniform):
+                     init_strategy=init_to_uniform, initial_params=None):
     """
     Given a Python callable with Pyro primitives, generates the following model-specific
     properties needed for inference using HMC/NUTS kernels:
@@ -364,6 +364,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         the returned `initial_params` will be a list with `num_chains` elements.
     :param callable init_strategy: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+    :param dict initial_params: dict containing initial tensors in unconstrained
+        space to initiate the markov chain.
     :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
     """
     # XXX `transforms` domains are sites' supports
@@ -401,17 +403,18 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     trace_prob_evaluator = TraceEinsumEvaluator(model_trace,
                                                 has_enumerable_sites,
                                                 max_plate_nesting)
-    prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
 
     pe_maker = _PEMaker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
-    # Note that we deliberately do not exercise jit compilation here so as to
-    # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
-    init_params = _find_valid_initial_params(model, model_args, model_kwargs, transforms,
-                                             pe_maker.get_potential_fn(), prototype_params,
-                                             num_chains=num_chains, init_strategy=init_strategy)
+    if initial_params is None:
+        prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
+        # Note that we deliberately do not exercise jit compilation here so as to
+        # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
+        initial_params = _find_valid_initial_params(model, model_args, model_kwargs, transforms,
+                                                    pe_maker.get_potential_fn(), prototype_params,
+                                                    num_chains=num_chains, init_strategy=init_strategy)
     potential_fn = pe_maker.get_potential_fn(jit_compile, skip_jit_warnings, jit_options)
-    return init_params, potential_fn, transforms, model_trace
+    return initial_params, potential_fn, transforms, model_trace
 
 
 def _safe(fn):
