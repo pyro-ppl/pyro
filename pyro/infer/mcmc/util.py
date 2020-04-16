@@ -310,7 +310,7 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
 
     params_per_chain = defaultdict(list)
     num_found = 0
-    for attempt in range(num_chains + max_tries_initial_params):
+    for attempt in range(num_chains * max_tries_initial_params):
         if strategy == "uniform":
             params = {k: dist.Uniform(v.new_full(v.shape, -2), v.new_full(v.shape, 2)).sample()
                       for k, v in params.items()}
