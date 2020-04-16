@@ -82,6 +82,27 @@ def init_to_mean(site):
         return init_to_median(site)
 
 
+def init_to_uniform(site, radius=2):
+    """
+    Initialize to a random point in the area `(-radius, radius)` of unconstrained domain.
+
+    :param float radius: specifies the range to draw an initial point in the unconstrained domain.
+    """
+    value = site["fn"].sample().detach()
+    t = transform_to(site["fn"].support)
+    return t(torch.rand_like(t.inv(value)) * (2 * radius) - radius)
+
+
+def init_to_value(site, values={}):
+    """
+    Initialize to the value specified in `values`. We defer to
+    :func:`init_to_uniform` strategy for sites which do not appear in `values`.
+
+    :param dict values: dictionary of initial values keyed by site name.
+    """
+    return values[site["name"]] if site["name"] not in values else init_to_uniform(site)
+
+
 class InitMessenger(Messenger):
     """
     Initializes a site by replacing ``.sample()`` calls with values

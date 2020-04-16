@@ -26,5 +26,7 @@ __all__ = [
     'init_to_mean',
     'init_to_median',
     'init_to_sample',
+    'init_to_uniform',
+    'init_to_value',
     'mean_field_entropy',
 ]

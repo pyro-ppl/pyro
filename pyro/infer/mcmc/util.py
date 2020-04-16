@@ -17,6 +17,7 @@ import pyro.poutine as poutine
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer import config_enumerate
+from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.util import is_validation_enabled
 from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
@@ -299,9 +300,9 @@ class _PEMaker:
         return self._potential_fn
 
 
-# TODO: expose init_strategy using separate functions.
-def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
-                     max_tries_initial_params=100, num_chains=1, strategy="uniform"):
+def find_valid_initial_params(model, model_args, model_kwargs, transforms, potential_fn,
+                              prototype_params, max_tries_initial_params=100, num_chains=1,
+                              init_strategy=init_to_uniform):
     params = prototype_params
     params_per_chain = defaultdict(list)
     n = 0
