@@ -8,6 +8,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import scalar_like
+from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
@@ -95,6 +96,8 @@ class NUTS(HMC):
         so the sampling will be slower but more robust. Default to 0.8.
     :param int max_tree_depth: Max depth of the binary tree created during the doubling
         scheme of NUTS sampler. Default to 10.
+    :param callable init_strategy: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
 
     Example:
 
@@ -130,7 +133,8 @@ class NUTS(HMC):
                  jit_options=None,
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8,
-                 max_tree_depth=10):
+                 max_tree_depth=10,
+                 init_strategy=init_to_uniform):
         super().__init__(model,
                          potential_fn,
                          step_size,
@@ -142,7 +146,8 @@ class NUTS(HMC):
                          jit_compile=jit_compile,
                          jit_options=jit_options,
                          ignore_jit_warnings=ignore_jit_warnings,
-                         target_accept_prob=target_accept_prob)
+                         target_accept_prob=target_accept_prob,
+                         init_strategy=init_strategy)
         self.use_multinomial_sampling = use_multinomial_sampling
         self._max_tree_depth = max_tree_depth
         # There are three conditions to stop doubling process:

@@ -10,6 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import eye_like, scalar_like
 
+from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
@@ -63,6 +64,8 @@ class HMC(MCMCKernel):
         tracer when ``jit_compile=True``. Default is False.
     :param float target_accept_prob: Increasing this value will lead to a smaller
         step size, hence the sampling will be slower and more robust. Default to 0.8.
+    :param callable init_strategy: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
 
     .. note:: Internally, the mass matrix will be ordered according to the order
         of the names of latent variables, not the order of their appearance in
@@ -102,7 +105,8 @@ class HMC(MCMCKernel):
                  jit_compile=False,
                  jit_options=None,
                  ignore_jit_warnings=False,
-                 target_accept_prob=0.8):
+                 target_accept_prob=0.8,
+                 init_strategy=init_to_uniform):
         if not ((model is None) ^ (potential_fn is None)):
             raise ValueError("Only one of `model` or `potential_fn` must be specified.")
         # NB: deprecating args - model, transforms
@@ -112,6 +116,7 @@ class HMC(MCMCKernel):
         self._jit_compile = jit_compile
         self._jit_options = jit_options
         self._ignore_jit_warnings = ignore_jit_warnings
+        self._init_strategy = init_strategy
 
         self.potential_fn = potential_fn
         if trajectory_length is not None:
@@ -237,6 +242,7 @@ class HMC(MCMCKernel):
             jit_compile=self._jit_compile,
             jit_options=self._jit_options,
             skip_jit_warnings=self._ignore_jit_warnings,
+            init_strategy=self._init_strategy,
         )
         self.potential_fn = potential_fn
         self.transforms = transforms
