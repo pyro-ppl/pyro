@@ -6,10 +6,13 @@ import logging
 import math
 
 import torch
+from torch.distributions import biject_to, constraints
+from torch.distributions.transforms import ComposeTransform
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
 from pyro.infer import HMC, MCMC, NUTS, SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.infer.autoguide import AutoNormal, init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
@@ -225,12 +228,16 @@ def infer_hmc_cont(args, data):
 
     I_aux = (data.cumsum(-1) + 1.5).clamp(min=0, max=args.population)
     S_aux = (args.population - I_aux - 0.5).clamp(min=0, max=args.population)
+    t = ComposeTransform([biject_to(constraints.interval(-0.5, 0.5 + args.population)).inv,
+                          DiscreteCosineTransform(dim=-1)])
     init_values = {
         "prob_s": torch.tensor(0.5),
         "prob_i": torch.tensor(0.5),
         "rho": torch.tensor(0.5),
         "S_aux": S_aux,
         "I_aux": I_aux,
+        "S_aux_dct": t(S_aux),
+        "I_aux_dct": t(I_aux),
     }
 
     _infer_hmc(args, data, model, init_values=init_values)
