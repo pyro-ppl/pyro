@@ -1,9 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import torch
 
 from pyro.ops.einsum.util import Tensordot
+from pyro.ops.tensor_utils import safe_log
 
 
 def transpose(a, axes):
@@ -46,7 +49,7 @@ def einsum(equation, *operands):
             shift = shift.permute(*(dims.index(dim) for dim in output))
         shifts.append(shift)
 
-    result = torch.einsum(equation, exp_operands).log()
+    result = safe_log(torch.einsum(equation, exp_operands))
     return sum(shifts + [result])
 
 
