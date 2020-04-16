@@ -1,3 +1,6 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.nn.functional as F
 from torch.distributions import constraints
