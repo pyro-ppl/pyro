@@ -187,9 +187,10 @@ def markov(fn=None, history=1, keep=False, dim=None, name=None):
     Markov dependency declaration.
 
     This can be used in a variety of ways:
-    - as a context manager
-    - as a decorator for recursive functions
-    - as an iterator for markov chains
+
+        - as a context manager
+        - as a decorator for recursive functions
+        - as an iterator for markov chains
 
     :param int history: The number of previous contexts visible from the
         current context. Defaults to 1. If zero, this is similar to

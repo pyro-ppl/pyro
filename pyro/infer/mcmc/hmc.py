@@ -243,11 +243,11 @@ class HMC(MCMCKernel):
             jit_options=self._jit_options,
             skip_jit_warnings=self._ignore_jit_warnings,
             init_strategy=self._init_strategy,
+            initial_params=self._initial_params,
         )
         self.potential_fn = potential_fn
         self.transforms = transforms
-        if self._initial_params is None:
-            self._initial_params = init_params
+        self._initial_params = init_params
         self._prototype_trace = trace
 
     def _initialize_adapter(self):
