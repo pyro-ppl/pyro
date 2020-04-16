@@ -6,6 +6,26 @@ import math
 import torch
 
 
+class _SafeLog(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return x.log()
+
+    @staticmethod
+    def backward(ctx, grad):
+        x, = ctx.saved_tensors
+        return grad / x.clamp(min=torch.finfo(x.dtype).eps)
+
+
+def safe_log(x):
+    """
+    Like :func:`torch.log` but avoids infinite gradients at log(0)
+    by clamping them to at most ``1 / finfo.eps``.
+    """
+    return _SafeLog.apply(x)
+
+
 def block_diag_embed(mat):
     """
     Takes a tensor of shape (..., B, M, N) and returns a block diagonal tensor
