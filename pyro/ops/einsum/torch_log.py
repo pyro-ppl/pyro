@@ -1,8 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import math
-
 import torch
 
 from pyro.ops.einsum.util import Tensordot
