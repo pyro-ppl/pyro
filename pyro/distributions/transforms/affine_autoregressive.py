@@ -11,11 +11,7 @@ from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.transforms.utils import clamp_preserve_gradients
 from pyro.distributions.util import copy_docs_from
-<<<<<<< HEAD
 from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
-=======
-from pyro.nn import AutoRegressiveNN
->>>>>>> 49a67ea67d2a159961af9dfa11b55f27d7b41181
 
 
 @copy_docs_from(TransformModule)
