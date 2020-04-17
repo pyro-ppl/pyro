@@ -316,7 +316,7 @@ def vectorized_model(data, population):
     logp = S_logp + (I_logp + obs_logp) + S2I_logp + I2R_logp
     logp = logp.reshape(-1, 2 * 2, 2 * 2)
     logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
-    logp = logp.logsumexp([0, 1])
+    logp = logp.reshape(-1).logsumexp(0)
     logp = logp - math.log(4)  # Account for S,I initial distributions.
     warn_if_nan(logp)
     pyro.factor("obs", logp)
@@ -405,7 +405,7 @@ if __name__ == "__main__":
     parser.add_argument("--infection-rate", default=0.3, type=float)
     parser.add_argument("--recovery-rate", default=0.3, type=float)
     parser.add_argument("--response-rate", default=0.5, type=float)
-    parser.add_argument("--heuristic", default=1, type=int)
+    parser.add_argument("-i", "--heuristic", default=1, type=int)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
     parser.add_argument("-v", "--vectorized", action="store_true",
@@ -414,8 +414,8 @@ if __name__ == "__main__":
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
-    parser.add_argument("--max-tree-depth", default=4, type=int)
-    parser.add_argument("--rng-seed", default=0, type=int)
+    parser.add_argument("-t", "--max-tree-depth", default=4, type=int)
+    parser.add_argument("-s", "--rng-seed", default=0, type=int)
     parser.add_argument("--test-init", action="store_true")
     parser.add_argument("--double", action="store_true")
     parser.add_argument("--jit", action="store_true")
