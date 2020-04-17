@@ -123,7 +123,7 @@ def reparameterized_discrete_model(data, population):
 # complexity is O(population^4), so this is only feasible for very small
 # populations.
 #
-# Here is an inference approch using an MCMC sampler.
+# Here is an inference approach using an MCMC sampler.
 
 def infer_hmc_enum(args, data):
     model = reparameterized_discrete_model
@@ -217,14 +217,19 @@ def heuristic_init(args, data):
     """Heuristically initialize to a feasible point."""
     # Start with a single infection.
     S0 = args.population - 1
-    # Assume >= 50% response rate.
-    S2I = data * min(2., S0 / data.sum())
-    S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
-    # Account for the single initial infection.
-    S2I[0] += 1
-    # Assume infection lasts less than a month.
-    recovery = (1 - args.recovery_rate / 2) ** torch.arange(30.)
-    I_aux = convolve(S2I, recovery)[:len(data)].clamp(min=0.5)
+    if args.heuristic == 1:
+        # Assume >= 50% response rate.
+        S2I = data * min(2., S0 / data.sum())
+        S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
+        # Account for the single initial infection.
+        S2I[0] += 1
+        # Assume infection lasts less than a month.
+        recovery = (1 - args.recovery_rate / 2) ** torch.arange(30.)
+        I_aux = convolve(S2I, recovery)[:len(data)].clamp(min=0.5)
+    elif args.heuristic == 2:
+        # Assume 100% response rate, 0% recovery rate.
+        S_aux = S0 - data.cumsum(-1)
+        I_aux = 1 + data.cumsum(-1)
     # Also initialize DCT transformed coordinates.
     t = ComposeTransform([biject_to(constraints.interval(-0.5, args.population + 0.5)).inv,
                           DiscreteCosineTransform(dim=-1)])
@@ -314,8 +319,7 @@ def vectorized_model(data, population):
     pyro.factor("obs", logp)
 
 
-# We can train fit vectorized_model exactly as we fit the original
-# continuous_model.
+# We can fit vectorized_model exactly as we fit the original continuous_model.
 #
 # Finally we'll define an experiment runner.
 
@@ -391,6 +395,7 @@ if __name__ == "__main__":
     parser.add_argument("--infection-rate", default=0.3, type=float)
     parser.add_argument("--recovery-rate", default=0.3, type=float)
     parser.add_argument("--response-rate", default=0.5, type=float)
+    parser.add_argument("--heuristic", default=1, type=int)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
     parser.add_argument("-v", "--vectorized", action="store_true",
