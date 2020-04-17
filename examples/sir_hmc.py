@@ -5,6 +5,7 @@ import argparse
 import logging
 
 import torch
+from torch.autograd import grad
 from torch.distributions import biject_to, constraints
 from torch.distributions.transforms import ComposeTransform
 
@@ -15,7 +16,6 @@ import pyro.poutine as poutine
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
 from pyro.infer import MCMC, NUTS, config_enumerate
 from pyro.infer.autoguide import init_to_value
-from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.ops.tensor_utils import convolve, safe_log
 from pyro.util import warn_if_nan
@@ -214,43 +214,36 @@ def continuous_model(data, population):
 # thus heuristically initialize to a feasible point.
 
 def heuristic_init(args, data):
-    """Heuristically initialize to a good feasible point."""
-    S0 = args.population - 1  # Start with a single infection.
-    S2I = data * min(2., S0 / data.sum())  # Assume 50% response rate.
-    S2I[0] += 1  # Account for the single infection.
-    S = (S0 - S2I.cumsum(-1)).clamp_(min=0.5)
+    """Heuristically initialize to a feasible point."""
+    # Start with a single infection.
+    S0 = args.population - 1
+    # Assume >= 50% response rate.
+    S2I = data * min(2., S0 / data.sum())
+    S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
+    # Account for the single initial infection.
+    S2I[0] += 1
     # Assume infection lasts less than a month.
     recovery = (1 - args.recovery_rate / 2) ** torch.arange(30.)
-    I = convolve(S2I, recovery)[:len(data)].clamp_(min=0.5)
+    I_aux = convolve(S2I, recovery)[:len(data)].clamp(min=0.5)
     # Also initialize DCT transformed coordinates.
     t = ComposeTransform([biject_to(constraints.interval(-0.5, args.population + 0.5)).inv,
                           DiscreteCosineTransform(dim=-1)])
-
-    if __debug__:
-        S_prev = torch.nn.functional.pad(S[:-1], (1, 0), value=args.population - 1)
-        I_prev = torch.nn.functional.pad(I[:-1], (1, 0), value=1)
-        S2I = S_prev - S
-        I2R = I_prev - I + S2I
-        assert (data <= S2I).all()
-        assert (S2I <= S).all()
-        assert (0 <= I2R).all()
-        assert (I2R <= I).all()
 
     return {
         "prob_s": torch.tensor(0.5),
         "prob_i": torch.tensor(0.5),
         "rho": torch.tensor(0.5),
-        "S_aux": S,
-        "I_aux": I,
-        "S_aux_dct": t(S),
-        "I_aux_dct": t(I),
+        "S_aux": S_aux,
+        "I_aux": I_aux,
+        "S_aux_dct": t(S_aux),
+        "I_aux_dct": t(I_aux),
     }
 
 
 # One trick to improve inference geometry is to reparameterize the S_aux,I_aux
-# variables via DiscreteCosineReparam. This especially allows HMC's diagonal mass
-# matrix to learn different step sizes for high- and low-frequency directions.
-# We can apply that outside of the model, during inference.
+# variables via DiscreteCosineReparam. This allows HMC's diagonal mass matrix
+# adaptation to learn different step sizes for high- and low-frequency
+# directions. We can apply that outside of the model, during inference.
 
 def infer_hmc_cont(model, args, data):
     if args.dct:
@@ -332,20 +325,10 @@ def main(args):
 
     data = generate_data(args)
 
-    # Optionally test the goodness of our initialization heuristic.
-    if args.test_init:
-        init_values = heuristic_init(args, data)
-        with InitMessenger(init_to_value(values=init_values)):
-            trace = poutine.trace(vectorized_model).get_trace(data, args.population)
-        log_prob = trace.log_prob_sum()
-        logging.info("log_prob = {:0.6g}".format(log_prob))
-        if not torch.isfinite(log_prob):
-            for key, value in init_values.items():
-                logging.info("{}:\n{}".format(key, value))
-            raise ValueError("infeasible initialization")
-
     # Choose among inference methods.
-    if args.enum:
+    if args.test_init:
+        _test_init(args, data)
+    elif args.enum:
         samples = infer_hmc_enum(args, data)
     elif args.vectorized:
         samples = infer_hmc_cont(vectorized_model, args, data)
@@ -363,6 +346,41 @@ def main(args):
                      .format(name, getattr(args, name), mean, std))
 
     return samples
+
+
+def _test_init(args, data):
+    """Test helper to debug the init heuristic."""
+    init_values = heuristic_init(args, data)
+    logging.info("-" * 40)
+    for name, x in init_values.items():
+        logging.info("{}:{}{}".format(name, "\n" if x.shape else " ", x))
+        x.requires_grad_()
+    with poutine.trace() as tr, poutine.condition(data=init_values):
+        vectorized_model(data, args.population)
+
+    # Test log prob.
+    logging.info("-" * 40)
+    log_prob = tr.trace.log_prob_sum()
+    logging.info("log_prob = {:0.6g}".format(log_prob))
+    if not torch.isfinite(log_prob):
+        raise ValueError("infinite log_prob")
+
+    # Test gradients.
+    grads = grad(log_prob, list(init_values.values()), allow_unused=True)
+    for name, dx in zip(init_values, grads):
+        if dx is None:
+            logging.info("{}: no gradient".format(name))
+            continue
+        logging.info("d/d {}:{}{}".format(name, "\n" if dx.shape else " ", dx))
+        if not torch.isfinite(dx).all():
+            raise ValueError("invalid gradient for {}".format(name))
+
+    # Smoke test.
+    logging.info("-" * 40)
+    args.warmup_steps = 0
+    args.num_samples = 1
+    args.max_tree_depth = 1
+    infer_hmc_cont(vectorized_model, args, data)
 
 
 if __name__ == "__main__":
