@@ -159,12 +159,15 @@ def _infer_hmc(args, data, model, init_values={}):
 #
 # We first define a helper to create enumerated Bernoulli sites.
 
+SPLINE_ORDER = 3
+
+
 def quantize(name, x_real):
     """Randomly quantize in a way that preserves probability mass."""
     lb = x_real.detach().floor()
     # This cubic spline guarantees gradients are continuous.
     t = x_real - lb
-    prob = t * t * (3 - 2 * t)
+    prob = t * t * (3 - 2 * t) if SPLINE_ORDER == 3 else t
     bern = pyro.sample(name, dist.Bernoulli(prob))
     return lb + bern
 
@@ -269,7 +272,7 @@ def quantize_enumerate(x_real, min, max):
     lb = x_real.detach().floor()
     # This cubic spline guarantees gradients are continuous.
     t = x_real - lb
-    prob = t * t * (3 - 2 * t)
+    prob = t * t * (3 - 2 * t) if SPLINE_ORDER == 3 else t
     x = torch.stack([lb, lb + 1], dim=-1).clamp(min=min, max=max)
     logits = safe_log(torch.stack([1 - prob, prob], dim=-1))
     return x, logits
@@ -408,10 +411,11 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--heuristic", default=1, type=int)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
-    parser.add_argument("-v", "--vectorized", action="store_true",
-                        help="use the vectorized continuous model")
+    parser.add_argument("--spline-order", default=3, type=int)
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
+    parser.add_argument("-v", "--vectorized", action="store_true",
+                        help="use the vectorized continuous model")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=4, type=int)
@@ -430,5 +434,7 @@ if __name__ == "__main__":
             torch.set_default_tensor_type(torch.DoubleTensor)
     elif args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
+
+    SPLINE_ORDER = args.spline_order
 
     main(args)
