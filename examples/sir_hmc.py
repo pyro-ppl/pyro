@@ -10,12 +10,14 @@ from torch.distributions.transforms import ComposeTransform
 
 import pyro
 import pyro.distributions as dist
+import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
 from pyro.infer import MCMC, NUTS, config_enumerate
 from pyro.infer.autoguide import init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
-from pyro.ops.tensor_utils import convolve
+from pyro.ops.tensor_utils import convolve, safe_log
+from pyro.util import warn_if_nan
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -129,6 +131,7 @@ def infer_hmc_enum(args, data):
 
 def _infer_hmc(args, data, model, init_values={}):
     kernel = NUTS(model,
+                  max_tree_depth=args.max_tree_depth,
                   init_strategy=init_to_value(values=init_values),
                   jit_compile=args.jit, ignore_jit_warnings=True)
 
@@ -211,8 +214,7 @@ def continuous_model(data, population):
 # matrix to learn different step sizes for high- and low-frequency directions.
 # We can apply that outside of the model, during inference.
 
-def infer_hmc_cont(args, data):
-    model = continuous_model
+def infer_hmc_cont(model, args, data):
     if args.dct:
         model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
                                         "I_aux": DiscreteCosineReparam()})
@@ -240,10 +242,71 @@ def infer_hmc_cont(args, data):
     return _infer_hmc(args, data, model, init_values=init_values)
 
 
-# The next step is to vectorize. We can repurpose DiscreteHMM here, but we'll
-# need to manually represent a Markov neighborhood of multiple Bernoullis as
-# single joint Categorical with 2 x 2 = 4 states. We leave this to future work.
+# The next step is to vectorize. We can repurpose DiscreteHMM's implementation
+# here, but we'll need to manually represent a Markov neighborhood of multiple
+# Bernoullis as single joint Categorical with 2 x 2 = 4 states.
 
+def quantize_enumerate(x_real, min, max):
+    """Quantize, then manually enumerate."""
+    lb = x_real.detach().floor()
+    # This cubic spline guarantees gradients are continuous.
+    t = x_real - lb
+    prob = t * t * (3 - 2 * t)
+    x = torch.stack([lb, lb + 1], dim=-1).clamp(min=min, max=max)
+    logits = safe_log(torch.stack([1 - prob, prob], dim=-1))
+    return x, logits
+
+
+def vectorized_model(data, population):
+    # Sample global parameters.
+    prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
+    prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
+    rho = pyro.sample("rho", dist.Uniform(0, 1))
+
+    # Sample reparametrizing variables.
+    S_aux = pyro.sample("S_aux",
+                        dist.Uniform(-0.5, population + 0.5)
+                            .expand(data.shape).to_event(1))
+    I_aux = pyro.sample("I_aux",
+                        dist.Uniform(-0.5, population + 0.5)
+                            .expand(data.shape).to_event(1))
+
+    # Manually enumerate.
+    S_curr, S_logp = quantize_enumerate(S_aux, min=0, max=population)
+    I_curr, I_logp = quantize_enumerate(I_aux, min=0, max=population)
+    S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=population - 1)
+    I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
+    # Reshape to support broadcasting, similar EnumMessenger.
+    S_prev = S_prev.reshape(-1, 2, 1, 1, 1)
+    I_prev = I_prev.reshape(-1, 1, 2, 1, 1)
+    S_curr = S_curr.reshape(-1, 1, 1, 2, 1)
+    S_logp = S_logp.reshape(-1, 1, 1, 2, 1)
+    I_curr = I_curr.reshape(-1, 1, 1, 1, 2)
+    I_logp = S_logp.reshape(-1, 1, 1, 1, 2)
+    data = data.reshape(-1, 1, 1, 1, 1)
+
+    # Reverse the S2I,I2R computation.
+    S2I = S_prev - S_curr
+    I2R = I_prev - I_curr + S2I
+
+    # Compute probability factors.
+    S2I_logp = dist.ExtendedBinomial(S_prev, prob_s * I_prev / population).log_prob(S2I)
+    I2R_logp = dist.ExtendedBinomial(I_prev, prob_i).log_prob(I2R)
+    obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(data)
+
+    # Manually perform variable elimination.
+    logp = S_logp + (I_logp + obs_logp) + S2I_logp + I2R_logp
+    logp = logp.expand(-1, 2, 2, 2, 2)
+    logp = logp.reshape(-1, 2 * 2, 2 * 2)
+    logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
+    logp = logp.logsumexp([0, 1])
+    warn_if_nan(logp)
+    pyro.factor("obs", logp)
+
+
+# We can train fit vectorized_model exactly as we fit the original
+# continuous_model.
+#
 # Finally we'll define an experiment runner.
 
 def main(args):
@@ -255,8 +318,10 @@ def main(args):
     # Choose among inference methods.
     if args.enum:
         samples = infer_hmc_enum(args, data)
+    elif args.vectorized:
+        samples = infer_hmc_cont(vectorized_model, args, data)
     else:
-        samples = infer_hmc_cont(args, data)
+        samples = infer_hmc_cont(continuous_model, args, data)
 
     # Evaluate results.
     names = {"response_rate": "rho",
@@ -281,10 +346,13 @@ if __name__ == "__main__":
     parser.add_argument("--response-rate", default=0.5, type=float)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
+    parser.add_argument("--vectorized", action="store_true",
+                        help="use the vectorized continuous model")
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
+    parser.add_argument("--max-tree-depth", default=4, type=int)
     parser.add_argument("--rng-seed", nargs='?', default=0, type=int)
     parser.add_argument("--jit", action="store_true")
     parser.add_argument("--cuda", action="store_true")
