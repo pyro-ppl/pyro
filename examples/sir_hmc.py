@@ -49,7 +49,7 @@ def discrete_model(data, population):
         S = S - S2I
         I = I + S2I - I2R
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho),  # See Note 1 above.
+                    dist.ExtendedBinomial(S2I, rho),
                     obs=datum)
 
 
@@ -91,26 +91,25 @@ def reparameterized_discrete_model(data, population):
     rho = pyro.sample("rho", dist.Uniform(0, 1))
 
     # Sequentially filter.
-    S = torch.tensor(population - 1.)
-    I = torch.tensor(1.)
+    S_curr = torch.tensor(population - 1.)
+    I_curr = torch.tensor(1.)
     for t, datum in enumerate(data):
         # Sample reparameterizing variables.
         # Note the density is ignored; distributions are used only for initialization.
         with poutine.mask(mask=False):
-            S_next = pyro.sample("S_{}".format(t), dist.Binomial(population, 0.5))
-            I_next = pyro.sample("I_{}".format(t), dist.Binomial(population, 0.5))
+            S_prev, I_prev = S_curr, I_curr
+            S_curr = pyro.sample("S_{}".format(t), dist.Binomial(population, 0.5))
+            I_curr = pyro.sample("I_{}".format(t), dist.Binomial(population, 0.5))
 
         # Now we reverse the computation.
-        S2I = S - S_next
-        I2R = I - I_next + S2I
+        S2I = S_prev - S_curr
+        I2R = I_prev - I_curr + S2I
         pyro.sample("S2I_{}".format(t),
-                    dist.ExtendedBinomial(S, prob_s * I / population),
+                    dist.ExtendedBinomial(S_prev, prob_s * I_prev / population),
                     obs=S2I)
         pyro.sample("I2R_{}".format(t),
-                    dist.ExtendedBinomial(I, prob_i),
+                    dist.ExtendedBinomial(I_prev, prob_i),
                     obs=I2R)
-        S = S_next
-        I = I_next
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
@@ -190,23 +189,22 @@ def continuous_model(data, population):
                             .expand(data.shape).to_event(1))
 
     # Sequentially filter.
-    S = torch.tensor(population - 1.)
-    I = torch.tensor(1.)
+    S_curr = torch.tensor(population - 1.)
+    I_curr = torch.tensor(1.)
     for t, datum in poutine.markov(enumerate(data)):
-        S_next = quantize("S_{}".format(t), S_aux[t]).clamp(min=0, max=population)
-        I_next = quantize("I_{}".format(t), I_aux[t]).clamp(min=0, max=population)
+        S_prev, I_prev = S_curr, I_curr
+        S_curr = quantize("S_{}".format(t), S_aux[t]).clamp(min=0, max=population)
+        I_curr = quantize("I_{}".format(t), I_aux[t]).clamp(min=0, max=population)
 
         # Now we reverse the computation.
-        S2I = S - S_next
-        I2R = I - I_next + S2I
+        S2I = S_prev - S_curr
+        I2R = I_prev - I_curr + S2I
         pyro.sample("S2I_{}".format(t),
-                    dist.ExtendedBinomial(S, prob_s * I / population),
+                    dist.ExtendedBinomial(S_prev, prob_s * I_prev / population),
                     obs=S2I)
         pyro.sample("I2R_{}".format(t),
-                    dist.ExtendedBinomial(I, prob_i),
+                    dist.ExtendedBinomial(I_prev, prob_i),
                     obs=I2R)
-        S = S_next
-        I = I_next
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I.clamp(min=0), rho),
                     obs=datum)
@@ -223,8 +221,8 @@ def heuristic_init(args, data):
     # Start with a single infection.
     S0 = args.population - 1
     if args.heuristic == 1:
-        # Assume >= 50% response rate.
-        S2I = data * min(2., S0 / data.sum())
+        # Assume 50% <= response rate <= 100%.
+        S2I = data * min(2., (S0 / data.sum()).sqrt())
         S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
         # Account for the single initial infection.
         S2I[0] += 1
