@@ -136,15 +136,27 @@ def _infer_hmc(args, data, model, init_values={}):
                   max_tree_depth=args.max_tree_depth,
                   init_strategy=init_to_value(values=init_values),
                   jit_compile=args.jit, ignore_jit_warnings=True)
+    energies = []
 
-    def logging_hook(kernel, *args):
-        print("potential = {:0.6g}".format(kernel._potential_energy_last))
+    def hook_fn(kernel, *unused):
+        e = float(kernel._potential_energy_last)
+        energies.append(e)
+        if args.verbose:
+            print("potential = {:0.6g}".format(e))
 
-    mcmc = MCMC(kernel,
-                hook_fn=logging_hook if args.verbose else None,
+    mcmc = MCMC(kernel, hook_fn=hook_fn,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps)
     mcmc.run(data, population=args.population)
+    mcmc.summary()
+    if args.plot:
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.plot(energies)
+        plt.xlabel("MCMC step")
+        plt.ylabel("potential energy")
+        plt.tight_layout()
+
     samples = mcmc.get_samples()
     return samples
 
@@ -263,7 +275,9 @@ def infer_hmc_cont(model, args, data):
 
 # The next step is to vectorize. We can repurpose DiscreteHMM's implementation
 # here, but we'll need to manually represent a Markov neighborhood of multiple
-# Bernoullis as single joint Categorical with 2 x 2 = 4 states.
+# Bernoullis as single joint Categorical with 2 x 2 = 4 states, and them
+# manually perform variable elimination (the factors here don't quite conform
+# to DiscreteHMM's interface).
 
 def quantize_enumerate(x_real, min, max):
     """Quantize, then manually enumerate."""
@@ -423,6 +437,7 @@ if __name__ == "__main__":
     parser.add_argument("--jit", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
 
     if args.double:
@@ -436,3 +451,7 @@ if __name__ == "__main__":
     SPLINE_ORDER = args.spline_order
 
     main(args)
+
+    if args.plot:
+        import matplotlib.pyplot as plt
+        plt.show()
