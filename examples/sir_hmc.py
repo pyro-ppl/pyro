@@ -91,7 +91,7 @@ def reparameterized_discrete_model(data, population):
     S = torch.tensor(population - 1.)
     I = torch.tensor(1.)
     for t, datum in enumerate(data):
-        # Sample reparametrizing variables.
+        # Sample reparameterizing variables.
         # Note the density is ignored; distributions are used only for initialization.
         with poutine.mask(mask=False):
             S_next = pyro.sample("S_{}".format(t), dist.Binomial(population, 0.5))
@@ -175,7 +175,7 @@ def continuous_model(data, population):
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
     rho = pyro.sample("rho", dist.Uniform(0, 1))
 
-    # Sample reparametrizing variables.
+    # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
                         dist.Uniform(-0.5, population + 0.5)
                             .expand(data.shape).to_event(1))
@@ -263,7 +263,7 @@ def vectorized_model(data, population):
     prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
     rho = pyro.sample("rho", dist.Uniform(0, 1))
 
-    # Sample reparametrizing variables.
+    # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
                         dist.Uniform(-0.5, population + 0.5)
                             .expand(data.shape).to_event(1))
@@ -296,7 +296,6 @@ def vectorized_model(data, population):
 
     # Manually perform variable elimination.
     logp = S_logp + (I_logp + obs_logp) + S2I_logp + I2R_logp
-    logp = logp.expand(-1, 2, 2, 2, 2)
     logp = logp.reshape(-1, 2 * 2, 2 * 2)
     logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
     logp = logp.logsumexp([0, 1])
@@ -339,14 +338,14 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
-    parser.add_argument("--population", default=10, type=int)
-    parser.add_argument("--duration", default=10, type=int)
+    parser.add_argument("-p", "--population", default=10, type=int)
+    parser.add_argument("-d", "--duration", default=10, type=int)
     parser.add_argument("--infection-rate", default=0.3, type=float)
     parser.add_argument("--recovery-rate", default=0.3, type=float)
     parser.add_argument("--response-rate", default=0.5, type=float)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
-    parser.add_argument("--vectorized", action="store_true",
+    parser.add_argument("-v", "--vectorized", action="store_true",
                         help="use the vectorized continuous model")
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
