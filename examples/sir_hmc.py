@@ -300,7 +300,7 @@ def vectorized_model(data, population):
     S_curr = S_curr.reshape(-1, 1, 1, 2, 1)
     S_logp = S_logp.reshape(-1, 1, 1, 2, 1)
     I_curr = I_curr.reshape(-1, 1, 1, 1, 2)
-    I_logp = S_logp.reshape(-1, 1, 1, 1, 2)
+    I_logp = I_logp.reshape(-1, 1, 1, 1, 2)
     data = data.reshape(-1, 1, 1, 1, 1)
 
     # Reverse the S2I,I2R computation.
