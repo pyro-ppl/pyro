@@ -11,15 +11,15 @@ from pyro.distributions.util import copy_docs_from
 
 @copy_docs_from(TransformModule)
 class GeneralizedChannelPermute(TransformModule):
-    """
+    r"""
     A bijection that generalizes a permutation on the channels of a batch of 2D
-    image in :math:`[\\ldots,C,H,W]` format. Specifically this transform performs
+    image in :math:`[\ldots,C,H,W]` format. Specifically this transform performs
     the operation,
 
-        :math:`\\mathbf{y} = \\text{torch.nn.functional.conv2d}(\\mathbf{x}, W)`
+        :math:`\mathbf{y} = \text{torch.nn.functional.conv2d}(\mathbf{x}, W)`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    and :math:`W\\sim C\\times C\\times 1\\times 1` is the filter matrix for a 1x1
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    and :math:`W\sim C\times C\times 1\times 1` is the filter matrix for a 1x1
     convolution with :math:`C` input and output channels.
 
     Ignoring the final two dimensions, :math:`W` is restricted to be the matrix
@@ -27,13 +27,13 @@ class GeneralizedChannelPermute(TransformModule):
 
         :math:`W = PLU`
 
-    where :math:`P\\sim C\\times C` is a permutation matrix on the channel
-    dimensions, :math:`L\\sim C\\times C` is a lower triangular matrix with ones on
-    the diagonal, and :math:`U\\sim C\\times C` is an upper triangular matrix.
+    where :math:`P\sim C\times C` is a permutation matrix on the channel
+    dimensions, :math:`L\sim C\times C` is a lower triangular matrix with ones on
+    the diagonal, and :math:`U\sim C\times C` is an upper triangular matrix.
     :math:`W` is initialized to a random orthogonal matrix. Then, :math:`P` is fixed
     and the learnable parameters set to :math:`L,U`.
 
-    The input :math:`\\mathbf{x}` and output :math:`\\mathbf{y}` both have shape
+    The input :math:`\mathbf{x}` and output :math:`\mathbf{y}` both have shape
     `[...,C,H,W]`, where `C` is the number of channels set at initialization.
 
     This operation was introduced in [1] for Glow normalizing flow, and is also

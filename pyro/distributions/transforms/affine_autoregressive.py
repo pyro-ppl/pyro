@@ -1,8 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import partial
-
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
@@ -16,21 +14,21 @@ from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
 
 @copy_docs_from(TransformModule)
 class AffineAutoregressive(TransformModule):
-    """
+    r"""
     An implementation of the bijective transform of Inverse Autoregressive Flow
     (IAF), using by default Eq (10) from Kingma Et Al., 2016,
 
-        :math:`\\mathbf{y} = \\mu_t + \\sigma_t\\odot\\mathbf{x}`
+        :math:`\mathbf{y} = \mu_t + \sigma_t\odot\mathbf{x}`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    :math:`\\mu_t,\\sigma_t` are calculated from an autoregressive network on
-    :math:`\\mathbf{x}`, and :math:`\\sigma_t>0`.
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    :math:`\mu_t,\sigma_t` are calculated from an autoregressive network on
+    :math:`\mathbf{x}`, and :math:`\sigma_t>0`.
 
     If the stable keyword argument is set to True then the transformation used is,
 
-        :math:`\\mathbf{y} = \\sigma_t\\odot\\mathbf{x} + (1-\\sigma_t)\\odot\\mu_t`
+        :math:`\mathbf{y} = \sigma_t\odot\mathbf{x} + (1-\sigma_t)\odot\mu_t`
 
-    where :math:`\\sigma_t` is restricted to :math:`(0,1)`. This variant of IAF is
+    where :math:`\sigma_t` is restricted to :math:`(0,1)`. This variant of IAF is
     claimed by the authors to be more numerically stable than one using Eq (10),
     although in practice it leads to a restriction on the distributions that can be
     represented, presumably since the input is restricted to rescaling by a number
@@ -225,23 +223,23 @@ class AffineAutoregressive(TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalAffineAutoregressive(ConditionalTransformModule):
-    """
+    r"""
     An implementation of the bijective transform of Inverse Autoregressive Flow
     (IAF) that conditions on an additional context variable and uses, by default,
     Eq (10) from Kingma Et Al., 2016,
 
-        :math:`\\mathbf{y} = \\mu_t + \\sigma_t\\odot\\mathbf{x}`
+        :math:`\mathbf{y} = \mu_t + \sigma_t\odot\mathbf{x}`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    :math:`\\mu_t,\\sigma_t` are calculated from an autoregressive network on
-    :math:`\\mathbf{x}` and context :math:`\\mathbf{z}\\in\\mathbb{R}^M`, and
-    :math:`\\sigma_t>0`.
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    :math:`\mu_t,\sigma_t` are calculated from an autoregressive network on
+    :math:`\mathbf{x}` and context :math:`\mathbf{z}\in\mathbb{R}^M`, and
+    :math:`\sigma_t>0`.
 
     If the stable keyword argument is set to True then the transformation used is,
 
-        :math:`\\mathbf{y} = \\sigma_t\\odot\\mathbf{x} + (1-\\sigma_t)\\odot\\mu_t`
+        :math:`\mathbf{y} = \sigma_t\odot\mathbf{x} + (1-\sigma_t)\odot\mu_t`
 
-    where :math:`\\sigma_t` is restricted to :math:`(0,1)`. This variant of IAF is
+    where :math:`\sigma_t` is restricted to :math:`(0,1)`. This variant of IAF is
     claimed by the authors to be more numerically stable than one using Eq (10),
     although in practice it leads to a restriction on the distributions that can be
     represented, presumably since the input is restricted to rescaling by a number
@@ -313,9 +311,9 @@ class ConditionalAffineAutoregressive(ConditionalTransformModule):
     bijective = True
     event_dim = 1
 
-    def __init__(self, hypernet, **kwargs):
+    def __init__(self, autoregressive_nn, **kwargs):
         super().__init__()
-        self.nn = hypernet
+        self.nn = autoregressive_nn
         self.kwargs = kwargs
 
     def condition(self, context):
@@ -323,8 +321,9 @@ class ConditionalAffineAutoregressive(ConditionalTransformModule):
         Conditions on a context variable, returning a non-conditional transform of
         of type :class:`~pyro.distributions.transforms.AffineAutoregressive`.
         """
-        cond_nn = partial(self.nn, context=context)
-        return AffineAutoregressive(cond_nn, **self.kwargs)
+
+        # Note that nn.condition doesn't copy the weights of the ConditionalAutoregressiveNN
+        return AffineAutoregressive(self.nn.condition(context), **self.kwargs)
 
 
 def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
@@ -391,4 +390,4 @@ def conditional_affine_autoregressive(input_dim, context_dim, hidden_dims=None, 
     if hidden_dims is None:
         hidden_dims = [10 * input_dim]
     nn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims)
-    return ConditionalAffineAutoregressive(input_dim, nn, **kwargs)
+    return ConditionalAffineAutoregressive(nn, **kwargs)

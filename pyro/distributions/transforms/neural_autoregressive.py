@@ -4,7 +4,6 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-from functools import partial
 
 import torch
 import torch.nn as nn
@@ -120,7 +119,7 @@ def tanh():
 
 @copy_docs_from(TransformModule)
 class NeuralAutoregressive(TransformModule):
-    """
+    r"""
     An implementation of the deep Neural Autoregressive Flow (NAF) bijective
     transform of the "IAF flavour" that can be used for sampling and scoring samples
     drawn from it (but not arbitrary ones).
@@ -235,7 +234,7 @@ class NeuralAutoregressive(TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalNeuralAutoregressive(ConditionalTransformModule):
-    """
+    r"""
     An implementation of the deep Neural Autoregressive Flow (NAF) bijective
     transform of the "IAF flavour" conditioning on an additiona context variable
     that can be used for sampling and scoring samples drawn from it (but not
@@ -287,12 +286,17 @@ class ConditionalNeuralAutoregressive(ConditionalTransformModule):
 
     def __init__(self, autoregressive_nn, **kwargs):
         super().__init__()
-        self.arn = autoregressive_nn
+        self.nn = autoregressive_nn
         self.kwargs = kwargs
 
     def condition(self, context):
-        cond_nn = partial(self.arn, context=context)
-        return NeuralAutoregressive(cond_nn, **self.kwargs)
+        """
+        Conditions on a context variable, returning a non-conditional transform of
+        of type :class:`~pyro.distributions.transforms.NeuralAutoregressive`.
+        """
+
+        # Note that nn.condition doesn't copy the weights of the ConditionalAutoregressiveNN
+        return NeuralAutoregressive(self.nn.condition(context), **self.kwargs)
 
 
 def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', width=16):

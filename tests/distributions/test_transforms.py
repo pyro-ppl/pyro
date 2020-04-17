@@ -43,7 +43,7 @@ class TransformTests(TestCase):
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
         # Apply permutation for autoregressive flows with a network
-        if hasattr(transform, 'arn'):
+        if hasattr(transform, 'arn') and 'get_permutation' in dir(transform.arn):
             permutation = transform.arn.get_permutation()
             permuted_jacobian = jacobian.clone()
             for j in range(input_dim):
@@ -86,6 +86,7 @@ class TransformTests(TestCase):
     def _test(self, transform_factory, shape=True, jacobian=True, inverse=True):
         for input_dim in [2, 5, 10]:
             transform = transform_factory(input_dim)
+
             if jacobian:
                 self._test_jacobian(input_dim, transform)
             if inverse:
@@ -97,7 +98,10 @@ class TransformTests(TestCase):
     def _test_conditional(self, conditional_transform_factory, context_dim=3, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
             z = torch.rand(1, context_dim)
+
+            # For autoregressive flows, we should disable permutation since you can't look inside partial
             return conditional_transform_factory(input_dim, context_dim).condition(z)
+
         self._test(transform_factory, **kwargs)
 
     def test_affine_autoregressive(self):
@@ -126,7 +130,7 @@ class TransformTests(TestCase):
             self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
 
     def test_conditional_affine_autoregressive(self):
-        self._test_conditional(T.conditional_affine_coupling)
+        self._test_conditional(T.conditional_affine_autoregressive)
 
     def test_conditional_affine_coupling(self):
         self._test_conditional(T.conditional_affine_coupling)
@@ -136,7 +140,7 @@ class TransformTests(TestCase):
         self._test_conditional(partial(T.conditional_householder, count_transforms=2))
 
     def test_conditional_neural_autoregressive(self):
-        self._test_conditional(T.conditional_affine_coupling, inverse=False)
+        self._test_conditional(T.conditional_neural_autoregressive, inverse=False)
 
     def test_conditional_planar(self):
         self._test_conditional(T.conditional_planar, inverse=False)
