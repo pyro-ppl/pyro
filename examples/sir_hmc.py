@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import math
 
 import torch
 from torch.autograd import grad
@@ -16,6 +17,7 @@ import pyro.poutine as poutine
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
 from pyro.infer import MCMC, NUTS, config_enumerate
 from pyro.infer.autoguide import init_to_value
+from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.ops.tensor_utils import convolve, safe_log
 from pyro.util import warn_if_nan
@@ -315,6 +317,7 @@ def vectorized_model(data, population):
     logp = logp.reshape(-1, 2 * 2, 2 * 2)
     logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
     logp = logp.logsumexp([0, 1])
+    logp = logp - math.log(4)  # Account for S,I initial distributions.
     warn_if_nan(logp)
     pyro.factor("obs", logp)
 
@@ -329,10 +332,13 @@ def main(args):
 
     data = generate_data(args)
 
-    # Choose among inference methods.
+    # Optionally test initialization heuristic.
     if args.test_init:
         _test_init(args, data)
-    elif args.enum:
+        return
+
+    # Choose among inference methods.
+    if args.enum:
         samples = infer_hmc_enum(args, data)
     elif args.vectorized:
         samples = infer_hmc_cont(vectorized_model, args, data)
@@ -359,12 +365,16 @@ def _test_init(args, data):
     for name, x in init_values.items():
         logging.info("{}:{}{}".format(name, "\n" if x.shape else " ", x))
         x.requires_grad_()
+    model = vectorized_model if args.vectorized else continuous_model
     with poutine.trace() as tr, poutine.condition(data=init_values):
-        vectorized_model(data, args.population)
+        model(data, args.population)
 
     # Test log prob.
     logging.info("-" * 40)
-    log_prob = tr.trace.log_prob_sum()
+    if args.vectorized:
+        log_prob = tr.trace.log_prob_sum()
+    else:
+        log_prob = TraceEinsumEvaluator(tr.trace, True, 0).log_prob(tr.trace)
     logging.info("log_prob = {:0.6g}".format(log_prob))
     if not torch.isfinite(log_prob):
         raise ValueError("infinite log_prob")
@@ -384,7 +394,7 @@ def _test_init(args, data):
     args.warmup_steps = 0
     args.num_samples = 1
     args.max_tree_depth = 1
-    infer_hmc_cont(vectorized_model, args, data)
+    infer_hmc_cont(model, args, data)
 
 
 if __name__ == "__main__":
