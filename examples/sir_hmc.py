@@ -77,7 +77,8 @@ def generate_data(args):
                             if site["name"].startswith("obs_")])
         if data.sum() > 2:
             break
-    logging.info("Generated data:\n{}".format(" ".join([str(int(x)) for x in data])))
+    logging.info("Generated {:0.0f} observed infections:\n{}"
+                 .format(data.sum(), " ".join([str(int(x)) for x in data])))
     return data
 
 
@@ -190,17 +191,31 @@ def _infer_hmc(args, data, model, init_values={}):
 #
 # We first define a helper to create enumerated Bernoulli sites.
 
-SPLINE_ORDER = 3
+SPLINE_ORDER = 1
 
 
 def quantize(name, x_real, min, max):
     """Randomly quantize in a way that preserves probability mass."""
     lb = x_real.detach().floor()
-    # This cubic spline guarantees gradients are continuous.
-    t = x_real - lb
-    prob = t * t * (3 - 2 * t) if SPLINE_ORDER == 3 else t
-    bern = pyro.sample("Q_" + name, dist.Bernoulli(prob))
-    x = (lb + bern).clamp(min=min, max=max)
+
+    if SPLINE_ORDER == 1:
+        # This linear spline produces piecewise constant gradients by
+        # interpolating over the nearest two integers.
+        prob = x_real - lb
+        q = pyro.sample("Q_" + name, dist.Bernoulli(prob))
+    elif SPLINE_ORDER == 2:
+        # This quadratic spline produces piecewise multilinear gradients by
+        # interpolating over the nearest four integers.
+        s = (x_real - lb) * 0.5
+        ss = s * s
+        t = 0.5 - s
+        tt = t * t
+        probs = torch.stack([tt, 0.5 - ss, 0.5 - tt, ss], dim=-1)
+        q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real) - 1
+    else:
+        raise NotImplementedError
+
+    x = (lb + q).clamp(min=min, max=max)
     return pyro.deterministic(name, x)
 
 
@@ -303,11 +318,27 @@ def infer_hmc_cont(model, args, data):
 def quantize_enumerate(x_real, min, max):
     """Quantize, then manually enumerate."""
     lb = x_real.detach().floor()
-    # This cubic spline guarantees gradients are continuous.
-    t = x_real - lb
-    prob = t * t * (3 - 2 * t) if SPLINE_ORDER == 3 else t
-    x = torch.stack([lb, lb + 1], dim=-1).clamp(min=min, max=max)
-    logits = safe_log(torch.stack([1 - prob, prob], dim=-1))
+
+    if SPLINE_ORDER == 1:
+        # This linear spline produces piecewise constant gradients by
+        # interpolating over the nearest two integers.
+        t = x_real - lb
+        logits = safe_log(torch.stack([1 - t, t], dim=-1))
+        q = torch.arange(2.)
+    elif SPLINE_ORDER == 2:
+        # This quadratic spline produces piecewise multilinear gradients by
+        # interpolating over the nearest four integers.
+        s = (x_real - lb) * 0.5
+        ss = s * s
+        t = 0.5 - s
+        tt = t * t
+        probs = torch.stack([tt, 0.5 - ss, 0.5 - tt, ss], dim=-1)
+        logits = safe_log(probs)
+        q = torch.arange(-1., 3.)
+    else:
+        raise NotImplementedError
+
+    x = (lb.unsqueeze(-1) + q).clamp(min=min, max=max)
     return x, logits
 
 
@@ -331,13 +362,15 @@ def vectorized_model(data, population):
     S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=population - 1)
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
     # Reshape to support broadcasting, similar EnumMessenger.
-    S_prev = S_prev.reshape(-1, 2, 1, 1, 1)
-    I_prev = I_prev.reshape(-1, 1, 2, 1, 1)
-    S_curr = S_curr.reshape(-1, 1, 1, 2, 1)
-    S_logp = S_logp.reshape(-1, 1, 1, 2, 1)
-    I_curr = I_curr.reshape(-1, 1, 1, 1, 2)
-    I_logp = I_logp.reshape(-1, 1, 1, 1, 2)
-    data = data.reshape(-1, 1, 1, 1, 1)
+    T = len(data)
+    Q = 2 * SPLINE_ORDER
+    S_prev = S_prev.reshape(T, Q, 1, 1, 1)
+    I_prev = I_prev.reshape(T, 1, Q, 1, 1)
+    S_curr = S_curr.reshape(T, 1, 1, Q, 1)
+    S_logp = S_logp.reshape(T, 1, 1, Q, 1)
+    I_curr = I_curr.reshape(T, 1, 1, 1, Q)
+    I_logp = I_logp.reshape(T, 1, 1, 1, Q)
+    data = data.reshape(T, 1, 1, 1, 1)
 
     # Reverse the S2I,I2R computation.
     S2I = S_prev - S_curr
@@ -350,7 +383,7 @@ def vectorized_model(data, population):
 
     # Manually perform variable elimination.
     logp = S_logp + (I_logp + obs_logp) + S2I_logp + I2R_logp
-    logp = logp.reshape(-1, 2 * 2, 2 * 2)
+    logp = logp.reshape(-1, Q * Q, Q * Q)
     logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
     logp = logp.reshape(-1).logsumexp(0)
     logp = logp - math.log(4)  # Account for S,I initial distributions.
@@ -530,7 +563,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--heuristic", default=1, type=int)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
-    parser.add_argument("--spline-order", default=3, type=int)
+    parser.add_argument("--spline-order", default=2, type=int)
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-v", "--vectorized", action="store_true",
