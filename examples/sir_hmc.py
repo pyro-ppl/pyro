@@ -4,6 +4,7 @@
 import argparse
 import logging
 import math
+import re
 
 import torch
 from torch.autograd import grad
@@ -15,7 +16,7 @@ import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
-from pyro.infer import MCMC, NUTS, config_enumerate
+from pyro.infer import MCMC, NUTS, config_enumerate, infer_discrete
 from pyro.infer.autoguide import init_to_value
 from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.infer.reparam import DiscreteCosineReparam
@@ -25,6 +26,9 @@ from pyro.util import warn_if_nan
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
+# Introduction
+# ============
+#
 # First consider a simple SIR model (Susceptible Infected Recovered).
 #
 # Note we need to use ExtendedBinomial rather than Binomial because the data
@@ -46,8 +50,8 @@ def discrete_model(data, population):
                           dist.Binomial(S, prob_s * I / population))
         I2R = pyro.sample("I2R_{}".format(t),
                           dist.Binomial(I, prob_i))
-        S = S - S2I
-        I = I + S2I - I2R
+        S = pyro.deterministic("S_{}".format(t), S - S2I)
+        I = pyro.deterministic("I_{}".format(t), I + S2I - I2R)
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I, rho),
                     obs=datum)
@@ -77,11 +81,26 @@ def generate_data(args):
     return data
 
 
-# Consider reparameterizing in terms of the variables (S, I) rather than (S2I,
-# I2R). Since these may lead to inconsistent states, we need to replace the
-# Binomial transition factors (S2I, I2R) with ExtendedBinomial.
+# Inference
+# =========
 #
-# The following model is equivalent:
+# While the above discrete_model is easy to understand, its discrete latent
+# variables pose a challenge for inference. One of the most popular inference
+# strategies for such models is Sequential Monte Carlo. However since Pyro and
+# PyTorch are stronger in gradient based vectorizable inference algorithms, we
+# will instead pursue inference based on Hamiltonian Monte Carlo (HMC).
+#
+# Our general inference strategy will be to:
+# 1. Introduce auxiliary variables to make the model Markov.
+# 2. Introduce more auxiliary variables to create a discrete parameterization.
+# 3. Marginalize out all remaining discrete latent variables.
+# 4. Vectorize to enable parallel-scan temporal filtering.
+#
+# Let's consider reparameterizing in terms of the variables (S, I) rather than
+# (S2I, I2R). Since these may lead to inconsistent states, we need to replace
+# the Binomial transition factors (S2I, I2R) with ExtendedBinomial.
+#
+# The following model is equivalent to the discrete_model:
 
 @config_enumerate
 def reparameterized_discrete_model(data, population):
@@ -161,9 +180,9 @@ def _infer_hmc(args, data, model, init_values={}):
     return samples
 
 
-# To perform exact inference on large populations, we'll continue to
-# reparameterize, this time replacing each of (S_aux,I_aux) with a combination of
-# a positive real variable and a Bernoulli variable.
+# To scale to large populations, we'll continue to reparameterize, this time
+# replacing each of (S_aux,I_aux) with a combination of a positive real
+# variable and a Bernoulli variable.
 #
 # This is the crux: we can now perform HMC over the real variable and marginalize
 # out the Bernoulli using variable elimination.
@@ -173,14 +192,15 @@ def _infer_hmc(args, data, model, init_values={}):
 SPLINE_ORDER = 3
 
 
-def quantize(name, x_real):
+def quantize(name, x_real, min, max):
     """Randomly quantize in a way that preserves probability mass."""
     lb = x_real.detach().floor()
     # This cubic spline guarantees gradients are continuous.
     t = x_real - lb
     prob = t * t * (3 - 2 * t) if SPLINE_ORDER == 3 else t
-    bern = pyro.sample(name, dist.Bernoulli(prob))
-    return lb + bern
+    bern = pyro.sample("Q_" + name, dist.Bernoulli(prob))
+    x = (lb + bern).clamp(min=min, max=max)
+    return pyro.deterministic(name, x)
 
 
 # Now we can define another equivalent model.
@@ -205,8 +225,8 @@ def continuous_model(data, population):
     I_curr = torch.tensor(1.)
     for t, datum in poutine.markov(enumerate(data)):
         S_prev, I_prev = S_curr, I_curr
-        S_curr = quantize("S_{}".format(t), S_aux[t]).clamp(min=0, max=population)
-        I_curr = quantize("I_{}".format(t), I_aux[t]).clamp(min=0, max=population)
+        S_curr = quantize("S_{}".format(t), S_aux[..., t], min=0, max=population)
+        I_curr = quantize("I_{}".format(t), I_aux[..., t], min=0, max=population)
 
         # Now we reverse the computation.
         S2I = S_prev - S_curr
@@ -273,11 +293,11 @@ def infer_hmc_cont(model, args, data):
     return _infer_hmc(args, data, model, init_values=init_values)
 
 
-# The next step is to vectorize. We can repurpose DiscreteHMM's implementation
-# here, but we'll need to manually represent a Markov neighborhood of multiple
-# Bernoullis as single joint Categorical with 2 x 2 = 4 states, and them
-# manually perform variable elimination (the factors here don't quite conform
-# to DiscreteHMM's interface).
+# Our final inference trick is to vectorize. We can repurpose DiscreteHMM's
+# implementation here, but we'll need to manually represent a Markov
+# neighborhood of multiple Bernoullis as single joint Categorical with 2 * 2 =
+# 4 states, and them manually perform variable elimination (the factors here
+# don't quite conform to DiscreteHMM's interface).
 
 def quantize_enumerate(x_real, min, max):
     """Quantize, then manually enumerate."""
@@ -337,7 +357,88 @@ def vectorized_model(data, population):
     pyro.factor("obs", logp)
 
 
-# We can fit vectorized_model exactly as we fit the original continuous_model.
+# We can fit vectorized_model exactly as we fit the original continuous_model,
+# using our infer_hmc_cont helper. The vectorized model is more than an order
+# of magnitude faster than the sequential version, and scales logarithmically
+# in time (up to your machine's parallelism).
+
+
+# Prediction and Forecasting
+# ==========================
+#
+# So far we've written four models that each describe the same probability
+# distribution. Each successive model made inference cheaper. Next let's move
+# beyond inference and consider predicting latent infection rate and
+# forecasting future infections.
+#
+# We'll use Pyro's effect handlers to combine multiple of the above models,
+# leveraging the vectorized_model for inference, then the continuous_model to
+# compute local latent variables, and finally the original discrete_model to
+# forecast forward in time. Let's assume posterior samples have already been
+# generated via infer_hmc_cont(vectorized_model, ...).
+
+@torch.no_grad()
+def predict(args, data, samples):
+    particle_plate = pyro.plate("particles", args.num_samples, dim=-1)
+
+    # First we sample discrete auxiliary variables from the continuous
+    # variables sampled in vectorized_model. Here infer_discrete runs a
+    # forward-filter backward-sample algorithm. We'll add these new samples to
+    # the existing dict of samples.
+    model = infer_discrete(particle_plate(continuous_model),
+                           first_available_dim=-2)
+    with poutine.trace() as tr, \
+            poutine.condition(data=samples):
+        model(data, args.population)
+    samples = {name: site["value"]
+               for name, site in tr.trace.nodes.items()
+               if site["type"] == "sample"}
+
+    # Next we'll run the forward generative process in discrete_model. Again
+    # we'll update the dict of samples.
+    extended_data = list(data)
+    extended_data.extend([None] * args.forecast)
+    with poutine.trace() as tr, \
+            poutine.condition(data=samples), \
+            particle_plate:
+        discrete_model(extended_data, args.population)
+    samples = {name: site["value"]
+               for name, site in tr.trace.nodes.items()
+               if site["type"] == "sample"}
+
+    # Concatenate sequential time series into tensors.
+    for key in ("S", "I", "S2I", "I2R"):
+        pattern = key + "_[0-9]+"
+        series = [value
+                  for name, value in samples.items()
+                  if re.match(pattern, name)]
+        assert len(series) == args.duration + args.forecast
+        samples[key] = torch.stack(series, dim=-1)
+
+    # Optionally plot the latent and forecasted series of new infections.
+    if args.plot:
+        import matplotlib.pyplot as plt
+        plt.figure()
+        time = torch.arange(len(data))
+        S2I = samples["S2I"]
+        p50 = S2I.median(0).values
+        p05 = S2I.kthvalue(int(round(0.05 * args.num_samples))).values
+        p95 = S2I.kthvalue(int(round(0.95 * args.num_samples))).values
+        plt.plot(time, data, "k-", label="observed")
+        plt.plot(time, p50, "r-", label="median")
+        plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
+        plt.axvline(args.duration, color="gray")
+        plt.xlabel("day after first infection")
+        plt.ylabel("new infections per day")
+        plt.title("Predicted new infections")
+        plt.legend(loc="best")
+        plt.tight_layout()
+
+    return samples
+
+
+# Experiments
+# ===========
 #
 # Finally we'll define an experiment runner.
 
@@ -360,7 +461,7 @@ def main(args):
     else:
         samples = infer_hmc_cont(continuous_model, args, data)
 
-    # Evaluate results.
+    # Evaluate fit.
     names = {"response_rate": "rho",
              "infection_rate": "prob_s",
              "recovery_rate": "prob_i"}
@@ -369,6 +470,10 @@ def main(args):
         std = samples[key].std().item()
         logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
                      .format(name, getattr(args, name), mean, std))
+
+    # Predict latent time series.
+    if args.forecast:
+        samples = predict(args, data, samples)
 
     return samples
 
@@ -417,6 +522,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-d", "--duration", default=10, type=int)
+    parser.add_argument("-f", "--forecast", default=0, type=int)
     parser.add_argument("--infection-rate", default=0.3, type=float)
     parser.add_argument("--recovery-rate", default=0.3, type=float)
     parser.add_argument("--response-rate", default=0.5, type=float)
