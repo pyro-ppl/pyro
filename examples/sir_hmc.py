@@ -205,10 +205,15 @@ def quantize(name, x_real, min, max):
         # This cubic spline interpolates over the nearest four integers.
     elif SPLINE_ORDER == 3:
         s = x_real - lb
-        s34 = s * s * s * 0.25
+        ss = s * s
         t = 1 - s
-        t34 = t * t * t * 0.25
-        probs = torch.stack([t34, 0.5 - s34, 0.5 - t34, s34], dim=-1)
+        tt = t * t
+        probs = torch.stack([
+            t * tt,
+            4 + ss * (3 * s - 6),
+            4 + tt * (3 * t - 6),
+            s * ss,
+        ], dim=-1) * (1/6)
         q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real) - 1
     else:
         raise NotImplementedError
@@ -325,10 +330,15 @@ def quantize_enumerate(x_real, min, max):
     elif SPLINE_ORDER == 3:
         # This cubic spline interpolates over the nearest four integers.
         s = x_real - lb
-        s34 = s * s * s * 0.25
+        ss = s * s
         t = 1 - s
-        t34 = t * t * t * 0.25
-        probs = torch.stack([t34, 0.5 - s34, 0.5 - t34, s34], dim=-1)
+        tt = t * t
+        probs = torch.stack([
+            t * tt,
+            4 + ss * (3 * s - 6),
+            4 + tt * (3 * t - 6),
+            s * ss,
+        ], dim=-1) * (1/6)
         logits = safe_log(probs)
         q = torch.arange(-1., 3.)
     else:
