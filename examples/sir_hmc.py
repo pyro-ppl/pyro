@@ -114,7 +114,8 @@ def reparameterized_discrete_model(data, population):
     I_curr = torch.tensor(1.)
     for t, datum in enumerate(data):
         # Sample reparameterizing variables.
-        # Note the density is ignored; distributions are used only for initialization.
+        # Note the density is ignored; distributions are used only for
+        # initialization.
         with poutine.mask(mask=False):
             S_prev, I_prev = S_curr, I_curr
             S_curr = pyro.sample("S_{}".format(t), dist.Binomial(population, 0.5))
@@ -184,8 +185,8 @@ def _infer_hmc(args, data, model, init_values={}):
 # replacing each of (S_aux,I_aux) with a combination of a positive real
 # variable and a Bernoulli variable.
 #
-# This is the crux: we can now perform HMC over the real variable and marginalize
-# out the Bernoulli using variable elimination.
+# This is the crux: we can now perform HMC over the real variable and
+# marginalize out the Bernoulli using variable elimination.
 #
 # We first define a helper to create enumerated Bernoulli sites.
 
