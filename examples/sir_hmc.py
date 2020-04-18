@@ -199,18 +199,16 @@ def quantize(name, x_real, min, max):
     lb = x_real.detach().floor()
 
     if SPLINE_ORDER == 1:
-        # This linear spline produces piecewise constant gradients by
-        # interpolating over the nearest two integers.
+        # This linear spline interpolates over the nearest two integers.
         prob = x_real - lb
         q = pyro.sample("Q_" + name, dist.Bernoulli(prob))
-    elif SPLINE_ORDER == 2:
-        # This quadratic spline produces piecewise multilinear gradients by
-        # interpolating over the nearest four integers.
-        s = (x_real - lb) * 0.5
-        ss = s * s
-        t = 0.5 - s
-        tt = t * t
-        probs = torch.stack([tt, 0.5 - ss, 0.5 - tt, ss], dim=-1)
+        # This cubic spline interpolates over the nearest four integers.
+    elif SPLINE_ORDER == 3:
+        s = x_real - lb
+        s34 = s * s * s * 0.25
+        t = 1 - s
+        t34 = t * t * t * 0.25
+        probs = torch.stack([t34, 0.5 - s34, 0.5 - t34, s34], dim=-1)
         q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real) - 1
     else:
         raise NotImplementedError
@@ -320,19 +318,17 @@ def quantize_enumerate(x_real, min, max):
     lb = x_real.detach().floor()
 
     if SPLINE_ORDER == 1:
-        # This linear spline produces piecewise constant gradients by
-        # interpolating over the nearest two integers.
+        # This linear spline interpolates over the nearest two integers.
         t = x_real - lb
         logits = safe_log(torch.stack([1 - t, t], dim=-1))
         q = torch.arange(2.)
-    elif SPLINE_ORDER == 2:
-        # This quadratic spline produces piecewise multilinear gradients by
-        # interpolating over the nearest four integers.
-        s = (x_real - lb) * 0.5
-        ss = s * s
-        t = 0.5 - s
-        tt = t * t
-        probs = torch.stack([tt, 0.5 - ss, 0.5 - tt, ss], dim=-1)
+    elif SPLINE_ORDER == 3:
+        # This cubic spline interpolates over the nearest four integers.
+        s = x_real - lb
+        s34 = s * s * s * 0.25
+        t = 1 - s
+        t34 = t * t * t * 0.25
+        probs = torch.stack([t34, 0.5 - s34, 0.5 - t34, s34], dim=-1)
         logits = safe_log(probs)
         q = torch.arange(-1., 3.)
     else:
@@ -363,7 +359,7 @@ def vectorized_model(data, population):
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
     # Reshape to support broadcasting, similar EnumMessenger.
     T = len(data)
-    Q = 2 * SPLINE_ORDER
+    Q = 1 + SPLINE_ORDER
     S_prev = S_prev.reshape(T, Q, 1, 1, 1)
     I_prev = I_prev.reshape(T, 1, Q, 1, 1)
     S_curr = S_curr.reshape(T, 1, 1, Q, 1)
@@ -563,7 +559,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--heuristic", default=1, type=int)
     parser.add_argument("--enum", action="store_true",
                         help="use the full enumeration model")
-    parser.add_argument("--spline-order", default=2, type=int)
+    parser.add_argument("--spline-order", default=3, type=int)
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-v", "--vectorized", action="store_true",
