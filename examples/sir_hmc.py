@@ -36,18 +36,27 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Binomial.log_prob() will error, whereas ExtendedBinomial.log_prob() will
 # return -inf.
 
+def global_model(population):
+    R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
+    tau = pyro.sample("tau", dist.LogNormal(math.log(7.), 1.))
+    rho = pyro.sample("rho", dist.Uniform(0, 1))
+
+    rate_s = -R0 / (tau * population)
+    prob_i = 1 / (1 + tau)
+
+    return rate_s, prob_i, rho
+
+
 def discrete_model(data, population):
     # Sample global parameters.
-    prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
-    prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
-    rho = pyro.sample("rho", dist.Uniform(0, 1))
+    rate_s, prob_i, rho = global_model(population)
 
     # Sequentially filter.
     S = torch.tensor(population - 1.)
     I = torch.tensor(1.)
     for t, datum in enumerate(data):
         S2I = pyro.sample("S2I_{}".format(t),
-                          dist.Binomial(S, prob_s * I / population))
+                          dist.Binomial(S, -(rate_s * I).expm1()))
         I2R = pyro.sample("I2R_{}".format(t),
                           dist.Binomial(I, prob_i))
         S = pyro.deterministic("S_{}".format(t), S - S2I)
@@ -61,8 +70,8 @@ def discrete_model(data, population):
 # parameter values and poutine.trace to record sample observations.
 
 def generate_data(args):
-    params = {"probs_s": torch.tensor(args.infection_rate),
-              "probs_i": torch.tensor(args.recovery_rate),
+    params = {"R0": torch.tensor(args.basic_reproduction_number),
+              "tau": torch.tensor(args.recovery_time),
               "rho": torch.tensor(args.response_rate)}
     empty_data = [None] * args.duration
 
@@ -106,9 +115,7 @@ def generate_data(args):
 @config_enumerate
 def reparameterized_discrete_model(data, population):
     # Sample global parameters.
-    prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
-    prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
-    rho = pyro.sample("rho", dist.Uniform(0, 1))
+    rate_s, prob_i, rho = global_model(population)
 
     # Sequentially filter.
     S_curr = torch.tensor(population - 1.)
@@ -127,7 +134,7 @@ def reparameterized_discrete_model(data, population):
         S2I = S_prev - S_curr
         I2R = I_prev - I_curr + S2I
         pyro.sample("S2I_{}".format(t),
-                    dist.ExtendedBinomial(S_prev, prob_s * I_prev / population),
+                    dist.ExtendedBinomial(S_prev, -(rate_s * I_prev).expm1()),
                     obs=S2I)
         pyro.sample("I2R_{}".format(t),
                     dist.ExtendedBinomial(I_prev, prob_i),
@@ -228,9 +235,7 @@ def quantize(name, x_real, min, max):
 @config_enumerate
 def continuous_model(data, population):
     # Sample global parameters.
-    prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
-    prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
-    rho = pyro.sample("rho", dist.Uniform(0, 1))
+    rate_s, prob_i, rho = global_model(population)
 
     # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
@@ -252,7 +257,7 @@ def continuous_model(data, population):
         S2I = S_prev - S_curr
         I2R = I_prev - I_curr + S2I
         pyro.sample("S2I_{}".format(t),
-                    dist.ExtendedBinomial(S_prev, prob_s * I_prev / population),
+                    dist.ExtendedBinomial(S_prev, -(rate_s * I_prev).expm1()),
                     obs=S2I)
         pyro.sample("I2R_{}".format(t),
                     dist.ExtendedBinomial(I_prev, prob_i),
@@ -279,7 +284,7 @@ def heuristic_init(args, data):
         # Account for the single initial infection.
         S2I[0] += 1
         # Assume infection lasts less than a month.
-        recovery = (1 - args.recovery_rate / 2) ** torch.arange(30.)
+        recovery = torch.arange(30.).div(args.recovery_time).neg().exp()
         I_aux = convolve(S2I, recovery)[:len(data)].clamp(min=0.5)
     elif args.heuristic == 2:
         # Assume 100% response rate, 0% recovery rate.
@@ -290,8 +295,8 @@ def heuristic_init(args, data):
                           DiscreteCosineTransform(dim=-1)])
 
     return {
-        "prob_s": torch.tensor(0.5),
-        "prob_i": torch.tensor(0.5),
+        "tau": torch.tensor(10.0),
+        "R0": torch.tensor(2.0),
         "rho": torch.tensor(0.5),
         "S_aux": S_aux,
         "I_aux": I_aux,
@@ -351,9 +356,7 @@ def quantize_enumerate(x_real, min, max):
 
 def vectorized_model(data, population):
     # Sample global parameters.
-    prob_s = pyro.sample("prob_s", dist.Uniform(0, 1))
-    prob_i = pyro.sample("prob_i", dist.Uniform(0, 1))
-    rho = pyro.sample("rho", dist.Uniform(0, 1))
+    rate_s, prob_i, rho = global_model(population)
 
     # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
@@ -384,7 +387,7 @@ def vectorized_model(data, population):
     I2R = I_prev - I_curr + S2I
 
     # Compute probability factors.
-    S2I_logp = dist.ExtendedBinomial(S_prev, prob_s * I_prev / population).log_prob(S2I)
+    S2I_logp = dist.ExtendedBinomial(S_prev, -(rate_s * I_prev).expm1()).log_prob(S2I)
     I2R_logp = dist.ExtendedBinomial(I_prev, prob_i).log_prob(I2R)
     obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(data)
 
@@ -504,13 +507,13 @@ def main(args):
 
     # Evaluate fit.
     names = {"response_rate": "rho",
-             "infection_rate": "prob_s",
-             "recovery_rate": "prob_i"}
+             "basic_reproduction_number": "R0",
+             "recovery_time": "tau"}
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
         logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
-                     .format(name, getattr(args, name), mean, std))
+                     .format(key, getattr(args, name), mean, std))
 
     # Predict latent time series.
     if args.forecast:
@@ -564,11 +567,11 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-d", "--duration", default=10, type=int)
     parser.add_argument("-f", "--forecast", default=0, type=int)
-    parser.add_argument("--infection-rate", default=0.3, type=float)
-    parser.add_argument("--recovery-rate", default=0.3, type=float)
-    parser.add_argument("--response-rate", default=0.5, type=float)
+    parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
+    parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
+    parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("-i", "--heuristic", default=1, type=int)
-    parser.add_argument("--enum", action="store_true",
+    parser.add_argument("-e", "--enum", action="store_true",
                         help="use the full enumeration model")
     parser.add_argument("--spline-order", default=3, type=int)
     parser.add_argument("--dct", action="store_true",
