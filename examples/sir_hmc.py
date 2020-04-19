@@ -115,12 +115,13 @@ def reparameterized_discrete_model(data, population):
     I_curr = torch.tensor(1.)
     for t, datum in enumerate(data):
         # Sample reparameterizing variables.
-        # Note the density is ignored; distributions are used only for
-        # initialization.
-        with poutine.mask(mask=False):
-            S_prev, I_prev = S_curr, I_curr
-            S_curr = pyro.sample("S_{}".format(t), dist.Binomial(population, 0.5))
-            I_curr = pyro.sample("I_{}".format(t), dist.Binomial(population, 0.5))
+        # When reparameterizing to a factor graph, we ignored density via
+        # .mask(False). Thus distributions are used only for initialization.
+        S_prev, I_prev = S_curr, I_curr
+        S_curr = pyro.sample("S_{}".format(t),
+                             dist.Binomial(population, 0.5).mask(False))
+        I_curr = pyro.sample("I_{}".format(t),
+                             dist.Binomial(population, 0.5).mask(False))
 
         # Now we reverse the computation.
         S2I = S_prev - S_curr
@@ -234,10 +235,10 @@ def continuous_model(data, population):
     # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
                         dist.Uniform(-0.5, population + 0.5)
-                            .expand(data.shape).to_event(1))
+                            .mask(False).expand(data.shape).to_event(1))
     I_aux = pyro.sample("I_aux",
                         dist.Uniform(-0.5, population + 0.5)
-                            .expand(data.shape).to_event(1))
+                            .mask(False).expand(data.shape).to_event(1))
 
     # Sequentially filter.
     S_curr = torch.tensor(population - 1.)
@@ -357,10 +358,10 @@ def vectorized_model(data, population):
     # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
                         dist.Uniform(-0.5, population + 0.5)
-                            .expand(data.shape).to_event(1))
+                            .mask(False).expand(data.shape).to_event(1))
     I_aux = pyro.sample("I_aux",
                         dist.Uniform(-0.5, population + 0.5)
-                            .expand(data.shape).to_event(1))
+                            .mask(False).expand(data.shape).to_event(1))
 
     # Manually enumerate.
     S_curr, S_logp = quantize_enumerate(S_aux, min=0, max=population)
