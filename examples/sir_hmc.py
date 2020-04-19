@@ -161,6 +161,7 @@ def infer_hmc_enum(args, data):
 
 
 def _infer_hmc(args, data, model, init_values={}):
+    logging.info("Running inference...")
     kernel = NUTS(model,
                   max_tree_depth=args.max_tree_depth,
                   init_strategy=init_to_value(values=init_values),
@@ -171,7 +172,7 @@ def _infer_hmc(args, data, model, init_values={}):
         e = float(kernel._potential_energy_last)
         energies.append(e)
         if args.verbose:
-            print("potential = {:0.6g}".format(e))
+            logging.info("potential = {:0.6g}".format(e))
 
     mcmc = MCMC(kernel, hook_fn=hook_fn,
                 num_samples=args.num_samples,
@@ -184,6 +185,7 @@ def _infer_hmc(args, data, model, init_values={}):
         plt.plot(energies)
         plt.xlabel("MCMC step")
         plt.ylabel("potential energy")
+        plt.title("MCMC energy trace")
         plt.tight_layout()
 
     samples = mcmc.get_samples()
@@ -405,6 +407,33 @@ def vectorized_model(data, population):
 # using our infer_hmc_cont helper. The vectorized model is more than an order
 # of magnitude faster than the sequential version, and scales logarithmically
 # in time (up to your machine's parallelism).
+#
+# After inference we have samples of all latent variables. Let's define a
+# helper to examine the inferred posterior distributions.
+
+def evaluate(args, samples):
+    # Print estimated values.
+    names = {"basic_reproduction_number": "R0",
+             "recovery_time": "tau",
+             "response_rate": "rho"}
+    for name, key in names.items():
+        mean = samples[key].mean().item()
+        std = samples[key].std().item()
+        logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
+                     .format(key, getattr(args, name), mean, std))
+
+    # Optionally plot histograms.
+    if args.plot:
+        import matplotlib.pyplot as plt
+        fig, axes = plt.subplots(3, 1, figsize=(5, 8))
+        axes[0].set_title("Posterior parameter estimates")
+        for ax, (name, key) in zip(axes, names.items()):
+            truth = getattr(args, name)
+            ax.hist(samples[key], label="posterior")
+            ax.axvline(truth, color="k", label="truth")
+            ax.set_xlabel(key + " = " + name.replace("_", " "))
+            ax.legend(loc="best")
+        plt.tight_layout()
 
 
 # Prediction and Forecasting
@@ -423,16 +452,17 @@ def vectorized_model(data, population):
 
 @torch.no_grad()
 def predict(args, data, samples):
+    logging.info("Forecasting {} steps ahead...".format(args.forecast))
     particle_plate = pyro.plate("particles", args.num_samples, dim=-1)
 
     # First we sample discrete auxiliary variables from the continuous
     # variables sampled in vectorized_model. Here infer_discrete runs a
     # forward-filter backward-sample algorithm. We'll add these new samples to
     # the existing dict of samples.
-    model = infer_discrete(particle_plate(continuous_model),
-                           first_available_dim=-2)
-    with poutine.trace() as tr, \
-            poutine.condition(data=samples):
+    model = poutine.condition(continuous_model, samples)
+    model = particle_plate(model)
+    model = infer_discrete(model, first_available_dim=-2)
+    with poutine.trace() as tr:
         model(data, args.population)
     samples = {name: site["value"]
                for name, site in tr.trace.nodes.items()
@@ -440,12 +470,11 @@ def predict(args, data, samples):
 
     # Next we'll run the forward generative process in discrete_model. Again
     # we'll update the dict of samples.
-    extended_data = list(data)
-    extended_data.extend([None] * args.forecast)
-    with poutine.trace() as tr, \
-            poutine.condition(data=samples), \
-            particle_plate:
-        discrete_model(extended_data, args.population)
+    extended_data = list(data) + [None] * args.forecast
+    model = poutine.condition(discrete_model, samples)
+    model = particle_plate(model)
+    with poutine.trace() as tr:
+        model(extended_data, args.population)
     samples = {name: site["value"]
                for name, site in tr.trace.nodes.items()
                if site["type"] == "sample"}
@@ -457,25 +486,28 @@ def predict(args, data, samples):
                   for name, value in samples.items()
                   if re.match(pattern, name)]
         assert len(series) == args.duration + args.forecast
+        series[0] = series[0].expand(series[1].shape)
         samples[key] = torch.stack(series, dim=-1)
 
     # Optionally plot the latent and forecasted series of new infections.
     if args.plot:
         import matplotlib.pyplot as plt
         plt.figure()
-        time = torch.arange(len(data))
+        time = torch.arange(len(data) + args.forecast)
         S2I = samples["S2I"]
-        p50 = S2I.median(0).values
-        p05 = S2I.kthvalue(int(round(0.05 * args.num_samples))).values
-        p95 = S2I.kthvalue(int(round(0.95 * args.num_samples))).values
-        plt.plot(time, data, "k-", label="observed")
+        p50 = S2I.median(dim=0).values
+        p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
+        p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
+        plt.plot(time[:len(data)], data, "k.", label="observed")
         plt.plot(time, p50, "r-", label="median")
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
-        plt.axvline(args.duration, color="gray")
+        plt.axvline(args.duration - 0.5, color="gray", lw=1)
+        plt.xlim(0, len(time) - 1)
+        plt.ylim(0, None)
         plt.xlabel("day after first infection")
         plt.ylabel("new infections per day")
-        plt.title("Predicted new infections")
-        plt.legend(loc="best")
+        plt.title("New infections in population of {}".format(args.population))
+        plt.legend(loc="upper left")
         plt.tight_layout()
 
     return samples
@@ -506,14 +538,7 @@ def main(args):
         samples = infer_hmc_cont(continuous_model, args, data)
 
     # Evaluate fit.
-    names = {"basic_reproduction_number": "R0",
-             "recovery_time": "tau",
-             "response_rate": "rho"}
-    for name, key in names.items():
-        mean = samples[key].mean().item()
-        std = samples[key].std().item()
-        logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
-                     .format(key, getattr(args, name), mean, std))
+    evaluate(args, samples)
 
     # Predict latent time series.
     if args.forecast:
@@ -580,7 +605,7 @@ if __name__ == "__main__":
                         help="use the vectorized continuous model")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
-    parser.add_argument("-t", "--max-tree-depth", default=4, type=int)
+    parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-s", "--rng-seed", default=0, type=int)
     parser.add_argument("--test-init", action="store_true")
     parser.add_argument("--double", action="store_true")
