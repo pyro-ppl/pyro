@@ -498,13 +498,15 @@ def predict(args, data, samples):
         assert len(series) == args.duration + args.forecast
         series[0] = series[0].expand(series[1].shape)
         samples[key] = torch.stack(series, dim=-1)
+    S2I = samples["S2I"]
+    logging.info("Median prediction of new infections (starting on day 0):\n{}"
+                 .format(" ".join(map(str, map(int, S2I.median(dim=0).values)))))
 
     # Optionally plot the latent and forecasted series of new infections.
     if args.plot:
         import matplotlib.pyplot as plt
         plt.figure()
         time = torch.arange(len(data) + args.forecast)
-        S2I = samples["S2I"]
         p50 = S2I.median(dim=0).values
         p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
         p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
