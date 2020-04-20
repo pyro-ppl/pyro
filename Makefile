@@ -14,6 +14,9 @@ docs: FORCE
 apidoc: FORCE
 	$(MAKE) -C docs apidoc
 
+tutorial: FORCE
+	$(MAKE) -C tutorial html
+
 lint: FORCE
 	flake8
 

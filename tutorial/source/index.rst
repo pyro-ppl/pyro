@@ -78,7 +78,7 @@ Welcome to Pyro Examples and Tutorials!
    forecast_simple
    timeseries
    smcfilter
-
+   sir_hmc
 
 Indices and tables
 ==================
