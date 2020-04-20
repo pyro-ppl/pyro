@@ -381,8 +381,7 @@ def vectorized_model(data, population):
     S_curr, S_logp = quantize_enumerate(S_aux, min=0, max=population)
     I_curr, I_logp = quantize_enumerate(I_aux, min=0, max=population)
     # Truncate final value from the right then pad initial value onto the left.
-    S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0),
-            value=population - 1)
+    S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=population - 1)
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
     # Reshape to support broadcasting, similar EnumMessenger.
     T = len(data)
