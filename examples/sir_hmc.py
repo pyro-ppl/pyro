@@ -230,32 +230,23 @@ def _infer_hmc(args, data, model, init_values={}):
 #
 # We first define a helper to create enumerated Categorical sites.
 
-SPLINE_ORDER = 1
-
-
 def quantize(name, x_real, min, max):
     """Randomly quantize in a way that preserves probability mass."""
     lb = x_real.detach().floor()
 
-    if SPLINE_ORDER == 1:
-        # This linear spline interpolates over the nearest two integers.
-        prob = x_real - lb
-        q = pyro.sample("Q_" + name, dist.Bernoulli(prob))
-        # This cubic spline interpolates over the nearest four integers.
-    elif SPLINE_ORDER == 3:
-        s = x_real - lb
-        ss = s * s
-        t = 1 - s
-        tt = t * t
-        probs = torch.stack([
-            t * tt,
-            4 + ss * (3 * s - 6),
-            4 + tt * (3 * t - 6),
-            s * ss,
-        ], dim=-1) * (1/6)
-        q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real) - 1
-    else:
-        raise NotImplementedError
+    # This cubic spline interpolates over the nearest four integers, ensuring
+    # piecewise quadratic gradients.
+    s = x_real - lb
+    ss = s * s
+    t = 1 - s
+    tt = t * t
+    probs = torch.stack([
+        t * tt,
+        4 + ss * (3 * s - 6),
+        4 + tt * (3 * t - 6),
+        s * ss,
+    ], dim=-1) * (1/6)
+    q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real) - 1
 
     x = (lb + q).clamp(min=min, max=max)
     return pyro.deterministic(name, x)
@@ -355,27 +346,20 @@ def quantize_enumerate(x_real, min, max):
     """Quantize, then manually enumerate."""
     lb = x_real.detach().floor()
 
-    if SPLINE_ORDER == 1:
-        # This linear spline interpolates over the nearest two integers.
-        t = x_real - lb
-        logits = safe_log(torch.stack([1 - t, t], dim=-1))
-        q = torch.arange(2.)
-    elif SPLINE_ORDER == 3:
-        # This cubic spline interpolates over the nearest four integers.
-        s = x_real - lb
-        ss = s * s
-        t = 1 - s
-        tt = t * t
-        probs = torch.stack([
-            t * tt,
-            4 + ss * (3 * s - 6),
-            4 + tt * (3 * t - 6),
-            s * ss,
-        ], dim=-1) * (1/6)
-        logits = safe_log(probs)
-        q = torch.arange(-1., 3.)
-    else:
-        raise NotImplementedError
+    # This cubic spline interpolates over the nearest four integers, ensuring
+    # piecewise quadratic gradients.
+    s = x_real - lb
+    ss = s * s
+    t = 1 - s
+    tt = t * t
+    probs = torch.stack([
+        t * tt,
+        4 + ss * (3 * s - 6),
+        4 + tt * (3 * t - 6),
+        s * ss,
+    ], dim=-1) * (1/6)
+    logits = safe_log(probs)
+    q = torch.arange(-1., 3.)
 
     x = (lb.unsqueeze(-1) + q).clamp(min=min, max=max)
     return x, logits
@@ -401,7 +385,7 @@ def vectorized_model(data, population):
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
     # Reshape to support broadcasting, similar EnumMessenger.
     T = len(data)
-    Q = 1 + SPLINE_ORDER
+    Q = 4  # Numbr of quantization points.
     S_prev = S_prev.reshape(T, Q, 1, 1, 1)
     I_prev = I_prev.reshape(T, 1, Q, 1, 1)
     S_curr = S_curr.reshape(T, 1, 1, Q, 1)
@@ -579,7 +563,6 @@ if __name__ == "__main__":
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("-e", "--enum", action="store_true",
                         help="use the full enumeration model")
-    parser.add_argument("--spline-order", default=3, type=int)
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
     parser.add_argument("-v", "--vectorized", action="store_true",
@@ -603,8 +586,6 @@ if __name__ == "__main__":
             torch.set_default_tensor_type(torch.DoubleTensor)
     elif args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
-
-    SPLINE_ORDER = args.spline_order
 
     main(args)
 
