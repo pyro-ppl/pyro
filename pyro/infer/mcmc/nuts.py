@@ -390,7 +390,8 @@ class NUTS(HMC):
                     z = new_tree.z_proposal
                     self._cache(z, new_tree.z_proposal_pe, new_tree.z_proposal_grads)
 
-                r_sum = r_sum + new_tree.r_sum
+                r_sum = {site_names: r_sum[site_names] + new_tree.r_sum[site_names]
+                         for site_names in self.inverse_mass_matrix}
                 if self._is_turning(r_left, r_right, r_sum):  # stop doubling
                     break
                 else:  # update tree_weight

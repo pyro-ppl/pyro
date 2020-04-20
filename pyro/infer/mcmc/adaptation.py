@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-import warnings
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -38,9 +37,8 @@ class WarmupAdapter:
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()
-
         if adapt_mass_matrix:
-            self._mass_matrix_adapt_scheme = OrderedDict()
+            self._mass_matrix_adapt_scheme = {}
 
         # We separate warmup_steps into windows:
         #   start_buffer + window 1 + window 2 + window 3 + ... + end_buffer
@@ -56,7 +54,7 @@ class WarmupAdapter:
         # configured later on setup
         self._warmup_steps = None
         self._inverse_mass_matrix = OrderedDict()
-        self._r_dist = OrderedDict()
+        self._r_dist = {}
         self._adaptation_schedule = []
 
     def _build_adaptation_schedule(self):
@@ -202,15 +200,14 @@ class WarmupAdapter:
 
     @inverse_mass_matrix.setter
     def inverse_mass_matrix(self, value):
-        # XXX: for backward compatibility
+        # XXX: for backward compatibility (when users want to specify a fixed inverse mass matrix)
         if torch.is_tensor(value):
-            warnings.warn("Please make sure that `inverse_mass_matrix` is ",
-                          DeprecationWarning)
             assert len(self._inverse_mass_matrix) == 1
             all_sites = list(self._inverse_mass_matrix.keys())[0]
             value = {all_sites: value}
 
-        self._inverse_mass_matrix = value
+        for site_names, inv_mass_matrix in value.items():
+            self._inverse_mass_matrix[site_names] = inv_mass_matrix
         self._update_r_dist()
         if self.adapt_mass_matrix:
             for site_names, adapt_scheme in self._mass_matrix_adapt_scheme.items():

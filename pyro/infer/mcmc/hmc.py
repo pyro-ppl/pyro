@@ -205,9 +205,10 @@ class HMC(MCMCKernel):
 
     def _sample_r(self, name):
         r = {}
-        r_flat_list = []
-        for site_names, r_dist in self._adapter.r_dist.items():
-            r_flat = pyro.sample(name + "_" + ",".join(site_names), r_dist)
+        r_flat_dict = {}
+        for site_names in self.inverse_mass_matrix:
+            r_flat = pyro.sample(
+                name + "_" + ",".join(site_names), self._adapter.r_dist[site_names])
             pos = 0
             for name in site_names:
                 param = self.initial_params[name]
@@ -215,8 +216,8 @@ class HMC(MCMCKernel):
                 r[name] = r_flat[pos:next_pos].reshape(param.shape)
                 pos = next_pos
             assert pos == r_flat.size(0)
-            r_flat_list.append(r_flat)
-        return r, torch.cat(r_flat_list)
+            r_flat_dict[site_names] = r_flat
+        return r, r_flat_dict
 
     @property
     def inverse_mass_matrix(self):

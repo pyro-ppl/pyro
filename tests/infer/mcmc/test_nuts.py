@@ -380,3 +380,24 @@ def test_gamma_poisson(hyperpriors):
     samples = mcmc.get_samples()
     posterior = posterior_replay(model, samples, data, num_samples=num_samples)
     assert_equal(posterior["rate"].mean(0), true_rate, prec=0.3)
+
+
+def test_structured_mass():
+    def model(cov):
+        x = pyro.sample("x", dist.Normal(0, 1000))
+        y = pyro.sample("y", dist.Normal(0, 1000))
+        z = pyro.sample("z", dist.Normal(0, 1000))
+        xyz = torch.stack([x, y, z])
+        pyro.sample("obs", dist.MultivariateNormal(torch.zeros(3), cov), obs=xyz)
+
+    xy_cov = torch.tensor([[2., 1.], [1., 3.]])
+    z_var = torch.tensor([4.])
+    cov = torch.zeros(3, 3)
+    cov[:2, :2] = xy_cov
+    cov[2, 2] = z_var
+    kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=[("x", "y")])
+    mcmc = MCMC(kernel, num_samples=1, warmup_steps=1000)
+    mcmc.run(cov)
+    assert ("x", "y") in kernel.inverse_mass_matrix and ("z",) in kernel.inverse_mass_matrix
+    assert_equal(kernel.inverse_mass_matrix[("x", "y")], xy_cov, prec=0.3)
+    assert_equal(kernel.inverse_mass_matrix[("z",)], z_var, prec=0.3)
