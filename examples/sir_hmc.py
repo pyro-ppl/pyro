@@ -499,19 +499,19 @@ def predict(args, data, samples):
         series[0] = series[0].expand(series[1].shape)
         samples[key] = torch.stack(series, dim=-1)
     S2I = samples["S2I"]
+    median = S2I.median(dim=0).values
     logging.info("Median prediction of new infections (starting on day 0):\n{}"
-                 .format(" ".join(map(str, map(int, S2I.median(dim=0).values)))))
+                 .format(" ".join(map(str, map(int, median)))))
 
     # Optionally plot the latent and forecasted series of new infections.
     if args.plot:
         import matplotlib.pyplot as plt
         plt.figure()
         time = torch.arange(len(data) + args.forecast)
-        p50 = S2I.median(dim=0).values
         p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
         p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
         plt.plot(time[:len(data)], data, "k.", label="observed")
-        plt.plot(time, p50, "r-", label="median")
+        plt.plot(time, median, "r-", label="median")
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
         plt.axvline(args.duration - 0.5, color="gray", lw=1)
         plt.xlim(0, len(time) - 1)
@@ -528,7 +528,11 @@ def predict(args, data, samples):
 # Experiments
 # ===========
 #
-# Finally we'll define an experiment runner.
+# Finally we'll define an experiment runner. For example we can simulate 60
+# days of infection on a population of 100000 and forecast forward another 30
+# days, and plot the results as follows (takes about 3 minutes on my laptop):
+#
+# python sir_hmc.py -p 100000 -d 60 -f 30 --plot
 
 def main(args):
     pyro.enable_validation(__debug__)
@@ -539,10 +543,10 @@ def main(args):
     # Choose among inference methods.
     if args.enum:
         samples = infer_hmc_enum(args, data)
-    elif args.vectorized:
-        samples = infer_hmc_cont(vectorized_model, args, data)
-    else:
+    elif args.sequential:
         samples = infer_hmc_cont(continuous_model, args, data)
+    else:
+        samples = infer_hmc_cont(vectorized_model, args, data)
 
     # Evaluate fit.
     evaluate(args, samples)
@@ -565,14 +569,14 @@ if __name__ == "__main__":
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("-e", "--enum", action="store_true",
                         help="use the full enumeration model")
+    parser.add_argument("-s", "--sequential", action="store_true",
+                        help="use the sequential continuous model")
     parser.add_argument("--dct", action="store_true",
                         help="use discrete cosine reparameterizer")
-    parser.add_argument("-v", "--vectorized", action="store_true",
-                        help="use the vectorized continuous model")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
-    parser.add_argument("-s", "--rng-seed", default=0, type=int)
+    parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("--double", action="store_true")
     parser.add_argument("--jit", action="store_true")
     parser.add_argument("--cuda", action="store_true")
