@@ -7,7 +7,6 @@ import math
 import re
 
 import torch
-from torch.autograd import grad
 from torch.distributions import biject_to, constraints
 from torch.distributions.transforms import ComposeTransform
 
@@ -18,7 +17,6 @@ import pyro.poutine as poutine
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
 from pyro.infer import MCMC, NUTS, config_enumerate, infer_discrete
 from pyro.infer.autoguide import init_to_value
-from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.ops.tensor_utils import convolve, safe_log
 from pyro.util import warn_if_nan
@@ -310,19 +308,15 @@ def heuristic_init(args, data):
     """Heuristically initialize to a feasible point."""
     # Start with a single infection.
     S0 = args.population - 1
-    if args.heuristic == 1:
-        # Assume 50% <= response rate <= 100%.
-        S2I = data * min(2., (S0 / data.sum()).sqrt())
-        S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
-        # Account for the single initial infection.
-        S2I[0] += 1
-        # Assume infection lasts less than a month.
-        recovery = torch.arange(30.).div(args.recovery_time).neg().exp()
-        I_aux = convolve(S2I, recovery)[:len(data)].clamp(min=0.5)
-    elif args.heuristic == 2:
-        # Assume 100% response rate, 0% recovery rate.
-        S_aux = S0 - data.cumsum(-1)
-        I_aux = 1 + data.cumsum(-1)
+    # Assume 50% <= response rate <= 100%.
+    S2I = data * min(2., (S0 / data.sum()).sqrt())
+    S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
+    # Account for the single initial infection.
+    S2I[0] += 1
+    # Assume infection lasts less than a month.
+    recovery = torch.arange(30.).div(args.recovery_time).neg().exp()
+    I_aux = convolve(S2I, recovery)[:len(data)].clamp(min=0.5)
+
     # Also initialize DCT transformed coordinates.
     t = ComposeTransform([biject_to(constraints.interval(-0.5, args.population + 0.5)).inv,
                           DiscreteCosineTransform(dim=-1)])
@@ -402,6 +396,7 @@ def vectorized_model(data, population):
     # Manually enumerate.
     S_curr, S_logp = quantize_enumerate(S_aux, min=0, max=population)
     I_curr, I_logp = quantize_enumerate(I_aux, min=0, max=population)
+    # Truncate final value from the right, then pad initial value on the left.
     S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=population - 1)
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
     # Reshape to support broadcasting, similar EnumMessenger.
@@ -555,11 +550,6 @@ def main(args):
 
     data = generate_data(args)
 
-    # Optionally test initialization heuristic.
-    if args.test_init:
-        _test_init(args, data)
-        return
-
     # Choose among inference methods.
     if args.enum:
         samples = infer_hmc_enum(args, data)
@@ -578,45 +568,6 @@ def main(args):
     return samples
 
 
-def _test_init(args, data):
-    """Test helper to debug the init heuristic."""
-    init_values = heuristic_init(args, data)
-    logging.info("-" * 40)
-    for name, x in init_values.items():
-        logging.info("{}:{}{}".format(name, "\n" if x.shape else " ", x))
-        x.requires_grad_()
-    model = vectorized_model if args.vectorized else continuous_model
-    with poutine.trace() as tr, poutine.condition(data=init_values):
-        model(data, args.population)
-
-    # Test log prob.
-    logging.info("-" * 40)
-    if args.vectorized:
-        log_prob = tr.trace.log_prob_sum()
-    else:
-        log_prob = TraceEinsumEvaluator(tr.trace, True, 0).log_prob(tr.trace)
-    logging.info("log_prob = {:0.6g}".format(log_prob))
-    if not torch.isfinite(log_prob):
-        raise ValueError("infinite log_prob")
-
-    # Test gradients.
-    grads = grad(log_prob, list(init_values.values()), allow_unused=True)
-    for name, dx in zip(init_values, grads):
-        if dx is None:
-            logging.info("{}: no gradient".format(name))
-            continue
-        logging.info("d/d {}:{}{}".format(name, "\n" if dx.shape else " ", dx))
-        if not torch.isfinite(dx).all():
-            raise ValueError("invalid gradient for {}".format(name))
-
-    # Smoke test.
-    logging.info("-" * 40)
-    args.warmup_steps = 0
-    args.num_samples = 1
-    args.max_tree_depth = 1
-    infer_hmc_cont(model, args, data)
-
-
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
@@ -626,7 +577,6 @@ if __name__ == "__main__":
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
-    parser.add_argument("-i", "--heuristic", default=1, type=int)
     parser.add_argument("-e", "--enum", action="store_true",
                         help="use the full enumeration model")
     parser.add_argument("--spline-order", default=3, type=int)
