@@ -171,7 +171,7 @@ class WarmupAdapter:
             self._update_step_size(accept_prob.item())
         if mass_matrix_adaptation_phase:
             for site_names, adapt_scheme in self._mass_matrix_adapt_scheme.items():
-                z_flat = [z[name].reshape(-1) for name in site_names]
+                z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
                 adapt_scheme.update(z_flat.detach())
 
         if t == window.end:

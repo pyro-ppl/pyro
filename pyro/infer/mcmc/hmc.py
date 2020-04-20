@@ -206,7 +206,7 @@ class HMC(MCMCKernel):
     def _sample_r(self, name):
         r = {}
         r_flat_list = []
-        for site_names, r_dist in self.adapter.r_dist.items():
+        for site_names, r_dist in self._adapter.r_dist.items():
             r_flat = pyro.sample(name + "_" + ",".join(site_names), r_dist)
             pos = 0
             for name in site_names:
@@ -257,13 +257,13 @@ class HMC(MCMCKernel):
         self._prototype_trace = trace
 
     def _initialize_adapter(self):
-        if self.adapter.dense_mass is False:
+        if self._adapter.dense_mass is False:
             dense_sites_list = []
-        elif self.adapter.dense_mass is True:
+        elif self._adapter.dense_mass is True:
             dense_sites_list = [tuple(sorted(self.initial_params))]
         else:
             msg = "full_mass should be a list of tuples of site names."
-            dense_sites_list = self.adapter.dense_mass
+            dense_sites_list = self._adapter.dense_mass
             assert isinstance(dense_sites_list, list), msg
             for dense_sites in dense_sites_list:
                 assert dense_sites and isinstance(dense_sites, tuple), msg
