@@ -395,9 +395,16 @@ def test_structured_mass():
     cov = torch.zeros(3, 3)
     cov[:2, :2] = xy_cov
     cov[2, 2] = z_var
+
+    # smoke tests
+    for dense_mass in [True, False]:
+        kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=dense_mass)
+        mcmc = MCMC(kernel, num_samples=1, warmup_steps=1)
+        mcmc.run(cov)
+        assert kernel.inverse_mass_matrix[("x", "y", "z")].dim() == 1 + int(dense_mass)
+
     kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=[("x", "y")])
     mcmc = MCMC(kernel, num_samples=1, warmup_steps=1000)
     mcmc.run(cov)
-    assert ("x", "y") in kernel.inverse_mass_matrix and ("z",) in kernel.inverse_mass_matrix
-    assert_equal(kernel.inverse_mass_matrix[("x", "y")], xy_cov, prec=0.3)
-    assert_equal(kernel.inverse_mass_matrix[("z",)], z_var, prec=0.3)
+    assert_equal(kernel.inverse_mass_matrix[("x", "y")], xy_cov, prec=0.5)
+    assert_equal(kernel.inverse_mass_matrix[("z",)], z_var, prec=0.5)
