@@ -571,7 +571,6 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-s", "--rng-seed", default=0, type=int)
-    parser.add_argument("--test-init", action="store_true")
     parser.add_argument("--double", action="store_true")
     parser.add_argument("--jit", action="store_true")
     parser.add_argument("--cuda", action="store_true")
