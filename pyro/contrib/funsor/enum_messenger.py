@@ -15,7 +15,7 @@ from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
 from pyro.contrib.funsor.named_messenger import DimType, \
-    BaseEnumMessenger, GlobalNamedMessenger, LocalNamedMessenger
+    BaseEnumMessenger, GlobalNamedMessenger, LocalNamedMessenger, NamedMessenger
 
 funsor.set_backend("torch")
 
@@ -121,6 +121,17 @@ class TraceMessenger(OrigTraceMessenger):
             value_output = funsor.reals(*getattr(msg["fn"], "event_shape", ()))
             msg["infer"]["funsor_value"] = to_funsor(msg["value"], value_output)
         return super()._pyro_post_sample(msg)
+
+
+class PackTraceMessenger(OrigTraceMessenger):
+    """
+    This version of TraceMessenger records information necessary to do packing after execution.
+    Each sample site is annotated with a "dim_to_name" dictionary,
+    which can be passed directly to funsor.to_funsor.
+    """
+    def _pyro_post_sample(self, msg):
+        msg["infer"]["dim_to_name"] = NamedMessenger._get_dim_to_name(msg["fn"].batch_shape)
+        super()._pyro_post_sample(msg)
 
 
 class ReplayMessenger(OrigReplayMessenger):
