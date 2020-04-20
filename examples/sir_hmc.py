@@ -380,12 +380,13 @@ def vectorized_model(data, population):
     # Manually enumerate.
     S_curr, S_logp = quantize_enumerate(S_aux, min=0, max=population)
     I_curr, I_logp = quantize_enumerate(I_aux, min=0, max=population)
-    # Truncate final value from the right, then pad initial value on the left.
-    S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=population - 1)
+    # Truncate final value from the right then pad initial value onto the left.
+    S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0),
+            value=population - 1)
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
     # Reshape to support broadcasting, similar EnumMessenger.
     T = len(data)
-    Q = 4  # Numbr of quantization points.
+    Q = 4  # Number of quantization points.
     S_prev = S_prev.reshape(T, Q, 1, 1, 1)
     I_prev = I_prev.reshape(T, 1, Q, 1, 1)
     S_curr = S_curr.reshape(T, 1, 1, Q, 1)
