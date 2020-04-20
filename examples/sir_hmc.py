@@ -29,7 +29,34 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Introduction
 # ============
 #
-# First consider a simple SIR model (Susceptible Infected Recovered).
+# This advanced Pyro tutorial demonstrates a number of inference and prediction
+# tricks in the context of epidemiological models, specifically stochastic
+# discrete time compartmental models with large discrete state spaces. This
+# tutorial assumes the reader has completed all introductory tutorials and
+# additionally the tutorials on enumeration and effect handlers (poutines):
+# http://pyro.ai/examples/enumeration.html
+# http://pyro.ai/examples/effect_handlers.html
+
+# A Discrete SIR Model
+# ====================
+#
+# Let's consider one of the simplest compartmental models: an SIR model
+# https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#The_SIR_model
+# This models the dynamics of three groups of a population:
+#
+#   population = Susceptible + Infected + Recovered
+#
+# At each discrete time step, each infected person infects a random number of
+# susceptible people, and then randomly may recover. We noisily observe the
+# number of people newly infected at each time step, assuming an unknown false
+# negative rate, but no false positives. Our eventual objective is to estimate
+# global model parameters R0 (the basic reproduction number), tau (the expected
+# recovery time), and rho (the mean response rate = 1 - false negative rate).
+# Having estimated these we will then estimate latent time series and forecast
+# forward.
+#
+# We'll start by defining a discrete_model that uses a helper global_model to
+# sample global parameters.
 #
 # Note we need to use ExtendedBinomial rather than Binomial because the data
 # may lie outside of the predicted support. For these values,
@@ -41,6 +68,7 @@ def global_model(population):
     tau = pyro.sample("tau", dist.LogNormal(math.log(7.), 1.))
     rho = pyro.sample("rho", dist.Uniform(0, 1))
 
+    # Convert interpretable parameters to distribution parameters.
     rate_s = -R0 / (tau * population)
     prob_i = 1 / (1 + tau)
 
@@ -51,7 +79,7 @@ def discrete_model(data, population):
     # Sample global parameters.
     rate_s, prob_i, rho = global_model(population)
 
-    # Sequentially filter.
+    # Sequentially sample time-local variables.
     S = torch.tensor(population - 1.)
     I = torch.tensor(1.)
     for t, datum in enumerate(data):
@@ -117,7 +145,7 @@ def reparameterized_discrete_model(data, population):
     # Sample global parameters.
     rate_s, prob_i, rho = global_model(population)
 
-    # Sequentially filter.
+    # Sequentially sample time-local variables.
     S_curr = torch.tensor(population - 1.)
     I_curr = torch.tensor(1.)
     for t, datum in enumerate(data):
@@ -144,7 +172,7 @@ def reparameterized_discrete_model(data, population):
                     obs=datum)
 
 
-# By reparameterizing, we have converted to coordinates to make the model
+# By reparameterizing, we have converted to coordinates that make the model
 # Markov. We have also replaced dynamic integer_interval constraints with
 # easier static integer_interval constraints (although we'll still need good
 # initialization to avoid NANs). Since the discrete latent variables are
@@ -166,6 +194,9 @@ def _infer_hmc(args, data, model, init_values={}):
                   max_tree_depth=args.max_tree_depth,
                   init_strategy=init_to_value(values=init_values),
                   jit_compile=args.jit, ignore_jit_warnings=True)
+
+    # We'll define a hook_fn to log potential energy values during inference.
+    # This is helpful to diagnose whether the chain is mixing.
     energies = []
 
     def hook_fn(kernel, *unused):
@@ -193,13 +224,13 @@ def _infer_hmc(args, data, model, init_values={}):
 
 
 # To scale to large populations, we'll continue to reparameterize, this time
-# replacing each of (S_aux,I_aux) with a combination of a positive real
-# variable and a Bernoulli variable.
+# replacing each of (S_aux,I_aux) with a combination of a bounded real
+# variable and a Categorical variable with only four values.
 #
 # This is the crux: we can now perform HMC over the real variable and
-# marginalize out the Bernoulli using variable elimination.
+# marginalize out the Categorical variables using variable elimination.
 #
-# We first define a helper to create enumerated Bernoulli sites.
+# We first define a helper to create enumerated Categorical sites.
 
 SPLINE_ORDER = 1
 
@@ -247,7 +278,7 @@ def continuous_model(data, population):
                         dist.Uniform(-0.5, population + 0.5)
                             .mask(False).expand(data.shape).to_event(1))
 
-    # Sequentially filter.
+    # Sequentially sample time-local variables.
     S_curr = torch.tensor(population - 1.)
     I_curr = torch.tensor(1.)
     for t, datum in poutine.markov(enumerate(data)):
@@ -322,9 +353,9 @@ def infer_hmc_cont(model, args, data):
 
 # Our final inference trick is to vectorize. We can repurpose DiscreteHMM's
 # implementation here, but we'll need to manually represent a Markov
-# neighborhood of multiple Bernoullis as single joint Categorical with 2 * 2 =
-# 4 states, and them manually perform variable elimination (the factors here
-# don't quite conform to DiscreteHMM's interface).
+# neighborhood of multiple Categorical of size 4 as single joint Categorical
+# with 4 * 4 = 16 states, and then manually perform variable elimination (the
+# factors here don't quite conform to DiscreteHMM's interface).
 
 def quantize_enumerate(x_real, min, max):
     """Quantize, then manually enumerate."""
