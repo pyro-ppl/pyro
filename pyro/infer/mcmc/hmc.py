@@ -135,15 +135,18 @@ class HMC(MCMCKernel):
                                       adapt_step_size=adapt_step_size,
                                       adapt_mass_matrix=adapt_mass_matrix,
                                       target_accept_prob=target_accept_prob,
-                                      is_diag_mass=not full_mass)
+                                      dense_mass=full_mass)
         super().__init__()
 
     def _kinetic_energy(self, r):
-        r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
-        if self.inverse_mass_matrix.dim() == 2:
-            return 0.5 * self.inverse_mass_matrix.matmul(r_flat).dot(r_flat)
-        else:
-            return 0.5 * self.inverse_mass_matrix.dot(r_flat ** 2)
+        energy = 0.
+        for site_names, inv_mass_matrix in self.inverse_mass_matrix.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            if inv_mass_matrix.dim() == 1:
+                energy = energy + 0.5 * inv_mass_matrix.dot(r_flat ** 2)
+            else:
+                energy = energy + 0.5 * inv_mass_matrix.matmul(r_flat).dot(r_flat)
+        return energy
 
     def _energy(self, z, r):
         return self._kinetic_energy(r) + self.potential_fn(z)
@@ -201,16 +204,19 @@ class HMC(MCMCKernel):
         return step_size
 
     def _sample_r(self, name):
-        r_dist = self._adapter.r_dist
-        r_flat = pyro.sample(name, r_dist)
         r = {}
-        pos = 0
-        for name, param in sorted(self.initial_params.items()):
-            next_pos = pos + param.numel()
-            r[name] = r_flat[pos:next_pos].reshape(param.shape)
-            pos = next_pos
-        assert pos == r_flat.size(0)
-        return r, r_flat
+        r_flat_list = []
+        for site_names, r_dist in self.adapter.r_dist.items():
+            r_flat = pyro.sample(name + "_" + ",".join(site_names), r_dist)
+            pos = 0
+            for name in site_names:
+                param = self.initial_params[name]
+                next_pos = pos + param.numel()
+                r[name] = r_flat[pos:next_pos].reshape(param.shape)
+                pos = next_pos
+            assert pos == r_flat.size(0)
+            r_flat_list.append(r_flat)
+        return r, torch.cat(r_flat_list)
 
     @property
     def inverse_mass_matrix(self):
@@ -251,14 +257,32 @@ class HMC(MCMCKernel):
         self._prototype_trace = trace
 
     def _initialize_adapter(self):
-        mass_matrix_size = sum([p.numel() for p in self.initial_params.values()])
-        site_value = list(self.initial_params.values())[0]
-        if self._adapter.is_diag_mass:
-            initial_mass_matrix = torch.ones(mass_matrix_size,
-                                             dtype=site_value.dtype,
-                                             device=site_value.device)
+        if self.adapter.dense_mass is False:
+            dense_sites_list = []
+        elif self.adapter.dense_mass is True:
+            dense_sites_list = [tuple(sorted(self.initial_params))]
         else:
-            initial_mass_matrix = eye_like(site_value, mass_matrix_size)
+            msg = "full_mass should be a list of tuples of site names."
+            dense_sites_list = self.adapter.dense_mass
+            assert isinstance(dense_sites_list, list), msg
+            for dense_sites in dense_sites_list:
+                assert dense_sites and isinstance(dense_sites, tuple), msg
+                for name in dense_sites:
+                    assert isinstance(name, str) and name in self.initial_params, msg
+        diag_sites = tuple(sorted([name for name in self.initial_params
+                                   if name not in set().union(*dense_sites_list)]))
+        assert len(diag_sites) + sum([len(sites) for sites in dense_sites_list]) == len(self.initial_params), \
+            "Site names specified in full_mass are duplicated."
+
+        prototype_value = list(self.initial_params.values())[0]
+        initial_mass_matrix = OrderedDict()
+        if diag_sites:
+            mass_matrix_size = sum([self.initial_params[site].numel() for site in diag_sites])
+            initial_mass_matrix[diag_sites] = prototype_value.new_ones(mass_matrix_size)
+        for dense_sites in dense_sites_list:
+            mass_matrix_size = sum([self.initial_params[site].numel() for site in dense_sites])
+            initial_mass_matrix[dense_sites] = eye_like(prototype_value, mass_matrix_size)
+
         self._adapter.configure(self._warmup_steps,
                                 inv_mass_matrix=initial_mass_matrix,
                                 find_reasonable_step_size_fn=self._find_reasonable_step_size)

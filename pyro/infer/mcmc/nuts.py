@@ -164,24 +164,29 @@ class NUTS(HMC):
 
     def _is_turning(self, r_left, r_right, r_sum):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
-        r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
-        r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
-        r_sum = r_sum - (r_left_flat + r_right_flat) / 2
-        if self.inverse_mass_matrix.dim() == 2:
-            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum) > 0 and
-                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum) > 0):
-                return False
-        else:
-            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum) > 0 and
-                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum) > 0):
-                return False
+        left_angle = 0.
+        right_angle = 0.
+        for site_names, inv_mass_matrix in self.inverse_mass_matrix.items():
+            r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in site_names])
+            r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in site_names])
+            rho = r_sum[site_names] - (r_left_flat + r_right_flat) / 2
+            if inv_mass_matrix.dim() == 1:
+                left_angle = left_angle + inv_mass_matrix.mul(r_left_flat).dot(rho)
+                right_angle = right_angle + inv_mass_matrix.mul(r_right_flat).dot(rho)
+            else:
+                left_angle = left_angle + inv_mass_matrix.matmul(r_left_flat).dot(rho)
+                right_angle = right_angle + inv_mass_matrix.matmul(r_right_flat).dot(rho)
+
+        if left_angle > 0 and right_angle > 0:
+            return False
         return True
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = velocity_verlet(
             z, r, self.potential_fn, self.inverse_mass_matrix, step_size, z_grads=z_grads)
-        r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
+        r_new_flat = {site_names: torch.cat([r_new[site_name].reshape(-1) for site_name in site_names])
+                      for site_names in self.inverse_mass_matrix}
         energy_new = potential_energy + self._kinetic_energy(r_new)
         # handle the NaN case
         energy_new = scalar_like(energy_new, float("inf")) if torch_isnan(energy_new) else energy_new
@@ -237,7 +242,8 @@ class NUTS(HMC):
             tree_weight = half_tree.weight + other_half_tree.weight
         sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
         num_proposals = half_tree.num_proposals + other_half_tree.num_proposals
-        r_sum = half_tree.r_sum + other_half_tree.r_sum
+        r_sum = {site_names: half_tree.r_sum[site_names] + other_half_tree.r_sum[site_names]
+                 for site_names in self.inverse_mass_matrix}
 
         # The probability of that proposal belongs to which half of tree
         #     is computed based on the weights of each half.
