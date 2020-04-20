@@ -1,6 +1,17 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+# Introduction
+# ============
+#
+# This advanced Pyro tutorial demonstrates a number of inference and prediction
+# tricks in the context of epidemiological models, specifically stochastic
+# discrete time compartmental models with large discrete state spaces. This
+# tutorial assumes the reader has completed all introductory tutorials and
+# additionally the tutorials on enumeration and effect handlers (poutines):
+# http://pyro.ai/examples/enumeration.html
+# http://pyro.ai/examples/effect_handlers.html
+
 import argparse
 import logging
 import math
@@ -24,23 +35,12 @@ from pyro.util import warn_if_nan
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
-# Introduction
-# ============
-#
-# This advanced Pyro tutorial demonstrates a number of inference and prediction
-# tricks in the context of epidemiological models, specifically stochastic
-# discrete time compartmental models with large discrete state spaces. This
-# tutorial assumes the reader has completed all introductory tutorials and
-# additionally the tutorials on enumeration and effect handlers (poutines):
-# http://pyro.ai/examples/enumeration.html
-# http://pyro.ai/examples/effect_handlers.html
-
 # A Discrete SIR Model
 # ====================
 #
 # Let's consider one of the simplest compartmental models: an SIR model
 # https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#The_SIR_model
-# This models the dynamics of three groups of a population:
+# This models the dynamics of three groups within a population:
 #
 #   population = Susceptible + Infected + Recovered
 #
@@ -210,7 +210,7 @@ def _infer_hmc(args, data, model, init_values={}):
     mcmc.summary()
     if args.plot:
         import matplotlib.pyplot as plt
-        plt.figure()
+        plt.figure(figsize=(6, 3))
         plt.plot(energies)
         plt.xlabel("MCMC step")
         plt.ylabel("potential energy")
@@ -435,13 +435,15 @@ def evaluate(args, samples):
     # Optionally plot histograms.
     if args.plot:
         import matplotlib.pyplot as plt
+        import seaborn as sns
         fig, axes = plt.subplots(3, 1, figsize=(5, 8))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
             truth = getattr(args, name)
-            ax.hist(samples[key], label="posterior")
+            sns.distplot(samples[key], ax=ax, label="posterior")
             ax.axvline(truth, color="k", label="truth")
             ax.set_xlabel(key + " = " + name.replace("_", " "))
+            ax.set_yticks(())
             ax.legend(loc="best")
         plt.tight_layout()
 
@@ -529,10 +531,10 @@ def predict(args, data, samples):
 # ===========
 #
 # Finally we'll define an experiment runner. For example we can simulate 60
-# days of infection on a population of 100000 and forecast forward another 30
+# days of infection on a population of 10000 and forecast forward another 30
 # days, and plot the results as follows (takes about 3 minutes on my laptop):
 #
-# python sir_hmc.py -p 100000 -d 60 -f 30 --plot
+# python sir_hmc.py -p 10000 -d 60 -f 30 --plot
 
 def main(args):
     pyro.enable_validation(__debug__)
