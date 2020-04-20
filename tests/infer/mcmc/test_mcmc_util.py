@@ -119,6 +119,5 @@ def test_init_strategy_smoke(init_strategy):
     def model():
         pyro.sample("x", dist.LogNormal(0, 1))
 
-    value = torch.randn(()).exp() * 10
-    kernel = NUTS(model, init_strategy=partial(init_to_value, values={"x": value}))
+    kernel = NUTS(model, init_strategy=init_strategy)
     kernel.setup(warmup_steps=10)
