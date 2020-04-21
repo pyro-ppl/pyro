@@ -90,20 +90,24 @@ def potential_grad(potential_fn, z):
 
 
 def _kinetic_grad(inverse_mass_matrix, r):
-    # XXX consider using list/OrderDict to store z and r
-    # so we don't have to sort the keys
-    r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
-    if inverse_mass_matrix.dim() == 1:
-        grads_flat = inverse_mass_matrix * r_flat
-    else:
-        grads_flat = inverse_mass_matrix.matmul(r_flat)
+    if torch.is_tensor(inverse_mass_matrix):
+        inverse_mass_matrix = {tuple(sorted(r)): inverse_mass_matrix}
+
+    grads_dict = {}
+    for site_names, inv_mass_matrix in inverse_mass_matrix.items():
+        r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+        if inv_mass_matrix.dim() == 1:
+            grads_dict[site_names] = inv_mass_matrix * r_flat
+        else:
+            grads_dict[site_names] = inv_mass_matrix.matmul(r_flat)
 
     # unpacking
     grads = {}
-    pos = 0
-    for site_name in sorted(r):
-        next_pos = pos + r[site_name].numel()
-        grads[site_name] = grads_flat[pos:next_pos].reshape(r[site_name].shape)
-        pos = next_pos
-    assert pos == grads_flat.size(0)
+    for site_names, grads_flat in grads_dict.items():
+        pos = 0
+        for site_name in site_names:
+            next_pos = pos + r[site_name].numel()
+            grads[site_name] = grads_flat[pos:next_pos].reshape(r[site_name].shape)
+            pos = next_pos
+        assert pos == grads_flat.size(0)
     return grads
