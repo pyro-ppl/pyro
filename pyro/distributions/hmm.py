@@ -10,7 +10,7 @@ from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
                                      matrix_and_mvn_to_gamma_gaussian)
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
-from pyro.ops.tensor_utils import cholesky, cholesky_solve
+from pyro.ops.tensor_utils import cholesky, cholesky_solve, safe_log
 
 
 @torch.jit.script
@@ -37,13 +37,16 @@ def _logmatmulexp(x, y):
     """
     Numerically stable version of ``(x.log() @ y.log()).exp()``.
     """
-    x_shift = x.max(-1, keepdim=True)[0]
-    y_shift = y.max(-2, keepdim=True)[0]
-    xy = torch.matmul((x - x_shift).exp(), (y - y_shift).exp()).log()
+    finfo = torch.finfo(x.dtype)  # avoid nan due to -inf - -inf
+    x_shift = x.max(-1, keepdim=True).values.clamp(min=finfo.min)
+    y_shift = y.max(-2, keepdim=True).values.clamp(min=finfo.min)
+    xy = safe_log(torch.matmul((x - x_shift).exp(), (y - y_shift).exp()))
     return xy + x_shift + y_shift
 
 
-@torch.jit.script
+# TODO re-enable jitting once _SafeLog is supported by the jit.
+# See https://discuss.pytorch.org/t/does-torch-jit-script-support-custom-operators/65759/4
+# @torch.jit.script
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::
