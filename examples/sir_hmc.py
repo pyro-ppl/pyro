@@ -62,8 +62,8 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 # return -inf.
 
 def global_model(population):
+    tau = args.recovery_time  # Assume this can be measured exactly.
     R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-    tau = pyro.sample("tau", dist.LogNormal(math.log(7.), 1.))
     rho = pyro.sample("rho", dist.Uniform(0, 1))
 
     # Convert interpretable parameters to distribution parameters.
@@ -98,7 +98,6 @@ def discrete_model(data, population):
 def generate_data(args):
     logging.info("Generating data...")
     params = {"R0": torch.tensor(args.basic_reproduction_number),
-              "tau": torch.tensor(args.recovery_time),
               "rho": torch.tensor(args.response_rate)}
     empty_data = [None] * (args.duration + args.forecast)
 
@@ -201,7 +200,7 @@ def infer_hmc_enum(args, data):
 def _infer_hmc(args, data, model, init_values={}):
     logging.info("Running inference...")
     kernel = NUTS(model,
-                  full_mass=[("R0", "tau", "rho")],
+                  full_mass=[("R0", "rho")],
                   max_tree_depth=args.max_tree_depth,
                   init_strategy=init_to_value(values=init_values),
                   jit_compile=args.jit, ignore_jit_warnings=True)
@@ -326,7 +325,6 @@ def heuristic_init(args, data):
                           DiscreteCosineTransform(dim=-1)])
 
     return {
-        "tau": torch.tensor(10.0),
         "R0": torch.tensor(2.0),
         "rho": torch.tensor(0.5),
         "S_aux": S_aux,
@@ -437,7 +435,6 @@ def vectorized_model(data, population):
 def evaluate(args, samples):
     # Print estimated values.
     names = {"basic_reproduction_number": "R0",
-             "recovery_time": "tau",
              "response_rate": "rho"}
     for name, key in names.items():
         mean = samples[key].mean().item()
@@ -449,7 +446,7 @@ def evaluate(args, samples):
     if args.plot:
         import matplotlib.pyplot as plt
         import seaborn as sns
-        fig, axes = plt.subplots(3, 1, figsize=(5, 8))
+        fig, axes = plt.subplots(2, 1, figsize=(5, 5))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
             truth = getattr(args, name)
