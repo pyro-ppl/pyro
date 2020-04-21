@@ -177,9 +177,7 @@ class NUTS(HMC):
                 left_angle = left_angle + inv_mass_matrix.matmul(r_left_flat).dot(rho)
                 right_angle = right_angle + inv_mass_matrix.matmul(r_right_flat).dot(rho)
 
-        if left_angle > 0 and right_angle > 0:
-            return False
-        return True
+        return (left_angle <= 0) or (right_angle <= 0)
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size

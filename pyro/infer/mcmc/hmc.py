@@ -208,7 +208,7 @@ class HMC(MCMCKernel):
         r_flat_dict = {}
         for site_names in self.inverse_mass_matrix:
             r_flat = pyro.sample(
-                name + "_" + ",".join(site_names), self._adapter.r_dist[site_names])
+                "{}_{}".format(name, site_names), self._adapter.r_dist[site_names])
             pos = 0
             for name in site_names:
                 param = self.initial_params[name]
@@ -270,8 +270,9 @@ class HMC(MCMCKernel):
                 assert dense_sites and isinstance(dense_sites, tuple), msg
                 for name in dense_sites:
                     assert isinstance(name, str) and name in self.initial_params, msg
+        dense_sites_set = set().union(*dense_sites_list)
         diag_sites = tuple(sorted([name for name in self.initial_params
-                                   if name not in set().union(*dense_sites_list)]))
+                                   if name not in dense_sites_set]))
         assert len(diag_sites) + sum([len(sites) for sites in dense_sites_list]) == len(self.initial_params), \
             "Site names specified in full_mass are duplicated."
 
