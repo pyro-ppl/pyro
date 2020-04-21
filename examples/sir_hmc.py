@@ -96,6 +96,7 @@ def discrete_model(data, population):
 # parameter values and poutine.trace to record sample observations.
 
 def generate_data(args):
+    logging.info("Generating data...")
     params = {"R0": torch.tensor(args.basic_reproduction_number),
               "tau": torch.tensor(args.recovery_time),
               "rho": torch.tensor(args.response_rate)}
@@ -110,11 +111,14 @@ def generate_data(args):
         data = torch.stack([site["value"]
                             for site in tr.trace.nodes.values()
                             if site["name"].startswith("obs_")])
-        if data.sum() > 2:
-            break
-    logging.info("Generated {:0.0f} observed infections:\n{}"
-                 .format(data.sum(), " ".join([str(int(x)) for x in data])))
-    return data
+        if data.sum() >= args.min_observations:
+            logging.info("Generated {:0.0f} observed infections:\n{}"
+                         .format(data.sum(), " ".join([str(int(x)) for x in data])))
+            return data
+
+    raise ValueError("Failed to generate {} observations. Try increasing "
+                     "--population or decreasing --min-observations"
+                     .format(args.min_observations))
 
 
 # Inference
@@ -189,6 +193,7 @@ def infer_hmc_enum(args, data):
 def _infer_hmc(args, data, model, init_values={}):
     logging.info("Running inference...")
     kernel = NUTS(model,
+                  full_mass=[("R0", "tau", "rho")],
                   max_tree_depth=args.max_tree_depth,
                   init_strategy=init_to_value(values=init_values),
                   jit_compile=args.jit, ignore_jit_warnings=True)
@@ -564,6 +569,7 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
+    parser.add_argument("-m", "--min-observations", default=3, type=int)
     parser.add_argument("-d", "--duration", default=10, type=int)
     parser.add_argument("-f", "--forecast", default=0, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
