@@ -100,7 +100,7 @@ def generate_data(args):
     params = {"R0": torch.tensor(args.basic_reproduction_number),
               "tau": torch.tensor(args.recovery_time),
               "rho": torch.tensor(args.response_rate)}
-    empty_data = [None] * args.duration
+    empty_data = [None] * (args.duration + args.forecast)
 
     # We'll retry until we get an actual outbreak.
     for attempt in range(100):
@@ -108,13 +108,21 @@ def generate_data(args):
             with poutine.condition(data=params):
                 discrete_model(empty_data, args.population)
 
-        data = torch.stack([site["value"]
-                            for site in tr.trace.nodes.values()
-                            if site["name"].startswith("obs_")])
-        if data.sum() >= args.min_observations:
-            logging.info("Generated {:0.0f} observed infections:\n{}"
-                         .format(data.sum(), " ".join([str(int(x)) for x in data])))
-            return data
+        # Concatenate sequential time series into tensors.
+        obs = torch.stack([site["value"]
+                           for name, site in tr.trace.nodes.items()
+                           if re.match("obs_[0-9]+", name)])
+        S2I = torch.stack([site["value"]
+                          for name, site in tr.trace.nodes.items()
+                          if re.match("S2I_[0-9]+", name)])
+        assert len(obs) == len(empty_data)
+
+        obs_sum = int(obs[:args.duration].sum())
+        S2I_sum = int(S2I[:args.duration].sum())
+        if obs_sum >= args.min_observations:
+            logging.info("Observed {:d}/{:d} infections:\n{}".format(
+                obs_sum, S2I_sum, " ".join([str(int(x)) for x in obs[:args.duration]])))
+            return {"S2I": S2I, "obs": obs}
 
     raise ValueError("Failed to generate {} observations. Try increasing "
                      "--population or decreasing --min-observations"
@@ -468,7 +476,7 @@ def evaluate(args, samples):
 # generated via infer_hmc_cont(vectorized_model, ...).
 
 @torch.no_grad()
-def predict(args, data, samples):
+def predict(args, data, samples, truth=None):
     logging.info("Forecasting {} steps ahead...".format(args.forecast))
     particle_plate = pyro.plate("particles", args.num_samples, dim=-1)
 
@@ -517,9 +525,11 @@ def predict(args, data, samples):
         time = torch.arange(len(data) + args.forecast)
         p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
         p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
-        plt.plot(time[:len(data)], data, "k.", label="observed")
-        plt.plot(time, median, "r-", label="median")
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
+        plt.plot(time, median, "r-", label="median")
+        plt.plot(time[:len(data)], data, "k.", label="observed")
+        if truth is not None:
+            plt.plot(time, truth, "k--", label="truth")
         plt.axvline(args.duration - 0.5, color="gray", lw=1)
         plt.xlim(0, len(time) - 1)
         plt.ylim(0, None)
@@ -545,22 +555,23 @@ def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
-    data = generate_data(args)
+    dataset = generate_data(args)
+    obs = dataset["obs"][:args.duration]
 
     # Choose among inference methods.
     if args.enum:
-        samples = infer_hmc_enum(args, data)
+        samples = infer_hmc_enum(args, obs)
     elif args.sequential:
-        samples = infer_hmc_cont(continuous_model, args, data)
+        samples = infer_hmc_cont(continuous_model, args, obs)
     else:
-        samples = infer_hmc_cont(vectorized_model, args, data)
+        samples = infer_hmc_cont(vectorized_model, args, obs)
 
     # Evaluate fit.
     evaluate(args, samples)
 
     # Predict latent time series.
     if args.forecast:
-        samples = predict(args, data, samples)
+        samples = predict(args, obs, samples, truth=dataset["S2I"])
 
     return samples
 
