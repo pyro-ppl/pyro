@@ -90,6 +90,9 @@ def potential_grad(potential_fn, z):
 
 
 def _kinetic_grad(inverse_mass_matrix, r):
+    if torch.is_tensor(inverse_mass_matrix):
+        inverse_mass_matrix = {tuple(sorted(r)): inverse_mass_matrix}
+
     grads_dict = {}
     for site_names, inv_mass_matrix in inverse_mass_matrix.items():
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
