@@ -384,27 +384,31 @@ def test_gamma_poisson(hyperpriors):
 
 def test_structured_mass():
     def model(cov):
-        x = pyro.sample("x", dist.Normal(0, 1000))
-        y = pyro.sample("y", dist.Normal(0, 1000))
-        z = pyro.sample("z", dist.Normal(0, 1000))
-        xyz = torch.stack([x, y, z])
-        pyro.sample("obs", dist.MultivariateNormal(torch.zeros(3), cov), obs=xyz)
+        w = pyro.sample("w", dist.Normal(0, 1000).expand([2]).to_event(1))
+        x = pyro.sample("x", dist.Normal(0, 1000).expand([1]).to_event(1))
+        y = pyro.sample("y", dist.Normal(0, 1000).expand([1]).to_event(1))
+        z = pyro.sample("z", dist.Normal(0, 1000).expand([1]).to_event(1))
+        wxyz = torch.cat([w, x, y, z])
+        pyro.sample("obs", dist.MultivariateNormal(torch.zeros(5), cov), obs=wxyz)
 
+    w_cov = torch.tensor([[1.5, 0.5], [0.5, 1.5]])
     xy_cov = torch.tensor([[2., 1.], [1., 3.]])
     z_var = torch.tensor([4.])
-    cov = torch.zeros(3, 3)
-    cov[:2, :2] = xy_cov
-    cov[2, 2] = z_var
+    cov = torch.zeros(5, 5)
+    cov[:2, :2] = w_cov
+    cov[2:4, 2:4] = xy_cov
+    cov[4, 4] = z_var
 
     # smoke tests
     for dense_mass in [True, False]:
         kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=dense_mass)
         mcmc = MCMC(kernel, num_samples=1, warmup_steps=1)
         mcmc.run(cov)
-        assert kernel.inverse_mass_matrix[("x", "y", "z")].dim() == 1 + int(dense_mass)
+        assert kernel.inverse_mass_matrix[("w", "x", "y", "z")].dim() == 1 + int(dense_mass)
 
-    kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=[("x", "y")])
+    kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=[("w",), ("x", "y")])
     mcmc = MCMC(kernel, num_samples=1, warmup_steps=1000)
     mcmc.run(cov)
+    assert_equal(kernel.inverse_mass_matrix[("w",)], w_cov, prec=0.5)
     assert_equal(kernel.inverse_mass_matrix[("x", "y")], xy_cov, prec=0.5)
     assert_equal(kernel.inverse_mass_matrix[("z",)], z_var, prec=0.5)
