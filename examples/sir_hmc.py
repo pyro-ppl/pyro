@@ -483,10 +483,10 @@ def predict(args, data, samples, truth=None):
     # algorithm. We'll add these new samples to the existing dict of samples.
     model = poutine.condition(continuous_model, samples)
     model = particle_plate(model)
-    model = infer_discrete(model, first_available_dim=-2)
     if args.dct:  # Apply the same reparameterizer as during inference.
         rep = DiscreteCosineReparam()
         model = poutine.reparam(model, {"S_aux": rep, "I_aux": rep})
+    model = infer_discrete(model, first_available_dim=-2)
     with poutine.trace() as tr:
         model(data, args.population)
     samples = {name: site["value"]
