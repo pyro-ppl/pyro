@@ -23,14 +23,18 @@ class DiscreteCosineReparam(Reparam):
     diagonal guides in SVI and improving the effectiveness of a diagonal mass
     matrix in HMC.
 
+    When reparameterizing variables that are approximately continuous along the
+    time dimension, set ``smooth=1``. For variables that are approximately
+    continuously differentiable along the time axis, set ``smooth=2``.
+
     This reparameterization works only for latent variables, not likelihoods.
 
     :param int dim: Dimension along which to transform. Must be negative.
         This is an absolute dim counting from the right.
     :param float smooth: Smoothing parameter. When 0, this transforms white
-        noise to white noise; when 1 this transforms continuous brownian-like
-        motion to white noise; when 2 this transforms doubly-cumsummed white
-        noise to white noise; etc. Any real number is allowed.
+        noise to white noise; when 1 this transforms Brownian noise to to white
+        noise; when -1 this transforms violet noise to white noise; etc. Any
+        real number is allowed. https://en.wikipedia.org/wiki/Colors_of_noise.
     """
     def __init__(self, dim=-1, smooth=0.):
         assert isinstance(dim, int) and dim < 0

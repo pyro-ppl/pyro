@@ -19,9 +19,9 @@ class DiscreteCosineTransform(Transform):
     :param int dim: Dimension along which to transform. Must be negative.
         This is an absolute dim counting from the right.
     :param float smooth: Smoothing parameter. When 0, this transforms white
-        noise to white noise; when 1 this transforms continuous brownian-like
-        motion to white noise; when 2 this transforms doubly-cumsummed white
-        noise to white noise; etc. Any real number is allowed.
+        noise to white noise; when 1 this transforms Brownian noise to to white
+        noise; when -1 this transforms violet noise to white noise; etc. Any
+        real number is allowed. https://en.wikipedia.org/wiki/Colors_of_noise.
     """
     domain = constraints.real
     codomain = constraints.real
@@ -43,7 +43,7 @@ class DiscreteCosineTransform(Transform):
         size = y.size(-1)
         if self._weight_cache is None or self._weight_cache.size(-1) != size:
             # Weight by frequency**smooth, where the DCT-II frequencies are:
-            freq = torch.arange(0.5, size - 0.5, size, dtype=y.dtype, device=y.device)
+            freq = torch.linspace(0.5, size - 0.5, size, dtype=y.dtype, device=y.device)
             w = freq.pow_(self.smooth)
             w /= w.log().mean().exp()  # Ensure |jacobian| = 1.
             self._weight_cache = w
