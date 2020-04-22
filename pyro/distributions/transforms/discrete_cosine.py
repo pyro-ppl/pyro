@@ -39,14 +39,13 @@ class DiscreteCosineTransform(Transform):
                 and self.smooth == other.smooth)
 
     @torch.no_grad()
-    def _smooth(self, y):
+    def _weight(self, y):
         size = y.size(-1)
         if self._weight_cache is None or self._weight_cache.size(-1) != size:
-            # Weight by frequency**(-smooth), where the DCT-II
-            # frequencies are [0.5, 1.5, ..., size - 0.5].
-            w = torch.arange(0.5, size - 0.5, size, dtype=y.dtype, device=y.device)
-            w.pow_(-self.smooth)
-            w.div_(w.norm(dim=-1))  # Ensure orthogonality.
+            # Weight by frequency**smooth, where the DCT-II frequencies are:
+            freq = torch.arange(0.5, size - 0.5, size, dtype=y.dtype, device=y.device)
+            w = freq.pow_(self.smooth)
+            w /= w.log().mean().exp()  # Ensure orthogonality.
             self._weight_cache = w
         return self._weight_cache
 
@@ -56,7 +55,7 @@ class DiscreteCosineTransform(Transform):
             x = x.transpose(dim, -1)
         y = dct(x)
         if self.smooth:
-            y = y / self._smooth(y)
+            y = y * self._weight(y)
         if dim != -1:
             y = y.transpose(dim, -1)
         return y
@@ -66,7 +65,7 @@ class DiscreteCosineTransform(Transform):
         if dim != -1:
             y = y.transpose(dim, -1)
         if self.smooth:
-            y = y * self._smooth(y)
+            y = y / self._weight(y)
         x = idct(y)
         if dim != -1:
             x = x.transpose(dim, -1)
