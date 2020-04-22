@@ -1,23 +1,51 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
+
 import pyro
 import pyro.distributions as dist
+from pyro.ops.tensor_utils import convolve
 
 from .compartmental import CompartmentalModel
 
 
 class SIRModel(CompartmentalModel):
+    """
+    Susceptible-Infected-Recovered model.
+
+    :param iterable data: Time series of new observed infections.
+    """
+
+    series = ("S2I", "I2R", "obs")
+
     def __init__(self, population, recovery_time, data):
         compartments = ("S", "I")  # R is implicit.
         duration = len(data)
-        super().__init__(self, compartments, duration, population)
+        super().__init__(compartments, duration, population)
 
         assert isinstance(recovery_time, float)
         assert recovery_time > 0
         self.recovery_time = recovery_time
 
         self.data = data
+
+    def heuristic(self):
+        # Start with a single infection.
+        S0 = self.population - 1
+        # Assume 50% <= response rate <= 100%.
+        S2I = self.data * min(2., (S0 / self.data.sum()).sqrt())
+        S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
+        # Account for the single initial infection.
+        S2I[0] += 1
+        # Assume infection lasts less than a month.
+        recovery = torch.arange(30.).div(self.recovery_time).neg().exp()
+        I_aux = convolve(S2I, recovery)[:len(self.data)].clamp(min=0.5)
+        return {
+            "R0": torch.tensor(2.0),
+            "rho": torch.tensor(0.5),
+            "auxiliary": torch.stack([S_aux, I_aux]),
+        }
 
     def global_model(self):
         tau = self.recovery_time
@@ -31,7 +59,7 @@ class SIRModel(CompartmentalModel):
         return rate_s, prob_i, rho
 
     def initialize(self, params):
-        return {"S": 1. - self.population, "I": 1.}
+        return {"S": 1 - self.population, "I": 1}
 
     def transition_fwd(self, params, state, t):
         rate_s, prob_i, rho = params

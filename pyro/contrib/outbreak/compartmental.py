@@ -64,6 +64,9 @@ class CompartmentalModel(ABC):
         effect = samples2["my_result"].mean() - samples1["my_result"].mean()
         print("average effect = {:0.3g}".format(effect))
 
+    :cvar tuple series: Tuple of names of time series names, in addition to
+        ``self.compartments``. These will be concatenated along the time axis
+        in returned sample dictionaries.
     :ivar dict samples: Dictionary of posterior samples.
     :param list compartments: A list of strings of compartment names.
     :param int duration:
@@ -87,6 +90,8 @@ class CompartmentalModel(ABC):
 
         # Inference state.
         self.samples = {}
+
+    series = ()
 
     # Abstract methods ########################################
 
@@ -128,10 +133,19 @@ class CompartmentalModel(ABC):
         """
         raise NotImplementedError("TODO")
 
+    @torch.no_grad()
     def generate(self):
         """
         """
-        raise NotImplementedError("TODO")
+        model = self._generative_model
+        model = poutine.uncondition(model)
+        trace = poutine.trace(model).get_trace()
+        samples = {name: site["value"]
+                   for name, site in trace.nodes.items()
+                   if site["type"] == "sample"}
+
+        self._concat_series(samples)
+        return samples
 
     def fit(self, **options):
         """
@@ -140,6 +154,7 @@ class CompartmentalModel(ABC):
 
         # Heuristically initialze to feasible latents.
         init_values = self.heuristic()
+        assert isinstance(init_values, dict)
         assert "auxiliary" in init_values, ".heuristic() did not define auxiliary value"
         if self._dct is not None:
             # Also initialize DCT transformed coordinates.
@@ -208,8 +223,18 @@ class CompartmentalModel(ABC):
                        for name, site in trace.nodes.items()
                        if site["type"] == "sample"}
 
-        # Concatenate sequential time series into tensors.
-        for name in self.compartments:
+        self._concat_series(samples, forecast)
+        return samples
+
+    # Internal helpers ########################################
+
+    def _concat_series(self, samples, forecast=0):
+        """
+        Concatenate sequential time series into tensors, in-place.
+
+        :param dict samples: A dictionary of samples.
+        """
+        for name in self.compartments + self.series:
             pattern = name + "_[0-9]+"
             series = [value
                       for name_t, value in samples.items()
@@ -218,17 +243,13 @@ class CompartmentalModel(ABC):
             series[0] = series[0].expand(series[1].shape)
             samples[name] = torch.stack(series, dim=-1)
 
-        return samples
-
-    # Internal helpers ########################################
-
     def _generative_model(self):
         # Sample global parameters.
         params = self.global_model()
 
         # Sample initial values.
         state = self.initialize(params)
-        state = {i: torch.tensor(value) for i, value in state.items()}
+        state = {i: torch.tensor(float(value)) for i, value in state.items()}
 
         # Sequentially transition.
         for t in range(self.duration):
@@ -253,11 +274,8 @@ class CompartmentalModel(ABC):
         # Sequentially transition.
         for t in poutine.markov(range(self.duration)):
             prev = curr
-            curr = {
-                quantize("{}_{}".format(name, t), aux, min=0, max=self.population)
-                for name, aux in zip(self.compartments, auxiliary[..., t].unbind(-1))
-            }
-
+            curr = {quantize("{}_{}".format(name, t), aux, min=0, max=self.population)
+                    for name, aux in zip(self.compartments, auxiliary[..., t].unbind(-1))}
             logp = self.transition_bwd(params, prev, curr)
             pyro.factor("transition_{}".format(t), logp)
 
@@ -276,32 +294,37 @@ class CompartmentalModel(ABC):
         init = self.initialize(params)
 
         # Manually enumerate.
-        curr, curr_logp = quantize_enumerate(auxiliary, min=0, max=self.population)
+        curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population)
         curr = dict(zip(self.compartments, curr.unbind(-2)))
-        curr_logp = dict(zip(self.compartments, curr_logp.unbind(-2)))
+        logp = dict(zip(self.compartments, logp.unbind(-2)))
+
         # Truncate final value from the right then pad initial value onto the left.
         prev = {}
-        for i in self.compartments:
-            if isinstance(init[i], int):
-                prev[i] = pad(curr[i][:-1], (0, 0, 1, 0), value=init[i])
-            else:
+        for name in self.compartments:
+            if not isinstance(init[name], int):
                 raise NotImplementedError("TODO use torch.cat()")
+            prev[name] = pad(curr[name][:-1], (0, 0, 1, 0), value=init[name])
+
         # Reshape to support broadcasting, similar EnumMessenger.
+        C = len(self.compartments)
         T = self.duration
         Q = 4  # Number of quantization points.
-        ########################################
-        # TODO generalize this
-        S_prev = S_prev.reshape(T, Q, 1, 1, 1)
-        I_prev = I_prev.reshape(T, 1, Q, 1, 1)
-        S_curr = S_curr.reshape(T, 1, 1, Q, 1)
-        S_logp = S_logp.reshape(T, 1, 1, Q, 1)
-        I_curr = I_curr.reshape(T, 1, 1, 1, Q)
-        I_logp = I_logp.reshape(T, 1, 1, 1, Q)
-        data = data.reshape(T, 1, 1, 1, 1)
-        ########################################
+
+        def enum_shape(position):
+            shape = [T] + [1] * (2 * C)
+            shape[position] = Q
+            return torch.Size(shape)
+
+        for e, name in enumerate(self.compartments):
+            prev[name] = prev[name].reshape(enum_shape(e))
+            curr[name] = curr[name].reshape(enum_shape(C + e))
+            logp[name] = logp[name].reshape(enum_shape(C + e))
+        # TODO provide a helper to reshape observed data, e.g.
+        # data = data.reshape(T, 1, 1, 1, 1)
 
         # Manually perform variable elimination.
-        logp = S_logp + I_logp + self.transition(params, prev, curr)
+        logp = sum(logp.values())
+        logp = logp + self.transition(params, prev, curr)
         logp = logp.reshape(-1, Q ** len(self.compartments), Q ** len(self.compartments))
         logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
         logp = logp.reshape(-1).logsumexp(0)
