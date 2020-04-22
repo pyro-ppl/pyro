@@ -190,6 +190,13 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
+MaskedDistribution
+------------------
+.. autoclass:: pyro.distributions.MaskedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 MaskedMixture
 -------------
 .. autoclass:: pyro.distributions.MaskedMixture
