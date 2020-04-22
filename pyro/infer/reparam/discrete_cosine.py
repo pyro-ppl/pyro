@@ -27,6 +27,10 @@ class DiscreteCosineReparam(Reparam):
 
     :param int dim: Dimension along which to transform. Must be negative.
         This is an absolute dim counting from the right.
+    :param float smooth: Smoothing parameter. When 0, this transforms white
+        noise to white noise; when 1 this transforms continuous brownian-like
+        motion to white noise; when 2 this transforms doubly-cumsummed white
+        noise to white noise; etc. Any real number is allowed.
     """
     def __init__(self, dim=-1, smooth=0.):
         assert isinstance(dim, int) and dim < 0
