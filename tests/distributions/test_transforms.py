@@ -144,6 +144,9 @@ class TransformTests(TestCase):
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
         self._test(lambda input_dim: T.DiscreteCosineTransform())
+        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=0.5))
+        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=1.0))
+        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=2.0))
 
     def test_elu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
