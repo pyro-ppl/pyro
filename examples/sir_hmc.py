@@ -277,14 +277,14 @@ def quantize(name, x_real, min, max, spline_order=3):
         ttttt = ttt * tt
 
         probs = torch.stack([
-            2 * sssss,
-            2 + 10 * s + 20 * ss + 20 * sss + 10 * ssss - 7 * sssss,
-            55 + 115 * s + 70 * ss - 9 * sss - 25 * ssss + 7 * sssss,
-            302 - 100 * tt + 10 * tttt,
-            302 - 100 * ss + 10 * ssss,
-            55 + 115 * t + 70 * tt - 9 * ttt - 25 * tttt + 7 * ttttt,
+            2 * ttttt,
             2 + 10 * t + 20 * tt + 20 * ttt + 10 * tttt - 7 * ttttt,
-            2 * ttttt
+            55 + 115 * t + 70 * tt - 9 * ttt - 25 * tttt + 7 * ttttt,
+            302 - 100 * ss + 10 * ssss,
+            302 - 100 * tt + 10 * tttt,
+            55 + 115 * s + 70 * ss - 9 * sss - 25 * ssss + 7 * sssss,
+            2 + 10 * s + 20 * ss + 20 * sss + 10 * ssss - 7 * sssss,
+            2 * sssss
         ], dim=-1) * (1/840)
 
     q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real)
@@ -420,14 +420,14 @@ def quantize_enumerate(x_real, min, max, spline_order=3):
         ttttt = ttt * tt
 
         probs = torch.stack([
-            2 * sssss,
-            2 + 10 * s + 20 * ss + 20 * sss + 10 * ssss - 7 * sssss,
-            55 + 115 * s + 70 * ss - 9 * sss - 25 * ssss + 7 * sssss,
-            302 - 100 * tt + 10 * tttt,
-            302 - 100 * ss + 10 * ssss,
-            55 + 115 * t + 70 * tt - 9 * ttt - 25 * tttt + 7 * ttttt,
+            2 * ttttt,
             2 + 10 * t + 20 * tt + 20 * ttt + 10 * tttt - 7 * ttttt,
-            2 * ttttt
+            55 + 115 * t + 70 * tt - 9 * ttt - 25 * tttt + 7 * ttttt,
+            302 - 100 * ss + 10 * ssss,
+            302 - 100 * tt + 10 * tttt,
+            55 + 115 * s + 70 * ss - 9 * sss - 25 * ssss + 7 * sssss,
+            2 + 10 * s + 20 * ss + 20 * sss + 10 * ssss - 7 * sssss,
+            2 * sssss
         ], dim=-1) * (1/840)
 
     logits = safe_log(probs)
