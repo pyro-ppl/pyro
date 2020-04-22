@@ -1,16 +1,19 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from abc import ABC, abstractmethod
 import logging
+import re
+from abc import ABC, abstractmethod
 
 import torch
+from torch.distributions import biject_to, constraints
 from torch.nn.functional import pad
 
 import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
-from pyro.infer import MCMC, NUTS, config_enumerate, infer_discrete
+from pyro.distributions.transforms import DiscreteCosineTransform
+from pyro.infer import MCMC, NUTS, infer_discrete
 from pyro.infer.autoguide import init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.util import warn_if_nan
@@ -25,9 +28,9 @@ class CompartmentalModel(ABC):
     Abstract base class for discrete-time discrete-value stochastic
     compartmental models.
 
-    Derived classes must implement methods :method:`heuristic`,
-    :method:`initialize`, :method:`transition_fwd`, :method:`transition_bwd`.
-    Derived classes may optionally implement :method:`global_model`.
+    Derived classes must implement methods :meth:`heuristic`,
+    :meth:`initialize`, :meth:`transition_fwd`, :meth:`transition_bwd`.
+    Derived classes may optionally implement :meth:`global_model`.
 
     Example usage::
 
@@ -89,21 +92,31 @@ class CompartmentalModel(ABC):
 
     @abstractmethod
     def heuristic(self):
+        """
+        """
         raise NotImplementedError
 
     def global_model(self):
+        """
+        """
         return None
 
     @abstractmethod
     def initialize(self, params):
+        """
+        """
         raise NotImplementedError
 
     @abstractmethod
     def transition_fwd(self, params, state, t):
+        """
+        """
         raise NotImplementedError
 
     @abstractmethod
     def transition_bwd(self, params, prev, curr):
+        """
+        """
         raise NotImplementedError
 
     # Inference interface ########################################
@@ -116,33 +129,48 @@ class CompartmentalModel(ABC):
         raise NotImplementedError("TODO")
 
     def generate(self):
+        """
+        """
         raise NotImplementedError("TODO")
 
     def fit(self, **options):
-        self._dct = options.pop("dct", None)
+        """
+        """
+        self._dct = options.pop("dct", None)  # Save for .predict().
 
-        model = self._vectorized_model
+        # Heuristically initialze to feasible latents.
+        init_values = self.heuristic()
+        assert "auxiliary" in init_values, ".heuristic() did not define auxiliary value"
         if self._dct is not None:
-            rep = DiscreteCosineReparam(smooth=self._dct)
-            model = poutine.reparam(model, {"auxiliary": rep})
+            # Also initialize DCT transformed coordinates.
+            x = init_values["auxiliary"]
+            x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
+            x = DiscreteCosineTransform(smooth=self._dct)(x)
+            init_values["auxiliary_dct"] = x
 
         # Configure a kernel.
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", False)
-        kernel = NUTS(self._vectorized_model,
+        model = self._vectorized_model
+        if self._dct is not None:
+            rep = DiscreteCosineReparam(smooth=self._dct)
+            model = poutine.reparam(model, {"auxiliary": rep})
+        kernel = NUTS(model,
                       full_mass=full_mass,
+                      init_strategy=init_to_value(values=init_values),
                       max_tree_depth=max_tree_depth)
 
         # Run mcmc.
         mcmc = MCMC(kernel, **options)
         mcmc.run()
-
         self.samples = mcmc.get_samples()
         self._max_plate_nesting = kernel._max_plate_nesting
-        return mcmc
+        return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
     def predict(self, forecast=0):
+        """
+        """
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
         samples = self.samples
@@ -155,7 +183,8 @@ class CompartmentalModel(ABC):
         # backward-sample algorithm.
         logger.info("Predicting latent variables for {} time steps..."
                     .format(self.duration))
-        model = poutine.condition(continuous_model, samples)
+        model = self._sequential_model
+        model = poutine.condition(model, samples)
         model = particle_plate(model)
         if self._dct is not None:
             # Apply the same reparameterizer as during inference.
@@ -171,7 +200,8 @@ class CompartmentalModel(ABC):
         # time steps [duration:duration+forecast].
         if forecast:
             logger.info("Forecasting {} steps ahead...".format(forecast))
-            model = poutine.condition(discrete_model, samples)
+            model = self._generative_model
+            model = poutine.condition(model, samples)
             model = particle_plate(model)
             trace = poutine.trace(model).get_trace()
             samples = {name: site["value"]
@@ -179,14 +209,14 @@ class CompartmentalModel(ABC):
                        if site["type"] == "sample"}
 
         # Concatenate sequential time series into tensors.
-        for key in self.compartments:
-            pattern = key + "_[0-9]+"
+        for name in self.compartments:
+            pattern = name + "_[0-9]+"
             series = [value
-                      for name, value in samples.items()
-                      if re.match(pattern, name)]
+                      for name_t, value in samples.items()
+                      if re.match(pattern, name_t)]
             assert len(series) == self.duration + forecast
             series[0] = series[0].expand(series[1].shape)
-            samples[key] = torch.stack(series, dim=-1)
+            samples[name] = torch.stack(series, dim=-1)
 
         return samples
 
@@ -201,18 +231,18 @@ class CompartmentalModel(ABC):
         state = {i: torch.tensor(value) for i, value in state.items()}
 
         # Sequentially transition.
-        for t  in range(self.duration):
+        for t in range(self.duration):
             self.transition_fwd(params, state, t)
             for name in self.compartments:
                 pyro.deterministic("{}_{}".format(name, t), state[name])
 
     def _sequential_model(self):
         # Sample global parameters.
-        params = global_model(population)
+        params = self.global_model()
 
         # Sample the continuous reparameterizing variable.
         auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, population + 0.5)
+                                dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False)
                                     .expand(len(self.compartments), self.duration)
                                     .to_event(2))
@@ -221,22 +251,23 @@ class CompartmentalModel(ABC):
         curr = self.initialize(params)
 
         # Sequentially transition.
-        for t, datum in poutine.markov(enumerate(data)):
+        for t in poutine.markov(range(self.duration)):
             prev = curr
-            curr = quantize("state_{}".format(t), auxiliary[..., t],
-                            min=0, max=self.population)
-            curr = dict(zip(self.compartments, curr.unbind(-2)))
+            curr = {
+                quantize("{}_{}".format(name, t), aux, min=0, max=self.population)
+                for name, aux in zip(self.compartments, auxiliary[..., t].unbind(-1))
+            }
 
             logp = self.transition_bwd(params, prev, curr)
             pyro.factor("transition_{}".format(t), logp)
 
     def _vectorized_model(self):
         # Sample global parameters.
-        params = global_model(population)
+        params = self.global_model()
 
         # Sample the continuous reparameterizing variable.
         auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, population + 0.5)
+                                dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False)
                                     .expand(len(self.compartments), self.duration)
                                     .to_event(2))
