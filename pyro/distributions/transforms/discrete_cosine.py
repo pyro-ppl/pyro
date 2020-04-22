@@ -45,7 +45,7 @@ class DiscreteCosineTransform(Transform):
             # Weight by frequency**smooth, where the DCT-II frequencies are:
             freq = torch.arange(0.5, size - 0.5, size, dtype=y.dtype, device=y.device)
             w = freq.pow_(self.smooth)
-            w /= w.log().mean().exp()  # Ensure orthogonality.
+            w /= w.log().mean().exp()  # Ensure |jacobian| = 1.
             self._weight_cache = w
         return self._weight_cache
 
