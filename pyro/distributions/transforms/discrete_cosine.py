@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
@@ -16,24 +17,40 @@ class DiscreteCosineTransform(Transform):
     orthonormal DCT and inverse DCT transforms. The jacobian is 1.
 
     :param int dim: Dimension along which to transform. Must be negative.
+        This is an absolute dim counting from the right.
     """
     domain = constraints.real
     codomain = constraints.real
     bijective = True
 
-    def __init__(self, dim=-1, cache_size=0):
+    def __init__(self, dim=-1, smooth=0., cache_size=0):
         assert isinstance(dim, int) and dim < 0
         self.event_dim = -dim
+        self.smooth = float(smooth)
+        self._weight_cache = None
         super().__init__(cache_size=cache_size)
 
     def __eq__(self, other):
-        return type(self) == type(other) and self.event_dim == other.event_dim
+        return (type(self) == type(other) and self.event_dim == other.event_dim
+                and self.smooth == other.smooth)
+
+    @torch.no_grad()
+    def _smooth(self, y):
+        size = y.size(-1)
+        if self._weight_cache is None or self._weight_cache.size(-1) != size:
+            w = torch.arange(1, 1 + size, dtype=y.dtype, device=y.device)
+            w.pow_(-self.smooth)
+            w.div_(w.norm(dim=-1))  # Ensure orthogonality.
+            self._weight_cache = w
+        return self._weight_cache
 
     def _call(self, x):
         dim = -self.event_dim
         if dim != -1:
             x = x.transpose(dim, -1)
         y = dct(x)
+        if self.smooth:
+            y = y / self._smooth(y)
         if dim != -1:
             y = y.transpose(dim, -1)
         return y
@@ -42,6 +59,8 @@ class DiscreteCosineTransform(Transform):
         dim = -self.event_dim
         if dim != -1:
             y = y.transpose(dim, -1)
+        if self.smooth:
+            y = y * self._smooth(y)
         x = idct(y)
         if dim != -1:
             x = x.transpose(dim, -1)

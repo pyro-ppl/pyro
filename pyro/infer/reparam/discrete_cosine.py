@@ -28,9 +28,10 @@ class DiscreteCosineReparam(Reparam):
     :param int dim: Dimension along which to transform. Must be negative.
         This is an absolute dim counting from the right.
     """
-    def __init__(self, dim=-1):
+    def __init__(self, dim=-1, smooth=0.):
         assert isinstance(dim, int) and dim < 0
         self.dim = dim
+        self.smooth = float(smooth)
 
     def __call__(self, name, fn, obs):
         assert obs is None, "TransformReparam does not support observe statements"
@@ -40,8 +41,8 @@ class DiscreteCosineReparam(Reparam):
         # Draw noise from the base distribution.
         # TODO Use biject_to(fn.support).inv.with_cache(1) once the following merges:
         # https://github.com/probtorch/pytorch/pull/153
-        transform = ComposeTransform([biject_to(fn.support).inv,
-                                      DiscreteCosineTransform(dim=self.dim, cache_size=1)])
+        dct = DiscreteCosineTransform(dim=self.dim, smooth=self.smooth, cache_size=1)
+        transform = ComposeTransform([biject_to(fn.support).inv, dct])
         x_dct = pyro.sample("{}_dct".format(name),
                             dist.TransformedDistribution(fn, transform))
 
