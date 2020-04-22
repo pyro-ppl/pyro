@@ -23,14 +23,23 @@ class DiscreteCosineReparam(Reparam):
     diagonal guides in SVI and improving the effectiveness of a diagonal mass
     matrix in HMC.
 
+    When reparameterizing variables that are approximately continuous along the
+    time dimension, set ``smooth=1``. For variables that are approximately
+    continuously differentiable along the time axis, set ``smooth=2``.
+
     This reparameterization works only for latent variables, not likelihoods.
 
     :param int dim: Dimension along which to transform. Must be negative.
         This is an absolute dim counting from the right.
+    :param float smooth: Smoothing parameter. When 0, this transforms white
+        noise to white noise; when 1 this transforms Brownian noise to to white
+        noise; when -1 this transforms violet noise to white noise; etc. Any
+        real number is allowed. https://en.wikipedia.org/wiki/Colors_of_noise.
     """
-    def __init__(self, dim=-1):
+    def __init__(self, dim=-1, smooth=0.):
         assert isinstance(dim, int) and dim < 0
         self.dim = dim
+        self.smooth = float(smooth)
 
     def __call__(self, name, fn, obs):
         assert obs is None, "TransformReparam does not support observe statements"
@@ -40,8 +49,8 @@ class DiscreteCosineReparam(Reparam):
         # Draw noise from the base distribution.
         # TODO Use biject_to(fn.support).inv.with_cache(1) once the following merges:
         # https://github.com/probtorch/pytorch/pull/153
-        transform = ComposeTransform([biject_to(fn.support).inv,
-                                      DiscreteCosineTransform(dim=self.dim, cache_size=1)])
+        dct = DiscreteCosineTransform(dim=self.dim, smooth=self.smooth, cache_size=1)
+        transform = ComposeTransform([biject_to(fn.support).inv, dct])
         x_dct = pyro.sample("{}_dct".format(name),
                             dist.TransformedDistribution(fn, transform))
 
