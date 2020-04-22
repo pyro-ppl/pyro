@@ -262,8 +262,8 @@ def quantize(name, x_real, min, max):
     q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real) - 1
 
     x = lb + q
-    x = torch.max(x, min - 1 - x)
-    x = torch.min(x, 2 * max - min + 1 - x)
+    x = torch.max(x, 2 * min - 1 - x)
+    x = torch.min(x, 2 * max + 1 - x)
     return pyro.deterministic(name, x)
 
 
@@ -377,8 +377,8 @@ def quantize_enumerate(x_real, min, max):
     q = torch.arange(-1., 3.)
 
     x = lb.unsqueeze(-1) + q
-    x = torch.max(x, min - 1 - x)
-    x = torch.min(x, 2 * max - min + 1 - x)
+    x = torch.max(x, 2 * min - 1 - x)
+    x = torch.min(x, 2 * max + 1 - x)
     return x, logits
 
 
