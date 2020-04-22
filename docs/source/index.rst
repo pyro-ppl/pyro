@@ -38,6 +38,7 @@ Pyro Documentation
    contrib.gp
    contrib.minipyro
    contrib.oed
+   contrib.outbreak
    contrib.timeseries
    contrib.tracking
 

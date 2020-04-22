@@ -9,7 +9,7 @@ Contributed Code
     This code makes no guarantee about maintaining backwards compatibility.
 """
 
-from pyro.contrib import autoname, bnn, easyguide, forecast, gp, oed, tracking
+from pyro.contrib import autoname, bnn, easyguide, forecast, gp, oed, outbreak, tracking
 
 __all__ = [
     "autoname",
@@ -18,5 +18,6 @@ __all__ = [
     "forecast",
     "gp",
     "oed",
+    "outbreak",
     "tracking",
 ]
