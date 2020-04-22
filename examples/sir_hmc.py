@@ -344,8 +344,8 @@ def heuristic_init(args, data):
 
 def infer_hmc_cont(model, args, data):
     if args.dct:
-        model = poutine.reparam(model, {"S_aux": DiscreteCosineReparam(),
-                                        "I_aux": DiscreteCosineReparam()})
+        rep = DiscreteCosineReparam()
+        model = poutine.reparam(model, {"S_aux": rep, "I_aux": rep})
     init_values = heuristic_init(args, data)
     return _infer_hmc(args, data, model, init_values=init_values)
 
@@ -484,11 +484,14 @@ def predict(args, data, samples, truth=None):
     particle_plate = pyro.plate("particles", args.num_samples, dim=-1)
 
     # First we sample discrete auxiliary variables from the continuous
-    # variables sampled in vectorized_model. Here infer_discrete runs a
-    # forward-filter backward-sample algorithm. We'll add these new samples to
-    # the existing dict of samples.
+    # variables sampled in vectorized_model. This samples only time steps
+    # [0:duration]. Here infer_discrete runs a forward-filter backward-sample
+    # algorithm. We'll add these new samples to the existing dict of samples.
     model = poutine.condition(continuous_model, samples)
     model = particle_plate(model)
+    if args.dct:  # Apply the same reparameterizer as during inference.
+        rep = DiscreteCosineReparam()
+        model = poutine.reparam(model, {"S_aux": rep, "I_aux": rep})
     model = infer_discrete(model, first_available_dim=-2)
     with poutine.trace() as tr:
         model(data, args.population)
@@ -496,8 +499,9 @@ def predict(args, data, samples, truth=None):
                for name, site in tr.trace.nodes.items()
                if site["type"] == "sample"}
 
-    # Next we'll run the forward generative process in discrete_model. Again
-    # we'll update the dict of samples.
+    # Next we'll run the forward generative process in discrete_model. This
+    # samples time steps [duration:duration+forecast]. Again we'll update the
+    # dict of samples.
     extended_data = list(data) + [None] * args.forecast
     model = poutine.condition(discrete_model, samples)
     model = particle_plate(model)
@@ -507,7 +511,8 @@ def predict(args, data, samples, truth=None):
                for name, site in tr.trace.nodes.items()
                if site["type"] == "sample"}
 
-    # Concatenate sequential time series into tensors.
+    # Finally we'll concatenate the sequentially sampled values into contiguous
+    # tensors. This operates on the entire time interval [0:duration+forecast].
     for key in ("S", "I", "S2I", "I2R"):
         pattern = key + "_[0-9]+"
         series = [value
