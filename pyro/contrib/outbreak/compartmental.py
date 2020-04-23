@@ -4,6 +4,7 @@
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -42,7 +43,7 @@ class CompartmentalModel(ABC):
             def global_model(self): ...
             def initialize(self, params): ...
             def transition_fwd(self, params, state, t): ...
-            def transition_bwd(self, params, prev, curr): ...
+            def transition_bwd(self, params, prev, curr, t): ...
 
         # Run inference to fit the model to data.
         model = MyModel(...)
@@ -138,9 +139,9 @@ class CompartmentalModel(ABC):
         model = self._generative_model
         model = poutine.condition(model, fixed)
         trace = poutine.trace(model).get_trace()
-        samples = {name: site["value"]
-                   for name, site in trace.nodes.items()
-                   if site["type"] == "sample"}
+        samples = OrderedDict((name, site["value"])
+                              for name, site in trace.nodes.items()
+                              if site["type"] == "sample")
 
         self._concat_series(samples)
         return samples
@@ -206,9 +207,9 @@ class CompartmentalModel(ABC):
             model = poutine.reparam(model, {"auxiliary": rep})
         model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
-        samples = {name: site["value"]
-                   for name, site in trace.nodes.items()
-                   if site["type"] == "sample"}
+        samples = OrderedDict((name, site["value"])
+                              for name, site in trace.nodes.items()
+                              if site["type"] == "sample")
 
         # Optionally forecast with the forward _generative_model. This samples
         # time steps [duration:duration+forecast].
@@ -218,9 +219,9 @@ class CompartmentalModel(ABC):
             model = poutine.condition(model, samples)
             model = particle_plate(model)
             trace = poutine.trace(model).get_trace(forecast)
-            samples = {name: site["value"]
-                       for name, site in trace.nodes.items()
-                       if site["type"] == "sample"}
+            samples = OrderedDict((name, site["value"])
+                                  for name, site in trace.nodes.items()
+                                  if site["type"] == "sample")
 
         self._concat_series(samples, forecast)
         return samples
