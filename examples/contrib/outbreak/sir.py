@@ -125,7 +125,7 @@ def main(args):
 
     # Predict latent time series.
     if args.forecast:
-        predict(args, obs, samples, truth=dataset["S2I"])
+        predict(args, model, truth=dataset["S2I"])
 
 
 if __name__ == "__main__":

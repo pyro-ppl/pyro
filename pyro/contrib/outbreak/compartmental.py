@@ -95,6 +95,7 @@ class CompartmentalModel(ABC):
 
     # Overridable attributes and methods ########################################
 
+    max_plate_nesting = 0
     series = ()
     full_mass = False
 
@@ -177,7 +178,6 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
-        self._max_plate_nesting = kernel._max_plate_nesting
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
@@ -188,7 +188,8 @@ class CompartmentalModel(ABC):
             raise RuntimeError("Missing samples, try running .fit() first")
         samples = self.samples
         num_samples = len(next(iter(samples.values())))
-        particle_plate = pyro.plate("particles", num_samples, dim=-1)
+        particle_plate = pyro.plate("particles", num_samples,
+                                    dim=-1 - self.max_plate_nesting)
 
         # Sample discrete auxiliary variables conditioned on the continuous
         # variables sampled in vectorized_model. This samples only time steps
@@ -203,7 +204,7 @@ class CompartmentalModel(ABC):
             # Apply the same reparameterizer as during inference.
             rep = DiscreteCosineReparam(smooth=self._dct)
             model = poutine.reparam(model, {"auxiliary": rep})
-        model = infer_discrete(model, first_available_dim=-1 - self._max_plate_nesting)
+        model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
         samples = {name: site["value"]
                    for name, site in trace.nodes.items()
@@ -277,7 +278,8 @@ class CompartmentalModel(ABC):
         for t in poutine.markov(range(self.duration)):
             aux_t = auxiliary[..., t]
             prev = curr
-            curr = {quantize("{}_{}".format(name, t), aux, min=0, max=self.population)
+            curr = {name: quantize("{}_{}".format(name, t), aux,
+                                   min=0, max=self.population)
                     for name, aux in zip(self.compartments, aux_t.unbind(-1))}
             logp = self.transition_bwd(params, prev, curr)
             pyro.factor("transition_{}".format(t), logp)
@@ -298,8 +300,8 @@ class CompartmentalModel(ABC):
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population)
-        curr = dict(zip(self.compartments, curr.unbind(-2)))
-        logp = dict(zip(self.compartments, logp.unbind(-2)))
+        curr = dict(zip(self.compartments, curr))
+        logp = dict(zip(self.compartments, logp))
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
