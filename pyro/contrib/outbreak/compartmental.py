@@ -30,7 +30,8 @@ class CompartmentalModel(ABC):
 
     Derived classes must implement methods :meth:`heuristic`,
     :meth:`initialize`, :meth:`transition_fwd`, :meth:`transition_bwd`.
-    Derived classes may optionally implement :meth:`global_model`.
+    Derived classes may optionally implement :meth:`global_model` and override
+    the :cvar:`series` attribute.
 
     Example usage::
 
@@ -72,6 +73,7 @@ class CompartmentalModel(ABC):
     :param int duration:
     :param int population:
     """
+
     def __init__(self, compartments, duration, population):
         super().__init__()
 
@@ -91,9 +93,10 @@ class CompartmentalModel(ABC):
         # Inference state.
         self.samples = {}
 
-    series = ()
+    # Overridable attributes and methods ########################################
 
-    # Abstract methods ########################################
+    series = ()
+    full_mass = False
 
     @abstractmethod
     def heuristic(self):
@@ -106,6 +109,7 @@ class CompartmentalModel(ABC):
         """
         return None
 
+    # TODO Allow stochastic initialization.
     @abstractmethod
     def initialize(self, params):
         """
@@ -126,19 +130,12 @@ class CompartmentalModel(ABC):
 
     # Inference interface ########################################
 
-    def validate(self):
-        """
-        Validate agreement between :meth:`transition_fwd` and
-        :meth:`transition_bwd`.
-        """
-        raise NotImplementedError("TODO")
-
     @torch.no_grad()
-    def generate(self):
+    def generate(self, fixed={}):
         """
         """
         model = self._generative_model
-        model = poutine.uncondition(model)
+        model = poutine.condition(model, fixed)
         trace = poutine.trace(model).get_trace()
         samples = {name: site["value"]
                    for name, site in trace.nodes.items()
@@ -150,6 +147,7 @@ class CompartmentalModel(ABC):
     def fit(self, **options):
         """
         """
+        logger.info("Running inference...")
         self._dct = options.pop("dct", None)  # Save for .predict().
 
         # Heuristically initialze to feasible latents.
@@ -165,7 +163,7 @@ class CompartmentalModel(ABC):
 
         # Configure a kernel.
         max_tree_depth = options.pop("max_tree_depth", 5)
-        full_mass = options.pop("full_mass", False)
+        full_mass = options.pop("full_mass", self.full_mass)
         model = self._vectorized_model
         if self._dct is not None:
             rep = DiscreteCosineReparam(smooth=self._dct)
@@ -244,6 +242,9 @@ class CompartmentalModel(ABC):
             samples[name] = torch.stack(series, dim=-1)
 
     def _generative_model(self):
+        """
+        Forward generative model used for simulation and forecasting.
+        """
         # Sample global parameters.
         params = self.global_model()
 
@@ -258,6 +259,9 @@ class CompartmentalModel(ABC):
                 pyro.deterministic("{}_{}".format(name, t), state[name])
 
     def _sequential_model(self):
+        """
+        Sequential model used to sample latents in the interval [0:duration].
+        """
         # Sample global parameters.
         params = self.global_model()
 
@@ -265,21 +269,23 @@ class CompartmentalModel(ABC):
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False)
-                                    .expand(len(self.compartments), self.duration)
+                                    .expand([len(self.compartments), self.duration])
                                     .to_event(2))
 
-        # Sample initial values.
-        curr = self.initialize(params)
-
         # Sequentially transition.
+        curr = self.initialize(params)
         for t in poutine.markov(range(self.duration)):
+            aux_t = auxiliary[..., t]
             prev = curr
             curr = {quantize("{}_{}".format(name, t), aux, min=0, max=self.population)
-                    for name, aux in zip(self.compartments, auxiliary[..., t].unbind(-1))}
+                    for name, aux in zip(self.compartments, aux_t.unbind(-1))}
             logp = self.transition_bwd(params, prev, curr)
             pyro.factor("transition_{}".format(t), logp)
 
     def _vectorized_model(self):
+        """
+        Vectorized model used for inference.
+        """
         # Sample global parameters.
         params = self.global_model()
 
@@ -287,11 +293,8 @@ class CompartmentalModel(ABC):
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False)
-                                    .expand(len(self.compartments), self.duration)
+                                    .expand([len(self.compartments), self.duration])
                                     .to_event(2))
-
-        # Sample initial values.
-        init = self.initialize(params)
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population)
@@ -299,33 +302,32 @@ class CompartmentalModel(ABC):
         logp = dict(zip(self.compartments, logp.unbind(-2)))
 
         # Truncate final value from the right then pad initial value onto the left.
+        init = self.initialize(params)
         prev = {}
         for name in self.compartments:
             if not isinstance(init[name], int):
                 raise NotImplementedError("TODO use torch.cat()")
             prev[name] = pad(curr[name][:-1], (0, 0, 1, 0), value=init[name])
 
-        # Reshape to support broadcasting, similar EnumMessenger.
+        # Reshape to support broadcasting, similar to EnumMessenger.
         C = len(self.compartments)
         T = self.duration
         Q = 4  # Number of quantization points.
 
         def enum_shape(position):
             shape = [T] + [1] * (2 * C)
-            shape[position] = Q
+            shape[1 + position] = Q
             return torch.Size(shape)
 
         for e, name in enumerate(self.compartments):
             prev[name] = prev[name].reshape(enum_shape(e))
             curr[name] = curr[name].reshape(enum_shape(C + e))
             logp[name] = logp[name].reshape(enum_shape(C + e))
-        # TODO provide a helper to reshape observed data, e.g.
-        # data = data.reshape(T, 1, 1, 1, 1)
 
         # Manually perform variable elimination.
         logp = sum(logp.values())
-        logp = logp + self.transition(params, prev, curr)
-        logp = logp.reshape(-1, Q ** len(self.compartments), Q ** len(self.compartments))
+        logp = logp + self.transition_bwd(params, prev, curr, enum_dims=2 * C)
+        logp = logp.reshape(T, Q ** C, Q ** C)
         logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
         logp = logp.reshape(-1).logsumexp(0)
         warn_if_nan(logp)

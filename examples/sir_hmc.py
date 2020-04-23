@@ -400,7 +400,7 @@ def vectorized_model(data, population):
     # Truncate final value from the right then pad initial value onto the left.
     S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=population - 1)
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
-    # Reshape to support broadcasting, similar EnumMessenger.
+    # Reshape to support broadcasting, similar to EnumMessenger.
     T = len(data)
     Q = 4  # Number of quantization points.
     S_prev = S_prev.reshape(T, Q, 1, 1, 1)
@@ -530,12 +530,12 @@ def predict(args, data, samples, truth=None):
     if args.plot:
         import matplotlib.pyplot as plt
         plt.figure()
-        time = torch.arange(len(data) + args.forecast)
+        time = torch.arange(args.duration + args.forecast)
         p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
         p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
         plt.plot(time, median, "r-", label="median")
-        plt.plot(time[:len(data)], data, "k.", label="observed")
+        plt.plot(time[:args.duration], data, "k.", label="observed")
         if truth is not None:
             plt.plot(time, truth, "k--", label="truth")
         plt.axvline(args.duration - 0.5, color="gray", lw=1)

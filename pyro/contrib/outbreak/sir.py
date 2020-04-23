@@ -14,10 +14,10 @@ class SIRModel(CompartmentalModel):
     """
     Susceptible-Infected-Recovered model.
 
+    :param int population:
+    :param float recovery_time:
     :param iterable data: Time series of new observed infections.
     """
-
-    series = ("S2I", "I2R", "obs")
 
     def __init__(self, population, recovery_time, data):
         compartments = ("S", "I")  # R is implicit.
@@ -29,6 +29,9 @@ class SIRModel(CompartmentalModel):
         self.recovery_time = recovery_time
 
         self.data = data
+
+    series = ("S2I", "I2R", "obs")
+    full_mass = [("R0", "rho")]
 
     def heuristic(self):
         # Start with a single infection.
@@ -59,7 +62,8 @@ class SIRModel(CompartmentalModel):
         return rate_s, prob_i, rho
 
     def initialize(self, params):
-        return {"S": 1 - self.population, "I": 1}
+        # Start with a single infection.
+        return {"S": self.population - 1, "I": 1}
 
     def transition_fwd(self, params, state, t):
         rate_s, prob_i, rho = params
@@ -78,7 +82,7 @@ class SIRModel(CompartmentalModel):
                     dist.ExtendedBinomial(S2I, rho),
                     obs=self.data[t] if t < self.duration else None)
 
-    def transition_bwd(self, params, prev, curr):
+    def transition_bwd(self, params, prev, curr, enum_dims=0):
         rate_s, prob_i, rho = params
 
         # Reverse the S2I,I2R computation.
@@ -89,6 +93,6 @@ class SIRModel(CompartmentalModel):
         prob_s = -(rate_s * prev["I"]).expm1()
         S2I_logp = dist.ExtendedBinomial(prev["S"], prob_s).log_prob(S2I)
         I2R_logp = dist.ExtendedBinomial(prev["I"], prob_i).log_prob(I2R)
-        # FIXME the following line needs to .unsqueeze() data for enumeration.
-        obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(self.data)
+        data = self.data.reshape((self.duration,) + (1,) * enum_dims)
+        obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(data)
         return obs_logp + S2I_logp + I2R_logp

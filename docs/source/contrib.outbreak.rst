@@ -2,10 +2,13 @@ Epidemiological Models
 ======================
 .. automodule:: pyro.contrib.outbreak
 
-``pyro.contrib.outbreak`` is a lightweight framework for experimenting with a
-restricted class of stochastic discrete-time discrete-count compartmental
-models. This framework implements inference via Hamiltonian Monte Carlo,
-prediction of latent variables, and forecasting future trends.
+.. warning:: Code in ``pyro.contrib.forecast`` is under development.
+    This code makes no guarantee about maintaining backwards compatibility.
+
+``pyro.contrib.outbreak`` is a framework for experimenting with a restricted
+class of stochastic discrete-time discrete-count compartmental models. This
+framework implements **inference** via Hamiltonian Monte Carlo, **prediction**
+of latent variables, and **forecasting** future trajectories.
 
 For explanation of the underlying machinery in this framework, see the
 `SIR with HMC tutorial <http://pyro.ai/examples/sir_hcm.html>`_
