@@ -3,7 +3,7 @@
 
 import pytest
 
-from pyro.contrib.outbreak import SIRModel
+from pyro.contrib.epidemiology import SIRModel
 
 
 @pytest.mark.parametrize("duration", [3, 7])

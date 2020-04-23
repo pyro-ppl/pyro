@@ -102,7 +102,7 @@ def generate_data(args):
               "rho": torch.tensor(args.response_rate)}
     empty_data = [None] * (args.duration + args.forecast)
 
-    # We'll retry until we get an actual outbreak.
+    # We'll retry until we get an actual epidemiology.
     for attempt in range(100):
         with poutine.trace() as tr:
             with poutine.condition(data=params):
@@ -587,7 +587,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
-    parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
+    parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
     parser.add_argument("-d", "--duration", default=10, type=int)

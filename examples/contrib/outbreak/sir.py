@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # This script aims to replicate the behavior of examples/sir_hmc.py but using
-# the high-level components of pyro.contrib.outbreak. Command line arguments and
-# results should be similar.
+# the high-level components of pyro.contrib.epidemiology. Command line
+# arguments and results should be similar.
 
 import argparse
 import logging
@@ -11,7 +11,7 @@ import logging
 import torch
 
 import pyro
-from pyro.contrib.outbreak import SIRModel
+from pyro.contrib.epidemiology import SIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -143,7 +143,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
-    parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
+    parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
     parser.add_argument("-d", "--duration", default=10, type=int)
