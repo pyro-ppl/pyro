@@ -5,10 +5,10 @@ Epidemiological Models
 .. warning:: Code in ``pyro.contrib.epidemiology`` is under development.
     This code makes no guarantee about maintaining backwards compatibility.
 
-``pyro.contrib.epidemiology`` is a framework for experimenting with a restricted
-class of stochastic discrete-time discrete-count compartmental models. This
-framework implements **inference** via Hamiltonian Monte Carlo, **prediction**
-of latent variables, and **forecasting** future trajectories.
+``pyro.contrib.epidemiology`` is a framework for experimenting with a
+restricted class of stochastic discrete-time discrete-count compartmental
+models. This framework implements **inference** (via Hamiltonian Monte Carlo),
+**prediction** of latent variables, and **forecasting** future trajectories.
 
 For example usage see the `SIR tuorial <http://pyro.ai/examples/contrib/epidemiology/sir.html>`_ .
 
