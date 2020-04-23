@@ -30,7 +30,7 @@ class SIRModel(CompartmentalModel):
 
         self.data = data
 
-    series = ("S2I", "I2R", "obs")
+    series = ("S2I", "I2R")
     full_mass = [("R0", "rho")]
 
     def heuristic(self):
@@ -82,8 +82,9 @@ class SIRModel(CompartmentalModel):
                     dist.ExtendedBinomial(S2I, rho),
                     obs=self.data[t] if t < self.duration else None)
 
-    def transition_bwd(self, params, prev, curr, enum_dims=0):
+    def transition_bwd(self, params, prev, curr, t):
         rate_s, prob_i, rho = params
+        obs = self.data[t]
 
         # Reverse the S2I,I2R computation.
         S2I = prev["S"] - curr["S"]
@@ -93,6 +94,5 @@ class SIRModel(CompartmentalModel):
         prob_s = -(rate_s * prev["I"]).expm1()
         S2I_logp = dist.ExtendedBinomial(prev["S"], prob_s).log_prob(S2I)
         I2R_logp = dist.ExtendedBinomial(prev["I"], prob_i).log_prob(I2R)
-        data = self.data.reshape((self.duration,) + (1,) * enum_dims)
-        obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(data)
+        obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(obs)
         return obs_logp + S2I_logp + I2R_logp

@@ -217,7 +217,7 @@ class CompartmentalModel(ABC):
             model = self._generative_model
             model = poutine.condition(model, samples)
             model = particle_plate(model)
-            trace = poutine.trace(model).get_trace()
+            trace = poutine.trace(model).get_trace(forecast)
             samples = {name: site["value"]
                        for name, site in trace.nodes.items()
                        if site["type"] == "sample"}
@@ -238,11 +238,12 @@ class CompartmentalModel(ABC):
             series = [value
                       for name_t, value in samples.items()
                       if re.match(pattern, name_t)]
-            assert len(series) == self.duration + forecast
-            series[0] = series[0].expand(series[1].shape)
-            samples[name] = torch.stack(series, dim=-1)
+            if series:
+                assert len(series) == self.duration + forecast
+                series[0] = series[0].expand(series[1].shape)
+                samples[name] = torch.stack(series, dim=-1)
 
-    def _generative_model(self):
+    def _generative_model(self, forecast=0):
         """
         Forward generative model used for simulation and forecasting.
         """
@@ -254,7 +255,7 @@ class CompartmentalModel(ABC):
         state = {i: torch.tensor(float(value)) for i, value in state.items()}
 
         # Sequentially transition.
-        for t in range(self.duration):
+        for t in range(self.duration + forecast):
             self.transition_fwd(params, state, t)
             for name in self.compartments:
                 pyro.deterministic("{}_{}".format(name, t), state[name])
@@ -281,7 +282,7 @@ class CompartmentalModel(ABC):
             curr = {name: quantize("{}_{}".format(name, t), aux,
                                    min=0, max=self.population)
                     for name, aux in zip(self.compartments, aux_t.unbind(-1))}
-            logp = self.transition_bwd(params, prev, curr)
+            logp = self.transition_bwd(params, prev, curr, t)
             pyro.factor("transition_{}".format(t), logp)
 
     def _vectorized_model(self):
@@ -325,10 +326,11 @@ class CompartmentalModel(ABC):
             prev[name] = prev[name].reshape(enum_shape(e))
             curr[name] = curr[name].reshape(enum_shape(C + e))
             logp[name] = logp[name].reshape(enum_shape(C + e))
+        t = (Ellipsis,) + (None,) * (2 * C)  # Used to unsqueeze data tensors.
 
         # Manually perform variable elimination.
         logp = sum(logp.values())
-        logp = logp + self.transition_bwd(params, prev, curr, enum_dims=2 * C)
+        logp = logp + self.transition_bwd(params, prev, curr, t)
         logp = logp.reshape(T, Q ** C, Q ** C)
         logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
         logp = logp.reshape(-1).logsumexp(0)

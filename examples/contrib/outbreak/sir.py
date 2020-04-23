@@ -19,9 +19,23 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 def generate_data(args):
     extended_data = [None] * (args.duration + args.forecast)
     model = SIRModel(args.population, args.recovery_time, extended_data)
-    dataset = model.generate({"R0": args.basic_reproduction_number,
-                              "rho": args.response_rate})
-    return dataset
+    for attempt in range(100):
+        samples = model.generate({"R0": args.basic_reproduction_number,
+                                  "rho": args.response_rate})
+        obs = torch.stack([v for k, v in samples.items()
+                           if k.startswith("obs_")][:args.duration])
+        S2I = samples["S2I"]
+
+        obs_sum = int(obs[:args.duration].sum())
+        S2I_sum = int(S2I[:args.duration].sum())
+        if obs_sum >= args.min_observations:
+            logging.info("Observed {:d}/{:d} infections:\n{}".format(
+                obs_sum, S2I_sum, " ".join([str(int(x)) for x in obs[:args.duration]])))
+            return {"S2I": S2I, "obs": obs}
+
+    raise ValueError("Failed to generate {} observations. Try increasing "
+                     "--population or decreasing --min-observations"
+                     .format(args.min_observations))
 
 
 def infer(args, model):
@@ -80,7 +94,7 @@ def evaluate(args, samples):
 def predict(args, model, truth):
     samples = model.predict(forecast=args.forecast)
 
-    obs = samples["obs"][:args.duration]
+    obs = model.data
     S2I = samples["S2I"]
     median = S2I.median(dim=0).values
     logging.info("Median prediction of new infections (starting on day 0):\n{}"
@@ -114,7 +128,7 @@ def main(args):
 
     # Generate data.
     dataset = generate_data(args)
-    obs = dataset["obs"][:args.duration]
+    obs = dataset["obs"]
 
     # Run inference.
     model = SIRModel(args.population, args.recovery_time, obs)
