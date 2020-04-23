@@ -7,7 +7,7 @@ Example Usage
 -------------
 
 The following example
-runs the script to generate epidemiology data for a population of 10000 observed
+runs the script to generate outbreak data for a population of 10000 observed
 for 60 days, then infer infection parameters and forecast new infections for
 another 30 days. This takes about 3 minutes on my laptop.
 
