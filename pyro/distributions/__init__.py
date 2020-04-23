@@ -11,6 +11,7 @@ from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
+from pyro.distributions.extended import ExtendedBetaBinomial, ExtendedBinomial
 from pyro.distributions.folded import FoldedDistribution
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
 from pyro.distributions.hmm import DiscreteHMM, GammaGaussianHMM, GaussianHMM, GaussianMRF, IndependentHMM, LinearHMM
@@ -26,7 +27,7 @@ from pyro.distributions.spanning_tree import SpanningTree
 from pyro.distributions.stable import Stable
 from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch import __all__ as torch_dists
-from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.torch_distribution import MaskedDistribution, TorchDistribution
 from pyro.distributions.torch_transform import ComposeTransformModule, TransformModule
 from pyro.distributions.unit import Unit
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
@@ -49,6 +50,8 @@ __all__ = [
     "DiscreteHMM",
     "Distribution",
     "Empirical",
+    "ExtendedBetaBinomial",
+    "ExtendedBinomial",
     "FoldedDistribution",
     "GammaGaussianHMM",
     "GammaPoisson",
@@ -59,6 +62,7 @@ __all__ = [
     "InverseGamma",
     "LinearHMM",
     "LKJCorrCholesky",
+    "MaskedDistribution",
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",

@@ -26,6 +26,7 @@ Welcome to Pyro Examples and Tutorials!
    jit
    minipyro
    effect_handlers
+   modules
 
 .. toctree::
    :maxdepth: 2
@@ -77,7 +78,7 @@ Welcome to Pyro Examples and Tutorials!
    forecast_simple
    timeseries
    smcfilter
-
+   sir_hmc
 
 Indices and tables
 ==================

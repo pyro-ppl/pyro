@@ -1,16 +1,16 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from functools import partial
+
 import torch
 from torch.distributions import constraints
 
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.utils import clamp_preserve_gradients
+from pyro.distributions.util import copy_docs_from
 from pyro.nn import ConditionalDenseNN, DenseNN
-
-from functools import partial
 
 
 @copy_docs_from(TransformModule)

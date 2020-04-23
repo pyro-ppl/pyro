@@ -8,6 +8,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import scalar_like
+from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
@@ -95,6 +96,8 @@ class NUTS(HMC):
         so the sampling will be slower but more robust. Default to 0.8.
     :param int max_tree_depth: Max depth of the binary tree created during the doubling
         scheme of NUTS sampler. Default to 10.
+    :param callable init_strategy: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
 
     Example:
 
@@ -130,7 +133,8 @@ class NUTS(HMC):
                  jit_options=None,
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8,
-                 max_tree_depth=10):
+                 max_tree_depth=10,
+                 init_strategy=init_to_uniform):
         super().__init__(model,
                          potential_fn,
                          step_size,
@@ -142,7 +146,8 @@ class NUTS(HMC):
                          jit_compile=jit_compile,
                          jit_options=jit_options,
                          ignore_jit_warnings=ignore_jit_warnings,
-                         target_accept_prob=target_accept_prob)
+                         target_accept_prob=target_accept_prob,
+                         init_strategy=init_strategy)
         self.use_multinomial_sampling = use_multinomial_sampling
         self._max_tree_depth = max_tree_depth
         # There are three conditions to stop doubling process:
@@ -159,24 +164,27 @@ class NUTS(HMC):
 
     def _is_turning(self, r_left, r_right, r_sum):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
-        r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
-        r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
-        r_sum = r_sum - (r_left_flat + r_right_flat) / 2
-        if self.inverse_mass_matrix.dim() == 2:
-            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum) > 0 and
-                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum) > 0):
-                return False
-        else:
-            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum) > 0 and
-                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum) > 0):
-                return False
-        return True
+        left_angle = 0.
+        right_angle = 0.
+        for site_names, inv_mass_matrix in self.inverse_mass_matrix.items():
+            r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in site_names])
+            r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in site_names])
+            rho = r_sum[site_names] - (r_left_flat + r_right_flat) / 2
+            if inv_mass_matrix.dim() == 1:
+                left_angle = left_angle + inv_mass_matrix.mul(r_left_flat).dot(rho)
+                right_angle = right_angle + inv_mass_matrix.mul(r_right_flat).dot(rho)
+            else:
+                left_angle = left_angle + inv_mass_matrix.matmul(r_left_flat).dot(rho)
+                right_angle = right_angle + inv_mass_matrix.matmul(r_right_flat).dot(rho)
+
+        return (left_angle <= 0) or (right_angle <= 0)
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = velocity_verlet(
             z, r, self.potential_fn, self.inverse_mass_matrix, step_size, z_grads=z_grads)
-        r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
+        r_new_flat = {site_names: torch.cat([r_new[site_name].reshape(-1) for site_name in site_names])
+                      for site_names in self.inverse_mass_matrix}
         energy_new = potential_energy + self._kinetic_energy(r_new)
         # handle the NaN case
         energy_new = scalar_like(energy_new, float("inf")) if torch_isnan(energy_new) else energy_new
@@ -232,7 +240,8 @@ class NUTS(HMC):
             tree_weight = half_tree.weight + other_half_tree.weight
         sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
         num_proposals = half_tree.num_proposals + other_half_tree.num_proposals
-        r_sum = half_tree.r_sum + other_half_tree.r_sum
+        r_sum = {site_names: half_tree.r_sum[site_names] + other_half_tree.r_sum[site_names]
+                 for site_names in self.inverse_mass_matrix}
 
         # The probability of that proposal belongs to which half of tree
         #     is computed based on the weights of each half.
@@ -379,7 +388,8 @@ class NUTS(HMC):
                     z = new_tree.z_proposal
                     self._cache(z, new_tree.z_proposal_pe, new_tree.z_proposal_grads)
 
-                r_sum = r_sum + new_tree.r_sum
+                r_sum = {site_names: r_sum[site_names] + new_tree.r_sum[site_names]
+                         for site_names in self.inverse_mass_matrix}
                 if self._is_turning(r_left, r_right, r_sum):  # stop doubling
                     break
                 else:  # update tree_weight

@@ -78,6 +78,6 @@ class AdagradRMSProp(Optimizer):
 
                 lr = group['eta'] * (state['step'] ** (-0.5 + group['delta']))
                 std = state['sum'].sqrt()
-                p.data.addcdiv_(-lr, grad, 1.0 + std)
+                p.data.addcdiv_(grad, 1.0 + std, value=-lr)
 
         return loss
