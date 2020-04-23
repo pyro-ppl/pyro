@@ -73,12 +73,12 @@ def global_model(population):
     return rate_s, prob_i, rho
 
 
-def discrete_model(data, population):
+def discrete_model(args, data):
     # Sample global parameters.
-    rate_s, prob_i, rho = global_model(population)
+    rate_s, prob_i, rho = global_model(args.population)
 
     # Sequentially sample time-local variables.
-    S = torch.tensor(population - 1.)
+    S = torch.tensor(args.population - 1.)
     I = torch.tensor(1.)
     for t, datum in enumerate(data):
         S2I = pyro.sample("S2I_{}".format(t),
@@ -105,7 +105,7 @@ def generate_data(args):
     for attempt in range(100):
         with poutine.trace() as tr:
             with poutine.condition(data=params):
-                discrete_model(empty_data, args.population)
+                discrete_model(args, empty_data)
 
         # Concatenate sequential time series into tensors.
         obs = torch.stack([site["value"]
@@ -150,12 +150,12 @@ def generate_data(args):
 # The following model is equivalent to the discrete_model:
 
 @config_enumerate
-def reparameterized_discrete_model(data, population):
+def reparameterized_discrete_model(args, data):
     # Sample global parameters.
-    rate_s, prob_i, rho = global_model(population)
+    rate_s, prob_i, rho = global_model(args.population)
 
     # Sequentially sample time-local variables.
-    S_curr = torch.tensor(population - 1.)
+    S_curr = torch.tensor(args.population - 1.)
     I_curr = torch.tensor(1.)
     for t, datum in enumerate(data):
         # Sample reparameterizing variables.
@@ -163,9 +163,9 @@ def reparameterized_discrete_model(data, population):
         # .mask(False). Thus distributions are used only for initialization.
         S_prev, I_prev = S_curr, I_curr
         S_curr = pyro.sample("S_{}".format(t),
-                             dist.Binomial(population, 0.5).mask(False))
+                             dist.Binomial(args.population, 0.5).mask(False))
         I_curr = pyro.sample("I_{}".format(t),
-                             dist.Binomial(population, 0.5).mask(False))
+                             dist.Binomial(args.population, 0.5).mask(False))
 
         # Now we reverse the computation.
         S2I = S_prev - S_curr
@@ -218,7 +218,7 @@ def _infer_hmc(args, data, model, init_values={}):
     mcmc = MCMC(kernel, hook_fn=hook_fn,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps)
-    mcmc.run(data, population=args.population, args=args)
+    mcmc.run(args, data)
     mcmc.summary()
     if args.plot:
         import matplotlib.pyplot as plt
@@ -289,7 +289,7 @@ def quantize(name, x_real, min, max, spline_order=3):
 
     q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real)
 
-    x = lb + q - 1 if spline_order == 3 else lb + q - 3
+    x = lb + q - {3: 1, 5: 3}[spline_order]
     x = torch.max(x, 2 * min - 1 - x)
     x = torch.min(x, 2 * max + 1 - x)
 
@@ -299,25 +299,25 @@ def quantize(name, x_real, min, max, spline_order=3):
 # Now we can define another equivalent model.
 
 @config_enumerate
-def continuous_model(data, population, args):
+def continuous_model(args, data):
     # Sample global parameters.
-    rate_s, prob_i, rho = global_model(population)
+    rate_s, prob_i, rho = global_model(args.population)
 
     # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
-                        dist.Uniform(-0.5, population + 0.5)
+                        dist.Uniform(-0.5, args.population + 0.5)
                             .mask(False).expand(data.shape).to_event(1))
     I_aux = pyro.sample("I_aux",
-                        dist.Uniform(-0.5, population + 0.5)
+                        dist.Uniform(-0.5, args.population + 0.5)
                             .mask(False).expand(data.shape).to_event(1))
 
     # Sequentially sample time-local variables.
-    S_curr = torch.tensor(population - 1.)
+    S_curr = torch.tensor(args.population - 1.)
     I_curr = torch.tensor(1.)
     for t, datum in poutine.markov(enumerate(data)):
         S_prev, I_prev = S_curr, I_curr
-        S_curr = quantize("S_{}".format(t), S_aux[..., t], min=0, max=population, spline_order=args.spline_order)
-        I_curr = quantize("I_{}".format(t), I_aux[..., t], min=0, max=population, spline_order=args.spline_order)
+        S_curr = quantize("S_{}".format(t), S_aux[..., t], min=0, max=args.population, spline_order=args.spline_order)
+        I_curr = quantize("I_{}".format(t), I_aux[..., t], min=0, max=args.population, spline_order=args.spline_order)
 
         # Now we reverse the computation.
         S2I = S_prev - S_curr
@@ -439,23 +439,23 @@ def quantize_enumerate(x_real, min, max, spline_order=3):
     return x, logits
 
 
-def vectorized_model(data, population, args):
+def vectorized_model(args, data):
     # Sample global parameters.
-    rate_s, prob_i, rho = global_model(population)
+    rate_s, prob_i, rho = global_model(args.population)
 
     # Sample reparameterizing variables.
     S_aux = pyro.sample("S_aux",
-                        dist.Uniform(-0.5, population + 0.5)
+                        dist.Uniform(-0.5, args.population + 0.5)
                             .mask(False).expand(data.shape).to_event(1))
     I_aux = pyro.sample("I_aux",
-                        dist.Uniform(-0.5, population + 0.5)
+                        dist.Uniform(-0.5, args.population + 0.5)
                             .mask(False).expand(data.shape).to_event(1))
 
     # Manually enumerate.
-    S_curr, S_logp = quantize_enumerate(S_aux, min=0, max=population, spline_order=args.spline_order)
-    I_curr, I_logp = quantize_enumerate(I_aux, min=0, max=population, spline_order=args.spline_order)
+    S_curr, S_logp = quantize_enumerate(S_aux, min=0, max=args.population, spline_order=args.spline_order)
+    I_curr, I_logp = quantize_enumerate(I_aux, min=0, max=args.population, spline_order=args.spline_order)
     # Truncate final value from the right then pad initial value onto the left.
-    S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=population - 1)
+    S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=args.population - 1)
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
     # Reshape to support broadcasting, similar EnumMessenger.
     T = len(data)
@@ -551,7 +551,7 @@ def predict(args, data, samples, truth=None):
         model = poutine.reparam(model, {"S_aux": rep, "I_aux": rep})
     model = infer_discrete(model, first_available_dim=-2)
     with poutine.trace() as tr:
-        model(data, args.population)
+        model(args, data)
     samples = {name: site["value"]
                for name, site in tr.trace.nodes.items()
                if site["type"] == "sample"}
@@ -563,7 +563,7 @@ def predict(args, data, samples, truth=None):
     model = poutine.condition(discrete_model, samples)
     model = particle_plate(model)
     with poutine.trace() as tr:
-        model(extended_data, args.population)
+        model(args, extended_data)
     samples = {name: site["value"]
                for name, site in tr.trace.nodes.items()
                if site["type"] == "sample"}
