@@ -235,12 +235,13 @@ class CompartmentalModel(ABC):
         """
         for name in self.compartments + self.series:
             pattern = name + "_[0-9]+"
-            series = [value
-                      for name_t, value in samples.items()
-                      if re.match(pattern, name_t)]
+            series = []
+            for key in list(samples):
+                if re.match(pattern, key):
+                    series.append(samples.pop(key))
             if series:
                 assert len(series) == self.duration + forecast
-                series[0] = series[0].expand(series[1].shape)
+                series = torch.broadcast_tensors(*series)
                 samples[name] = torch.stack(series, dim=-1)
 
     def _generative_model(self, forecast=0):

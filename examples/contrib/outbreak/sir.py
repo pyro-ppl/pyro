@@ -22,15 +22,14 @@ def generate_data(args):
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
                                   "rho": args.response_rate})
-        obs = torch.stack([v for k, v in samples.items()
-                           if k.startswith("obs_")][:args.duration])
+        obs = samples["obs"][:args.duration]
         S2I = samples["S2I"]
 
-        obs_sum = int(obs[:args.duration].sum())
+        obs_sum = int(obs.sum())
         S2I_sum = int(S2I[:args.duration].sum())
         if obs_sum >= args.min_observations:
             logging.info("Observed {:d}/{:d} infections:\n{}".format(
-                obs_sum, S2I_sum, " ".join([str(int(x)) for x in obs[:args.duration]])))
+                obs_sum, S2I_sum, " ".join(str(int(x)) for x in obs)))
             return {"S2I": S2I, "obs": obs}
 
     raise ValueError("Failed to generate {} observations. Try increasing "

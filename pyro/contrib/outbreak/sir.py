@@ -30,7 +30,7 @@ class SIRModel(CompartmentalModel):
 
         self.data = data
 
-    series = ("S2I", "I2R")
+    series = ("S2I", "I2R", "obs")
     full_mass = [("R0", "rho")]
 
     def heuristic(self):
