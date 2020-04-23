@@ -84,15 +84,19 @@ class SIRModel(CompartmentalModel):
 
     def transition_bwd(self, params, prev, curr, t):
         rate_s, prob_i, rho = params
-        obs = self.data[t]
 
         # Reverse the S2I,I2R computation.
         S2I = prev["S"] - curr["S"]
         I2R = prev["I"] - curr["I"] + S2I
 
-        # Compute probability factors.
+        # Declare probability factors.
         prob_s = -(rate_s * prev["I"]).expm1()
-        S2I_logp = dist.ExtendedBinomial(prev["S"], prob_s).log_prob(S2I)
-        I2R_logp = dist.ExtendedBinomial(prev["I"], prob_i).log_prob(I2R)
-        obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(obs)
-        return obs_logp + S2I_logp + I2R_logp
+        pyro.sample("S2I_{}".format(t),
+                    dist.ExtendedBinomial(prev["S"], prob_s),
+                    obs=S2I)
+        pyro.sample("I2R_{}".format(t),
+                    dist.ExtendedBinomial(prev["I"], prob_i),
+                    obs=I2R)
+        pyro.sample("obs_{}".format(t),
+                    dist.ExtendedBinomial(S2I.clamp(min=0), rho),
+                    obs=self.data[t])

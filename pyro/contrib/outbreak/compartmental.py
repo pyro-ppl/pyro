@@ -188,12 +188,13 @@ class CompartmentalModel(ABC):
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
         samples = self.samples
+        print("DEBUG {}".format(samples.keys()))
         num_samples = len(next(iter(samples.values())))
         particle_plate = pyro.plate("particles", num_samples,
                                     dim=-1 - self.max_plate_nesting)
 
         # Sample discrete auxiliary variables conditioned on the continuous
-        # variables sampled in vectorized_model. This samples only time steps
+        # variables sampled by _vectorized_model. This samples only time steps
         # [0:duration]. Here infer_discrete runs a forward-filter
         # backward-sample algorithm.
         logger.info("Predicting latent variables for {} time steps..."
@@ -284,8 +285,7 @@ class CompartmentalModel(ABC):
             curr = {name: quantize("{}_{}".format(name, t), aux,
                                    min=0, max=self.population)
                     for name, aux in zip(self.compartments, aux_t.unbind(-1))}
-            logp = self.transition_bwd(params, prev, curr, t)
-            pyro.factor("transition_{}".format(t), logp)
+            self.transition_bwd(params, prev, curr, t)
 
     def _vectorized_model(self):
         """
@@ -303,8 +303,8 @@ class CompartmentalModel(ABC):
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population)
-        curr = dict(zip(self.compartments, curr))
-        logp = dict(zip(self.compartments, logp))
+        curr = OrderedDict(zip(self.compartments, curr))
+        logp = OrderedDict(zip(self.compartments, logp))
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
@@ -330,9 +330,15 @@ class CompartmentalModel(ABC):
             logp[name] = logp[name].reshape(enum_shape(C + e))
         t = (Ellipsis,) + (None,) * (2 * C)  # Used to unsqueeze data tensors.
 
+        # Record transition factors.
+        with poutine.block(), poutine.trace() as tr:
+            self.transition_bwd(params, prev, curr, t)
+        for name, site in tr.trace.nodes.items():
+            if site["type"] == "sample":
+                logp[name] = site["fn"].log_prob(site["value"])
+
         # Manually perform variable elimination.
         logp = sum(logp.values())
-        logp = logp + self.transition_bwd(params, prev, curr, t)
         logp = logp.reshape(T, Q ** C, Q ** C)
         logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
         logp = logp.reshape(-1).logsumexp(0)

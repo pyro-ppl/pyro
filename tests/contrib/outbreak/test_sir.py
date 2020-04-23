@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-import torch
 
 from pyro.contrib.outbreak import SIRModel
 

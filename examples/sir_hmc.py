@@ -16,6 +16,7 @@ import argparse
 import logging
 import math
 import re
+from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -495,9 +496,9 @@ def predict(args, data, samples, truth=None):
     model = infer_discrete(model, first_available_dim=-2)
     with poutine.trace() as tr:
         model(data, args.population)
-    samples = {name: site["value"]
-               for name, site in tr.trace.nodes.items()
-               if site["type"] == "sample"}
+    samples = OrderedDict((name, site["value"])
+                          for name, site in tr.trace.nodes.items()
+                          if site["type"] == "sample")
 
     # Next we'll run the forward generative process in discrete_model. This
     # samples time steps [duration:duration+forecast]. Again we'll update the
@@ -507,9 +508,9 @@ def predict(args, data, samples, truth=None):
     model = particle_plate(model)
     with poutine.trace() as tr:
         model(extended_data, args.population)
-    samples = {name: site["value"]
-               for name, site in tr.trace.nodes.items()
-               if site["type"] == "sample"}
+    samples = OrderedDict((name, site["value"])
+                          for name, site in tr.trace.nodes.items()
+                          if site["type"] == "sample")
 
     # Finally we'll concatenate the sequentially sampled values into contiguous
     # tensors. This operates on the entire time interval [0:duration+forecast].
