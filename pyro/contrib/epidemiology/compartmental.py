@@ -103,11 +103,20 @@ class CompartmentalModel(ABC):
     @abstractmethod
     def heuristic(self):
         """
+        Finds an initial feasible guess of all latent variables, consistent
+        with observed data. This is needed because not all hypotheses are
+        feasible and HMC needs to start at a feasible solution to progress.
+
+        :returns: A dictionary mapping sample site name to tensor value.
+        :rtype: dict
         """
         raise NotImplementedError
 
     def global_model(self):
         """
+        Samples and returns any global parameters.
+
+        :returns: An arbitrary object of parameters (e.g. ``None``).
         """
         return None
 
@@ -115,18 +124,58 @@ class CompartmentalModel(ABC):
     @abstractmethod
     def initialize(self, params):
         """
+        Returns initial counts in each compartment.
+
+        :param params: The global params returned by :meth:`global_model`.
+        :returns: A dict mapping compartment name to initial value.
+        :rtype: dict
         """
         raise NotImplementedError
 
     @abstractmethod
     def transition_fwd(self, params, state, t):
         """
+        Forward generative process for dynamics.
+
+        This inputs a current ``state`` and stochastically updates that
+        state in-place.
+
+        Note that this method is called under two different interpretations.
+        During :meth:`generate` this is called to generate a single sample.
+        During :meth:`predict` thsi is called to forecast a batch of samples,
+        conditioned on posterior samples for the time interval
+        ``[0:duration]``.
+
+        :param params: The global params returned by :meth:`global_model`.
+        :param dict state: A dictionary mapping compartment name to current
+            tensor value. This should be updated in-place.
+        :param int t: Time index.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def transition_bwd(self, params, prev, curr):
+    def transition_bwd(self, params, prev, curr, t):
         """
+        Backward factor graph for dynamics.
+
+        This inputs hypotheses for two subsequent time steps
+        (``prev``,``curr``) and makes observe statements
+        ``pyro.sample(..., obs=...)`` to declare probability factors.
+
+        Note that this method is called under two different interpretations.
+        During inference it is called vectorizing over time but with a single
+        sample. During prediction it is called sequentially for each time
+        step, but always vectorizing over samples.
+
+        :param params: The global params returned by :meth:`global_model`.
+        :param dict prev: 
+        :param dict state: A dictionary mapping compartment name to previous
+            tensor value. This should not be modified.
+        :param dict state: A dictionary mapping compartment name to current
+            tensor value. This should not be modified.
+        :param t: A time-like index. During inference ``t`` will be
+            an indexing tuple that reshapes data tensors. During prediction
+            ``t`` will be an actual integer time index.
         """
         raise NotImplementedError
 
@@ -135,6 +184,13 @@ class CompartmentalModel(ABC):
     @torch.no_grad()
     def generate(self, fixed={}):
         """
+        Generate data from the prior.
+
+        :pram dict fixed: A dictionary of parameters on which to condition.
+            These must be top-level parentless nodes, i.e. have no
+            upstream stochastic dependencies.
+        :returns: A dictionary mapping sample site name to sampled value.
+        :rtype: dict
         """
         model = self._generative_model
         model = poutine.condition(model, fixed)
@@ -147,7 +203,24 @@ class CompartmentalModel(ABC):
         return samples
 
     def fit(self, **options):
-        """
+        r"""
+        Runs inference to generate posterior samples.
+
+        This uses the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel to run
+        :class:`~pyro.infer.mcmc.api.MCMC`, setting the ``.samples``
+        attribute on completion.
+
+        :param \*\*options: Options passed to
+            :class:`~pyro.infer.mcmc.api.MCMC`. The remaining options are
+            pulled out and have special meaning.
+        :param int max_tree_depth: (Default 5). Max tree depth of the
+            :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param full_mass: (Default ``False``). Specification of mass matrix
+            of the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param float dct: If provided, use a discrete cosine reparameterizer
+            with this value as smoothness.
+        :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
+        :rtype: ~pyro.infer.mcmc.api.MCMC
         """
         logger.info("Running inference...")
         self._dct = options.pop("dct", None)  # Save for .predict().
@@ -155,7 +228,8 @@ class CompartmentalModel(ABC):
         # Heuristically initialze to feasible latents.
         init_values = self.heuristic()
         assert isinstance(init_values, dict)
-        assert "auxiliary" in init_values, ".heuristic() did not define auxiliary value"
+        assert "auxiliary" in init_values, \
+            ".heuristic() did not define auxiliary value"
         if self._dct is not None:
             # Also initialize DCT transformed coordinates.
             x = init_values["auxiliary"]
@@ -184,6 +258,14 @@ class CompartmentalModel(ABC):
     @torch.no_grad()
     def predict(self, forecast=0):
         """
+        Predict latent variables and optionally forecast forward.
+
+        This may be run only after :meth:`fit` and draws the same
+        ``num_samples`` as passed to :meth:`fit`.
+
+        :returns: A dictionary mapping sample site name (or compartment name)
+            to a tensor whose first dimension corresponds to sample batching.
+        :rtype: dict
         """
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
