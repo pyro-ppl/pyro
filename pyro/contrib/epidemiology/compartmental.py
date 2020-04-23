@@ -168,10 +168,9 @@ class CompartmentalModel(ABC):
         step, but always vectorizing over samples.
 
         :param params: The global params returned by :meth:`global_model`.
-        :param dict prev: 
-        :param dict state: A dictionary mapping compartment name to previous
+        :param dict prev: A dictionary mapping compartment name to previous
             tensor value. This should not be modified.
-        :param dict state: A dictionary mapping compartment name to current
+        :param dict curr: A dictionary mapping compartment name to current
             tensor value. This should not be modified.
         :param t: A time-like index. During inference ``t`` will be
             an indexing tuple that reshapes data tensors. During prediction
