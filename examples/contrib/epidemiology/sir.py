@@ -49,6 +49,7 @@ def infer(args, model):
     mcmc = model.fit(warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
+                     dct=args.dct,
                      hook_fn=hook_fn)
 
     mcmc.summary()
@@ -151,12 +152,13 @@ if __name__ == "__main__":
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
+    parser.add_argument("--dct", type=float,
+                        help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("--double", action="store_true")
-    parser.add_argument("--jit", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
