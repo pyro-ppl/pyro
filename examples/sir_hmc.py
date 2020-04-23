@@ -102,7 +102,7 @@ def generate_data(args):
               "rho": torch.tensor(args.response_rate)}
     empty_data = [None] * (args.duration + args.forecast)
 
-    # We'll retry until we get an actual epidemiology.
+    # We'll retry until we get an actual outbreak.
     for attempt in range(100):
         with poutine.trace() as tr:
             with poutine.condition(data=params):
