@@ -78,6 +78,7 @@ CPU_EXAMPLES = [
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 -f 2',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 -f 2 --dct',
+    'sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 -f 2 -so=5',
     'smcfilter.py --num-timesteps=3 --num-particles=10',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto',
