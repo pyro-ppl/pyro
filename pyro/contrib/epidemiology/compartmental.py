@@ -32,7 +32,7 @@ class CompartmentalModel(ABC):
     Derived classes must implement methods :meth:`heuristic`,
     :meth:`initialize`, :meth:`transition_fwd`, :meth:`transition_bwd`.
     Derived classes may optionally implement :meth:`global_model` and override
-    the :cvar:`series` attribute.
+    the ``series`` attribute.
 
     Example usage::
 
