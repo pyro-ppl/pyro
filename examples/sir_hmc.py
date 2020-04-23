@@ -317,7 +317,7 @@ def continuous_model(data, population, args):
     for t, datum in poutine.markov(enumerate(data)):
         S_prev, I_prev = S_curr, I_curr
         S_curr = quantize("S_{}".format(t), S_aux[..., t], min=0, max=population, spline_order=args.spline_order)
-        I_curr = quantize("I_{}".format(t), I_aux[..., t], min=0, max=population, spine_order=args.spline_order)
+        I_curr = quantize("I_{}".format(t), I_aux[..., t], min=0, max=population, spline_order=args.spline_order)
 
         # Now we reverse the computation.
         S2I = S_prev - S_curr
