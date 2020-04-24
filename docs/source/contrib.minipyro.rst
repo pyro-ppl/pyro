@@ -1,3 +1,5 @@
+Minipyro
+========
 .. automodule:: pyro.contrib.minipyro
     :members:
     :undoc-members:

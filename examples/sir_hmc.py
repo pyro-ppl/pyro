@@ -16,6 +16,7 @@ import argparse
 import logging
 import math
 import re
+from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -457,7 +458,7 @@ def vectorized_model(args, data):
     # Truncate final value from the right then pad initial value onto the left.
     S_prev = torch.nn.functional.pad(S_curr[:-1], (0, 0, 1, 0), value=args.population - 1)
     I_prev = torch.nn.functional.pad(I_curr[:-1], (0, 0, 1, 0), value=1)
-    # Reshape to support broadcasting, similar EnumMessenger.
+    # Reshape to support broadcasting, similar to EnumMessenger.
     T = len(data)
     Q = 4 if args.spline_order == 3 else 8  # Number of quantization points.
     S_prev = S_prev.reshape(T, Q, 1, 1, 1)
@@ -552,9 +553,9 @@ def predict(args, data, samples, truth=None):
     model = infer_discrete(model, first_available_dim=-2)
     with poutine.trace() as tr:
         model(args, data)
-    samples = {name: site["value"]
-               for name, site in tr.trace.nodes.items()
-               if site["type"] == "sample"}
+    samples = OrderedDict((name, site["value"])
+                          for name, site in tr.trace.nodes.items()
+                          if site["type"] == "sample")
 
     # Next we'll run the forward generative process in discrete_model. This
     # samples time steps [duration:duration+forecast]. Again we'll update the
@@ -564,9 +565,9 @@ def predict(args, data, samples, truth=None):
     model = particle_plate(model)
     with poutine.trace() as tr:
         model(args, extended_data)
-    samples = {name: site["value"]
-               for name, site in tr.trace.nodes.items()
-               if site["type"] == "sample"}
+    samples = OrderedDict((name, site["value"])
+                          for name, site in tr.trace.nodes.items()
+                          if site["type"] == "sample")
 
     # Finally we'll concatenate the sequentially sampled values into contiguous
     # tensors. This operates on the entire time interval [0:duration+forecast].
@@ -587,12 +588,12 @@ def predict(args, data, samples, truth=None):
     if args.plot:
         import matplotlib.pyplot as plt
         plt.figure()
-        time = torch.arange(len(data) + args.forecast)
+        time = torch.arange(args.duration + args.forecast)
         p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
         p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
         plt.plot(time, median, "r-", label="median")
-        plt.plot(time[:len(data)], data, "k.", label="observed")
+        plt.plot(time[:args.duration], data, "k.", label="observed")
         if truth is not None:
             plt.plot(time, truth, "k--", label="truth")
         plt.axvline(args.duration - 0.5, color="gray", lw=1)
@@ -643,7 +644,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
-    parser = argparse.ArgumentParser(description="SIR outbreak modeling using HMC")
+    parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
     parser.add_argument("-d", "--duration", default=10, type=int)
