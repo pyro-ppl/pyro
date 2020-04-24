@@ -4,7 +4,6 @@
 import pytest
 
 import torch
-from torch.distributions import Uniform
 
 from pyro.contrib.epidemiology.util import compute_bin_probs
 
@@ -14,7 +13,7 @@ def test_quantization_scheme(num_quant_bins, num_samples=1000 * 1000):
     min, max = 0, 7
     probs = torch.zeros(max + 1)
 
-    x = Uniform(-0.5, max + 0.5).sample(sample_shape=(num_samples,))
+    x = torch.linspace(-0.5, max + 0.5, num_samples)
     bin_probs = compute_bin_probs(x - x.floor(), num_quant_bins=num_quant_bins)
     x_floor = x.floor()
 
@@ -28,4 +27,4 @@ def test_quantization_scheme(num_quant_bins, num_samples=1000 * 1000):
         probs.scatter_add_(0, y, bin_probs[:, k] / num_samples)
 
     max_deviation = (probs - 1.0 / (max + 1.0)).abs().max().item()
-    assert max_deviation < 5.0e-4
+    assert max_deviation < 1.0e-4
