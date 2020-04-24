@@ -178,7 +178,7 @@ def reparameterized_discrete_model(args, data):
                     dist.ExtendedBinomial(I_prev, prob_i),
                     obs=I2R)
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I.clamp(min=0), rho),
+                    dist.ExtendedBinomial(S2I, rho),
                     obs=datum)
 
 
@@ -330,7 +330,7 @@ def continuous_model(args, data):
                     dist.ExtendedBinomial(I_prev, prob_i),
                     obs=I2R)
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I.clamp(min=0), rho),
+                    dist.ExtendedBinomial(S2I, rho),
                     obs=datum)
 
 
@@ -476,7 +476,7 @@ def vectorized_model(args, data):
     # Compute probability factors.
     S2I_logp = dist.ExtendedBinomial(S_prev, -(rate_s * I_prev).expm1()).log_prob(S2I)
     I2R_logp = dist.ExtendedBinomial(I_prev, prob_i).log_prob(I2R)
-    obs_logp = dist.ExtendedBinomial(S2I.clamp(min=0), rho).log_prob(data)
+    obs_logp = dist.ExtendedBinomial(S2I, rho).log_prob(data)
 
     # Manually perform variable elimination.
     logp = S_logp + (I_logp + obs_logp) + S2I_logp + I2R_logp

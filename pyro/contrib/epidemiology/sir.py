@@ -98,5 +98,5 @@ class SIRModel(CompartmentalModel):
                     dist.ExtendedBinomial(prev["I"], prob_i),
                     obs=I2R)
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I.clamp(min=0), rho),
+                    dist.ExtendedBinomial(S2I, rho),
                     obs=self.data[t])
