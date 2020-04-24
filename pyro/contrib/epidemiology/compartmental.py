@@ -77,7 +77,8 @@ class CompartmentalModel(ABC):
         computational cost is exponential in `num_quant_bins`. Defaults to 4.
     """
 
-    def __init__(self, compartments, duration, population, num_quant_bins=4):
+    def __init__(self, compartments, duration, population, *,
+                 num_quant_bins=4):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -93,8 +94,8 @@ class CompartmentalModel(ABC):
         assert len(compartments) == len(set(compartments))
         self.compartments = compartments
 
-        if num_quant_bins not in [4, 8, 12, 16]:
-            raise ValueError("Supported quantization strategies have 4, 8, 12, or 16 bins")
+        assert isinstance(num_quant_bins, int)
+        assert num_quant_bins >= 2
         self.num_quant_bins = num_quant_bins
 
         # Inference state.

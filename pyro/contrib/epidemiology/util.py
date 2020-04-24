@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import numpy
+
 import torch
 
 import pyro
@@ -11,7 +13,7 @@ from pyro.ops.tensor_utils import safe_log
 # this 8 x 10 tensor encodes the coefficients of 8 10-dimensional polynomials
 # that are used to construct the num_quant_bins=16 quantization strategy
 
-w16 = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.1562511562511555e-07],
+W16 = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.1562511562511555e-07],
        [1.1562511562511557e-07, 1.04062604062604e-06, 4.16250416250416e-06,
         9.712509712509707e-06, 1.456876456876456e-05, 1.4568764568764562e-05,
         9.712509712509707e-06, 4.16250416250416e-06, 1.04062604062604e-06, -6.937506937506934e-07],
@@ -34,7 +36,7 @@ w16 = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.1562511562511555e-07],
         0.0, 0.0014617327117327117, 0.0,
         -3.561253561253564e-05, 0.0, 3.4687534687534714e-07, 0.0]]
 
-w16 = torch.tensor(w16)
+W16 = numpy.array(W16)
 
 
 def compute_bin_probs(s, num_quant_bins=3):
@@ -108,9 +110,7 @@ def compute_bin_probs(s, num_quant_bins=3):
             693 * s7,
         ], dim=-1) * (1/32931360)
     elif num_quant_bins == 16:
-        global w16
-        if w16.device != s.device:
-            w16 = w16.to(s.device)
+        w16 = torch.from_numpy(W16).to(s.device).type_as(s)
         s_powers = s.unsqueeze(-1).unsqueeze(-1).pow(torch.arange(10.))
         t_powers = t.unsqueeze(-1).unsqueeze(-1).pow(torch.arange(10.))
         splines_t = (w16 * t_powers).sum(-1)
@@ -148,8 +148,8 @@ def quantize_enumerate(x_real, min, max, num_quant_bins=4):
     probs = compute_bin_probs(x_real - lb, num_quant_bins=num_quant_bins)
     logits = safe_log(probs)
 
-    arange_min = - (num_quant_bins // 2 - 1)
-    arange_max = num_quant_bins // 2 + 1
+    arange_min = 1 - num_quant_bins // 2
+    arange_max = 1 + num_quant_bins // 2
     q = torch.arange(arange_min, arange_max)
 
     x = lb.unsqueeze(-1) + q

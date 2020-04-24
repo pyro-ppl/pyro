@@ -22,7 +22,8 @@ class SIRModel(CompartmentalModel):
             computational cost is exponential in `num_quant_bins`. Defaults to 4.
     """
 
-    def __init__(self, population, recovery_time, data, num_quant_bins=4):
+    def __init__(self, population, recovery_time, data, *,
+                 num_quant_bins=4):
         compartments = ("S", "I")  # R is implicit.
         duration = len(data)
         super().__init__(compartments, duration, population, num_quant_bins=num_quant_bins)
