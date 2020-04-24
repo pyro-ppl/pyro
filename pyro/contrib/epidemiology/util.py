@@ -41,7 +41,7 @@ W16 = numpy.array(W16)
 
 def compute_bin_probs(s, num_quant_bins=3):
     """
-    Compute categorical probabilities for a quantization schme with num_quant_bins many
+    Compute categorical probabilities for a quantization scheme with num_quant_bins many
     bins. `s` is a real-valued tensor with values in [0, 1]. Returns probabilities
     of shape `s.shape` + `(num_quant_bins,)`
     """
