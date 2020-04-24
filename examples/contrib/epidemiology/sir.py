@@ -131,7 +131,8 @@ def main(args):
     obs = dataset["obs"]
 
     # Run inference.
-    model = SIRModel(args.population, args.recovery_time, obs)
+    model = SIRModel(args.population, args.recovery_time, obs,
+                     num_quant_bins=args.num_bins)
     samples = infer(args, model)
 
     # Evaluate fit.
@@ -158,6 +159,7 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
+    parser.add_argument("-nb", "--num-bins", default=4, type=int)
     parser.add_argument("--double", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
