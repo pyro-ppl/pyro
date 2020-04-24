@@ -16,12 +16,12 @@ from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
-def Model(population, incubation_time, recovery_time, data):
+def Model(population, incubation_time, recovery_time, data, **kwargs):
     """Dispatch between different model classes."""
     if incubation_time:
         assert incubation_time > 1
-        return SimpleSEIRModel(population, incubation_time, recovery_time, data)
-    return SimpleSIRModel(population, recovery_time, data)
+        return SimpleSEIRModel(population, incubation_time, recovery_time, data, **kwargs)
+    return SimpleSIRModel(population, recovery_time, data, **kwargs)
 
 
 def generate_data(args):
@@ -144,7 +144,8 @@ def main(args):
     obs = dataset["obs"]
 
     # Run inference.
-    model = Model(args.population, args.incubation_time, args.recovery_time, obs)
+    model = Model(args.population, args.incubation_time, args.recovery_time, obs,
+                  num_quant_bins=args.num_bins)
     samples = infer(args, model)
 
     # Evaluate fit.
@@ -175,6 +176,7 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
+    parser.add_argument("-nb", "--num-bins", default=4, type=int)
     parser.add_argument("--double", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
