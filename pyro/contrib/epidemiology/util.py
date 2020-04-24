@@ -83,6 +83,7 @@ def compute_bin_probs(s, num_quant_bins=3):
             2 * s5
         ], dim=-1) * (1/840)
     elif num_quant_bins == 12:
+        # This septic spline interpolates over the nearest 12 integers
         s3 = ss * s
         s4 = ss * ss
         s5 = s3 * ss
@@ -110,6 +111,7 @@ def compute_bin_probs(s, num_quant_bins=3):
             693 * s7,
         ], dim=-1) * (1/32931360)
     elif num_quant_bins == 16:
+        # This nonic spline interpolates over the nearest 16 integers
         w16 = torch.from_numpy(W16).to(s.device).type_as(s)
         s_powers = s.unsqueeze(-1).unsqueeze(-1).pow(torch.arange(10.))
         t_powers = t.unsqueeze(-1).unsqueeze(-1).pow(torch.arange(10.))
