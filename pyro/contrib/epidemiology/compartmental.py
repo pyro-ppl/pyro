@@ -73,9 +73,11 @@ class CompartmentalModel(ABC):
     :param list compartments: A list of strings of compartment names.
     :param int duration:
     :param int population:
+    :param int num_quant_bins: The number of quantization bins to use. Note that
+        computational cost is exponential in `num_quant_bins`. Defaults to 4.
     """
 
-    def __init__(self, compartments, duration, population):
+    def __init__(self, compartments, duration, population, num_quant_bins=4):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -90,6 +92,10 @@ class CompartmentalModel(ABC):
         assert all(isinstance(name, str) for name in compartments)
         assert len(compartments) == len(set(compartments))
         self.compartments = compartments
+
+        if num_quant_bins not in [4, 8, 12, 16]:
+            raise ValueError("Supported quantization strategies have 4, 8, 12, or 16 bins")
+        self.num_quant_bins = num_quant_bins
 
         # Inference state.
         self.samples = {}
@@ -364,7 +370,8 @@ class CompartmentalModel(ABC):
             aux_t = auxiliary[..., t]
             prev = curr
             curr = {name: quantize("{}_{}".format(name, t), aux,
-                                   min=0, max=self.population)
+                                   min=0, max=self.population,
+                                   num_quant_bins=self.num_quant_bins)
                     for name, aux in zip(self.compartments, aux_t.unbind(-1))}
             self.transition_bwd(params, prev, curr, t)
 
@@ -383,7 +390,8 @@ class CompartmentalModel(ABC):
                                     .to_event(2))
 
         # Manually enumerate.
-        curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population)
+        curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
+                                        num_quant_bins=self.num_quant_bins)
         curr = OrderedDict(zip(self.compartments, curr))
         logp = OrderedDict(zip(self.compartments, logp))
 
@@ -398,7 +406,7 @@ class CompartmentalModel(ABC):
         # Reshape to support broadcasting, similar to EnumMessenger.
         C = len(self.compartments)
         T = self.duration
-        Q = 4  # Number of quantization points.
+        Q = self.num_quant_bins  # Number of quantization points.
 
         def enum_shape(position):
             shape = [T] + [1] * (2 * C)
