@@ -9,10 +9,13 @@
 # * https://github.com/hmdolatabadi/LRS_NF/blob/master/nde/transforms/nonlinearities.py,
 # under the MIT license.
 
+import torch
+import torch.nn.functional as F
 
 def _search_sorted(bin_locations, inputs, eps=1e-6):
     """
-    Searches for which bin an input belongs to (in a way that is parallelizable and amenable to autodiff)
+    Searches for which bin an input belongs to (in a way that is parallelizable and
+    amenable to autodiff)
     """
     bin_locations[..., -1] += eps
     return torch.sum(
@@ -33,8 +36,8 @@ def _select_bins(x, idx):
 
 def _calculate_knots(lengths, lower, upper):
     """
-    Given a tensor of unscaled bin lengths that sum to 1, plus the lower and upper limits,
-    returns the shifted and scaled lengths plus knot positions
+    Given a tensor of unscaled bin lengths that sum to 1, plus the lower and upper
+    limits, returns the shifted and scaled lengths plus knot positions
     """
 
     # Cumulative widths gives x (y for inverse) position of knots
@@ -63,9 +66,29 @@ def monotonic_rational_linear_spline(inputs, widths, heights, derivatives, lambd
                                min_derivative=1e-3,
                                min_lambda=0.025):
     """
-    Calculating a monotonic rational spline (linear for now) or its inverse, plus the log(abs(detJ)) required
-    for normalizing flows.
-    NOTE: I omit the docstring with parameter descriptions for this method since it is not considered "public" yet!
+    Calculating a monotonic rational spline (linear for now) or its inverse, plus
+    the log(abs(detJ)) required for normalizing flows.
+
+    :param autoregressive_nn: an autoregressive neural network whose forward call
+        returns a real-valued mean and logit-scale as a tuple
+    :type autoregressive_nn: nn.Module
+    
+    """
+
+    """
+    Abstract tensor ring class.
+
+    Each tensor ring class has a notion of ``dims`` that can be sum-contracted
+    out, and a notion of ``ordinal`` that represents a set of plate dimensions
+    that can be broadcasted-up or product-contracted out.
+    Implementations should cache intermediate results to be compatible with
+    :func:`~opt_einsum.shared_intermediates`.
+
+    Dims are characters (string or unicode).
+    Ordinals are frozensets of characters.
+
+    :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
+        cache.
     """
 
     # Ensure bound is positive
