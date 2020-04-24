@@ -52,7 +52,7 @@ class AffineAutoregressive(TransformModule):
     called, e.g., when sampling from
     :class:`~pyro.distributions.TransformedDistribution`. However, if the cached
     value isn't available, either because it was overwritten during sampling a new
-    value or an arbitary value is being scored, it will calculate it manually. Note
+    value or an arbitrary value is being scored, it will calculate it manually. Note
     that this is an operation that scales as O(D) where D is the input dimension,
     and so should be avoided for large dimensional uses. So in general, it is cheap
     to sample from IAF and score a value that was sampled by IAF, but expensive to
@@ -270,7 +270,7 @@ class ConditionalAffineAutoregressive(ConditionalTransformModule):
     called, e.g., when sampling from
     :class:`~pyro.distributions.TransformedDistribution`. However, if the cached
     value isn't available, either because it was overwritten during sampling a new
-    value or an arbitary value is being scored, it will calculate it manually. Note
+    value or an arbitrary value is being scored, it will calculate it manually. Note
     that this is an operation that scales as O(D) where D is the input dimension,
     and so should be avoided for large dimensional uses. So in general, it is cheap
     to sample from IAF and score a value that was sampled by IAF, but expensive to
