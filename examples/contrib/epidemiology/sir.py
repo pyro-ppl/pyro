@@ -11,26 +11,36 @@ import logging
 import torch
 
 import pyro
-from pyro.contrib.epidemiology import SIRModel
+from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
+def Model(population, incubation_time, recovery_time, data):
+    """Dispatch between different model classes."""
+    if incubation_time:
+        assert incubation_time > 1
+        return SimpleSEIRModel(population, incubation_time, recovery_time, data)
+    return SimpleSIRModel(population, recovery_time, data)
+
+
 def generate_data(args):
     extended_data = [None] * (args.duration + args.forecast)
-    model = SIRModel(args.population, args.recovery_time, extended_data)
+    model = Model(args.population, args.incubation_time, args.recovery_time,
+                  extended_data)
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
-                                  "rho": args.response_rate})
+                                  "rho": args.response_rate,
+                                  "c": args.concentration})
         obs = samples["obs"][:args.duration]
-        S2I = samples["S2I"]
+        new_I = samples.get("S2I", samples.get("E2I"))
 
         obs_sum = int(obs.sum())
-        S2I_sum = int(S2I[:args.duration].sum())
+        new_I_sum = int(new_I[:args.duration].sum())
         if obs_sum >= args.min_observations:
             logging.info("Observed {:d}/{:d} infections:\n{}".format(
-                obs_sum, S2I_sum, " ".join(str(int(x)) for x in obs)))
-            return {"S2I": S2I, "obs": obs}
+                obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)))
+            return {"new_I": new_I, "obs": obs}
 
     raise ValueError("Failed to generate {} observations. Try increasing "
                      "--population or decreasing --min-observations"
@@ -69,6 +79,8 @@ def evaluate(args, samples):
     # Print estimated values.
     names = {"basic_reproduction_number": "R0",
              "response_rate": "rho"}
+    if args.incubation_time:
+        names["concentration"] = "c"
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
@@ -79,7 +91,7 @@ def evaluate(args, samples):
     if args.plot:
         import matplotlib.pyplot as plt
         import seaborn as sns
-        fig, axes = plt.subplots(2, 1, figsize=(5, 5))
+        fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
             truth = getattr(args, name)
@@ -95,8 +107,9 @@ def predict(args, model, truth):
     samples = model.predict(forecast=args.forecast)
 
     obs = model.data
-    S2I = samples["S2I"]
-    median = S2I.median(dim=0).values
+
+    new_I = samples.get("S2I", samples.get("E2I"))
+    median = new_I.median(dim=0).values
     logging.info("Median prediction of new infections (starting on day 0):\n{}"
                  .format(" ".join(map(str, map(int, median)))))
 
@@ -105,8 +118,8 @@ def predict(args, model, truth):
         import matplotlib.pyplot as plt
         plt.figure()
         time = torch.arange(args.duration + args.forecast)
-        p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
-        p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
+        p05 = new_I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
+        p95 = new_I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
         plt.plot(time, median, "r-", label="median")
         plt.plot(time[:args.duration], obs, "k.", label="observed")
@@ -131,7 +144,7 @@ def main(args):
     obs = dataset["obs"]
 
     # Run inference.
-    model = SIRModel(args.population, args.recovery_time, obs)
+    model = Model(args.population, args.incubation_time, args.recovery_time, obs)
     samples = infer(args, model)
 
     # Evaluate fit.
@@ -139,19 +152,23 @@ def main(args):
 
     # Predict latent time series.
     if args.forecast:
-        predict(args, model, truth=dataset["S2I"])
+        predict(args, model, truth=dataset["new_I"])
 
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
-    parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
-    parser.add_argument("-p", "--population", default=10, type=int)
+    parser = argparse.ArgumentParser(
+        description="Compartmental epidemiology modeling using HMC")
+    parser.add_argument("-p", "--population", default=1000, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
-    parser.add_argument("-d", "--duration", default=10, type=int)
-    parser.add_argument("-f", "--forecast", default=0, type=int)
+    parser.add_argument("-d", "--duration", default=20, type=int)
+    parser.add_argument("-f", "--forecast", default=10, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
+    parser.add_argument("-e", "--incubation-time", default=0.0, type=float,
+                        help="If zero, use SIR model; if > 1 use SEIR model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
+    parser.add_argument("-c", "--concentration", default=2.0, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)

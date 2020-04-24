@@ -35,6 +35,7 @@ CPU_EXAMPLES = [
     'contrib/cevae/synthetic.py --num-epochs=1',
     'contrib/epidemiology/sir.py -t=2 -w=2 -n=4 -d=100 -p=10000 -f 2',
     'contrib/epidemiology/sir.py -t=2 -w=2 -n=4 -d=100 -p=10000 -f 2 --dct=1',
+    'contrib/epidemiology/sir.py -t=2 -w=2 -n=4 -d=100 -p=10000 -f 2 -e=2',
     'contrib/forecast/bart.py --num-steps=2 --stride=99999',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',
     'contrib/gp/sv-dkl.py --binary --epochs=1 --num-inducing=4 --batch-size=1000',

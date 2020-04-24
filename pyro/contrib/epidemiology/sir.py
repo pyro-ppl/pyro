@@ -10,12 +10,20 @@ from pyro.ops.tensor_utils import convolve
 from .compartmental import CompartmentalModel
 
 
-class SIRModel(CompartmentalModel):
+class SimpleSIRModel(CompartmentalModel):
     """
     Susceptible-Infected-Recovered model.
 
-    :param int population:
-    :param float recovery_time:
+    To customize this model we recommend forking and editing this class.
+
+    This is a stochastic discrete-time discrete-state model with three
+    compartments: "S" for susceptible, "I" for infected, and "R" for
+    recovered individuals (the recovered individuals are implicit: ``R =
+    population - S - I``) with transitions ``S -> I -> R``.
+
+    :param int population: Total ``population = S + I + R``.
+    :param float recovery_time: Mean recovery time (duration in state
+        ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections.
     """
 
@@ -25,7 +33,7 @@ class SIRModel(CompartmentalModel):
         super().__init__(compartments, duration, population)
 
         assert isinstance(recovery_time, float)
-        assert recovery_time > 0
+        assert recovery_time > 1
         self.recovery_time = recovery_time
 
         self.data = data
@@ -44,6 +52,7 @@ class SIRModel(CompartmentalModel):
         # Assume infection lasts less than a month.
         recovery = torch.arange(30.).div(self.recovery_time).neg().exp()
         I_aux = convolve(S2I, recovery)[:len(self.data)].clamp(min=0.5)
+
         return {
             "R0": torch.tensor(2.0),
             "rho": torch.tensor(0.5),
@@ -57,7 +66,7 @@ class SIRModel(CompartmentalModel):
 
         # Convert interpretable parameters to distribution parameters.
         rate_s = -R0 / (tau * self.population)
-        prob_i = 1 / (1 + tau)
+        prob_i = 1 / tau
 
         return rate_s, prob_i, rho
 
@@ -68,12 +77,14 @@ class SIRModel(CompartmentalModel):
     def transition_fwd(self, params, state, t):
         rate_s, prob_i, rho = params
 
-        # Compute state update.
+        # Sample flows between compartments.
         prob_s = -(rate_s * state["I"]).expm1()
         S2I = pyro.sample("S2I_{}".format(t),
                           dist.Binomial(state["S"], prob_s))
         I2R = pyro.sample("I2R_{}".format(t),
                           dist.Binomial(state["I"], prob_i))
+
+        # Update compartements with flows.
         state["S"] = state["S"] - S2I
         state["I"] = state["I"] + S2I - I2R
 
@@ -85,11 +96,11 @@ class SIRModel(CompartmentalModel):
     def transition_bwd(self, params, prev, curr, t):
         rate_s, prob_i, rho = params
 
-        # Reverse the S2I,I2R computation.
+        # Reverse the flow computation.
         S2I = prev["S"] - curr["S"]
         I2R = prev["I"] - curr["I"] + S2I
 
-        # Declare probability factors.
+        # Condition on flows between compartments.
         prob_s = -(rate_s * prev["I"]).expm1()
         pyro.sample("S2I_{}".format(t),
                     dist.ExtendedBinomial(prev["S"], prob_s),
@@ -97,6 +108,8 @@ class SIRModel(CompartmentalModel):
         pyro.sample("I2R_{}".format(t),
                     dist.ExtendedBinomial(prev["I"], prob_i),
                     obs=I2R)
+
+        # Condition on observations.
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I, rho),
                     obs=self.data[t])
