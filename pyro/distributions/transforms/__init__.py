@@ -11,6 +11,7 @@ from pyro.distributions.transforms.affine_autoregressive import AffineAutoregres
 from pyro.distributions.transforms.affine_coupling import (AffineCoupling, ConditionalAffineCoupling, affine_coupling,
                                                            conditional_affine_coupling)
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
+from pyro.distributions.transforms.basic import ELUTransform, LeakyReLUTransform, TanhTransform, elu, leaky_relu, tanh
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
@@ -19,10 +20,8 @@ from pyro.distributions.transforms.generalized_channel_permute import (Generaliz
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
                                                        householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
-from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, ELUTransform,
-                                                                 LeakyReLUTransform, NeuralAutoregressive,
-                                                                 TanhTransform, conditional_neural_autoregressive, elu,
-                                                                 leaky_relu, neural_autoregressive, tanh)
+from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive,  NeuralAutoregressive,
+                                                                 conditional_neural_autoregressive, neural_autoregressive)
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
