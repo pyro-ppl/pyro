@@ -33,6 +33,7 @@ Pyro Documentation
    contrib.bnn
    contrib.cevae
    contrib.easyguide
+   contrib.epidemiology
    contrib.examples
    contrib.forecast
    contrib.gp

@@ -2,9 +2,6 @@ Forecasting
 ===========
 .. automodule:: pyro.contrib.forecast
 
-.. warning:: Code in ``pyro.contrib.forecast`` is under development.
-    This code makes no guarantee about maintaining backwards compatibility.
-
 ``pyro.contrib.forecast`` is a lightweight framework for experimenting with a
 restricted class of time series models and inference algorithms using familiar
 Pyro modeling syntax and PyTorch neural networks.

@@ -9,12 +9,13 @@ Contributed Code
     This code makes no guarantee about maintaining backwards compatibility.
 """
 
-from pyro.contrib import autoname, bnn, easyguide, forecast, gp, oed, tracking
+from pyro.contrib import autoname, bnn, easyguide, epidemiology, forecast, gp, oed, tracking
 
 __all__ = [
     "autoname",
     "bnn",
     "easyguide",
+    "epidemiology",
     "forecast",
     "gp",
     "oed",
