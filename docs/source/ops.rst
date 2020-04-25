@@ -93,3 +93,13 @@ State Space Model and GP Utilities
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
+
+
+Numerical Methods Utilities
+---------------------------
+
+.. automodule:: pyro.ops.spline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource

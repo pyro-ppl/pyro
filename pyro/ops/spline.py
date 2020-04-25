@@ -12,6 +12,7 @@
 import torch
 import torch.nn.functional as F
 
+
 def _search_sorted(bin_locations, inputs, eps=1e-6):
     """
     Searches for which bin an input belongs to (in a way that is parallelizable and
@@ -59,42 +60,75 @@ def _calculate_knots(lengths, lower, upper):
 
 
 def monotonic_rational_linear_spline(inputs, widths, heights, derivatives, lambdas,
-                               inverse=False,
-                               bound=3.,
-                               min_bin_width=1e-3,
-                               min_bin_height=1e-3,
-                               min_derivative=1e-3,
-                               min_lambda=0.025):
-    """
-    Calculating a monotonic rational spline (linear for now) or its inverse, plus
-    the log(abs(detJ)) required for normalizing flows.
+                                     inverse=False,
+                                     bound=3.,
+                                     min_bin_width=1e-3,
+                                     min_bin_height=1e-3,
+                                     min_derivative=1e-3,
+                                     min_lambda=0.025):
+    r"""
+    Calculates a monotonic rational linear spline or its inverse, plus the
+    log(abs(detJ)) required for normalizing flows.
 
-    :param autoregressive_nn: an autoregressive neural network whose forward call
-        returns a real-valued mean and logit-scale as a tuple
-    :type autoregressive_nn: nn.Module
-    
-    """
+    :param inputs: Input variable with shape `([batch_dims,] input_dim)`, where the
+        the batch dimensions are optional.
+    :type inputs: torch.Tensor
+    :param widths: Normalized widths of the bins that define the spline segments,
+        having shape `([context_batch_dims,] input_dim, count_bins)` for optional
+        context variable batch dimensions. The widths sum to 1 in the final
+        dimension and represent the fraction of the total width `[-B,B]` that the
+        bin occupies.
+    :type widths: torch.Tensor
+    :param heights: Normalized heights of the bins that define the spline segments,
+        having shape `([context_batch_dims,] input_dim, count_bins)` for optional
+        context variable batch dimensions. The heights sum to 1 in the final
+        dimension and represent the fraction of the total width `[-B,B]` that the
+        bin occupies.
+    :type heights: torch.Tensor
+    :param derivatives: Positive derivatives with shape
+        `([context_batch_dims,] input_dim, count_bins - 1)` at the `count_bins - 1`
+        interior knots of the spline. Positivity is not enforced by this method.
+    :type derivatives: torch.Tensor
+    :param lambdas: Normalized locations having shape
+        `([context_batch_dims,] input_dim, count_bins)` specifying where to split
+        each bin as a fraction :math:`\lambda_i\in(0,1)` of the bin width. For
+        monotonic, rational, linear spline, the bins must be split in two in order
+        to match the degrees-of-freedom to the number of parameters (see references
+        below).
+    :type lambdas: torch.Tensor
+    :param inverse: If `True`, the inverse operation of the spline is calculated,
+        otherwise, by default, return the forward operation of the spline.
+    :type inverse: bool
+    :param bound: The bound `B` defining the bounding box `[-B, B] X [-B, B]` upon
+        which the spline is defined. Outside the bounding box, the identity function
+        is applied. If you want an asymmetric bounding box you can apply an affine
+        transform before and after the function.
+    :type bound: float
+    :param min_bin_width: For numerical stability, the minimimum normalized width
+        to impose on each bin.
+    :type min_bin_width: float
+    :param min_bin_height: For numerical stability, the minimimum normalized height
+        to impose on each bin.
+    :type min_bin_height: float
+    :param min_derivative: For numerical stability, the minimimum (positive)
+        derivative to impose on each internal knot.
+    :type min_derivative: float
+    :param min_lambda: For numerical stability, the minimum split fraction for
+    :type min_lambda: float
 
-    """
-    Abstract tensor ring class.
+    References:
 
-    Each tensor ring class has a notion of ``dims`` that can be sum-contracted
-    out, and a notion of ``ordinal`` that represents a set of plate dimensions
-    that can be broadcasted-up or product-contracted out.
-    Implementations should cache intermediate results to be compatible with
-    :func:`~opt_einsum.shared_intermediates`.
+    R. D. Fuhr and M. Kallay, Monotone linear rational spline interpolation.
+    Computer Aided Geometric Design, 9 (1992), pp. 313–319.
 
-    Dims are characters (string or unicode).
-    Ordinals are frozensets of characters.
+    Hadi M. Dolatabadi, Sarah Erfani, Christopher Leckie. Invertible generative
+    Modeling using Linear Rational Splines. AISTATS 2020.
 
-    :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
-        cache.
     """
 
     # Ensure bound is positive
     # NOTE: For simplicity, we apply the identity function outside [-B, B] X [-B, B] rather than allowing arbitrary
-    # corners to the bounding box. If you want a different bounding box you can apply an affine transform before and
-    # after the input
+    # corners to the bounding box.
     assert bound > 0.0
 
     num_bins = widths.shape[-1]

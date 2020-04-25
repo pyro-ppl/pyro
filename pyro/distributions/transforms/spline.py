@@ -15,9 +15,7 @@ from torch.distributions import constraints
 
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
-
-
-
+from pyro.ops.spline import monotonic_rational_linear_spline
 
 
 class SplineLayer(nn.Module):
@@ -74,7 +72,7 @@ class SplineLayer(nn.Module):
         return torch.sigmoid(self.unnormalized_lambdas)
 
     def __call__(self, x, jacobian=False, **kwargs):
-        y, log_detJ = _monotonic_rational_spline(
+        y, log_detJ = monotonic_rational_linear_spline(
             x,
             self.widths,
             self.heights,
@@ -92,25 +90,23 @@ class SplineLayer(nn.Module):
 @copy_docs_from(TransformModule)
 class Spline(TransformModule):
     """
-    An implementation of the element-wise rational spline bijections of linear
-    and quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020).
-    Rational splines are functions that are comprised of segments that are the
-    ratio of two polynomials. For instance, for the :math:`d`-th dimension and
-    the :math:`k`-th segment on the spline, the function will take the form,
+    An implementation of the element-wise rational spline bijections of linear and
+    quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020). Rational splines
+    are functions that are comprised of segments that are the ratio of two
+    polynomials. For instance, for the :math:`d`-th dimension and the :math:`k`-th
+    segment on the spline, the function will take the form,
 
         :math:`y_d = \\frac{\\alpha^{(k)}(x_d)}{\\beta^{(k)}(x_d)},`
 
     where :math:`\\alpha^{(k)}` and :math:`\\beta^{(k)}` are two polynomials of
     order :math:`d`. For :math:`d=1`, we say that the spline is linear, and for
-    :math:`d=2`, quadratic. The spline is constructed on the specified bounding
-    box, :math:`[-K,K]\\times[-K,K]`, with the identity function used elsewhere
-    .
+    :math:`d=2`, quadratic. The spline is constructed on the specified bounding box,
+    :math:`[-K,K]\\times[-K,K]`, with the identity function used elsewhere.
 
-    Rational splines offer an excellent combination of functional flexibility
-    whilst maintaining a numerically stable inverse that is of the same
-    computational and space complexities as the forward operation. This
-    element-wise transform permits the accurate represention of complex
-    univariate distributions.
+    Rational splines offer an excellent combination of functional flexibility whilst
+    maintaining a numerically stable inverse that is of the same computational and
+    space complexities as the forward operation. This element-wise transform permits
+    the accurate represention of complex univariate distributions.
 
     Example usage:
 
@@ -120,22 +116,21 @@ class Spline(TransformModule):
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
 
-    :param input_dim: Dimension of the input vector. Despite operating
-        element-wise, this is required so we know how many parameters to store.
+    :param input_dim: Dimension of the input vector. Despite operating element-wise,
+        this is required so we know how many parameters to store.
     :type input_dim: int
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
     :param bound: The quantity :math:`K` determining the bounding box,
         :math:`[-K,K]\\times[-K,K]`, of the spline.
     :type bound: float
-    :param order: One of ['linear', 'quadratic'] specifying the order of the
-        spline.
+    :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
     :type order: string
 
     References:
 
-    Conor Durkan, Artur Bekasov, Iain Murray, George Papamakarios. Neural
-    Spline Flows. NeurIPS 2019.
+    Conor Durkan, Artur Bekasov, Iain Murray, George Papamakarios. Neural Spline
+    Flows. NeurIPS 2019.
 
     Hadi M. Dolatabadi, Sarah Erfani, Christopher Leckie. Invertible Generative
     Modeling using Linear Rational Splines. AISTATS 2020.
@@ -186,8 +181,8 @@ class Spline(TransformModule):
 def spline(input_dim, **kwargs):
     """
     A helper function to create a
-    :class:`~pyro.distributions.transforms.Spline` object for consistency with
-    other helpers.
+    :class:`~pyro.distributions.transforms.Spline` object for consistency with other
+    helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
