@@ -19,9 +19,11 @@ from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
 
+
 def _search_sorted(bin_locations, inputs, eps=1e-6):
     """
-    Searches for which bin an input belongs to (in a way that is parallelizable and amenable to autodiff)
+    Searches for which bin an input belongs to (in a way that is parallelizable and
+    amenable to autodiff)
     """
     bin_locations[..., -1] += eps
     return torch.sum(
@@ -43,8 +45,8 @@ def _select_bins(x, idx):
 
 def _calculate_knots(lengths, lower, upper):
     """
-    Given a tensor of unscaled bin lengths that sum to 1, plus the lower and upper limits,
-    returns the shifted and scaled lengths plus knot positions
+    Given a tensor of unscaled bin lengths that sum to 1, plus the lower and upper
+    limits, returns the shifted and scaled lengths plus knot positions
     """
 
     # Cumulative widths gives x (y for inverse) position of knots
@@ -73,9 +75,10 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
                                min_derivative=1e-3,
                                min_lambda=0.025):
     """
-    Calculating a monotonic rational spline (linear for now) or its inverse, plus the log(abs(detJ)) required
-    for normalizing flows.
-    NOTE: I omit the docstring with parameter descriptions for this method since it is not considered "public" yet!
+    Calculating a monotonic rational spline (linear for now) or its inverse, plus
+    the log(abs(detJ)) required for normalizing flows.
+    NOTE: I omit the docstring with parameter descriptions for this method since it
+    is not considered "public" yet!
     """
 
     # Ensure bound is positive
@@ -218,7 +221,7 @@ class ConditionedSpline(Transform):
         self.heights = heights
         self.derivatives = derivatives
         self.lambdas = lambdas
-    
+
     def _call(self, x):
         y, log_detJ = self.spline_op(x)
         self._cache_log_detJ = log_detJ
@@ -262,19 +265,19 @@ class ConditionedSpline(Transform):
 
 @copy_docs_from(ConditionedSpline)
 class Spline(ConditionedSpline, TransformModule):
-    """
+    r"""
     An implementation of the element-wise rational spline bijections of linear and
     quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020). Rational splines
     are functions that are comprised of segments that are the ratio of two
     polynomials. For instance, for the :math:`d`-th dimension and the :math:`k`-th
     segment on the spline, the function will take the form,
 
-        :math:`y_d = \\frac{\\alpha^{(k)}(x_d)}{\\beta^{(k)}(x_d)},`
+        :math:`y_d = \frac{\alpha^{(k)}(x_d)}{\beta^{(k)}(x_d)},`
 
-    where :math:`\\alpha^{(k)}` and :math:`\\beta^{(k)}` are two polynomials of
+    where :math:`\alpha^{(k)}` and :math:`\beta^{(k)}` are two polynomials of
     order :math:`d`. For :math:`d=1`, we say that the spline is linear, and for
     :math:`d=2`, quadratic. The spline is constructed on the specified bounding box,
-    :math:`[-K,K]\\times[-K,K]`, with the identity function used elsewhere.
+    :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere.
 
     Rational splines offer an excellent combination of functional flexibility whilst
     maintaining a numerically stable inverse that is of the same computational and
@@ -295,7 +298,7 @@ class Spline(ConditionedSpline, TransformModule):
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
     :param bound: The quantity :math:`K` determining the bounding box,
-        :math:`[-K,K]\\times[-K,K]`, of the spline.
+        :math:`[-K,K]\times[-K,K]`, of the spline.
     :type bound: float
     :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
     :type order: string
@@ -347,7 +350,7 @@ class Spline(ConditionedSpline, TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalSpline(ConditionalTransformModule):
-    """
+    r"""
     An implementation of the element-wise rational spline bijections of linear and
     quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020) conditioning on
     an additional context variable.
@@ -356,12 +359,14 @@ class ConditionalSpline(ConditionalTransformModule):
     of two polynomials. For instance, for the :math:`d`-th dimension and the
     :math:`k`-th segment on the spline, the function will take the form,
 
-        :math:`y_d = \\frac{\\alpha^{(k)}(x_d)}{\\beta^{(k)}(x_d)},`
+        :math:`y_d = \frac{\alpha^{(k)}(x_d)}{\beta^{(k)}(x_d)},`
 
-    where :math:`\\alpha^{(k)}` and :math:`\\beta^{(k)}` are two polynomials of
-    order :math:`d`. For :math:`d=1`, we say that the spline is linear, and for
+    where :math:`\alpha^{(k)}` and :math:`\beta^{(k)}` are two polynomials of
+    order :math:`d` whose parameters are the output of a function, e.g. a NN, with
+    input :math:`z\\in\\mathbb{R}^{M}` representing the context variable to
+    condition on.. For :math:`d=1`, we say that the spline is linear, and for
     :math:`d=2`, quadratic. The spline is constructed on the specified bounding box,
-    :math:`[-K,K]\\times[-K,K]`, with the identity function used elsewhere.
+    :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere.
 
     Rational splines offer an excellent combination of functional flexibility whilst
     maintaining a numerically stable inverse that is of the same computational and
@@ -370,11 +375,20 @@ class ConditionalSpline(ConditionalTransformModule):
 
     Example usage:
 
-    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> transform = Spline(10, count_bins=4, bound=3.)
-    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
-    >>> flow_dist.sample()  # doctest: +SKIP
+    >>> from pyro.nn.dense_nn import DenseNN
+    >>> input_dim = 10
+    >>> context_dim = 5
+    >>> batch_size = 3
+    >>> count_bins = 8
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> param_dims = [input_dim * count_bins, input_dim * count_bins,
+    ... input_dim * (count_bins - 1), input_dim * count_bins]
+    >>> hypernet = DenseNN(context_dim, [50, 50], param_dims)
+    >>> transform = ConditionalSpline(hypernet, input_dim, count_bins)
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
+    ... [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
     :param input_dim: Dimension of the input vector. Despite operating element-wise,
         this is required so we know how many parameters to store.
@@ -382,7 +396,7 @@ class ConditionalSpline(ConditionalTransformModule):
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
     :param bound: The quantity :math:`K` determining the bounding box,
-        :math:`[-K,K]\\times[-K,K]`, of the spline.
+        :math:`[-K,K]\times[-K,K]`, of the spline.
     :type bound: float
     :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
     :type order: string
@@ -468,42 +482,10 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
 
-    nn = DenseNN(context_dim, hidden_dims, param_dims=[input_dim*count_bins, input_dim*count_bins, input_dim*(count_bins-1), input_dim*count_bins])
+    nn = DenseNN(context_dim,
+                 hidden_dims,
+                 param_dims=[input_dim * count_bins,
+                             input_dim * count_bins,
+                             input_dim * (count_bins - 1),
+                             input_dim * count_bins])
     return ConditionalSpline(nn, input_dim, count_bins, bound=bound)
-
-
-if __name__ == "__main__":
-    """s = conditional_spline(5, 3)
-    base_dist = dist.Normal(torch.zeros(5), torch.ones(5))
-    z = torch.rand(1, 3)
-    s_cond_z = s.condition(z)
-    x = base_dist.sample()
-    s_cond_z._call(x)"""
-
-    import torch.distributions as dist
-    context_dim = 3
-    def transform_factory(input_dim, context_dim=context_dim):
-        z = torch.rand(1, context_dim)
-        return conditional_spline(input_dim, context_dim).condition(z)
-
-    def _test_inverse(shape, transform):
-        base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
-
-        x_true = base_dist.sample(torch.Size([10]))
-        y = transform._call(x_true)
-
-        # Cache is empty, hence must be calculating inverse afresh
-        x_calculated = transform._inverse(y)
-
-        assert torch.norm(x_true - x_calculated, dim=-1).max().item() < 1e-6
-
-    def _test_shape(base_shape, transform):
-        base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
-        sample = dist.TransformedDistribution(base_dist, [transform]).sample()
-        assert sample.shape == base_shape
-
-    for input_dim in [2, 5, 10]:
-        transform = transform_factory(input_dim)
-        # self._test_inverse(input_dim, transform)
-        for shape in [(3,), (3, 4)]:
-            _test_shape(shape + (input_dim,), transform)
