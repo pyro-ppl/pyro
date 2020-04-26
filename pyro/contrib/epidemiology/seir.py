@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
+from torch.nn.functional import pad
 
 import pyro
 import pyro.distributions as dist
@@ -55,18 +56,17 @@ class SimpleSEIRModel(CompartmentalModel):
         S0 = self.population - 1
         # Assume 50% <= response rate <= 100%.
         E2I = self.data * min(2., (S0 / self.data.sum()).sqrt())
+        # Assume recovery less than a month.
+        recovery = torch.arange(30.).div(self.recovery_time).neg().exp()
+        I_aux = convolve(E2I, recovery)[:T]
         # Assume incubation takes less than a month.
         incubation = torch.arange(30.).div(self.incubation_time).exp()
+        incubation = pad(incubation, (0, 1), value=0)
         incubation /= incubation.sum()
         S2E = convolve(E2I, incubation)
         S2E_cumsum = S2E[:-T].sum() + S2E[-T:].cumsum(-1)
-        # Assume recovery less than a month.
-        recovery = torch.arange(30.).div(self.recovery_time).neg().exp()
-        I2R = convolve(E2I, recovery)[:T]
-        # Accumulate.
         S_aux = S0 - S2E_cumsum
         E_aux = S2E_cumsum - E2I.cumsum(-1)
-        I_aux = 1 + E2I.cumsum(-1) - I2R.cumsum(-1)
 
         return {
             "R0": torch.tensor(2.0),
