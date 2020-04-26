@@ -86,7 +86,7 @@ class SimpleSIRModel(CompartmentalModel):
         I2R = pyro.sample("I2R_{}".format(t),
                           dist.Binomial(state["I"], prob_i))
 
-        # Update compartements with flows.
+        # Update compartments with flows.
         state["S"] = state["S"] - S2I
         state["I"] = state["I"] + S2I - I2R
 

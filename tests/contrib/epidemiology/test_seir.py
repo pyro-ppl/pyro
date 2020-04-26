@@ -8,7 +8,12 @@ from pyro.contrib.epidemiology import SimpleSEIRModel
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-def test_smoke(duration, forecast):
+@pytest.mark.parametrize("options", [
+    {},
+    {"dct": 1.},
+    {"num_quant_bins": 8},
+], ids=str)
+def test_smoke(duration, forecast, options):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -25,7 +30,8 @@ def test_smoke(duration, forecast):
     # Infer.
     model = SimpleSEIRModel(population, incubation_time, recovery_time, data)
     num_samples = 5
-    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2)
+    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
+              **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)

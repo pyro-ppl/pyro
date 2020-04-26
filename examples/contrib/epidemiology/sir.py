@@ -30,8 +30,7 @@ def generate_data(args):
                   extended_data)
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
-                                  "rho": args.response_rate,
-                                  "c": args.concentration})
+                                  "rho": args.response_rate})
         obs = samples["obs"][:args.duration]
         new_I = samples.get("S2I", samples.get("E2I"))
 
@@ -80,8 +79,6 @@ def evaluate(args, samples):
     # Print estimated values.
     names = {"basic_reproduction_number": "R0",
              "response_rate": "rho"}
-    if args.incubation_time:
-        names["concentration"] = "c"
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
@@ -92,7 +89,7 @@ def evaluate(args, samples):
     if args.plot:
         import matplotlib.pyplot as plt
         import seaborn as sns
-        fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
+        fig, axes = plt.subplots(2, 1, figsize=(5, 5))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
             truth = getattr(args, name)
@@ -169,7 +166,6 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--incubation-time", default=0.0, type=float,
                         help="If zero, use SIR model; if > 1 use SEIR model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
-    parser.add_argument("-c", "--concentration", default=2.0, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
