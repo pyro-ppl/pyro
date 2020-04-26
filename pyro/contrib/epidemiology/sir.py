@@ -26,17 +26,12 @@ class SimpleSIRModel(CompartmentalModel):
         ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections.
     :param int data: Time series of new observed infections.
-    :param int num_quant_bins: The number of quantization bins to use.
-        Note that computational cost is exponential in `num_quant_bins`.
-        Defaults to 4.
     """
 
-    def __init__(self, population, recovery_time, data, *,
-                 num_quant_bins=4):
+    def __init__(self, population, recovery_time, data):
         compartments = ("S", "I")  # R is implicit.
         duration = len(data)
-        super().__init__(compartments, duration, population,
-                         num_quant_bins=num_quant_bins)
+        super().__init__(compartments, duration, population)
 
         assert isinstance(recovery_time, float)
         assert recovery_time > 1

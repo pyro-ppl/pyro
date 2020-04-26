@@ -16,13 +16,12 @@ from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
-def Model(population, incubation_time, recovery_time, data, **kwargs):
+def Model(population, incubation_time, recovery_time, data):
     """Dispatch between different model classes."""
     if incubation_time:
         assert incubation_time > 1
-        return SimpleSEIRModel(population, incubation_time, recovery_time, data,
-                               **kwargs)
-    return SimpleSIRModel(population, recovery_time, data, **kwargs)
+        return SimpleSEIRModel(population, incubation_time, recovery_time, data)
+    return SimpleSIRModel(population, recovery_time, data)
 
 
 def generate_data(args):
@@ -60,6 +59,7 @@ def infer(args, model):
     mcmc = model.fit(warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
+                     num_quant_bins=args.num_bins,
                      dct=args.dct,
                      hook_fn=hook_fn)
 
@@ -145,8 +145,7 @@ def main(args):
     obs = dataset["obs"]
 
     # Run inference.
-    model = Model(args.population, args.incubation_time, args.recovery_time, obs,
-                  num_quant_bins=args.num_bins)
+    model = Model(args.population, args.incubation_time, args.recovery_time, obs)
     samples = infer(args, model)
 
     # Evaluate fit.
