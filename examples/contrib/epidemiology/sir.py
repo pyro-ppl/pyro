@@ -11,14 +11,14 @@ import logging
 import torch
 
 import pyro
-from pyro.contrib.epidemiology import SIRModel
+from pyro.contrib.epidemiology import SimpleSIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
 def generate_data(args):
     extended_data = [None] * (args.duration + args.forecast)
-    model = SIRModel(args.population, args.recovery_time, extended_data)
+    model = SimpleSIRModel(args.population, args.recovery_time, extended_data)
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
                                   "rho": args.response_rate})
@@ -49,6 +49,7 @@ def infer(args, model):
     mcmc = model.fit(warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
+                     num_quant_bins=args.num_bins,
                      dct=args.dct,
                      hook_fn=hook_fn)
 
@@ -131,8 +132,7 @@ def main(args):
     obs = dataset["obs"]
 
     # Run inference.
-    model = SIRModel(args.population, args.recovery_time, obs,
-                     num_quant_bins=args.num_bins)
+    model = SimpleSIRModel(args.population, args.recovery_time, obs)
     samples = infer(args, model)
 
     # Evaluate fit.

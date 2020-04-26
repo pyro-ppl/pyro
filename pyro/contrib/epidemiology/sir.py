@@ -10,26 +10,31 @@ from pyro.ops.tensor_utils import convolve
 from .compartmental import CompartmentalModel
 
 
-class SIRModel(CompartmentalModel):
+class SimpleSIRModel(CompartmentalModel):
     """
     Susceptible-Infected-Recovered model.
 
-    :param int population:
-    :param float recovery_time:
+    To customize this model we recommend forking and editing this class.
+
+    This is a stochastic discrete-time discrete-state model with three
+    compartments: "S" for susceptible, "I" for infected, and "R" for
+    recovered individuals (the recovered individuals are implicit: ``R =
+    population - S - I``) with transitions ``S -> I -> R``.
+
+    :param int population: Total ``population = S + I + R``.
+    :param float recovery_time: Mean recovery time (duration in state
+        ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections.
     :param int data: Time series of new observed infections.
-    :param int num_quant_bins: The number of quantization bins to use. Note that
-            computational cost is exponential in `num_quant_bins`. Defaults to 4.
     """
 
-    def __init__(self, population, recovery_time, data, *,
-                 num_quant_bins=4):
+    def __init__(self, population, recovery_time, data):
         compartments = ("S", "I")  # R is implicit.
         duration = len(data)
-        super().__init__(compartments, duration, population, num_quant_bins=num_quant_bins)
+        super().__init__(compartments, duration, population)
 
         assert isinstance(recovery_time, float)
-        assert recovery_time > 0
+        assert recovery_time > 1
         self.recovery_time = recovery_time
 
         self.data = data
@@ -61,7 +66,7 @@ class SIRModel(CompartmentalModel):
 
         # Convert interpretable parameters to distribution parameters.
         rate_s = -R0 / (tau * self.population)
-        prob_i = 1 / (1 + tau)
+        prob_i = 1 / tau
 
         return rate_s, prob_i, rho
 

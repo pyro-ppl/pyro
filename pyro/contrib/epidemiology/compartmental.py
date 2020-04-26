@@ -73,8 +73,6 @@ class CompartmentalModel(ABC):
     :param list compartments: A list of strings of compartment names.
     :param int duration:
     :param int population:
-    :param int num_quant_bins: The number of quantization bins to use. Note that
-        computational cost is exponential in `num_quant_bins`. Defaults to 4.
     """
 
     def __init__(self, compartments, duration, population, *,
@@ -93,10 +91,6 @@ class CompartmentalModel(ABC):
         assert all(isinstance(name, str) for name in compartments)
         assert len(compartments) == len(set(compartments))
         self.compartments = compartments
-
-        assert isinstance(num_quant_bins, int)
-        assert num_quant_bins >= 2
-        self.num_quant_bins = num_quant_bins
 
         # Inference state.
         self.samples = {}
@@ -223,13 +217,18 @@ class CompartmentalModel(ABC):
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
         :param full_mass: (Default ``False``). Specification of mass matrix
             of the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param int num_quant_bins: The number of quantization bins to use. Note
+            that computational cost is exponential in `num_quant_bins`.
+            Defaults to 4.
         :param float dct: If provided, use a discrete cosine reparameterizer
             with this value as smoothness.
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
         :rtype: ~pyro.infer.mcmc.api.MCMC
         """
         logger.info("Running inference...")
-        self._dct = options.pop("dct", None)  # Save for .predict().
+        # Save these options for .predict().
+        self.num_quant_bins = options.pop("num_quant_bins", 4)
+        self._dct = options.pop("dct", None)
 
         # Heuristically initialze to feasible latents.
         init_values = self.heuristic()
