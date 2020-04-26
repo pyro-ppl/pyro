@@ -28,12 +28,17 @@ class SimpleSEIRModel(CompartmentalModel):
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections.
+    :param int num_quant_bins: The number of quantization bins to use.
+        Note that computational cost is exponential in `num_quant_bins`.
+        Defaults to 4.
     """
 
-    def __init__(self, population, incubation_time, recovery_time, data):
+    def __init__(self, population, incubation_time, recovery_time, data, *,
+                 num_quant_bins=4):
         compartments = ("S", "E", "I")  # R is implicit.
         duration = len(data)
-        super().__init__(compartments, duration, population)
+        super().__init__(compartments, duration, population,
+                         num_quant_bins=num_quant_bins)
 
         assert isinstance(incubation_time, float)
         assert incubation_time > 1

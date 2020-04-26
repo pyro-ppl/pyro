@@ -20,7 +20,8 @@ def Model(population, incubation_time, recovery_time, data, **kwargs):
     """Dispatch between different model classes."""
     if incubation_time:
         assert incubation_time > 1
-        return SimpleSEIRModel(population, incubation_time, recovery_time, data, **kwargs)
+        return SimpleSEIRModel(population, incubation_time, recovery_time, data,
+                               **kwargs)
     return SimpleSIRModel(population, recovery_time, data, **kwargs)
 
 
