@@ -20,8 +20,11 @@ from pyro.distributions.transforms.generalized_channel_permute import (Generaliz
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
                                                        householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
-from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive,  NeuralAutoregressive,
-                                                                 conditional_neural_autoregressive, neural_autoregressive)
+from pyro.distributions.transforms.neural_autoregressive import (
+    ConditionalNeuralAutoregressive,
+    NeuralAutoregressive,
+    conditional_neural_autoregressive,
+    neural_autoregressive)
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
