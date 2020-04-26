@@ -48,17 +48,17 @@ class SimpleSIRModel(CompartmentalModel):
         S0 = self.population - 1
         # Assume 50% <= response rate <= 100%.
         S2I = self.data * min(2., (S0 / self.data.sum()).sqrt())
-        S_aux = (S0 - S2I.cumsum(-1)).clamp(min=0.5)
+        S_aux = S0 - S2I.cumsum(-1)
         # Account for the single initial infection.
         S2I[0] += 1
         # Assume infection lasts less than a month.
         recovery = torch.arange(30.).div(self.recovery_time).neg().exp()
-        I_aux = convolve(S2I, recovery)[:len(self.data)].clamp(min=0.5)
+        I_aux = convolve(S2I, recovery)[:len(self.data)]
 
         return {
             "R0": torch.tensor(2.0),
             "rho": torch.tensor(0.5),
-            "auxiliary": torch.stack([S_aux, I_aux]),
+            "auxiliary": torch.stack([S_aux, I_aux]).clamp(min=0.5),
         }
 
     def global_model(self):
