@@ -434,6 +434,13 @@ ConditionalRadial
     :undoc-members:
     :show-inheritance:
 
+ConditionalSplineCoupling
+-------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalSplineCoupling
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransformModule
 --------------------------
 .. autoclass:: pyro.distributions.ConditionalTransformModule
@@ -486,6 +493,13 @@ Radial
 Spline
 ------
 .. autoclass:: pyro.distributions.transforms.Spline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SplineCoupling
+--------------
+.. autoclass:: pyro.distributions.transforms.SplineCoupling
     :members:
     :undoc-members:
     :show-inheritance:
@@ -557,6 +571,10 @@ conditional_radial
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_radial
 
+conditional_spline_coupling
+---------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_spline_coupling
+
 elu
 ---
 .. autofunction:: pyro.distributions.transforms.elu
@@ -596,6 +614,10 @@ radial
 spline
 ------
 .. autofunction:: pyro.distributions.transforms.spline
+
+spline_coupling
+---------------
+.. autofunction:: pyro.distributions.transforms.spline_coupling
 
 sylvester
 ---------

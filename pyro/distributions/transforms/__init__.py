@@ -28,6 +28,7 @@ from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, cond
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.radial import ConditionalRadial, Radial, conditional_radial, radial
 from pyro.distributions.transforms.spline import Spline, spline
+from pyro.distributions.transforms.spline_coupling import ConditionalSplineCoupling, SplineCoupling, conditional_spline_coupling, spline_coupling
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 
 ########################################
@@ -70,6 +71,7 @@ __all__ = [
     'ConditionalNeuralAutoregressive',
     'ConditionalPlanar',
     'ConditionalRadial',
+    'ConditionalSplineCoupling',
     'CorrLCholeskyTransform',
     'DiscreteCosineTransform',
     'ELUTransform',
@@ -83,6 +85,7 @@ __all__ = [
     'Polynomial',
     'Radial',
     'Spline',
+    'SplineCoupling',
     'Sylvester',
     'TanhTransform',
     'affine_autoregressive',
@@ -94,6 +97,7 @@ __all__ = [
     'conditional_neural_autoregressive',
     'conditional_planar',
     'conditional_radial',
+    'conditional_spline_coupling',
     'elu',
     'generalized_channel_permute',
     'householder',
@@ -104,6 +108,7 @@ __all__ = [
     'polynomial',
     'radial',
     'spline',
+    'spline_coupling',
     'sylvester',
     'tanh',
 ]
