@@ -26,3 +26,9 @@ SIR Models
 .. automodule:: pyro.contrib.epidemiology.sir
     :members:
     :member-order: bysource
+
+SEIR Models
+-----------
+.. automodule:: pyro.contrib.epidemiology.seir
+    :members:
+    :member-order: bysource

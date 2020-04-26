@@ -25,7 +25,8 @@ class SimpleSIRModel(CompartmentalModel):
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections.
-    :param int data: Time series of new observed infections.
+    :param int data: Time series of new observed infections, i.e. a Binomial
+        subset of the ``S -> I`` transitions at each time step.
     """
 
     def __init__(self, population, recovery_time, data):

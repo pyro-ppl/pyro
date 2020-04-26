@@ -22,12 +22,35 @@ class SimpleSEIRModel(CompartmentalModel):
     implicit: ``R = population - S - E - I``) with transitions
     ``S -> E -> I -> R``.
 
+    This model accounts for superspreading (overdispersed individual
+    reproduction number) by assuming each infected individual infects
+    BetaBinomial-many susceptible individuals, where the BetaBinomial acts as
+    an overdispersed Binomial distribution, adapting the more standard
+    NegativeBinomial overdispersed Poisson distribution [1,2] to the setting of
+    finite populations. To preserve Markov structure, we follow [2] and assume
+    all infections by a single individual occur on the single time step where
+    that individual makes an ``S->R`` transition.
+
+    **References**
+
+    [1] J. O. Lloyd-Smith, S. J. Schreiber, P. E. Kopp, W. M. Getz
+        "Superspreading and the effect of individual variation on disease
+        emergence"
+        Nature (2005)
+        https://www.nature.com/articles/nature04153.pdf
+    [2] Lucy M. Li, Nicholas C. Grassly, Christophe Fraser
+        "Quantifying Transmission Heterogeneity Using Both Pathogen Phylogenies
+        and Incidence Time Series"
+        Molecular Biology and Evolution (2017)
+        https://academic.oup.com/mbe/article/34/11/2982/3952784
+
     :param int population: Total ``population = S + E + I + R``.
     :param float incubation_time: Mean incubation time (duration in state
         ``E``). Must be greater than 1.
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
-    :param iterable data: Time series of new observed infections.
+    :param iterable data: Time series of new observed infections, i.e. a
+        Binomial subset of the ``E -> I`` transitions at each time step.
     """
 
     def __init__(self, population, incubation_time, recovery_time, data):
@@ -46,7 +69,7 @@ class SimpleSEIRModel(CompartmentalModel):
         self.data = data
 
     series = ("S2E", "E2I", "I2R", "obs")
-    full_mass = [("R0", "rho", "c")]
+    full_mass = [("R0", "rho", "k")]
 
     def heuristic(self):
         T = len(self.data)
@@ -72,7 +95,7 @@ class SimpleSEIRModel(CompartmentalModel):
         return {
             "R0": torch.tensor(2.0),
             "rho": torch.tensor(0.5),
-            "c": torch.tensor(1.0),
+            "k": torch.tensor(1.0),
             "auxiliary": torch.stack([S_aux, E_aux, I_aux]).clamp(min=0.5),
         }
 
@@ -81,29 +104,29 @@ class SimpleSEIRModel(CompartmentalModel):
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         rho = pyro.sample("rho", dist.Uniform(0, 1))
-        c = pyro.sample("c", dist.Exponential(1.))
+        k = pyro.sample("k", dist.Exponential(1.))
 
         # Convert interpretable parameters to distribution parameters.
         rate_s = -R0 / self.population
         prob_e = 1 / tau_e
         prob_i = 1 / tau_i
 
-        return c, rate_s, prob_e, prob_i, rho
+        return k, rate_s, prob_e, prob_i, rho
 
     def initialize(self, params):
         # Start with a single exposure.
         return {"S": self.population - 1, "E": 1, "I": 0}
 
     def transition_fwd(self, params, state, t):
-        c, rate_s, prob_e, prob_i, rho = params
+        k, rate_s, prob_e, prob_i, rho = params
 
         # Sample flows between compartments.
         E2I = pyro.sample("E2I_{}".format(t),
                           dist.Binomial(state["E"], prob_e))
         I2R = pyro.sample("I2R_{}".format(t),
                           dist.Binomial(state["I"], prob_i))
-        c0 = (c * (rate_s * I2R).exp()).clamp(min=1e-6)
-        c1 = (c - c0).clamp(min=1e-6)
+        c0 = (k * (rate_s * I2R).exp()).clamp(min=1e-6)
+        c1 = (k - c0).clamp(min=1e-6)
         S2E = pyro.sample("S2E_{}".format(t),
                           dist.BetaBinomial(c1, c0, state["S"]))
 
@@ -118,7 +141,7 @@ class SimpleSEIRModel(CompartmentalModel):
                     obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
-        c, rate_s, prob_e, prob_i, rho = params
+        k, rate_s, prob_e, prob_i, rho = params
 
         # Reverse the flow computation.
         S2E = prev["S"] - curr["S"]
@@ -126,8 +149,8 @@ class SimpleSEIRModel(CompartmentalModel):
         I2R = prev["I"] - curr["I"] + E2I
 
         # Condition on flows between compartments.
-        c0 = (c * (rate_s * I2R).exp()).clamp(min=1e-6)
-        c1 = (c - c0).clamp(min=1e-6)
+        c0 = (k * (rate_s * I2R).exp()).clamp(min=1e-6)
+        c1 = (k - c0).clamp(min=1e-6)
         pyro.sample("S2E_{}".format(t),
                     dist.ExtendedBetaBinomial(c1, c0, prev["S"]),
                     obs=S2E)
