@@ -24,7 +24,10 @@ class MarkovMessenger(LocalNamedMessenger):
     """
     LocalNamedMessenger is meant to be a drop-in replacement for pyro.markov.
     """
-    pass
+    def __call__(self, fn):
+        if fn is not None and not callable(fn):
+            return self.generator(iterable=fn)
+        return super().__call__(fn)
 
 
 class IndepMessenger(GlobalNamedMessenger):
@@ -62,6 +65,16 @@ class IndepMessenger(GlobalNamedMessenger):
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
 
 
+class SequentialPlateMessenger(LocalNamedMessenger):
+    def __init__(self, name=None, size=None, dim=None):
+        self.name, self.size, self.dim, self.counter = name, size, dim, 0
+        super().__init__(history=0, keep=False)
+
+    def _pyro_sample(self, msg):
+        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+
+
 class PlateMessenger(IndepMessenger):
     """
     Combines new IndepMessenger implementation with existing BroadcastMessenger.
@@ -72,7 +85,9 @@ class PlateMessenger(IndepMessenger):
         BroadcastMessenger._pyro_sample(msg)
 
     def __iter__(self):
-        for i in MarkovMessenger(history=0, keep=False).generator(iterable=range(self.size)):
+        c = SequentialPlateMessenger(self.name, self.size, self.dim)
+        for i in c:
+            c.counter += 1
             yield i
 
 

@@ -37,7 +37,7 @@ class TraceEnum_ELBO(ELBO):
         # TODO get this optimizer call right
         with funsor.interpreter.interpretation(funsor.optimizer.optimize), funsor.memoize.memoize():
             for factor in factors:
-                elbo += funsor.einsum.sum_product(
+                elbo += funsor.sum_product.sum_product(
                     funsor.ops.add, funsor.ops.mul,
                     [lm.exp() for lm in measures] + [factor],
                     eliminate=measure_vars | frozenset(factor.inputs) - plate_vars,
@@ -70,7 +70,7 @@ class TraceTMC_ELBO(ELBO):
                 sum_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs) - plate_vars
 
         with funsor.interpreter.interpretation(funsor.terms.normalize):
-            elbo = funsor.einsum.sum_product(
+            elbo = funsor.sum_product.sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
                 measures + factors, eliminate=sum_vars, plates=plate_vars
             )
