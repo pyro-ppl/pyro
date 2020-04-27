@@ -99,4 +99,5 @@ class RandomVariable(RVArithmeticMixin):
             or you can subclass directly from `Transform`.
         :type t: `Transform`
         """
-        self.distribution = TransformedDistribution(self.distribution, t)
+        dist = TransformedDistribution(self.distribution, t)
+        return RandomVariable(dist)
