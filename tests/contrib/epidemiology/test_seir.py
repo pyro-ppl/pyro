@@ -13,7 +13,7 @@ from pyro.contrib.epidemiology import SimpleSEIRModel
     {"dct": 1.},
     {"num_quant_bins": 8},
 ], ids=str)
-def test_smoke(duration, forecast, options):
+def test_simple_smoke(duration, forecast, options):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -36,3 +36,5 @@ def test_smoke(duration, forecast, options):
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
     assert samples["S"].shape == (num_samples, duration + forecast)
+    assert samples["E"].shape == (num_samples, duration + forecast)
+    assert samples["I"].shape == (num_samples, duration + forecast)
