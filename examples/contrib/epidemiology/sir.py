@@ -13,12 +13,40 @@ import torch
 import pyro
 from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel
 
-from pyro.infer.mcmc.util import diagnostics, summary
+from pyro.infer.mcmc.util import summary
 
 import pickle
+from logger import get_logger
 
+from functools import partial, reduce
+from itertools import product
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
+
+
+def log_summary(samples, _logger, prob=0.9, group_by_chain=True):
+    summary_dict = summary(samples, prob, group_by_chain)
+
+    row_names = {k: k + '[' + ','.join(map(lambda x: str(x - 1), v.shape[2:])) + ']'
+                 for k, v in samples.items()}
+    max_len = max(max(map(lambda x: len(x), row_names.values())), 10)
+    name_format = '{:>' + str(max_len) + '}'
+    header_format = name_format + ' {:>9}' * 7
+    columns = [''] + list(list(summary_dict.values())[0].keys())
+
+    _logger("")
+    _logger(header_format.format(*columns))
+
+    row_format = name_format + ' {:>9.2f}' * 7
+    for name, stats_dict in summary_dict.items():
+        shape = stats_dict["mean"].shape
+        if len(shape) == 0:
+            _logger(row_format.format(name, *stats_dict.values()))
+        else:
+            for idx in product(*map(range, shape)):
+                idx_str = '[{}]'.format(','.join(map(str, idx)))
+                _logger(row_format.format(name + idx_str, *[v[idx] for v in stats_dict.values()]))
+    _logger("")
 
 
 def Model(population, incubation_time, recovery_time, data):
@@ -30,25 +58,25 @@ def Model(population, incubation_time, recovery_time, data):
 
 
 def generate_data(args):
-    extended_data = [None] * (args.duration + args.forecast)
-    model = Model(args.population, args.incubation_time, args.recovery_time,
+    extended_data = [None] * (args['duration'] + args['forecast'])
+    model = Model(args['population'], args['incubation_time'], args['recovery_time'],
                   extended_data)
     for attempt in range(100):
-        samples = model.generate({"R0": args.basic_reproduction_number,
-                                  "rho": args.response_rate})
-        obs = samples["obs"][:args.duration]
+        samples = model.generate({"R0": args['basic_reproduction_number'],
+                                  "rho": args['response_rate']})
+        obs = samples["obs"][:args['duration']]
         new_I = samples.get("S2I", samples.get("E2I"))
 
         obs_sum = int(obs.sum())
-        new_I_sum = int(new_I[:args.duration].sum())
-        if obs_sum >= args.min_observations:
+        new_I_sum = int(new_I[:args['duration']].sum())
+        if obs_sum >= args['min_observations']:
             logging.info("Observed {:d}/{:d} infections:\n{}".format(
                 obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)))
             return {"new_I": new_I, "obs": obs}
 
     raise ValueError("Failed to generate {} observations. Try increasing "
                      "--population or decreasing --min-observations"
-                     .format(args.min_observations))
+                     .format(args['min_observations']))
 
 
 def infer(args, model):
@@ -57,20 +85,20 @@ def infer(args, model):
     def hook_fn(kernel, *unused):
         e = float(kernel._potential_energy_last)
         energies.append(e)
-        if args.verbose:
+        if args['verbose']:
             logging.info("potential = {:0.6g}".format(e))
 
-    mcmc = model.fit(warmup_steps=args.warmup_steps,
-                     num_samples=args.num_samples,
-                     max_tree_depth=args.max_tree_depth,
-                     num_chains=args.num_chains,
-                     num_quant_bins=args.num_bins,
-                     dct=args.dct,
-                     haar=args.haar,
+    mcmc = model.fit(warmup_steps=args['warmup_steps'],
+                     num_samples=args['num_samples'],
+                     max_tree_depth=args['max_tree_depth'],
+                     num_chains=args['num_chains'],
+                     num_quant_bins=args['num_bins'],
+                     dct=args['dct'],
+                     haar=args['haar'],
                      )#hook_fn=hook_fn)
 
     mcmc.summary()
-    if args.plot:
+    if args['plot']:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(6, 3))
         plt.plot(energies)
@@ -93,7 +121,7 @@ def evaluate(args, samples):
                      .format(key, getattr(args, name), mean, std))
 
     # Optionally plot histograms.
-    if args.plot:
+    if args['plot']:
         import matplotlib.pyplot as plt
         import seaborn as sns
         fig, axes = plt.subplots(2, 1, figsize=(5, 5))
@@ -109,7 +137,7 @@ def evaluate(args, samples):
 
 
 def predict(args, model, truth):
-    samples = model.predict(forecast=args.forecast)
+    samples = model.predict(forecast=args['forecast'])
 
     obs = model.data
 
@@ -119,75 +147,87 @@ def predict(args, model, truth):
                  .format(" ".join(map(str, map(int, median)))))
 
     # Optionally plot the latent and forecasted series of new infections.
-    if args.plot:
+    if args['plot']:
         import matplotlib.pyplot as plt
         plt.figure()
-        time = torch.arange(args.duration + args.forecast)
-        p05 = new_I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
-        p95 = new_I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
+        time = torch.arange(args['duration'] + args['forecast'])
+        p05 = new_I.kthvalue(int(round(0.5 + 0.05 * args['num_samples'])), dim=0).values
+        p95 = new_I.kthvalue(int(round(0.5 + 0.95 * args['num_samples'])), dim=0).values
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
         plt.plot(time, median, "r-", label="median")
-        plt.plot(time[:args.duration], obs, "k.", label="observed")
+        plt.plot(time[:args['duration']], obs, "k.", label="observed")
         if truth is not None:
             plt.plot(time, truth, "k--", label="truth")
-        plt.axvline(args.duration - 0.5, color="gray", lw=1)
+        plt.axvline(args['duration'] - 0.5, color="gray", lw=1)
         plt.xlim(0, len(time) - 1)
         plt.ylim(0, None)
         plt.xlabel("day after first infection")
         plt.ylabel("new infections per day")
-        plt.title("New infections in population of {}".format(args.population))
+        plt.title("New infections in population of {}".format(args['population']))
         plt.legend(loc="upper left")
         plt.tight_layout()
 
 
-def main(args):
-    if args.haar:
-        args.haar = args.duration
+#def main(args):
+def main(**args):
+    if args['haar']:
+        args['haar'] = args['duration']
     else:
-        args.haar = None
+        args['haar'] = None
+
+    tag = "sir.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.dct_{}.haar_{}."
+    tag += "tree_{}.nqb_{}.nc_{}"
+    tag = tag.format(args['population'], args['duration'], args['min_observations'],
+                               args['basic_reproduction_number'], args['response_rate'],
+                               args['dct'], args['haar'], args['max_tree_depth'], args['num_bins'], args['num_chains'])
+
+    log = get_logger(args['results_dir'], tag + '.log', use_local_logger=False)
+    log(args)
 
     pyro.enable_validation(__debug__)
-    pyro.set_rng_seed(args.rng_seed)
+    pyro.set_rng_seed(args['rng_seed'])
 
     # Generate data.
     dataset = generate_data(args)
     obs = dataset["obs"]
 
     # Run inference.
-    model = Model(args.population, args.incubation_time, args.recovery_time, obs)
+    model = Model(args['population'], args['incubation_time'], args['recovery_time'], obs)
     samples, summary = infer(args, model)
+
+    if args['num_chains'] > 1:
+        for k, v in samples.items():
+            T = v.shape[0]
+            log("[{}]  {:.4f}  {:.4f}".format(k, v[0:T//2].mean().item(), v[T//2:].mean().item()))
 
     for k, v in summary.items():
         for k2, v2 in v.items():
             summary[k][k2] = v2.data.cpu().numpy().tolist()
 
+    log(summary)
+    #log_summary(samples, log)
+
     summary['args'] = args
 
-    pkl_file = "sir.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.dct_{}.haar_{}."
-    pkl_file += "tree_{}.nqb_{}.nc_{}.pkl"
-    pkl_file = pkl_file.format(args.population, args.duration, args.min_observations,
-                               args.basic_reproduction_number, args.response_rate,
-                               args.dct, args.haar, args.max_tree_depth, args.num_bins, args.num_chains)
-
-    with open(args.results_dir + '/' + pkl_file, 'wb') as f:
+    with open(args['results_dir'] + '/' + tag  +'.pkl', 'wb') as f:
         pickle.dump(summary, f, protocol=2)
 
     # Evaluate fit.
     #evaluate(args, samples)
 
     # Predict latent time series.
-    #if args.forecast:
+    #if args['forecast:
     #    predict(args, model, truth=dataset["S2I"])
 
 
 if __name__ == "__main__":
     #assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
-    parser.add_argument("-p", "--population", default=10, type=int)
-    parser.add_argument("-m", "--min-observations", default=3, type=int)
-    parser.add_argument("-d", "--duration", default=20, type=int)
-    parser.add_argument("-f", "--forecast", default=10, type=int)
-    parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
+    parser.add_argument("-p", "--population", default=50000, type=int)
+    parser.add_argument("-m", "--min-observations", default=200, type=int)
+    parser.add_argument("-d", "--duration", default=32, type=int)
+    parser.add_argument("-f", "--forecast", default=0, type=int)
+    parser.add_argument("-R0", "--basic-reproduction-number", default=1.8, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-e", "--incubation-time", default=0.0, type=float,
                         help="If zero, use SIR model; if > 1 use SEIR model.")
@@ -197,7 +237,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
-    parser.add_argument("--num-chains", default=4, type=int)
+    parser.add_argument("--num-chains", default=2, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("--haar", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
@@ -216,7 +256,8 @@ if __name__ == "__main__":
     elif args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
-    main(args)
+    #main(args)
+    main(**vars(args))
 
     if args.plot:
         import matplotlib.pyplot as plt
