@@ -19,13 +19,12 @@ def infection_dist(*,
     infections at a discrete time step.
 
     This returns a Poisson, Negative-Binomial, Binomial, or Beta-Binomial
-    distribution depending on whether :param:`population` and
-    :param:`concentration` are finite. In Pyro models, the population is
-    usually finite. In the limit ``population → ∞`` and
-    ``num_susceptible/population → 1``, the Binomial converges to Poisson and
-    the Beta-Binomial converges to Negative-Binomial. In the limit
-    ``concentration → ∞``, the Negative-Binomial converges to Poisson and
-    the Beta-Binomial converges to Binomial.
+    distribution depending on whether ``population`` and ``concentration`` are
+    finite. In Pyro models, the population is usually finite. In the limit
+    ``population → ∞`` and ``num_susceptible/population → 1``, the Binomial
+    converges to Poisson and the Beta-Binomial converges to Negative-Binomial.
+    In the limit ``concentration → ∞``, the Negative-Binomial converges to
+    Poisson and the Beta-Binomial converges to Binomial.
 
     The overdispersed distributions (Negative-Binomial and Beta-Binomial
     returned when ``concentration < ∞``) are useful for modeling superspreader
