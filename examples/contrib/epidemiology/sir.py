@@ -7,30 +7,41 @@
 
 import argparse
 import logging
+import math
 
 import torch
 
 import pyro
-from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel
+from pyro.contrib.epidemiology import OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
-def Model(population, incubation_time, recovery_time, data):
+def Model(args, data):
     """Dispatch between different model classes."""
-    if incubation_time:
-        assert incubation_time > 1
-        return SimpleSEIRModel(population, incubation_time, recovery_time, data)
-    return SimpleSIRModel(population, recovery_time, data)
+    if args.incubation_time > 0:
+        assert args.incubation_time > 1
+        if args.concentration == math.inf:
+            return SimpleSEIRModel(args.population, args.incubation_time,
+                                   args.recovery_time, data)
+        else:
+            return OverdispersedSEIRModel(args.population, args.incubation_time,
+                                          args.recovery_time, data)
+    else:
+        if args.concentration == math.inf:
+            return SimpleSIRModel(args.population, args.recovery_time, data)
+        else:
+            return OverdispersedSIRModel(args.population, args.recovery_time, data)
 
 
 def generate_data(args):
     extended_data = [None] * (args.duration + args.forecast)
-    model = Model(args.population, args.incubation_time, args.recovery_time,
-                  extended_data)
+    model = Model(args, extended_data)
+    logging.info("Simulating from a {}".format(type(model).__name__))
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
-                                  "rho": args.response_rate})
+                                  "rho": args.response_rate,
+                                  "k": args.concentration})
         obs = samples["obs"][:args.duration]
         new_I = samples.get("S2I", samples.get("E2I"))
 
@@ -79,6 +90,8 @@ def evaluate(args, samples):
     # Print estimated values.
     names = {"basic_reproduction_number": "R0",
              "response_rate": "rho"}
+    if args.concentration < math.inf:
+        names["concentration"] = "k"
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
@@ -89,7 +102,7 @@ def evaluate(args, samples):
     if args.plot:
         import matplotlib.pyplot as plt
         import seaborn as sns
-        fig, axes = plt.subplots(2, 1, figsize=(5, 5))
+        fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
             truth = getattr(args, name)
@@ -142,7 +155,7 @@ def main(args):
     obs = dataset["obs"]
 
     # Run inference.
-    model = Model(args.population, args.incubation_time, args.recovery_time, obs)
+    model = Model(args, obs)
     samples = infer(args, model)
 
     # Evaluate fit.
@@ -165,6 +178,8 @@ if __name__ == "__main__":
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-e", "--incubation-time", default=0.0, type=float,
                         help="If zero, use SIR model; if > 1 use SEIR model.")
+    parser.add_argument("-k", "--concentration", default=math.inf, type=float,
+                        help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")

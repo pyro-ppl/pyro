@@ -132,6 +132,17 @@ class OverdispersedSEIRModel(CompartmentalModel):
     single individual occur on the single time step where that individual makes
     an ``I -> R`` transition.
 
+    **References**
+
+    [1] J. O. Lloyd-Smith, S. J. Schreiber, P. E. Kopp, W. M. Getz (2005)
+        "Superspreading and the effect of individual variation on disease
+        emergence"
+        https://www.nature.com/articles/nature04153.pdf
+    [2] Lucy M. Li, Nicholas C. Grassly, Christophe Fraser (2017)
+        "Quantifying Transmission Heterogeneity Using Both Pathogen Phylogenies
+        and Incidence Time Series"
+        https://academic.oup.com/mbe/article/34/11/2982/3952784
+
     :param int population: Total ``population = S + E + I + R``.
     :param float incubation_time: Mean incubation time (duration in state
         ``E``). Must be greater than 1.

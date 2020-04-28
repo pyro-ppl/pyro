@@ -248,12 +248,12 @@ class CompartmentalModel(ABC):
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
         :rtype: ~pyro.infer.mcmc.api.MCMC
         """
-        logger.info("Running inference...")
         # Save these options for .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
         self._dct = options.pop("dct", None)
 
         # Heuristically initialze to feasible latents.
+        logger.info("Heuristically initializing...")
         init_values = self.heuristic()
         assert isinstance(init_values, dict)
         assert "auxiliary" in init_values, \
@@ -266,6 +266,7 @@ class CompartmentalModel(ABC):
             init_values["auxiliary_dct"] = x
 
         # Configure a kernel.
+        logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
         model = self._vectorized_model

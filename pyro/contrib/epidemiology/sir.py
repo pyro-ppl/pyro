@@ -117,35 +117,15 @@ class OverdispersedSIRModel(CompartmentalModel):
     single individual occur on the single time step where that individual makes
     an ``I -> R`` transition.
 
-    At a given time step, let ``R0`` be the basic reproductive number, ``k`` be
-    the dispersion, ``N`` be the total population, ``S`` be the number of
-    susceptible individuals, and ``I2R`` be the number of individuals
-    recovering at that time step. Then the reproductive number is
-
-        Rt = R0 * S / N
-
-    and the number of new infections ``S2I`` is distributed as::
-
-        S2I ~ BetaBinomial(concentration1=k * I2R,
-                           concentration2=k * S / Rt,
-                           total_count=S)
-
-            ≈ GammaPoisson(concentration=k * I2R,  # in the limit S → ∞
-                           rate=K / Rt)
-
-            = NegativeBinomial(R=Rt * I2R, k=k * I2R)
-
     **References**
 
-    [1] J. O. Lloyd-Smith, S. J. Schreiber, P. E. Kopp, W. M. Getz
+    [1] J. O. Lloyd-Smith, S. J. Schreiber, P. E. Kopp, W. M. Getz (2005)
         "Superspreading and the effect of individual variation on disease
         emergence"
-        Nature (2005)
         https://www.nature.com/articles/nature04153.pdf
-    [2] Lucy M. Li, Nicholas C. Grassly, Christophe Fraser
+    [2] Lucy M. Li, Nicholas C. Grassly, Christophe Fraser (2017)
         "Quantifying Transmission Heterogeneity Using Both Pathogen Phylogenies
         and Incidence Time Series"
-        Molecular Biology and Evolution (2017)
         https://academic.oup.com/mbe/article/34/11/2982/3952784
 
     :param int population: Total ``population = S + I + R``.
@@ -168,7 +148,7 @@ class OverdispersedSIRModel(CompartmentalModel):
         self.data = data
 
     series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho")]
+    full_mass = [("R0", "rho", "k")]
 
     def global_model(self):
         tau = self.recovery_time
