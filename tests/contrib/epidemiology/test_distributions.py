@@ -20,17 +20,17 @@ def assert_dist_close(d1, d2):
 
     mean1 = (p1 * x).sum()
     mean2 = (p2 * x).sum()
-    assert_close(mean1, mean2)
+    assert_close(mean1, mean2, rtol=0.05)
 
     max_prob = torch.max(p1.max(), p2.max())
     assert (p1 - p2).abs().max() / max_prob < 0.05
 
 
 @pytest.mark.parametrize("R0,I", [
-    (1.0, 1),
-    (1.0, 10),
-    (10.0, 1),
-    (10.0, 10),
+    (1., 1),
+    (1., 10),
+    (10., 1),
+    (5., 5),
 ])
 def test_binomial_vs_poisson(R0, I):
     R0 = torch.tensor(R0)
@@ -38,7 +38,7 @@ def test_binomial_vs_poisson(R0, I):
 
     d1 = infection_dist(individual_rate=R0, num_infectious=I)
     d2 = infection_dist(individual_rate=R0, num_infectious=I,
-                        num_susceptible=1000, population=1000)
+                        num_susceptible=1000., population=1000.)
 
     assert isinstance(d1, dist.Poisson)
     assert isinstance(d2, dist.Binomial)
@@ -46,18 +46,18 @@ def test_binomial_vs_poisson(R0, I):
 
 
 @pytest.mark.parametrize("R0,I,k", [
-    (1.0, 1, 0.5),
-    (1.0, 10, 0.5),
-    (10.0, 1, 0.5),
-    (10.0, 10, 0.5),
-    (1.0, 1, 1.0),
-    (1.0, 10, 1.0),
-    (10.0, 1, 1.0),
-    (10.0, 10, 1.0),
-    (1.0, 1, 2.0),
-    (1.0, 10, 2.0),
-    (10.0, 1, 2.0),
-    (10.0, 10, 2.0),
+    (1., 1., 0.5),
+    (1., 1., 1.),
+    (1., 1., 2.),
+    (1., 10., 0.5),
+    (1., 10., 1.),
+    (1., 10., 2.),
+    (10., 1., 0.5),
+    (10., 1., 1.),
+    (10., 1., 2.),
+    (5., 5, 0.5),
+    (5., 5, 1.),
+    (5., 5, 2.),
 ])
 def test_beta_binomial_vs_negative_binomial(R0, I, k):
     R0 = torch.tensor(R0)
@@ -65,7 +65,7 @@ def test_beta_binomial_vs_negative_binomial(R0, I, k):
 
     d1 = infection_dist(individual_rate=R0, num_infectious=I, concentration=k)
     d2 = infection_dist(individual_rate=R0, num_infectious=I, concentration=k,
-                        num_susceptible=1000, population=1000)
+                        num_susceptible=1000., population=1000.)
 
     assert isinstance(d1, dist.NegativeBinomial)
     assert isinstance(d2, dist.BetaBinomial)
@@ -73,19 +73,19 @@ def test_beta_binomial_vs_negative_binomial(R0, I, k):
 
 
 @pytest.mark.parametrize("R0,I", [
-    (1.0, 1),
-    (1.0, 10),
-    (10.0, 1),
-    (10.0, 10),
+    (1., 1.),
+    (1., 10.),
+    (10., 1.),
+    (5., 5.),
 ])
 def test_beta_binomial_vs_binomial(R0, I):
     R0 = torch.tensor(R0)
     I = torch.tensor(I)
 
     d1 = infection_dist(individual_rate=R0, num_infectious=I,
-                        num_susceptible=20, population=30)
+                        num_susceptible=20., population=30.)
     d2 = infection_dist(individual_rate=R0, num_infectious=I,
-                        num_susceptible=20, population=30,
+                        num_susceptible=20., population=30.,
                         concentration=200.)
 
     assert isinstance(d1, dist.Binomial)
@@ -94,10 +94,10 @@ def test_beta_binomial_vs_binomial(R0, I):
 
 
 @pytest.mark.parametrize("R0,I", [
-    (1.0, 1),
-    (1.0, 10),
-    (10.0, 1),
-    (10.0, 10),
+    (1., 1.),
+    (1., 10.),
+    (10., 1.),
+    (5., 5.),
 ])
 def test_negative_binomial_vs_poisson(R0, I):
     R0 = torch.tensor(R0)
