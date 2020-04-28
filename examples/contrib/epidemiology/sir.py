@@ -154,8 +154,7 @@ def main(args):
     obs = dataset["obs"]
 
     # Run inference.
-    model = SIRModel(args.population, args.recovery_time, obs,
-                     num_quant_bins=args.num_bins)
+    model = Model(args.population, args.incubation_time, args.recovery_time, obs)
     samples, summary = infer(args, model)
 
     for k, v in summary.items():
