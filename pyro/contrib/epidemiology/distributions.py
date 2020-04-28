@@ -28,7 +28,7 @@ def infection_dist(*,
 
     The overdispersed distributions (Negative-Binomial and Beta-Binomial
     returned when ``concentration < ∞``) are useful for modeling superspreader
-    individuals [2,3]. The finitely supported distributions Binomial and
+    individuals [1,2]. The finitely supported distributions Binomial and
     Negative-Binomial are useful in small populations and in probabilistic
     programming systems where truncation or censoring are expensive [3].
 
@@ -58,7 +58,7 @@ def infection_dist(*,
     :param population: The total number of individuals in a population.
         This defaults to an infinite population.
     :concentration: The concentration or dispersion parameter ``k`` in
-        overdispersed models of superspreaders [2,3]. This defaults to minimum
+        overdispersed models of superspreaders [1,2]. This defaults to minimum
         variance ``concentration = ∞``.
     """
     # Convert to colloquial variable names.
