@@ -460,21 +460,20 @@ class CompartmentalModel(ABC):
 
 class _SMCModel:
     """
-    Helper to initialize a CompartmentalModel to an feasible initial state.
+    Helper to initialize a CompartmentalModel to a feasible initial state.
     """
     def __init__(self, model):
         assert isinstance(model, CompartmentalModel)
         self.model = model
 
     def init(self, state):
-        self.t = 0
-
         with poutine.trace() as tr:
             params = self.model.global_model()
         for name, site in tr.trace.nodes.items():
             if site["type"] == "sample":
                 state[name] = site["value"]
 
+        self.t = 0
         state.update(self.model.initialize(params))
         self.step(state)  # Take one step since model.initialize is deterministic.
 
@@ -491,7 +490,7 @@ class _SMCModel:
 
 class _SMCGuide(_SMCModel):
     """
-    Like _SMCModel but does not observe and does not update state.
+    Like _SMCModel but does not update state and does not observe.
     """
     def init(self, state):
         super().init(state.copy())
