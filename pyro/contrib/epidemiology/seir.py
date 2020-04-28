@@ -92,8 +92,8 @@ class SimpleSEIRModel(CompartmentalModel):
         # Sample flows between compartments.
         S2E = pyro.sample("S2E_{}".format(t),
                           infection_dist(individual_rate=R0 / tau_i,
-                                         num_suceptible=state["S"],
-                                         num_infections=state["I"],
+                                         num_susceptible=state["S"],
+                                         num_infectious=state["I"],
                                          population=self.population))
         E2I = pyro.sample("E2I_{}".format(t),
                           dist.Binomial(state["E"], 1 / tau_e))
@@ -121,8 +121,8 @@ class SimpleSEIRModel(CompartmentalModel):
         # Condition on flows between compartments.
         pyro.sample("S2E_{}".format(t),
                     infection_dist(individual_rate=R0 / tau_i,
-                                   num_suceptible=prev["S"],
-                                   num_infections=prev["I"],
+                                   num_susceptible=prev["S"],
+                                   num_infectious=prev["I"],
                                    population=self.population),
                     obs=S2E)
         pyro.sample("E2I_{}".format(t),

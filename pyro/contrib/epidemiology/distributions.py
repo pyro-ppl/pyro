@@ -54,7 +54,7 @@ def infection_dist(*,
         is the mean duration of infectiousness.
     :param num_infectious: The number of infectious individuals at this
         time step, sometimes ``I``, sometimes ``E+I``.
-    :param num_suceptible: The number ``S`` of susceptible individuals at this
+    :param num_susceptible: The number ``S`` of susceptible individuals at this
         time step. This defaults to an infinite population.
     :param population: The total number of individuals in a population.
         This defaults to an infinite population.
@@ -82,8 +82,7 @@ def infection_dist(*,
     else:
         # Compute the probability that any given (susceptible, infectious)
         # pair of individuals results in an infection at this time step.
-        p = R / N
-        assert (p <= 1).all(), "R > N"
+        p = (R / N).clamp(max=1 - 1e-6)
         # Combine infections from all individuals.
         combined_p = p.neg().log1p().mul(I).expm1().neg()  # = 1 - (1 - p)**I
         combined_p = combined_p.clamp(min=1e-6)
