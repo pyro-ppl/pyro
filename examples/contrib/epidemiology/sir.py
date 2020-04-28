@@ -13,6 +13,11 @@ import torch
 import pyro
 from pyro.contrib.epidemiology import SIRModel
 
+from pyro.infer.mcmc.util import diagnostics, summary
+
+import pickle
+
+
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
@@ -49,8 +54,10 @@ def infer(args, model):
     mcmc = model.fit(warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
+                     num_chains=args.num_chains,
                      dct=args.dct,
-                     hook_fn=hook_fn)
+                     haar=args.haar,
+                     )#hook_fn=hook_fn)
 
     mcmc.summary()
     if args.plot:
@@ -62,7 +69,7 @@ def infer(args, model):
         plt.title("MCMC energy trace")
         plt.tight_layout()
 
-    return model.samples
+    return model.samples, summary(mcmc._samples, prob=0.90)
 
 
 def evaluate(args, samples):
@@ -123,6 +130,11 @@ def predict(args, model, truth):
 
 
 def main(args):
+    if args.haar:
+        args.haar = args.duration
+    else:
+        args.haar = None
+
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
@@ -133,18 +145,33 @@ def main(args):
     # Run inference.
     model = SIRModel(args.population, args.recovery_time, obs,
                      num_quant_bins=args.num_bins)
-    samples = infer(args, model)
+    samples, summary = infer(args, model)
+
+    for k, v in summary.items():
+        for k2, v2 in v.items():
+            summary[k][k2] = v2.data.cpu().numpy().tolist()
+
+    summary['args'] = args
+
+    pkl_file = "sir.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.dct_{}.haar_{}."
+    pkl_file += "tree_{}.nqb_{}.nc_{}.pkl"
+    pkl_file = pkl_file.format(args.population, args.duration, args.min_observations,
+                               args.basic_reproduction_number, args.response_rate,
+                               args.dct, args.haar, args.max_tree_depth, args.num_bins, args.num_chains)
+
+    with open(args.results_dir + '/' + pkl_file, 'wb') as f:
+        pickle.dump(summary, f, protocol=2)
 
     # Evaluate fit.
-    evaluate(args, samples)
+    #evaluate(args, samples)
 
     # Predict latent time series.
-    if args.forecast:
-        predict(args, model, truth=dataset["S2I"])
+    #if args.forecast:
+    #    predict(args, model, truth=dataset["S2I"])
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    #assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
@@ -158,8 +185,11 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
+    parser.add_argument("--num-chains", default=4, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
+    parser.add_argument("--haar", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
+    parser.add_argument("--results-dir", default='./test/', type=str)
     parser.add_argument("--double", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")

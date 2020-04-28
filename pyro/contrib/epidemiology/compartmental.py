@@ -13,10 +13,10 @@ from torch.nn.functional import pad
 import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
-from pyro.distributions.transforms import DiscreteCosineTransform
+from pyro.distributions.transforms import DiscreteCosineTransform, HaarTransform
 from pyro.infer import MCMC, NUTS, infer_discrete
 from pyro.infer.autoguide import init_to_value
-from pyro.infer.reparam import DiscreteCosineReparam
+from pyro.infer.reparam import DiscreteCosineReparam, HaarReparam
 from pyro.util import warn_if_nan
 
 from .util import quantize, quantize_enumerate
@@ -230,6 +230,7 @@ class CompartmentalModel(ABC):
         """
         logger.info("Running inference...")
         self._dct = options.pop("dct", None)  # Save for .predict().
+        self._haar = options.pop("haar", None)  # Save for .predict().
 
         # Heuristically initialze to feasible latents.
         init_values = self.heuristic()
@@ -242,6 +243,12 @@ class CompartmentalModel(ABC):
             x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
             x = DiscreteCosineTransform(smooth=self._dct)(x)
             init_values["auxiliary_dct"] = x
+        if self._haar is not None:
+            # Also initialize DCT transformed coordinates.
+            x = init_values["auxiliary"]
+            x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
+            x = HaarTransform(size=self._haar)(x)
+            init_values["auxiliary_dct"] = x
 
         # Configure a kernel.
         max_tree_depth = options.pop("max_tree_depth", 5)
@@ -250,13 +257,16 @@ class CompartmentalModel(ABC):
         if self._dct is not None:
             rep = DiscreteCosineReparam(smooth=self._dct)
             model = poutine.reparam(model, {"auxiliary": rep})
+        if self._haar is not None:
+            rep = HaarReparam(size=self._haar)
+            model = poutine.reparam(model, {"auxiliary": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
                       init_strategy=init_to_value(values=init_values),
                       max_tree_depth=max_tree_depth)
 
         # Run mcmc.
-        mcmc = MCMC(kernel, **options)
+        mcmc = MCMC(kernel, mp_context="spawn", **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
         return mcmc  # E.g. so user can run mcmc.summary().
