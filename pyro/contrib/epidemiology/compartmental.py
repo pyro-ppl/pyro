@@ -211,10 +211,10 @@ class CompartmentalModel(ABC):
         smc.init()
         for t in range(1, self.duration):
             smc.step()
-        i = int(smc.state._log_weights.max(0).index)
-        samples = smc.get_empirical()
-        self._concat_series(samples)
-        return samples
+        i = int(smc.state._log_weights.max(0).indices)
+        sample = {key: value[i] for key, value in smc.state.items()}
+        sample = self.generate(sample)
+        return sample
 
     def fit(self, **options):
         r"""
@@ -456,61 +456,37 @@ class _SMCModel:
     def __init__(self, model):
         assert isinstance(model, CompartmentalModel)
         self.model = model
-        self.params = None
-
-    def _dump_params(self, state, params=None, name=None):
-        if name is None:
-            params = self.params
-            name = "_params"
-
-        if params is None:
-            return
-        elif isinstance(params, torch.Tensor):
-            state[name] = params
-        elif isinstance(params, (tuple, list)):
-            for i, p in enumerate(params):
-                self._dump_params(state, p, "{}.{}".format(name, i))
-        elif isinstance(params, dict):
-            for i, p in params.items():
-                self._dump_params(state, p, "{}.{}".format(name, i))
-        else:
-            raise TypeError(params)
-
-    def _load_params(self, state, params=None, name=None):
-        if name is None:
-            params = self.params
-            name = "_params"
-
-        if params is None:
-            return None
-        elif isinstance(params, torch.Tensor):
-            return state[name]
-        elif isinstance(params, (tuple, list)):
-            return type(params)(
-                self._load_params(self, state, p, "{}.{}".format(name, i))
-                for i, p in enumerate(params))
-        elif isinstance(params, dict):
-            return type(params)(
-                (i, self._load_params(self, state, p, "{}.{}".format(name, i)))
-                for i, p in params.items())
-        else:
-            raise TypeError(params)
 
     def init(self, state):
         self.t = 0
-        self.params = self.model.global_model()
-        self._dump_params(state)
-        state.update(self.model.initialize(self.params))
+
+        with poutine.trace() as tr:
+            params = self.model.global_model()
+        for name, site in tr.trace.nodes.items():
+            if site["type"] == "sample":
+                state[name] = site["value"]
+
+        state.update(self.model.initialize(params))
         self.step(state)  # Take one step since model.initialize is deterministic.
 
     def step(self, state):
-        params = self._load_params(state)
-        self.transition_fwd(params, state, self.t)
+        with poutine.block(), poutine.condition(data=state):
+            params = self.model.global_model()
+        with poutine.trace() as tr:
+            self.model.transition_fwd(params, state, self.t)
+        for name, site in tr.trace.nodes.items():
+            if site["type"] == "sample" and not site["is_observed"]:
+                state[name] = site["value"]
         self.t += 1
 
 
 class _SMCGuide(_SMCModel):
+    """
+    Like _SMCModel but does not observe and does not update state.
+    """
+    def init(self, state):
+        super().init(state.copy())
+
     def step(self, state):
-        # Like _SMCModel.step() but do not observe and do not update state.
         with poutine.block(hide_types=["observe"]):
             super().step(state.copy())

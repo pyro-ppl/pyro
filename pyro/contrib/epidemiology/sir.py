@@ -43,7 +43,7 @@ class SimpleSIRModel(CompartmentalModel):
     series = ("S2I", "I2R", "obs")
     full_mass = [("R0", "rho")]
 
-    def heuristic(self):
+    def old_heuristic(self):
         # Start with a single infection.
         S0 = self.population - 1
         # Assume 50% <= response rate <= 100%.
@@ -59,6 +59,16 @@ class SimpleSIRModel(CompartmentalModel):
             "R0": torch.tensor(2.0),
             "rho": torch.tensor(0.5),
             "auxiliary": torch.stack([S_aux, I_aux]).clamp(min=0.5),
+        }
+
+    def heuristic(self):
+        sample = self.smc_heuristic()
+        S = sample["S"]
+        I = sample["I"]
+        return {
+            "R0": sample["R0"],
+            "rho": sample["rho"],
+            "auxiliary": torch.stack([S, I]).clamp(min=0.5),
         }
 
     def global_model(self):
