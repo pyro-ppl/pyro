@@ -109,9 +109,9 @@ class CompartmentalModel(ABC):
         feasible and HMC needs to start at a feasible solution to progress.
 
         The default implementation attempts to find a feasible state using
-        :class:`~pyro.infer.smcfilter.SMCFilter` proprosing from the prior.
-        However this method may be overridden in cases where SMC performs
-        poorly e.g. in high-dimensional models.
+        :class:`~pyro.infer.smcfilter.SMCFilter` with proprosals from the
+        prior.  However this method may be overridden in cases where SMC
+        performs poorly e.g. in high-dimensional models.
 
         :param int num_particles: Number of particles used for SMC.
         :returns: A dictionary mapping sample site name to tensor value.
