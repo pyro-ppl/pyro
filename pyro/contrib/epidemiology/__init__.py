@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .compartmental import CompartmentalModel
-from .sir import SIRModel
+from .seir import SimpleSEIRModel
+from .sir import SimpleSIRModel
 
 __all__ = [
     "CompartmentalModel",
-    "SIRModel",
+    "SimpleSEIRModel",
+    "SimpleSIRModel",
 ]
