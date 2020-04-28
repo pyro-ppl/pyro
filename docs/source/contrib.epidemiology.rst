@@ -32,3 +32,9 @@ SEIR Models
 .. automodule:: pyro.contrib.epidemiology.seir
     :members:
     :member-order: bysource
+
+Distributions
+-------------
+.. automodule:: pyro.contrib.epidemiology.distributions
+    :members:
+    :member-order: bysource

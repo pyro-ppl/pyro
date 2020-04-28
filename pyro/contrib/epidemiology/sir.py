@@ -8,6 +8,7 @@ import pyro.distributions as dist
 from pyro.ops.tensor_utils import convolve
 
 from .compartmental import CompartmentalModel
+from .distributions import infection_dist
 
 
 class SimpleSIRModel(CompartmentalModel):
@@ -65,26 +66,23 @@ class SimpleSIRModel(CompartmentalModel):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         rho = pyro.sample("rho", dist.Uniform(0, 1))
-
-        # Convert interpretable parameters to distribution parameters.
-        rate_s = -R0 / (tau * self.population)
-        prob_i = 1 / tau
-
-        return rate_s, prob_i, rho
+        return R0, tau, rho
 
     def initialize(self, params):
         # Start with a single infection.
         return {"S": self.population - 1, "I": 1}
 
     def transition_fwd(self, params, state, t):
-        rate_s, prob_i, rho = params
+        R0, tau, rho = params
 
         # Sample flows between compartments.
-        prob_s = -(rate_s * state["I"]).expm1()
         S2I = pyro.sample("S2I_{}".format(t),
-                          dist.Binomial(state["S"], prob_s))
+                          infection_dist(individual_rate=R0 / tau,
+                                         num_susceptible=state["S"],
+                                         num_infectious=state["I"],
+                                         population=self.population))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.Binomial(state["I"], prob_i))
+                          dist.Binomial(state["I"], 1 / tau))
 
         # Update compartments with flows.
         state["S"] = state["S"] - S2I
@@ -96,19 +94,21 @@ class SimpleSIRModel(CompartmentalModel):
                     obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
-        rate_s, prob_i, rho = params
+        R0, tau, rho = params
 
         # Reverse the flow computation.
         S2I = prev["S"] - curr["S"]
         I2R = prev["I"] - curr["I"] + S2I
 
         # Condition on flows between compartments.
-        prob_s = -(rate_s * prev["I"]).expm1()
         pyro.sample("S2I_{}".format(t),
-                    dist.ExtendedBinomial(prev["S"], prob_s),
+                    infection_dist(individual_rate=R0 / tau,
+                                   num_susceptible=prev["S"],
+                                   num_infectious=prev["I"],
+                                   population=self.population),
                     obs=S2I)
         pyro.sample("I2R_{}".format(t),
-                    dist.ExtendedBinomial(prev["I"], prob_i),
+                    dist.ExtendedBinomial(prev["I"], 1 / tau),
                     obs=I2R)
 
         # Condition on observations.

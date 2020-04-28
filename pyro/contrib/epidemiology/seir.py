@@ -9,6 +9,7 @@ import pyro.distributions as dist
 from pyro.ops.tensor_utils import convolve
 
 from .compartmental import CompartmentalModel
+from .distributions import infection_dist
 
 
 class SimpleSEIRModel(CompartmentalModel):
@@ -79,29 +80,25 @@ class SimpleSEIRModel(CompartmentalModel):
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         rho = pyro.sample("rho", dist.Uniform(0, 1))
-
-        # Convert interpretable parameters to distribution parameters.
-        rate_s = -R0 / (tau_i * self.population)
-        prob_e = 1 / tau_e
-        prob_i = 1 / tau_i
-
-        return rate_s, prob_e, prob_i, rho
+        return R0, tau_e, tau_i, rho
 
     def initialize(self, params):
         # Start with a single infection.
         return {"S": self.population - 1, "E": 0, "I": 1}
 
     def transition_fwd(self, params, state, t):
-        rate_s, prob_e, prob_i, rho = params
+        R0, tau_e, tau_i, rho = params
 
         # Sample flows between compartments.
-        prob_s = -(rate_s * state["I"]).expm1()
         S2E = pyro.sample("S2E_{}".format(t),
-                          dist.Binomial(state["S"], prob_s))
+                          infection_dist(individual_rate=R0 / tau_i,
+                                         num_susceptible=state["S"],
+                                         num_infectious=state["I"],
+                                         population=self.population))
         E2I = pyro.sample("E2I_{}".format(t),
-                          dist.Binomial(state["E"], prob_e))
+                          dist.Binomial(state["E"], 1 / tau_e))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.Binomial(state["I"], prob_i))
+                          dist.Binomial(state["I"], 1 / tau_i))
 
         # Update compartments with flows.
         state["S"] = state["S"] - S2E
@@ -114,7 +111,7 @@ class SimpleSEIRModel(CompartmentalModel):
                     obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
-        rate_s, prob_e, prob_i, rho = params
+        R0, tau_e, tau_i, rho = params
 
         # Reverse the flow computation.
         S2E = prev["S"] - curr["S"]
@@ -122,15 +119,17 @@ class SimpleSEIRModel(CompartmentalModel):
         I2R = prev["I"] - curr["I"] + E2I
 
         # Condition on flows between compartments.
-        prob_s = -(rate_s * prev["I"]).expm1()
         pyro.sample("S2E_{}".format(t),
-                    dist.ExtendedBinomial(prev["S"], prob_s),
+                    infection_dist(individual_rate=R0 / tau_i,
+                                   num_susceptible=prev["S"],
+                                   num_infectious=prev["I"],
+                                   population=self.population),
                     obs=S2E)
         pyro.sample("E2I_{}".format(t),
-                    dist.ExtendedBinomial(prev["E"], prob_e),
+                    dist.ExtendedBinomial(prev["E"], 1 / tau_e),
                     obs=E2I)
         pyro.sample("I2R_{}".format(t),
-                    dist.ExtendedBinomial(prev["I"], prob_i),
+                    dist.ExtendedBinomial(prev["I"], 1 / tau_i),
                     obs=I2R)
 
         # Condition on observations.
