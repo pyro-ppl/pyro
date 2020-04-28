@@ -54,7 +54,7 @@ def infection_dist(*,
         is the mean duration of infectiousness.
     :param num_infectious: The number of infectious individuals at this
         time step, sometimes ``I``, sometimes ``E+I``.
-    :param num_suceptible: The number ``S`` of susceptible individuals at this
+    :param num_susceptible: The number ``S`` of susceptible individuals at this
         time step. This defaults to an infinite population.
     :param population: The total number of individuals in a population.
         This defaults to an infinite population.
@@ -63,27 +63,25 @@ def infection_dist(*,
         variance ``concentration = ∞``.
     """
     # Convert to colloquial variable names.
-    R = torch.as_tensor(individual_rate)
-    I = torch.as_tensor(num_infectious)
-    S = torch.as_tensor(num_susceptible)
-    N = torch.as_tensor(population)
-    k = torch.as_tensor(concentration)
+    R = individual_rate
+    I = num_infectious
+    S = num_susceptible
+    N = population
+    k = concentration
 
     if population == math.inf:
-        mean = R * I
         if k == math.inf:
             # Return a Poisson distribution.
-            return dist.Poisson(mean)
+            return dist.Poisson(R * I)
         else:
             # Return an overdispersed Negative-Binomial distribution.
             combined_k = k * I
-            logits = (R / k).log()
+            logits = torch.as_tensor(R / k).log()
             return dist.NegativeBinomial(combined_k, logits=logits)
     else:
         # Compute the probability that any given (susceptible, infectious)
         # pair of individuals results in an infection at this time step.
-        p = R / N
-        assert (p <= 1).all(), "R > N"
+        p = torch.as_tensor(R / N).clamp(max=1 - 1e-6)
         # Combine infections from all individuals.
         combined_p = p.neg().log1p().mul(I).expm1().neg()  # = 1 - (1 - p)**I
         combined_p = combined_p.clamp(min=1e-6)
