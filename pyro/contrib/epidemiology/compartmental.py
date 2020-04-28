@@ -101,17 +101,40 @@ class CompartmentalModel(ABC):
     series = ()
     full_mass = False
 
-    @abstractmethod
-    def heuristic(self):
+    @torch.no_grad()
+    def heuristic(self, num_particles=1024):
         """
         Finds an initial feasible guess of all latent variables, consistent
         with observed data. This is needed because not all hypotheses are
         feasible and HMC needs to start at a feasible solution to progress.
 
+        The default implementation attempts to find a feasible state using
+        :class:`~pyro.infer.smcfilter.SMCFilter` proprosing from the prior.
+        However this method may be overridden in cases where SMC performs
+        poorly e.g. in high-dimensional models.
+
+        :param int num_particles: Number of particles used for SMC.
         :returns: A dictionary mapping sample site name to tensor value.
         :rtype: dict
         """
-        raise NotImplementedError
+        # Run SMC.
+        model = _SMCModel(self)
+        guide = _SMCGuide(self)
+        smc = SMCFilter(model, guide, num_particles=num_particles,
+                        max_plate_nesting=self.max_plate_nesting)
+        smc.init()
+        for t in range(1, self.duration):
+            smc.step()
+
+        # Select the most probably hypothesis.
+        i = int(smc.state._log_weights.max(0).indices)
+        init = {key: value[i] for key, value in smc.state.items()}
+
+        # Fill in sample site values.
+        init = self.generate(init)
+        init["auxiliary"] = torch.stack(
+            [init[name] for name in self.compartments]).clamp_(min=0.5)
+        return init
 
     def global_model(self):
         """
@@ -201,20 +224,6 @@ class CompartmentalModel(ABC):
 
         self._concat_series(samples)
         return samples
-
-    @torch.no_grad()
-    def smc_heuristic(self, num_particles=1024):
-        model = _SMCModel(self)
-        guide = _SMCGuide(self)
-        smc = SMCFilter(model, guide, num_particles=num_particles,
-                        max_plate_nesting=self.max_plate_nesting)
-        smc.init()
-        for t in range(1, self.duration):
-            smc.step()
-        i = int(smc.state._log_weights.max(0).indices)
-        sample = {key: value[i] for key, value in smc.state.items()}
-        sample = self.generate(sample)
-        return sample
 
     def fit(self, **options):
         r"""

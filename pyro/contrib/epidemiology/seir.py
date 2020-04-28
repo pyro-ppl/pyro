@@ -1,12 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
-from torch.nn.functional import pad
-
 import pyro
 import pyro.distributions as dist
-from pyro.ops.tensor_utils import convolve
 
 from .compartmental import CompartmentalModel
 
@@ -49,30 +45,6 @@ class SimpleSEIRModel(CompartmentalModel):
 
     series = ("S2E", "E2I", "I2R", "obs")
     full_mass = [("R0", "rho")]
-
-    def heuristic(self):
-        T = len(self.data)
-        # Start with a single exposure.
-        S0 = self.population - 1
-        # Assume 50% <= response rate <= 100%.
-        E2I = self.data * min(2., (S0 / self.data.sum()).sqrt())
-        # Assume recovery less than a month.
-        recovery = torch.arange(30.).div(self.recovery_time).neg().exp()
-        I_aux = convolve(E2I, recovery)[:T]
-        # Assume incubation takes less than a month.
-        incubation = torch.arange(30.).div(self.incubation_time).exp()
-        incubation = pad(incubation, (0, 1), value=0)
-        incubation /= incubation.sum()
-        S2E = convolve(E2I, incubation)
-        S2E_cumsum = S2E[:-T].sum() + S2E[-T:].cumsum(-1)
-        S_aux = S0 - S2E_cumsum
-        E_aux = S2E_cumsum - E2I.cumsum(-1)
-
-        return {
-            "R0": torch.tensor(2.0),
-            "rho": torch.tensor(0.5),
-            "auxiliary": torch.stack([S_aux, E_aux, I_aux]).clamp(min=0.5),
-        }
 
     def global_model(self):
         tau_e = self.incubation_time

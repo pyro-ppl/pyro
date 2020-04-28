@@ -1,11 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
-
 import pyro
 import pyro.distributions as dist
-from pyro.ops.tensor_utils import convolve
 
 from .compartmental import CompartmentalModel
 
@@ -42,34 +39,6 @@ class SimpleSIRModel(CompartmentalModel):
 
     series = ("S2I", "I2R", "obs")
     full_mass = [("R0", "rho")]
-
-    def old_heuristic(self):
-        # Start with a single infection.
-        S0 = self.population - 1
-        # Assume 50% <= response rate <= 100%.
-        S2I = self.data * min(2., (S0 / self.data.sum()).sqrt())
-        S_aux = S0 - S2I.cumsum(-1)
-        # Account for the single initial infection.
-        S2I[0] += 1
-        # Assume infection lasts less than a month.
-        recovery = torch.arange(30.).div(self.recovery_time).neg().exp()
-        I_aux = convolve(S2I, recovery)[:len(self.data)]
-
-        return {
-            "R0": torch.tensor(2.0),
-            "rho": torch.tensor(0.5),
-            "auxiliary": torch.stack([S_aux, I_aux]).clamp(min=0.5),
-        }
-
-    def heuristic(self):
-        sample = self.smc_heuristic()
-        S = sample["S"]
-        I = sample["I"]
-        return {
-            "R0": sample["R0"],
-            "rho": sample["rho"],
-            "auxiliary": torch.stack([S, I]).clamp(min=0.5),
-        }
 
     def global_model(self):
         tau = self.recovery_time
