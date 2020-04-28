@@ -155,26 +155,24 @@ class OverdispersedSIRModel(CompartmentalModel):
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         k = pyro.sample("k", dist.Exponential(1.))
         rho = pyro.sample("rho", dist.Uniform(0, 1))
-
-        # Convert interpretable parameters to distribution parameters.
-        prob_i = 1 / tau
-
-        return R0, k, prob_i, rho
+        return R0, k, tau, rho
 
     def initialize(self, params):
         # Start with a single infection.
         return {"S": self.population - 1, "I": 1}
 
     def transition_fwd(self, params, state, t):
-        R0, k, prob_i, rho = params
+        R0, k, tau, rho = params
 
         # Sample flows between compartments.
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.Binomial(state["I"], prob_i))
-        c1 = (k * I2R).clamp(min=1e-6)
-        c0 = k / R0 * self.population
+                          dist.Binomial(state["I"], 1 / tau))
         S2I = pyro.sample("S2I_{}".format(t),
-                          dist.BetaBinomial(c1, c0, state["S"]))
+                          infection_dist(individual_rate=R0,
+                                         num_susceptible=state["S"],
+                                         num_infectious=state["I"],
+                                         population=self.population,
+                                         concentration=k))
 
         # Update compartments with flows.
         state["S"] = state["S"] - S2I
@@ -186,20 +184,22 @@ class OverdispersedSIRModel(CompartmentalModel):
                     obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
-        R0, k, prob_i, rho = params
+        R0, k, tau, rho = params
 
         # Reverse the flow computation.
         S2I = prev["S"] - curr["S"]
         I2R = prev["I"] - curr["I"] + S2I
 
         # Condition on flows between compartments.
-        c1 = (k * I2R).clamp(min=1e-6)
-        c0 = k / R0 * self.population
         pyro.sample("S2I_{}".format(t),
-                    dist.ExtendedBetaBinomial(c1, c0, prev["S"]),
+                    infection_dist(individual_rate=R0,
+                                   num_susceptible=prev["S"],
+                                   num_infectious=prev["I"],
+                                   population=self.population,
+                                   concentration=k),
                     obs=S2I)
         pyro.sample("I2R_{}".format(t),
-                    dist.ExtendedBinomial(prev["I"], prob_i),
+                    dist.ExtendedBinomial(prev["I"], 1 / tau),
                     obs=I2R)
 
         # Condition on observations.
