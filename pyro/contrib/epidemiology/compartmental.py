@@ -14,7 +14,7 @@ import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import DiscreteCosineTransform
-from pyro.infer import MCMC, NUTS, infer_discrete
+from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
 from pyro.infer.autoguide import init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.util import warn_if_nan
@@ -199,6 +199,20 @@ class CompartmentalModel(ABC):
                               for name, site in trace.nodes.items()
                               if site["type"] == "sample")
 
+        self._concat_series(samples)
+        return samples
+
+    @torch.no_grad()
+    def smc_heuristic(self, num_particles=1024):
+        model = _SMCModel(self)
+        guide = _SMCGuide(self)
+        smc = SMCFilter(model, guide, num_particles=num_particles,
+                        max_plate_nesting=self.max_plate_nesting)
+        smc.init()
+        for t in range(1, self.duration):
+            smc.step()
+        i = int(smc.state._log_weights.max(0).index)
+        samples = smc.get_empirical()
         self._concat_series(samples)
         return samples
 
@@ -433,3 +447,70 @@ class CompartmentalModel(ABC):
         logp = logp.reshape(-1).logsumexp(0)
         warn_if_nan(logp)
         pyro.factor("transition", logp)
+
+
+class _SMCModel:
+    """
+    Helper to initialize a CompartmentalModel to an feasible initial state.
+    """
+    def __init__(self, model):
+        assert isinstance(model, CompartmentalModel)
+        self.model = model
+        self.params = None
+
+    def _dump_params(self, state, params=None, name=None):
+        if name is None:
+            params = self.params
+            name = "_params"
+
+        if params is None:
+            return
+        elif isinstance(params, torch.Tensor):
+            state[name] = params
+        elif isinstance(params, (tuple, list)):
+            for i, p in enumerate(params):
+                self._dump_params(state, p, "{}.{}".format(name, i))
+        elif isinstance(params, dict):
+            for i, p in params.items():
+                self._dump_params(state, p, "{}.{}".format(name, i))
+        else:
+            raise TypeError(params)
+
+    def _load_params(self, state, params=None, name=None):
+        if name is None:
+            params = self.params
+            name = "_params"
+
+        if params is None:
+            return None
+        elif isinstance(params, torch.Tensor):
+            return state[name]
+        elif isinstance(params, (tuple, list)):
+            return type(params)(
+                self._load_params(self, state, p, "{}.{}".format(name, i))
+                for i, p in enumerate(params))
+        elif isinstance(params, dict):
+            return type(params)(
+                (i, self._load_params(self, state, p, "{}.{}".format(name, i)))
+                for i, p in params.items())
+        else:
+            raise TypeError(params)
+
+    def init(self, state):
+        self.t = 0
+        self.params = self.model.global_model()
+        self._dump_params(state)
+        state.update(self.model.initialize(self.params))
+        self.step(state)  # Take one step since model.initialize is deterministic.
+
+    def step(self, state):
+        params = self._load_params(state)
+        self.transition_fwd(params, state, self.t)
+        self.t += 1
+
+
+class _SMCGuide(_SMCModel):
+    def step(self, state):
+        # Like _SMCModel.step() but do not observe and do not update state.
+        with poutine.block(hide_types=["observe"]):
+            super().step(state.copy())
