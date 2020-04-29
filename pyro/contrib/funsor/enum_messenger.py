@@ -198,10 +198,13 @@ class ReplayMessenger(OrigReplayMessenger):
                 return None
             if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sample in trace".format(name))
-            msg["done"] = True
             # TODO make this work with sequential enumeration
-            msg["value"] = guide_msg["value"]  # to_data(guide_msg["infer"]["funsor_value"])  # only difference is here
+            if guide_msg["infer"].get("funsor_value", None) is not None:
+                msg["value"] = to_data(guide_msg["infer"]["funsor_value"])  # only difference is here
+            else:
+                msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
+            msg["done"] = True
 
 
 def enum_seq(fn=None, queue=None,

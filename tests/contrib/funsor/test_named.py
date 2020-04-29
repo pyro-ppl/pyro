@@ -617,7 +617,7 @@ def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
         with x_plate, y_plate:
             pyro.sample("d", dist.Bernoulli(Vindex(q)[b] if reuse_plate else 0.5))
 
-        assert c.shape != b.shape
+        assert c.shape != b.shape or enumerate_ == "sequential"
 
     assert_ok(model, max_plate_nesting=2)
 
@@ -645,8 +645,8 @@ def test_enum_discrete_plate_shape_broadcasting_ok(subsampling, enumerate_):
             assert d.shape == (2, 1, 1, 1, 1)
         elif enumerate_ == "sequential":
             assert b.shape == (50, 1, x_plate.subsample_size)
-            assert c.shape == (1, 1, 1)
-            assert d.shape == (1, 1, 1)
+            assert c.shape in ((), (1, 1, 1))  # both are valid
+            assert d.shape in ((), (1, 1, 1))  # both are valid
         else:
             assert b.shape == (50, 1, x_plate.subsample_size)
             assert c.shape == (50, y_plate.subsample_size, 1)
