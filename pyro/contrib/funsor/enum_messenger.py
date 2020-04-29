@@ -72,8 +72,8 @@ class SubsampleMessenger(IndepMessenger):
         size, subsample_size, indices = OrigSubsampleMessenger._subsample(
             name, size, subsample_size, subsample, use_cuda, device)
         super().__init__(name, subsample_size, dim, indices)
+        self.subsample_size = subsample_size
         self._full_size = size
-        self._subsample_size = subsample_size
         self._scale = size / subsample_size
 
     def _pyro_sample(self, msg):
@@ -122,8 +122,7 @@ class EnumMessenger(BaseEnumMessenger):
     """
     def _pyro_sample(self, msg):
 
-        if msg["done"] or msg["is_observed"] or msg["infer"].get("expand", False) or \
-                msg["infer"].get("enumerate") != "parallel":
+        if msg["done"] or msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
             return
 
         if msg["infer"].get("num_samples", None) is not None:

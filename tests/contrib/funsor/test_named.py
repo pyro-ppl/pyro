@@ -537,16 +537,17 @@ def test_plate_dim_allocation_ok(plate_dims):
     assert_ok(model, max_plate_nesting=4)
 
 
+@pytest.mark.parametrize("subsampling", [False, True])
 @pytest.mark.parametrize("reuse_plate", [False, True])
-def test_enum_recycling_plate(reuse_plate):
+def test_enum_recycling_plate(subsampling, reuse_plate):
 
     @config_enumerate
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.tensor([0.5, 0.5]))
-        plate_x = pyro_plate("plate_x", 4, dim=-1)
-        plate_y = pyro_plate("plate_y", 5, dim=-1)
-        plate_z = pyro_plate("plate_z", 6, dim=-2)
+        plate_x = pyro_plate("plate_x", 4, subsample_size=3 if subsampling else None, dim=-1)
+        plate_y = pyro_plate("plate_y", 5, subsample_size=3 if subsampling else None, dim=-1)
+        plate_z = pyro_plate("plate_z", 6, subsample_size=3 if subsampling else None, dim=-2)
 
         a = pyro.sample("a", dist.Bernoulli(q[0])).long()
         w = 0
@@ -607,13 +608,14 @@ def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
     assert_ok(model, max_plate_nesting=2)
 
 
+@pytest.mark.parametrize('subsampling', [False, True])
 @pytest.mark.parametrize('enumerate_', [None, "parallel"])
-def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_):
+def test_enum_discrete_plate_shape_broadcasting_ok(subsampling, enumerate_):
 
     @config_enumerate(default=enumerate_)
     def model():
-        x_plate = pyro_plate("x_plate", 5, dim=-1)
-        y_plate = pyro_plate("y_plate", 6, dim=-2)
+        x_plate = pyro_plate("x_plate", 5, subsample_size=2 if subsampling else None, dim=-1)
+        y_plate = pyro_plate("y_plate", 6, subsample_size=3 if subsampling else None, dim=-2)
         with pyro_plate("num_particles", 50, dim=-3):
             with x_plate:
                 b = pyro.sample("b", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
@@ -624,23 +626,24 @@ def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_):
 
         # check shapes
         if enumerate_ == "parallel":
-            assert b.shape == (50, 1, 5)
+            assert b.shape == (50, 1, x_plate.subsample_size)
             assert c.shape == (2, 1, 1, 1)
             assert d.shape == (2, 1, 1, 1, 1)
         else:
-            assert b.shape == (50, 1, 5)
-            assert c.shape == (50, 6, 1)
-            assert d.shape == (50, 6, 5)
+            assert b.shape == (50, 1, x_plate.subsample_size)
+            assert c.shape == (50, y_plate.subsample_size, 1)
+            assert d.shape == (50, y_plate.subsample_size, x_plate.subsample_size)
 
     assert_ok(model, max_plate_nesting=3)
 
 
+@pytest.mark.parametrize('subsampling', [False, True])
 @pytest.mark.parametrize('enumerate_', [None, "parallel"])
-def test_enum_discrete_iplate_plate_dependency_ok(enumerate_):
+def test_enum_discrete_iplate_plate_dependency_ok(subsampling, enumerate_):
 
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
-        inner_plate = pyro_plate("plate", 10)
+        inner_plate = pyro_plate("plate", 10, subsample_size=4 if subsampling else None)
         for i in pyro_plate("iplate", 3):  # use regular sequential plate here...
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
             with inner_plate:
