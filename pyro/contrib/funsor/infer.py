@@ -6,7 +6,7 @@ import funsor
 import pyro
 from pyro.infer import ELBO
 
-from pyro.contrib.funsor import to_funsor
+from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.enum_messenger import EnumMessenger, ReplayMessenger, TraceMessenger
 
 funsor.set_backend("torch")
@@ -44,7 +44,7 @@ class TraceEnum_ELBO(ELBO):
                     plates=plate_vars & frozenset(factor.inputs)
                 )
 
-        return elbo.data
+        return to_data(elbo)
 
 
 class TraceTMC_ELBO(ELBO):
@@ -74,4 +74,4 @@ class TraceTMC_ELBO(ELBO):
                 funsor.ops.logaddexp, funsor.ops.add,
                 measures + factors, eliminate=sum_vars, plates=plate_vars
             )
-        return funsor.optimizer.apply_optimizer(elbo).data
+        return to_data(funsor.optimizer.apply_optimizer(elbo))

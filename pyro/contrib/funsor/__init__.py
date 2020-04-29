@@ -42,10 +42,7 @@ def markov(fn=None, history=1, keep=False):
     if fn is None:
         # Used as a decorator with bound args
         return LocalNamedMessenger(history=history, keep=keep)
-    if not callable(fn):
-        # Used as a generator
-        return LocalNamedMessenger(history=history, keep=keep).generator(iterable=fn)
-    # Used as a decorator with bound args
+    # Used as a decorator or iterator with bound args
     return LocalNamedMessenger(history=history, keep=keep)(fn)
 
 

@@ -11,6 +11,7 @@ import funsor
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
+from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
@@ -150,6 +151,8 @@ class TraceMessenger(OrigTraceMessenger):
     converting all distributions and values to Funsors as soon as they are available.
     """
     def _pyro_post_sample(self, msg):
+        if isinstance(msg["fn"], _Subsample):
+            return super()._pyro_post_sample(msg)
         if "funsor_fn" not in msg["infer"]:
             msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
         if "funsor_log_prob" not in msg["infer"]:
@@ -168,8 +171,12 @@ class PackTraceMessenger(OrigTraceMessenger):
     which can be passed directly to funsor.to_funsor.
     """
     def _pyro_post_sample(self, msg):
+        if isinstance(msg["fn"], _Subsample):
+            return super()._pyro_post_sample(msg)
         msg["infer"]["dim_to_name"] = NamedMessenger._get_dim_to_name(msg["fn"].batch_shape)
-        super()._pyro_post_sample(msg)
+        msg["infer"]["dim_to_name"].update(NamedMessenger._get_dim_to_name(
+            msg["value"].shape[:len(msg["value"]).shape - len(msg["fn"].event_shape)]))
+        return super()._pyro_post_sample(msg)
 
 
 class ReplayMessenger(OrigReplayMessenger):
