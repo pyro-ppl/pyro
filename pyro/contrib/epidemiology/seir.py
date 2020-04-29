@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import pyro
 import pyro.distributions as dist
 
@@ -158,7 +160,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
         transitions. This allows false negative but no false positives.
     """
 
-    def __init__(self, population, incubation_time, recovery_time, data):
+    def __init__(self, population, incubation_time, recovery_time, data, phy_data=None):
         compartments = ("S", "E", "I")  # R is implicit.
         duration = len(data)
         super().__init__(compartments, duration, population)
@@ -172,6 +174,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
         self.recovery_time = recovery_time
 
         self.data = data
+        self.phy_data = phy_data
 
     series = ("S2E", "E2I", "I2R", "obs")
     full_mass = [("R0", "rho", "k")]
@@ -204,6 +207,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
                                          concentration=k))
 
         # Update compartements with flows.
+        I_prev, S_prev = state["I"], state["S"]
         state["S"] = state["S"] - S2E
         state["E"] = state["E"] + S2E - E2I
         state["I"] = state["I"] + E2I - I2R
@@ -212,6 +216,31 @@ class OverdispersedSEIRModel(CompartmentalModel):
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(E2I, rho),
                     obs=self.data[t] if t < self.duration else None)
+
+        if self.phy_data is not None:
+            R = R0 * S_prev / self.population
+            coal_rate = R * (1. + 1. / k) / (I_prev * tau_i)
+            weight = 0.
+            for binom_coeff, time_to_next_event in zip(self.phy_data[t]['binomial'],
+                                                       self.phy_data[t]['intervals']):
+                if I_prev <= 1. or I_prev * (I_prev - 1.) / 2. < binom_coeff:
+                    weight = -math.inf
+                    break
+                coal_rate_population = binom_coeff * coal_rate
+                if time_to_next_event < 0.:
+                    # Coalescent ended interval
+                    if coal_rate == 0.:
+                        # If epidemic has died out before the most recent tip
+                        weight = -math.inf
+                        break
+                    time_to_coal = -time_to_next_event
+                    weight = weight + coal_rate_population.log()
+                    weight = weight - coal_rate_population * time_to_coal
+                else:
+                    # Sampling ended interval, or the end of the simulation time step
+                    weight = weight - coal_rate_population * time_to_next_event
+
+            pyro.factor(f"phy_{t}", weight)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, k, tau_e, tau_i, rho = params
