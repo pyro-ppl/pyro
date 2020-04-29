@@ -3,6 +3,8 @@
 
 import math
 
+import torch
+
 import pyro
 import pyro.distributions as dist
 
@@ -158,6 +160,8 @@ class OverdispersedSEIRModel(CompartmentalModel):
     :param iterable data: Time series of new observed infections. Each time
         step is Binomial distributed between 0 and the number of ``E -> I``
         transitions. This allows false negative but no false positives.
+    :param iterable phy_data: Time series of phylogenetic data in the form of
+        binomial coefficients and intervals between coalescent events as used in [2]
     """
 
     def __init__(self, population, incubation_time, recovery_time, data, phy_data=None):
@@ -217,20 +221,29 @@ class OverdispersedSEIRModel(CompartmentalModel):
                     dist.ExtendedBinomial(E2I, rho),
                     obs=self.data[t] if t < self.duration else None)
 
-        if self.phy_data is not None:
+        if self.phy_data is not None and t < len(self.phy_data):
             R = R0 * S_prev / self.population
             coal_rate = R * (1. + 1. / k) / (I_prev * tau_i)
-            weight = 0.
+            weight = torch.zeros_like(R)
+            # TODO does the preprocessed input data contain binomial or binomial_coeff?
             for binom_coeff, time_to_next_event in zip(self.phy_data[t]['binomial'],
                                                        self.phy_data[t]['intervals']):
-                if I_prev <= 1. or I_prev * (I_prev - 1.) / 2. < binom_coeff:
+                if binom_coeff <= 0:
+                    continue
+                invalid = (I_prev <= 1.) | (I_prev * (I_prev - 1.) / 2. < binom_coeff)
+                if isinstance(invalid, torch.Tensor):
+                    weight[invalid] = -math.inf
+                elif invalid:
                     weight = -math.inf
                     break
                 coal_rate_population = binom_coeff * coal_rate
                 if time_to_next_event < 0.:
                     # Coalescent ended interval
-                    if coal_rate == 0.:
-                        # If epidemic has died out before the most recent tip
+                    invalid_t = coal_rate == 0.
+                    # If epidemic has died out before the most recent tip
+                    if isinstance(invalid_t, torch.Tensor):
+                        weight[invalid_t] = -math.inf
+                    elif invalid_t:
                         weight = -math.inf
                         break
                     time_to_coal = -time_to_next_event
@@ -239,6 +252,8 @@ class OverdispersedSEIRModel(CompartmentalModel):
                 else:
                     # Sampling ended interval, or the end of the simulation time step
                     weight = weight - coal_rate_population * time_to_next_event
+
+            print(f"phy_{t}", weight)
 
             pyro.factor(f"phy_{t}", weight)
 

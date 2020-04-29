@@ -8,31 +8,19 @@
 import argparse
 import logging
 import math
+import os
 import pickle
 
 import torch
 
 import pyro
-from pyro.contrib.epidemiology import OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel
+from pyro.contrib.epidemiology import OverdispersedSEIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
-def Model(args, data):
-    """Dispatch between different model classes."""
-    if args.incubation_time > 0:
-        assert args.incubation_time > 1
-        if args.concentration == math.inf:
-            return SimpleSEIRModel(args.population, args.incubation_time,
-                                   args.recovery_time, data)
-        else:
-            return OverdispersedSEIRModel(args.population, args.incubation_time,
-                                          args.recovery_time, data)
-    else:
-        if args.concentration == math.inf:
-            return SimpleSIRModel(args.population, args.recovery_time, data)
-        else:
-            return OverdispersedSIRModel(args.population, args.recovery_time, data)
+DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "processed_epigen_data.pkl")
 
 
 def infer(args, model):
@@ -132,12 +120,23 @@ def main(args):
     with open(args.data_path, 'rb') as f:
         dataset = pickle.load(f)
 
-    obs = torch.tensor(dataset["epi"][3::4])
-    args.duration = len(obs)
-    import pdb; pdb.set_trace()
+    obs_epi = torch.tensor(dataset["epi"][3::4])
+    obs_phy = [{k: torch.tensor(v) for k, v in row.items()}
+               for row in dataset["phy"][3::4]]
+
+    assert len(obs_epi) == len(obs_phy)
+    if args.duration is not None:
+        obs_epi = obs_epi[:args.duration]
+        obs_phy = obs_phy[:args.duration]
+
+    args.duration = len(obs_epi)
+
+    logging.info("Observed {:d} infections:\n{}".format(
+        int(obs_epi.sum().item()), " ".join(str(int(x)) for x in obs_epi)))
 
     # Run inference.
-    model = Model(args, obs)
+    model = OverdispersedSEIRModel(args.population, args.incubation_time,
+                                   args.recovery_time, obs_epi, phy_data=obs_phy)
     samples = infer(args, model)
 
     # Evaluate fit.
@@ -145,7 +144,7 @@ def main(args):
 
     # Predict latent time series.
     if args.forecast:
-        predict(args, model)  # , truth=dataset["new_I"])
+        predict(args, model)
 
 
 if __name__ == "__main__":
@@ -153,14 +152,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=int)
-    #parser.add_argument("-m", "--min-observations", default=3, type=int)
-    #parser.add_argument("-d", "--duration", default=20, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
-    parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
-    parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
-    parser.add_argument("-e", "--incubation-time", default=0.0, type=float,
+    parser.add_argument("-d", "--duration", type=int)
+    parser.add_argument("-R0", "--basic-reproduction-number", default=2.5, type=float)
+    parser.add_argument("-tau", "--recovery-time", default=14.0, type=float)
+    parser.add_argument("-e", "--incubation-time", default=2.0, type=float,
                         help="If zero, use SIR model; if > 1 use SEIR model.")
-    parser.add_argument("-k", "--concentration", default=math.inf, type=float,
+    parser.add_argument("-k", "--concentration", default=1.0, type=float,
                         help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("--dct", type=float,
@@ -174,7 +172,7 @@ if __name__ == "__main__":
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
-    parser.add_argument("--data-path", type=str)
+    parser.add_argument("--data-path", default=DEFAULT_DATA_FILE)
     args = parser.parse_args()
 
     if args.double:
