@@ -101,6 +101,7 @@ def evaluate(args, samples):
     # Optionally plot histograms.
     if args.plot:
         import matplotlib.pyplot as plt
+        from matplotlib.pylab import cm
         import seaborn as sns
         fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
         axes[0].set_title("Posterior parameter estimates")
@@ -112,6 +113,37 @@ def evaluate(args, samples):
             ax.set_yticks(())
             ax.legend(loc="best")
         plt.tight_layout()
+
+        # Plot traces.
+        scalars = {}
+        vectors = {}
+        for k, v in samples.items():
+            if v.dim() == 1:
+                scalars[k] = v
+            elif v.dim() == 2:
+                vectors[k] = v
+            elif v.dim() == 3:
+                for i, v in enumerate(v.unbind(1)):
+                    vectors["{}[{}]".format(k, i)] = v
+        if scalars:
+            fig, axes = plt.subplots(
+                len(scalars), figsize=(6, 2 * len(scalars)), sharex=True)
+            axes[0].set_title("Trace plots")
+            for (name, y), ax in zip(scalars.items(), axes):
+                ax.plot(y)
+                ax.set_ylabel(name)
+            ax.set_xlim(0, len(y) - 1)
+            ax.set_xlabel("MCMC step")
+            fig.subplots_adjust(hspace=0)
+        for name, ys in vectors.items():
+            plt.figure(figsize=(6, 3))
+            plt.title("Trace plot (color denotes MCMC step)".format(name))
+            colors = cm.jet(torch.linspace(0, 1, len(ys)).numpy())
+            for y, c in zip(ys, colors):
+                plt.plot(y, color=c, lw=0.5)
+            plt.xlim(0, len(y) - 1)
+            plt.ylabel(name)
+            plt.xlabel("model time step")
 
 
 def predict(args, model, truth):
