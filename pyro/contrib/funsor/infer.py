@@ -3,7 +3,6 @@
 
 import funsor
 
-import pyro
 from pyro.infer import ELBO
 
 from pyro.contrib.funsor import to_data, to_funsor
@@ -20,7 +19,7 @@ class TraceEnum_ELBO(ELBO):
             guide(*args, **kwargs)
         with TraceMessenger() as model_tr, ReplayMessenger(trace=guide_tr.trace):
             model(*args, **kwargs)
-        factors, measures, sum_vars, plate_vars = [], [], frozenset(), frozenset()
+        factors, measures, measure_vars, plate_vars = [], [], frozenset(), frozenset()
         for role, trace in zip(("model", "guide"), (model_tr.trace, guide_tr.trace)):
             for name, node in trace.nodes.items():
                 if role == "model":
@@ -29,7 +28,7 @@ class TraceEnum_ELBO(ELBO):
                     factors.append(-node["infer"]["funsor_log_prob"])
                     measures.append(node["infer"]["funsor_log_measure"])
                 plate_vars |= frozenset(f.name for f in node["cond_indep_stack"])
-                sum_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs) - plate_vars
+                measure_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs) - plate_vars
 
         # TODO support model enumeration
         # compute actual loss
@@ -37,10 +36,10 @@ class TraceEnum_ELBO(ELBO):
         # TODO get this optimizer call right
         with funsor.interpreter.interpretation(funsor.optimizer.optimize), funsor.memoize.memoize():
             for factor in factors:
-                elbo += funsor.sum_product.sum_product(
+                elbo = elbo + funsor.sum_product.sum_product(
                     funsor.ops.add, funsor.ops.mul,
                     [lm.exp() for lm in measures] + [factor],
-                    eliminate=measure_vars | frozenset(factor.inputs) - plate_vars,
+                    eliminate=measure_vars | frozenset(factor.inputs) | plate_vars,
                     plates=plate_vars & frozenset(factor.inputs)
                 )
 
@@ -69,9 +68,9 @@ class TraceTMC_ELBO(ELBO):
                 plate_vars |= frozenset(f.name for f in node["cond_indep_stack"])
                 sum_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs) - plate_vars
 
-        with funsor.interpreter.interpretation(funsor.terms.normalize):
+        with funsor.interpreter.interpretation(funsor.terms.lazy):
             elbo = funsor.sum_product.sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
-                measures + factors, eliminate=sum_vars, plates=plate_vars
+                measures + factors, eliminate=sum_vars | plate_vars, plates=plate_vars
             )
         return to_data(funsor.optimizer.apply_optimizer(elbo))
