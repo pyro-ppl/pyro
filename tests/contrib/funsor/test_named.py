@@ -643,6 +643,10 @@ def test_enum_discrete_plate_shape_broadcasting_ok(subsampling, enumerate_):
             assert b.shape == (50, 1, x_plate.subsample_size)
             assert c.shape == (2, 1, 1, 1)
             assert d.shape == (2, 1, 1, 1, 1)
+        elif enumerate_ == "sequential":
+            assert b.shape == (50, 1, x_plate.subsample_size)
+            assert c.shape == (1, 1, 1)
+            assert d.shape == (1, 1, 1)
         else:
             assert b.shape == (50, 1, x_plate.subsample_size)
             assert c.shape == (50, y_plate.subsample_size, 1)
