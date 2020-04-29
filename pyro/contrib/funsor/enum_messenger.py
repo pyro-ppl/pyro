@@ -199,7 +199,8 @@ class ReplayMessenger(OrigReplayMessenger):
             if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sample in trace".format(name))
             msg["done"] = True
-            msg["value"] = to_data(guide_msg["funsor"]["funsor_value"])  # only difference is here
+            # TODO make this work with sequential enumeration
+            msg["value"] = guide_msg["value"]  # to_data(guide_msg["infer"]["funsor_value"])  # only difference is here
             msg["infer"] = guide_msg["infer"]
 
 

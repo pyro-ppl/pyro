@@ -5,6 +5,7 @@ from collections import OrderedDict, defaultdict
 import contextlib
 import logging
 import os
+import queue
 
 import pytest
 import torch
@@ -13,12 +14,13 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
+from pyro.infer.enum import iter_discrete_escape, iter_discrete_extend
 from pyro.ops.indexing import Vindex
 from pyro.util import check_traceenum_requirements
 
 from pyro.contrib.funsor import to_data, to_funsor, markov
 from pyro.contrib.funsor.named_messenger import _DIM_STACK, GlobalNamedMessenger
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger, TraceMessenger
+from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger, TraceMessenger, enum_seq
 
 logger = logging.getLogger(__name__)
 
@@ -55,21 +57,33 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     Assert that enumeration runs...
     """
     pyro.clear_param_store()
-    with toggle_backend("pyro"), poutine.trace() as tr_pyro:
-        with poutine.enum(first_available_dim=-max_plate_nesting - 1):
-            model(**kwargs)
+    q_pyro, q_funsor = queue.LifoQueue(), queue.LifoQueue()
+    q_pyro.put(poutine.Trace())
+    q_funsor.put(poutine.Trace())
+    while not q_pyro.empty() and not q_funsor.empty():
+        with toggle_backend("pyro"), poutine.trace() as tr_pyro:
+            with poutine.enum(first_available_dim=-max_plate_nesting - 1):
+                poutine.queue(
+                    model, q_pyro, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
+                )(**kwargs)
 
-    with toggle_backend("funsor"), TraceMessenger() as tr_funsor:
-        with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
-            model(**kwargs)
+        with toggle_backend("funsor"), TraceMessenger() as tr_funsor:
+            with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
+                enum_seq(
+                    model, q_funsor, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
+                )(**kwargs)
 
-    # make sure all dimensions were cleaned up
-    assert len(_DIM_STACK._stack) == 1
-    assert not _DIM_STACK.global_frame.name_to_dim and not _DIM_STACK.global_frame.dim_to_name
-    assert _DIM_STACK.outermost is None
+        # make sure all dimensions were cleaned up
+        assert len(_DIM_STACK._stack) == 1
+        assert not _DIM_STACK.global_frame.name_to_dim and not _DIM_STACK.global_frame.dim_to_name
+        assert _DIM_STACK.outermost is None
 
-    tr_pyro = poutine.util.prune_subsample_sites(tr_pyro.trace)
-    tr_funsor = poutine.util.prune_subsample_sites(tr_funsor.trace)
+        tr_pyro = poutine.util.prune_subsample_sites(tr_pyro.trace.copy())
+        tr_funsor = poutine.util.prune_subsample_sites(tr_funsor.trace.copy())
+        _check_traces(tr_pyro, tr_funsor)
+
+
+def _check_traces(tr_pyro, tr_funsor):
 
     assert tr_pyro.nodes.keys() == tr_funsor.nodes.keys()
     tr_pyro.compute_log_prob()
@@ -498,7 +512,7 @@ def test_markov_history(max_plate_nesting, history):
     assert_ok(model, max_plate_nesting=max_plate_nesting)
 
 
-@pytest.mark.parametrize('enumerate_', [None, "parallel"])
+@pytest.mark.parametrize('enumerate_', [None, "parallel", "sequential"])
 def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
 
     def model():
@@ -585,7 +599,7 @@ def test_enum_recycling_plate(subsampling, reuse_plate):
     assert_ok(model, max_plate_nesting=2)
 
 
-@pytest.mark.parametrize("enumerate_", [None, "parallel"])
+@pytest.mark.parametrize("enumerate_", [None, "parallel", "sequential"])
 @pytest.mark.parametrize("reuse_plate", [True, False])
 def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
 
@@ -609,7 +623,7 @@ def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
 
 
 @pytest.mark.parametrize('subsampling', [False, True])
-@pytest.mark.parametrize('enumerate_', [None, "parallel"])
+@pytest.mark.parametrize('enumerate_', [None, "parallel", "sequential"])
 def test_enum_discrete_plate_shape_broadcasting_ok(subsampling, enumerate_):
 
     @config_enumerate(default=enumerate_)
@@ -638,7 +652,7 @@ def test_enum_discrete_plate_shape_broadcasting_ok(subsampling, enumerate_):
 
 
 @pytest.mark.parametrize('subsampling', [False, True])
-@pytest.mark.parametrize('enumerate_', [None, "parallel"])
+@pytest.mark.parametrize('enumerate_', [None, "parallel", "sequential"])
 def test_enum_discrete_iplate_plate_dependency_ok(subsampling, enumerate_):
 
     def model():
