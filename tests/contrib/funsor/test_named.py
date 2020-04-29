@@ -644,7 +644,7 @@ def test_enum_discrete_iplate_plate_dependency_ok(subsampling, enumerate_):
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
         inner_plate = pyro_plate("plate", 10, subsample_size=4 if subsampling else None)
-        for i in pyro_plate("iplate", 3):  # use regular sequential plate here...
+        for i in pyro_plate("iplate", 10, subsample=torch.arange(3) if subsampling else None):
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
             with inner_plate:
                 pyro.sample("x_{}".format(i), dist.Bernoulli(0.5),
