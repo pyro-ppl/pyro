@@ -225,7 +225,6 @@ class OverdispersedSEIRModel(CompartmentalModel):
             R = R0 * S_prev / self.population
             coal_rate = R * (1. + 1. / k) / (I_prev * tau_i)
             weight = torch.zeros_like(R)
-            # TODO does the preprocessed input data contain binomial or binomial_coeff?
             for binom_coeff, time_to_next_event in zip(self.phy_data[t]['binomial'],
                                                        self.phy_data[t]['intervals']):
                 if binom_coeff <= 0:
