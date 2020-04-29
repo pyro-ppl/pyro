@@ -4,11 +4,17 @@
 This file contains reimplementations of some of Pyro's core enumeration machinery,
 which should eventually be drop-in replacements for the current versions.
 """
+import functools
+from queue import LifoQueue
 from collections import OrderedDict
 
 import funsor
 
+import pyro.poutine.runtime
+import pyro.poutine.util
+
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
+from pyro.poutine.escape_messenger import EscapeMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 from pyro.poutine.subsample_messenger import _Subsample
@@ -195,3 +201,52 @@ class ReplayMessenger(OrigReplayMessenger):
             msg["done"] = True
             msg["value"] = to_data(guide_msg["funsor"]["funsor_value"])  # only difference is here
             msg["infer"] = guide_msg["infer"]
+
+
+def enum_seq(fn=None, queue=None,
+             max_tries=int(1e6), num_samples=-1,
+             extend_fn=pyro.poutine.util.enum_extend,
+             escape_fn=pyro.poutine.util.discrete_escape):
+    """
+    Used in sequential enumeration over discrete variables (copied from poutine.queue).
+
+    Given a stochastic function and a queue,
+    return a return value from a complete trace in the queue.
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :param q: a queue data structure like multiprocessing.Queue to hold partial traces
+    :param max_tries: maximum number of attempts to compute a single complete trace
+    :param extend_fn: function (possibly stochastic) that takes a partial trace and a site,
+        and returns a list of extended traces
+    :param escape_fn: function (possibly stochastic) that takes a partial trace and a site,
+        and returns a boolean value to decide whether to exit
+    :param num_samples: optional number of extended traces for extend_fn to return
+    :returns: stochastic function decorated with poutine logic
+    """
+    # TODO rewrite this to use purpose-built trace/replay handlers
+    if queue is None:
+        queue = LifoQueue()
+
+    def wrapper(wrapped):
+        def _fn(*args, **kwargs):
+
+            for i in range(max_tries):
+                assert not queue.empty(), \
+                    "trying to get() from an empty queue will deadlock"
+
+                next_trace = queue.get()
+                try:
+                    ftr = TraceMessenger()(
+                        EscapeMessenger(escape_fn=functools.partial(escape_fn, next_trace))(
+                            ReplayMessenger(trace=next_trace)(wrapped)))
+                    return ftr(*args, **kwargs)
+                except pyro.poutine.runtime.NonlocalExit as site_container:
+                    site_container.reset_stack()  # TODO implement missing ._reset()s
+                    for tr in extend_fn(ftr.trace.copy(), site_container.site,
+                                        num_samples=num_samples):
+                        queue.put(tr)
+
+            raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
+        return _fn
+
+    return wrapper(fn) if fn is not None else wrapper
