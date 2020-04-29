@@ -79,6 +79,10 @@ class SubsampleMessenger(IndepMessenger):
         super()._pyro_sample(msg)
         msg["scale"] = msg["scale"] * self._scale
 
+    def _pyro_param(self, msg):
+        super()._pyro_param(msg)
+        msg["scale"] = msg["scale"] * self._scale
+
 
 class SequentialPlateMessenger(LocalNamedMessenger):
     def __init__(self, name=None, size=None, dim=None):
@@ -86,6 +90,10 @@ class SequentialPlateMessenger(LocalNamedMessenger):
         super().__init__(history=0, keep=False)
 
     def _pyro_sample(self, msg):
+        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+
+    def _pyro_param(self, msg):
         frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
 
