@@ -1,0 +1,1 @@
+from pyro.contrib.randomvariable.random_variable import RandomVariable

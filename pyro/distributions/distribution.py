@@ -4,6 +4,7 @@
 from abc import ABCMeta, abstractmethod
 
 from pyro.distributions.score_parts import ScoreParts
+# from pyro.contrib.randomvariable import RandomVariable as RV
 
 
 class Distribution(object, metaclass=ABCMeta):
@@ -166,3 +167,7 @@ class Distribution(object, metaclass=ABCMeta):
             raise ValueError("Expected value in {False,True}, actual {}".format(value))
         self.has_rsample = value
         return self
+
+    # @property
+    # def rv(self):
+    #     return RV(self)
