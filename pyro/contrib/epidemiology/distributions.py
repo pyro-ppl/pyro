@@ -68,8 +68,8 @@ def infection_dist(*,
     N = population
     k = concentration
 
-    if population == math.inf:
-        if k == math.inf:
+    if isinstance(N, float) and N == math.inf:
+        if isinstance(k, float) and k == math.inf:
             # Return a Poisson distribution.
             return dist.Poisson(R * I)
         else:
@@ -85,7 +85,7 @@ def infection_dist(*,
         combined_p = p.neg().log1p().mul(I).expm1().neg()  # = 1 - (1 - p)**I
         combined_p = combined_p.clamp(min=1e-6)
 
-        if k == math.inf:
+        if isinstance(k, float) and k == math.inf:
             # Return a pure Binomial model, combining the independent Binomial
             # models of each infectious individual.
             return dist.ExtendedBinomial(S, combined_p)
@@ -93,6 +93,6 @@ def infection_dist(*,
             # Return an overdispersed Beta-Binomial model, combining
             # independent BetaBinomial(c1,c0,S) models for each infectious
             # individual.
-            c1 = k * I
+            c1 = (k * I).clamp(min=1e-6)
             c0 = c1 * (combined_p.reciprocal() - 1).clamp(min=1e-6)
             return dist.ExtendedBetaBinomial(c1, c0, S)
