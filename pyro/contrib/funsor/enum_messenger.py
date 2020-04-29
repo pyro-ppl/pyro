@@ -11,6 +11,7 @@ import funsor
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
+from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor import to_funsor, to_data
@@ -24,28 +25,26 @@ class MarkovMessenger(LocalNamedMessenger):
     """
     LocalNamedMessenger is meant to be a drop-in replacement for pyro.markov.
     """
-    def __call__(self, fn):
-        if fn is not None and not callable(fn):
-            return self.generator(iterable=fn)
-        return super().__call__(fn)
+    pass
 
 
 class IndepMessenger(GlobalNamedMessenger):
     """
     Sketch of vectorized plate implementation using to_data instead of _DIM_ALLOCATOR.
     """
-    def __init__(self, name=None, size=None, dim=None):
+    def __init__(self, name=None, size=None, dim=None, indices=None):
         assert size > 1
         assert dim is None or dim < 0
         super().__init__()
         self.name = name
         self.size = size
         self.dim = dim
+        if indices is None:
+            indices = funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size)
+        assert len(indices) == size
 
         self._indices = funsor.Tensor(
-            funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size),
-            OrderedDict([(self.name, funsor.bint(self.size))]),
-            self.size
+            indices, OrderedDict([(self.name, funsor.bint(self.size))]), self.size
         )
 
     def __enter__(self):
@@ -65,6 +64,22 @@ class IndepMessenger(GlobalNamedMessenger):
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
 
 
+class SubsampleMessenger(IndepMessenger):
+
+    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
+                 use_cuda=None, device=None):
+        size, subsample_size, indices = OrigSubsampleMessenger._subsample(
+            name, size, subsample_size, subsample, use_cuda, device)
+        super().__init__(name, subsample_size, dim, indices)
+        self._full_size = size
+        self._subsample_size = subsample_size
+        self._scale = size / subsample_size
+
+    def _pyro_sample(self, msg):
+        super()._pyro_sample(msg)
+        msg["scale"] = msg["scale"] * self._scale
+
+
 class SequentialPlateMessenger(LocalNamedMessenger):
     def __init__(self, name=None, size=None, dim=None):
         self.name, self.size, self.dim, self.counter = name, size, dim, 0
@@ -75,7 +90,7 @@ class SequentialPlateMessenger(LocalNamedMessenger):
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
 
 
-class PlateMessenger(IndepMessenger):
+class PlateMessenger(SubsampleMessenger):
     """
     Combines new IndepMessenger implementation with existing BroadcastMessenger.
     Should eventually be a drop-in replacement for pyro.plate.
@@ -86,7 +101,7 @@ class PlateMessenger(IndepMessenger):
 
     def __iter__(self):
         c = SequentialPlateMessenger(self.name, self.size, self.dim)
-        for i in c:
+        for i in c(range(self.size)):
             c.counter += 1
             yield i
 

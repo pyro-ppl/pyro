@@ -250,9 +250,11 @@ class LocalNamedMessenger(NamedMessenger):
         self._iter_parents = ()
         super().__init__()
 
-    def generator(self, iterable):
-        self._iterable = iterable
-        return self
+    def __call__(self, fn):
+        if fn is not None and not callable(fn):
+            self._iterable = fn
+            return self
+        return super().__call__(fn)
 
     def _get_iter_parents(self, frame):
         iter_parents = [frame]
