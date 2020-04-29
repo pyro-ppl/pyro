@@ -25,8 +25,9 @@ class SimpleSEIRModel(CompartmentalModel):
         ``E``). Must be greater than 1.
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
-    :param iterable data: Time series of new observed infections, i.e. a
-        Binomial subset of the ``E -> I`` transitions at each time step.
+    :param iterable data: Time series of new observed infections. Each time
+        step is Binomial distributed between 0 and the number of ``E -> I``
+        transitions. This allows false negative but no false positives.
     """
 
     def __init__(self, population, incubation_time, recovery_time, data):
@@ -130,7 +131,11 @@ class OverdispersedSEIRModel(CompartmentalModel):
     Poisson distribution [1,2] to the setting of finite populations. To
     preserve Markov structure, we follow [2] and assume all infections by a
     single individual occur on the single time step where that individual makes
-    an ``I -> R`` transition.
+    an ``I -> R`` transition. That is, whereas the :class:`SimpleSEIRModel`
+    assumes infected individuals infect `Binomial(S,R/tau)`-many susceptible
+    individuals during each infected time step (over `tau`-many steps on
+    average), this model assumes they infect `BetaBinomial(k,...,S)`-many
+    susceptible individuals but only on the final time step before recovering.
 
     **References**
 
@@ -148,8 +153,9 @@ class OverdispersedSEIRModel(CompartmentalModel):
         ``E``). Must be greater than 1.
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
-    :param iterable data: Time series of new observed infections, i.e. a
-        Binomial subset of the ``E -> I`` transitions at each time step.
+    :param iterable data: Time series of new observed infections. Each time
+        step is Binomial distributed between 0 and the number of ``E -> I``
+        transitions. This allows false negative but no false positives.
     """
 
     def __init__(self, population, incubation_time, recovery_time, data):
