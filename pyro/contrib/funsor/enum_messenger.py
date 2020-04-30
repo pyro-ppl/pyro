@@ -173,8 +173,7 @@ def _tmc_sample_full(msg):
 def _tmc_sample_enum(msg):
     dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
     raw_value = msg["fn"].enumerate_support(expand=msg["infer"].get("expand", False))
-    size = raw_value.shape[0]
-    return dist, to_funsor(raw_value, output=funsor.bint(size))
+    return dist, to_funsor(raw_value, output=dist.inputs[msg['name']])
 
 
 def enumerate_site(msg):
