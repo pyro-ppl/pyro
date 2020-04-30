@@ -673,3 +673,21 @@ def test_enum_discrete_iplate_plate_dependency_ok(subsampling, enumerate_):
                             infer={'enumerate': enumerate_})
 
     assert_ok(model, max_plate_nesting=1)
+
+
+@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parametrize("num_samples", [None, 2])
+def test_plate_subsample_primitive_ok(subsample_size, num_samples):
+
+    @config_enumerate(num_samples=num_samples, tmc="diagonal")
+    def model():
+        with pyro_plate("plate", 10, subsample_size=subsample_size, dim=None):
+            p0 = torch.tensor(0.)
+            p0 = pyro.subsample(p0, event_dim=0)
+            assert p0.shape == ()
+            p = 0.5 * torch.ones(10)
+            p = pyro.subsample(p, event_dim=0)
+            assert len(p) == subsample_size
+            pyro.sample("x", dist.Bernoulli(p))
+
+    assert_ok(model, max_plate_nesting=1)
