@@ -192,7 +192,6 @@ def _enum_strategy_mixture(msg):
         name: funsor.distributions.Categorical(
             # sample different ancestors for each plate slice
             logits=funsor.Tensor(
-                # TODO use backend-agnostic op
                 funsor.ops.new_zeros(1).expand(tuple(plate_inputs.values()) + (dist.inputs[name].dtype,)),
                 plate_inputs
             ),
