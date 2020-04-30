@@ -136,7 +136,10 @@ def _check_traces(tr_pyro, tr_funsor):
                 funsor_node = tr_funsor.nodes[name]
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
                 funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
-                assert pyro_names == funsor_names
+                try:
+                    assert pyro_names == funsor_names
+                except AssertionError:
+                    assert pyro_names == frozenset(name.replace('__PARTICLES', '') for name in funsor_names)
         except AssertionError:
             for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
@@ -551,11 +554,12 @@ def test_plate_dim_allocation_ok(plate_dims):
     assert_ok(model, max_plate_nesting=4)
 
 
+@pytest.mark.parametrize("tmc_strategy", [None, "diagonal"])
 @pytest.mark.parametrize("subsampling", [False, True])
 @pytest.mark.parametrize("reuse_plate", [False, True])
-def test_enum_recycling_plate(subsampling, reuse_plate):
+def test_enum_recycling_plate(subsampling, reuse_plate, tmc_strategy):
 
-    @config_enumerate
+    @config_enumerate(default="parallel", tmc=tmc_strategy, num_samples=2 if tmc_strategy else None)
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.tensor([0.5, 0.5]))

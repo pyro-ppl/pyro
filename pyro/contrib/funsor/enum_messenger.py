@@ -137,55 +137,66 @@ def _get_delta_point(funsor_dist, name):
         raise ValueError("Could not extract point from {} at name {}".format(funsor_dist, name))
 
 
-def _tmc_sample_diagonal(msg):
+def _enum_strategy_diagonal(msg):
     dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg["infer"]["num_samples"])})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"])
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
-                               and k not in plate_names)
+                               and k != msg['name'] and k not in plate_names)
     ancestor_indices = {name: sample_dim_name for name in ancestor_names}
-    sampled_dist = dist(**ancestor_indices).sample({sample_dim_name: msg["infer"]["num_samples"]})
+    sampled_dist = dist(**ancestor_indices).sample(
+        msg['name'], sample_inputs if not ancestor_indices else None)
     return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
 
 
-def _tmc_sample_mixture(msg):
+def _enum_strategy_mixture(msg):
     dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg['infer']['num_samples'])})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"])
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
-                               and k not in plate_names)
+                               and k != msg['name'] and k not in plate_names)
     ancestor_indices = {
         name: funsor.distributions.Categorical(logits=...).sample(  # TODO finish
-            {sample_dim_name: msg["infer"]["num_samples"]})
+            name, sample_inputs)
         for name in ancestor_names
     }
-    sampled_dist = dist(**ancestor_indices).sample({sample_dim_name: msg["infer"]["num_samples"]})
+    sampled_dist = dist(**ancestor_indices).sample(
+        msg['name'], sample_inputs if not ancestor_indices else None)
     return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
 
 
-def _tmc_sample_full(msg):
+def _enum_strategy_full(msg):
     dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
-    sampled_dist = dist.sample({sample_dim_name: msg["infer"]["num_samples"]})
+    sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg["infer"]["num_samples"])})
+    sampled_dist = dist.sample(msg['name'], sample_inputs)
     return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
 
 
-def _tmc_sample_enum(msg):
+def _enum_strategy_enum(msg):
     dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
     raw_value = msg["fn"].enumerate_support(expand=msg["infer"].get("expand", False))
-    return dist, to_funsor(raw_value, output=dist.inputs[msg['name']])
+    size = raw_value.numel()
+    funsor_value = funsor.Tensor(
+        raw_value.squeeze(),
+        OrderedDict([(msg["name"], funsor.bint(size))]),
+        size
+    )
+    return dist, funsor_value
 
 
 def enumerate_site(msg):
     if msg["infer"].get("num_samples", None) is None:
-        return _tmc_sample_enum(msg)
+        return _enum_strategy_enum(msg)
     elif msg["infer"]["num_samples"] > 1 and \
             (msg["infer"].get("expand", False) or msg["infer"].get("tmc") == "full"):
-        return _tmc_sample_full(msg)
+        return _enum_strategy_full(msg)
     elif msg["infer"]["num_samples"] > 1 and msg["infer"].get("tmc", "diagonal") == "diagonal":
-        return _tmc_sample_diagonal(msg)
+        return _enum_strategy_diagonal(msg)
     elif msg["infer"]["num_samples"] > 1 and msg["infer"]["tmc"] == "mixture":
-        return _tmc_sample_mixture(msg)
+        return _enum_strategy_mixture(msg)
     raise ValueError("{} not valid enum strategy".format(msg))
 
 
@@ -195,7 +206,8 @@ class EnumMessenger(BaseEnumMessenger):
     for each discrete sample site.
     """
     def _pyro_sample(self, msg):
-        if msg["done"] or msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
+        if msg["done"] or msg["is_observed"] or msg["infer"].get("enumerate") != "parallel" \
+                or isinstance(msg["fn"], _Subsample):
             return
 
         msg["infer"]["funsor_log_measure"], msg["infer"]["funsor_value"] = enumerate_site(msg)
