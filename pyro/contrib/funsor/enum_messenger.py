@@ -121,31 +121,85 @@ class PlateMessenger(SubsampleMessenger):
             yield i
 
 
+def _get_delta_point(funsor_dist, name):
+    assert isinstance(funsor_dist, funsor.terms.Funsor)
+    assert name in funsor_dist.inputs
+    if isinstance(funsor_dist, funsor.delta.Delta):
+        return OrderedDict(funsor_dist.terms)[name][0]
+    elif isinstance(funsor_dist, funsor.cnf.Contraction):
+        delta_terms = [v for v in funsor_dist.terms
+                       if isinstance(v, funsor.delta.Delta) and name in v.fresh]
+        assert len(delta_terms) == 1
+        return _get_delta_point(delta_terms[0], name)
+    elif isinstance(funsor_dist, funsor.Tensor):
+        return funsor_dist
+    else:
+        raise ValueError("Could not extract point from {} at name {}".format(funsor_dist, name))
+
+
+def _tmc_sample_diagonal(msg):
+    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+    sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    plate_names = frozenset(f.name for f in msg["cond_indep_stack"])
+    ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
+                               and k not in plate_names)
+    ancestor_indices = {name: sample_dim_name for name in ancestor_names}
+    sampled_dist = dist(**ancestor_indices).sample({sample_dim_name: msg["infer"]["num_samples"]})
+    return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
+
+
+def _tmc_sample_mixture(msg):
+    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+    sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    plate_names = frozenset(f.name for f in msg["cond_indep_stack"])
+    ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
+                               and k not in plate_names)
+    ancestor_indices = {
+        name: funsor.distributions.Categorical(logits=...).sample(  # TODO finish
+            {sample_dim_name: msg["infer"]["num_samples"]})
+        for name in ancestor_names
+    }
+    sampled_dist = dist(**ancestor_indices).sample({sample_dim_name: msg["infer"]["num_samples"]})
+    return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
+
+
+def _tmc_sample_full(msg):
+    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+    sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    sampled_dist = dist.sample({sample_dim_name: msg["infer"]["num_samples"]})
+    return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
+
+
+def _tmc_sample_enum(msg):
+    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+    raw_value = msg["fn"].enumerate_support(expand=msg["infer"].get("expand", False))
+    size = raw_value.shape[0]
+    return dist, to_funsor(raw_value, output=funsor.bint(size))
+
+
+def enumerate_site(msg):
+    if msg["infer"].get("num_samples", None) is None:
+        return _tmc_sample_enum(msg)
+    elif msg["infer"]["num_samples"] > 1 and \
+            (msg["infer"].get("expand", False) or msg["infer"].get("tmc") == "full"):
+        return _tmc_sample_full(msg)
+    elif msg["infer"]["num_samples"] > 1 and msg["infer"].get("tmc", "diagonal") == "diagonal":
+        return _tmc_sample_diagonal(msg)
+    elif msg["infer"]["num_samples"] > 1 and msg["infer"]["tmc"] == "mixture":
+        return _tmc_sample_mixture(msg)
+    raise ValueError("{} not valid enum strategy".format(msg))
+
+
 class EnumMessenger(BaseEnumMessenger):
     """
     This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
     for each discrete sample site.
     """
     def _pyro_sample(self, msg):
-
         if msg["done"] or msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
             return
 
-        if msg["infer"].get("num_samples", None) is not None:
-            raise NotImplementedError("TODO implement multiple sampling")
-
-        if msg["infer"].get("expand", False):
-            raise NotImplementedError("expand=True not implemented")
-
-        msg["infer"]["funsor_log_measure"] = to_funsor(msg["fn"], funsor.reals())(value=msg["name"])
-        raw_value = msg["fn"].enumerate_support(expand=False).squeeze()
-        size = raw_value.numel()
-        msg["infer"]["funsor_value"] = funsor.Tensor(
-            raw_value,
-            OrderedDict([(msg["name"], funsor.bint(size))]),
-            size
-        )
-
+        msg["infer"]["funsor_log_measure"], msg["infer"]["funsor_value"] = enumerate_site(msg)
         msg["value"] = to_data(msg["infer"]["funsor_value"])
         msg["done"] = True
 
