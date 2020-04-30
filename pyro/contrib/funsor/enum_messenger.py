@@ -169,9 +169,10 @@ def _enum_strategy_diagonal(msg):
     dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
     sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg["infer"]["num_samples"])})
-    plate_names = frozenset(f.name for f in msg["cond_indep_stack"])
+    plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
                                and k != msg['name'] and k not in plate_names)
+    # TODO should the ancestor_indices be pyro.observed?
     ancestor_indices = {name: sample_dim_name for name in ancestor_names}
     sampled_dist = dist(**ancestor_indices).sample(
         msg['name'], sample_inputs if not ancestor_indices else None)
@@ -182,12 +183,20 @@ def _enum_strategy_mixture(msg):
     dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
     sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg['infer']['num_samples'])})
-    plate_names = frozenset(f.name for f in msg["cond_indep_stack"])
+    plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
                                and k != msg['name'] and k not in plate_names)
+    plate_inputs = OrderedDict((k, dist.inputs[k]) for k in plate_names)
+    # TODO should the ancestor_indices be pyro.sampled?
     ancestor_indices = {
-        name: funsor.distributions.Categorical(logits=...).sample(  # TODO finish
-            name, sample_inputs)
+        name: funsor.distributions.Categorical(
+            # sample different ancestors for each plate slice
+            logits=funsor.Tensor(
+                # TODO use backend-agnostic op
+                funsor.ops.new_zeros(1).expand(tuple(plate_inputs.values()) + (dist.inputs[name].dtype,)),
+                plate_inputs
+            ),
+        )(value=name).sample(name, sample_inputs)
         for name in ancestor_names
     }
     sampled_dist = dist(**ancestor_indices).sample(
@@ -216,6 +225,7 @@ def _enum_strategy_enum(msg):
 
 
 def enumerate_site(msg):
+    # TODO come up with a better dispatch system for enumeration strategies
     if msg["infer"].get("num_samples", None) is None:
         return _enum_strategy_enum(msg)
     elif msg["infer"]["num_samples"] > 1 and \
