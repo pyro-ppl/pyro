@@ -26,7 +26,7 @@ class SimpleSEIRModel(CompartmentalModel):
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections. Each time
-        step is Binomial distributed between 0 and the number of ``E -> I``
+        step is Binomial distributed between 0 and the number of ``S -> E``
         transitions. This allows false negative but no false positives.
     """
 
@@ -80,7 +80,7 @@ class SimpleSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
@@ -107,7 +107,7 @@ class SimpleSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t])
 
 
@@ -154,7 +154,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections. Each time
-        step is Binomial distributed between 0 and the number of ``E -> I``
+        step is Binomial distributed between 0 and the number of ``S -> E``
         transitions. This allows false negative but no false positives.
     """
 
@@ -210,7 +210,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
@@ -238,5 +238,5 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t])
