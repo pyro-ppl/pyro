@@ -48,7 +48,7 @@ class TraceEnum_ELBO(ELBO):
                     plates=plate_vars & frozenset(factor.inputs)
                 )
 
-        return to_data(elbo)
+        return -to_data(elbo)
 
 
 class TraceTMC_ELBO(ELBO):
@@ -57,9 +57,9 @@ class TraceTMC_ELBO(ELBO):
         raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with TraceMessenger() as guide_tr, EnumMessenger(-self.max_plate_nesting-1):
+        with TraceMessenger() as guide_tr, EnumMessenger(-1-self.max_plate_nesting):
             guide(*args, **kwargs)
-        with TraceMessenger() as model_tr, EnumMessenger(-self.max_plate_nesting-1), \
+        with TraceMessenger() as model_tr, EnumMessenger(-1-self.max_plate_nesting), \
                 ReplayMessenger(trace=guide_tr.trace):
             model(*args, **kwargs)
         factors, measures, sum_vars, plate_vars = [], [], frozenset(), frozenset()
@@ -72,15 +72,18 @@ class TraceTMC_ELBO(ELBO):
                     factors.append(node["infer"]["funsor_log_prob"])
                     if name not in guide_tr.trace.nodes and not node["is_observed"]:
                         measures.append(node["infer"]["funsor_log_measure"])
+                        sum_vars |= frozenset(node["infer"]["funsor_log_measure"].inputs)
                 elif role == "guide":
                     factors.append(-node["infer"]["funsor_log_prob"])
                     measures.append(node["infer"]["funsor_log_measure"])
+                    sum_vars |= frozenset(node["infer"]["funsor_log_measure"].inputs)
                 plate_vars |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-                sum_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs) - plate_vars
+                sum_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs)
+                sum_vars -= plate_vars
 
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             elbo = funsor.sum_product.sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
                 measures + factors, eliminate=sum_vars | plate_vars, plates=plate_vars
             )
-        return to_data(funsor.optimizer.apply_optimizer(elbo))
+        return -to_data(funsor.optimizer.apply_optimizer(elbo))
