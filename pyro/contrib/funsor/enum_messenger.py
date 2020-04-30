@@ -47,12 +47,14 @@ class IndepMessenger(GlobalNamedMessenger):
         self.name = name
         self.size = size
         self.dim = dim
+        if not hasattr(self, "_full_size"):
+            self._full_size = size
         if indices is None:
             indices = funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size)
         assert len(indices) == size
 
         self._indices = funsor.Tensor(
-            indices, OrderedDict([(self.name, funsor.bint(self.size))]), self.size
+            indices, OrderedDict([(self.name, funsor.bint(self.size))]), self._full_size
         )
 
     def __enter__(self):
@@ -78,10 +80,11 @@ class SubsampleMessenger(IndepMessenger):
                  use_cuda=None, device=None):
         size, subsample_size, indices = OrigSubsampleMessenger._subsample(
             name, size, subsample_size, subsample, use_cuda, device)
-        super().__init__(name, subsample_size, dim, indices)
         self.subsample_size = subsample_size
         self._full_size = size
         self._scale = size / subsample_size
+        # initialize other things last
+        super().__init__(name, subsample_size, dim, indices)
 
     def _pyro_sample(self, msg):
         super()._pyro_sample(msg)

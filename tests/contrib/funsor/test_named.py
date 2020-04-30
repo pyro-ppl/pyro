@@ -687,7 +687,7 @@ def test_plate_subsample_primitive_ok(subsample_size, num_samples):
             assert p0.shape == ()
             p = 0.5 * torch.ones(10)
             p = pyro.subsample(p, event_dim=0)
-            assert len(p) == subsample_size
+            assert len(p) == (subsample_size if subsample_size else 10)
             pyro.sample("x", dist.Bernoulli(p))
 
     assert_ok(model, max_plate_nesting=1)
