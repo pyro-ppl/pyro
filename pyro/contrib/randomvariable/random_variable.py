@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Union, Callable
+from typing import Union
 
 from torch import Tensor
 from pyro.distributions import TransformedDistribution
@@ -112,7 +112,7 @@ class RandomVariable(RVMagicOps, RVChainOps):
     def transform(self, t: Transform):
         """Performs a transformation on the distribution underlying the RV.
 
-        :param t: The transformation (or sequence of transformations) to be 
+        :param t: The transformation (or sequence of transformations) to be
             applied to the distribution. There are many examples to be found in
             `torch.distributions.transforms` and `pyro.distributions.transforms`,
             or you can subclass directly from `Transform`.
