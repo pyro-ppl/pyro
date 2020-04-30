@@ -268,6 +268,22 @@ def test_enum_recycling_chain_iter(history):
     assert_ok(model, max_plate_nesting=0)
 
 
+@pytest.mark.xfail(reason="Pyro not handling mixed parallel/sequential enum well?")
+@pytest.mark.parametrize("history", [1, 2, 3])
+def test_enum_recycling_chain_iter_interleave_parallel_sequential(history):
+
+    def model():
+        p = torch.tensor([[0.2, 0.8], [0.1, 0.9]])
+
+        xs = [0]
+        for t in pyro_markov(range(10), history=history):
+            xs.append(pyro.sample("x_{}".format(t), dist.Categorical(p[xs[-1]]),
+                                  infer={"enumerate": ("sequential", "parallel")[t % 2]}))
+        assert all(x.dim() <= history + 1 for x in xs[1:])
+
+    assert_ok(model, max_plate_nesting=0)
+
+
 @pytest.mark.parametrize("history", [1, 2, 3])
 def test_enum_recycling_chain_while(history):
 
