@@ -50,16 +50,17 @@ def infection_dist(*,
     :param individual_rate: The mean number of infections per infectious
         individual per time step in the limit of large population, equal to
         ``R0 / tau`` where ``R0`` is the basic reproductive number and ``tau``
-        is the mean duration of infectiousness.
+        is the mean duration of infectiousness. Units: ``1 / time``.
     :param num_infectious: The number of infectious individuals at this
-        time step, sometimes ``I``, sometimes ``E+I``.
+        time step, sometimes ``I``, sometimes ``E+I``. Units: ``individuals``.
     :param num_susceptible: The number ``S`` of susceptible individuals at this
-        time step. This defaults to an infinite population.
+        time step. This defaults to an infinite population. Units:
+        ``individuals``.
     :param population: The total number of individuals in a population.
-        This defaults to an infinite population.
+        This defaults to an infinite population. Units: ``individuals``.
     :concentration: The concentration or dispersion parameter ``k`` in
         overdispersed models of superspreaders [1,2]. This defaults to minimum
-        variance ``concentration = ∞``.
+        variance ``concentration = ∞``. Units: ``1 / time``.
     """
     # Convert to colloquial variable names.
     R = individual_rate
