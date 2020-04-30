@@ -90,6 +90,16 @@ class SubsampleMessenger(IndepMessenger):
         super()._pyro_param(msg)
         msg["scale"] = msg["scale"] * self._scale
 
+    def _pyro_post_param(self, msg):
+        self.size = self._full_size  # TODO avoid this hack by implementing directly
+        OrigSubsampleMessenger._postprocess_message(self, msg)
+        self.size = self.subsample_size
+
+    def _pyro_post_subsample(self, msg):
+        self.size = self._full_size  # TODO avoid this hack by implementing directly
+        OrigSubsampleMessenger._postprocess_message(self, msg)
+        self.size = self.subsample_size
+
 
 class SequentialPlateMessenger(LocalNamedMessenger):
     def __init__(self, name=None, size=None, dim=None):
