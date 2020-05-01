@@ -215,7 +215,7 @@ class OverdispersedSIRModel(CompartmentalModel):
                     obs=self.data[t])
 
 
-class TruncatedSIRModel(CompartmentalModel):
+class UnknownStartSIRModel(CompartmentalModel):
     """
     Susceptible-Infected-Recovered model with unknown date of first infection.
 
@@ -225,6 +225,10 @@ class TruncatedSIRModel(CompartmentalModel):
     compartments: "S" for susceptible, "I" for infected, and "R" for
     recovered individuals (the recovered individuals are implicit: ``R =
     population - S - I``) with transitions ``S -> I -> R``.
+
+    This model demonstrates (1) how to incorporate spontaneous infections from
+    external sources and (2) how to override the :meth:`predict` method to
+    compute extra statistics.
 
     :param int population: Total ``population = S + I + R``.
     :param float recovery_time: Mean recovery time (duration in state
@@ -249,34 +253,35 @@ class TruncatedSIRModel(CompartmentalModel):
         self.pre_window = pre_window
         self.post_window = len(data)
 
-        # Assume an average of one external infection during the pre_window.
+        # Expect a single external infection during the pre_window.
         self.external_rate = 1 / pre_window
 
-        # Prepend data with 
+        # Prepend data with zeros.
         if isinstance(data, list):
-            data = [0] * self.pre_window + data
+            data = [0.] * self.pre_window + data
         else:
-            data = pad(data, (self.pre_window, 0), value=0)
+            data = pad(data, (self.pre_window, 0), value=0.)
         self.data = data
 
     series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho01", "rho1")]
+    full_mass = [("R0", "rho0", "rho1")]
 
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
 
-        # Assume two different response rates, a lower response rate rho0
-        # before any observations were made (in pre_window), followed by a
-        # higher response rate rho1 after observations were made (in data).
-        rho01 = pyro.sample("rho01", dist.Uniform(0, 1))
+        # Assume two different response rates: rho0 before any observations
+        # were made (in pre_window), followed by a higher response rate rho1
+        # after observations were made (in post_window).
+        rho0 = pyro.sample("rho0", dist.Uniform(0, 1))
         rho1 = pyro.sample("rho1", dist.Uniform(0, 1))
-        rho0 = rho1 * rho01
-        rho0 = rho0.unsqueeze(-1).expand(rho0.shape + (self.pre_window,))
-        rho1 = rho1.unsqueeze(-1).expand(rho1.shape + (self.post_window,))
-        rho = torch.cat([rho0, rho1], dim=-1)
+        rho = torch.cat([
+            rho0.unsqueeze(-1).expand(rho0.shape + (self.pre_window,)),
+            rho1.unsqueeze(-1).expand(rho1.shape + (self.post_window,)),
+        ], dim=-1)
 
-        # Model external infections as an infectious pseudo-individual.
+        # Model external infections as an infectious pseudo-individual added
+        # to num_infectious when sampling S2I below.
         X = self.external_rate * tau / R0
 
         return R0, X, tau, rho
@@ -328,3 +333,14 @@ class TruncatedSIRModel(CompartmentalModel):
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I, rho[t]),
                     obs=self.data[t])
+
+    def predict(self, forecast=0):
+        """
+        Augments
+        :meth:`~pyro.contrib.epidemiology.compartmental.Compartmental.predict`
+        with samples of ``first_infection``.
+        """
+        samples = super().predict(forecast)
+        S2I = samples["S2I"]
+        samples["first_infection"] = (S2I > 0).max(-1).indices.type_as(S2I)
+        return samples

@@ -132,8 +132,8 @@ class CompartmentalModel(ABC):
 
         # Fill in sample site values.
         init = self.generate(init)
-        init["auxiliary"] = torch.stack(
-            [init[name] for name in self.compartments]).clamp_(min=0.5)
+        init["auxiliary"] = torch.stack([init[name] for name in self.compartments])
+        init["auxiliary"].clamp_(min=0.5, max=self.population - 0.5)
         return init
 
     def global_model(self):
@@ -303,7 +303,6 @@ class CompartmentalModel(ABC):
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
         samples = self.samples
-        print("DEBUG {}".format(samples.keys()))
         num_samples = len(next(iter(samples.values())))
         particle_plate = pyro.plate("particles", num_samples,
                                     dim=-1 - self.max_plate_nesting)
