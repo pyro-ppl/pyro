@@ -36,6 +36,8 @@ class TraceMessenger(OrigTraceMessenger):
                 value_output = funsor.reals(*getattr(msg["fn"], "event_shape", ()))
                 msg["infer"]["funsor_value"] = to_funsor(msg["value"], value_output)
         else:
+            # this logic has the same side effect on the _DIM_STACK as the above,
+            # but does not perform any tensor or funsor operations.
             msg["infer"]["dim_to_name"] = NamedMessenger._get_dim_to_name(msg["fn"].batch_shape)
             msg["infer"]["dim_to_name"].update(NamedMessenger._get_dim_to_name(
                 msg["value"].shape[:len(msg["value"]).shape - len(msg["fn"].event_shape)]))

@@ -3,7 +3,7 @@
 
 import funsor
 
-from pyro.infer import ELBO, SVI  # noqa: F401
+from pyro.infer import ELBO, SVI, config_enumerate  # noqa: F401
 from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data, to_funsor
