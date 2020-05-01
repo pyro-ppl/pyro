@@ -347,11 +347,11 @@ class UnknownStartSIRModel(CompartmentalModel):
     :param int population: Total ``population = S + I + R``.
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
+    :param int pre_window: Number of time steps before beginning ``data``
+        where the initial infection may have occurred. Must be positive.
     :param iterable data: Time series of new observed infections. Each time
         step is Binomial distributed between 0 and the number of ``S -> I``
         transitions. This allows false negative but no false positives.
-    :param float external_rate: Mean number of spontaneous infections per time
-        step caused by a source external to the target population.
     """
 
     def __init__(self, population, recovery_time, pre_window, data):
