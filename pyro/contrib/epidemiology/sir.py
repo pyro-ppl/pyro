@@ -224,7 +224,7 @@ class SparseSIRModel(CompartmentalModel):
     population - S - I``) with transitions ``S -> I -> R``.
 
     This model allows observations of **cumulative** infections at uneven time
-    intervals. To preserve Markov structure (and hence tractible inference)
+    intervals. To preserve Markov structure (and hence tractable inference)
     this model adds an auxiliary compartment ``O`` denoting the fully-observed
     cumulative number of observations at each time point. At observed times
     (when ``mask[t] == True``) ``O`` must exactly match the provided data;
