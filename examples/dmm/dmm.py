@@ -22,6 +22,7 @@ from os.path import exists
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.distributions as tdist
 
 import polyphonic_data_loader as poly
 import pyro
@@ -145,8 +146,11 @@ class DMM(nn.Module):
 
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
                  transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.0,
-                 num_iafs=0, iaf_dim=50, use_cuda=False):
+                 use_cuda=False, guide_family="meanfield"):
         super().__init__()
+        self.guide_family = guide_family
+        assert guide_family in ['meanfield', 'markov']
+        self.z_dim = z_dim
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
@@ -156,10 +160,6 @@ class DMM(nn.Module):
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
                           batch_first=True, bidirectional=False, num_layers=num_layers,
                           dropout=rnn_dropout_rate)
-
-        # if we're using normalizing flows, instantiate those too
-        self.iafs = [affine_autoregressive(z_dim, hidden_dims=[iaf_dim]) for _ in range(num_iafs)]
-        self.iafs_modules = nn.ModuleList(self.iafs)
 
         # define a (trainable) parameters z_0 and z_q_0 that help define the probability
         # distributions p(z_1) and q(z_1)
@@ -191,13 +191,15 @@ class DMM(nn.Module):
         z_shift = torch.cat([z_0, z[:, :-1, :]], dim=-2)
         z_loc, z_scale = self.trans(z_shift)
 
+        mask = mini_batch_mask.unsqueeze(-1)
+
         with poutine.scale(scale=annealing_factor):
             # actually compute p(z)
-            pyro.sample("z_aux", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3),
+            pyro.sample("z_aux", dist.Normal(z_loc, z_scale).mask(mask).to_event(3),
                         obs=z)
 
             emission_probs = self.emitter(z)
-            pyro.sample("obs_x", dist.Bernoulli(emission_probs).mask(mini_batch_mask.unsqueeze(-1)).to_event(3),
+            pyro.sample("obs_x", dist.Bernoulli(emission_probs).mask(mask).to_event(3),
                         obs=mini_batch)
 
     def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
@@ -214,7 +216,21 @@ class DMM(nn.Module):
         z_loc, z_scale = self.combiner(rnn_output)
 
         with pyro.poutine.scale(scale=annealing_factor):
-            pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
+
+            if self.guide_family == "meanfield":
+                pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
+            elif self.guide_family == "markov":
+                init_dist = tdist.MultivariateNormal(z_loc.new_zeros(self.z_dim),
+                                                     torch.eye(self.z_dim, dtype=z_loc.dtype, device=z_loc.device))
+                trans_cov = z_scale.unsqueeze(-1) * torch.eye(self.z_dim, dtype=z_loc.dtype, device=z_loc.device)
+                trans_dist = tdist.MultivariateNormal(z_loc.new_zeros(self.z_dim), trans_cov)
+                trans_matrix = pyro.param("trans_mat", lambda: 0.2 * torch.randn(self.z_dim, self.z_dim))
+                obs_matrix = torch.eye(self.z_dim, dtype=z_loc.dtype, device=z_loc.device)
+                obs_dist = tdist.MultivariateNormal(z_loc.new_zeros(self.z_dim), trans_cov)
+                hmm = dist.GaussianHMM(init_dist, trans_matrix, trans_dist,
+                                       obs_matrix, obs_dist.mask(mini_batch_mask), duration=T_max,
+                                       obs=z_loc)
+                pyro.sample("z", hmm.to_event(1))
 
 
 # setup, training, and evaluation
@@ -262,8 +278,7 @@ def main(args):
         test_seq_lengths, cuda=args.cuda)
 
     # instantiate the dmm
-    dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, num_iafs=args.num_iafs,
-              iaf_dim=args.iaf_dim, use_cuda=args.cuda)
+    dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, use_cuda=args.cuda, guide_family=args.guide_family)
 
     # setup optimizer
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
@@ -388,6 +403,7 @@ if __name__ == '__main__':
     #assert pyro.__version__.startswith('1.3.1')
 
     parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-gf', '--guide-family', type=str, default="markov")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)
     parser.add_argument('-b1', '--beta1', type=float, default=0.96)
@@ -399,8 +415,6 @@ if __name__ == '__main__':
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
     parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.2)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
-    parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
-    parser.add_argument('-id', '--iaf-dim', type=int, default=100)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')
     parser.add_argument('-lmod', '--load-model', type=str, default='')
