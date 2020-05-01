@@ -121,18 +121,18 @@ class Combiner(nn.Module):
         self.tanh = nn.Tanh()
         self.softplus = nn.Softplus()
 
-    def forward(self, z_t_1, h_rnn):
+    def forward(self, h_rnn):
         """
         Given the latent z at at a particular time step t-1 as well as the hidden
         state of the RNN `h(x_{t:T})` we return the mean and scale vectors that
         parameterize the (diagonal) gaussian distribution `q(z_t | z_{t-1}, x_{t:T})`
         """
         # combine the rnn hidden state with a transformed version of z_t_1
-        h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
+        #h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
         # use the combined hidden state to compute the mean used to sample z_t
-        loc = self.lin_hidden_to_loc(h_combined)
+        loc = self.lin_hidden_to_loc(h_rnn)
         # use the combined hidden state to compute the scale used to sample z_t
-        scale = self.softplus(self.lin_hidden_to_scale(h_combined))
+        scale = self.softplus(self.lin_hidden_to_scale(h_rnn))
         # return loc, scale which can be fed into Normal
         return loc, scale
 
@@ -178,108 +178,43 @@ class DMM(nn.Module):
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
-        # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
 
-        # register all PyTorch (sub)modules with pyro
-        # this needs to happen in both the model and guide
         pyro.module("dmm", self)
 
-        # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
-        z_prev = self.z_0.expand(mini_batch.size(0), self.z_0.size(0))
+        ones = torch.ones(mini_batch.size(0), T_max, self.z_0.size(0), dtype=self.z_0.dtype, device=self.z_0.device)
+        # note the mask
+        z = pyro.sample("z", dist.Normal(0.0, ones).mask(False).to_event(3))
 
-        # we enclose all the sample statements in the model in a plate.
-        # this marks that each datapoint is conditionally independent of the others
-        with pyro.plate("z_minibatch", len(mini_batch)):
-            # sample the latents z and observed x's one time step at a time
-            # we wrap this loop in pyro.markov so that TraceEnum_ELBO can use multiple samples from the guide at each z
-            for t in pyro.markov(range(1, T_max + 1)):
-                # the next chunk of code samples z_t ~ p(z_t | z_{t-1})
-                # note that (both here and elsewhere) we use poutine.scale to take care
-                # of KL annealing. we use the mask() method to deal with raggedness
-                # in the observed data (i.e. different sequences in the mini-batch
-                # have different lengths)
+        z_0 = self.z_0.expand(mini_batch.size(0), 1, self.z_0.size(0))
+        # shift z for autoregressive conditioning
+        z_shift = torch.cat([z_0, z[:, :-1, :]], dim=-2)
+        z_loc, z_scale = self.trans(z_shift)
 
-                # first compute the parameters of the diagonal gaussian distribution p(z_t | z_{t-1})
-                z_loc, z_scale = self.trans(z_prev)
+        with poutine.scale(scale=annealing_factor):
+            # actually compute p(z)
+            pyro.sample("z_aux", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3),
+                        obs=z)
 
-                # then sample z_t according to dist.Normal(z_loc, z_scale)
-                # note that we use the reshape method so that the univariate Normal distribution
-                # is treated as a multivariate Normal distribution with a diagonal covariance.
-                with poutine.scale(scale=annealing_factor):
-                    z_t = pyro.sample("z_%d" % t,
-                                      dist.Normal(z_loc, z_scale)
-                                          .mask(mini_batch_mask[:, t - 1:t])
-                                          .to_event(1))
+            emission_probs = self.emitter(z)
+            pyro.sample("obs_x", dist.Bernoulli(emission_probs).mask(mini_batch_mask.unsqueeze(-1)).to_event(3),
+                        obs=mini_batch)
 
-                # compute the probabilities that parameterize the bernoulli likelihood
-                emission_probs_t = self.emitter(z_t)
-                # the next statement instructs pyro to observe x_t according to the
-                # bernoulli distribution p(x_t|z_t)
-                pyro.sample("obs_x_%d" % t,
-                            dist.Bernoulli(emission_probs_t)
-                                .mask(mini_batch_mask[:, t - 1:t])
-                                .to_event(1),
-                            obs=mini_batch[:, t - 1, :])
-                # the latent sampled at this time step will be conditioned upon
-                # in the next time step so keep track of it
-                z_prev = z_t
-
-    # the guide q(z_{1:T} | x_{1:T}) (i.e. the variational distribution)
     def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
-        # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
-        # register all PyTorch (sub)modules with pyro
         pyro.module("dmm", self)
 
-        # if on gpu we need the fully broadcast view of the rnn initial state
-        # to be in contiguous gpu memory
         h_0_contig = self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
-        # push the observed x's through the rnn;
-        # rnn_output contains the hidden state at each time step
+
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-        # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
-        z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
+        z_loc, z_scale = self.combiner(rnn_output)
 
-        # we enclose all the sample statements in the guide in a plate.
-        # this marks that each datapoint is conditionally independent of the others.
-        with pyro.plate("z_minibatch", len(mini_batch)):
-            # sample the latents z one time step at a time
-            # we wrap this loop in pyro.markov so that TraceEnum_ELBO can use multiple samples from the guide at each z
-            for t in pyro.markov(range(1, T_max + 1)):
-                # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
-                z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t - 1, :])
-
-                # if we are using normalizing flows, we apply the sequence of transformations
-                # parameterized by self.iafs to the base distribution defined in the previous line
-                # to yield a transformed distribution that we use for q(z_t|...)
-                if len(self.iafs) > 0:
-                    z_dist = TransformedDistribution(dist.Normal(z_loc, z_scale), self.iafs)
-                    assert z_dist.event_shape == (self.z_q_0.size(0),)
-                    assert z_dist.batch_shape[-1:] == (len(mini_batch),)
-                else:
-                    z_dist = dist.Normal(z_loc, z_scale)
-                    assert z_dist.event_shape == ()
-                    assert z_dist.batch_shape[-2:] == (len(mini_batch), self.z_q_0.size(0))
-
-                # sample z_t from the distribution z_dist
-                with pyro.poutine.scale(scale=annealing_factor):
-                    if len(self.iafs) > 0:
-                        # in output of normalizing flow, all dimensions are correlated (event shape is not empty)
-                        z_t = pyro.sample("z_%d" % t,
-                                          z_dist.mask(mini_batch_mask[:, t - 1]))
-                    else:
-                        # when no normalizing flow used, ".to_event(1)" indicates latent dimensions are independent
-                        z_t = pyro.sample("z_%d" % t,
-                                          z_dist.mask(mini_batch_mask[:, t - 1:t])
-                                          .to_event(1))
-                # the latent sampled at this time step will be conditioned upon in the next time step
-                # so keep track of it
-                z_prev = z_t
+        with pyro.poutine.scale(scale=annealing_factor):
+            pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
 
 
 # setup, training, and evaluation
@@ -304,7 +239,7 @@ def main(args):
         (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
     # how often we do validation/test evaluation during training
-    val_test_frequency = 50
+    val_test_frequency = 10
     # the number of samples we use to do the evaluation
     n_eval_samples = 1
 
@@ -406,9 +341,9 @@ def main(args):
 
         # compute the validation and test loss n_samples many times
         val_nll = svi.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
-                                    val_seq_lengths) / torch.sum(val_seq_lengths)
+                                    val_seq_lengths) / float(torch.sum(val_seq_lengths))
         test_nll = svi.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
-                                     test_seq_lengths) / torch.sum(test_seq_lengths)
+                                     test_seq_lengths) / float(torch.sum(test_seq_lengths))
 
         # put the RNN back into training mode (i.e. turn on drop-out if applicable)
         dmm.rnn.train()
@@ -450,7 +385,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.3.1')
+    #assert pyro.__version__.startswith('1.3.1')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
