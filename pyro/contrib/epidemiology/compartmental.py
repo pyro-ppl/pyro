@@ -359,8 +359,7 @@ class CompartmentalModel(ABC):
                     series.append(samples.pop(key))
             if series:
                 assert len(series) == self.duration + forecast
-                series = list(map(torch.as_tensor, series))
-                series = torch.broadcast_tensors(*series)
+                series = torch.broadcast_tensors(*map(torch.as_tensor, series))
                 samples[name] = torch.stack(series, dim=-1)
 
     def _generative_model(self, forecast=0):
@@ -447,9 +446,7 @@ class CompartmentalModel(ABC):
             prev[name] = prev[name].reshape(enum_shape(e))
             curr[name] = curr[name].reshape(enum_shape(C + e))
             logp[name] = logp[name].reshape(enum_shape(C + e))
-        # This nonstandard time value is passed to user code to unsqueeze
-        # time series tensors.
-        t = (Ellipsis, slice(T)) + (None,) * (2 * C)
+        t = (Ellipsis,) + (None,) * (2 * C)  # Used to unsqueeze data tensors.
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
