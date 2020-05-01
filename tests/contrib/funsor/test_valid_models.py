@@ -5,7 +5,7 @@ from collections import OrderedDict, defaultdict
 import contextlib
 import logging
 import os
-import queue
+from queue import LifoQueue
 
 import pytest
 import torch
@@ -18,9 +18,10 @@ from pyro.infer.enum import iter_discrete_escape, iter_discrete_extend
 from pyro.ops.indexing import Vindex
 from pyro.util import check_traceenum_requirements
 
-from pyro.contrib.funsor import to_data, to_funsor, markov
-from pyro.contrib.funsor.named_messenger import _DIM_STACK, GlobalNamedMessenger
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger, TraceMessenger, enum_seq
+from pyro.contrib.funsor import to_data, to_funsor, markov, plate
+from pyro.contrib.funsor.handlers import enum, trace, queue
+from pyro.contrib.funsor.handlers.named_messenger import GlobalNamedMessenger
+from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def toggle_backend(backend):
 def pyro_plate(*args, **kwargs):
     global _ENUM_BACKEND_VERSION
     # TODO update to plate wrapper from pyro.contrib.funsor.__init__
-    return (PlateMessenger if _ENUM_BACKEND_VERSION == "funsor" else pyro.plate)(*args, **kwargs)
+    return (plate if _ENUM_BACKEND_VERSION == "funsor" else pyro.plate)(*args, **kwargs)
 
 
 def pyro_markov(*args, **kwargs):
@@ -57,7 +58,7 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
     Assert that enumeration runs...
     """
     pyro.clear_param_store()
-    q_pyro, q_funsor = queue.LifoQueue(), queue.LifoQueue()
+    q_pyro, q_funsor = LifoQueue(), LifoQueue()
     q_pyro.put(poutine.Trace())
     q_funsor.put(poutine.Trace())
     while not q_pyro.empty() and not q_funsor.empty():
@@ -67,9 +68,9 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
                     model, q_pyro, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
                 )(**kwargs)
 
-        with toggle_backend("funsor"), TraceMessenger() as tr_funsor:
-            with EnumMessenger(first_available_dim=-max_plate_nesting - 1):
-                enum_seq(
+        with toggle_backend("funsor"), trace() as tr_funsor:
+            with enum(first_available_dim=-max_plate_nesting - 1):
+                queue(
                     model, q_funsor, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
                 )(**kwargs)
 

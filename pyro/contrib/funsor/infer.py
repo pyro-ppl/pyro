@@ -7,7 +7,7 @@ from pyro.infer import ELBO
 from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data, to_funsor
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, ReplayMessenger, TraceMessenger
+from pyro.contrib.funsor.handlers import enum, replay, trace
 
 funsor.set_backend("torch")
 
@@ -19,14 +19,14 @@ class TraceEnum_ELBO(ELBO):
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
         # currently supports guide enumeration only, not mixed enumeration
-        with TraceMessenger() as guide_tr, EnumMessenger(-self.max_plate_nesting-1):
+        with trace() as guide_tr, enum(-self.max_plate_nesting-1):
             guide(*args, **kwargs)
-        with TraceMessenger() as model_tr, ReplayMessenger(trace=guide_tr.trace):
+        with trace() as model_tr, replay(trace=guide_tr.trace):
             model(*args, **kwargs)
         factors, measures, measure_vars, plate_vars = [], [], frozenset(), frozenset()
-        for role, trace in zip(("model", "guide"), (model_tr.trace, guide_tr.trace)):
-            trace = prune_subsample_sites(trace)
-            for name, node in trace.nodes.items():
+        for role, tr in zip(("model", "guide"), (model_tr.trace, guide_tr.trace)):
+            tr = prune_subsample_sites(tr)
+            for name, node in tr.nodes.items():
                 if role == "model":
                     factors.append(node["infer"]["funsor_log_prob"])
                 elif role == "guide":
@@ -57,15 +57,15 @@ class TraceTMC_ELBO(ELBO):
         raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with TraceMessenger() as guide_tr, EnumMessenger(-1-self.max_plate_nesting):
+        with trace() as guide_tr, enum(-1-self.max_plate_nesting):
             guide(*args, **kwargs)
-        with TraceMessenger() as model_tr, EnumMessenger(-1-self.max_plate_nesting), \
-                ReplayMessenger(trace=guide_tr.trace):
+        with trace() as model_tr, enum(-1-self.max_plate_nesting), \
+                replay(trace=guide_tr.trace):
             model(*args, **kwargs)
         factors, measures, sum_vars, plate_vars = [], [], frozenset(), frozenset()
-        for role, trace in zip(("model", "guide"), (model_tr.trace, guide_tr.trace)):
-            trace = prune_subsample_sites(trace)
-            for name, node in trace.nodes.items():
+        for role, tr in zip(("model", "guide"), (model_tr.trace, guide_tr.trace)):
+            tr = prune_subsample_sites(tr)
+            for name, node in tr.nodes.items():
                 if node["type"] != "sample":
                     continue
                 if role == "model":

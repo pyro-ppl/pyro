@@ -12,7 +12,7 @@ from pyro.infer import config_enumerate
 from pyro.poutine.messenger import Messenger
 
 from pyro.contrib.funsor import to_data, to_funsor, markov
-from pyro.contrib.funsor.enum_messenger import EnumMessenger
+from pyro.contrib.funsor.handlers import enum
 
 funsor.set_backend("torch")
 
@@ -33,7 +33,7 @@ def log_z(model):
 
     def _wrapped(*args, **kwargs):
         with FunsorLogJointMessenger() as tr:
-            with EnumMessenger():
+            with enum():
                 model(*args)
 
         with funsor.interpreter.interpretation(funsor.terms.normalize):

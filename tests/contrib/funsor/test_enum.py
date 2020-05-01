@@ -12,17 +12,13 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import config_enumerate
-from pyro.infer.importance import vectorized_importance_weights
 from pyro.infer.tracetmc_elbo import TraceTMC_ELBO as PyroTMC_ELBO
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO as PyroEnum_ELBO
 from tests.common import assert_equal
 
-from pyro.contrib.funsor import to_data, to_funsor, markov
-from pyro.contrib.funsor.named_messenger import _DIM_STACK, GlobalNamedMessenger
-from pyro.contrib.funsor.enum_messenger import EnumMessenger, PlateMessenger, TraceMessenger, enum_seq
+from pyro.contrib.funsor import markov, plate
 from pyro.contrib.funsor.infer import TraceTMC_ELBO as FunsorTMC_ELBO
 from pyro.contrib.funsor.infer import TraceEnum_ELBO as FunsorEnum_ELBO
 
@@ -51,7 +47,7 @@ def toggle_backend(backend):
 def pyro_plate(*args, **kwargs):
     global _ENUM_BACKEND_VERSION
     # TODO update to plate wrapper from pyro.contrib.funsor.__init__
-    return (PlateMessenger if _ENUM_BACKEND_VERSION == "funsor" else pyro.plate)(*args, **kwargs)
+    return (plate if _ENUM_BACKEND_VERSION == "funsor" else pyro.plate)(*args, **kwargs)
 
 
 def pyro_markov(*args, **kwargs):
@@ -171,7 +167,6 @@ def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expan
     expected_grads = (torch.tensor(
         {1: 0.0999, 2: 0.0860, 3: 0.0802, 4: 0.0771}[depth]
     ),)
-
 
     grad_prec = 0.05 if reparameterized else 0.1
 

@@ -98,27 +98,24 @@ _msngrs = [
 
 
 def _make_handler(msngr_cls):
+    _re1 = re.compile('(.)([A-Z][a-z]+)')
+    _re2 = re.compile('([a-z0-9])([A-Z])')
 
     def handler(fn=None, *args, **kwargs):
-        if fn is not None and not callable(fn):
-            raise ValueError(
-                "{} is not callable, did you mean to pass it as a keyword arg?".format(fn))
         msngr = msngr_cls(*args, **kwargs)
         return functools.update_wrapper(msngr(fn), fn, updated=()) if fn is not None else msngr
 
-    return handler
+    handler_name = _re2.sub(
+        r'\1_\2', _re1.sub(r'\1_\2', msngr_cls.__name__.split("Messenger")[0])).lower()
+    handler.__doc__ = """Convenient wrapper of :class:`~pyro.poutine.{}.{}` \n\n""".format(
+        handler_name + "_messenger", msngr_cls.__name__) + msngr_cls.__doc__
+    handler.__name__ = handler_name
+    return handler_name, handler
 
 
-_re1 = re.compile('(.)([A-Z][a-z]+)')
-_re2 = re.compile('([a-z0-9])([A-Z])')
 for _msngr_cls in _msngrs:
-    _handler_name = _re2.sub(
-        r'\1_\2', _re1.sub(r'\1_\2', _msngr_cls.__name__.split("Messenger")[0])).lower()
-    _handler = _make_handler(_msngr_cls)
+    _handler_name, _handler = _make_handler(_msngr_cls)
     _handler.__module__ = __name__
-    _handler.__doc__ = """Convenient wrapper of :class:`~pyro.poutine.{}.{}` \n\n""".format(
-        _handler_name + "_messenger", _msngr_cls.__name__) + _msngr_cls.__doc__
-    _handler.__name__ = _handler_name
     locals()[_handler_name] = _handler
 
 
