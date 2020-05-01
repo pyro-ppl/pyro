@@ -96,3 +96,66 @@ def infection_dist(*,
             c1 = (k * I).clamp(min=1e-6)
             c0 = c1 * (combined_p.reciprocal() - 1).clamp(min=1e-6)
             return dist.ExtendedBetaBinomial(c1, c0, S)
+
+
+def coalescent_likelihood(S_prev, I_prev, R, k, tau_i, binomials, intervals):
+    coal_rate = R * (1. + 1. / k) / (I_prev * tau_i)
+    log_weight = torch.zeros_like(R)
+    for binom_coeff, time_to_next_event in zip(binomials, intervals):
+        if binom_coeff <= 0:
+            continue
+        invalid = (I_prev <= 1.) | (I_prev * (I_prev - 1.) / 2. < binom_coeff)
+        if isinstance(invalid, torch.Tensor):
+            log_weight[invalid] = -math.inf
+        elif invalid:
+            log_weight = -math.inf
+            break
+        coal_rate_population = binom_coeff * coal_rate
+        if time_to_next_event < 0.:
+            # Coalescent ended interval
+            invalid_t = coal_rate == 0.
+            # If epidemic has died out before the most recent tip
+            if isinstance(invalid_t, torch.Tensor):
+                log_weight[invalid_t] = -math.inf
+            elif invalid_t:
+                log_weight = -math.inf
+                break
+            time_to_coal = -time_to_next_event
+            log_weight = log_weight + coal_rate_population.log()
+            log_weight = log_weight - coal_rate_population * time_to_coal
+        else:
+            # Sampling ended interval, or the end of the simulation time step
+            log_weight = log_weight - coal_rate_population * time_to_next_event
+
+    return log_weight
+
+
+def vectorized_coalescent_likelihood(S_prev, I_prev, R, k, tau_i, binomials, intervals):
+    # TODO put data in a single tensor for distribution implementation
+    # binomials, intervals = binomials_intervals[..., 0, :], binomials_intervals[..., 1, :]
+
+    # support broadcasting along phylogenetic time dimension
+    S_prev = (S_prev if isinstance(S_prev, torch.Tensor) else binomials.new_tensor(S_prev)).unsqueeze(-1)
+    I_prev = (I_prev if isinstance(I_prev, torch.Tensor) else binomials.new_tensor(I_prev)).unsqueeze(-1)
+    R = (R if isinstance(R, torch.Tensor) else intervals.new_tensor(R)).unsqueeze(-1)
+    k = (k if isinstance(k, torch.Tensor) else intervals.new_tensor(k)).unsqueeze(-1)
+    tau_i = (tau_i if isinstance(tau_i, torch.Tensor) else intervals.new_tensor(tau_i)).unsqueeze(-1)
+
+    coal_rate = R * (1. + 1. / k) / (I_prev * tau_i)
+    log_weight = torch.zeros_like(R).expand(R.shape[:-1] + binomials.shape[-1:])
+
+    invalid = (I_prev <= 1.) | (I_prev * (I_prev - 1.) / 2. < binomials).expand(log_weight.shape)
+    log_weight[invalid] = -math.inf
+
+    coal_rate_population = binomials * coal_rate
+
+    cond = (intervals < 0.).expand(log_weight.shape)  # coalescent ended interval
+    # Coalescent ended interval
+    log_weight[cond & (coal_rate == 0.)] = -math.inf
+    log_weight[cond] = log_weight[cond] + coal_rate_population[cond].log()
+    log_weight[cond] = log_weight[cond] + coal_rate_population[cond] * intervals[intervals < 0.]
+    # Sampling ended interval, or the end of the simulation time step
+    log_weight[~cond] = log_weight[~cond] - coal_rate_population[~cond] * intervals[~(intervals < 0.)]
+
+    log_weight[(binomials <= 0.).expand(log_weight.shape)] = 0.
+    return log_weight.sum(-1)  # sum out phylogenetic time dimension

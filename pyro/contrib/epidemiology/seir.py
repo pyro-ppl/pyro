@@ -1,15 +1,11 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import math
-
-import torch
-
 import pyro
 import pyro.distributions as dist
 
 from .compartmental import CompartmentalModel
-from .distributions import infection_dist
+from .distributions import infection_dist, vectorized_coalescent_likelihood
 
 
 class SimpleSEIRModel(CompartmentalModel):
@@ -223,38 +219,11 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         if self.phy_data is not None and t < len(self.phy_data):
             R = R0 * S_prev / self.population
-            coal_rate = R * (1. + 1. / k) / (I_prev * tau_i)
-            weight = torch.zeros_like(R)
-            for binom_coeff, time_to_next_event in zip(self.phy_data[t]['binomial'],
-                                                       self.phy_data[t]['intervals']):
-                if binom_coeff <= 0:
-                    continue
-                invalid = (I_prev <= 1.) | (I_prev * (I_prev - 1.) / 2. < binom_coeff)
-                if isinstance(invalid, torch.Tensor):
-                    weight[invalid] = -math.inf
-                elif invalid:
-                    weight = -math.inf
-                    break
-                coal_rate_population = binom_coeff * coal_rate
-                if time_to_next_event < 0.:
-                    # Coalescent ended interval
-                    invalid_t = coal_rate == 0.
-                    # If epidemic has died out before the most recent tip
-                    if isinstance(invalid_t, torch.Tensor):
-                        weight[invalid_t] = -math.inf
-                    elif invalid_t:
-                        weight = -math.inf
-                        break
-                    time_to_coal = -time_to_next_event
-                    weight = weight + coal_rate_population.log()
-                    weight = weight - coal_rate_population * time_to_coal
-                else:
-                    # Sampling ended interval, or the end of the simulation time step
-                    weight = weight - coal_rate_population * time_to_next_event
-
-            print(f"phy_{t}", weight)
-
-            pyro.factor(f"phy_{t}", weight)
+            log_weight = vectorized_coalescent_likelihood(S_prev, I_prev, R, k, tau_i,
+                                                          self.phy_data[t]['binomial'],
+                                                          self.phy_data[t]['intervals'])
+            print(f"phy_{t}", log_weight)
+            pyro.factor(f"phy_{t}", log_weight)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, k, tau_e, tau_i, rho = params
