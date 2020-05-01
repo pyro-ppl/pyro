@@ -215,6 +215,7 @@ class CompartmentalModel(ABC):
         :returns: A dictionary mapping sample site name to sampled value.
         :rtype: dict
         """
+        fixed = {k: torch.as_tensor(v) for k, v in fixed.items()}
         model = self._generative_model
         model = poutine.condition(model, fixed)
         trace = poutine.trace(model).get_trace()
@@ -296,6 +297,7 @@ class CompartmentalModel(ABC):
         This may be run only after :meth:`fit` and draws the same
         ``num_samples`` as passed to :meth:`fit`.
 
+        :param int forecast: The number of time steps to forecast forward.
         :returns: A dictionary mapping sample site name (or compartment name)
             to a tensor whose first dimension corresponds to sample batching.
         :rtype: dict
@@ -357,6 +359,7 @@ class CompartmentalModel(ABC):
                     series.append(samples.pop(key))
             if series:
                 assert len(series) == self.duration + forecast
+                series = list(map(torch.as_tensor, series))
                 series = torch.broadcast_tensors(*series)
                 samples[name] = torch.stack(series, dim=-1)
 
@@ -444,7 +447,9 @@ class CompartmentalModel(ABC):
             prev[name] = prev[name].reshape(enum_shape(e))
             curr[name] = curr[name].reshape(enum_shape(C + e))
             logp[name] = logp[name].reshape(enum_shape(C + e))
-        t = (Ellipsis,) + (None,) * (2 * C)  # Used to unsqueeze data tensors.
+        # This nonstandard time value is passed to user code to unsqueeze
+        # time series tensors.
+        t = (Ellipsis, slice(T)) + (None,) * (2 * C)
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:

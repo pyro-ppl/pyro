@@ -6,6 +6,7 @@ from torch.nn.functional import pad
 
 import pyro
 import pyro.distributions as dist
+from pyro.ops.indexing import Index
 
 from .compartmental import CompartmentalModel
 from .distributions import infection_dist
@@ -334,9 +335,14 @@ class UnknownStartSIRModel(CompartmentalModel):
     recovered individuals (the recovered individuals are implicit: ``R =
     population - S - I``) with transitions ``S -> I -> R``.
 
-    This model demonstrates (1) how to incorporate spontaneous infections from
-    external sources and (2) how to override the :meth:`predict` method to
-    compute extra statistics.
+    This model demonstrates:
+
+    1.  How to incorporate spontaneous infections from external sources;
+    2.  How to incorporate time-varying piecwise ``rho`` by supporting
+        forecasting in :meth:`transition_fwd` and using the
+        :class:`~pyro.ops.index.ing.Index` helper in :meth:`transition_bwd`.
+    3.  How to override the :meth:`predict` method to compute extra
+        statistics.
 
     :param int population: Total ``population = S + I + R``.
     :param float recovery_time: Mean recovery time (duration in state
@@ -414,10 +420,15 @@ class UnknownStartSIRModel(CompartmentalModel):
         state["S"] = state["S"] - S2I
         state["I"] = state["I"] + S2I - I2R
 
+        # In .transition_fwd() t will always be an integer but may lie outside
+        # of [0,self.duration) when forecasting.
+        rho_t = rho[..., t] if t < self.duration else rho[..., -1]
+        data_t = self.data[t] if t < self.duration else None
+
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho[t]),
-                    obs=self.data[t] if t < self.duration else None)
+                    dist.ExtendedBinomial(S2I, rho_t),
+                    obs=data_t)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, X, tau, rho = params
@@ -437,9 +448,14 @@ class UnknownStartSIRModel(CompartmentalModel):
                     dist.ExtendedBinomial(prev["I"], 1 / tau),
                     obs=I2R)
 
+        # In .transition_bwd() t may be either an integer in [0,self.duration)
+        # or may be a nonstandard slicing object like (Ellipsis, None, None);
+        # we use the Index(-)[-] helper to support indexing with nonstandard t.
+        rho_t = Index(rho)[..., t]
+
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho[t]),
+                    dist.ExtendedBinomial(S2I, rho_t),
                     obs=self.data[t])
 
     def predict(self, forecast=0):
@@ -447,8 +463,12 @@ class UnknownStartSIRModel(CompartmentalModel):
         Augments
         :meth:`~pyro.contrib.epidemiology.compartmental.Compartmental.predict`
         with samples of ``first_infection``.
+
+        :param int forecast: The number of time steps to forecast forward.
+        :returns: A dictionary mapping sample site name (or compartment name)
+            to a tensor whose first dimension corresponds to sample batching.
+        :rtype: dict
         """
         samples = super().predict(forecast)
-        S2I = samples["S2I"]
-        samples["first_infection"] = (S2I > 0).max(-1).indices.type_as(S2I)
+        samples["first_infection"] = samples["I"].cumsum(-1).eq(0).sum(-1)
         return samples

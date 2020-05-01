@@ -7,7 +7,7 @@ import math
 import pytest
 import torch
 
-from pyro.contrib.epidemiology import OverdispersedSIRModel, SimpleSIRModel, SparseSIRModel
+from pyro.contrib.epidemiology import OverdispersedSIRModel, SimpleSIRModel, SparseSIRModel, UnknownStartSIRModel
 
 logger = logging.getLogger(__name__)
 
@@ -112,3 +112,48 @@ def test_sparse_smoke(duration, forecast, options):
     for O in samples["O"]:
         logger.info("imputed:\n{}".format(O))
         assert (O[:duration][mask] == data[mask]).all()
+
+
+@pytest.mark.parametrize("pre_window", [6])
+@pytest.mark.parametrize("duration", [8])
+@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("options", [
+    {},
+    {"dct": 1.},
+    {"num_quant_bins": 8},
+], ids=str)
+def test_unknown_start_smoke(duration, pre_window, forecast, options):
+    population = 100
+    recovery_time = 7.0
+
+    # Generate data.
+    data = [None] * duration
+    model = UnknownStartSIRModel(population, recovery_time, pre_window, data)
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5, "rho0": 0.1, "rho1": 0.5})["obs"]
+        assert len(data) == pre_window + duration
+        data = data[pre_window:]
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+    logger.info("data:\n{}".format(data))
+
+    # Infer.
+    model = UnknownStartSIRModel(population, recovery_time, pre_window, data)
+    num_samples = 5
+    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, pre_window + duration + forecast)
+    assert samples["I"].shape == (num_samples, pre_window + duration + forecast)
+
+    # Check time of first infection.
+    t = samples["first_infection"]
+    logger.info("first_infection:\n{}".format(t))
+    assert t.shape == (num_samples,)
+    assert (0 <= t).all()
+    assert (t < pre_window + duration).all()
+    for I, ti in zip(samples["I"], t):
+        assert (I[:ti] == 0).all()
+        assert I[ti] > 0
