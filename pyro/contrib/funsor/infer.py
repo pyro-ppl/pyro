@@ -3,7 +3,7 @@
 
 import funsor
 
-from pyro.infer import ELBO
+from pyro.infer import ELBO, SVI
 from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data, to_funsor
