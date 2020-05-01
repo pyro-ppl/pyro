@@ -245,6 +245,8 @@ class CompartmentalModel(ABC):
             Defaults to 4.
         :param float dct: If provided, use a discrete cosine reparameterizer
             with this value as smoothness.
+        :param int heuristic_num_particles: Passed to :meth:`heuristic` as
+            ``num_particles``. Defaults to 1024.
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
         :rtype: ~pyro.infer.mcmc.api.MCMC
         """
@@ -254,7 +256,9 @@ class CompartmentalModel(ABC):
 
         # Heuristically initialze to feasible latents.
         logger.info("Heuristically initializing...")
-        init_values = self.heuristic()
+        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
+                             for k in list(options) if k.startswith("heuristic_")}
+        init_values = self.heuristic(**heuristic_options)
         assert isinstance(init_values, dict)
         assert "auxiliary" in init_values, \
             ".heuristic() did not define auxiliary value"
