@@ -19,7 +19,7 @@ class TraceEnum_ELBO(ELBO):
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
         # currently supports guide enumeration only, not mixed enumeration
-        with trace() as guide_tr, enum(-self.max_plate_nesting-1):
+        with trace() as guide_tr, enum(first_available_dim=-self.max_plate_nesting-1):
             guide(*args, **kwargs)
         with trace() as model_tr, replay(trace=guide_tr.trace):
             model(*args, **kwargs)
@@ -57,9 +57,9 @@ class TraceTMC_ELBO(ELBO):
         raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with trace() as guide_tr, enum(-1-self.max_plate_nesting):
+        with trace() as guide_tr, enum(first_available_dim=-1-self.max_plate_nesting):
             guide(*args, **kwargs)
-        with trace() as model_tr, enum(-1-self.max_plate_nesting), \
+        with trace() as model_tr, enum(first_available_dim=-1-self.max_plate_nesting), \
                 replay(trace=guide_tr.trace):
             model(*args, **kwargs)
         factors, measures, sum_vars, plate_vars = [], [], frozenset(), frozenset()
