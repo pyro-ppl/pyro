@@ -124,6 +124,7 @@ class Combiner(nn.Module):
         self.z_dim = z_dim
         self.obs_dim = obs_dim
         self.obs_mat = nn.Parameter(0.3 * torch.randn(self.z_dim, self.obs_dim))
+        self.trans_mat = nn.Parameter(0.3 * torch.randn(self.z_dim, self.z_dim))
         self.guide_family = guide_family
         if self.guide_family == 'markov':
             self.lin_hidden_to_obs_scale = nn.Linear(rnn_dim, self.obs_dim)
@@ -144,7 +145,7 @@ class Combiner(nn.Module):
             trans_scale = self.softplus(self.lin_hidden_to_trans_scale(h_rnn))
             obs_scale = self.softplus(self.lin_hidden_to_obs_scale(h_rnn))
             pseudo_obs = self.lin_hidden_to_pseudo_obs(h_rnn)
-            return trans_scale, obs_scale, pseudo_obs, self.obs_mat
+            return trans_scale, obs_scale, pseudo_obs, self.obs_mat, self.trans_mat
         else:
             loc = self.lin_hidden_to_loc(h_rnn)
             scale = self.softplus(self.lin_hidden_to_scale(h_rnn))
@@ -233,8 +234,8 @@ class DMM(nn.Module):
                 z_loc, z_scale = self.combiner(rnn_output)
                 pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
             elif self.guide_family == "markov":
-                trans_scale, obs_scale, pseudo_obs, obs_mat = self.combiner(rnn_output)
-                hmm = CustomHMM(T_max, pseudo_obs, trans_scale, obs_scale, obs_mat)
+                trans_scale, obs_scale, pseudo_obs, obs_mat, trans_mat = self.combiner(rnn_output)
+                hmm = CustomHMM(T_max, pseudo_obs, trans_scale, obs_scale, obs_mat, trans_mat)
                 pyro.sample("z", hmm.to_event(1))
 
 
@@ -243,7 +244,7 @@ class CustomHMM(TorchDistribution):
     arg_constraints = {}
     support = constraints.real
 
-    def __init__(self, duration, pseudo_obs, trans_scale, obs_scale, obs_mat):
+    def __init__(self, duration, pseudo_obs, trans_scale, obs_scale, obs_mat, trans_mat):
         self.duration = duration
         self.z_dim = trans_scale.size(-1)
         self.obs_dim = obs_scale.size(-1)
@@ -251,6 +252,7 @@ class CustomHMM(TorchDistribution):
         self.trans_scale = trans_scale
         self.obs_scale = obs_scale
         self.obs_mat = obs_mat
+        self.trans_mat = trans_mat
 
         batch_shape = obs_scale.shape[:-2]
         event_shape = obs_scale.shape[-2:]
@@ -263,11 +265,10 @@ class CustomHMM(TorchDistribution):
     def rsample(self, sample_shape=()):
         proto = self.obs_mat
 
-        trans_matrix = torch.eye(self.z_dim, dtype=proto.dtype, device=proto.device)
         trans_dist = tdist.Normal(torch.zeros(self.batch_shape + (self.duration, self.z_dim),
                                               dtype=proto.dtype, device=proto.device),
                                               self.trans_scale)
-        trans = matrix_and_mvn_to_gaussian(trans_matrix, tdist.Independent(trans_dist, 1))
+        trans = matrix_and_mvn_to_gaussian(self.trans_mat, tdist.Independent(trans_dist, 1))
 
         initial_dist = tdist.Normal(torch.zeros(self.batch_shape + (self.z_dim,),
                                                 dtype=proto.dtype, device=proto.device),
@@ -486,7 +487,7 @@ if __name__ == '__main__':
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-zd', '--z-dim', type=int, default=64)
-    parser.add_argument('-od', '--obs-dim', type=int, default=64)
+    parser.add_argument('-od', '--obs-dim', type=int, default=32)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')
     parser.add_argument('-lmod', '--load-model', type=str, default='')
     parser.add_argument('-sopt', '--save-opt', type=str, default='')
