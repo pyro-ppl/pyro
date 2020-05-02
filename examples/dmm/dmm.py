@@ -123,10 +123,10 @@ class Combiner(nn.Module):
         print("Initialized {} Combiner with obs/z dims = {} {}".format(guide_family, obs_dim, z_dim))
         self.z_dim = z_dim
         self.obs_dim = obs_dim
-        self.obs_mat = nn.Parameter(0.3 * torch.randn(self.z_dim, self.obs_dim))
-        self.trans_mat = nn.Parameter(0.3 * torch.randn(self.z_dim, self.z_dim))
         self.guide_family = guide_family
         if self.guide_family == 'markov':
+            self.obs_mat = nn.Parameter(0.3 * torch.randn(self.z_dim, self.obs_dim))
+            self.trans_mat = nn.Parameter(0.3 * torch.randn(self.z_dim, self.z_dim))
             self.lin_hidden_to_obs_scale = nn.Linear(rnn_dim, self.obs_dim)
             self.lin_hidden_to_trans_scale = nn.Linear(rnn_dim, z_dim)
             self.lin_hidden_to_pseudo_obs = nn.Linear(rnn_dim, self.obs_dim)
@@ -275,7 +275,6 @@ class CustomHMM(TorchDistribution):
                                     torch.ones(self.z_dim, dtype=proto.dtype, device=proto.device))
         init = mvn_to_gaussian(tdist.Independent(initial_dist, 1))
 
-        eye2 = torch.eye(self.obs_dim, dtype=proto.dtype, device=proto.device)
         obs_dist = tdist.Normal(torch.zeros(self.batch_shape + (self.duration, self.obs_dim),
                                             dtype=proto.dtype, device=proto.device),
                                             self.obs_scale)
@@ -324,26 +323,13 @@ def main(args):
         (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
     # how often we do validation/test evaluation during training
-    val_test_frequency = 10
-    # the number of samples we use to do the evaluation
-    n_eval_samples = 1
+    val_test_frequency = 20
 
-    # package repeated copies of val/test data for faster evaluation
-    # (i.e. set us up for vectorization)
-    def rep(x):
-        rep_shape = torch.Size([x.size(0) * n_eval_samples]) + x.size()[1:]
-        repeat_dims = [1] * len(x.size())
-        repeat_dims[0] = n_eval_samples
-        return x.repeat(repeat_dims).reshape(n_eval_samples, -1).transpose(1, 0).reshape(rep_shape)
-
-    # get the validation/test data ready for the dmm: pack into sequences, etc.
-    val_seq_lengths = rep(val_seq_lengths)
-    test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
-        torch.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
+        torch.arange(val_data_sequences.shape[0]), val_data_sequences,
         val_seq_lengths, cuda=args.cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
-        torch.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
+        torch.arange(test_data_sequences.shape[0]), test_data_sequences,
         test_seq_lengths, cuda=args.cuda)
 
     # instantiate the dmm
@@ -420,19 +406,23 @@ def main(args):
         return loss
 
     # helper function for doing evaluation
-    def do_evaluation():
+    def do_evaluation(num_evals=20):
         # put the RNN into evaluation mode (i.e. turn off drop-out if applicable)
         dmm.rnn.eval()
 
-        # compute the validation and test loss n_samples many times
-        val_nll = svi.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
-                                    val_seq_lengths) / float(torch.sum(val_seq_lengths))
-        test_nll = svi.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
-                                     test_seq_lengths) / float(torch.sum(test_seq_lengths))
+        val_nlls, test_nlls = [], []
+
+        for _ in range(num_evals):
+            val_nll = svi.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
+                                        val_seq_lengths) / float(torch.sum(val_seq_lengths))
+            test_nll = svi.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
+                                         test_seq_lengths) / float(torch.sum(test_seq_lengths))
+            val_nlls.append(val_nll)
+            test_nlls.append(test_nll)
 
         # put the RNN back into training mode (i.e. turn on drop-out if applicable)
         dmm.rnn.train()
-        return val_nll, test_nll
+        return np.mean(val_nlls), np.mean(test_nlls)
 
     # if checkpoint files provided, load model and optimizer states from disk before we start training
     if args.load_opt != '' and args.load_model != '':
@@ -480,10 +470,10 @@ if __name__ == '__main__':
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
     parser.add_argument('-cn', '--clip-norm', type=float, default=10.0)
     parser.add_argument('-lrd', '--lr-decay', type=float, default=0.99996)
-    parser.add_argument('-wd', '--weight-decay', type=float, default=5.0)
+    parser.add_argument('-wd', '--weight-decay', type=float, default=1.0)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
-    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.1)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.2)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
     parser.add_argument('-zd', '--z-dim', type=int, default=64)
