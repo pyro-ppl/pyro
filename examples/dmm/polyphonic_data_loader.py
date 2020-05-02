@@ -68,7 +68,7 @@ def process_data(base_path, dataset, min_note=21, note_range=88):
         processed_dataset[split]['sequence_lengths'] = torch.zeros(n_seqs, dtype=torch.long)
         processed_dataset[split]['sequences'] = []
         for seq in range(n_seqs):
-            seq_length = len(data_split[seq])
+            seq_length = 25#len(data_split[seq])
             processed_dataset[split]['sequence_lengths'][seq] = seq_length
             processed_sequence = torch.zeros((seq_length, note_range))
             for t in range(seq_length):
@@ -161,8 +161,6 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
         mini_batch_reversed = mini_batch_reversed.cuda()
 
     # do sequence packing
-    mini_batch_reversed = mini_batch_reversed[:, -25:, :]
-    sorted_seq_lengths[:] = 25
     mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
                                                             sorted_seq_lengths,
                                                             batch_first=True)

@@ -118,13 +118,18 @@ class Combiner(nn.Module):
     through the hidden state of the RNN (see the PyTorch module `rnn` below)
     """
 
-    def __init__(self, z_dim, rnn_dim):
+    def __init__(self, z_dim, rnn_dim, guide_family):
         super().__init__()
         self.z_dim = z_dim
+        self.guide_family = guide_family
         # initialize the three linear transformations used in the neural network
-        self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim // 4)
-        self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim // 4)
-        self.lin_hidden_to_mat = nn.Linear(rnn_dim, z_dim * z_dim // 4)
+        if self.guide_family == 'markov':
+            self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim // 4)
+            self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim // 4)
+            self.lin_hidden_to_mat = nn.Linear(rnn_dim, z_dim * z_dim // 4)
+        elif self.guide_family == 'meanfield':
+            self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim)
+            self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim)
         # initialize the two non-linearities used in the neural network
         self.tanh = nn.Tanh()
         self.softplus = nn.Softplus()
@@ -135,16 +140,14 @@ class Combiner(nn.Module):
         state of the RNN `h(x_{t:T})` we return the mean and scale vectors that
         parameterize the (diagonal) gaussian distribution `q(z_t | z_{t-1}, x_{t:T})`
         """
-        # combine the rnn hidden state with a transformed version of z_t_1
-        #h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
-        # use the combined hidden state to compute the mean used to sample z_t
         loc = self.lin_hidden_to_loc(h_rnn)
-        mat = self.lin_hidden_to_mat(h_rnn)
-        mat = mat.reshape(mat.size(0), mat.size(1), self.z_dim, self.z_dim // 4)
-        # use the combined hidden state to compute the scale used to sample z_t
         scale = self.softplus(self.lin_hidden_to_scale(h_rnn))
-        # return loc, scale which can be fed into Normal
-        return loc, scale, mat
+        if self.guide_family == 'markov':
+            mat = self.lin_hidden_to_mat(h_rnn)
+            mat = mat.reshape(mat.size(0), mat.size(1), self.z_dim, self.z_dim // 4)
+            return loc, scale, mat
+        else:
+            return loc, scale, None
 
 
 class DMM(nn.Module):
@@ -153,8 +156,8 @@ class DMM(nn.Module):
     variational distribution (the guide) for the Deep Markov Model
     """
 
-    def __init__(self, input_dim=88, z_dim=32, emission_dim=100,
-                 transition_dim=200, rnn_dim=100, num_layers=1, rnn_dropout_rate=0.0,
+    def __init__(self, input_dim=88, z_dim=64, emission_dim=100,
+                 transition_dim=200, rnn_dim=300, num_layers=1, rnn_dropout_rate=0.0,
                  use_cuda=False, guide_family="meanfield"):
         super().__init__()
         self.guide_family = guide_family
@@ -163,7 +166,7 @@ class DMM(nn.Module):
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
-        self.combiner = Combiner(z_dim, rnn_dim)
+        self.combiner = Combiner(z_dim, rnn_dim, guide_family)
         # dropout just takes effect on inner layers of rnn
         rnn_dropout_rate = 0. if num_layers == 1 else rnn_dropout_rate
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
@@ -187,10 +190,6 @@ class DMM(nn.Module):
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
 
-        mini_batch = mini_batch[:, 0:25, :]
-        mini_batch_mask = mini_batch_mask[:, 0:25]
-        #print('mask min max', mini_batch_mask.min().item(), mini_batch_mask.max().item())
-
         T_max = mini_batch.size(1)
 
         pyro.module("dmm", self)
@@ -211,66 +210,9 @@ class DMM(nn.Module):
             pyro.sample("z_aux", dist.Normal(z_loc, z_scale).mask(mask).to_event(3),
                         obs=z)
 
-            emission_probs = self.emitter(z)
-            pyro.sample("obs_x", dist.Bernoulli(emission_probs).mask(mask).to_event(3),
-                        obs=mini_batch)
-
-    def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
-              mini_batch_seq_lengths, annealing_factor=1.0):
-
-        mini_batch = mini_batch[:, 0:25, :]
-        mini_batch_mask = mini_batch_mask[:, 0:25]
-        mini_batch_seq_lengths[:] = 25
-        T_max = mini_batch.size(1)
-        pyro.module("dmm", self)
-
-        h_0_contig = self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
-
-        rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
-        # reverse the time-ordering in the hidden state and un-pack it
-        rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-        z_loc, z_scale, z_mat = self.combiner(rnn_output)
-
-        with pyro.poutine.scale(scale=annealing_factor):
-
-            if self.guide_family == "meanfield":
-                pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
-            elif self.guide_family == "markov":
-                #print("T_max, z_loc, z_scale, z_mat",T_max, z_loc.shape, z_scale.shape, z_mat.shape)
-                hmm = CustomHMM(T_max, z_loc, z_scale, z_mat)
-                pyro.sample("z", hmm.to_event(1))
-
-
-class CustomHMM(TorchDistribution):
-    has_rsample = True
-    arg_constraints = {}
-    support = constraints.real
-
-    def __init__(self, duration, loc, scale, mat):
-
-        T_max = mini_batch.size(1)
-
-        pyro.module("dmm", self)
-
-        ones = torch.ones(mini_batch.size(0), T_max, self.z_0.size(0), dtype=self.z_0.dtype, device=self.z_0.device)
-        # note the mask
-        z = pyro.sample("z", dist.Normal(0.0, ones).mask(False).to_event(3))
-
-        z_0 = self.z_0.expand(mini_batch.size(0), 1, self.z_0.size(0))
-        # shift z for autoregressive conditioning
-        z_shift = torch.cat([z_0, z[:, :-1, :]], dim=-2)
-        z_loc, z_scale = self.trans(z_shift)
-
-        mask = mini_batch_mask.unsqueeze(-1)
-
-        with poutine.scale(scale=annealing_factor):
-            # actually compute p(z)
-            pyro.sample("z_aux", dist.Normal(z_loc, z_scale).mask(mask).to_event(3),
-                        obs=z)
-
-            emission_probs = self.emitter(z)
-            pyro.sample("obs_x", dist.Bernoulli(emission_probs).mask(mask).to_event(3),
-                        obs=mini_batch)
+        emission_probs = self.emitter(z)
+        pyro.sample("obs_x", dist.Bernoulli(emission_probs).mask(mask).to_event(3),
+                    obs=mini_batch)
 
     def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
@@ -331,7 +273,6 @@ class CustomHMM(TorchDistribution):
         obs_dist = tdist.MultivariateNormal(torch.zeros(self.batch_shape + (self.duration, self.dim // 4),
                                                         dtype=self.loc.dtype, device=self.loc.device),
                                             self.scale.unsqueeze(-1) * eye2)
-        #obs_matrix = torch.eye(self.dim, dtype=self.loc.dtype, device=self.loc.device)
         obs = matrix_and_mvn_to_gaussian(self.mat, obs_dist)
 
         factor = trans + obs.condition(self.loc).event_pad(left=self.dim)
@@ -342,14 +283,14 @@ class CustomHMM(TorchDistribution):
         trans0 = trans[(slice(0, None), 0)]
         num1 = trans_forward.log_density(torch.cat([z[:, :-1, :], z[:, 1:, :]], dim=-1)).sum(-1)
         num2 = (trans0.condition(z[:, 0, :]) + init).event_logsumexp()
-        numerator = num1 + num2
+        num3 = obs.log_density(torch.cat([z, self.loc], dim=-1)).sum(-1)
+        numerator = num1 + num2 + num3
 
         denom = _sequential_gaussian_tensordot(factor)
         denom = gaussian_tensordot(init, denom, dims=self.dim)
         denom = denom.event_logsumexp()
 
         self._log_prob = numerator - denom
-        #print("lp", self._log_prob.mean().item())
         return z
 
 
@@ -375,7 +316,7 @@ def main(args):
         (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
     # how often we do validation/test evaluation during training
-    val_test_frequency = 5
+    val_test_frequency = 10
     # the number of samples we use to do the evaluation
     n_eval_samples = 1
 
