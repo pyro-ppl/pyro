@@ -7,7 +7,7 @@ from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
 from pyro.contrib.funsor.handlers.primitives import to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
+from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
 
 
 class TraceMessenger(OrigTraceMessenger):
@@ -38,7 +38,7 @@ class TraceMessenger(OrigTraceMessenger):
         else:
             # this logic has the same side effect on the _DIM_STACK as the above,
             # but does not perform any tensor or funsor operations.
-            msg["infer"]["dim_to_name"] = NamedMessenger._get_dim_to_name(msg["fn"].batch_shape)
-            msg["infer"]["dim_to_name"].update(NamedMessenger._get_dim_to_name(
+            msg["infer"]["dim_to_name"] = _DIM_STACK.names_from_batch_shape(msg["fn"].batch_shape)
+            msg["infer"]["dim_to_name"].update(_DIM_STACK.names_from_batch_shape(
                 msg["value"].shape[:len(msg["value"]).shape - len(msg["fn"].event_shape)]))
         return super()._pyro_post_sample(msg)

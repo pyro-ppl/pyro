@@ -134,5 +134,13 @@ class DimStack:
 
         return name, dim
 
+    def names_from_batch_shape(self, batch_shape, dim_type=DimType.LOCAL):
+        dim_to_name = OrderedDict()
+        for dim in range(-len(batch_shape), 0):
+            if batch_shape[dim] == 1:
+                continue
+            dim_to_name[dim] = self.request(NameRequest(None, dim_type), dim)[0]
+        return dim_to_name
+
 
 _DIM_STACK = DimStack()  # only one global instance

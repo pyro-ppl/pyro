@@ -33,21 +33,6 @@ class DimStackCleanupMessenger(ReentrantMessenger):
 
 class NamedMessenger(DimStackCleanupMessenger):
 
-    @staticmethod
-    def _get_name_to_dim(batch_names, name_to_dim=None, dim_type=DimType.LOCAL):
-        name_to_dim = OrderedDict() if name_to_dim is None else name_to_dim.copy()
-
-        # interpret all names/dims as requests since we only run this function once
-        for name in batch_names:
-            dim = name_to_dim.get(name, None)
-            name_to_dim[name] = dim if isinstance(dim, DimRequest) else DimRequest(dim, dim_type)
-
-        # read dimensions and allocate fresh dimensions as necessary
-        for name, dim_request in name_to_dim.items():
-            name_to_dim[name] = _DIM_STACK.request(name, dim_request)[1]
-
-        return name_to_dim
-
     @classmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_data(cls, msg):
 
@@ -57,25 +42,13 @@ class NamedMessenger(DimStackCleanupMessenger):
 
         batch_names = tuple(funsor_value.inputs.keys())
 
-        name_to_dim.update(cls._get_name_to_dim(batch_names, name_to_dim=name_to_dim, dim_type=dim_type))
-        msg["stop"] = True  # only need to run this once per to_data call
-
-    @staticmethod
-    def _get_dim_to_name(batch_shape, dim_to_name=None, dim_type=DimType.LOCAL):
-        dim_to_name = OrderedDict() if dim_to_name is None else dim_to_name.copy()
-        batch_dim = len(batch_shape)
-
         # interpret all names/dims as requests since we only run this function once
-        for dim in range(-batch_dim, 0):
-            if batch_shape[dim] == 1:
-                continue
-            name = dim_to_name.get(dim, None)
-            dim_to_name[dim] = name if isinstance(name, NameRequest) else NameRequest(name, dim_type)
+        for name in batch_names:
+            dim = name_to_dim.get(name, None)
+            name_to_dim[name] = _DIM_STACK.request(
+                name, dim if isinstance(dim, DimRequest) else DimRequest(dim, dim_type))[1]
 
-        for dim, name_request in dim_to_name.items():
-            dim_to_name[dim] = _DIM_STACK.request(name_request, dim)[0]
-
-        return dim_to_name
+        msg["stop"] = True  # only need to run this once per to_data call
 
     @classmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_funsor(cls, msg):
@@ -94,7 +67,14 @@ class NamedMessenger(DimStackCleanupMessenger):
         except AttributeError:
             batch_shape = raw_value.shape[:len(raw_value.shape) - event_dim]
 
-        dim_to_name.update(cls._get_dim_to_name(batch_shape, dim_to_name=dim_to_name, dim_type=dim_type))
+        # interpret all names/dims as requests since we only run this function once
+        for dim in range(-len(batch_shape), 0):
+            if batch_shape[dim] == 1:
+                continue
+            name = dim_to_name.get(dim, None)
+            dim_to_name[dim] = _DIM_STACK.request(
+                name if isinstance(name, NameRequest) else NameRequest(name, dim_type), dim)[0]
+
         msg["stop"] = True  # only need to run this once per to_funsor call
 
 
