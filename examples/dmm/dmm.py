@@ -118,20 +118,20 @@ class Combiner(nn.Module):
     through the hidden state of the RNN (see the PyTorch module `rnn` below)
     """
 
-    def __init__(self, z_dim, rnn_dim, guide_family):
+    def __init__(self, z_dim, obs_dim, rnn_dim, guide_family):
         super().__init__()
+        print("Initialized {} Combiner with obs/z dims = {} {}".format(guide_family, obs_dim, z_dim))
         self.z_dim = z_dim
+        self.obs_dim = obs_dim
+        self.obs_mat = nn.Parameter(0.3 * torch.randn(self.z_dim, self.obs_dim))
         self.guide_family = guide_family
-        # initialize the three linear transformations used in the neural network
         if self.guide_family == 'markov':
-            self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim // 4)
-            self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim // 4)
-            self.lin_hidden_to_mat = nn.Linear(rnn_dim, z_dim * z_dim // 4)
+            self.lin_hidden_to_obs_scale = nn.Linear(rnn_dim, self.obs_dim)
+            self.lin_hidden_to_trans_scale = nn.Linear(rnn_dim, z_dim)
+            self.lin_hidden_to_pseudo_obs = nn.Linear(rnn_dim, self.obs_dim)
         elif self.guide_family == 'meanfield':
             self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim)
             self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim)
-        # initialize the two non-linearities used in the neural network
-        self.tanh = nn.Tanh()
         self.softplus = nn.Softplus()
 
     def forward(self, h_rnn):
@@ -140,14 +140,15 @@ class Combiner(nn.Module):
         state of the RNN `h(x_{t:T})` we return the mean and scale vectors that
         parameterize the (diagonal) gaussian distribution `q(z_t | z_{t-1}, x_{t:T})`
         """
-        loc = self.lin_hidden_to_loc(h_rnn)
-        scale = self.softplus(self.lin_hidden_to_scale(h_rnn))
         if self.guide_family == 'markov':
-            mat = self.lin_hidden_to_mat(h_rnn)
-            mat = mat.reshape(mat.size(0), mat.size(1), self.z_dim, self.z_dim // 4)
-            return loc, scale, mat
+            trans_scale = self.softplus(self.lin_hidden_to_trans_scale(h_rnn))
+            obs_scale = self.softplus(self.lin_hidden_to_obs_scale(h_rnn))
+            pseudo_obs = self.lin_hidden_to_pseudo_obs(h_rnn)
+            return trans_scale, obs_scale, pseudo_obs, self.obs_mat
         else:
-            return loc, scale, None
+            loc = self.lin_hidden_to_loc(h_rnn)
+            scale = self.softplus(self.lin_hidden_to_scale(h_rnn))
+            return loc, scale
 
 
 class DMM(nn.Module):
@@ -156,8 +157,8 @@ class DMM(nn.Module):
     variational distribution (the guide) for the Deep Markov Model
     """
 
-    def __init__(self, input_dim=88, z_dim=64, emission_dim=100,
-                 transition_dim=200, rnn_dim=300, num_layers=1, rnn_dropout_rate=0.0,
+    def __init__(self, input_dim=88, z_dim=80, obs_dim=100, emission_dim=100,
+                 transition_dim=200, rnn_dim=400, num_layers=1, rnn_dropout_rate=0.0,
                  use_cuda=False, guide_family="meanfield"):
         super().__init__()
         self.guide_family = guide_family
@@ -166,7 +167,7 @@ class DMM(nn.Module):
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
-        self.combiner = Combiner(z_dim, rnn_dim, guide_family)
+        self.combiner = Combiner(z_dim, obs_dim, rnn_dim, guide_family)
         # dropout just takes effect on inner layers of rnn
         rnn_dropout_rate = 0. if num_layers == 1 else rnn_dropout_rate
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
@@ -225,15 +226,15 @@ class DMM(nn.Module):
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-        z_loc, z_scale, z_mat = self.combiner(rnn_output)
 
         with pyro.poutine.scale(scale=annealing_factor):
 
             if self.guide_family == "meanfield":
+                z_loc, z_scale = self.combiner(rnn_output)
                 pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
             elif self.guide_family == "markov":
-                #print("T_max, z_loc, z_scale, z_mat",T_max, z_loc.shape, z_scale.shape, z_mat.shape)
-                hmm = CustomHMM(T_max, z_loc, z_scale, z_mat)
+                trans_scale, obs_scale, pseudo_obs, obs_mat = self.combiner(rnn_output)
+                hmm = CustomHMM(T_max, pseudo_obs, trans_scale, obs_scale, obs_mat)
                 pyro.sample("z", hmm.to_event(1))
 
 
@@ -242,15 +243,17 @@ class CustomHMM(TorchDistribution):
     arg_constraints = {}
     support = constraints.real
 
-    def __init__(self, duration, loc, scale, mat):
+    def __init__(self, duration, pseudo_obs, trans_scale, obs_scale, obs_mat):
         self.duration = duration
-        self.loc = loc
-        self.scale = scale
-        self.mat = mat
-        self.dim = 4 *  loc.size(-1)
+        self.z_dim = trans_scale.size(-1)
+        self.obs_dim = obs_scale.size(-1)
+        self.pseudo_obs = pseudo_obs
+        self.trans_scale = trans_scale
+        self.obs_scale = obs_scale
+        self.obs_mat = obs_mat
 
-        batch_shape = loc.shape[:-2]
-        event_shape = loc.shape[-2:]
+        batch_shape = obs_scale.shape[:-2]
+        event_shape = obs_scale.shape[-2:]
         self._log_prob = None
         super().__init__(batch_shape, event_shape, validate_args=False)
 
@@ -258,36 +261,40 @@ class CustomHMM(TorchDistribution):
         return self._log_prob
 
     def rsample(self, sample_shape=()):
-        eye = torch.eye(self.dim, dtype=self.loc.dtype, device=self.loc.device)
-        trans_matrix = torch.eye(self.dim, dtype=self.loc.dtype, device=self.loc.device)
-        trans_dist = tdist.MultivariateNormal(torch.zeros(self.batch_shape + (self.duration, self.dim),
-                                                          dtype=self.loc.dtype, device=self.loc.device),
-                                              0.1 * eye)
-        trans = matrix_and_mvn_to_gaussian(trans_matrix, trans_dist)
+        proto = self.obs_mat
 
-        initial_dist = tdist.MultivariateNormal(torch.zeros(self.batch_shape + (self.dim,),
-                                                             dtype=self.loc.dtype, device=self.loc.device), eye)
-        init = mvn_to_gaussian(initial_dist)
+        trans_matrix = torch.eye(self.z_dim, dtype=proto.dtype, device=proto.device)
+        trans_dist = tdist.Normal(torch.zeros(self.batch_shape + (self.duration, self.z_dim),
+                                              dtype=proto.dtype, device=proto.device),
+                                              self.trans_scale)
+        trans = matrix_and_mvn_to_gaussian(trans_matrix, tdist.Independent(trans_dist, 1))
 
-        eye2 = torch.eye(self.dim // 4, dtype=self.loc.dtype, device=self.loc.device)
-        obs_dist = tdist.MultivariateNormal(torch.zeros(self.batch_shape + (self.duration, self.dim // 4),
-                                                        dtype=self.loc.dtype, device=self.loc.device),
-                                            self.scale.unsqueeze(-1) * eye2)
-        obs = matrix_and_mvn_to_gaussian(self.mat, obs_dist)
+        initial_dist = tdist.Normal(torch.zeros(self.batch_shape + (self.z_dim,),
+                                                dtype=proto.dtype, device=proto.device),
+                                    torch.ones(self.z_dim, dtype=proto.dtype, device=proto.device))
+        init = mvn_to_gaussian(tdist.Independent(initial_dist, 1))
 
-        factor = trans + obs.condition(self.loc).event_pad(left=self.dim)
+        eye2 = torch.eye(self.obs_dim, dtype=proto.dtype, device=proto.device)
+        obs_dist = tdist.Normal(torch.zeros(self.batch_shape + (self.duration, self.obs_dim),
+                                            dtype=proto.dtype, device=proto.device),
+                                            self.obs_scale)
+        obs = matrix_and_mvn_to_gaussian(self.obs_mat, tdist.Independent(obs_dist, 1))
 
+        factor = trans + obs.condition(self.pseudo_obs).event_pad(left=self.z_dim)
+
+        # sample
         z = _sequential_gaussian_filter_sample(init, factor, sample_shape=sample_shape)
 
-        trans_forward = trans[(slice(0, None), slice(1, None))]
+        # now compute log prob and save result for later
+        trans_forward = trans[(slice(0, None), slice(1, None))].to_gaussian()
         trans0 = trans[(slice(0, None), 0)]
         num1 = trans_forward.log_density(torch.cat([z[:, :-1, :], z[:, 1:, :]], dim=-1)).sum(-1)
         num2 = (trans0.condition(z[:, 0, :]) + init).event_logsumexp()
-        num3 = obs.log_density(torch.cat([z, self.loc], dim=-1)).sum(-1)
+        num3 = obs.to_gaussian().log_density(torch.cat([z, self.pseudo_obs], dim=-1)).sum(-1)
         numerator = num1 + num2 + num3
 
         denom = _sequential_gaussian_tensordot(factor)
-        denom = gaussian_tensordot(init, denom, dims=self.dim)
+        denom = gaussian_tensordot(init, denom, dims=self.z_dim)
         denom = denom.event_logsumexp()
 
         self._log_prob = numerator - denom
@@ -339,7 +346,8 @@ def main(args):
         test_seq_lengths, cuda=args.cuda)
 
     # instantiate the dmm
-    dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, use_cuda=args.cuda, guide_family=args.guide_family)
+    dmm = DMM(rnn_dropout_rate=args.rnn_dropout_rate, use_cuda=args.cuda,
+              z_dim=args.z_dim, obs_dim=args.obs_dim, guide_family=args.guide_family)
 
     # setup optimizer
     adam_params = {"lr": args.learning_rate, "betas": (args.beta1, args.beta2),
@@ -465,18 +473,20 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-gf', '--guide-family', type=str, default="markov")
-    parser.add_argument('-n', '--num-epochs', type=int, default=5000)
-    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)
-    parser.add_argument('-b1', '--beta1', type=float, default=0.96)
+    parser.add_argument('-n', '--num-epochs', type=int, default=3000)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.001)
+    parser.add_argument('-b1', '--beta1', type=float, default=0.95)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
     parser.add_argument('-cn', '--clip-norm', type=float, default=10.0)
     parser.add_argument('-lrd', '--lr-decay', type=float, default=0.99996)
-    parser.add_argument('-wd', '--weight-decay', type=float, default=2.0)
+    parser.add_argument('-wd', '--weight-decay', type=float, default=5.0)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
-    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.2)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.1)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
+    parser.add_argument('-zd', '--z-dim', type=int, default=64)
+    parser.add_argument('-od', '--obs-dim', type=int, default=64)
     parser.add_argument('-lopt', '--load-opt', type=str, default='')
     parser.add_argument('-lmod', '--load-model', type=str, default='')
     parser.add_argument('-sopt', '--save-opt', type=str, default='')
