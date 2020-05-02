@@ -146,6 +146,7 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
 
     # compute the length of the longest sequence in the mini-batch
     T_max = torch.max(seq_lengths)
+    T_min = torch.min(seq_lengths)
     # this is the sorted mini-batch
     mini_batch = sequences[sorted_mini_batch_indices, 0:T_max, :]
     # this is the sorted mini-batch in reverse temporal order
@@ -160,6 +161,8 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
         mini_batch_reversed = mini_batch_reversed.cuda()
 
     # do sequence packing
+    mini_batch_reversed = mini_batch_reversed[:, -25:, :]
+    sorted_seq_lengths[:] = 25
     mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
                                                             sorted_seq_lengths,
                                                             batch_first=True)

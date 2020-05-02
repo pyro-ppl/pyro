@@ -23,6 +23,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.distributions as tdist
+from torch.distributions import constraints
 
 import polyphonic_data_loader as poly
 import pyro
@@ -33,6 +34,11 @@ from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
 from util import get_logger
+
+from pyro.distributions.torch_distribution import TorchDistribution
+
+from pyro.ops.gaussian import gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
+from pyro.distributions.hmm import _sequential_gaussian_filter_sample, _sequential_gaussian_tensordot
 
 
 class Emitter(nn.Module):
@@ -114,10 +120,11 @@ class Combiner(nn.Module):
 
     def __init__(self, z_dim, rnn_dim):
         super().__init__()
+        self.z_dim = z_dim
         # initialize the three linear transformations used in the neural network
-        self.lin_z_to_hidden = nn.Linear(z_dim, rnn_dim)
-        self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim)
-        self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim)
+        self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim // 4)
+        self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim // 4)
+        self.lin_hidden_to_mat = nn.Linear(rnn_dim, z_dim * z_dim // 4)
         # initialize the two non-linearities used in the neural network
         self.tanh = nn.Tanh()
         self.softplus = nn.Softplus()
@@ -132,10 +139,12 @@ class Combiner(nn.Module):
         #h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
         # use the combined hidden state to compute the mean used to sample z_t
         loc = self.lin_hidden_to_loc(h_rnn)
+        mat = self.lin_hidden_to_mat(h_rnn)
+        mat = mat.reshape(mat.size(0), mat.size(1), self.z_dim, self.z_dim // 4)
         # use the combined hidden state to compute the scale used to sample z_t
         scale = self.softplus(self.lin_hidden_to_scale(h_rnn))
         # return loc, scale which can be fed into Normal
-        return loc, scale
+        return loc, scale, mat
 
 
 class DMM(nn.Module):
@@ -144,8 +153,8 @@ class DMM(nn.Module):
     variational distribution (the guide) for the Deep Markov Model
     """
 
-    def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
-                 transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.0,
+    def __init__(self, input_dim=88, z_dim=32, emission_dim=100,
+                 transition_dim=200, rnn_dim=100, num_layers=1, rnn_dropout_rate=0.0,
                  use_cuda=False, guide_family="meanfield"):
         super().__init__()
         self.guide_family = guide_family
@@ -177,6 +186,67 @@ class DMM(nn.Module):
     # the model p(x_{1:T} | z_{1:T}) p(z_{1:T})
     def model(self, mini_batch, mini_batch_reversed, mini_batch_mask,
               mini_batch_seq_lengths, annealing_factor=1.0):
+
+        mini_batch = mini_batch[:, 0:25, :]
+        mini_batch_mask = mini_batch_mask[:, 0:25]
+        #print('mask min max', mini_batch_mask.min().item(), mini_batch_mask.max().item())
+
+        T_max = mini_batch.size(1)
+
+        pyro.module("dmm", self)
+
+        ones = torch.ones(mini_batch.size(0), T_max, self.z_0.size(0), dtype=self.z_0.dtype, device=self.z_0.device)
+        # note the mask
+        z = pyro.sample("z", dist.Normal(0.0, ones).mask(False).to_event(3))
+
+        z_0 = self.z_0.expand(mini_batch.size(0), 1, self.z_0.size(0))
+        # shift z for autoregressive conditioning
+        z_shift = torch.cat([z_0, z[:, :-1, :]], dim=-2)
+        z_loc, z_scale = self.trans(z_shift)
+
+        mask = mini_batch_mask.unsqueeze(-1)
+
+        with poutine.scale(scale=annealing_factor):
+            # actually compute p(z)
+            pyro.sample("z_aux", dist.Normal(z_loc, z_scale).mask(mask).to_event(3),
+                        obs=z)
+
+            emission_probs = self.emitter(z)
+            pyro.sample("obs_x", dist.Bernoulli(emission_probs).mask(mask).to_event(3),
+                        obs=mini_batch)
+
+    def guide(self, mini_batch, mini_batch_reversed, mini_batch_mask,
+              mini_batch_seq_lengths, annealing_factor=1.0):
+
+        mini_batch = mini_batch[:, 0:25, :]
+        mini_batch_mask = mini_batch_mask[:, 0:25]
+        mini_batch_seq_lengths[:] = 25
+        T_max = mini_batch.size(1)
+        pyro.module("dmm", self)
+
+        h_0_contig = self.h_0.expand(1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
+
+        rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
+        # reverse the time-ordering in the hidden state and un-pack it
+        rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
+        z_loc, z_scale, z_mat = self.combiner(rnn_output)
+
+        with pyro.poutine.scale(scale=annealing_factor):
+
+            if self.guide_family == "meanfield":
+                pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
+            elif self.guide_family == "markov":
+                #print("T_max, z_loc, z_scale, z_mat",T_max, z_loc.shape, z_scale.shape, z_mat.shape)
+                hmm = CustomHMM(T_max, z_loc, z_scale, z_mat)
+                pyro.sample("z", hmm.to_event(1))
+
+
+class CustomHMM(TorchDistribution):
+    has_rsample = True
+    arg_constraints = {}
+    support = constraints.real
+
+    def __init__(self, duration, loc, scale, mat):
 
         T_max = mini_batch.size(1)
 
@@ -213,24 +283,74 @@ class DMM(nn.Module):
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
-        z_loc, z_scale = self.combiner(rnn_output)
+        z_loc, z_scale, z_mat = self.combiner(rnn_output)
 
         with pyro.poutine.scale(scale=annealing_factor):
 
             if self.guide_family == "meanfield":
                 pyro.sample("z", dist.Normal(z_loc, z_scale).mask(mini_batch_mask.unsqueeze(-1)).to_event(3))
             elif self.guide_family == "markov":
-                init_dist = tdist.MultivariateNormal(z_loc.new_zeros(self.z_dim),
-                                                     torch.eye(self.z_dim, dtype=z_loc.dtype, device=z_loc.device))
-                trans_cov = z_scale.unsqueeze(-1) * torch.eye(self.z_dim, dtype=z_loc.dtype, device=z_loc.device)
-                trans_dist = tdist.MultivariateNormal(z_loc.new_zeros(self.z_dim), trans_cov)
-                trans_matrix = pyro.param("trans_mat", lambda: 0.2 * torch.randn(self.z_dim, self.z_dim))
-                obs_matrix = torch.eye(self.z_dim, dtype=z_loc.dtype, device=z_loc.device)
-                obs_dist = tdist.MultivariateNormal(z_loc.new_zeros(self.z_dim), trans_cov)
-                hmm = dist.GaussianHMM(init_dist, trans_matrix, trans_dist,
-                                       obs_matrix, obs_dist.mask(mini_batch_mask), duration=T_max,
-                                       obs=z_loc)
+                #print("T_max, z_loc, z_scale, z_mat",T_max, z_loc.shape, z_scale.shape, z_mat.shape)
+                hmm = CustomHMM(T_max, z_loc, z_scale, z_mat)
                 pyro.sample("z", hmm.to_event(1))
+
+
+class CustomHMM(TorchDistribution):
+    has_rsample = True
+    arg_constraints = {}
+    support = constraints.real
+
+    def __init__(self, duration, loc, scale, mat):
+        self.duration = duration
+        self.loc = loc
+        self.scale = scale
+        self.mat = mat
+        self.dim = 4 *  loc.size(-1)
+
+        batch_shape = loc.shape[:-2]
+        event_shape = loc.shape[-2:]
+        self._log_prob = None
+        super().__init__(batch_shape, event_shape, validate_args=False)
+
+    def log_prob(self, value):
+        return self._log_prob
+
+    def rsample(self, sample_shape=()):
+        eye = torch.eye(self.dim, dtype=self.loc.dtype, device=self.loc.device)
+        trans_matrix = torch.eye(self.dim, dtype=self.loc.dtype, device=self.loc.device)
+        trans_dist = tdist.MultivariateNormal(torch.zeros(self.batch_shape + (self.duration, self.dim),
+                                                          dtype=self.loc.dtype, device=self.loc.device),
+                                              0.1 * eye)
+        trans = matrix_and_mvn_to_gaussian(trans_matrix, trans_dist)
+
+        initial_dist = tdist.MultivariateNormal(torch.zeros(self.batch_shape + (self.dim,),
+                                                             dtype=self.loc.dtype, device=self.loc.device), eye)
+        init = mvn_to_gaussian(initial_dist)
+
+        eye2 = torch.eye(self.dim // 4, dtype=self.loc.dtype, device=self.loc.device)
+        obs_dist = tdist.MultivariateNormal(torch.zeros(self.batch_shape + (self.duration, self.dim // 4),
+                                                        dtype=self.loc.dtype, device=self.loc.device),
+                                            self.scale.unsqueeze(-1) * eye2)
+        #obs_matrix = torch.eye(self.dim, dtype=self.loc.dtype, device=self.loc.device)
+        obs = matrix_and_mvn_to_gaussian(self.mat, obs_dist)
+
+        factor = trans + obs.condition(self.loc).event_pad(left=self.dim)
+
+        z = _sequential_gaussian_filter_sample(init, factor, sample_shape=sample_shape)
+
+        trans_forward = trans[(slice(0, None), slice(1, None))]
+        trans0 = trans[(slice(0, None), 0)]
+        num1 = trans_forward.log_density(torch.cat([z[:, :-1, :], z[:, 1:, :]], dim=-1)).sum(-1)
+        num2 = (trans0.condition(z[:, 0, :]) + init).event_logsumexp()
+        numerator = num1 + num2
+
+        denom = _sequential_gaussian_tensordot(factor)
+        denom = gaussian_tensordot(init, denom, dims=self.dim)
+        denom = denom.event_logsumexp()
+
+        self._log_prob = numerator - denom
+        #print("lp", self._log_prob.mean().item())
+        return z
 
 
 # setup, training, and evaluation
@@ -255,7 +375,7 @@ def main(args):
         (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
     # how often we do validation/test evaluation during training
-    val_test_frequency = 10
+    val_test_frequency = 5
     # the number of samples we use to do the evaluation
     n_eval_samples = 1
 
