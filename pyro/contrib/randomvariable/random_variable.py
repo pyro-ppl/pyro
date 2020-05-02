@@ -75,7 +75,7 @@ class RVChainOps:
     def pow(self, x):
         return self ** x
 
-    def neg(self, x):
+    def neg(self):
         return -self
 
     def exp(self):
