@@ -83,7 +83,7 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples, tmc_strategy):
 @pytest.mark.parametrize("num_samples,expand", [(200, False)])
 @pytest.mark.parametrize("max_plate_nesting", [1])
 @pytest.mark.parametrize("guide_type", ["prior", "factorized", "nonfactorized"])
-@pytest.mark.parametrize("reparameterized", [False, True])
+@pytest.mark.parametrize("reparameterized", [False, True], ids=["dice", "pathwise"])
 @pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
 def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expand,
                                     guide_type, reparameterized, tmc_strategy):

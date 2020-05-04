@@ -4,6 +4,7 @@
 from collections import OrderedDict, defaultdict
 import contextlib
 import logging
+import math
 import os
 from queue import LifoQueue
 
@@ -38,12 +39,15 @@ logger = logging.getLogger(__name__)
 _NAMED_TEST_STRENGTH = int(os.environ.get("NAMED_TEST_STRENGTH", 2))
 
 
-def assert_ok(model, max_plate_nesting=None, **kwargs):
+def assert_ok(model, guide=None, max_plate_nesting=None, **kwargs):
     """
     Assert that enumeration runs...
     """
     with pyro_backend("pyro"):
         pyro.clear_param_store()
+
+    if guide is None:
+        guide = lambda **kwargs: None  # noqa: E731
 
     q_pyro, q_funsor = LifoQueue(), LifoQueue()
     q_pyro.put(Trace())
@@ -51,24 +55,26 @@ def assert_ok(model, max_plate_nesting=None, **kwargs):
 
     while not q_pyro.empty() and not q_funsor.empty():
         with pyro_backend("pyro"):
-            with handlers.trace() as tr_pyro, handlers.enum(first_available_dim=-max_plate_nesting - 1):
-                handlers.queue(
-                    model, q_pyro, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
-                )(**kwargs)
+            with handlers.enum(first_available_dim=-max_plate_nesting - 1):
+                guide_tr_pyro = handlers.trace(handlers.queue(
+                    guide, q_pyro, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
+                )).get_trace(**kwargs)
+                tr_pyro = handlers.trace(handlers.replay(model, trace=guide_tr_pyro)).get_trace(**kwargs)
 
         with pyro_backend("contrib.funsor"):
-            with handlers.trace() as tr_funsor, handlers.enum(first_available_dim=-max_plate_nesting - 1):
-                handlers.queue(
-                    model, q_funsor, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
-                )(**kwargs)
+            with handlers.enum(first_available_dim=-max_plate_nesting - 1):
+                guide_tr_funsor = handlers.trace(handlers.queue(
+                    guide, q_funsor, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
+                )).get_trace(**kwargs)
+                tr_funsor = handlers.trace(handlers.replay(model, trace=guide_tr_funsor)).get_trace(**kwargs)
 
         # make sure all dimensions were cleaned up
         assert len(_DIM_STACK._stack) == 1
         assert not _DIM_STACK.global_frame.name_to_dim and not _DIM_STACK.global_frame.dim_to_name
         assert _DIM_STACK.outermost is None
 
-        tr_pyro = prune_subsample_sites(tr_pyro.trace.copy())
-        tr_funsor = prune_subsample_sites(tr_funsor.trace.copy())
+        tr_pyro = prune_subsample_sites(tr_pyro.copy())
+        tr_funsor = prune_subsample_sites(tr_funsor.copy())
         _check_traces(tr_pyro, tr_funsor)
 
 
@@ -124,7 +130,7 @@ def _check_traces(tr_pyro, tr_funsor):
                     continue
                 funsor_node = tr_funsor.nodes[name]
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
-                funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
+                funsor_names = frozenset(funsor_node['funsor']['log_prob'].inputs)
                 try:
                     assert pyro_names == funsor_names
                 except AssertionError:
@@ -135,7 +141,7 @@ def _check_traces(tr_pyro, tr_funsor):
                     continue
                 funsor_node = tr_funsor.nodes[name]
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
-                funsor_names = frozenset(funsor_node['infer']['funsor_log_prob'].inputs)
+                funsor_names = frozenset(funsor_node['funsor']['log_prob'].inputs)
                 if pyro_names != funsor_names:
                     err_str = f"==> (packed mismatch) {name}"
                 else:
@@ -652,7 +658,7 @@ def test_enum_discrete_plate_shape_broadcasting_ok(subsampling, enumerate_):
             assert c.shape == (50, y_plate.subsample_size, 1)
             assert d.shape == (50, y_plate.subsample_size, x_plate.subsample_size)
 
-    assert_ok(model, max_plate_nesting=3)
+    assert_ok(model, guide=model, max_plate_nesting=3)
 
 
 @pytest.mark.parametrize('subsampling', [False, True])
@@ -689,26 +695,41 @@ def test_plate_subsample_primitive_ok(subsample_size, num_samples):
     assert_ok(model, max_plate_nesting=1)
 
 
-@pytest.mark.parametrize("depth", [1, 2, 3])
-@pytest.mark.parametrize("num_samples", [None, 200])
-@pytest.mark.parametrize("max_plate_nesting", [2, 3])
-@pytest.mark.parametrize("tmc_strategy", ["diagonal"])
-def test_tmc_categoricals_valid(depth, max_plate_nesting, num_samples, tmc_strategy):
+@pytest.mark.parametrize("depth", [1, 2, 3, 4])
+@pytest.mark.parametrize("num_samples,expand", [(200, False)])
+@pytest.mark.parametrize("max_plate_nesting", [1])
+@pytest.mark.parametrize("guide_type", ["prior", "factorized", "nonfactorized"])
+@pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
+def test_normals_chain_valid(depth, num_samples, max_plate_nesting, expand,
+                             guide_type, tmc_strategy):
 
-    @infer.config_enumerate(default="parallel", expand=False, num_samples=num_samples, tmc=tmc_strategy)
-    def model(qs=None, data=None):
-        x = pyro.sample("x0", dist.Categorical(qs[0]))
-        with pyro.plate("local", 3):
-            for i in range(1, depth):
-                x = pyro.sample("x{}".format(i), dist.Categorical(qs[i][..., x, :]))
-            with pyro.plate("data", 4):
-                pyro.sample("y", dist.Bernoulli(qs[-1][..., x]), obs=data)
+    def model():
+        q2 = pyro.param("q2", lambda: torch.tensor(0.5, requires_grad=True))
+        x = pyro.sample("x0", dist.Normal(q2, math.sqrt(1. / depth)))
+        for i in range(1, depth):
+            x = pyro.sample("x{}".format(i), dist.Normal(x, math.sqrt(1. / depth)))
+        pyro.sample("y", dist.Normal(x, 1.), obs=torch.tensor(float(1)))
 
-    # initialize
-    qs = [torch.tensor([0.4, 0.6])]
-    for i in range(1, depth):
-        qs.append(torch.randn(2, 2).abs())
-    qs.append(torch.tensor([0.75, 0.25]))
-    data = (torch.rand(4, 3) > 0.5).to(dtype=qs[-1].dtype, device=qs[-1].device)
+    def factorized_guide():
+        q2 = pyro.param("q2", lambda: torch.tensor(0.5, requires_grad=True))
+        pyro.sample("x0", dist.Normal(q2, math.sqrt(1. / depth)))
+        for i in range(1, depth):
+            pyro.sample("x{}".format(i), dist.Normal(0., math.sqrt(float(i+1) / depth)))
 
-    assert_ok(model, max_plate_nesting=max_plate_nesting, qs=qs, data=data)
+    def nonfactorized_guide():
+        q2 = pyro.param("q2", lambda: torch.tensor(0.5, requires_grad=True))
+        x = pyro.sample("x0", dist.Normal(q2, math.sqrt(1. / depth)))
+        for i in range(1, depth):
+            x = pyro.sample("x{}".format(i), dist.Normal(x, math.sqrt(1. / depth)))
+
+    with pyro_backend("pyro"):
+
+        model = infer.config_enumerate(
+            model, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
+        guide = factorized_guide if guide_type == "factorized" else \
+            nonfactorized_guide if guide_type == "nonfactorized" else \
+            lambda *args: None
+        guide = infer.config_enumerate(
+            guide, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
+
+    assert_ok(model, guide=guide, max_plate_nesting=max_plate_nesting)

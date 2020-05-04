@@ -136,8 +136,10 @@ class EnumMessenger(BaseEnumMessenger):
                 or isinstance(msg["fn"], _Subsample):
             return
 
-        msg["infer"]["funsor_log_measure"], msg["infer"]["funsor_value"] = enumerate_site(msg)
-        msg["value"] = to_data(msg["infer"]["funsor_value"])
+        if "funsor" not in msg:
+            msg["funsor"] = {}
+        msg["funsor"]["log_measure"], msg["funsor"]["value"] = enumerate_site(msg)
+        msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
 
 

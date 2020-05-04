@@ -28,12 +28,12 @@ class TraceEnum_ELBO(ELBO):
             tr = prune_subsample_sites(tr)
             for name, node in tr.nodes.items():
                 if role == "model":
-                    factors.append(node["infer"]["funsor_log_prob"])
+                    factors.append(node["funsor"]["log_prob"])
                 elif role == "guide":
-                    factors.append(-node["infer"]["funsor_log_prob"])
-                    measures.append(node["infer"]["funsor_log_measure"])
+                    factors.append(-node["funsor"]["log_prob"])
+                    measures.append(node["funsor"]["log_measure"])
                 plate_vars |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-                measure_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs) - plate_vars
+                measure_vars |= frozenset(node["funsor"]["log_prob"].inputs) - plate_vars
 
         # TODO support model enumeration
         # compute actual loss
@@ -69,16 +69,16 @@ class TraceTMC_ELBO(ELBO):
                 if node["type"] != "sample":
                     continue
                 if role == "model":
-                    factors.append(node["infer"]["funsor_log_prob"])
+                    factors.append(node["funsor"]["log_prob"])
                     if name not in guide_tr.trace.nodes and not node["is_observed"]:
-                        measures.append(node["infer"]["funsor_log_measure"])
-                        sum_vars |= frozenset(node["infer"]["funsor_log_measure"].inputs)
+                        measures.append(node["funsor"]["log_measure"])
+                        sum_vars |= frozenset(node["funsor"]["log_measure"].inputs)
                 elif role == "guide":
-                    factors.append(-node["infer"]["funsor_log_prob"])
-                    measures.append(node["infer"]["funsor_log_measure"])
-                    sum_vars |= frozenset(node["infer"]["funsor_log_measure"].inputs)
+                    factors.append(-node["funsor"]["log_prob"])
+                    measures.append(node["funsor"]["log_measure"])
+                    sum_vars |= frozenset(node["funsor"]["log_measure"].inputs)
                 plate_vars |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-                sum_vars |= frozenset(node["infer"]["funsor_log_prob"].inputs)
+                sum_vars |= frozenset(node["funsor"]["log_prob"].inputs)
                 sum_vars -= plate_vars
 
         with funsor.interpreter.interpretation(funsor.terms.lazy):

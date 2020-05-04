@@ -24,21 +24,22 @@ class TraceMessenger(OrigTraceMessenger):
         self.pack_online = True if pack_online is None else pack_online
 
     def _pyro_post_sample(self, msg):
+        if "funsor" not in msg:
+            msg["funsor"] = {}
         if isinstance(msg["fn"], _Subsample):
             return super()._pyro_post_sample(msg)
         if self.pack_online:
-            if "funsor_fn" not in msg["infer"]:
-                msg["infer"]["funsor_fn"] = to_funsor(msg["fn"], funsor.reals())
-            if "funsor_log_prob" not in msg["infer"]:
-                msg["infer"]["funsor_log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]),
-                                                            funsor.reals())
-            if "funsor_value" not in msg["infer"]:
+            if "fn" not in msg["funsor"]:
+                msg["funsor"]["fn"] = to_funsor(msg["fn"], funsor.reals())
+            if "log_prob" not in msg["funsor"]:
+                msg["funsor"]["log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.reals())
+            if "value" not in msg["funsor"]:
                 value_output = funsor.reals(*getattr(msg["fn"], "event_shape", ()))
-                msg["infer"]["funsor_value"] = to_funsor(msg["value"], value_output)
+                msg["funsor"]["value"] = to_funsor(msg["value"], value_output)
         else:
             # this logic has the same side effect on the _DIM_STACK as the above,
             # but does not perform any tensor or funsor operations.
-            msg["infer"]["dim_to_name"] = _DIM_STACK.names_from_batch_shape(msg["fn"].batch_shape)
-            msg["infer"]["dim_to_name"].update(_DIM_STACK.names_from_batch_shape(
+            msg["funsor"]["dim_to_name"] = _DIM_STACK.names_from_batch_shape(msg["fn"].batch_shape)
+            msg["funsor"]["dim_to_name"].update(_DIM_STACK.names_from_batch_shape(
                 msg["value"].shape[:len(msg["value"]).shape - len(msg["fn"].event_shape)]))
         return super()._pyro_post_sample(msg)
