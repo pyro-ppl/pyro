@@ -40,7 +40,10 @@ class TraceEnum_ELBO(ELBO):
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
 
         # TODO in this loop, compute factors, measures, plates, and elimination variables
-        factors, measures, measure_vars, plate_vars = [], [], frozenset(), frozenset()
+        model_log_factors, model_log_measures, model_measure_vars, model_plate_vars = \
+            [], [], frozenset(), frozenset()
+        guide_log_factors, guide_log_measures, guide_measure_vars, guide_plate_vars = \
+            [], [], frozenset(), frozenset()
         for role, tr in zip(("model", "guide"), (model_tr, guide_tr)):
             tr = prune_subsample_sites(tr)
             for name, node in tr.nodes.items():
@@ -51,41 +54,31 @@ class TraceEnum_ELBO(ELBO):
                     measures.append(node["funsor"]["log_measure"])
                 plate_vars |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
                 measure_vars |= frozenset(node["funsor"]["log_prob"].inputs) - plate_vars
+
         # contract out auxiliary variables in the guide
-        guide_aux_vars = frozenset().union(*(f.inputs for f in guide_log_factors)) - \
-            frozenset(guide_plates) - \
-            frozenset(model_log_factors)  # TODO get this right
+        guide_aux_vars = guide_measure_vars - guide_plate_vars - (model_measure_vars | model_plate_vars)
         if guide_aux_vars:
-            guide_log_probs = funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, guide_log_probs,
-                plates=frozenset(guide_plates), eliminate=guide_aux_vars
+            guide_log_factors = funsor.sum_product.partial_sum_product(
+                funsor.ops.logaddexp, funsor.ops.add, guide_log_measures + guide_log_factors,
+                plates=guide_plate_vars, eliminate=guide_aux_vars
             )
 
         # contract out auxiliary variables in the model
-        model_aux_vars = frozenset().union(*(f.inputs for f in model_log_factors)) - \
-            frozenset(model_plates) - \
-            frozenset(guide_log_factors)  # TODO get this right
+        model_aux_vars = model_measure_vars - model_plate_vars - (guide_measure_vars | guide_plate_vars)
         if model_aux_vars:
-            model_log_probs = funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, model_log_probs,
-                plates=frozenset(model_plates), eliminate=model_aux_vars
+            model_log_factors = funsor.sum_product.partial_sum_product(
+                funsor.ops.logaddexp, funsor.ops.add, model_log_measures + model_log_factors,
+                plates=model_plate_vars, eliminate=model_aux_vars
             )
 
         # compute remaining plates and sum_dims
-        plates = frozenset().union(
-            *(model_plates.intersection(f.inputs) for f in model_log_probs))
-        plates = plates | frozenset().union(
-            *(guide_plates.intersection(f.inputs) for f in guide_log_probs))
-        # TODO get sum_vars right
-        sum_vars = frozenset().union(model_log_probs, guide_log_probs) - \
-            frozenset(model_aux_vars | guide_aux_vars)
+        plate_vars = (model_plate_vars | guide_plate_vars) - guide_aux_vars - model_aux_vars
+        sum_vars = (model_measure_vars | guide_measure_vars) - guide_aux_vars - model_aux_vars - plate_vars
 
         # TODO inline this final bit
         with funsor.interpreter.interpretation(funsor.terms.lazy):
-            elbo = Expectation(tuple(log_probs),  # TODO define args correctly
-                               tuple(costs),
-                               sum_vars=sum_vars,
-                               prod_vars=plates)
+            elbo = Expectation(guide_log_factors, model_log_factors + [-lp for lp in guide_log_factors],
+                               sum_vars, plate_vars)
 
         with funsor.memoize.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
