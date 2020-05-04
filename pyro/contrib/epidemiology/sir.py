@@ -368,9 +368,9 @@ class UnknownStartSIRModel(CompartmentalModel):
         self.post_obs_window = len(data)
 
         # We set a small time-constant external infecton rate such that on
-        # average there a single external infection during the pre_obs_window.
-        # This allows unknown time of initial infection without introducing
-        # long-range coupling across time.
+        # average there is a single external infection during the
+        # pre_obs_window. This allows unknown time of initial infection
+        # without introducing long-range coupling across time.
         self.external_rate = 1 / pre_obs_window
 
         # Prepend data with zeros.
