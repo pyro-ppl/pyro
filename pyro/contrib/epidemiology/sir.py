@@ -338,7 +338,7 @@ class UnknownStartSIRModel(CompartmentalModel):
     This model demonstrates:
 
     1.  How to incorporate spontaneous infections from external sources;
-    2.  How to incorporate time-varying piecwise ``rho`` by supporting
+    2.  How to incorporate time-varying piecewise ``rho`` by supporting
         forecasting in :meth:`transition_fwd` and using the
         :class:`~pyro.ops.index.ing.Index` helper in :meth:`transition_bwd`.
     3.  How to override the :meth:`predict` method to compute extra
@@ -347,34 +347,37 @@ class UnknownStartSIRModel(CompartmentalModel):
     :param int population: Total ``population = S + I + R``.
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
-    :param int pre_window: Number of time steps before beginning ``data``
+    :param int pre_obs_window: Number of time steps before beginning ``data``
         where the initial infection may have occurred. Must be positive.
     :param iterable data: Time series of new observed infections. Each time
         step is Binomial distributed between 0 and the number of ``S -> I``
         transitions. This allows false negative but no false positives.
     """
 
-    def __init__(self, population, recovery_time, pre_window, data):
+    def __init__(self, population, recovery_time, pre_obs_window, data):
         compartments = ("S", "I")  # R is implicit.
-        duration = pre_window + len(data)
+        duration = pre_obs_window + len(data)
         super().__init__(compartments, duration, population)
 
         assert isinstance(recovery_time, float)
         assert recovery_time > 1
         self.recovery_time = recovery_time
 
-        assert isinstance(pre_window, int) and pre_window > 0
-        self.pre_window = pre_window
-        self.post_window = len(data)
+        assert isinstance(pre_obs_window, int) and pre_obs_window > 0
+        self.pre_obs_window = pre_obs_window
+        self.post_obs_window = len(data)
 
-        # Expect a single external infection during the pre_window.
-        self.external_rate = 1 / pre_window
+        # We set a small time-constant external infecton rate such that on
+        # average there a single external infection during the pre_obs_window.
+        # This allows unknown time of initial infection without introducing
+        # long-range coupling across time.
+        self.external_rate = 1 / pre_obs_window
 
         # Prepend data with zeros.
         if isinstance(data, list):
-            data = [0.] * self.pre_window + data
+            data = [0.] * self.pre_obs_window + data
         else:
-            data = pad(data, (self.pre_window, 0), value=0.)
+            data = pad(data, (self.pre_obs_window, 0), value=0.)
         self.data = data
 
     series = ("S2I", "I2R", "obs")
@@ -385,13 +388,15 @@ class UnknownStartSIRModel(CompartmentalModel):
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
 
         # Assume two different response rates: rho0 before any observations
-        # were made (in pre_window), followed by a higher response rate rho1
-        # after observations were made (in post_window).
+        # were made (in pre_obs_window), followed by a higher response rate rho1
+        # after observations were made (in post_obs_window).
         rho0 = pyro.sample("rho0", dist.Uniform(0, 1))
         rho1 = pyro.sample("rho1", dist.Uniform(0, 1))
+        # Whereas each of rho0,rho1 are scalars (possibly batched over samples),
+        # we construct a time series rho with an extra time dim on the right.
         rho = torch.cat([
-            rho0.unsqueeze(-1).expand(rho0.shape + (self.pre_window,)),
-            rho1.unsqueeze(-1).expand(rho1.shape + (self.post_window,)),
+            rho0.unsqueeze(-1).expand(rho0.shape + (self.pre_obs_window,)),
+            rho1.unsqueeze(-1).expand(rho1.shape + (self.post_obs_window,)),
         ], dim=-1)
 
         # Model external infections as an infectious pseudo-individual added
@@ -462,7 +467,9 @@ class UnknownStartSIRModel(CompartmentalModel):
         """
         Augments
         :meth:`~pyro.contrib.epidemiology.compartmental.Compartmental.predict`
-        with samples of ``first_infection``.
+        with samples of ``first_infection`` i.e. the first time index at which
+        the infection ``I`` becomes nonzero. Note this is measured from the
+        beginning of ``pre_obs_window``, not the beginning of data.
 
         :param int forecast: The number of time steps to forecast forward.
         :returns: A dictionary mapping sample site name (or compartment name)
@@ -470,5 +477,9 @@ class UnknownStartSIRModel(CompartmentalModel):
         :rtype: dict
         """
         samples = super().predict(forecast)
+
+        # Extract the time index of the first infection (samples["I"] > 0)
+        # for each sample trajectory in the samples["I"] tensor.
         samples["first_infection"] = samples["I"].cumsum(-1).eq(0).sum(-1)
+
         return samples
