@@ -9,6 +9,7 @@ import functools
 import math
 from collections import OrderedDict
 
+import torch
 import funsor
 
 import pyro.poutine.runtime
@@ -73,13 +74,15 @@ def _enum_strategy_mixture(msg):
     plate_inputs = OrderedDict((k, dist.inputs[k]) for k in plate_names)
     # TODO should the ancestor_indices be pyro.sampled?
     ancestor_indices = {
-        name: funsor.distributions.Categorical(
+        # TODO make this comprehension less gross
+        name: _get_delta_point(funsor.distributions.CategoricalLogits(
             # sample different ancestors for each plate slice
             logits=funsor.Tensor(
-                funsor.ops.new_zeros(1).expand(tuple(plate_inputs.values()) + (dist.inputs[name].dtype,)),
+                # TODO avoid use of torch.zeros here in favor of funsor.ops.new_zeros
+                torch.zeros((1,)).expand(tuple(v.dtype for v in plate_inputs.values()) + (dist.inputs[name].dtype,)),
                 plate_inputs
             ),
-        )(value=name).sample(name, sample_inputs)
+        )(value=name).sample(name, sample_inputs), name)
         for name in ancestor_names
     }
     sampled_dist = dist(**ancestor_indices).sample(
