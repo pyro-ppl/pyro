@@ -687,3 +687,28 @@ def test_plate_subsample_primitive_ok(subsample_size, num_samples):
             pyro.sample("x", dist.Bernoulli(p))
 
     assert_ok(model, max_plate_nesting=1)
+
+
+@pytest.mark.parametrize("depth", [1, 2, 3])
+@pytest.mark.parametrize("num_samples", [None, 200])
+@pytest.mark.parametrize("max_plate_nesting", [2, 3])
+@pytest.mark.parametrize("tmc_strategy", ["diagonal"])
+def test_tmc_categoricals_valid(depth, max_plate_nesting, num_samples, tmc_strategy):
+
+    @infer.config_enumerate(default="parallel", expand=False, num_samples=num_samples, tmc=tmc_strategy)
+    def model(qs=None, data=None):
+        x = pyro.sample("x0", dist.Categorical(qs[0]))
+        with pyro.plate("local", 3):
+            for i in range(1, depth):
+                x = pyro.sample("x{}".format(i), dist.Categorical(qs[i][..., x, :]))
+            with pyro.plate("data", 4):
+                pyro.sample("y", dist.Bernoulli(qs[-1][..., x]), obs=data)
+
+    # initialize
+    qs = [torch.tensor([0.4, 0.6])]
+    for i in range(1, depth):
+        qs.append(torch.randn(2, 2).abs())
+    qs.append(torch.tensor([0.75, 0.25]))
+    data = (torch.rand(4, 3) > 0.5).to(dtype=qs[-1].dtype, device=qs[-1].device)
+
+    assert_ok(model, max_plate_nesting=max_plate_nesting, qs=qs, data=data)

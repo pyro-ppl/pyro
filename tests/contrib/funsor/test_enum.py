@@ -54,7 +54,8 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples, tmc_strategy):
 
     with pyro_backend("pyro"):
         elbo = infer.TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
-        enum_model = infer.config_enumerate(model, default="parallel", expand=False, num_samples=None, tmc=tmc_strategy)
+        enum_model = infer.config_enumerate(
+            model, default="parallel", expand=False, num_samples=num_samples, tmc=tmc_strategy)
         expected_loss = (-elbo.differentiable_loss(enum_model, lambda: None)).exp()
         expected_grads = grad(expected_loss, qs)
 
