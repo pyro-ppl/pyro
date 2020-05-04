@@ -87,20 +87,20 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples, tmc_strategy):
 def test_tmc_normals_chain_gradient(depth, num_samples, max_plate_nesting, expand,
                                     guide_type, reparameterized, tmc_strategy):
     def model(reparameterized):
-        Normal = dist.Normal if reparameterized else dist.fakes.NonreparameterizedNormal
+        Normal = dist.Normal if reparameterized else dist.testing.fakes.NonreparameterizedNormal
         x = pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1. / depth)))
         for i in range(1, depth):
             x = pyro.sample("x{}".format(i), Normal(x, math.sqrt(1. / depth)))
         pyro.sample("y", Normal(x, 1.), obs=torch.tensor(float(1)))
 
     def factorized_guide(reparameterized):
-        Normal = dist.Normal if reparameterized else dist.fakes.NonreparameterizedNormal
+        Normal = dist.Normal if reparameterized else dist.testing.fakes.NonreparameterizedNormal
         pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1. / depth)))
         for i in range(1, depth):
             pyro.sample("x{}".format(i), Normal(0., math.sqrt(float(i+1) / depth)))
 
     def nonfactorized_guide(reparameterized):
-        Normal = dist.Normal if reparameterized else dist.fakes.NonreparameterizedNormal
+        Normal = dist.Normal if reparameterized else dist.testing.fakes.NonreparameterizedNormal
         x = pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1. / depth)))
         for i in range(1, depth):
             x = pyro.sample("x{}".format(i), Normal(x, math.sqrt(1. / depth)))
