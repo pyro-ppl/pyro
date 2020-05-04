@@ -18,33 +18,26 @@ class TraceTMC_ELBO(ELBO):
         raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with trace() as guide_tr, enum(first_available_dim=-1-self.max_plate_nesting):
-            guide(*args, **kwargs)
-        with trace() as model_tr, enum(first_available_dim=-1-self.max_plate_nesting), \
-                replay(trace=guide_tr.trace):
-            model(*args, **kwargs)
-        factors, measures, sum_vars, plate_vars = [], [], frozenset(), frozenset()
-        for role, tr in zip(("model", "guide"), (model_tr.trace, guide_tr.trace)):
-            tr = prune_subsample_sites(tr)
+        with enum(first_available_dim=-self.max_plate_nesting-1):
+            guide_tr = trace(guide).get_trace(*args, **kwargs)
+            model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
+
+        log_factors, log_measures, measure_vars, plate_vars = [], [], frozenset(), frozenset()
+        for role, tr in zip(("model", "guide"), map(prune_subsample_sites, (model_tr, guide_tr))):
             for name, node in tr.nodes.items():
                 if node["type"] != "sample":
                     continue
-                if role == "model":
-                    factors.append(node["funsor"]["log_prob"])
-                    if name not in guide_tr.trace.nodes and not node["is_observed"]:
-                        measures.append(node["funsor"]["log_measure"])
-                        sum_vars |= frozenset(node["funsor"]["log_measure"].inputs)
-                elif role == "guide":
-                    factors.append(-node["funsor"]["log_prob"])
-                    measures.append(node["funsor"]["log_measure"])
-                    sum_vars |= frozenset(node["funsor"]["log_measure"].inputs)
+                log_factors.append(
+                    node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
+                if node["funsor"].get("log_measure", None) is not None:
+                    log_measures.append(node["funsor"]["log_measure"])
+                    measure_vars |= frozenset(node["funsor"]["log_measure"].inputs)
                 plate_vars |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-                sum_vars |= frozenset(node["funsor"]["log_prob"].inputs)
-                sum_vars -= plate_vars
+                measure_vars |= frozenset(node["funsor"]["log_prob"].inputs)
 
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             elbo = funsor.sum_product.sum_product(
-                funsor.ops.logaddexp, funsor.ops.add,
-                measures + factors, eliminate=sum_vars | plate_vars, plates=plate_vars
+                funsor.ops.logaddexp, funsor.ops.add, log_measures + log_factors,
+                eliminate=measure_vars | plate_vars, plates=plate_vars
             )
         return -to_data(funsor.optimizer.apply_optimizer(elbo))

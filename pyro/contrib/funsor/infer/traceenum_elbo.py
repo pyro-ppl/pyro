@@ -14,14 +14,11 @@ funsor.set_backend("torch")
 
 # TODO inline this
 def Expectation(log_probs, costs, sum_vars, prod_vars):
-    result = 0
+    result = to_funsor(0, output=funsor.reals())
     for cost in costs:
         log_prob = funsor.sum_product.sum_product(
-            sum_op=funsor.ops.logaddexp,
-            prod_op=funsor.ops.add,
-            factors=log_probs,
-            plates=prod_vars,
-            eliminate=(prod_vars | sum_vars) - frozenset(cost.inputs)
+            funsor.ops.logaddexp, funsor.ops.add, log_probs,
+            plates=prod_vars, eliminate=(prod_vars | sum_vars) - frozenset(cost.inputs)
         )
         term = funsor.Integrate(log_prob, cost, sum_vars & frozenset(cost.inputs))
         term = term.reduce(funsor.ops.add, prod_vars & frozenset(cost.inputs))
@@ -39,45 +36,40 @@ class TraceEnum_ELBO(ELBO):
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
 
-        # TODO in this loop, compute factors, measures, plates, and elimination variables
-        model_log_factors, model_log_measures, model_measure_vars, model_plate_vars = \
-            [], [], frozenset(), frozenset()
-        guide_log_factors, guide_log_measures, guide_measure_vars, guide_plate_vars = \
-            [], [], frozenset(), frozenset()
-        for role, tr in zip(("model", "guide"), (model_tr, guide_tr)):
-            tr = prune_subsample_sites(tr)
+        terms = {
+            "model": {"log_factors": [], "log_measures": [], "plate_vars": frozenset(), "measure_vars": frozenset()},
+            "guide": {"log_factors": [], "log_measures": [], "plate_vars": frozenset(), "measure_vars": frozenset()},
+        }
+        for role, tr in zip(("model", "guide"), map(prune_subsample_sites, (model_tr, guide_tr))):
             for name, node in tr.nodes.items():
-                if role == "model":
-                    factors.append(node["funsor"]["log_prob"])
-                elif role == "guide":
-                    factors.append(-node["funsor"]["log_prob"])
-                    measures.append(node["funsor"]["log_measure"])
-                plate_vars |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-                measure_vars |= frozenset(node["funsor"]["log_prob"].inputs) - plate_vars
+                if node["type"] != "sample":
+                    continue
+                terms[role]["log_factors"].append(
+                    node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
+                if node["funsor"].get("log_measure", None) is not None:
+                    terms[role]["log_measures"].append(node["funsor"]["log_measure"])
+                    terms["role"]["measure_vars"] |= frozenset(node["funsor"]["log_measure"].inputs)
+                terms[role]["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
+                terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_prob"].inputs)
 
-        # contract out auxiliary variables in the guide
-        guide_aux_vars = guide_measure_vars - guide_plate_vars - (model_measure_vars | model_plate_vars)
-        if guide_aux_vars:
-            guide_log_factors = funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, guide_log_measures + guide_log_factors,
-                plates=guide_plate_vars, eliminate=guide_aux_vars
-            )
-
+        # XXX should we support auxiliary guide variables? complicates distinction btw factors/measures
         # contract out auxiliary variables in the model
-        model_aux_vars = model_measure_vars - model_plate_vars - (guide_measure_vars | guide_plate_vars)
+        model_aux_vars = terms["model"]["measure_vars"] - terms["model"]["plate_vars"] - \
+            (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
         if model_aux_vars:
             model_log_factors = funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, model_log_measures + model_log_factors,
-                plates=model_plate_vars, eliminate=model_aux_vars
+                funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measure"] + terms["model"]["log_factors"],
+                plates=terms["model"]["plate_vars"], eliminate=model_aux_vars
             )
 
         # compute remaining plates and sum_dims
-        plate_vars = (model_plate_vars | guide_plate_vars) - guide_aux_vars - model_aux_vars
-        sum_vars = (model_measure_vars | guide_measure_vars) - guide_aux_vars - model_aux_vars - plate_vars
+        plate_vars = (terms["model"]["plate_vars"] | terms["guide"]["plate_vars"]) - model_aux_vars
+        sum_vars = (terms["model"]["measure_vars"] | terms["guide"]["measure_vars"]) - model_aux_vars - plate_vars
 
         # TODO inline this final bit
         with funsor.interpreter.interpretation(funsor.terms.lazy):
-            elbo = Expectation(guide_log_factors, model_log_factors + [-lp for lp in guide_log_factors],
+            elbo = Expectation(terms["guide"]["log_measures"],
+                               model_log_factors + terms["guide"]["log_factors"],
                                sum_vars, plate_vars)
 
         with funsor.memoize.memoize():
