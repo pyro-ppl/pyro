@@ -12,7 +12,6 @@ from pyro.contrib.funsor.handlers import enum, replay, trace
 funsor.set_backend("torch")
 
 
-# TODO inline this
 def Expectation(log_probs, costs, sum_vars, prod_vars):
     result = to_funsor(0, output=funsor.reals())
     for cost in costs:
@@ -52,7 +51,6 @@ class TraceEnum_ELBO(ELBO):
                 terms[role]["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
                 terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_prob"].inputs)
 
-        # XXX should we support auxiliary guide variables? complicates distinction btw factors/measures
         # contract out auxiliary variables in the model
         model_aux_vars = terms["model"]["measure_vars"] - terms["model"]["plate_vars"] - \
             (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
