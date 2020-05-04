@@ -33,8 +33,8 @@ class DimStackCleanupMessenger(ReentrantMessenger):
 
 class NamedMessenger(DimStackCleanupMessenger):
 
-    @classmethod  # only depends on the global _DIM_STACK state, not self
-    def _pyro_to_data(cls, msg):
+    @staticmethod  # only depends on the global _DIM_STACK state, not self
+    def _pyro_to_data(msg):
 
         funsor_value, = msg["args"]
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
@@ -50,8 +50,8 @@ class NamedMessenger(DimStackCleanupMessenger):
 
         msg["stop"] = True  # only need to run this once per to_data call
 
-    @classmethod  # only depends on the global _DIM_STACK state, not self
-    def _pyro_to_funsor(cls, msg):
+    @staticmethod  # only depends on the global _DIM_STACK state, not self
+    def _pyro_to_funsor(msg):
 
         if len(msg["args"]) == 2:
             raw_value, output = msg["args"]
