@@ -6,6 +6,7 @@ This file contains reimplementations of some of Pyro's core enumeration machiner
 which should eventually be drop-in replacements for the current versions.
 """
 import functools
+import math
 from collections import OrderedDict
 
 import funsor
@@ -57,6 +58,8 @@ def _enum_strategy_diagonal(msg):
     ancestor_indices = {name: sample_dim_name for name in ancestor_names}
     sampled_dist = dist(**ancestor_indices).sample(
         msg['name'], sample_inputs if not ancestor_indices else None)
+    if ancestor_indices:  # XXX is there a better way to account for this in funsor?
+        sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
     return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
 
 
@@ -81,6 +84,8 @@ def _enum_strategy_mixture(msg):
     }
     sampled_dist = dist(**ancestor_indices).sample(
         msg['name'], sample_inputs if not ancestor_indices else None)
+    if ancestor_indices:  # XXX is there a better way to account for this in funsor?
+        sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
     return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
 
 
