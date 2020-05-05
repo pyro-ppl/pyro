@@ -695,41 +695,75 @@ def test_plate_subsample_primitive_ok(subsample_size, num_samples):
     assert_ok(model, max_plate_nesting=1)
 
 
-@pytest.mark.parametrize("depth", [1, 2, 3, 4])
-@pytest.mark.parametrize("num_samples,expand", [(200, False)])
-@pytest.mark.parametrize("max_plate_nesting", [1])
-@pytest.mark.parametrize("guide_type", ["prior", "factorized", "nonfactorized"])
-@pytest.mark.parametrize("tmc_strategy", ["diagonal", "mixture"])
-def test_normals_chain_valid(depth, num_samples, max_plate_nesting, expand,
-                             guide_type, tmc_strategy):
+def test_enum_iplate_iplate_ok():
 
-    def model():
-        q2 = pyro.param("q2", lambda: torch.tensor(0.5, requires_grad=True))
-        x = pyro.sample("x0", dist.Normal(q2, math.sqrt(1. / depth)))
-        for i in range(1, depth):
-            x = pyro.sample("x{}".format(i), dist.Normal(x, math.sqrt(1. / depth)))
-        pyro.sample("y", dist.Normal(x, 1.), obs=torch.tensor(float(1)))
+    @infer.config_enumerate
+    def model(data=None):
+        probs_a = torch.tensor([0.45, 0.55])
+        probs_b = torch.tensor([[0.6, 0.4], [0.4, 0.6]])
+        probs_c = torch.tensor([[0.75, 0.25], [0.55, 0.45]])
+        probs_d = torch.tensor([[[0.4, 0.6], [0.3, 0.7]], [[0.3, 0.7], [0.2, 0.8]]])
 
-    def factorized_guide():
-        q2 = pyro.param("q2", lambda: torch.tensor(0.5, requires_grad=True))
-        pyro.sample("x0", dist.Normal(q2, math.sqrt(1. / depth)))
-        for i in range(1, depth):
-            pyro.sample("x{}".format(i), dist.Normal(0., math.sqrt(float(i+1) / depth)))
+        b_axis = pyro.plate("b_axis", 2)
+        c_axis = pyro.plate("c_axis", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        for i in b_axis:
+            for j in c_axis:
+                pyro.sample("d_{}_{}".format(i, j),
+                            dist.Categorical(Vindex(probs_d)[b[i], c[j]]),
+                            obs=data[i, j])
 
-    def nonfactorized_guide():
-        q2 = pyro.param("q2", lambda: torch.tensor(0.5, requires_grad=True))
-        x = pyro.sample("x0", dist.Normal(q2, math.sqrt(1. / depth)))
-        for i in range(1, depth):
-            x = pyro.sample("x{}".format(i), dist.Normal(x, math.sqrt(1. / depth)))
+    data = torch.tensor([[0, 1], [0, 0]])
+    assert_ok(model, max_plate_nesting=1, data=data)
 
-    with pyro_backend("pyro"):
 
-        model = infer.config_enumerate(
-            model, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
-        guide = factorized_guide if guide_type == "factorized" else \
-            nonfactorized_guide if guide_type == "nonfactorized" else \
-            lambda *args: None
-        guide = infer.config_enumerate(
-            guide, default="parallel", expand=expand, num_samples=num_samples, tmc=tmc_strategy)
+def test_enum_plate_iplate_ok():
 
-    assert_ok(model, guide=guide, max_plate_nesting=max_plate_nesting)
+    @infer.config_enumerate
+    def model(data=None):
+        probs_a = torch.tensor([0.45, 0.55])
+        probs_b = torch.tensor([[0.6, 0.4], [0.4, 0.6]])
+        probs_c = torch.tensor([[0.75, 0.25], [0.55, 0.45]])
+        probs_d = torch.tensor([[[0.4, 0.6], [0.3, 0.7]], [[0.3, 0.7], [0.2, 0.8]]])
+
+        b_axis = pyro.plate("b_axis", 2)
+        c_axis = pyro.plate("c_axis", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with b_axis:
+            b = pyro.sample("b", dist.Categorical(probs_b[a]))
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        with b_axis:
+            for j in c_axis:
+                pyro.sample("d_{}".format(j),
+                            dist.Categorical(Vindex(probs_d)[b, c[j]]),
+                            obs=data[:, j])
+
+    data = torch.tensor([[0, 1], [0, 0]])
+    assert_ok(model, max_plate_nesting=1, data=data)
+
+
+def test_enum_iplate_plate_ok():
+
+    @infer.config_enumerate
+    def model(data=None):
+        probs_a = torch.tensor([0.45, 0.55])
+        probs_b = torch.tensor([[0.6, 0.4], [0.4, 0.6]])
+        probs_c = torch.tensor([[0.75, 0.25], [0.55, 0.45]])
+        probs_d = torch.tensor([[[0.4, 0.6], [0.3, 0.7]], [[0.3, 0.7], [0.2, 0.8]]])
+
+        b_axis = pyro.plate("b_axis", 2)
+        c_axis = pyro.plate("c_axis", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
+        with c_axis:
+            c = pyro.sample("c", dist.Categorical(probs_c[a]))
+        for i in b_axis:
+            with c_axis:
+                pyro.sample("d_{}".format(i),
+                            dist.Categorical(Vindex(probs_d)[b[i], c]),
+                            obs=data[i])
+
+    data = torch.tensor([[0, 1], [0, 0]])
+    assert_ok(model, max_plate_nesting=1, data=data)
