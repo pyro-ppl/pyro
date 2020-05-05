@@ -48,7 +48,7 @@ class SimpleSIRModel(CompartmentalModel):
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+        rho = pyro.sample("rho", dist.Beta(2, 2))
         return R0, tau, rho
 
     def initialize(self, params):
@@ -162,7 +162,7 @@ class OverdispersedSIRModel(CompartmentalModel):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         k = pyro.sample("k", dist.Exponential(1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+        rho = pyro.sample("rho", dist.Beta(2, 2))
         return R0, k, tau, rho
 
     def initialize(self, params):
@@ -263,7 +263,7 @@ class SparseSIRModel(CompartmentalModel):
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+        rho = pyro.sample("rho", dist.Beta(2, 2))
         return R0, tau, rho
 
     def initialize(self, params):
@@ -390,8 +390,8 @@ class UnknownStartSIRModel(CompartmentalModel):
         # Assume two different response rates: rho0 before any observations
         # were made (in pre_obs_window), followed by a higher response rate rho1
         # after observations were made (in post_obs_window).
-        rho0 = pyro.sample("rho0", dist.Uniform(0, 1))
-        rho1 = pyro.sample("rho1", dist.Uniform(0, 1))
+        rho0 = pyro.sample("rho0", dist.Beta(2, 2))
+        rho1 = pyro.sample("rho1", dist.Beta(2, 2))
         # Whereas each of rho0,rho1 are scalars (possibly batched over samples),
         # we construct a time series rho with an extra time dim on the right.
         rho = torch.cat([
