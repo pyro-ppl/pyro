@@ -43,12 +43,18 @@ class TraceMessenger(OrigTraceMessenger):
             return super()._pyro_post_sample(msg)
         if self.pack_online:
             if "fn" not in msg["funsor"]:
-                msg["funsor"]["fn"] = to_funsor(msg["fn"], funsor.reals())
-            if "log_prob" not in msg["funsor"]:
-                msg["funsor"]["log_prob"] = to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.reals())
+                fn_masked = msg["fn"].mask(msg["mask"]) if msg["mask"] is not None else msg["fn"]
+                msg["funsor"]["fn"] = to_funsor(fn_masked, funsor.reals())(value=msg["name"])
             if "value" not in msg["funsor"]:
-                value_output = funsor.reals(*getattr(msg["fn"], "event_shape", ()))
-                msg["funsor"]["value"] = to_funsor(msg["value"], value_output)
+                # value_output = funsor.reals(*getattr(msg["fn"], "event_shape", ()))
+                msg["funsor"]["value"] = to_funsor(msg["value"], msg["funsor"]["fn"].inputs[msg["name"]])
+            if "log_prob" not in msg["funsor"]:
+                fn_masked = msg["fn"].mask(msg["mask"]) if msg["mask"] is not None else msg["fn"]
+                msg["funsor"]["log_prob"] = to_funsor(fn_masked.log_prob(msg["value"]), output=funsor.reals())
+                # TODO support this pattern which uses funsor directly - blocked by casting issues
+                # msg["funsor"]["log_prob"] = msg["funsor"]["fn"](**{msg["name"]: msg["funsor"]["value"]})
+            if msg["scale"] is not None and "scale" not in msg["funsor"]:
+                msg["funsor"]["scale"] = to_funsor(msg["scale"], output=funsor.reals())
         else:
             # this logic has the same side effect on the _DIM_STACK as the above,
             # but does not perform any tensor or funsor operations.

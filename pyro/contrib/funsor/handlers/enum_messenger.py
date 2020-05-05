@@ -107,7 +107,7 @@ def _enum_strategy_enum(msg):
     funsor_value = funsor.Tensor(
         raw_value.squeeze(),
         OrderedDict([(msg["name"], funsor.bint(size))]),
-        size
+        dist.inputs[msg["name"]].dtype
     )
     if isinstance(dist, funsor.Tensor):
         # ensure dist is normalized

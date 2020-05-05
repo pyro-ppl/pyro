@@ -65,7 +65,8 @@ class NamedMessenger(DimStackCleanupMessenger):
         try:
             batch_shape = raw_value.batch_shape  # TODO make make this more robust
         except AttributeError:
-            batch_shape = raw_value.shape[:len(raw_value.shape) - event_dim]
+            full_shape = getattr(raw_value, "shape", ())
+            batch_shape = full_shape[:len(full_shape) - event_dim]
 
         # interpret all names/dims as requests since we only run this function once
         for dim in range(-len(batch_shape), 0):

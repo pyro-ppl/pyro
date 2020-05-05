@@ -253,8 +253,7 @@ def test_enum_recycling_chain_iter(history):
     assert_ok(model, max_plate_nesting=0)
 
 
-@pytest.mark.xfail(reason="Pyro not handling mixed parallel/sequential enum well?")
-@pytest.mark.parametrize("history", [1, 2, 3])
+@pytest.mark.parametrize("history", [2, 3])
 def test_enum_recycling_chain_iter_interleave_parallel_sequential(history):
 
     def model():
