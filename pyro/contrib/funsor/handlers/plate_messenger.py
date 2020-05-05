@@ -105,7 +105,7 @@ class SubsampleMessenger(IndepMessenger):
 class SequentialPlateMessenger(MarkovMessenger):
     def __init__(self, name=None, size=None, dim=None):
         self.name, self.size, self.dim, self.counter = name, size, dim, 0
-        super().__init__(history=0, keep=False)
+        super().__init__(history=0, keep=True)
 
     def _pyro_sample(self, msg):
         frame = CondIndepStackFrame(self.name, None, self.size, self.counter)

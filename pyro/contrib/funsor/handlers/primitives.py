@@ -1,9 +1,12 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
+
 import funsor
 
 import pyro.poutine.runtime
+import pyro.primitives
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimType
 
 
@@ -19,3 +22,9 @@ def to_data(x, name_to_dim=None, dim_type=DimType.LOCAL):
     if pyro.poutine.runtime.am_i_wrapped() and not name_to_dim:
         name_to_dim = _DIM_STACK.global_frame.name_to_dim.copy()
     return funsor.to_data(x, name_to_dim=name_to_dim)
+
+
+@functools.wraps(pyro.primitives.sample)
+def sample(name, fn=None, *args, **kwargs):
+    fn = fn if fn is not None else lambda *args: None
+    return pyro.primitives.sample(name, fn, *args, **kwargs)
