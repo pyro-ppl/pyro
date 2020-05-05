@@ -47,7 +47,7 @@ class TraceEnum_ELBO(ELBO):
                     node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
                 if node["funsor"].get("log_measure", None) is not None:
                     terms[role]["log_measures"].append(node["funsor"]["log_measure"])
-                    terms["role"]["measure_vars"] |= frozenset(node["funsor"]["log_measure"].inputs)
+                    terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_measure"].inputs)
                 terms[role]["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
                 terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_prob"].inputs)
 
@@ -55,8 +55,8 @@ class TraceEnum_ELBO(ELBO):
         model_aux_vars = terms["model"]["measure_vars"] - terms["model"]["plate_vars"] - \
             (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
         if model_aux_vars:
-            model_log_factors = funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measure"] + terms["model"]["log_factors"],
+            terms["model"]["log_factors"] = funsor.sum_product.partial_sum_product(
+                funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measures"] + terms["model"]["log_factors"],
                 plates=terms["model"]["plate_vars"], eliminate=model_aux_vars
             )
 
@@ -67,7 +67,7 @@ class TraceEnum_ELBO(ELBO):
         # TODO inline this final bit
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             elbo = Expectation(terms["guide"]["log_measures"],
-                               model_log_factors + terms["guide"]["log_factors"],
+                               terms["model"]["log_factors"] + terms["guide"]["log_factors"],
                                sum_vars, plate_vars)
 
         with funsor.memoize.memoize():
