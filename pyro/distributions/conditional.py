@@ -3,6 +3,7 @@
 
 from abc import ABC, abstractmethod
 
+import pyro
 import torch
 import torch.nn
 
@@ -63,4 +64,4 @@ class ConditionalTransformedDistribution(ConditionalDistribution):
     def condition(self, context):
         base_dist = self.base_dist.condition(context)
         transforms = [t.condition(context) for t in self.transforms]
-        return torch.distributions.TransformedDistribution(base_dist, transforms)
+        return pyro.distributions.TransformedDistribution(base_dist, transforms)
