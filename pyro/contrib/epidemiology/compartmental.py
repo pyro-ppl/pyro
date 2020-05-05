@@ -132,8 +132,8 @@ class CompartmentalModel(ABC):
 
         # Fill in sample site values.
         init = self.generate(init)
-        init["auxiliary"] = torch.stack(
-            [init[name] for name in self.compartments]).clamp_(min=0.5)
+        init["auxiliary"] = torch.stack([init[name] for name in self.compartments])
+        init["auxiliary"].clamp_(min=0.5, max=self.population - 0.5)
         return init
 
     def global_model(self):
@@ -215,6 +215,7 @@ class CompartmentalModel(ABC):
         :returns: A dictionary mapping sample site name to sampled value.
         :rtype: dict
         """
+        fixed = {k: torch.as_tensor(v) for k, v in fixed.items()}
         model = self._generative_model
         model = poutine.condition(model, fixed)
         trace = poutine.trace(model).get_trace()
@@ -296,6 +297,7 @@ class CompartmentalModel(ABC):
         This may be run only after :meth:`fit` and draws the same
         ``num_samples`` as passed to :meth:`fit`.
 
+        :param int forecast: The number of time steps to forecast forward.
         :returns: A dictionary mapping sample site name (or compartment name)
             to a tensor whose first dimension corresponds to sample batching.
         :rtype: dict
@@ -303,7 +305,6 @@ class CompartmentalModel(ABC):
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
         samples = self.samples
-        print("DEBUG {}".format(samples.keys()))
         num_samples = len(next(iter(samples.values())))
         particle_plate = pyro.plate("particles", num_samples,
                                     dim=-1 - self.max_plate_nesting)
@@ -358,7 +359,7 @@ class CompartmentalModel(ABC):
                     series.append(samples.pop(key))
             if series:
                 assert len(series) == self.duration + forecast
-                series = torch.broadcast_tensors(*series)
+                series = torch.broadcast_tensors(*map(torch.as_tensor, series))
                 samples[name] = torch.stack(series, dim=-1)
 
     def _generative_model(self, forecast=0):
