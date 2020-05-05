@@ -16,7 +16,7 @@ from pyro.ops.indexing import Vindex
 
 from pyroapi import handlers, infer, pyro, pyro_backend
 from pyroapi import distributions as dist
-from tests.common import assert_equal
+from tests.common import assert_equal  # , xfail_param
 
 
 funsor.set_backend("torch")
@@ -1316,7 +1316,7 @@ def test_elbo_enumerate_plates_7(scale):
         probs_e = pyro.param("probs_e")
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
-        a = pyro.sample("a", dist.Categorical(probs_a)) 
+        a = pyro.sample("a", dist.Categorical(probs_a))
         with c_axis:
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         for i in b_axis:
@@ -1389,8 +1389,10 @@ def test_elbo_enumerate_plates_7(scale):
 @pytest.mark.parametrize('guide_scale', [1])
 @pytest.mark.parametrize('model_scale', [1])
 @pytest.mark.parametrize('outer_vectorized,inner_vectorized,xfail',
-                         [(False, True, False), (True, False, True), (True, True, True)],
-                         ids=['iplate-plate', 'plate-iplate', 'plate-plate'])
+                         [(False, True, False)],
+                          # (True, False, xfail_param(True, reason="validation not yet implemented")),
+                          # (True, True, xfail_param(True, reason="validation not yet implemented"))],
+                         ids=['iplate-plate'])  # , 'plate-iplate', 'plate-plate'])
 @pyro_backend("contrib.funsor")
 def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized, xfail):
     #        Guide   Model
