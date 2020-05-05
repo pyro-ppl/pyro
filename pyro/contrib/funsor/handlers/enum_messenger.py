@@ -109,6 +109,9 @@ def _enum_strategy_enum(msg):
         OrderedDict([(msg["name"], funsor.bint(size))]),
         size
     )
+    if isinstance(dist, funsor.Tensor):
+        # ensure dist is normalized
+        dist = dist - dist.reduce(funsor.ops.logaddexp, msg['name'])
     return dist, funsor_value
 
 

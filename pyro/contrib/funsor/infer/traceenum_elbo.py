@@ -43,8 +43,10 @@ class TraceEnum_ELBO(ELBO):
             for name, node in tr.nodes.items():
                 if node["type"] != "sample":
                     continue
-                terms[role]["log_factors"].append(
-                    node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
+                # if a site is enumerated in the model, measure but no log_prob
+                if name in guide_tr.nodes or node['is_observed']:
+                    terms[role]["log_factors"].append(
+                        node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
                 if node["funsor"].get("log_measure", None) is not None:
                     terms[role]["log_measures"].append(node["funsor"]["log_measure"])
                     terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_measure"].inputs)
@@ -55,8 +57,10 @@ class TraceEnum_ELBO(ELBO):
         model_aux_vars = terms["model"]["measure_vars"] - terms["model"]["plate_vars"] - \
             (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
         if model_aux_vars:
-            terms["model"]["log_factors"] = funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measures"] + terms["model"]["log_factors"],
+            contracted_terms = [t for t in terms["model"]["log_factors"] if model_aux_vars.intersection(t.inputs)]
+            uncontracted_terms = [t for t in terms["model"]["log_factors"] if not model_aux_vars.intersection(t.inputs)]
+            terms["model"]["log_factors"] = uncontracted_terms + funsor.sum_product.partial_sum_product(
+                funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measures"] + contracted_terms,
                 plates=terms["model"]["plate_vars"], eliminate=model_aux_vars
             )
 

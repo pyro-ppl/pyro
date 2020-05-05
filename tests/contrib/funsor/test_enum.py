@@ -613,6 +613,7 @@ def test_elbo_enumerate_plate_4(outer_obs, inner_obs, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
+@pytest.mark.xfail(reason="Not supported in regular Pyro")
 @pyro_backend("contrib.funsor")
 def test_elbo_enumerate_plate_5():
     #        Guide   Model
