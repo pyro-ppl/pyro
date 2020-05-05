@@ -724,6 +724,7 @@ def test_enum_iplate_iplate_ok_1():
     assert_ok(model, max_plate_nesting=1, data=data)
 
 
+@pytest.mark.xfail(reason="semantic difference in sequential plates")
 def test_enum_iplate_iplate_ok_2():
 
     @infer.config_enumerate
