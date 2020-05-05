@@ -762,11 +762,11 @@ def test_enum_plate_iplate_ok():
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         with b_axis:
             for j in c_axis:
+                c_j = pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a]))
                 pyro.sample("d_{}".format(j),
-                            dist.Categorical(Vindex(probs_d)[b, c[j]]),
+                            dist.Categorical(Vindex(probs_d)[b, c_j]),
                             obs=data[:, j])
 
     data = torch.tensor([[0, 1], [0, 0]])
@@ -785,13 +785,13 @@ def test_enum_iplate_plate_ok():
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
         a = pyro.sample("a", dist.Categorical(probs_a))
-        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
         with c_axis:
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         for i in b_axis:
+            b_i = pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a]))
             with c_axis:
                 pyro.sample("d_{}".format(i),
-                            dist.Categorical(Vindex(probs_d)[b[i], c]),
+                            dist.Categorical(Vindex(probs_d)[b_i, c]),
                             obs=data[i])
 
     data = torch.tensor([[0, 1], [0, 0]])

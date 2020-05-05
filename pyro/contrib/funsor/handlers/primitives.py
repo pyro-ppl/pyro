@@ -5,6 +5,7 @@ import functools
 
 import funsor
 
+import pyro.distributions
 import pyro.poutine.runtime
 import pyro.primitives
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimType
@@ -24,7 +25,15 @@ def to_data(x, name_to_dim=None, dim_type=DimType.LOCAL):
     return funsor.to_data(x, name_to_dim=name_to_dim)
 
 
+class _EmptyDist(pyro.distributions.Distribution):
+    def log_prob(self, value):
+        raise NotImplementedError("Should not be here. Cannot score from null distribution")
+
+    def sample(self):
+        raise NotImplementedError("Should not be here. Cannot sample from null distribution")
+
+
 @functools.wraps(pyro.primitives.sample)
 def sample(name, fn=None, *args, **kwargs):
-    fn = fn if fn is not None else lambda *args: None
+    fn = fn if fn is not None else _EmptyDist()
     return pyro.primitives.sample(name, fn, *args, **kwargs)

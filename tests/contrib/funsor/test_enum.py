@@ -1154,6 +1154,7 @@ def test_elbo_enumerate_plates_6(scale):
 
     @infer.config_enumerate
     @handlers.scale(scale=scale)
+    @handlers.trace
     def model_iplate_iplate(data):
         probs_a = pyro.param("probs_a")
         probs_b = pyro.param("probs_b")
@@ -1165,9 +1166,11 @@ def test_elbo_enumerate_plates_6(scale):
         b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
         c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         for i in b_axis:
+            b_i = pyro.sample("b_{}".format(i))
             for j in c_axis:
+                c_j = pyro.sample("c_{}".format(j))
                 pyro.sample("d_{}_{}".format(i, j),
-                            dist.Categorical(Vindex(probs_d)[b[i], c[j]]),
+                            dist.Categorical(Vindex(probs_d)[b_i, c_j]),
                             obs=data[i, j])
 
     @infer.config_enumerate
@@ -1180,13 +1183,13 @@ def test_elbo_enumerate_plates_6(scale):
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
         a = pyro.sample("a", dist.Categorical(probs_a))
-        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
         with c_axis:
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         for i in b_axis:
+            b_i = pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a]))
             with c_axis:
                 pyro.sample("d_{}".format(i),
-                            dist.Categorical(Vindex(probs_d)[b[i], c]),
+                            dist.Categorical(Vindex(probs_d)[b_i, c]),
                             obs=data[i])
 
     @infer.config_enumerate
@@ -1201,11 +1204,11 @@ def test_elbo_enumerate_plates_6(scale):
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         with b_axis:
             for j in c_axis:
+                c_j = pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a]))
                 pyro.sample("d_{}".format(j),
-                            dist.Categorical(Vindex(probs_d)[b, c[j]]),
+                            dist.Categorical(Vindex(probs_d)[b, c_j]),
                             obs=data[:, j])
 
     @infer.config_enumerate
@@ -1237,8 +1240,8 @@ def test_elbo_enumerate_plates_6(scale):
     elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
     loss_plate_iplate = elbo.differentiable_loss(model_plate_iplate, guide, data)
     loss_iplate_plate = elbo.differentiable_loss(model_iplate_plate, guide, data)
-    _check_loss_and_grads(loss_iplate_iplate, loss_plate_iplate)
     _check_loss_and_grads(loss_iplate_iplate, loss_iplate_plate)
+    _check_loss_and_grads(loss_iplate_iplate, loss_plate_iplate)
 
     # But promoting both to plates should result in an error.
     elbo = infer.TraceEnum_ELBO(max_plate_nesting=2)
