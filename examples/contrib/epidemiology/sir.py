@@ -99,10 +99,11 @@ def evaluate(args, samples):
         logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
                      .format(key, getattr(args, name), mean, std))
 
-    # Optionally plot histograms.
+    # Optionally plot histograms and pairwise correlations.
     if args.plot:
         import matplotlib.pyplot as plt
         import seaborn as sns
+
         fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
@@ -113,6 +114,25 @@ def evaluate(args, samples):
             ax.set_yticks(())
             ax.legend(loc="best")
         plt.tight_layout()
+
+        covariates = [(name, samples[name]) for name in names.values()]
+        for i, aux in enumerate(samples["auxiliary"].unbind(-2)):
+            covariates.append(("aux[{},0]".format(i), aux[:, 0]))
+            covariates.append(("aux[{},-1]".format(i), aux[:, -1]))
+        N = len(covariates)
+        fig, axes = plt.subplots(N, N, figsize=(8, 8), sharex="col", sharey="row")
+        for i in range(N):
+            axes[i][0].set_ylabel(covariates[i][0])
+            axes[0][i].set_xlabel(covariates[i][0])
+            axes[0][i].xaxis.set_label_position("top")
+            for j in range(N):
+                ax = axes[i][j]
+                ax.set_xticks(())
+                ax.set_yticks(())
+                ax.scatter(covariates[j][1], -covariates[i][1],
+                           lw=0, color="darkblue", alpha=0.3)
+        plt.tight_layout()
+        plt.subplots_adjust(wspace=0, hspace=0)
 
 
 def predict(args, model, truth):
