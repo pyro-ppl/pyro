@@ -27,8 +27,10 @@ class TraceTMC_ELBO(ELBO):
             for name, node in tr.nodes.items():
                 if node["type"] != "sample":
                     continue
-                log_factors.append(
-                    node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
+                # if a site is enumerated in the model, measure but no log_prob
+                if name in guide_tr.nodes or node['is_observed']:
+                    log_factors.append(
+                        node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
                 if node["funsor"].get("log_measure", None) is not None:
                     log_measures.append(node["funsor"]["log_measure"])
                     measure_vars |= frozenset(node["funsor"]["log_measure"].inputs)

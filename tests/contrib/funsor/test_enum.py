@@ -100,7 +100,7 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples, tmc_strategy):
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4])
-@pytest.mark.parametrize("num_samples,expand", [(200, False)])
+@pytest.mark.parametrize("num_samples,expand", [(400, False)])
 @pytest.mark.parametrize("max_plate_nesting", [1])
 @pytest.mark.parametrize("guide_type", ["prior", "factorized", "nonfactorized"])
 @pytest.mark.parametrize("reparameterized", [False, True], ids=["dice", "pathwise"])
