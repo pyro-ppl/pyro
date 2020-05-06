@@ -3,7 +3,9 @@
 
 import funsor
 
+from pyro.distributions.util import copy_docs_from
 from pyro.infer import ELBO
+from pyro.infer import TraceEnum_ELBO as OrigTraceEnum_ELBO
 from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data, to_funsor
@@ -12,7 +14,7 @@ from pyro.contrib.funsor.handlers import enum, replay, trace
 funsor.set_backend("torch")
 
 
-def Expectation(log_probs, costs, sum_vars, prod_vars):
+def expectation(log_probs, costs, sum_vars, prod_vars):
     result = to_funsor(0, output=funsor.reals())
     for cost in costs:
         log_prob = funsor.sum_product.sum_product(
@@ -25,6 +27,7 @@ def Expectation(log_probs, costs, sum_vars, prod_vars):
     return result
 
 
+@copy_docs_from(OrigTraceEnum_ELBO)
 class TraceEnum_ELBO(ELBO):
 
     def _get_trace(self, *args, **kwargs):
@@ -70,7 +73,7 @@ class TraceEnum_ELBO(ELBO):
 
         # TODO inline this final bit
         with funsor.interpreter.interpretation(funsor.terms.lazy):
-            elbo = Expectation(terms["guide"]["log_measures"],
+            elbo = expectation(terms["guide"]["log_measures"],
                                terms["model"]["log_factors"] + terms["guide"]["log_factors"],
                                sum_vars, plate_vars)
 

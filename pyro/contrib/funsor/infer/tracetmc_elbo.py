@@ -3,7 +3,9 @@
 
 import funsor
 
+from pyro.distributions.util import copy_docs_from
 from pyro.infer import ELBO
+from pyro.infer import TraceTMC_ELBO as OrigTraceTMC_ELBO
 from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data
@@ -12,6 +14,7 @@ from pyro.contrib.funsor.handlers import enum, replay, trace
 funsor.set_backend("torch")
 
 
+@copy_docs_from(OrigTraceTMC_ELBO)
 class TraceTMC_ELBO(ELBO):
 
     def _get_trace(self, *args, **kwargs):

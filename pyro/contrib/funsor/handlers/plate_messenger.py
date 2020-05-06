@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 import funsor
 
+from pyro.distributions.util import copy_docs_from
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
@@ -54,6 +55,7 @@ class IndepMessenger(GlobalNamedMessenger):
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
 
 
+@copy_docs_from(OrigSubsampleMessenger)
 class SubsampleMessenger(IndepMessenger):
 
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
