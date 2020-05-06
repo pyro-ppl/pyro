@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import operator
 import re
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from functools import reduce
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -458,18 +461,22 @@ class CompartmentalModel(ABC):
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         C = len(self.compartments)
+        T = self.duration
         Q = self.num_quant_bins  # Number of quantization points.
 
         def enum_reshape(tensor, position):
-            shape = [1] * (2 * C)
-            shape[position] = Q
-            return tensor.reshape(tensor.shape[:-1] + torch.Size(shape))
+            assert tensor.size(-1) == Q
+            assert tensor.dim() <= self.max_plate_nesting + 1
+            tensor = tensor.permute(tensor.dim() - 1, *range(tensor.dim() - 1))
+            shape = [Q] + [1] * (position + self.max_plate_nesting - (tensor.dim() - 1))
+            shape.extend(tensor.shape[1:])
+            return tensor.reshape(shape)
 
         for e, name in enumerate(self.compartments):
-            prev[name] = enum_reshape(prev[name], e)
-            curr[name] = enum_reshape(curr[name], C + e)
-            logp[name] = enum_reshape(logp[name], C + e)
-        t = (Ellipsis,) + (None,) * (2 * C)  # Used to unsqueeze data tensors.
+            curr[name] = enum_reshape(curr[name], e)
+            logp[name] = enum_reshape(logp[name], e)
+            prev[name] = enum_reshape(prev[name], C + e)
+        t = slice(None)  # Used to slice data tensors.
 
         # In regional models, enable approximate inference by using aux
         # as a non-enumerated proxy for enumerated compartment values.
@@ -481,13 +488,17 @@ class CompartmentalModel(ABC):
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
             self.transition_bwd(params, prev, curr, t)
+        tr.trace.compute_log_prob()
         for name, site in tr.trace.nodes.items():
             if site["type"] == "sample":
-                logp[name] = site["fn"].log_prob(site["value"])
+                logp[name] = site["log_prob"]
 
         # Manually perform variable elimination.
-        logp = sum(logp.values())  # FIXME does this correctly handle region_plate?
-        logp = logp.reshape(-1, Q ** C, Q ** C)
+        logp = reduce(operator.add, logp.values())
+        logp = logp.reshape(Q ** C, Q ** C, *logp.shape[-self.max_plate_nesting:])
+        logp = logp.reshape(-1, T, Q ** C, Q ** C).squeeze(0)
+        if not logp.is_contiguous():
+            warnings.warn("logp is not contiguous in _vectorized_model()")
         logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
         logp = logp.reshape(-1).logsumexp(0)
         warn_if_nan(logp)

@@ -563,15 +563,15 @@ class RegionalSIRModel(CompartmentalModel):
             # Condition on observations.
             pyro.sample("obs_{}".format(t),
                         dist.ExtendedBinomial(S2I, rho),
-                        obs=self.data[t] if t < self.duration else None)
+                        obs=self.data[:, t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, tau, rho = params
 
         # FIXME the following matmul is incorrect:
         I_effective = prev["I_approx"] @ self.coupling
-        # In _vectorized_model, I_approx will have shape (R,T,1,1,1,1);
-        # in _sequential_model, I_approx will have shape (B,R,T).
+        # In _vectorized_model, I_approx will have shape (1,R);
+        # in _sequential_model, I_approx will have shape (B,T,R).
         pop_effective = self.population @ self.coupling
 
         # Reverse the flow computation.
