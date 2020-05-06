@@ -485,7 +485,7 @@ class UnknownStartSIRModel(CompartmentalModel):
         return samples
 
 
-class RegionalSIRModel(RegionalCompartmentalModel):
+class RegionalSIRModel(CompartmentalModel):
     """
     Susceptible-Infected-Recovered model with weak coupling across regions.
 
@@ -496,7 +496,8 @@ class RegionalSIRModel(RegionalCompartmentalModel):
     recovered individuals (the recovered individuals are implicit: ``R =
     population - S - I``) with transitions ``S -> I -> R``.
 
-    :param torch.Tensor populations: Total ``population = S + I + R``.
+    :param torch.Tensor population: Tensor of per-region populations, defining
+        ``population = S + I + R``.
     :param torch.Tensor coupling: Pairwise coupling matrix. Entries should be
         in ``[0,1]``. The all ones matrix is equivalent to a single region. The
         identity matrix is equivalent to a set of independent regions. Diagonal
@@ -509,56 +510,49 @@ class RegionalSIRModel(RegionalCompartmentalModel):
         transitions. This allows false negative but no false positives.
     """
 
-    def __init__(self, populations, coupling, recovery_time, data):
+    def __init__(self, population, coupling, recovery_time, data):
         num_regions, duration = data.shape
-        assert populations.shape == (num_regions,)
+        assert population.shape == (num_regions,)
         assert coupling.shape == (num_regions, num_regions)
         assert isinstance(recovery_time, float)
         assert recovery_time > 1
 
         compartments = ("S", "I")  # R is implicit.
-        super().__init__(compartments, duration, populations)
+        super().__init__(compartments, duration, population)
 
         self.coupling = coupling
         self.recovery_time = recovery_time
         self.data = data
 
-    max_plate_nesting = 1
     series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho0", "rho1")]
+    full_mass = [("R0", "rho")]
 
     def global_model(self):
         tau = self.recovery_time
-        # TODO consider moving these into the region plate.
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         rho = pyro.sample("rho", dist.Uniform(0, 1))
-
-        # Model external infections as an infectious pseudo-individual added
-        # to num_infectious when sampling S2I below.
-        X = self.external_rate * tau / R0
-
-        return R0, X, tau, rho, region_plate
+        return R0, tau, rho
 
     def initialize(self, params):
         # Start with a single infection in region 0.
-        I = torch.zeros_like(self.populations)
+        I = torch.zeros_like(self.population)
         I[0] += 1
-        S = self.populations - I
+        S = self.population - I
         return {"S": S, "I": I}
 
     def transition_fwd(self, params, state, t):
-        R0, X, tau, rho = params
+        R0, tau, rho = params
 
         I_effective = state["I"] @ self.coupling
+        pop_effective = self.population @ self.coupling
 
-        with self.plate("region", len(self.data)):
-
+        with self.region_plate:
             # Sample flows between compartments.
             S2I = pyro.sample("S2I_{}".format(t),
                               infection_dist(individual_rate=R0 / tau,
                                              num_susceptible=state["S"],
                                              num_infectious=I_effective,
-                                             population=self.populations))
+                                             population=pop_effective))
             I2R = pyro.sample("I2R_{}".format(t),
                               dist.Binomial(state["I"], 1 / tau))
 
@@ -566,42 +560,37 @@ class RegionalSIRModel(RegionalCompartmentalModel):
             state["S"] = state["S"] - S2I
             state["I"] = state["I"] + S2I - I2R
 
-            # In .transition_fwd() t will always be an integer but may lie outside
-            # of [0,self.duration) when forecasting.
-            rho_t = rho[..., t] if t < self.duration else rho[..., -1]
-            data_t = self.data[t] if t < self.duration else None
-
             # Condition on observations.
             pyro.sample("obs_{}".format(t),
-                        dist.ExtendedBinomial(S2I, rho_t),
-                        obs=data_t)
+                        dist.ExtendedBinomial(S2I, rho),
+                        obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
-        R0, X, tau, rho = params
+        R0, tau, rho = params
 
-        with self.plate("region", len(self.data)):
+        # FIXME the following matmul is incorrect:
+        I_effective = prev["I_approx"] @ self.coupling
+        # In _vectorized_model, I_approx will have shape (R,T,1,1,1,1);
+        # in _sequential_model, I_approx will have shape (B,R,T).
+        pop_effective = self.population @ self.coupling
 
-            # Reverse the flow computation.
-            S2I = prev["S"] - curr["S"]
-            I2R = prev["I"] - curr["I"] + S2I
+        # Reverse the flow computation.
+        S2I = prev["S"] - curr["S"]
+        I2R = prev["I"] - curr["I"] + S2I
 
+        with self.region_plate:
             # Condition on flows between compartments.
             pyro.sample("S2I_{}".format(t),
                         infection_dist(individual_rate=R0 / tau,
                                        num_susceptible=prev["S"],
-                                       num_infectious=prev["I"] + X,
-                                       population=self.population),
+                                       num_infectious=I_effective,
+                                       population=pop_effective),
                         obs=S2I)
             pyro.sample("I2R_{}".format(t),
                         dist.ExtendedBinomial(prev["I"], 1 / tau),
                         obs=I2R)
 
-            # In .transition_bwd() t may be either an integer in [0,self.duration)
-            # or may be a nonstandard slicing object like (Ellipsis, None, None);
-            # we use the Index(-)[-] helper to support indexing with nonstandard t.
-            rho_t = Index(rho)[..., t]
-
             # Condition on observations.
             pyro.sample("obs_{}".format(t),
-                        dist.ExtendedBinomial(S2I, rho_t),
+                        dist.ExtendedBinomial(S2I, rho),
                         obs=self.data[t])

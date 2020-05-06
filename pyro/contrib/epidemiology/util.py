@@ -10,6 +10,38 @@ import pyro.distributions as dist
 from pyro.ops.tensor_utils import safe_log
 
 
+def clamp(tensor, *, min=None, max=None):
+    """
+    Like :func:`torch.clamp` but dispatches to :func:`torch.min` and/or
+    :func:`torch.max` if ``min`` and/or ``max`` is a :class:`~torch.Tensor`.
+    """
+    if isinstance(min, torch.Tensor):
+        tensor = torch.max(tensor, min)
+        min = None
+    if isinstance(max, torch.Tensor):
+        tensor = torch.min(tensor, max)
+        max = None
+    if min is None and max is None:
+        return tensor
+    return tensor.clamp(min=min, max=max)
+
+
+def cat2(lhs, rhs, *, dim=-1):
+    """
+    Like ``torch.cat([lhs, rhs], dim=dim)`` but dispatches to
+    :func:`torch.nn.functional.pad` in case one of ``lhs`` or ``rhs`` is a
+    scalar.
+    """
+    assert dim < 0
+    if not isinstance(lhs, torch.Tensor):
+        pad = (0, 0) * (-1 - dim) + (1, 0)
+        return torch.nn.functional.pad(rhs, pad, value=lhs)
+    if not isinstance(rhs, torch.Tensor):
+        pad = (0, 0) * (-1 - dim) + (0, 1)
+        return torch.nn.functional.pad(lhs, pad, value=rhs)
+    return torch.cat([lhs, rhs], dim=dim)
+
+
 # this 8 x 10 tensor encodes the coefficients of 8 10-dimensional polynomials
 # that are used to construct the num_quant_bins=16 quantization strategy
 

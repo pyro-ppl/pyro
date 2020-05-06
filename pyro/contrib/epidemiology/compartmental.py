@@ -8,7 +8,6 @@ from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
-from torch.nn.functional import pad
 
 import pyro.distributions as dist
 import pyro.distributions.hmm
@@ -19,7 +18,7 @@ from pyro.infer.autoguide import init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.util import warn_if_nan
 
-from .util import quantize, quantize_enumerate
+from .util import cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +82,16 @@ class CompartmentalModel(ABC):
         assert duration >= 1
         self.duration = duration
 
-        assert isinstance(population, int)
-        assert population >= 2
+        if isinstance(population, torch.Tensor):
+            assert population.dim() == 1
+            assert (population >= 1).all()
+            self.is_regional = True
+            if self.max_plate_nesting == 0:
+                self.max_plate_nesting = 1
+        else:
+            assert isinstance(population, int)
+            assert population >= 2
+            self.is_regional = False
         self.population = population
 
         compartments = tuple(compartments)
@@ -94,6 +101,12 @@ class CompartmentalModel(ABC):
 
         # Inference state.
         self.samples = {}
+        self._region_plate = None
+
+    def region_plate(self):
+        if self.is_regional and self._region_plate is None:
+            self._region_plate = pyro.plate("region", len(self.population), dim=-1)
+        return self._region_plate
 
     # Overridable attributes and methods ########################################
 
@@ -126,14 +139,14 @@ class CompartmentalModel(ABC):
         for t in range(1, self.duration):
             smc.step()
 
-        # Select the most probably hypothesis.
+        # Select the most probable hypothesis.
         i = int(smc.state._log_weights.max(0).indices)
         init = {key: value[i] for key, value in smc.state.items()}
 
         # Fill in sample site values.
         init = self.generate(init)
-        init["auxiliary"] = torch.stack([init[name] for name in self.compartments])
-        init["auxiliary"].clamp_(min=0.5, max=self.population - 0.5)
+        aux = torch.stack([init[name] for name in self.compartments], dim=-2)
+        init["auxiliary"] = clamp(aux, min=0.5, max=self.population - 0.5)
         return init
 
     def global_model(self):
@@ -376,8 +389,12 @@ class CompartmentalModel(ABC):
         # Sequentially transition.
         for t in range(self.duration + forecast):
             self.transition_fwd(params, state, t)
-            for name in self.compartments:
-                pyro.deterministic("{}_{}".format(name, t), state[name])
+            with self.region_plate:
+                for name in self.compartments:
+                    pyro.deterministic("{}_{}".format(name, t), state[name])
+
+        # Cleanup.
+        self._region_plate = None
 
     def _sequential_model(self):
         """
@@ -387,22 +404,31 @@ class CompartmentalModel(ABC):
         params = self.global_model()
 
         # Sample the continuous reparameterizing variable.
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False)
-                                    .expand([len(self.compartments), self.duration])
-                                    .to_event(2))
+        with self.region_plate:
+            shape = getattr(self.population, "shape", ()) + (len(self.compartments), self.duration)
+            auxiliary = pyro.sample("auxiliary",
+                                    dist.Uniform(-0.5, self.population + 0.5)
+                                        .mask(False).expand(shape).to_event(2))
 
         # Sequentially transition.
         curr = self.initialize(params)
         for t in poutine.markov(range(self.duration)):
-            aux_t = auxiliary[..., t]
-            prev = curr
-            curr = {name: quantize("{}_{}".format(name, t), aux,
-                                   min=0, max=self.population,
-                                   num_quant_bins=self.num_quant_bins)
-                    for name, aux in zip(self.compartments, aux_t.unbind(-1))}
+            with self.region_plate:
+                aux_t = auxiliary[..., t]
+                prev, curr = curr, {}
+                for name, aux in zip(self.compartments, aux_t.unbind(-1)):
+                    curr[name] = quantize("{}_{}".format(name, t), aux,
+                                          min=0, max=self.population,
+                                          num_quant_bins=self.num_quant_bins)
+                    # In regional models, enable approximate inference by using aux
+                    # as a non-enumerated proxy for enumerated compartment values.
+                    if self.is_regional:
+                        curr[name + "_approx"] = aux
+                        prev.setdefault(name + "_approx", prev[name])
             self.transition_bwd(params, prev, curr, t)
+
+        # Cleanup.
+        self._region_plate = None
 
     def _vectorized_model(self):
         """
@@ -412,11 +438,11 @@ class CompartmentalModel(ABC):
         params = self.global_model()
 
         # Sample the continuous reparameterizing variable.
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False)
-                                    .expand([len(self.compartments), self.duration])
-                                    .to_event(2))
+        with self.region_plate:
+            shape = getattr(self.population, "shape", ()) + (len(self.compartments), self.duration)
+            auxiliary = pyro.sample("auxiliary",
+                                    dist.Uniform(-0.5, self.population + 0.5)
+                                        .mask(False).expand(shape).to_event(2))
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
@@ -428,25 +454,29 @@ class CompartmentalModel(ABC):
         init = self.initialize(params)
         prev = {}
         for name in self.compartments:
-            if not isinstance(init[name], int):
-                raise NotImplementedError("TODO use torch.cat()")
-            prev[name] = pad(curr[name][:-1], (0, 0, 1, 0), value=init[name])
+            prev[name] = cat2(init[name], curr[name][..., :-1, :], dim=-2)
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         C = len(self.compartments)
-        T = self.duration
         Q = self.num_quant_bins  # Number of quantization points.
 
-        def enum_shape(position):
-            shape = [T] + [1] * (2 * C)
-            shape[1 + position] = Q
-            return torch.Size(shape)
+        def enum_reshape(tensor, position):
+            shape = [1] * (2 * C)
+            shape[position] = Q
+            return tensor.reshape(tensor.shape[:-1] + torch.Size(shape))
 
         for e, name in enumerate(self.compartments):
-            prev[name] = prev[name].reshape(enum_shape(e))
-            curr[name] = curr[name].reshape(enum_shape(C + e))
-            logp[name] = logp[name].reshape(enum_shape(C + e))
+            prev[name] = enum_reshape(prev[name], e)
+            curr[name] = enum_reshape(curr[name], C + e)
+            logp[name] = enum_reshape(logp[name], C + e)
         t = (Ellipsis,) + (None,) * (2 * C)  # Used to unsqueeze data tensors.
+
+        # In regional models, enable approximate inference by using aux
+        # as a non-enumerated proxy for enumerated compartment values.
+        if self.is_regional:
+            for name, aux in zip(self.compartments, auxiliary.unbind(-2)):
+                curr[name + "_approx"] = aux[t]
+                prev[name + "_approx"] = cat2(init[name], aux[..., :-1], dim=-1)[t]
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
@@ -456,12 +486,15 @@ class CompartmentalModel(ABC):
                 logp[name] = site["fn"].log_prob(site["value"])
 
         # Manually perform variable elimination.
-        logp = sum(logp.values())
-        logp = logp.reshape(T, Q ** C, Q ** C)
+        logp = sum(logp.values())  # FIXME does this correctly handle region_plate?
+        logp = logp.reshape(-1, Q ** C, Q ** C)
         logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
         logp = logp.reshape(-1).logsumexp(0)
         warn_if_nan(logp)
         pyro.factor("transition", logp)
+
+        # Cleanup.
+        self._region_plate = None
 
 
 class _SMCModel:
