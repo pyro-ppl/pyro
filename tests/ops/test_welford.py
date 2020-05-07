@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from pyro.ops.welford import WelfordCovariance
+from pyro.ops.welford import WelfordArrowheadCovariance, WelfordCovariance
 from pyro.util import optional
 from tests.common import assert_equal
 
@@ -35,7 +35,7 @@ def test_welford_diagonal(n_samples, dim_size):
 @pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
                                                 (1000, 7),
                                                 (1, 1)])
-@pytest.mark.init(rng_seed=7)
+# @pytest.mark.init(rng_seed=7)
 def test_welford_dense(n_samples, dim_size):
     w = WelfordCovariance(diagonal=False)
     loc = torch.zeros(dim_size)
@@ -52,3 +52,33 @@ def test_welford_dense(n_samples, dim_size):
         estimates = w.get_covariance(regularize=False).data.cpu().numpy()
         sample_cov = np.cov(torch.stack(samples).data.cpu().numpy(), bias=False, rowvar=False)
         assert_equal(estimates, sample_cov)
+
+
+@pytest.mark.parametrize('n_samples,dim_size,head_size', [
+    (1000, 5, 0),
+    (1000, 5, 1),
+    (1000, 5, 4),
+    (1000, 5, 5)
+])
+@pytest.mark.parametrize('regularize', [True, False])
+def test_welford_arrowhead(n_samples, dim_size, head_size, regularize):
+    adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
+    loc = torch.zeros(dim_size)
+    cov = torch.randn(dim_size, dim_size)
+    cov = torch.mm(cov, cov.t())
+    dist = torch.distributions.MultivariateNormal(loc=loc, covariance_matrix=cov)
+    samples = dist.sample(sample_shape=torch.Size([n_samples]))
+
+    for sample in samples:
+        adapt_scheme.update(sample)
+    actual = adapt_scheme.get_covariance(regularize=regularize)
+
+    mask = torch.ones(dim_size, dim_size)
+    mask[head_size:, head_size:] = 0.
+    mask.view(-1)[::dim_size+1][head_size:] = 1.
+    expected = np.cov(samples.cpu().numpy(), bias=False, rowvar=False)
+    expected = torch.from_numpy(expected).type_as(mask)
+    if regularize:
+        expected = (expected * n_samples + 1e-3 * torch.eye(dim_size) * 5) / (n_samples + 5)
+    expected = expected * mask
+    assert_equal(actual, expected)

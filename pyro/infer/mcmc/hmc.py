@@ -278,12 +278,14 @@ class HMC(MCMCKernel):
 
         prototype_value = list(self.initial_params.values())[0]
         initial_mass_matrix = OrderedDict()
-        if diag_sites:
-            mass_matrix_size = sum([self.initial_params[site].numel() for site in diag_sites])
-            initial_mass_matrix[diag_sites] = prototype_value.new_ones(mass_matrix_size)
         for dense_sites in dense_sites_list:
             mass_matrix_size = sum([self.initial_params[site].numel() for site in dense_sites])
             initial_mass_matrix[dense_sites] = eye_like(prototype_value, mass_matrix_size)
+
+        # we keep diagonal block at lower right of block matrix
+        if diag_sites:
+            mass_matrix_size = sum([self.initial_params[site].numel() for site in diag_sites])
+            initial_mass_matrix[diag_sites] = prototype_value.new_ones(mass_matrix_size)
 
         self._adapter.configure(self._warmup_steps,
                                 inv_mass_matrix=initial_mass_matrix,
