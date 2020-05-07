@@ -499,17 +499,20 @@ class RegionalSIRModel(CompartmentalModel):
         reproductive number.
     :param float recovery_time: Mean recovery time (duration in state ``I``).
         Must be greater than 1.
-    :param iterable data: Time series of new observed infections. Each time
-        step is Binomial distributed between 0 and the number of ``S -> I``
-        transitions. This allows false negative but no false positives.
+    :param iterable data: Time x Region sized tensor of new observed
+        infections. Each time step is vector of Binomials distributed between
+        0 and the number of ``S -> I`` transitions. This allows false negative
+        but no false positives.
     """
 
     def __init__(self, population, coupling, recovery_time, data):
-        num_regions, duration = data.shape
-        assert population.shape == (num_regions,)
+        duration = len(data)
+        num_regions, = population.shape
         assert coupling.shape == (num_regions, num_regions)
         assert isinstance(recovery_time, float)
         assert recovery_time > 1
+        if isinstance(data, torch.Tensor):
+            assert data.shape == (duration, num_regions)
 
         compartments = ("S", "I")  # R is implicit.
         super().__init__(compartments, duration, population)

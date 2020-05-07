@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy
-
 import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions.util import broadcast_shape
 from pyro.ops.tensor_utils import safe_log
 
 
@@ -39,7 +39,16 @@ def cat2(lhs, rhs, *, dim=-1):
     if not isinstance(rhs, torch.Tensor):
         pad = (0, 0) * (-1 - dim) + (0, 1)
         return torch.nn.functional.pad(lhs, pad, value=rhs)
-    return torch.cat([lhs, rhs], dim=dim)
+
+    diff = lhs.dim() - rhs.dim()
+    if diff > 0:
+        rhs = rhs.expand((1,) * diff + rhs.shape)
+    elif diff < 0:
+        diff = -diff
+        lhs = lhs.expand((1,) * diff + lhs.shape)
+    shape = list(broadcast_shape(lhs.shape, rhs.shape))
+    shape[dim] = -1
+    return torch.cat([lhs.expand(shape), rhs.expand(shape)], dim=dim)
 
 
 # this 8 x 10 tensor encodes the coefficients of 8 10-dimensional polynomials
@@ -156,9 +165,17 @@ def compute_bin_probs(s, num_quant_bins=3):
     return probs
 
 
+def _all(x):
+    return x.all() if isinstance(x, torch.Tensor) else x
+
+
+def _unsqueeze(x):
+    return x.unsqueeze(-1) if isinstance(x, torch.Tensor) else x
+
+
 def quantize(name, x_real, min, max, num_quant_bins=4):
     """Randomly quantize in a way that preserves probability mass."""
-    assert min < max
+    assert _all(min < max)
     lb = x_real.detach().floor()
 
     probs = compute_bin_probs(x_real - lb, num_quant_bins=num_quant_bins)
@@ -176,7 +193,7 @@ def quantize(name, x_real, min, max, num_quant_bins=4):
 
 def quantize_enumerate(x_real, min, max, num_quant_bins=4):
     """Quantize, then manually enumerate."""
-    assert min < max
+    assert _all(min < max)
     lb = x_real.detach().floor()
 
     probs = compute_bin_probs(x_real - lb, num_quant_bins=num_quant_bins)
@@ -187,7 +204,7 @@ def quantize_enumerate(x_real, min, max, num_quant_bins=4):
     q = torch.arange(arange_min, arange_max)
 
     x = lb.unsqueeze(-1) + q
-    x = torch.max(x, 2 * min - 1 - x)
-    x = torch.min(x, 2 * max + 1 - x)
+    x = torch.max(x, 2 * _unsqueeze(min) - 1 - x)
+    x = torch.min(x, 2 * _unsqueeze(max) + 1 - x)
 
     return x, logits

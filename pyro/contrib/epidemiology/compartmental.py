@@ -6,6 +6,7 @@ import operator
 import re
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from contextlib import ExitStack
 from functools import reduce
 
 import torch
@@ -105,9 +106,17 @@ class CompartmentalModel(ABC):
         self.samples = {}
         self._clear_plates()
 
+    @property
     def region_plate(self):
-        if self.is_regional and self._region_plate is None:
-            self._region_plate = pyro.plate("region", len(self.population), dim=-1)
+        """
+        Either a ``pyro.plate`` or a trivial ``ExitStack`` depending on whether
+        this model ``.is_regional``.
+        """
+        if self._region_plate is None:
+            if self.is_regional:
+                self._region_plate = pyro.plate("region", len(self.population), dim=-1)
+            else:
+                self._region_plate = ExitStack()
         return self._region_plate
 
     def _clear_plates(self):
@@ -150,7 +159,7 @@ class CompartmentalModel(ABC):
 
         # Fill in sample site values.
         init = self.generate(init)
-        aux = torch.stack([init[name] for name in self.compartments], dim=-2)
+        aux = torch.stack([init[name] for name in self.compartments], dim=0)
         init["auxiliary"] = clamp(aux, min=0.5, max=self.population - 0.5)
         return init
 
@@ -369,6 +378,7 @@ class CompartmentalModel(ABC):
 
         :param dict samples: A dictionary of samples.
         """
+        dim = -2 if self.is_regional else -1
         for name in self.compartments + self.series:
             pattern = name + "_[0-9]+"
             series = []
@@ -378,7 +388,7 @@ class CompartmentalModel(ABC):
             if series:
                 assert len(series) == self.duration + forecast
                 series = torch.broadcast_tensors(*map(torch.as_tensor, series))
-                samples[name] = torch.stack(series, dim=-1)
+                samples[name] = torch.stack(series, dim=dim)
 
     def _generative_model(self, forecast=0):
         """
@@ -389,7 +399,8 @@ class CompartmentalModel(ABC):
 
         # Sample initial values.
         state = self.initialize(params)
-        state = {i: torch.tensor(float(value)) for i, value in state.items()}
+        state = {k: v if isinstance(v, torch.Tensor) else torch.tensor(float(v))
+                 for k, v in state.items()}
 
         # Sequentially transition.
         for t in range(self.duration + forecast):
@@ -468,14 +479,17 @@ class CompartmentalModel(ABC):
         init = self.initialize(params)
         prev = {}
         for name in self.compartments:
-            prev[name] = cat2(init[name], curr[name][..., :-1, :], dim=-2)
+            value = init[name]
+            if isinstance(value, torch.Tensor):
+                value = value[..., None]  # Because curr is enumerated on the right.
+            prev[name] = cat2(value, curr[name][:-1], dim=-3 if self.is_regional else -2)
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         def enum_reshape(tensor, position):
             assert tensor.size(-1) == Q
-            assert tensor.dim() <= self.max_plate_nesting + 1
+            assert tensor.dim() <= self.max_plate_nesting + 2
             tensor = tensor.permute(tensor.dim() - 1, *range(tensor.dim() - 1))
-            shape = [Q] + [1] * (position + self.max_plate_nesting - (tensor.dim() - 1))
+            shape = [Q] + [1] * (position + self.max_plate_nesting - (tensor.dim() - 2))
             shape.extend(tensor.shape[1:])
             return tensor.reshape(shape)
 
@@ -489,7 +503,8 @@ class CompartmentalModel(ABC):
         if self.is_regional:
             for name, aux in zip(self.compartments, auxiliary):
                 curr[name + "_approx"] = aux
-                prev[name + "_approx"] = cat2(init[name], aux[:-1], dim=0)
+                prev[name + "_approx"] = cat2(init[name], aux[:-1],
+                                              dim=-2 if self.is_regional else -1)
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
