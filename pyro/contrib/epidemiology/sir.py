@@ -480,7 +480,7 @@ class UnknownStartSIRModel(CompartmentalModel):
 
 class RegionalSIRModel(CompartmentalModel):
     """
-    Susceptible-Infected-Recovered model with weak coupling across regions.
+    Susceptible-Infected-Recovered model with coupling across regions.
 
     To customize this model we recommend forking and editing this class.
 
@@ -566,7 +566,7 @@ class RegionalSIRModel(CompartmentalModel):
         R0, tau, rho = params
 
         # Account for infections from all regions. This uses approximate (point
-        # estimate) count I_approx for infection from other regions, but uses
+        # estimate) counts I_approx for infection from other regions, but uses
         # the exact (enumerated) count I for infections from one's own region.
         I_coupled = prev["I_approx"] @ self.coupling
         I_coupled = I_coupled + (prev["I"] - prev["I_approx"]) * self.coupling.diag()
