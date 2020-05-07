@@ -3,7 +3,6 @@
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property
 
 from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
