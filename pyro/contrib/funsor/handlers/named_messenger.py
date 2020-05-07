@@ -13,13 +13,11 @@ class DimStackCleanupMessenger(ReentrantMessenger):
 
     def __init__(self):
         self._saved_dims = ()
-        self._prev_first_available_dim = -1
         return super().__init__()
 
     def __enter__(self):
         if self._ref_count == 0 and _DIM_STACK.outermost is None:
             _DIM_STACK.outermost = self
-            self._prev_first_available_dim = _DIM_STACK.set_first_available_dim(self._prev_first_available_dim)
             for name, dim in self._saved_dims:
                 _DIM_STACK.global_frame.write(name, dim)
             self._saved_dims = ()
@@ -28,7 +26,7 @@ class DimStackCleanupMessenger(ReentrantMessenger):
     def __exit__(self, *args, **kwargs):
         if self._ref_count == 1 and _DIM_STACK.outermost is self:
             _DIM_STACK.outermost = None
-            self._prev_first_available_dim = _DIM_STACK.set_first_available_dim(self._prev_first_available_dim)
+            _DIM_STACK.set_first_available_dim(-1)
             for name, dim in reversed(tuple(_DIM_STACK.global_frame.name_to_dim.items())):
                 self._saved_dims += (_DIM_STACK.global_frame.free(name, dim),)
         return super().__exit__(*args, **kwargs)
