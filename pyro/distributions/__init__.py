@@ -31,7 +31,6 @@ from pyro.distributions.torch_distribution import MaskedDistribution, TorchDistr
 from pyro.distributions.torch_transform import ComposeTransformModule, TransformModule
 from pyro.distributions.unit import Unit
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
-from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated import ZeroInflatedDistribution, ZeroInflatedNegativeBinomial, ZeroInflatedPoisson
 
@@ -76,7 +75,6 @@ __all__ = [
     "TorchDistribution",
     "TransformModule",
     "Unit",
-    "VonMises",
     "VonMises3D",
     "ZeroInflatedPoisson",
     "ZeroInflatedNegativeBinomial",
