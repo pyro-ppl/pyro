@@ -164,7 +164,6 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"dct": 1.},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_regional_smoke(duration, forecast, options):
@@ -190,5 +189,5 @@ def test_regional_smoke(duration, forecast, options):
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
-    assert samples["S"].shape == (num_samples, num_regions, duration + forecast)
-    assert samples["I"].shape == (num_samples, num_regions, duration + forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast, num_regions)
+    assert samples["I"].shape == (num_samples, duration + forecast, num_regions)

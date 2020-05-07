@@ -314,6 +314,8 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
+        if self.is_regional:
+            self.samples["auxiliary"] = self.samples["auxiliary"].unsqueeze(1)
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()

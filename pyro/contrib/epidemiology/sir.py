@@ -338,8 +338,7 @@ class UnknownStartSIRModel(CompartmentalModel):
 
     1.  How to incorporate spontaneous infections from external sources;
     2.  How to incorporate time-varying piecewise ``rho`` by supporting
-        forecasting in :meth:`transition_fwd` and using the
-        :class:`~pyro.ops.index.ing.Index` helper in :meth:`transition_bwd`.
+        forecasting in :meth:`transition_fwd`.
     3.  How to override the :meth:`predict` method to compute extra
         statistics.
 
