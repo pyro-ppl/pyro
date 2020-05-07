@@ -489,6 +489,15 @@ class RegionalSIRModel(CompartmentalModel):
     recovered individuals (the recovered individuals are implicit: ``R =
     population - S - I``) with transitions ``S -> I -> R``.
 
+    This model demonstrates:
+
+    1.  How to create a regional model with a ``population`` vector.
+    2.  How to model both homogeneous parameters (here ``R0``) and
+        heterogeneous parameters with hierarchical structure (here ``rho``)
+        using ``self.region_plate``.
+    3.  How to approximately couple regions in :meth:`transition_bwd` using
+        ``prev["I_approx"]``.
+
     :param torch.Tensor population: Tensor of per-region populations, defining
         ``population = S + I + R``.
     :param torch.Tensor coupling: Pairwise coupling matrix. Entries should be
@@ -511,9 +520,11 @@ class RegionalSIRModel(CompartmentalModel):
         assert isinstance(recovery_time, float)
         assert recovery_time > 1
         if isinstance(data, torch.Tensor):
+            # Data tensors should be oriented as (time, region).
             assert data.shape == (duration, num_regions)
-
         compartments = ("S", "I")  # R is implicit.
+
+        # We create a regional model by passing a vector of populations.
         super().__init__(compartments, duration, population)
 
         self.coupling = coupling
@@ -524,10 +535,19 @@ class RegionalSIRModel(CompartmentalModel):
     full_mass = [("R0", "rho")]
 
     def global_model(self):
+        # Assume recovery time is a known constant.
         tau = self.recovery_time
-        # TODO make one of these hierarchical.
+
+        # Assume reproductive number is unknown but homogeneous.
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+
+        # Assume response rate is heterogeneous and model it with a
+        # hierarchical Gamma-Beta prior.
+        rho_c1 = pyro.sample("rho_c1", dist.Gamma(2, 1))
+        rho_c0 = pyro.sample("rho_c0", dist.Gamma(2, 1))
+        with self.region_plate:
+            rho = pyro.sample("rho", dist.Beta(rho_c1, rho_c0))
+
         return R0, tau, rho
 
     def initialize(self, params):

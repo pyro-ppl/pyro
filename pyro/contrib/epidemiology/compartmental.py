@@ -381,7 +381,6 @@ class CompartmentalModel(ABC):
 
         :param dict samples: A dictionary of samples.
         """
-        dim = -2 if self.is_regional else -1
         for name in self.compartments + self.series:
             pattern = name + "_[0-9]+"
             series = []
@@ -391,7 +390,7 @@ class CompartmentalModel(ABC):
             if series:
                 assert len(series) == self.duration + forecast
                 series = torch.broadcast_tensors(*map(torch.as_tensor, series))
-                samples[name] = torch.stack(series, dim=dim)
+                samples[name] = torch.stack(series, dim=-2 if self.is_regional else -1)
 
     def _generative_model(self, forecast=0):
         """
@@ -429,7 +428,7 @@ class CompartmentalModel(ABC):
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event(len(shape)))
+                                    .mask(False).expand(shape).to_event())
         if self.is_regional:
             # This reshapes from (particle, 1, C, T, R) -> (particle, C, T, R)
             # to allow aux below to have shape (particle, R) for region_plate.
@@ -469,7 +468,7 @@ class CompartmentalModel(ABC):
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event(len(shape)))
+                                    .mask(False).expand(shape).to_event())
         assert auxiliary.shape == shape, "particle plates are not supported"
 
         # Manually enumerate.
