@@ -14,7 +14,7 @@ from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
-from pyro.ops.integrator import velocity_verlet
+from pyro.ops.integrator import potential_grad, velocity_verlet
 from pyro.util import optional, torch_isnan
 
 
@@ -296,8 +296,8 @@ class HMC(MCMCKernel):
         self._warmup_steps = warmup_steps
         if self.model is not None:
             self._initialize_model_properties(args, kwargs)
-        potential_energy = self.potential_fn(self.initial_params)
-        self._cache(self.initial_params, potential_energy, None)
+        z_grads, potential_energy = potential_grad(self.potential_fn, self.initial_params)
+        self._cache(self.initial_params, potential_energy, z_grads)
         if self.initial_params:
             self._initialize_adapter()
 
@@ -322,8 +322,8 @@ class HMC(MCMCKernel):
         # recompute PE when cache is cleared
         if z is None:
             z = params
-            potential_energy = self.potential_fn(z)
-            self._cache(z, potential_energy)
+            z_grads, potential_energy = potential_grad(self.potential_fn, z)
+            self._cache(z, potential_energy, z_grads)
         # return early if no sample sites
         elif len(z) == 0:
             self._t += 1
@@ -358,7 +358,8 @@ class HMC(MCMCKernel):
         if rand < accept_prob:
             accepted = True
             z = z_new
-            self._cache(z, potential_energy_new, z_grads_new)
+            z_grads = z_grads_new
+            self._cache(z, potential_energy_new, z_grads)
 
         self._t += 1
         if self._t > self._warmup_steps:
@@ -367,7 +368,7 @@ class HMC(MCMCKernel):
                 self._accept_cnt += 1
         else:
             n = self._t
-            self._adapter.step(self._t, z, accept_prob)
+            self._adapter.step(self._t, z, accept_prob, z_grads)
 
         self._mean_accept_prob += (accept_prob.item() - self._mean_accept_prob) / n
         return z.copy()

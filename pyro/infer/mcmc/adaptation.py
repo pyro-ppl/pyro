@@ -150,7 +150,7 @@ class WarmupAdapter:
                 adapt_scheme.reset()
                 self._mass_matrix_adapt_scheme[site_names] = adapt_scheme
 
-    def step(self, t, z, accept_prob):
+    def step(self, t, z, accept_prob, z_grads=None):
         r"""
         Called at each step during the warmup phase to learn tunable
         parameters.
@@ -169,8 +169,10 @@ class WarmupAdapter:
             self._update_step_size(accept_prob.item())
         if mass_matrix_adaptation_phase:
             for site_names, adapt_scheme in self._mass_matrix_adapt_scheme.items():
-                z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
-                adapt_scheme.update(z_flat.detach())
+                # z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
+                # adapt_scheme.update(z_flat.detach())
+                z_grads_flat = torch.cat([z_grads[name].reshape(-1) for name in site_names])
+                adapt_scheme.update(z_grads_flat)
 
         if t == window.end:
             if self._current_window == num_windows - 1:
@@ -183,8 +185,11 @@ class WarmupAdapter:
                 return
 
             if mass_matrix_adaptation_phase:
-                self.inverse_mass_matrix = {site_names: scheme.get_covariance()
-                                            for site_names, scheme in self._mass_matrix_adapt_scheme.items()}
+                inv_mass_matrix = {}
+                for site_names, scheme in self._mass_matrix_adapt_scheme.items():
+                    prec = scheme.get_covariance(regularize=False)
+                    inv_mass_matrix[site_names] = prec.inverse() if prec.ndim == 2 else prec.reciprocal()
+                self.inverse_mass_matrix = inv_mass_matrix
                 if self.adapt_step_size:
                     self.reset_step_size_adaptation(z)
 

@@ -10,7 +10,7 @@ import pyro.distributions as dist
 from pyro.distributions.util import scalar_like
 from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.hmc import HMC
-from pyro.ops.integrator import velocity_verlet
+from pyro.ops.integrator import potential_grad, velocity_verlet
 from pyro.util import optional, torch_isnan
 
 
@@ -293,8 +293,8 @@ class NUTS(HMC):
         # recompute PE when cache is cleared
         if z is None:
             z = params
-            potential_energy = self.potential_fn(z)
-            self._cache(z, potential_energy)
+            z_grads, potential_energy = potential_grad(self.potential_fn, z)
+            self._cache(z, potential_energy, z_grads)
         # return early if no sample sites
         elif len(z) == 0:
             self._t += 1
@@ -386,7 +386,8 @@ class NUTS(HMC):
                 if rand < new_tree_prob:
                     accepted = True
                     z = new_tree.z_proposal
-                    self._cache(z, new_tree.z_proposal_pe, new_tree.z_proposal_grads)
+                    z_grads = new_tree.z_proposal_grads
+                    self._cache(z, new_tree.z_proposal_pe, z_grads)
 
                 r_sum = {site_names: r_sum[site_names] + new_tree.r_sum[site_names]
                          for site_names in self.inverse_mass_matrix}
@@ -407,7 +408,7 @@ class NUTS(HMC):
                 self._accept_cnt += 1
         else:
             n = self._t
-            self._adapter.step(self._t, z, accept_prob)
+            self._adapter.step(self._t, z, accept_prob, z_grads)
         self._mean_accept_prob += (accept_prob.item() - self._mean_accept_prob) / n
 
         return z.copy()
