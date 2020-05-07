@@ -164,6 +164,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
+    {"dct": 1.},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_regional_smoke(duration, forecast, options):

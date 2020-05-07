@@ -21,7 +21,7 @@ from pyro.infer.autoguide import init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.util import warn_if_nan
 
-from .util import cat2, clamp, quantize, quantize_enumerate
+from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +89,12 @@ class CompartmentalModel(ABC):
             assert population.dim() == 1
             assert (population >= 1).all()
             self.is_regional = True
-            if self.max_plate_nesting == 0:
-                self.max_plate_nesting = 1
+            self.max_plate_nesting = 1
         else:
             assert isinstance(population, int)
             assert population >= 2
             self.is_regional = False
+            self.max_plate_nesting = 0
         self.population = population
 
         compartments = tuple(compartments)
@@ -116,7 +116,7 @@ class CompartmentalModel(ABC):
             if self.is_regional:
                 self._region_plate = pyro.plate("region", len(self.population), dim=-1)
             else:
-                self._region_plate = ExitStack()
+                self._region_plate = ExitStack()  # Trivial context manager.
         return self._region_plate
 
     def _clear_plates(self):
@@ -124,7 +124,6 @@ class CompartmentalModel(ABC):
 
     # Overridable attributes and methods ########################################
 
-    max_plate_nesting = 0
     series = ()
     full_mass = False
 
@@ -314,8 +313,10 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
-        if self.is_regional:
-            self.samples["auxiliary"] = self.samples["auxiliary"].unsqueeze(1)
+        # Unsqueeze samples to align particle dim for use in poutine.condition.
+        # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
+        self.samples = align_samples(self.samples, model,
+                                     particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
@@ -498,7 +499,7 @@ class CompartmentalModel(ABC):
         for e, name in enumerate(self.compartments):
             curr[name] = enum_reshape(curr[name], e)
             logp[name] = enum_reshape(logp[name], e)
-            prev[name] = enum_reshape(prev[name], C + e)
+            prev[name] = enum_reshape(prev[name], e + C)
 
         # In regional models, enable approximate inference by using aux
         # as a non-enumerated proxy for enumerated compartment values.

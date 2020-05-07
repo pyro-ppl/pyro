@@ -6,6 +6,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.tensor_utils import safe_log
 
@@ -49,6 +50,32 @@ def cat2(lhs, rhs, *, dim=-1):
     shape = list(broadcast_shape(lhs.shape, rhs.shape))
     shape[dim] = -1
     return torch.cat([lhs.expand(shape), rhs.expand(shape)], dim=dim)
+
+
+@torch.no_grad()
+def align_samples(samples, model, particle_dim):
+    """
+    Unsqueeze stacked samples such that their particle dim all aligns.
+    This traces ``model`` to determine the ``event_dim`` of each site.
+    """
+    assert particle_dim < 0
+
+    sample = {name: value[0] for name, value in samples.items()}
+    with poutine.block(), poutine.trace() as tr, poutine.condition(data=sample):
+        model()
+
+    samples = samples.copy()
+    for name, value in samples.items():
+        event_dim = tr.trace.nodes[name]["fn"].event_dim
+        pad = event_dim - particle_dim - value.dim()
+        if pad < 0:
+            raise ValueError("Cannot align samples, try moving particle_dim left")
+        if pad > 0:
+            shape = value.shape[:1] + (1,) * pad + value.shape[1:]
+            print("DEBUG reshaping {} : {} -> {}".format(name, value.shape, shape))
+            samples[name] = value.reshape(shape)
+
+    return samples
 
 
 # this 8 x 10 tensor encodes the coefficients of 8 10-dimensional polynomials

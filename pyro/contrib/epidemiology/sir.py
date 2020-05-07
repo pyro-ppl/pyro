@@ -525,6 +525,7 @@ class RegionalSIRModel(CompartmentalModel):
 
     def global_model(self):
         tau = self.recovery_time
+        # TODO make one of these hierarchical.
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         rho = pyro.sample("rho", dist.Uniform(0, 1))
         return R0, tau, rho
