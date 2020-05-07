@@ -6,7 +6,6 @@ from torch.nn.functional import pad
 
 import pyro
 import pyro.distributions as dist
-from pyro.ops.indexing import Index
 
 from .compartmental import CompartmentalModel
 from .distributions import infection_dist
@@ -453,14 +452,9 @@ class UnknownStartSIRModel(CompartmentalModel):
                     dist.ExtendedBinomial(prev["I"], 1 / tau),
                     obs=I2R)
 
-        # In .transition_bwd() t may be either an integer in [0,self.duration)
-        # or may be a nonstandard slicing object like (Ellipsis, None, None);
-        # we use the Index(-)[-] helper to support indexing with nonstandard t.
-        rho_t = Index(rho)[..., t]
-
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho_t),
+                    dist.ExtendedBinomial(S2I, rho[..., t]),
                     obs=self.data[t])
 
     def predict(self, forecast=0):
@@ -543,16 +537,17 @@ class RegionalSIRModel(CompartmentalModel):
     def transition_fwd(self, params, state, t):
         R0, tau, rho = params
 
-        I_effective = state["I"] @ self.coupling
-        pop_effective = self.population @ self.coupling
+        # Account for infections from all regions.
+        I_coupled = state["I"] @ self.coupling
+        pop_coupled = self.population @ self.coupling
 
         with self.region_plate:
             # Sample flows between compartments.
             S2I = pyro.sample("S2I_{}".format(t),
                               infection_dist(individual_rate=R0 / tau,
                                              num_susceptible=state["S"],
-                                             num_infectious=I_effective,
-                                             population=pop_effective))
+                                             num_infectious=I_coupled,
+                                             population=pop_coupled))
             I2R = pyro.sample("I2R_{}".format(t),
                               dist.Binomial(state["I"], 1 / tau))
 
@@ -563,16 +558,18 @@ class RegionalSIRModel(CompartmentalModel):
             # Condition on observations.
             pyro.sample("obs_{}".format(t),
                         dist.ExtendedBinomial(S2I, rho),
-                        obs=self.data[:, t] if t < self.duration else None)
+                        obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, tau, rho = params
 
-        # FIXME the following matmul is incorrect:
-        I_effective = prev["I_approx"] @ self.coupling
-        # In _vectorized_model, I_approx will have shape (1,R);
-        # in _sequential_model, I_approx will have shape (B,T,R).
-        pop_effective = self.population @ self.coupling
+        # Account for infections from all regions. This uses approximate (point
+        # estimate) count I_approx for infection from other regions, but uses
+        # the exact (enumerated) count I for infections from one's own region.
+        I_coupled = prev["I_approx"] @ self.coupling
+        I_coupled = I_coupled + (prev["I"] - prev["I_approx"]) * self.coupling.diag()
+        I_coupled = I_coupled.clamp(min=0)  # In case I_approx is negative.
+        pop_coupled = self.population @ self.coupling
 
         # Reverse the flow computation.
         S2I = prev["S"] - curr["S"]
@@ -583,8 +580,8 @@ class RegionalSIRModel(CompartmentalModel):
             pyro.sample("S2I_{}".format(t),
                         infection_dist(individual_rate=R0 / tau,
                                        num_susceptible=prev["S"],
-                                       num_infectious=I_effective,
-                                       population=pop_effective),
+                                       num_infectious=I_coupled,
+                                       population=pop_coupled),
                         obs=S2I)
             pyro.sample("I2R_{}".format(t),
                         dist.ExtendedBinomial(prev["I"], 1 / tau),

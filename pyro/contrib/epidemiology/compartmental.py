@@ -4,7 +4,6 @@
 import logging
 import operator
 import re
-import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from functools import reduce
@@ -104,12 +103,15 @@ class CompartmentalModel(ABC):
 
         # Inference state.
         self.samples = {}
-        self._region_plate = None
+        self._clear_plates()
 
     def region_plate(self):
         if self.is_regional and self._region_plate is None:
             self._region_plate = pyro.plate("region", len(self.population), dim=-1)
         return self._region_plate
+
+    def _clear_plates(self):
+        self._region_plate = None
 
     # Overridable attributes and methods ########################################
 
@@ -396,30 +398,35 @@ class CompartmentalModel(ABC):
                 for name in self.compartments:
                     pyro.deterministic("{}_{}".format(name, t), state[name])
 
-        # Cleanup.
-        self._region_plate = None
+        self._clear_plates()
 
     def _sequential_model(self):
         """
         Sequential model used to sample latents in the interval [0:duration].
         """
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
         # Sample global parameters.
         params = self.global_model()
 
         # Sample the continuous reparameterizing variable.
-        with self.region_plate:
-            shape = getattr(self.population, "shape", ()) + (len(self.compartments), self.duration)
-            auxiliary = pyro.sample("auxiliary",
-                                    dist.Uniform(-0.5, self.population + 0.5)
-                                        .mask(False).expand(shape).to_event(2))
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event(len(shape)))
+        if self.is_regional:
+            # This reshapes from (particle, 1, C, T, R) -> (particle, C, T, R)
+            # to allow aux below to have shape (particle, R) for region_plate.
+            auxiliary = auxiliary.squeeze(-4)
 
         # Sequentially transition.
         curr = self.initialize(params)
-        for t in poutine.markov(range(self.duration)):
+        for t, aux_t in poutine.markov(enumerate(auxiliary.unbind(2))):
             with self.region_plate:
-                aux_t = auxiliary[..., t]
                 prev, curr = curr, {}
-                for name, aux in zip(self.compartments, aux_t.unbind(-1)):
+                for name, aux in zip(self.compartments, aux_t.unbind(1)):
                     curr[name] = quantize("{}_{}".format(name, t), aux,
                                           min=0, max=self.population,
                                           num_quant_bins=self.num_quant_bins)
@@ -430,22 +437,26 @@ class CompartmentalModel(ABC):
                         prev.setdefault(name + "_approx", prev[name])
             self.transition_bwd(params, prev, curr, t)
 
-        # Cleanup.
-        self._region_plate = None
+        self._clear_plates()
 
     def _vectorized_model(self):
         """
         Vectorized model used for inference.
         """
+        C = len(self.compartments)
+        T = self.duration
+        Q = self.num_quant_bins
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
         # Sample global parameters.
         params = self.global_model()
 
         # Sample the continuous reparameterizing variable.
-        with self.region_plate:
-            shape = getattr(self.population, "shape", ()) + (len(self.compartments), self.duration)
-            auxiliary = pyro.sample("auxiliary",
-                                    dist.Uniform(-0.5, self.population + 0.5)
-                                        .mask(False).expand(shape).to_event(2))
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event(len(shape)))
+        assert auxiliary.shape == shape, "particle plates are not supported"
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
@@ -460,10 +471,6 @@ class CompartmentalModel(ABC):
             prev[name] = cat2(init[name], curr[name][..., :-1, :], dim=-2)
 
         # Reshape to support broadcasting, similar to EnumMessenger.
-        C = len(self.compartments)
-        T = self.duration
-        Q = self.num_quant_bins  # Number of quantization points.
-
         def enum_reshape(tensor, position):
             assert tensor.size(-1) == Q
             assert tensor.dim() <= self.max_plate_nesting + 1
@@ -476,18 +483,19 @@ class CompartmentalModel(ABC):
             curr[name] = enum_reshape(curr[name], e)
             logp[name] = enum_reshape(logp[name], e)
             prev[name] = enum_reshape(prev[name], C + e)
-        t = slice(None)  # Used to slice data tensors.
 
         # In regional models, enable approximate inference by using aux
         # as a non-enumerated proxy for enumerated compartment values.
         if self.is_regional:
-            for name, aux in zip(self.compartments, auxiliary.unbind(-2)):
-                curr[name + "_approx"] = aux[t]
-                prev[name + "_approx"] = cat2(init[name], aux[..., :-1], dim=-1)[t]
+            for name, aux in zip(self.compartments, auxiliary):
+                curr[name + "_approx"] = aux
+                prev[name + "_approx"] = cat2(init[name], aux[:-1], dim=0)
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
-            self.transition_bwd(params, prev, curr, t)
+            with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
+                t = slice(None)  # Used to slice data tensors.
+                self.transition_bwd(params, prev, curr, t)
         tr.trace.compute_log_prob()
         for name, site in tr.trace.nodes.items():
             if site["type"] == "sample":
@@ -495,17 +503,14 @@ class CompartmentalModel(ABC):
 
         # Manually perform variable elimination.
         logp = reduce(operator.add, logp.values())
-        logp = logp.reshape(Q ** C, Q ** C, *logp.shape[-self.max_plate_nesting:])
-        logp = logp.reshape(-1, T, Q ** C, Q ** C).squeeze(0)
-        if not logp.is_contiguous():
-            warnings.warn("logp is not contiguous in _vectorized_model()")
-        logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)
-        logp = logp.reshape(-1).logsumexp(0)
+        logp = logp.reshape(Q ** C, Q ** C, T, -1)  # prev, curr, T, batch
+        logp = logp.permute(3, 2, 0, 1).squeeze(0)  # batch, T, prev, curr
+        logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)  # batch, prev, curr
+        logp = logp.reshape(-1, Q ** C * Q ** C).logsumexp(-1).sum()
         warn_if_nan(logp)
         pyro.factor("transition", logp)
 
-        # Cleanup.
-        self._region_plate = None
+        self._clear_plates()
 
 
 class _SMCModel:
