@@ -108,7 +108,7 @@ def _make_handler(msngr_cls):
     handler_name = _re2.sub(
         r'\1_\2', _re1.sub(r'\1_\2', msngr_cls.__name__.split("Messenger")[0])).lower()
     handler.__doc__ = """Convenient wrapper of :class:`~pyro.poutine.{}.{}` \n\n""".format(
-        handler_name + "_messenger", msngr_cls.__name__) + msngr_cls.__doc__
+        handler_name + "_messenger", msngr_cls.__name__) + (msngr_cls.__doc__ if msngr_cls.__doc__ else "")
     handler.__name__ = handler_name
     return handler_name, handler
 
