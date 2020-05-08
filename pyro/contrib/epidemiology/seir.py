@@ -26,7 +26,7 @@ class SimpleSEIRModel(CompartmentalModel):
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections. Each time
-        step is Binomial distributed between 0 and the number of ``E -> I``
+        step is Binomial distributed between 0 and the number of ``S -> E``
         transitions. This allows false negative but no false positives.
     """
 
@@ -52,7 +52,7 @@ class SimpleSEIRModel(CompartmentalModel):
         tau_e = self.incubation_time
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+        rho = pyro.sample("rho", dist.Beta(2, 2))
         return R0, tau_e, tau_i, rho
 
     def initialize(self, params):
@@ -80,7 +80,7 @@ class SimpleSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t] if t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
@@ -107,7 +107,7 @@ class SimpleSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t])
 
 
@@ -154,7 +154,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
     :param iterable data: Time series of new observed infections. Each time
-        step is Binomial distributed between 0 and the number of ``E -> I``
+        step is Binomial distributed between 0 and the number of ``S -> E``
         transitions. This allows false negative but no false positives.
     :param iterable phy_data: Time series of phylogenetic data in the form of
         binomial coefficients and intervals between coalescent events as used in [2]
@@ -184,7 +184,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         k = pyro.sample("k", dist.Exponential(1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+        rho = pyro.sample("rho", dist.Beta(2, 2))
         return R0, k, tau_e, tau_i, rho
 
     def initialize(self, params):
@@ -214,7 +214,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t] if t < self.duration else None)
 
         if self.phy_data is not None and t < len(self.phy_data):
@@ -250,5 +250,5 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(E2I, rho),
+                    dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t])

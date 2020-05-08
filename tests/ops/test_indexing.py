@@ -8,8 +8,16 @@ import torch
 
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.indexing import Vindex
+from pyro.ops.indexing import Index, Vindex
 from tests.common import assert_equal
+
+
+class TensorMock:
+    def __getitem__(self, args):
+        return args
+
+
+tensor_mock = TensorMock()
 
 
 def z(*args):
@@ -132,3 +140,19 @@ def test_hmm_example(prev_enum_dim, curr_enum_dim):
     expected = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), torch.arange(hidden_dim)]
     actual = Vindex(probs_x)[x_prev, x_curr, :]
     assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("args,expected", [
+    (0, 0),
+    (1, 1),
+    (None, None),
+    (slice(1, 2, 3), slice(1, 2, 3)),
+    (Ellipsis, Ellipsis),
+    ((0, 1, None, slice(1, 2, 3), Ellipsis), (0, 1, None, slice(1, 2, 3), Ellipsis)),
+    (((0, 1), (None, slice(1, 2, 3)), Ellipsis), (0, 1, None, slice(1, 2, 3), Ellipsis)),
+    ((Ellipsis, None), (Ellipsis, None)),
+    ((Ellipsis, (Ellipsis, None)), (Ellipsis, None)),
+    ((Ellipsis, (Ellipsis, None, None)), (Ellipsis, None, None)),
+])
+def test_index(args, expected):
+    assert Index(tensor_mock)[args] == expected
