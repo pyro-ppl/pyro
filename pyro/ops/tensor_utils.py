@@ -378,3 +378,35 @@ def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
     return x.triangular_solve(y, upper=upper, transpose=transpose).solution
+
+
+def precision_to_scale_tril(P):
+    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
+    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
+    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
+                               L_inv, upper=False)[0]
+    return L
+
+
+def arrowhead_precision_to_scale_tril(x, head_size):
+    N = x.size(-1)
+    assert x.dim() == 2
+    assert x.size(-2) == N
+    assert head_size <= N
+    if head_size == 0:
+        return x.diag().rsqrt().diag()
+
+    A, B = x[:head_size, :head_size], x[:head_size, head_size:]
+    D = x.view(-1)[::N + 1][head_size:]
+    # NB: the complexity is O(N * head_size^2)
+    # ref: https://en.wikipedia.org/wiki/Schur_complement#Background
+    B_Dinv = B / D.unsqueeze(-2)
+    schur_complement = A - B_Dinv.matmul(B.transpose(-2, -1))
+    tril_upper = precision_to_scale_tril(schur_complement)
+    tril_lower_left = -B_Dinv.transpose(-2, -1).matmul(tril_upper)
+    # NB: we can exploit this diagonal form of scale_tril
+    # to generate samples with O(N x head_size) cost
+    tril_lower_diag = D.rsqrt().diag()
+    tril_upper = torch.nn.functional.pad(tril_upper, (0, N - head_size))
+    tril_lower = torch.cat([tril_lower_left, tril_lower_diag], -1)
+    return torch.cat([tril_upper, tril_lower])

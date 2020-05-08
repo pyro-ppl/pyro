@@ -75,7 +75,7 @@ def test_welford_arrowhead(n_samples, dim_size, head_size, regularize):
 
     mask = torch.ones(dim_size, dim_size)
     mask[head_size:, head_size:] = 0.
-    mask.view(-1)[::dim_size+1][head_size:] = 1.
+    mask.view(-1)[::dim_size + 1][head_size:] = 1.
     expected = np.cov(samples.cpu().numpy(), bias=False, rowvar=False)
     expected = torch.from_numpy(expected).type_as(mask)
     if regularize:
