@@ -205,12 +205,6 @@ class WarmupAdapter:
 
     @inverse_mass_matrix.setter
     def inverse_mass_matrix(self, value):
-        # XXX: for backward compatibility (when users want to specify a fixed inverse mass matrix)
-        if torch.is_tensor(value):
-            assert len(self._inverse_mass_matrix) == 1
-            all_sites = list(self._inverse_mass_matrix.keys())[0]
-            value = {all_sites: value}
-
         for site_names, inv_mass_matrix in value.items():
             self._inverse_mass_matrix[site_names] = inv_mass_matrix
         self._update_r_dist()
@@ -221,3 +215,81 @@ class WarmupAdapter:
     @property
     def r_dist(self):
         return self._r_dist
+
+
+class BlockMassMatrix:
+    def __init__(self):
+        self._adapt_scheme = {}
+        self._inverse_mass_matrix = OrderedDict()
+        self._r_scale = {}
+
+    def configure(self, inverse_mass_matrix):
+        self.inverse_mass_matrix = inverse_mass_matrix
+        for site_names, inv_mass_matrix in inverse_mass_matrix.items():
+            head_size = 0 if inv_mass_matrix.dim() == 1 else inv_mass_matrix.size(0)
+            adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
+            adapt_scheme.reset()
+            self._adapt_scheme[site_names] = adapt_scheme
+
+    def update(self, z, z_grads=None):
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
+            adapt_scheme.update(z_flat.detach())
+
+    def __call__(self, *args, **kwargs):
+        return samples
+
+    def quadratic(self, r1, r2):
+        # compute r1 M^{-1} r2
+        return self._r_scale.matmul(r1)
+
+    @property
+    def inverse_mass_matrix(self):
+        return self._inverse_mass_matrix
+
+    @inverse_mass_matrix.setter
+    def inverse_mass_matrix(self, value):
+        for site_names, inv_mass_matrix in value.items():
+            self._inverse_mass_matrix[site_names] = inv_mass_matrix
+            # also update r_scale
+            self._r_scale = inv_mass_matrix.cholesky()
+
+
+class ArrowheadMass(InverseMassMatrixAdapter):
+
+
+    def 
+
+
+class ArrowheadMassMatrix():
+    """
+    Computes scale_triu U matrix from a symmetric arrowhead positive definite matrix M,
+    that is `M = U @ U.T`. 
+    """
+    def __init__(self, inverse_mass_matrix):
+        self.inverse_mass_matrix
+
+    def __call__(self):
+        return 
+
+    N = x.size(-1)
+    assert x.dim() == 2
+    assert x.size(-2) == N
+    assert head_size <= N
+    if head_size == 0:
+        return x.diag().rsqrt().diag()
+
+    A, B = x[:head_size, :head_size], x[:head_size, head_size:]
+    D = x.view(-1)[::N + 1][head_size:]
+    # NB: the complexity is O(N * head_size^2)
+    # ref: https://en.wikipedia.org/wiki/Schur_complement#Background
+    B_Dinv = B / D.unsqueeze(-2)
+    schur_complement = A - B_Dinv.matmul(B.transpose(-2, -1))
+    tril_upper = precision_to_scale_tril(schur_complement)
+    tril_lower_left = -B_Dinv.transpose(-2, -1).matmul(tril_upper)
+    # NB: we can exploit this diagonal form of scale_tril
+    # to generate samples with O(N x head_size) cost
+    tril_lower_diag = D.rsqrt().diag()
+    tril_upper = torch.nn.functional.pad(tril_upper, (0, N - head_size))
+    tril_lower = torch.cat([tril_lower_left, tril_lower_diag], -1)
+    return torch.cat([tril_upper, tril_lower])

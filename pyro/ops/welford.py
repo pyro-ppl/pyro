@@ -72,7 +72,7 @@ class WelfordArrowheadCovariance:
         self._m2_dense += torch.ger(delta_post[:self.head_size], delta_pre)
         self._m2_diagonal += delta_post[self.head_size:] * delta_pre[self.head_size:]
 
-    def get_covariance(self, regularize=False):
+    def get_covariance(self, regularize=True):
         if self.n_samples < 2:
             raise RuntimeError('Insufficient samples to estimate covariance')
         dense = self._m2_dense / (self.n_samples - 1)
