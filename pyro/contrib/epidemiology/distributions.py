@@ -159,3 +159,29 @@ def vectorized_coalescent_likelihood(S_prev, I_prev, R, k, tau_i, binomials, int
 
     log_weight[(binomials <= 0.).expand(log_weight.shape)] = 0.
     return log_weight.sum(-1)  # sum out phylogenetic time dimension
+
+
+def tree_likelihood(R, k, tau, I, tree, *, time_step=1., time_start=0.):
+    """
+    Coalescent likelihood based on a phylogenetic tree in
+    :class:`Bio.Phylo.BaseTree.Tree` format [1].
+
+    **References**
+
+    [1] Biopython Phylogenetic Trees https://biopython.org/wiki/Phylo
+
+    :param R: Reproductive number.
+    :type R: float or ~torch.Tensor
+    :param k: Concentration aka dispersion.
+    :type k: float or ~torch.Tensor
+    :param tau: Expected duration of infection.
+    :type tau: float or ~torch.Tensor
+    :param I: Number of infections over time.
+    :type I: ~torch.Tensor
+    :param tree: Phylogenetic tree.
+    :type tree: ~Bio.Phylo.BaseTree.Tree
+    :param float time_step: Optional time step. Defaults to 1.
+    :param float time_start: Optional start time step. Defaults to 0.
+    """
+    coal_rate = R * (1. + 1. / k) / (I * tau)
+    raise NotImplementedError("TODO")

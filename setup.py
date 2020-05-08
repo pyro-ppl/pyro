@@ -62,6 +62,7 @@ EXTRAS_REQUIRE = [
     'matplotlib>=1.3',
     'torchvision>=0.5.0',
     'visdom>=0.1.4',
+    'biopython>=1.54',
     'pandas',
     'seaborn',
     'wget',
