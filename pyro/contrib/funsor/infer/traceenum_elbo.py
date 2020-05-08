@@ -56,23 +56,23 @@ class TraceEnum_ELBO(ELBO):
                 terms[role]["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
                 terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_prob"].inputs)
 
-        # contract out auxiliary variables in the model
-        model_aux_vars = terms["model"]["measure_vars"] - terms["model"]["plate_vars"] - \
-            (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
-        if model_aux_vars:
-            contracted_terms = [t for t in terms["model"]["log_factors"] if model_aux_vars.intersection(t.inputs)]
-            uncontracted_terms = [t for t in terms["model"]["log_factors"] if not model_aux_vars.intersection(t.inputs)]
-            terms["model"]["log_factors"] = uncontracted_terms + funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measures"] + contracted_terms,
-                plates=terms["model"]["plate_vars"], eliminate=model_aux_vars
-            )
-
-        # compute remaining plates and sum_dims
-        plate_vars = (terms["model"]["plate_vars"] | terms["guide"]["plate_vars"]) - model_aux_vars
-        sum_vars = (terms["model"]["measure_vars"] | terms["guide"]["measure_vars"]) - model_aux_vars - plate_vars
-
-        # TODO inline this final bit
         with funsor.interpreter.interpretation(funsor.terms.lazy):
+            # contract out auxiliary variables in the model
+            model_aux_vars = terms["model"]["measure_vars"] - terms["model"]["plate_vars"] - \
+                (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
+            if model_aux_vars:
+                contracted_terms = [t for t in terms["model"]["log_factors"] if model_aux_vars.intersection(t.inputs)]
+                uncontracted_terms = [t for t in terms["model"]["log_factors"] if not model_aux_vars.intersection(t.inputs)]
+                terms["model"]["log_factors"] = uncontracted_terms + funsor.sum_product.partial_sum_product(
+                    funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measures"] + contracted_terms,
+                    plates=terms["model"]["plate_vars"], eliminate=model_aux_vars
+                )
+
+            # compute remaining plates and sum_dims
+            plate_vars = (terms["model"]["plate_vars"] | terms["guide"]["plate_vars"]) - model_aux_vars
+            sum_vars = (terms["model"]["measure_vars"] | terms["guide"]["measure_vars"]) - model_aux_vars - plate_vars
+
+            # integrate out guide variables
             elbo = expectation(terms["guide"]["log_measures"],
                                terms["model"]["log_factors"] + terms["guide"]["log_factors"],
                                sum_vars, plate_vars)
