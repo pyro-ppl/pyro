@@ -13,8 +13,9 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
 def Model(args, data):
+    assert 0 <= args.coupling <= 1, args.coupling
     population = torch.full((args.num_regions,), float(args.population))
-    coupling = torch.eye(args.num_regions).clamp(min=0.1)
+    coupling = torch.eye(args.num_regions).clamp(min=args.coupling)
     return RegionalSIRModel(population, coupling, args.recovery_time, data)
 
 
@@ -95,7 +96,8 @@ def predict(args, model, truth):
             ax.axvline(args.duration - 0.5, color="gray", lw=1)
             ax.set_xlim(0, len(time) - 1)
             ax.set_ylim(0, None)
-        axes[0].set_title("New infections in population of {}".format(args.population))
+        axes[0].set_title("New infections among {} regions each of size {}"
+                          .format(args.num_regions, args.population))
         axes[args.num_regions // 2].set_ylabel("inf./day")
         axes[-1].set_xlabel("day after first infection")
         axes[-1].legend(loc="upper left")
@@ -125,6 +127,7 @@ if __name__ == "__main__":
         description="Regional compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=int)
     parser.add_argument("-r", "--num-regions", default=2, type=int)
+    parser.add_argument("-c", "--coupling", default=0.1, type=float)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
     parser.add_argument("-d", "--duration", default=20, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
