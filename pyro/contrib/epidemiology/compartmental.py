@@ -280,6 +280,8 @@ class CompartmentalModel(ABC):
         # Save these options for .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
         self._dct = options.pop("dct", None)
+        if self._dct is not None and self.is_regional:
+            raise NotImplementedError("regional models do not support DiscreteCosineReparam")
 
         # Heuristically initialze to feasible latents.
         logger.info("Heuristically initializing...")
