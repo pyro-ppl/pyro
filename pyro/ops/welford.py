@@ -69,7 +69,10 @@ class WelfordArrowheadCovariance:
         delta_pre = sample - self._mean
         self._mean = self._mean + delta_pre / self.n_samples
         delta_post = sample - self._mean
-        self._m2_dense += torch.ger(delta_post[:self.head_size], delta_pre)
+        if self.head_size > 0:
+            self._m2_dense += torch.ger(delta_post[:self.head_size], delta_pre)
+        else:
+            self._m2_dense = sample.new_empty(0, 0)
         self._m2_diagonal += delta_post[self.head_size:] * delta_pre[self.head_size:]
 
     def get_covariance(self, regularize=True):
@@ -84,5 +87,7 @@ class WelfordArrowheadCovariance:
             dense.view(-1)[::dense.size(-1) + 1] += shrinkage
             diagonal += shrinkage
 
-        cov = torch.cat([dense, torch.cat([dense[:, self.head_size:].t(), diagonal.diag()], -1)])
+        cov = diagonal.diag()
+        if self.head_size > 0:
+            cov = torch.cat([dense, torch.cat([dense[:, self.head_size:].t(), cov], -1)])
         return cov
