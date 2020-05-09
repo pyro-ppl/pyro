@@ -78,7 +78,7 @@ class CompartmentalModel(ABC):
         a tensor of each region's population in a regional model.
     :type population: int or torch.Tensor
     :param tuple approximate: Names of compartments for which pointwise
-        apprixmations should be provided in :meth:`transition_bwd`, e.g. if you
+        approximations should be provided in :meth:`transition_bwd`, e.g. if you
         specify ``approximate=("I")`` then the ``prev["I_approx"]`` will be a
         continuous-valued non-enumerated point estimate of ``prev["I"]``.
         Approximations are useful to reduce computational cost. Approximations

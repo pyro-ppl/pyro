@@ -479,15 +479,29 @@ class UnknownStartSIRModel(CompartmentalModel):
 
 
 class RegionalSIRModel(CompartmentalModel):
-    """
+    r"""
     Susceptible-Infected-Recovered model with coupling across regions.
 
     To customize this model we recommend forking and editing this class.
 
     This is a stochastic discrete-time discrete-state model with three
-    compartments: "S" for susceptible, "I" for infected, and "R" for
-    recovered individuals (the recovered individuals are implicit: ``R =
+    compartments in each region: "S" for susceptible, "I" for infected, and "R"
+    for recovered individuals (the recovered individuals are implicit: ``R =
     population - S - I``) with transitions ``S -> I -> R``.
+
+    Regions are coupled by a ``coupling`` matrix with entries in ``[0,1]``.
+    The all ones matrix is equivalent to a single region. The identity matrix
+    is equivalent to a set of independent regions. This need not be symmetric,
+    but symmetric matrices are probably more physically plausible. The expected
+    number of new infections each time step ``S2I`` is Binomial distributed
+    with mean::
+
+        E[S2I] = S (1 - (1 - R0 / (population @ coupling)) ** (I @ coupling))
+               ≈ R0 S (I @ coupling) / (population @ coupling)  # for small I
+
+    This in a nearly entirely susceptible population, a single infected
+    individual infects approximately ``R0`` new individuals on average,
+    independent of ``coupling``.
 
     This model demonstrates:
 
@@ -501,10 +515,7 @@ class RegionalSIRModel(CompartmentalModel):
     :param torch.Tensor population: Tensor of per-region populations, defining
         ``population = S + I + R``.
     :param torch.Tensor coupling: Pairwise coupling matrix. Entries should be
-        in ``[0,1]``. The all ones matrix is equivalent to a single region. The
-        identity matrix is equivalent to a set of independent regions. Diagonal
-        entries less than one are multiplied by ``R0`` to reduce local
-        reproductive number.
+        in ``[0,1]``.
     :param float recovery_time: Mean recovery time (duration in state ``I``).
         Must be greater than 1.
     :param iterable data: Time x Region sized tensor of new observed
@@ -517,6 +528,8 @@ class RegionalSIRModel(CompartmentalModel):
         duration = len(data)
         num_regions, = population.shape
         assert coupling.shape == (num_regions, num_regions)
+        assert (0 <= coupling).all()
+        assert (coupling <= 1).all()
         assert isinstance(recovery_time, float)
         assert recovery_time > 1
         if isinstance(data, torch.Tensor):
