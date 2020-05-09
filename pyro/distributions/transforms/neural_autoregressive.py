@@ -60,7 +60,7 @@ class NeuralAutoregressive(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
-    eps=1e-8
+    eps = 1e-8
 
     def __init__(self, autoregressive_nn, hidden_units=16, activation='sigmoid'):
         super().__init__(cache_size=1)
@@ -126,7 +126,7 @@ class NeuralAutoregressive(TransformModule):
         T = self.T
 
         log_dydD = self._cached_log_df_inv_dx
-        log_dDdx = torch.logsumexp(torch.log(A + eps) + self.logsoftmax(W_pre) +
+        log_dDdx = torch.logsumexp(torch.log(A + self.eps) + self.logsoftmax(W_pre) +
                                    T.log_abs_det_jacobian(C, T_C), dim=-2)
         log_det = log_dydD + log_dDdx
         return log_det.sum(-1)

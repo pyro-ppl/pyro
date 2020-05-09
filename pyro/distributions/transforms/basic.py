@@ -9,6 +9,8 @@ from torch.distributions import constraints
 import torch.nn.functional as F
 
 # TODO: Move upstream
+
+
 class ELUTransform(Transform):
     r"""
     Bijective transform via the mapping :math:`y = \text{ELU}(x)`.
@@ -40,6 +42,8 @@ def elu():
     return ELUTransform()
 
 # TODO: Move upstream
+
+
 class LeakyReLUTransform(Transform):
     r"""
     Bijective transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
@@ -71,6 +75,8 @@ def leaky_relu():
     return LeakyReLUTransform()
 
 # TODO: Move upstream
+
+
 class TanhTransform(Transform):
     r"""
     Bijective transform via the mapping :math:`y = \text{tanh}(x)`.
