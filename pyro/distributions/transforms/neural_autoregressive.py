@@ -1,4 +1,4 @@
-# Copyright Contributors to the Pyro project.
+# Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 from functools import partial
@@ -60,6 +60,7 @@ class NeuralAutoregressive(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    eps=1e-8
 
     def __init__(self, autoregressive_nn, hidden_units=16, activation='sigmoid'):
         super().__init__(cache_size=1)
@@ -113,7 +114,7 @@ class NeuralAutoregressive(TransformModule):
         return y
 
     # This method returns log(abs(det(dy/dx)), which is equal to -log(abs(det(dx/dy))
-    def log_abs_det_jacobian(self, x, y, eps=1e-8):
+    def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log Jacobian
         """
