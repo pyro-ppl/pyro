@@ -304,8 +304,8 @@ class Spline(ConditionedSpline, TransformModule):
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
 
-    :param input_dim: Dimension of the input vector. Despite operating element-wise,
-        this is required so we know how many parameters to store.
+    :param input_dim: Dimension of the input vector. This is required so we know how
+        many parameters to store.
     :type input_dim: int
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
@@ -402,8 +402,8 @@ class ConditionalSpline(ConditionalTransformModule):
     ... [transform]).condition(z)
     >>> flow_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
-    :param input_dim: Dimension of the input vector. Despite operating element-wise,
-        this is required so we know how many parameters to store.
+    :param input_dim: Dimension of the input vector. This is required so we know how
+        many parameters to store.
     :type input_dim: int
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
@@ -501,41 +501,3 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
                              input_dim * (count_bins - 1),
                              input_dim * count_bins])
     return ConditionalSpline(nn, input_dim, count_bins, bound=bound)
-
-
-if __name__ == "__main__":
-    """s = conditional_spline(5, 3)
-    base_dist = dist.Normal(torch.zeros(5), torch.ones(5))
-    z = torch.rand(1, 3)
-    s_cond_z = s.condition(z)
-    x = base_dist.sample()
-    s_cond_z._call(x)"""
-
-    import torch.distributions as dist
-    context_dim = 3
-
-    def transform_factory(input_dim, context_dim=context_dim):
-        z = torch.rand(1, context_dim)
-        return conditional_spline(input_dim, context_dim).condition(z)
-
-    def _test_inverse(shape, transform):
-        base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
-
-        x_true = base_dist.sample(torch.Size([10]))
-        y = transform._call(x_true)
-
-        # Cache is empty, hence must be calculating inverse afresh
-        x_calculated = transform._inverse(y)
-
-        assert torch.norm(x_true - x_calculated, dim=-1).max().item() < 1e-6
-
-    def _test_shape(base_shape, transform):
-        base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
-        sample = dist.TransformedDistribution(base_dist, [transform]).sample()
-        assert sample.shape == base_shape
-
-    for input_dim in [2, 5, 10]:
-        transform = transform_factory(input_dim)
-        # self._test_inverse(input_dim, transform)
-        for shape in [(3,), (3, 4)]:
-            _test_shape(shape + (input_dim,), transform)
