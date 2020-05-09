@@ -9,7 +9,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.welford import WelfordCovariance
+from pyro.ops.welford import WelfordArrowheadCovariance
 
 adapt_window = namedtuple("adapt_window", ["start", "end"])
 
@@ -217,31 +217,33 @@ class WarmupAdapter:
         return self._r_dist
 
 
+# this works for diagonal matrix `x`
+def _matmul(x, y):
+    return x.mul(y) if x.dim() == 1 else x.matmul(y)
+
+
+def _cholesky(x):
+    return x.rsqrt() if x.dim() == 1 else x.cholesky()
+
+
+def _transpose(x):
+    return x if x.dim() == 1 else x.t()
+
+
+def _upper_triangular_inverse(x):
+    if x.dim() == 1:
+        return x.reciprocal()
+    else:
+        identity = torch.eye(x.size(-1), dtype=x.dtype, device=x.device)
+        return torch.triangular_solve(identity, x, upper=True)[0]
+
+
 class BlockMassMatrix:
     def __init__(self):
         self._adapt_scheme = {}
-        self._inverse_mass_matrix = OrderedDict()
-        self._r_scale = {}
-
-    def configure(self, inverse_mass_matrix):
-        self.inverse_mass_matrix = inverse_mass_matrix
-        for site_names, inv_mass_matrix in inverse_mass_matrix.items():
-            head_size = 0 if inv_mass_matrix.dim() == 1 else inv_mass_matrix.size(0)
-            adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
-            adapt_scheme.reset()
-            self._adapt_scheme[site_names] = adapt_scheme
-
-    def update(self, z, z_grads=None):
-        for site_names, adapt_scheme in self._adapt_scheme.items():
-            z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
-            adapt_scheme.update(z_flat.detach())
-
-    def __call__(self, *args, **kwargs):
-        return samples
-
-    def quadratic(self, r1, r2):
-        # compute r1 M^{-1} r2
-        return self._r_scale.matmul(r1)
+        self._inverse_mass_matrix = {}
+        self._mass_matrix_sqrt = {}
+        self._mass_matrix_sqrt_inverse = {}
 
     @property
     def inverse_mass_matrix(self):
@@ -249,47 +251,74 @@ class BlockMassMatrix:
 
     @inverse_mass_matrix.setter
     def inverse_mass_matrix(self, value):
-        for site_names, inv_mass_matrix in value.items():
-            self._inverse_mass_matrix[site_names] = inv_mass_matrix
-            # also update r_scale
-            self._r_scale = inv_mass_matrix.cholesky()
+        for site_names, inverse_mass_matrix in value.items():
+            self._adapt_scheme[site_names].reset()
+            mass_matrix_sqrt_inverse = _transpose(_cholesky(inverse_mass_matrix))
+            mass_matrix_sqrt = _upper_triangular_inverse(mass_matrix_sqrt_inverse)
+            self._inverse_mass_matrix[site_names] = inverse_mass_matrix
+            self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
+            self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
 
+    def configure(self, inverse_mass_matrix):
+        for site_names, value in inverse_mass_matrix.items():
+            head_size = 0 if value.dim() == 1 else value.size(0)
+            adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
+            self._adapt_scheme[site_names] = adapt_scheme
+        self.inverse_mass_matrix = inverse_mass_matrix
 
-class ArrowheadMass(InverseMassMatrixAdapter):
+    def update(self, z, z_grad=None):
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
+            adapt_scheme.update(z_flat.detach())
 
+    def end_adaptation(self):
+        inverse_mass_matrix = {}
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            inverse_mass_matrix[site_names] = adapt_scheme.get_covariance(regularize=True)
+        self.inverse_mass_matrix = inverse_mass_matrix
 
-    def 
+    def velocity(self, r):
+        """
+        Computes the gradient of kinetic energy w.r.t. the momentum `r`.
+        It is equivalent to compute velocity given the momentum `r`.
 
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding gradient
+        """
+        grad = {}
+        for site_names, inverse_mass_matrix in self._inverse_mass_matrix.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            grad[site_names] = _matmul(inverse_mass_matrix, r_flat)
+        return grad
 
-class ArrowheadMassMatrix():
-    """
-    Computes scale_triu U matrix from a symmetric arrowhead positive definite matrix M,
-    that is `M = U @ U.T`. 
-    """
-    def __init__(self, inverse_mass_matrix):
-        self.inverse_mass_matrix
+    def scale(self, r_eps):
+        """
+        Computes M^{1/2} @ r_eps.
 
-    def __call__(self):
-        return 
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will unscaled it.
 
-    N = x.size(-1)
-    assert x.dim() == 2
-    assert x.size(-2) == N
-    assert head_size <= N
-    if head_size == 0:
-        return x.diag().rsqrt().diag()
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        s = {}
+        for site_names, mass_matrix_sqrt in self._mass_matrix_sqrt.items():
+            r_flat = torch.cat([r_eps[site_name].reshape(-1) for site_name in site_names])
+            s[site_names] = _matmul(mass_matrix_sqrt, r_flat)
+        return s
 
-    A, B = x[:head_size, :head_size], x[:head_size, head_size:]
-    D = x.view(-1)[::N + 1][head_size:]
-    # NB: the complexity is O(N * head_size^2)
-    # ref: https://en.wikipedia.org/wiki/Schur_complement#Background
-    B_Dinv = B / D.unsqueeze(-2)
-    schur_complement = A - B_Dinv.matmul(B.transpose(-2, -1))
-    tril_upper = precision_to_scale_tril(schur_complement)
-    tril_lower_left = -B_Dinv.transpose(-2, -1).matmul(tril_upper)
-    # NB: we can exploit this diagonal form of scale_tril
-    # to generate samples with O(N x head_size) cost
-    tril_lower_diag = D.rsqrt().diag()
-    tril_upper = torch.nn.functional.pad(tril_upper, (0, N - head_size))
-    tril_lower = torch.cat([tril_lower_left, tril_lower_diag], -1)
-    return torch.cat([tril_upper, tril_lower])
+    def unscale(self, r):
+        """
+        Computes `inv(M^{1/2}) @ r`.
+
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will unscaled it.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        u = {}
+        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            u[site_names] = _matmul(mass_matrix_sqrt_inverse, r_flat)
+        return u
