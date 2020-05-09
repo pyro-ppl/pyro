@@ -174,8 +174,8 @@ class NUTS(HMC):
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = velocity_verlet(
-            z, r, self.potential_fn, self._adapter.mass_matrix_adapter.kinetic_grad, step_size, z_grads=z_grads)
-        r_new_unscaled = self._adapter.mass_matrix_adapter.unscale(r_new)
+            z, r, self.potential_fn, self.mass_matrix_adapter.kinetic_grad, step_size, z_grads=z_grads)
+        r_new_unscaled = self.mass_matrix_adapter.unscale(r_new)
         energy_new = potential_energy + self._kinetic_energy(r_new_unscaled)
         # handle the NaN case
         energy_new = scalar_like(energy_new, float("inf")) if torch_isnan(energy_new) else energy_new
