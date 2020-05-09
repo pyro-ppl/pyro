@@ -199,8 +199,9 @@ class HMC(MCMCKernel):
     def _sample_r(self, name):
         r_unscaled = {}
         for site_names, value in self.inverse_mass_matrix.items():
+            size = value.size(0)
             r_unscaled[site_names] = pyro.sample(
-                "{}_{}".format(name, site_names), dist.Normal(0., 1.).expand([value.size(0)]))
+                "{}_{}".format(name, site_names), dist.Normal(value.new_zeros(size), value.new_ones(size)))
 
         r = self.mass_matrix_adapter.scale(r_unscaled, r_prototype=self.initial_params)
         return r, r_unscaled
