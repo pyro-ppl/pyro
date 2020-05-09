@@ -37,18 +37,24 @@ class Permute(Transform):
 
     :param permutation: a permutation ordering that is applied to the inputs.
     :type permutation: torch.LongTensor
+    :param dim: the tensor dimension to permute. This value must be negative and
+        defines the event dim as `abs(dim)`.
 
     """
 
     codomain = constraints.real
     bijective = True
-    event_dim = 1
     volume_preserving = True
 
-    def __init__(self, permutation):
+    def __init__(self, permutation, dim=-1):
         super().__init__(cache_size=1)
 
+        if dim >= 0:
+            raise ValueError("'dim' keyword argument must be negative")
+
         self.permutation = permutation
+        self.dim = dim
+        self.event_dim = -dim
 
     @lazy_property
     def inv_permutation(self):
@@ -68,7 +74,7 @@ class Permute(Transform):
         the base distribution (or the output of a previous transform)
         """
 
-        return x[..., self.permutation]
+        return x.index_select(self.dim, self.permutation)
 
     def _inverse(self, y):
         """
@@ -77,8 +83,7 @@ class Permute(Transform):
 
         Inverts y => x.
         """
-
-        return y[..., self.inv_permutation]
+        return y.index_select(self.dim, self.inv_permutation)
 
     def log_abs_det_jacobian(self, x, y):
         """

@@ -66,6 +66,9 @@ class AffineCoupling(TransformModule):
         dimension split_dim and the output final dimension input_dim-split_dim for
         each member of the tuple.
     :type hypernet: callable
+    :param dim: the tensor dimension on which to split. This value must be negative
+        and defines the event dim as `abs(dim)`.
+    :type dim: int
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from
         the autoregressive NN
     :type log_scale_min_clip: float
@@ -83,12 +86,16 @@ class AffineCoupling(TransformModule):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    event_dim = 1
 
-    def __init__(self, split_dim, hypernet, log_scale_min_clip=-5., log_scale_max_clip=3.):
+    def __init__(self, split_dim, hypernet, dim=-1, log_scale_min_clip=-5., log_scale_max_clip=3.):
         super().__init__(cache_size=1)
+        if dim >= 0:
+            raise ValueError("'dim' keyword argument must be negative")
+
         self.split_dim = split_dim
         self.nn = hypernet
+        self.dim = dim
+        self.event_dim = -dim
         self._cached_log_scale = None
         self.log_scale_min_clip = log_scale_min_clip
         self.log_scale_max_clip = log_scale_max_clip
@@ -102,7 +109,7 @@ class AffineCoupling(TransformModule):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
         the base distribution (or the output of a previous transform)
         """
-        x1, x2 = x[..., :self.split_dim], x[..., self.split_dim:]
+        x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
 
         mean, log_scale = self.nn(x1)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
@@ -120,7 +127,7 @@ class AffineCoupling(TransformModule):
         Inverts y => x. Uses a previously cached inverse if available, otherwise
         performs the inversion afresh.
         """
-        y1, y2 = y[..., :self.split_dim], y[..., self.split_dim:]
+        y1, y2 = y.split([self.split_dim, y.size(self.dim) - self.split_dim], dim=self.dim)
         x1 = y1
         mean, log_scale = self.nn(x1)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
@@ -137,7 +144,7 @@ class AffineCoupling(TransformModule):
         if self._cached_log_scale is not None and x is x_old and y is y_old:
             log_scale = self._cached_log_scale
         else:
-            x1 = x[..., :self.split_dim]
+            x1, _ = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
             _, log_scale = self.nn(x1)
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         return log_scale.sum(-1)
