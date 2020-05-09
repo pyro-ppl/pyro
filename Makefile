@@ -14,8 +14,12 @@ docs: FORCE
 apidoc: FORCE
 	$(MAKE) -C docs apidoc
 
+tutorial: FORCE
+	$(MAKE) -C tutorial html
+
 lint: FORCE
 	flake8
+	python scripts/update_headers.py --check
 
 license: FORCE
 	python scripts/update_headers.py

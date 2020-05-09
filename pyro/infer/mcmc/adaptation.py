@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from collections import OrderedDict, namedtuple
+
 import torch
-from collections import namedtuple
 
 import pyro
 import pyro.distributions as dist
@@ -26,18 +27,18 @@ class WarmupAdapter:
                  adapt_step_size=False,
                  target_accept_prob=0.8,
                  adapt_mass_matrix=False,
-                 is_diag_mass=True):
+                 dense_mass=False):
         self.adapt_step_size = adapt_step_size
         self.adapt_mass_matrix = adapt_mass_matrix
         self.target_accept_prob = target_accept_prob
-        self.is_diag_mass = is_diag_mass
+        self.dense_mass = dense_mass
         self.step_size = 1 if step_size is None else step_size
         self._init_step_size = self.step_size
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()
         if adapt_mass_matrix:
-            self._mass_matrix_adapt_scheme = WelfordCovariance(diagonal=is_diag_mass)
+            self._mass_matrix_adapt_scheme = {}
 
         # We separate warmup_steps into windows:
         #   start_buffer + window 1 + window 2 + window 3 + ... + end_buffer
@@ -52,8 +53,8 @@ class WarmupAdapter:
 
         # configured later on setup
         self._warmup_steps = None
-        self._inverse_mass_matrix = None
-        self._r_dist = None
+        self._inverse_mass_matrix = OrderedDict()
+        self._r_dist = {}
         self._adaptation_schedule = []
 
     def _build_adaptation_schedule(self):
@@ -107,14 +108,12 @@ class WarmupAdapter:
         self.step_size = math.exp(log_step_size)
 
     def _update_r_dist(self):
-        loc = torch.zeros(self._inverse_mass_matrix.size(0),
-                          dtype=self._inverse_mass_matrix.dtype,
-                          device=self._inverse_mass_matrix.device)
-        if self.is_diag_mass:
-            self._r_dist = dist.Normal(loc, self._inverse_mass_matrix.rsqrt())
-        else:
-            self._r_dist = dist.MultivariateNormal(loc,
-                                                   precision_matrix=self._inverse_mass_matrix)
+        for site_names, inv_mass_matrix in self._inverse_mass_matrix.items():
+            loc = inv_mass_matrix.new_zeros(inv_mass_matrix.size(0))
+            if inv_mass_matrix.dim() == 1:
+                self._r_dist[site_names] = dist.Normal(loc, inv_mass_matrix.rsqrt())
+            else:
+                self._r_dist[site_names] = dist.MultivariateNormal(loc, precision_matrix=inv_mass_matrix)
 
     def _end_adaptation(self):
         if self.adapt_step_size:
@@ -146,7 +145,10 @@ class WarmupAdapter:
         if self.adapt_step_size:
             self._step_size_adapt_scheme.reset()
         if self.adapt_mass_matrix:
-            self._mass_matrix_adapt_scheme.reset()
+            for site_names, inv_mass_matrix in self._inverse_mass_matrix.items():
+                adapt_scheme = WelfordCovariance(diagonal=inv_mass_matrix.dim() == 1)
+                adapt_scheme.reset()
+                self._mass_matrix_adapt_scheme[site_names] = adapt_scheme
 
     def step(self, t, z, accept_prob):
         r"""
@@ -166,8 +168,10 @@ class WarmupAdapter:
         if self.adapt_step_size:
             self._update_step_size(accept_prob.item())
         if mass_matrix_adaptation_phase:
-            z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
-            self._mass_matrix_adapt_scheme.update(z_flat.detach())
+            for site_names, adapt_scheme in self._mass_matrix_adapt_scheme.items():
+                z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
+                adapt_scheme.update(z_flat.detach())
+
         if t == window.end:
             if self._current_window == num_windows - 1:
                 self._current_window += 1
@@ -179,7 +183,8 @@ class WarmupAdapter:
                 return
 
             if mass_matrix_adaptation_phase:
-                self.inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
+                self.inverse_mass_matrix = {site_names: scheme.get_covariance()
+                                            for site_names, scheme in self._mass_matrix_adapt_scheme.items()}
                 if self.adapt_step_size:
                     self.reset_step_size_adaptation(z)
 
@@ -195,10 +200,18 @@ class WarmupAdapter:
 
     @inverse_mass_matrix.setter
     def inverse_mass_matrix(self, value):
-        self._inverse_mass_matrix = value
+        # XXX: for backward compatibility (when users want to specify a fixed inverse mass matrix)
+        if torch.is_tensor(value):
+            assert len(self._inverse_mass_matrix) == 1
+            all_sites = list(self._inverse_mass_matrix.keys())[0]
+            value = {all_sites: value}
+
+        for site_names, inv_mass_matrix in value.items():
+            self._inverse_mass_matrix[site_names] = inv_mass_matrix
         self._update_r_dist()
         if self.adapt_mass_matrix:
-            self._mass_matrix_adapt_scheme.reset()
+            for site_names, adapt_scheme in self._mass_matrix_adapt_scheme.items():
+                adapt_scheme.reset()
 
     @property
     def r_dist(self):

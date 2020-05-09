@@ -182,10 +182,11 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
-            self.permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
+            P = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
         else:
             # The permutation is chosen by the user
-            self.permutation = permutation.type(dtype=torch.int64)
+            P = permutation.type(dtype=torch.int64)
+        self.register_buffer('permutation', P)
 
         # Create masks
         self.masks, self.mask_skip = create_mask(
@@ -256,10 +257,6 @@ class ConditionalAutoRegressiveNN(nn.Module):
             # If not all ones, then probably don't want to squeeze a single dimension parameter
             else:
                 return tuple([h[..., s, :] for s in self.param_slices])
-
-    def condition(self, context):
-        self.context = context
-        return self
 
 
 class AutoRegressiveNN(ConditionalAutoRegressiveNN):

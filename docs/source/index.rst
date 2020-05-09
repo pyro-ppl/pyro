@@ -33,11 +33,13 @@ Pyro Documentation
    contrib.bnn
    contrib.cevae
    contrib.easyguide
+   contrib.epidemiology
    contrib.examples
    contrib.forecast
    contrib.gp
    contrib.minipyro
    contrib.oed
+   contrib.randomvariable
    contrib.timeseries
    contrib.tracking
 

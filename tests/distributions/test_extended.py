@@ -37,6 +37,11 @@ def test_extended_binomial():
     with pytest.raises(ValueError):
         d2.log_prob(torch.tensor(0.5))
 
+    # Check on negative total_count.
+    total_count = torch.arange(-10, 0.)
+    d = dist.ExtendedBinomial(total_count, 0.5)
+    assert (d.log_prob(data) == -math.inf).all()
+
 
 def test_extended_beta_binomial():
     concentration1 = torch.tensor([1.0, 2.0, 1.0])
@@ -65,3 +70,8 @@ def test_extended_beta_binomial():
     # Check on value error.
     with pytest.raises(ValueError):
         d2.log_prob(torch.tensor(0.5))
+
+    # Check on negative total_count.
+    total_count = torch.arange(-10, 0.)
+    d = dist.ExtendedBetaBinomial(1.5, 1.5, total_count)
+    assert (d.log_prob(data) == -math.inf).all()

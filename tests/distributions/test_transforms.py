@@ -8,6 +8,7 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
+from pyro.nn import DenseNN
 
 from functools import partial
 
@@ -61,7 +62,7 @@ class TransformTests(TestCase):
         assert ldt_discrepancy < self.epsilon
 
         # Test that lower triangular with unit diagonal for autoregressive flows
-        if hasattr(transform, 'arn'):
+        if hasattr(transform, 'autoregressive'):
             diag_sum = torch.sum(torch.diag(nonzero(jacobian)))
             lower_sum = torch.sum(torch.tril(nonzero(jacobian), diagonal=-1))
             assert diag_sum == float(input_dim)
@@ -98,8 +99,6 @@ class TransformTests(TestCase):
     def _test_conditional(self, conditional_transform_factory, context_dim=3, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
             z = torch.rand(1, context_dim)
-
-            # For autoregressive flows, we should disable permutation since you can't look inside partial
             return conditional_transform_factory(input_dim, context_dim).condition(z)
 
         self._test(transform_factory, **kwargs)
@@ -135,6 +134,44 @@ class TransformTests(TestCase):
     def test_conditional_affine_coupling(self):
         self._test_conditional(T.conditional_affine_coupling)
 
+    def test_conditional_generalized_channel_permute(self, context_dim=3):
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
+            z = torch.rand(context_dim)
+            transform = T.conditional_generalized_channel_permute(context_dim=3, channels=shape[-3]).condition(z)
+            self._test_shape(shape, transform)
+            self._test_inverse(shape, transform)
+
+        channels = 3
+        from pyro.distributions.transforms.generalized_channel_permute import ConditionedGeneralizedChannelPermute
+        for width_dim in [2, 4, 6]:
+            # Do a bit of a hack until we merge in Reshape transform
+            class Flatten(ConditionedGeneralizedChannelPermute):
+                event_dim = 1
+
+                def __init__(self):
+                    z = torch.rand(context_dim)
+                    P = torch.arange(channels)
+                    permutation = torch.eye(len(P), len(P))[P.type(dtype=torch.int64)]
+                    LU = DenseNN(context_dim, [10 * channels, 10 * channels], param_dims=[channels * channels])(z)
+                    LU = LU.view(LU.shape[:-1] + (channels, channels))
+                    super(Flatten, self).__init__(permutation=permutation, LU=LU)
+
+                def _call(self, x):
+                    return super(Flatten, self)._call(x.view(3, width_dim, width_dim)).view_as(x)
+
+                def _inverse(self, x):
+                    return super(Flatten, self)._inverse(x.view(3, width_dim, width_dim)).view_as(x)
+
+                def log_abs_det_jacobian(self, x, y):
+                    return super(
+                        Flatten, self).log_abs_det_jacobian(
+                        x.view(
+                            3, width_dim, width_dim), y.view(
+                            3, width_dim, width_dim))
+
+            input_dim = (width_dim**2) * 3
+            self._test_jacobian(input_dim, Flatten())
+
     def test_conditional_householder(self):
         self._test_conditional(T.conditional_householder)
         self._test_conditional(partial(T.conditional_householder, count_transforms=2))
@@ -151,6 +188,9 @@ class TransformTests(TestCase):
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
         self._test(lambda input_dim: T.DiscreteCosineTransform())
+        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=0.5))
+        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=1.0))
+        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=2.0))
 
     def test_elu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
@@ -168,10 +208,17 @@ class TransformTests(TestCase):
                 event_dim = 1
 
                 def _call(self, x):
-                    return super(Flatten, self)._call(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+                    return super(Flatten, self)._call(x.view(3, width_dim, width_dim)).view_as(x)
 
                 def _inverse(self, x):
-                    return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+                    return super(Flatten, self)._inverse(x.view(3, width_dim, width_dim)).view_as(x)
+
+                def log_abs_det_jacobian(self, x, y):
+                    return super(
+                        Flatten, self).log_abs_det_jacobian(
+                        x.view(
+                            3, width_dim, width_dim), y.view(
+                            3, width_dim, width_dim))
 
             input_dim = (width_dim**2) * 3
             self._test_jacobian(input_dim, Flatten())

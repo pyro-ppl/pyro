@@ -267,3 +267,10 @@ def test_expand_reshaped_distribution(extra_event_dims, expand_shape, default):
     # Throws error when trying to shrink existing batch shape
     with pytest.raises((RuntimeError, ValueError)):
         large.expand(expand_shape[1:])
+
+
+def test_expand_enumerate_support():
+    probs = torch.ones(3, 6) / 6
+    d = dist.Categorical(probs)
+    actual_enum_shape = TorchDistribution.expand(d, (4, 3)).enumerate_support(expand=True).shape
+    assert actual_enum_shape == (6, 4, 3)

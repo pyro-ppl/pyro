@@ -4,6 +4,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -161,6 +162,7 @@ class NeuralAutoregressive(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    autoregressive = True
 
     def __init__(self, autoregressive_nn, hidden_units=16, activation='sigmoid'):
         super().__init__(cache_size=1)
@@ -296,7 +298,10 @@ class ConditionalNeuralAutoregressive(ConditionalTransformModule):
         """
 
         # Note that nn.condition doesn't copy the weights of the ConditionalAutoregressiveNN
-        return NeuralAutoregressive(self.nn.condition(context), **self.kwargs)
+        cond_nn = partial(self.nn, context=context)
+        cond_nn.permutation = cond_nn.func.permutation
+        cond_nn.get_permutation = cond_nn.func.get_permutation
+        return NeuralAutoregressive(cond_nn, **self.kwargs)
 
 
 def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', width=16):

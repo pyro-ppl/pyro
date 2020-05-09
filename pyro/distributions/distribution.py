@@ -166,3 +166,28 @@ class Distribution(object, metaclass=ABCMeta):
             raise ValueError("Expected value in {False,True}, actual {}".format(value))
         self.has_rsample = value
         return self
+
+    @property
+    def rv(self):
+        """
+        EXPERIMENTAL Switch to the Random Variable DSL for applying transformations
+        to random variables. Supports either chaining operations or arithmetic
+        operator overloading.
+
+        Example usage::
+
+            # This should be equivalent to an Exponential distribution.
+            Uniform(0, 1).rv.log().neg().dist
+
+            # These two distributions Y1, Y2 should be the same
+            X = Uniform(0, 1).rv
+            Y1 = X.mul(4).pow(0.5).sub(1).abs().neg().dist
+            Y2 = (-abs((4*X)**(0.5) - 1)).dist
+
+
+        :return: A :class: `~pyro.contrib.randomvariable.random_variable.RandomVariable`
+            object wrapping this distribution.
+        :rtype: ~pyro.contrib.randomvariable.random_variable.RandomVariable
+        """
+        from pyro.contrib.randomvariable import RandomVariable
+        return RandomVariable(self)

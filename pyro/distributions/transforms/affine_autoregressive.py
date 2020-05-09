@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from functools import partial
+
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
@@ -322,8 +324,10 @@ class ConditionalAffineAutoregressive(ConditionalTransformModule):
         of type :class:`~pyro.distributions.transforms.AffineAutoregressive`.
         """
 
-        # Note that nn.condition doesn't copy the weights of the ConditionalAutoregressiveNN
-        return AffineAutoregressive(self.nn.condition(context), **self.kwargs)
+        cond_nn = partial(self.nn, context=context)
+        cond_nn.permutation = cond_nn.func.permutation
+        cond_nn.get_permutation = cond_nn.func.get_permutation
+        return AffineAutoregressive(cond_nn, **self.kwargs)
 
 
 def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):

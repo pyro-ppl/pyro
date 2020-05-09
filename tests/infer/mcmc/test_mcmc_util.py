@@ -1,12 +1,16 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from functools import partial
+
 import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer import Predictive
+from pyro.infer.autoguide import (init_to_feasible, init_to_mean, init_to_median,
+                                  init_to_sample, init_to_uniform, init_to_value)
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.util import initialize_model
@@ -85,3 +89,35 @@ def test_model_with_subsample(subsample_size):
             mcmc.run()
     else:
         mcmc.run()
+
+
+def test_init_to_value():
+    def model():
+        pyro.sample("x", dist.LogNormal(0, 1))
+
+    value = torch.randn(()).exp() * 10
+    kernel = NUTS(model, init_strategy=partial(init_to_value, values={"x": value}))
+    kernel.setup(warmup_steps=10)
+    assert_close(value, kernel.initial_params['x'].exp())
+
+
+@pytest.mark.parametrize("init_strategy", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+    init_to_uniform,
+    init_to_value,
+    init_to_feasible(),
+    init_to_mean(),
+    init_to_median(num_samples=4),
+    init_to_sample(),
+    init_to_uniform(radius=0.1),
+    init_to_value(values={"x": torch.tensor(3.)}),
+])
+def test_init_strategy_smoke(init_strategy):
+    def model():
+        pyro.sample("x", dist.LogNormal(0, 1))
+
+    kernel = NUTS(model, init_strategy=init_strategy)
+    kernel.setup(warmup_steps=10)
