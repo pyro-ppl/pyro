@@ -406,6 +406,13 @@ ConditionalAffineCoupling
     :undoc-members:
     :show-inheritance:
 
+ConditionalGeneralizedChannelPermute
+------------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalGeneralizedChannelPermute
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalHouseholder
 ----------------------
 .. autoclass:: pyro.distributions.transforms.ConditionalHouseholder
@@ -540,6 +547,10 @@ block_autoregressive
 conditional_affine_coupling
 ---------------------------
 .. autofunction:: pyro.distributions.transforms.conditional_affine_coupling
+
+conditional_generalized_channel_permute
+---------------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_generalized_channel_permute
 
 conditional_householder
 -----------------------

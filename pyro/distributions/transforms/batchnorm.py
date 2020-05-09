@@ -79,7 +79,7 @@ class BatchNorm(TransformModule):
         super().__init__()
 
         self.input_dim = input_dim
-        self.gamma = nn.Parameter(torch.zeros(input_dim))
+        self.gamma = nn.Parameter(torch.ones(input_dim))
         self.beta = nn.Parameter(torch.zeros(input_dim))
         self.momentum = momentum
         self.epsilon = epsilon
@@ -115,9 +115,10 @@ class BatchNorm(TransformModule):
         if self.training:
             mean, var = y.mean(0), y.var(0)
 
-            # NOTE: The momentum variable agrees with the definition in e.g. `torch.nn.BatchNorm1d`
-            self.moving_mean.mul_(1 - self.momentum).add_(mean * self.momentum)
-            self.moving_variance.mul_(1 - self.momentum).add_(var * self.momentum)
+            with torch.no_grad():
+                # NOTE: The momentum variable agrees with the definition in e.g. `torch.nn.BatchNorm1d`
+                self.moving_mean.mul_(1 - self.momentum).add_(mean * self.momentum)
+                self.moving_variance.mul_(1 - self.momentum).add_(var * self.momentum)
 
         # During test time, use smoothed averages rather than the sample ones
         else:
