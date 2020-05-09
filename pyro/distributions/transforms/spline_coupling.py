@@ -9,6 +9,7 @@ from torch.distributions import constraints
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.spline import Spline, ConditionalSpline
+from pyro.nn import DenseNN
 
 
 @copy_docs_from(TransformModule)
@@ -135,7 +136,7 @@ class SplineCoupling(TransformModule):
         return self._cache_log_detJ.sum(-1)
 
 
-def spline_coupling(input_dim, **kwargs):
+def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.Spline` object for consistency with
@@ -146,6 +147,18 @@ def spline_coupling(input_dim, **kwargs):
 
     """
 
-    # *** CONTINUE FROM HERE 26/4, CREATE HYPERNET ***
+    if split_dim is None:
+        # TODO: Check this works!
+        split_dim = input_dim // 2
 
-    return SplineCoupling(input_dim, **kwargs)
+    if hidden_dims is None:
+        hidden_dims = [input_dim * 10, input_dim * 10]
+
+    nn = DenseNN(split_dim,
+                 hidden_dims,
+                 param_dims=[input_dim * count_bins,
+                             input_dim * count_bins,
+                             input_dim * (count_bins - 1),
+                             input_dim * count_bins])
+
+    return SplineCoupling(input_dim, split_dim, nn, count_bins, bound)
