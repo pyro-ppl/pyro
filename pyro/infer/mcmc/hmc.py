@@ -4,8 +4,6 @@
 import math
 from collections import OrderedDict
 
-import torch
-
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import eye_like, scalar_like
@@ -138,18 +136,11 @@ class HMC(MCMCKernel):
                                       dense_mass=full_mass)
         super().__init__()
 
-    def _kinetic_energy(self, r):
+    def _kinetic_energy(self, r_unscaled):
         energy = 0.
-        for site_names, inv_mass_matrix in self.inverse_mass_matrix.items():
-            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
-            if inv_mass_matrix.dim() == 1:
-                energy = energy + 0.5 * inv_mass_matrix.dot(r_flat ** 2)
-            else:
-                energy = energy + 0.5 * inv_mass_matrix.matmul(r_flat).dot(r_flat)
-        return energy
-
-    def _energy(self, z, r):
-        return self._kinetic_energy(r) + self.potential_fn(z)
+        for site_names, value in r_unscaled.items():
+            energy += value.dot(value)
+        return 0.5 * energy
 
     def _reset(self):
         self._t = 0
@@ -170,14 +161,15 @@ class HMC(MCMCKernel):
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
         potential_energy = self.potential_fn(z)
-        r, _ = self._sample_r(name="r_presample_0")
-        energy_current = self._kinetic_energy(r) + potential_energy
+        r, r_unscaled = self._sample_r(name="r_presample_0")
+        energy_current = self._kinetic_energy(r_unscaled) + potential_energy
         # This is required so as to avoid issues with autograd when model
         # contains transforms with cache_size > 0 (https://github.com/pyro-ppl/pyro/issues/2292)
         z = {k: v.clone() for k, v in z.items()}
         z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-            z, r, self.potential_fn, self.inverse_mass_matrix, step_size)
-        energy_new = self._kinetic_energy(r_new) + potential_energy_new
+            z, r, self.potential_fn, self._adapter.mass_matrix_adapter.kinetic_grad, step_size)
+        r_new_unscaled = self._adapter.mass_matrix_adapter.unscale(r_new)
+        energy_new = self._kinetic_energy(r_new_unscaled) + potential_energy_new
         delta_energy = energy_new - energy_current
         # direction=1 means keep increasing step_size, otherwise decreasing step_size.
         # Note that the direction is -1 if delta_energy is `NaN` which may be the
@@ -194,34 +186,32 @@ class HMC(MCMCKernel):
         while direction_new == direction:
             t += 1
             step_size = step_size_scale * step_size
-            r, _ = self._sample_r(name="r_presample_{}".format(t))
-            energy_current = self._kinetic_energy(r) + potential_energy
+            r, r_unscaled = self._sample_r(name="r_presample_{}".format(t))
+            energy_current = self._kinetic_energy(r_unscaled) + potential_energy
             z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-                z, r, self.potential_fn, self.inverse_mass_matrix, step_size)
-            energy_new = self._kinetic_energy(r_new) + potential_energy_new
+                z, r, self.potential_fn, self._adapter.mass_matrix_adapter.kinetic_grad, step_size)
+            r_new_unscaled = self._adapter.mass_matrix_adapter.unscale(r_new)
+            energy_new = self._kinetic_energy(r_new_unscaled) + potential_energy_new
             delta_energy = energy_new - energy_current
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
         return step_size
 
     def _sample_r(self, name):
-        r = {}
-        r_flat_dict = {}
-        for site_names in self.inverse_mass_matrix:
-            r_flat = pyro.sample(
-                "{}_{}".format(name, site_names), self._adapter.r_dist[site_names])
-            pos = 0
-            for name in site_names:
-                param = self.initial_params[name]
-                next_pos = pos + param.numel()
-                r[name] = r_flat[pos:next_pos].reshape(param.shape)
-                pos = next_pos
-            assert pos == r_flat.size(0)
-            r_flat_dict[site_names] = r_flat
-        return r, r_flat_dict
+        r_unscaled = {}
+        for site_names, value in self.inverse_mass_matrix.items():
+            r_unscaled[site_names] = pyro.sample(
+                "{}_{}".format(name, site_names), dist.Normal(0., 1.).expand([value.size(0)]))
+
+        r = self._adapter.mass_matrix_adapter.scale(r_unscaled, r_prototype=self.initial_params)
+        return r, r_unscaled
+
+    @property
+    def warmup_adapter(self):
+        return self._adapter
 
     @property
     def inverse_mass_matrix(self):
-        return self._adapter.inverse_mass_matrix
+        return self._adapter.mass_matrix_adapter.inverse_mass_matrix
 
     @property
     def step_size(self):
@@ -333,19 +323,18 @@ class HMC(MCMCKernel):
             if self._t > self._warmup_steps:
                 self._accept_cnt += 1
             return params
-        r, _ = self._sample_r(name="r_t={}".format(self._t))
-        energy_current = self._kinetic_energy(r) + potential_energy
+        r, r_unscaled = self._sample_r(name="r_t={}".format(self._t))
+        energy_current = self._kinetic_energy(r_unscaled) + potential_energy
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation
         with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
-            z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(z, r, self.potential_fn,
-                                                                              self.inverse_mass_matrix,
-                                                                              self.step_size,
-                                                                              self.num_steps,
-                                                                              z_grads=z_grads)
+            z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
+                z, r, self.potential_fn, self._adapter.mass_matrix_adapter.kinetic_grad,
+                self.step_size, self.num_steps, z_grads=z_grads)
             # apply Metropolis correction.
-            energy_proposal = self._kinetic_energy(r_new) + potential_energy_new
+            r_new_unscaled = self._adapter.mass_matrix_adapter.unscale(r_new)
+            energy_proposal = self._kinetic_energy(r_new_unscaled) + potential_energy_new
         delta_energy = energy_proposal - energy_current
         # handle the NaN case which may be the case for a diverging trajectory
         # when using a large step size.

@@ -12,7 +12,7 @@ from torch.autograd import grad
 import pyro
 from pyro.ops.tensor_utils import (block_diag_embed, block_diagonal, convolve, dct, idct, next_fast_len,
                                    periodic_cumsum, periodic_features, periodic_repeat, precision_to_scale_tril,
-                                   arrowhead_precision_to_scale_tril, repeated_matmul, safe_log)
+                                   repeated_matmul, safe_log)
 from tests.common import assert_close, assert_equal
 
 pytestmark = pytest.mark.stage('unit')
@@ -181,25 +181,5 @@ def test_precision_to_scale_tril(batch_shape, event_shape):
     x = torch.randn(batch_shape + event_shape + event_shape)
     precision = x.matmul(x.transpose(-2, -1))
     actual = precision_to_scale_tril(precision)
-    expected = precision.inverse().cholesky()
-    assert_close(actual, expected)
-
-
-@pytest.mark.parametrize('size,head_size', [
-    (3, 0),
-    (4, 4),
-    (5, 3),
-])
-def test_arrowhead_precision_to_scale_tril(size, head_size):
-    # contruct arrowhead precision matrix
-    x = torch.randn(10, size)
-    precision = np.cov(x.cpu().numpy(), bias=False, rowvar=False)
-    precision = torch.from_numpy(precision).type_as(x)
-    mask = torch.ones(size, size)
-    mask[head_size:, head_size:] = 0.
-    mask.view(-1)[::size + 1][head_size:] = 1.
-    precision = mask * precision
-
-    actual = arrowhead_precision_to_scale_tril(precision, head_size)
     expected = precision.inverse().cholesky()
     assert_close(actual, expected)
