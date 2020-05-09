@@ -37,10 +37,22 @@ def _select_bins(x, idx):
     Performs gather to select the bin in the correct way on batched inputs
     """
     idx = idx.clamp(min=0, max=x.size(-1) - 1)
-    extra_dims = len(idx.shape) - len(x.shape)
-    x = x.reshape((1,) * extra_dims + x.shape)
-    expanded_x = x.expand(idx.shape[:-2] + (-1,) * 2)
-    return expanded_x.gather(-1, idx).squeeze(-1)
+
+    """
+    idx ~ (context_batch_dims, input_dim, 1)
+    x ~ (batch_dims, input_dim, count_bins)
+    """
+
+    # Broadcast dimensions of idx over x
+    if len(idx.shape) >= len(x.shape):
+        x = x.reshape((1,) * (len(idx.shape) - len(x.shape)) + x.shape)
+        x = x.expand(idx.shape[:-2] + (-1,) * 2)
+    # Broadcast dimensions of x over idx
+    elif len(idx.shape) <= len(x.shape):
+        idx = idx.reshape((1,) * (len(x.shape) - len(idx.shape)) + idx.shape)
+        idx = idx.expand(x.shape[:-2] + (-1,) * 2)
+
+    return x.gather(-1, idx).squeeze(-1)
 
 
 def _calculate_knots(lengths, lower, upper):
@@ -489,3 +501,41 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
                              input_dim * (count_bins - 1),
                              input_dim * count_bins])
     return ConditionalSpline(nn, input_dim, count_bins, bound=bound)
+
+
+if __name__ == "__main__":
+    """s = conditional_spline(5, 3)
+    base_dist = dist.Normal(torch.zeros(5), torch.ones(5))
+    z = torch.rand(1, 3)
+    s_cond_z = s.condition(z)
+    x = base_dist.sample()
+    s_cond_z._call(x)"""
+
+    import torch.distributions as dist
+    context_dim = 3
+
+    def transform_factory(input_dim, context_dim=context_dim):
+        z = torch.rand(1, context_dim)
+        return conditional_spline(input_dim, context_dim).condition(z)
+
+    def _test_inverse(shape, transform):
+        base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
+
+        x_true = base_dist.sample(torch.Size([10]))
+        y = transform._call(x_true)
+
+        # Cache is empty, hence must be calculating inverse afresh
+        x_calculated = transform._inverse(y)
+
+        assert torch.norm(x_true - x_calculated, dim=-1).max().item() < 1e-6
+
+    def _test_shape(base_shape, transform):
+        base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
+        sample = dist.TransformedDistribution(base_dist, [transform]).sample()
+        assert sample.shape == base_shape
+
+    for input_dim in [2, 5, 10]:
+        transform = transform_factory(input_dim)
+        # self._test_inverse(input_dim, transform)
+        for shape in [(3,), (3, 4)]:
+            _test_shape(shape + (input_dim,), transform)
