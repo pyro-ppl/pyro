@@ -525,7 +525,7 @@ class RegionalSIRModel(CompartmentalModel):
         compartments = ("S", "I")  # R is implicit.
 
         # We create a regional model by passing a vector of populations.
-        super().__init__(compartments, duration, population)
+        super().__init__(compartments, duration, population, approximate=("I",))
 
         self.coupling = coupling
         self.recovery_time = recovery_time

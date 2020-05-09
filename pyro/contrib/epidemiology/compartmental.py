@@ -73,12 +73,22 @@ class CompartmentalModel(ABC):
         in returned sample dictionaries.
     :ivar dict samples: Dictionary of posterior samples.
     :param list compartments: A list of strings of compartment names.
-    :param int duration:
-    :param int population:
+    :param int duration: The number of discrete time steps in this model.
+    :param population: Either the total population of a single-region model or
+        a tensor of each region's population in a regional model.
+    :type population: int or torch.Tensor
+    :param tuple approximate: Names of compartments for which pointwise
+        apprixmations should be provided in :meth:`transition_bwd`, e.g. if you
+        specify ``approximate=("I")`` then the ``prev["I_approx"]`` will be a
+        continuous-valued non-enumerated point estimate of ``prev["I"]``.
+        Approximations are useful to reduce computational cost. Approximations
+        are continuous-valued with support ``(-0.5, population + 0.5)``.
+    :param int num_quant_bins: Number of quantization bins in the auxiliary
+        variable spline. Defaults to 4.
     """
 
     def __init__(self, compartments, duration, population, *,
-                 num_quant_bins=4):
+                 num_quant_bins=4, approximate=()):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -101,6 +111,10 @@ class CompartmentalModel(ABC):
         assert all(isinstance(name, str) for name in compartments)
         assert len(compartments) == len(set(compartments))
         self.compartments = compartments
+
+        assert isinstance(approximate, tuple)
+        assert all(name in compartments for name in approximate)
+        self.approximate = approximate
 
         # Inference state.
         self.samples = {}
@@ -445,9 +459,9 @@ class CompartmentalModel(ABC):
                     curr[name] = quantize("{}_{}".format(name, t), aux,
                                           min=0, max=self.population,
                                           num_quant_bins=self.num_quant_bins)
-                    # In regional models, enable approximate inference by using aux
-                    # as a non-enumerated proxy for enumerated compartment values.
-                    if self.is_regional:
+                    # Enable approximate inference by using aux as a
+                    # non-enumerated proxy for enumerated compartment values.
+                    if name in self.approximate:
                         curr[name + "_approx"] = aux
                         prev.setdefault(name + "_approx", prev[name])
             self.transition_bwd(params, prev, curr, t)
@@ -502,13 +516,13 @@ class CompartmentalModel(ABC):
             logp[name] = enum_reshape(logp[name], e)
             prev[name] = enum_reshape(prev[name], e + C)
 
-        # In regional models, enable approximate inference by using aux
-        # as a non-enumerated proxy for enumerated compartment values.
-        if self.is_regional:
-            for name, aux in zip(self.compartments, auxiliary):
-                curr[name + "_approx"] = aux
-                prev[name + "_approx"] = cat2(init[name], aux[:-1],
-                                              dim=-2 if self.is_regional else -1)
+        # Enable approximate inference by using aux as a non-enumerated proxy
+        # for enumerated compartment values.
+        for name in self.approximate:
+            aux = auxiliary[self.compartments.index(name)]
+            curr[name + "_approx"] = aux
+            prev[name + "_approx"] = cat2(init[name], aux[:-1],
+                                          dim=-2 if self.is_regional else -1)
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
