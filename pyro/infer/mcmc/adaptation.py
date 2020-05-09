@@ -189,7 +189,7 @@ def _matmul(x, y):
 
 
 def _cholesky(x):
-    return x.rsqrt() if x.dim() == 1 else x.cholesky()
+    return x.sqrt() if x.dim() == 1 else x.cholesky()
 
 
 def _transpose(x):
@@ -240,7 +240,8 @@ class BlockMassMatrix:
     def end_adaptation(self):
         inverse_mass_matrix = {}
         for site_names, adapt_scheme in self._adapt_scheme.items():
-            inverse_mass_matrix[site_names] = adapt_scheme.get_covariance(regularize=True)
+            cov = adapt_scheme.get_covariance(regularize=True)
+            inverse_mass_matrix[site_names] = cov.diag() if adapt_scheme.head_size == 0 else cov
         self.inverse_mass_matrix = inverse_mass_matrix
 
     def kinetic_grad(self, r):

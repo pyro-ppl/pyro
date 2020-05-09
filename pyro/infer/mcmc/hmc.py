@@ -7,6 +7,7 @@ from collections import OrderedDict
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import eye_like, scalar_like
+from pyro.distributions.testing.fakes import NonreparameterizedNormal
 
 from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.adaptation import WarmupAdapter
@@ -201,7 +202,8 @@ class HMC(MCMCKernel):
         for site_names, value in self.inverse_mass_matrix.items():
             size = value.size(0)
             r_unscaled[site_names] = pyro.sample(
-                "{}_{}".format(name, site_names), dist.Normal(value.new_zeros(size), value.new_ones(size)))
+                "{}_{}".format(name, site_names),
+                NonreparameterizedNormal(value.new_zeros(size), value.new_ones(size)))
 
         r = self.mass_matrix_adapter.scale(r_unscaled, r_prototype=self.initial_params)
         return r, r_unscaled
@@ -293,7 +295,11 @@ class HMC(MCMCKernel):
         self._warmup_steps = warmup_steps
         if self.model is not None:
             self._initialize_model_properties(args, kwargs)
-        z_grads, potential_energy = potential_grad(self.potential_fn, self.initial_params)
+        if self.initial_params:
+            z = {k: v.detach() for k, v in self.initial_params.items()}
+            z_grads, potential_energy = potential_grad(self.potential_fn, z)
+        else:
+            z_grads, potential_energy = {}, self.potential_fn(self.initial_params)
         self._cache(self.initial_params, potential_energy, z_grads)
         if self.initial_params:
             self._initialize_adapter()
