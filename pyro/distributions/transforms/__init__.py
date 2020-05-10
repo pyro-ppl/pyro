@@ -7,18 +7,19 @@ from torch.distributions.transforms import __all__ as torch_transforms
 
 from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
 from pyro.distributions.torch_transform import ComposeTransformModule
-from pyro.distributions.transforms.affine_autoregressive import AffineAutoregressive, affine_autoregressive
+from pyro.distributions.transforms.affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive,
+                                                                 affine_autoregressive,
+                                                                 conditional_affine_autoregressive)
 from pyro.distributions.transforms.affine_coupling import (AffineCoupling, ConditionalAffineCoupling, affine_coupling,
                                                            conditional_affine_coupling)
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
-from pyro.distributions.transforms.generalized_channel_permute import (
-    ConditionalGeneralizedChannelPermute,
-    GeneralizedChannelPermute,
-    conditional_generalized_channel_permute,
-    generalized_channel_permute)
+from pyro.distributions.transforms.generalized_channel_permute import (ConditionalGeneralizedChannelPermute,
+                                                                       GeneralizedChannelPermute,
+                                                                       conditional_generalized_channel_permute,
+                                                                       generalized_channel_permute)
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
                                                        householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
@@ -68,6 +69,7 @@ __all__ = [
     'BatchNorm',
     'BlockAutoregressive',
     'ComposeTransformModule',
+    'ConditionalAffineAutoregressive',
     'ConditionalAffineCoupling',
     'ConditionalGeneralizedChannelPermute',
     'ConditionalHouseholder',
@@ -93,6 +95,7 @@ __all__ = [
     'affine_coupling',
     'batchnorm',
     'block_autoregressive',
+    'conditional_affine_autoregressive',
     'conditional_affine_coupling',
     'conditional_generalized_channel_permute',
     'conditional_householder',

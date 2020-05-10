@@ -83,16 +83,16 @@ class ConditionedPlanar(Transform):
 
 @copy_docs_from(ConditionedPlanar)
 class Planar(ConditionedPlanar, TransformModule):
-    """
+    r"""
     A 'planar' bijective transform with equation,
 
-        :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
+        :math:`\mathbf{y} = \mathbf{x} + \mathbf{u}\tanh(\mathbf{w}^T\mathbf{z}+b)`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    and the learnable parameters are :math:`b\\in\\mathbb{R}`,
-    :math:`\\mathbf{u}\\in\\mathbb{R}^D`, :math:`\\mathbf{w}\\in\\mathbb{R}^D` for
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    and the learnable parameters are :math:`b\in\mathbb{R}`,
+    :math:`\mathbf{u}\in\mathbb{R}^D`, :math:`\mathbf{w}\in\mathbb{R}^D` for
     input dimension :math:`D`. For this to be an invertible transformation, the
-    condition :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
+    condition :math:`\mathbf{w}^T\mathbf{u}>-1` is enforced.
 
     Together with :class:`~pyro.distributions.TransformedDistribution` this provides
     a way to create richer variational approximations.
@@ -143,18 +143,18 @@ class Planar(ConditionedPlanar, TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalPlanar(ConditionalTransformModule):
-    """
+    r"""
     A conditional 'planar' bijective transform using the equation,
 
-        :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
+        :math:`\mathbf{y} = \mathbf{x} + \mathbf{u}\tanh(\mathbf{w}^T\mathbf{z}+b)`
 
-    where :math:`\\mathbf{x}` are the inputs with dimension :math:`D`,
-    :math:`\\mathbf{y}` are the outputs, and the pseudo-parameters
-    :math:`b\\in\\mathbb{R}`, :math:`\\mathbf{u}\\in\\mathbb{R}^D`, and
-    :math:`\\mathbf{w}\\in\\mathbb{R}^D` are the output of a function, e.g. a NN,
-    with input :math:`z\\in\\mathbb{R}^{M}` representing the context variable to
+    where :math:`\mathbf{x}` are the inputs with dimension :math:`D`,
+    :math:`\mathbf{y}` are the outputs, and the pseudo-parameters
+    :math:`b\in\mathbb{R}`, :math:`\mathbf{u}\in\mathbb{R}^D`, and
+    :math:`\mathbf{w}\in\mathbb{R}^D` are the output of a function, e.g. a NN,
+    with input :math:`z\in\mathbb{R}^{M}` representing the context variable to
     condition on. For this to be an invertible transformation, the condition
-    :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
+    :math:`\mathbf{w}^T\mathbf{u}>-1` is enforced.
 
     Together with :class:`~pyro.distributions.ConditionalTransformedDistribution`
     this provides a way to create richer variational approximations.
