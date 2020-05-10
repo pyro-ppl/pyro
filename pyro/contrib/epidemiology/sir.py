@@ -499,7 +499,7 @@ class RegionalSIRModel(CompartmentalModel):
         E[S2I] = S (1 - (1 - R0 / (population @ coupling)) ** (I @ coupling))
                ≈ R0 S (I @ coupling) / (population @ coupling)  # for small I
 
-    This in a nearly entirely susceptible population, a single infected
+    Thus in a nearly entirely susceptible population, a single infected
     individual infects approximately ``R0`` new individuals on average,
     independent of ``coupling``.
 
