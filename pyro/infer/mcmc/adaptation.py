@@ -8,7 +8,7 @@ import torch
 
 import pyro
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.welford import WelfordArrowheadCovariance
+from pyro.ops.welford import WelfordCovariance, WelfordArrowheadCovariance
 
 adapt_window = namedtuple("adapt_window", ["start", "end"])
 
@@ -108,8 +108,8 @@ class WarmupAdapter:
             _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
 
-    def configure(self, warmup_steps, initial_step_size=None, inv_mass_matrix=None,
-                  find_reasonable_step_size_fn=None):
+    def configure(self, warmup_steps, initial_step_size=None, mass_matrix_shape=None,
+                  find_reasonable_step_size_fn=None, options={}):
         r"""
         Model specific properties that are specified when the HMC kernel is setup.
 
@@ -123,10 +123,10 @@ class WarmupAdapter:
         self.step_size = initial_step_size if initial_step_size is not None else self._init_step_size
         if find_reasonable_step_size_fn is not None:
             self._find_reasonable_step_size = find_reasonable_step_size_fn
-        if inv_mass_matrix is None or self.step_size is None:
+        if mass_matrix_shape is None or self.step_size is None:
             raise ValueError("Incomplete configuration - step size and inverse mass matrix "
                              "need to be initialized.")
-        self.mass_matrix_adapter.configure(inv_mass_matrix)
+        self.mass_matrix_adapter.configure(mass_matrix_shape, self.adapt_mass_matrix, options=options)
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
         self._current_window = 0  # starting window index
@@ -205,11 +205,18 @@ def _upper_triangular_inverse(x):
 
 
 class BlockMassMatrix:
-    def __init__(self):
+    def __init__(self, init_scale=1.):
+        self._init_scale = init_scale
         self._adapt_scheme = {}
         self._inverse_mass_matrix = {}
+        # NB: those sqrt matrices are upper triangular
         self._mass_matrix_sqrt = {}
         self._mass_matrix_sqrt_inverse = {}
+        self._mass_matrix_size = {}
+
+    @property
+    def mass_matrix_size(self):
+        return self._mass_matrix_size
 
     @property
     def inverse_mass_matrix(self):
@@ -218,18 +225,29 @@ class BlockMassMatrix:
     @inverse_mass_matrix.setter
     def inverse_mass_matrix(self, value):
         for site_names, inverse_mass_matrix in value.items():
-            self._adapt_scheme[site_names].reset()
+            if site_names in self._adapt_scheme:
+                self._adapt_scheme[site_names].reset()
             mass_matrix_sqrt_inverse = _transpose(_cholesky(inverse_mass_matrix))
             mass_matrix_sqrt = _upper_triangular_inverse(mass_matrix_sqrt_inverse)
             self._inverse_mass_matrix[site_names] = inverse_mass_matrix
-            self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
             self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
+            self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
 
-    def configure(self, inverse_mass_matrix):
-        for site_names, value in inverse_mass_matrix.items():
-            head_size = 0 if value.dim() == 1 else value.size(0)
-            adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
-            self._adapt_scheme[site_names] = adapt_scheme
+    def configure(self, mass_matrix_shape, adapt_mass_matrix=True, options={}):
+        inverse_mass_matrix = {}
+        for site_names, shape in mass_matrix_shape.items():
+            self._mass_matrix_size[site_names] = shape[0]
+            diagonal = len(shape) == 1
+            if site_names not in self._inverse_mass_matrix:
+                inverse_mass_matrix[site_names] = torch.full(shape, self._init_scale, **options) \
+                    if diagonal else torch.eye(*shape, **options) * self._init_scale
+            else:
+                # verify the shape is consistent
+                assert self._inverse_mass_matrix[site_names].shape == shape
+            if adapt_mass_matrix:
+                adapt_scheme = WelfordCovariance(diagonal=diagonal)
+                self._adapt_scheme[site_names] = adapt_scheme
+
         self.inverse_mass_matrix = inverse_mass_matrix
 
     def update(self, z, z_grad=None):
@@ -240,8 +258,7 @@ class BlockMassMatrix:
     def end_adaptation(self):
         inverse_mass_matrix = {}
         for site_names, adapt_scheme in self._adapt_scheme.items():
-            cov = adapt_scheme.get_covariance(regularize=True)
-            inverse_mass_matrix[site_names] = cov.diag() if adapt_scheme.head_size == 0 else cov
+            inverse_mass_matrix[site_names] = adapt_scheme.get_covariance(regularize=True)
         self.inverse_mass_matrix = inverse_mass_matrix
 
     def kinetic_grad(self, r):
@@ -301,4 +318,207 @@ class BlockMassMatrix:
         for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
             r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
             u[site_names] = _matmul(mass_matrix_sqrt_inverse, r_flat)
+        return u
+
+
+def _arrowhead_sqrt(x, head_size):
+    N = x.size(-1)
+    A, B = x[:head_size, :head_size], x[:head_size, head_size:]
+    D = x.view(-1)[::N + 1][head_size:]
+    # NB: the complexity is O(N * head_size^2)
+    # ref: https://en.wikipedia.org/wiki/Schur_complement#Background
+    Dsqrt = D.sqrt()
+    B_Dsqrt = B / Dsqrt.unsqueeze(-2)  # shape: head_size x N
+    schur_complement = A - B_Dsqrt.matmul(B_Dsqrt.t())  # complexity: head_size^2 x N
+    # we will decompose schur_complement to U @ U.T (so that the sqrt matrix
+    # is upper triangular) using some `flip` operators:
+    #   flip(cholesky(flip(schur_complement)))
+    top_left = torch.flip(torch.flip(schur_complement, (-2, -1)).cholesky(), (-2, -1))
+    top_right = B_Dsqrt
+    bottom_right = Dsqrt.diag()
+    top = torch.cat([top_left, top_right], -1)
+    bottom = torch.nn.functional.pad(bottom_right, (head_size, 0))
+    return torch.cat([top, bottom], 0)
+
+
+def _arrowhead_sqrt_to_sqrt_inverse(x, head_size):
+    N = x.size(-1)
+    A, B = x[:head_size, :head_size], x[:head_size, head_size:]
+    D = x.view(-1)[::N + 1][head_size:]
+
+    identity = torch.eye(head_size, dtype=x.dtype, device=x.device)
+    top_left = torch.triangular_solve(identity, A, upper=True)[0]
+    top_right = -top_left.matmul(B)  # complexity: head_size^2 x N
+    bottom_right = D.reciprocal().diag()
+    top = torch.cat([top_left, top_right], -1)
+    bottom = torch.nn.functional.pad(bottom_right, (head_size, 0))
+    return torch.cat([top, bottom], 0)
+
+
+def _arrowhead_sqrt_matmul(x, y, head_size, transpose=False):
+    N = x.size(-1)
+    AB = x[:head_size]
+    D = x.view(-1)[::N + 1][head_size:]
+    if transpose:
+        z = AB.tranpose(-2, -1).matmul(y[:head_size])
+        # here we exploit the diagonal structure of the bottom right part
+        # of arrowhead_sqrt matrix; so the complexity is still O(N)
+        top = z[:head_size]
+        bottom = z[head_size:] + D * y[head_size:]
+    else:
+        top = AB.matmul(y)
+        bottom = D * y[head_size:]
+    return torch.cat([top, bottom], 0)
+
+
+def _arrowhead_sqrt_inverse_to_inverse(x, head_size):
+    AB = x[:head_size]
+    A, B = AB[:, :head_size], AB[:, head_size:]
+    D = x[head_size:, head_size:]
+    top = A.t().matmul(AB)
+    bottom_left = top[:, head_size:].t()
+    bottom_right = B.t().matmul(B) + D.pow(2)
+    return torch.cat([top, torch.cat([bottom_left, bottom_right], -1)], 0)
+
+
+class ArrowheadMassMatrix:
+    def __init__(self, head_size=0, init_scale=1.):
+        # TODO: support pack/unpack mechanism as an alternative to `reshape(-1)`
+        # so that we can arrange important part of a variable to the head.
+        assert isinstance(head_size, (int, dict))
+        self._head_size = head_size
+        self._init_scale = 1
+        self._adapt_scheme = {}
+        # TODO: save memory by using arrowhead form: (top, bottom_diag); with this, we don't need to
+        # carry head_size around
+        self._mass_matrix = None
+        # NB: like BlockMassMatrix, those sqrt matrices are upper triangular
+        self._mass_matrix_sqrt = {}
+        self._mass_matrix_sqrt_inverse = {}
+        self._mass_matrix_shape = None
+
+    @property
+    def mass_matrix_shape(self):
+        return self._mass_matrix_shape
+
+    @property
+    def inverse_mass_matrix(self):
+        # NB: this computation is O(N^2 x head_size)
+        # however, HMC/NUTS kernel does not require us computing inverse_mass_matrix;
+        # so all linear algebra cost in HMC/NUTS is still O(N x head_size^2);
+        # we still expose this property for testing and for backward compatibility
+        inverse_mass_matrix = {}
+        for site_names, sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            head_size = self._adapt_scheme[site_names].head_size
+            inverse_mass_matrix[site_names] = _arrowhead_sqrt_inverse_to_inverse(sqrt_inverse, head_size)
+        return inverse_mass_matrix
+
+    @property
+    def mass_matrix(self):
+        return self._mass_matrix
+
+    @mass_matrix.setter
+    def mass_matrix(self, value):
+        if self.mass_matrix is None:
+            self._mass_matrix = {}
+
+        for site_names, mass_matrix in value.items():
+            self._adapt_scheme[site_names].reset()
+            mass_matrix_sqrt = _arrowhead_sqrt(mass_matrix, self.head_size)
+            mass_matrix_sqrt_inverse = _arrowhead_sqrt_to_sqrt_inverse(mass_matrix_sqrt, self.head_size)
+            self._mass_matrix[site_names] = mass_matrix
+            self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
+            self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
+
+    def configure(self, mass_matrix_shape, adapt_mass_matrix=True, options={}):
+        self._mass_matrix_shape = mass_matrix_shape
+        mass_matrix = {}
+        for site_names, shape in mass_matrix_shape.items():
+            head_size = self.head_size if isinstance(self.head_size, int) else self.head_size[site_names]
+            head_size = max(head_size, shape[0])
+            mass_matrix[site_names] = torch.eye(*shape, **options) * self._init_scale
+            if adapt_mass_matrix:
+                adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
+                self._adapt_scheme[site_names] = adapt_scheme
+
+        if self._mass_matrix is None:
+            # update mass matrix and its derivations if they are not specified yet
+            self._mass_matrix = mass_matrix
+        else:
+            # verify that the current mass_matrix is consistent with configuration
+            assert set(self._mass_matrix.keys()) == set(mass_matrix_shape.keys())
+            for site_names, shape in mass_matrix_shape.items():
+                assert self._mass_matrix[site_names].shape == shape
+
+    def update(self, z, z_grad=None):
+        assert z_grad is not None
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            z_grad_flat = torch.cat([z_grad[name].reshape(-1) for name in site_names])
+            adapt_scheme.update(z_grad_flat)
+
+    def end_adaptation(self):
+        mass_matrix = {}
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            cov = adapt_scheme.get_covariance(regularize=True)
+            mass_matrix[site_names] = cov.diag() if adapt_scheme.head_size == 0 else cov
+        self.mass_matrix = mass_matrix
+
+    def kinetic_grad(self, r):
+        """
+        Computes the gradient of kinetic energy w.r.t. the momentum `r`.
+        It is equivalent to compute velocity given the momentum `r`.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding gradient
+        """
+        v = {}
+        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            r_unscaled = _arrowhead_sqrt_matmul(mass_matrix_sqrt_inverse, r_flat, self.head_size)
+            v_flat = _arrowhead_sqrt_matmul(mass_matrix_sqrt_inverse, r_unscaled, transpose=True)
+
+            # unpacking
+            pos = 0
+            for site_name in site_names:
+                next_pos = pos + r[site_name].numel()
+                v[site_name] = v_flat[pos:next_pos].reshape(r[site_name].shape)
+                pos = next_pos
+        return v
+
+    def scale(self, r_unscaled, r_prototype):
+        """
+        Computes `M^{1/2} @ r_unscaled`.
+
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will unscaled it.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        s = {}
+        for site_names, mass_matrix_sqrt in self._mass_matrix_sqrt.items():
+            r_flat = _arrowhead_sqrt_matmul(mass_matrix_sqrt, r_unscaled[site_names])
+
+            # unpacking
+            pos = 0
+            for site_name in site_names:
+                next_pos = pos + r_prototype[site_name].numel()
+                s[site_name] = r_flat[pos:next_pos].reshape(r_prototype[site_name].shape)
+                pos = next_pos
+        return s
+
+    def unscale(self, r):
+        """
+        Computes `inv(M^{1/2}) @ r`.
+
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will unscaled it.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        u = {}
+        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            u[site_names] = _arrowhead_sqrt_matmul(mass_matrix_sqrt_inverse, r_flat)
         return u

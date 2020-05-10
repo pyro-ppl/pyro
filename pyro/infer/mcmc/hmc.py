@@ -4,9 +4,11 @@
 import math
 from collections import OrderedDict
 
+import torch
+
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import eye_like, scalar_like
+from pyro.distributions.util import scalar_like
 from pyro.distributions.testing.fakes import NonreparameterizedNormal
 
 from pyro.infer.autoguide import init_to_uniform
@@ -199,11 +201,12 @@ class HMC(MCMCKernel):
 
     def _sample_r(self, name):
         r_unscaled = {}
-        for site_names, value in self.inverse_mass_matrix.items():
-            size = value.size(0)
+        options = {"dtype": self._potential_energy_last.dtype,
+                   "device": self._potential_energy_last.device}
+        for site_names, size in self.mass_matrix_adapter.mass_matrix_size.items():
             r_unscaled[site_names] = pyro.sample(
                 "{}_{}".format(name, site_names),
-                NonreparameterizedNormal(value.new_zeros(size), value.new_ones(size)))
+                NonreparameterizedNormal(torch.zeros(size, **options), torch.ones(size, **options)))
 
         r = self.mass_matrix_adapter.scale(r_unscaled, r_prototype=self.initial_params)
         return r, r_unscaled
@@ -273,20 +276,21 @@ class HMC(MCMCKernel):
         assert len(diag_sites) + sum([len(sites) for sites in dense_sites_list]) == len(self.initial_params), \
             "Site names specified in full_mass are duplicated."
 
-        prototype_value = list(self.initial_params.values())[0]
-        initial_mass_matrix = OrderedDict()
+        mass_matrix_shape = {}
         for dense_sites in dense_sites_list:
-            mass_matrix_size = sum([self.initial_params[site].numel() for site in dense_sites])
-            initial_mass_matrix[dense_sites] = eye_like(prototype_value, mass_matrix_size)
+            size = sum([self.initial_params[site].numel() for site in dense_sites])
+            mass_matrix_shape[dense_sites] = (size, size)
 
-        # we keep diagonal block at lower right of block matrix
         if diag_sites:
-            mass_matrix_size = sum([self.initial_params[site].numel() for site in diag_sites])
-            initial_mass_matrix[diag_sites] = prototype_value.new_ones(mass_matrix_size)
+            size = sum([self.initial_params[site].numel() for site in diag_sites])
+            mass_matrix_shape[diag_sites] = (size,)
 
+        options = {"dtype": self._potential_energy_last.dtype,
+                   "device": self._potential_energy_last.device}
         self._adapter.configure(self._warmup_steps,
-                                inv_mass_matrix=initial_mass_matrix,
-                                find_reasonable_step_size_fn=self._find_reasonable_step_size)
+                                mass_matrix_shape=mass_matrix_shape,
+                                find_reasonable_step_size_fn=self._find_reasonable_step_size,
+                                options=options)
 
         if self._adapter.adapt_step_size:
             self._adapter.reset_step_size_adaptation(self._initial_params)
