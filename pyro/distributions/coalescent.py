@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
-from weakref import WeakKeyDictionary
 
 import torch
 from torch.distributions import constraints
@@ -18,17 +17,17 @@ class CoalescentTimesWithRate(TorchDistribution):
     Distribution over coalescent times given irregular sampled ``leaf_times``
     and piecewise constant coalescent rates defined on a regular time grid.
 
-    This assumes a piecewise constant rate specified on time intervals
-    ``(-inf,1]``, ``[1,2]``, ..., ``[T-1,T]``,  where ``T =
-    rate_grid.size(-1)``.  Leaves may be sampled at arbitrary times in the real
-    interval ``(-inf, T]``.
+    This assumes a piecewise constant base coalescent rate specified on time
+    intervals ``(-inf,1]``, ``[1,2]``, ..., ``[T-1,inf)``,  where ``T =
+    rate_grid.size(-1)``. Leaves may be sampled at arbitrary real times, but
+    are commonly sampled in the interval ``[0, T]``.
 
-    Sample values will be unordered sets of binary coalescent times in the
-    interval ``(-inf, T]``, where ``T = rate_grid.size(-1)``. Each sample
-    ``value`` will have cardinality ``value.size(-1) = leaf_times.size(-1) -
-    1``, so that phylogenies are complete binary trees. This distribution can
-    thus be batched over multiple samples of phylogenies given fixed (number
-    of) leaf times, e.g. over phylogeny samples from BEAST or MrBayes.
+    Sample values will be unordered sets of binary coalescent times. Each
+    sample ``value`` will have cardinality ``value.size(-1) =
+    leaf_times.size(-1) - 1``, so that phylogenies are complete binary trees.
+    This distribution can thus be batched over multiple samples of phylogenies
+    given fixed (number of) leaf times, e.g. over phylogeny samples from BEAST
+    or MrBayes.
 
     This distribution implements :meth:`log_prob` but not ``.sample()``.
 
@@ -79,12 +78,8 @@ class CoalescentTimesWithRate(TorchDistribution):
         This has time complexity ``O(T + S N log(N))`` where ``T`` is the
         number of time steps, ``N`` is the number of leaves, and ``S =
         sample_shape.numel()`` is the number of samples of ``value``.
-        Additionally this caches ``(leaf_times, coal_times)`` pairs such that
-        if only ``rate_grid`` varies across multiple calls, the amortized time
-        complexity is ``O(T + S N)``.
 
-        :param torch.Tensor value: A tensor of coalescent times ranging in
-            ``(-inf,T)`` where ``T = self.rate_grid.size(-1)``. These denote
+        :param torch.Tensor value: A tensor of coalescent times. These denote
             sets of size ``leaf_times.size(-1) - 1`` along the trailing
             dimension and can be unordered along that dimension.
         :returns: Likelihood ``p(coal_times | leaf_times, rate_grid)``
@@ -94,10 +89,13 @@ class CoalescentTimesWithRate(TorchDistribution):
             self._validate_sample(value)
         coal_times = value
         times, binomial, coal_binomial = _preprocess(self.leaf_times, coal_times)
+        if self._validate_args:
+            if not (binomial >= 0).all():
+                raise ValueError("Invalid coalescent times")
 
         # Compute survival factors for closed intervals.
         cumsum = self._unbroadcasted_rate_grid.cumsum(-1)
-        cumsum = torch.nn.functional.pad(cumsum, (1, 0), value=0)
+        cumsum = torch.nn.functional.pad(cumsum, (1, 0), value=0).unsqueeze(-2)
         integral = _interpolate(cumsum, times[..., 1:])  # ignore the first lonely leaf
         integral = integral[..., :-1] - integral[..., 1:]
         integral = integral.clamp(min=torch.finfo(integral.dtype).tiny)  # avoid nan
@@ -105,8 +103,8 @@ class CoalescentTimesWithRate(TorchDistribution):
 
         # Compute density of coalescent events.
         i = coal_times.floor().clamp(min=0).long()
-        rates = coal_binomial * self._unbroadcasted_rate_grid[..., i]
-        log_prob = log_prob - safe_log(rates)
+        rates = coal_binomial * Vindex(self._unbroadcasted_rate_grid.unsqueeze(-2))[..., i]
+        log_prob = log_prob + safe_log(rates).sum(-1)
 
         return log_prob
 
@@ -124,22 +122,7 @@ def _interpolate(array, x):
     return f0 * (x1 - x) + f1 * (x - x0)
 
 
-def _weak_memoize_2(fn):
-    cache = WeakKeyDictionary()
-
-    @functools.wraps(fn)
-    def memoized_fn(x, y):
-        if x not in cache:
-            cache[x] = WeakKeyDictionary()
-            cache[x][y] = fn(x, y)
-        elif y not in cache[x]:
-            cache[x][y] = fn(x, y)
-        return cache[x][y]
-
-    return memoized_fn
-
-
-@_weak_memoize_2
+# TODO consider memoizing via WeakKeyDictionary or similar
 @torch.no_grad()
 def _preprocess(leaf_times, coal_times):
     assert leaf_times.dim() == 1
@@ -161,17 +144,17 @@ def _preprocess(leaf_times, coal_times):
 
     # Sort the events reverse-ordered in time.
     times, index = times.sort(dim=-1, descending=True)
-    signs = signs.index_select(-1, index)
+    signs = Vindex(signs)[..., index]
     inv_index = index.new_empty(index.shape)
     inv_index[..., index] = torch.arange(2 * N - 1).expand_as(index)
 
     # Compute the number n of lineages preceding each event, then the binomial
-    # coefficients that will adjust coalescence rate.
+    # coefficients that will multiply the base coalescence rate.
     n = signs.cumsum(-1)
     binomial = n * (n - 1) / 2
 
     # Compute the binomial coefficient following each coalescent event.
     coal_index = inv_index[..., :N - 1]
-    coal_binomial = binomial.index_select(-1, coal_index + 1)
+    coal_binomial = Vindex(binomial.unsqueeze(-2))[..., coal_index + 1]
 
     return times, binomial, coal_binomial
