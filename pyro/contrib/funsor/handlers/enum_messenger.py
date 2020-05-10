@@ -18,18 +18,11 @@ from pyro.poutine.escape_messenger import EscapeMessenger
 from pyro.poutine.subsample_messenger import _Subsample
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import BaseEnumMessenger, LocalNamedMessenger
+from pyro.contrib.funsor.handlers.named_messenger import BaseEnumMessenger
 from pyro.contrib.funsor.handlers.replay_messenger import ReplayMessenger
 from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
 
 funsor.set_backend("torch")
-
-
-class MarkovMessenger(LocalNamedMessenger):
-    """
-    LocalNamedMessenger is meant to be a drop-in replacement for pyro.markov.
-    """
-    pass
 
 
 def _get_delta_point(funsor_dist, name):

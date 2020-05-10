@@ -201,3 +201,10 @@ class BaseEnumMessenger(NamedMessenger):
         if self._ref_count == 1 and self.first_available_dim is not None:
             _DIM_STACK.set_first_available_dim(self._prev_first_dim)
         return super().__exit__(*args, **kwargs)
+
+
+class MarkovMessenger(LocalNamedMessenger):
+    """
+    LocalNamedMessenger is meant to be a drop-in replacement for pyro.markov.
+    """
+    pass

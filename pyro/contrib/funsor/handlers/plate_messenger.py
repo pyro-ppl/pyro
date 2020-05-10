@@ -11,8 +11,7 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.enum_messenger import MarkovMessenger
-from pyro.contrib.funsor.handlers.named_messenger import DimType, GlobalNamedMessenger
+from pyro.contrib.funsor.handlers.named_messenger import DimType, GlobalNamedMessenger, MarkovMessenger
 
 funsor.set_backend("torch")
 
