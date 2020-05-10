@@ -35,7 +35,7 @@ def test_welford_diagonal(n_samples, dim_size):
 @pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
                                                 (1000, 7),
                                                 (1, 1)])
-# @pytest.mark.init(rng_seed=7)
+@pytest.mark.init(rng_seed=7)
 def test_welford_dense(n_samples, dim_size):
     w = WelfordCovariance(diagonal=False)
     loc = torch.zeros(dim_size)

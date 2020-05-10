@@ -161,7 +161,7 @@ def test_logistic_regression(jit, use_multinomial_sampling):
     "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
     [
         (0.1, False, False, False),
-        (0.1, False, True, False),
+        (0.5, False, True, False),
         (None, True, False, False),
         (None, True, True, False),
         (None, True, True, True),
@@ -181,10 +181,8 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
                        adapt_mass_matrix=adapt_mass_matrix, full_mass=full_mass)
     mcmc = MCMC(nuts_kernel, num_samples=400, warmup_steps=200)
     mcmc.run(data)
-    print(mcmc.kernel.inverse_mass_matrix)
     samples = mcmc.get_samples()
     assert_equal(samples["p_latent"].mean(0), true_probs, prec=0.02)
-    print((torch.log(samples["p_latent"]) - torch.log1p(-samples["p_latent"])).var(0))
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
