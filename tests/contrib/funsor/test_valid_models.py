@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 import contextlib
 import logging
 import os
@@ -11,8 +11,6 @@ import pytest
 import torch
 
 import funsor
-from funsor.domains import bint, reals
-from funsor.tensor import Tensor
 
 import pyro
 from pyro.infer.enum import iter_discrete_escape, iter_discrete_extend
@@ -22,8 +20,6 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_traceenum_requirements
 
 import pyro.contrib.funsor
-from pyro.contrib.funsor import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import GlobalNamedMessenger
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
 
 from pyroapi import distributions as dist
@@ -170,72 +166,6 @@ def _check_traces(tr_pyro, tr_funsor):
                     err_str = name
                 print(err_str, f"Pyro: {pyro_shape} vs Funsor: {funsor_shape}")
             raise
-
-
-def test_iteration():
-
-    def testing():
-        for i in pyro.markov(range(5)):
-            v1 = to_data(Tensor(torch.ones(2), OrderedDict([(f"{i}", bint(2))]), 'real'))
-            v2 = to_data(Tensor(torch.zeros(2), OrderedDict([('a', bint(2))]), 'real'))
-            fv1 = to_funsor(v1, reals())
-            fv2 = to_funsor(v2, reals())
-            print(i, v1.shape)  # shapes should alternate
-            if i % 2 == 0:
-                assert v1.shape == (2,)
-            else:
-                assert v1.shape == (2, 1, 1)
-            assert v2.shape == (2, 1)
-            print(i, fv1.inputs)
-            print('a', v2.shape)  # shapes should stay the same
-            print('a', fv2.inputs)
-
-    with pyro_backend("contrib.funsor"), GlobalNamedMessenger():
-        testing()
-
-
-def test_nesting():
-
-    def testing():
-
-        with pyro.markov():
-            v1 = to_data(Tensor(torch.ones(2), OrderedDict([(f"{1}", bint(2))]), 'real'))
-            print(1, v1.shape)  # shapes should alternate
-            assert v1.shape == (2,)
-
-            with pyro.markov():
-                v2 = to_data(Tensor(torch.ones(2), OrderedDict([(f"{2}", bint(2))]), 'real'))
-                print(2, v2.shape)  # shapes should alternate
-                assert v2.shape == (2, 1)
-
-                with pyro.markov():
-                    v3 = to_data(Tensor(torch.ones(2), OrderedDict([(f"{3}", bint(2))]), 'real'))
-                    print(3, v3.shape)  # shapes should alternate
-                    assert v3.shape == (2,)
-
-                    with pyro.markov():
-                        v4 = to_data(Tensor(torch.ones(2), OrderedDict([(f"{4}", bint(2))]), 'real'))
-                        print(4, v4.shape)  # shapes should alternate
-
-                        assert v4.shape == (2, 1)
-
-    with pyro_backend("contrib.funsor"), GlobalNamedMessenger():
-        testing()
-
-
-def test_staggered():
-
-    def testing():
-        for i in pyro.markov(range(12)):
-            if i % 4 == 0:
-                v2 = to_data(Tensor(torch.zeros(2), OrderedDict([('a', bint(2))]), 'real'))
-                fv2 = to_funsor(v2, reals())
-                assert v2.shape == (2,)
-                print('a', v2.shape)
-                print('a', fv2.inputs)
-
-    with pyro_backend("contrib.funsor"), GlobalNamedMessenger():
-        testing()
 
 
 @pytest.mark.parametrize("history", [1, 2, 3])
@@ -708,8 +638,8 @@ def test_enum_iplate_iplate_ok_1():
             b_axis = pyro.plate("b_axis", 2)
             c_axis = pyro.plate("c_axis", 2)
             a = pyro.sample("a", dist.Categorical(probs_a))
-            b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
-            c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+            b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]  # noqa: F841
+            c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
             for i in b_axis:
                 for j in c_axis:
                     b_i, c_j = pyro.sample("b_{}".format(i)), pyro.sample("c_{}".format(j))
