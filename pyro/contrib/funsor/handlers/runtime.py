@@ -84,7 +84,7 @@ class DimStack:
         dim_type = dim_request.dim_type
 
         if name_request.name is None:
-            fresh_name = f"_pyro_dim_{-dim_request.dim}"
+            fresh_name = "_pyro_dim_{}".format(-dim_request.dim)
         else:
             fresh_name = name_request.name
 
