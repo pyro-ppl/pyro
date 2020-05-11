@@ -174,3 +174,53 @@ class LocalNamedMessenger(NamedMessenger):
 # but in the interest of matching Pyro we introduce a MarkovMessenger alias.
 class MarkovMessenger(LocalNamedMessenger):
     pass
+
+
+class GlobalNamedMessenger(NamedMessenger):
+
+    def __init__(self):
+        self._saved_globals = ()
+        super().__init__()
+
+    def __enter__(self):
+        if self._ref_count == 0:
+            for name, dim in self._saved_globals:
+                _DIM_STACK.global_frame.write(name, dim)
+            self._saved_globals = ()
+        return super().__enter__()
+
+    def __exit__(self, *args, **kwargs):
+        if self._ref_count == 1:
+            for name, dim in self._saved_globals:
+                _DIM_STACK.global_frame.free(name, dim)
+        return super().__exit__(*args, **kwargs)
+
+    def _pyro_post_to_funsor(self, msg):
+        if msg["kwargs"]["dim_type"] in (DimType.GLOBAL, DimType.VISIBLE):
+            for name in msg["value"].inputs:
+                self._saved_globals += ((name, _DIM_STACK.global_frame.name_to_dim[name]),)
+
+    def _pyro_post_to_data(self, msg):
+        if msg["kwargs"]["dim_type"] in (DimType.GLOBAL, DimType.VISIBLE):
+            for name in msg["args"][0].inputs:
+                self._saved_globals += ((name, _DIM_STACK.global_frame.name_to_dim[name]),)
+
+
+class BaseEnumMessenger(NamedMessenger):
+    """
+    handles first_available_dim management, enum effects should inherit from this
+    """
+    def __init__(self, first_available_dim=None):
+        assert first_available_dim is None or first_available_dim < 0, first_available_dim
+        self.first_available_dim = first_available_dim
+        super().__init__()
+
+    def __enter__(self):
+        if self._ref_count == 0 and self.first_available_dim is not None:
+            self._prev_first_dim = _DIM_STACK.set_first_available_dim(self.first_available_dim)
+        return super().__enter__()
+
+    def __exit__(self, *args, **kwargs):
+        if self._ref_count == 1 and self.first_available_dim is not None:
+            _DIM_STACK.set_first_available_dim(self._prev_first_dim)
+        return super().__exit__(*args, **kwargs)
