@@ -218,6 +218,7 @@ class BlockMassMatrix:
     :param float init_scale: initial scale to construct the initial mass matrix.
     """
     def __init__(self, init_scale=1.):
+        # TODO: we might allow users specify the initial mass matrix in the constructor.
         self._init_scale = init_scale
         self._adapt_scheme = {}
         self._inverse_mass_matrix = {}
@@ -261,13 +262,8 @@ class BlockMassMatrix:
         for site_names, shape in mass_matrix_shape.items():
             self._mass_matrix_size[site_names] = shape[0]
             diagonal = len(shape) == 1
-            if site_names not in self._inverse_mass_matrix:
-                inverse_mass_matrix[site_names] = torch.full(shape, self._init_scale, **options) \
-                    if diagonal else torch.eye(*shape, **options) * self._init_scale
-            else:
-                # verify the shape is consistent
-                assert self._inverse_mass_matrix[site_names].shape == shape
-
+            inverse_mass_matrix[site_names] = torch.full(shape, self._init_scale, **options) \
+                if diagonal else torch.eye(*shape, **options) * self._init_scale
             if adapt_mass_matrix:
                 adapt_scheme = WelfordCovariance(diagonal=diagonal)
                 self._adapt_scheme[site_names] = adapt_scheme
