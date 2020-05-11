@@ -13,8 +13,7 @@ import pyro.distributions as dist
 from pyro.infer.autoguide import AutoDelta
 from pyro.contrib.conjugate.infer import BetaBinomialPair, collapse_conjugate, GammaPoissonPair, posterior_replay
 from pyro.infer import TraceEnum_ELBO, SVI
-from pyro.infer.mcmc.api import MCMC
-from pyro.infer.mcmc.nuts import NUTS
+from pyro.infer.mcmc import ArrowheadMassMatrix, MCMC, NUTS
 import pyro.optim as optim
 import pyro.poutine as poutine
 from pyro.util import ignore_jit_warnings
@@ -412,3 +411,21 @@ def test_structured_mass():
     assert_equal(kernel.inverse_mass_matrix[("w",)], w_cov, prec=0.5)
     assert_equal(kernel.inverse_mass_matrix[("x", "y")], xy_cov, prec=0.5)
     assert_equal(kernel.inverse_mass_matrix[("z",)], z_var, prec=0.5)
+
+
+def test_arrowhead():
+    def model(data):
+        concentration = torch.tensor([1.0, 1.0, 1.0])
+        p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
+        pyro.sample("obs", dist.Categorical(p_latent), obs=data)
+        return p_latent
+
+    true_probs = torch.tensor([0.1, 0.6, 0.3])
+    data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
+    nuts_kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True)
+    nuts_kernel.mass_matrix_adapter = ArrowheadMassMatrix(head_size=1)
+    mcmc = MCMC(nuts_kernel, num_samples=200, warmup_steps=100)
+    mcmc.run(data)
+    samples = mcmc.get_samples()
+    posterior = samples["p_latent"]
+    assert_equal(posterior.mean(0), true_probs, prec=0.02)

@@ -361,6 +361,9 @@ class BlockMassMatrix:
 def _arrowhead_sqrt(x):
     assert isinstance(x, ArrowheadMatrix)
     head_size = x.top.size(0)
+    if head_size == 0:
+        return ArrowheadUpperSqrtMatrix(x.top, x.bottom_diag.sqrt())
+
     A, B = x.top[:, :head_size], x.top[:, head_size:]
     # NB: the complexity is O(N * head_size^2)
     # ref: https://en.wikipedia.org/wiki/Schur_complement#Background
@@ -380,11 +383,15 @@ def _arrowhead_sqrt(x):
 def _arrowhead_sqrt_to_sqrt_inverse(x):
     assert isinstance(x, ArrowheadUpperSqrtMatrix)
     head_size = x.top.size(0)
-    A, B = x.top[:, :head_size], x.top[:, head_size:]
+    if head_size == 0:
+        return ArrowheadUpperSqrtMatrix(x.top, x.bottom_diag.reciprocal())
 
-    identity = torch.eye(head_size, dtype=x.dtype, device=x.device)
+    A, B = x.top[:, :head_size], x.top[:, head_size:]
+    B_Dinv = B / x.bottom_diag.unsqueeze(-2)
+
+    identity = torch.eye(head_size, dtype=A.dtype, device=A.device)
     top_left = torch.triangular_solve(identity, A, upper=True)[0]
-    top_right = -top_left.matmul(B)  # complexity: head_size^2 x N
+    top_right = -top_left.matmul(B_Dinv)  # complexity: head_size^2 x N
     top = torch.cat([top_left, top_right], -1)
     bottom_diag = x.bottom_diag.reciprocal()
     return ArrowheadUpperSqrtMatrix(top, bottom_diag)
@@ -394,7 +401,7 @@ def _arrowhead_sqrt_matmul(x, y, transpose=False):
     assert isinstance(x, ArrowheadUpperSqrtMatrix)
     head_size = x.top.size(0)
     if transpose:
-        z = x.top.tranpose(-2, -1).matmul(y[:head_size])
+        z = x.top.transpose(-2, -1).matmul(y[:head_size])
         # here we exploit the diagonal structure of the bottom right part
         # of arrowhead_sqrt matrix; so the complexity is still O(N)
         top = z[:head_size]
@@ -408,9 +415,13 @@ def _arrowhead_sqrt_matmul(x, y, transpose=False):
 def _arrowhead_sqrt_inverse_to_inverse(x):
     assert isinstance(x, ArrowheadUpperSqrtMatrix)
     head_size = x.top.size(0)
+    if head_size == 0:
+        return x.bottom_diag.pow(2)
+
     A, B = x.top[:, :head_size], x.top[:, head_size:]
     top = A.t().matmul(x.top)
     bottom_left = top[:, head_size:].t()
+    # the following matmul operator is O(N^2 x head_size)
     bottom_right = B.t().matmul(B) + x.bottom_diag.pow(2).diag()
     return torch.cat([top, torch.cat([bottom_left, bottom_right], -1)], 0)
 
@@ -460,8 +471,7 @@ class ArrowheadMassMatrix:
         # we still expose this property for testing and for backward compatibility
         inverse_mass_matrix = {}
         for site_names, sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
-            head_size = self._adapt_scheme[site_names].head_size
-            inverse_mass_matrix[site_names] = _arrowhead_sqrt_inverse_to_inverse(sqrt_inverse, head_size)
+            inverse_mass_matrix[site_names] = _arrowhead_sqrt_inverse_to_inverse(sqrt_inverse)
         return inverse_mass_matrix
 
     @property
@@ -472,8 +482,8 @@ class ArrowheadMassMatrix:
     def mass_matrix(self, value):
         for site_names, mass_matrix in value.items():
             self._adapt_scheme[site_names].reset()
-            mass_matrix_sqrt = _arrowhead_sqrt(mass_matrix, self.head_size)
-            mass_matrix_sqrt_inverse = _arrowhead_sqrt_to_sqrt_inverse(mass_matrix_sqrt, self.head_size)
+            mass_matrix_sqrt = _arrowhead_sqrt(mass_matrix)
+            mass_matrix_sqrt_inverse = _arrowhead_sqrt_to_sqrt_inverse(mass_matrix_sqrt)
             self._mass_matrix[site_names] = mass_matrix
             self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
             self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
@@ -488,7 +498,7 @@ class ArrowheadMassMatrix:
             head_size = 0 if len(shape) == 1 else min(head_size, size)
             if site_names not in self._mass_matrix:
                 top = torch.eye(head_size, size, **options) * self._init_scale
-                bottom_diag = torch.full(size - head_size, self._init_scale, **options)
+                bottom_diag = torch.full((size - head_size,), self._init_scale, **options)
                 mass_matrix[site_names] = ArrowheadMatrix(top, bottom_diag)
             else:
                 # verify that the current mass_matrix is consistent with configuration
@@ -509,8 +519,8 @@ class ArrowheadMassMatrix:
     def end_adaptation(self):
         mass_matrix = {}
         for site_names, adapt_scheme in self._adapt_scheme.items():
-            cov = adapt_scheme.get_covariance(regularize=True)
-            mass_matrix[site_names] = cov.diag() if adapt_scheme.head_size == 0 else cov
+            top, bottom_diag = adapt_scheme.get_covariance(regularize=True)
+            mass_matrix[site_names] = ArrowheadMatrix(top, bottom_diag)
         self.mass_matrix = mass_matrix
 
     def kinetic_grad(self, r):
@@ -523,7 +533,11 @@ class ArrowheadMassMatrix:
         v = {}
         for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
             r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
-            r_unscaled = _arrowhead_sqrt_matmul(mass_matrix_sqrt_inverse, r_flat, self.head_size)
+            # NB: using inverse_mass_matrix as in BlockMassMatrix will cost
+            # O(N^2 x head_size) operators and O(N^2) memory requirement;
+            # here, we will leverage mass_matrix_sqrt_inverse to reduce the cost to
+            # O(N x head_size^2) operators and O(N x head_size) memory requirement.
+            r_unscaled = _arrowhead_sqrt_matmul(mass_matrix_sqrt_inverse, r_flat)
             v_flat = _arrowhead_sqrt_matmul(mass_matrix_sqrt_inverse, r_unscaled, transpose=True)
 
             # unpacking
