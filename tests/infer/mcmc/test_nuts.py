@@ -17,7 +17,7 @@ from pyro.infer.mcmc import ArrowheadMassMatrix, MCMC, NUTS
 import pyro.optim as optim
 import pyro.poutine as poutine
 from pyro.util import ignore_jit_warnings
-from tests.common import assert_equal
+from tests.common import assert_close, assert_equal
 
 from .test_hmc import GaussianChain, rmse
 
@@ -392,7 +392,7 @@ def test_structured_mass():
 
     w_cov = torch.tensor([[1.5, 0.5], [0.5, 1.5]])
     xy_cov = torch.tensor([[2., 1.], [1., 3.]])
-    z_var = torch.tensor([4.])
+    z_var = torch.tensor([2.5])
     cov = torch.zeros(5, 5)
     cov[:2, :2] = w_cov
     cov[2:4, 2:4] = xy_cov
@@ -408,9 +408,9 @@ def test_structured_mass():
     kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=[("w",), ("x", "y")])
     mcmc = MCMC(kernel, num_samples=1, warmup_steps=1000)
     mcmc.run(cov)
-    assert_equal(kernel.inverse_mass_matrix[("w",)], w_cov, prec=0.5)
-    assert_equal(kernel.inverse_mass_matrix[("x", "y")], xy_cov, prec=0.5)
-    assert_equal(kernel.inverse_mass_matrix[("z",)], z_var, prec=0.5)
+    assert_close(kernel.inverse_mass_matrix[("w",)], w_cov, atol=0.5, rtol=0.5)
+    assert_close(kernel.inverse_mass_matrix[("x", "y")], xy_cov, atol=0.5, rtol=0.5)
+    assert_close(kernel.inverse_mass_matrix[("z",)], z_var, atol=0.5, rtol=0.5)
 
 
 def test_arrowhead():

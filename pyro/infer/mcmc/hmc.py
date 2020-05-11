@@ -142,7 +142,7 @@ class HMC(MCMCKernel):
     def _kinetic_energy(self, r_unscaled):
         energy = 0.
         for site_names, value in r_unscaled.items():
-            energy += value.dot(value)
+            energy = energy + value.dot(value)
         return 0.5 * energy
 
     def _reset(self):
