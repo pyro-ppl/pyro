@@ -220,6 +220,7 @@ class BlockMassMatrix:
     :param float init_scale: initial scale to construct the initial mass matrix.
     """
     def __init__(self, init_scale=1.):
+        # TODO: we might allow users specify the initial mass matrix in the constructor.
         self._init_scale = init_scale
         self._adapt_scheme = {}
         self._inverse_mass_matrix = {}
@@ -263,13 +264,8 @@ class BlockMassMatrix:
         for site_names, shape in mass_matrix_shape.items():
             self._mass_matrix_size[site_names] = shape[0]
             diagonal = len(shape) == 1
-            if site_names not in self._inverse_mass_matrix:
-                inverse_mass_matrix[site_names] = torch.full(shape, self._init_scale, **options) \
-                    if diagonal else torch.eye(*shape, **options) * self._init_scale
-            else:
-                # verify the shape is consistent
-                assert self._inverse_mass_matrix[site_names].shape == shape
-
+            inverse_mass_matrix[site_names] = torch.full(shape, self._init_scale, **options) \
+                if diagonal else torch.eye(*shape, **options) * self._init_scale
             if adapt_mass_matrix:
                 adapt_scheme = WelfordCovariance(diagonal=diagonal)
                 self._adapt_scheme[site_names] = adapt_scheme
@@ -496,15 +492,9 @@ class ArrowheadMassMatrix:
             # we set head_size=0 if diagonal, otherwise min(default_head_size, mass_matrix_size)
             head_size = self._head_size if isinstance(self._head_size, int) else self._head_size[site_names]
             head_size = 0 if len(shape) == 1 else min(head_size, size)
-            if site_names not in self._mass_matrix:
-                top = torch.eye(head_size, size, **options) * self._init_scale
-                bottom_diag = torch.full((size - head_size,), self._init_scale, **options)
-                mass_matrix[site_names] = ArrowheadMatrix(top, bottom_diag)
-            else:
-                # verify that the current mass_matrix is consistent with configuration
-                assert self._mass_matrix[site_names].top.shape == (head_size, size)
-                assert self._mass_matrix[site_names].bottom_diag.shape == (size - head_size,)
-
+            top = torch.eye(head_size, size, **options) * self._init_scale
+            bottom_diag = torch.full((size - head_size,), self._init_scale, **options)
+            mass_matrix[site_names] = ArrowheadMatrix(top, bottom_diag)
             if adapt_mass_matrix:
                 adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
                 self._adapt_scheme[site_names] = adapt_scheme
