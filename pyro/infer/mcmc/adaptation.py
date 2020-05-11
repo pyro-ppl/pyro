@@ -267,6 +267,7 @@ class BlockMassMatrix:
             else:
                 # verify the shape is consistent
                 assert self._inverse_mass_matrix[site_names].shape == shape
+
             if adapt_mass_matrix:
                 adapt_scheme = WelfordCovariance(diagonal=diagonal)
                 self._adapt_scheme[site_names] = adapt_scheme
