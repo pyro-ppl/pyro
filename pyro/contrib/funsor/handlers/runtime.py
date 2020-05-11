@@ -101,7 +101,7 @@ class DimStack:
         if fresh_dim < self.MAX_DIM or \
                 any(fresh_dim in p.dim_to_name for p in conflict_frames) or \
                 (dim_type == DimType.VISIBLE and fresh_dim <= self._first_available_dim):
-            raise ValueError(f"Ran out of free dims during allocation for {fresh_name}")
+            raise ValueError("Ran out of free dims during allocation for {}".format(fresh_name))
 
         return fresh_name, fresh_dim
 
