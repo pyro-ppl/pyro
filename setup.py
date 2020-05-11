@@ -99,6 +99,7 @@ setup(
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
             'flake8',
+            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@master',  # TODO update to release branch
             'isort',
             'nbformat',
             'nbsphinx>=0.3.2',
