@@ -447,8 +447,6 @@ class ArrowheadMassMatrix:
         self._head_size = head_size
         self._init_scale = init_scale
         self._adapt_scheme = {}
-        # TODO: save memory by using arrowhead form: (top, bottom_diag); with this, we don't need to
-        # carry head_size around
         self._mass_matrix = {}
         # NB: like BlockMassMatrix, those sqrt matrices are upper triangular
         self._mass_matrix_sqrt = {}
