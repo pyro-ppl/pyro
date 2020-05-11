@@ -1046,8 +1046,8 @@ def test_elbo_enumerate_plates_6(scale):
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
         a = pyro.sample("a", dist.Categorical(probs_a))
-        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]  # noqa: F841
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
         for i in b_axis:
             b_i = pyro.sample("b_{}".format(i))
             for j in c_axis:
@@ -1088,7 +1088,7 @@ def test_elbo_enumerate_plates_6(scale):
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
         with b_axis:
             for j in c_axis:
                 c_j = pyro.sample("c_{}".format(j))
@@ -1178,8 +1178,8 @@ def test_elbo_enumerate_plates_7(scale):
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
         a = pyro.sample("a", dist.Categorical(probs_a))
-        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]  # noqa: F841
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
         for i in b_axis:
             b_i = pyro.sample("b_{}".format(i))
             for j in c_axis:
@@ -1224,7 +1224,7 @@ def test_elbo_enumerate_plates_7(scale):
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
         with b_axis:
             for j in c_axis:
                 c_j = pyro.sample("c_{}".format(j))
@@ -1273,8 +1273,8 @@ def test_elbo_enumerate_plates_7(scale):
 @pytest.mark.parametrize('model_scale', [1])
 @pytest.mark.parametrize('outer_vectorized,inner_vectorized,xfail',
                          [(False, True, False)],
-                          # (True, False, xfail_param(True, reason="validation not yet implemented")),
-                          # (True, True, xfail_param(True, reason="validation not yet implemented"))],
+                         # (True, False, xfail_param(True, reason="validation not yet implemented")),
+                         # (True, True, xfail_param(True, reason="validation not yet implemented"))],
                          ids=['iplate-plate'])  # , 'plate-iplate', 'plate-plate'])
 @pyro_backend("contrib.funsor")
 def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized, xfail):

@@ -62,7 +62,8 @@ class TraceEnum_ELBO(ELBO):
                 (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
             if model_aux_vars:
                 contracted_terms = [t for t in terms["model"]["log_factors"] if model_aux_vars.intersection(t.inputs)]
-                uncontracted_terms = [t for t in terms["model"]["log_factors"] if not model_aux_vars.intersection(t.inputs)]
+                uncontracted_terms = [t for t in terms["model"]["log_factors"]
+                                      if not model_aux_vars.intersection(t.inputs)]
                 terms["model"]["log_factors"] = uncontracted_terms + funsor.sum_product.partial_sum_product(
                     funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measures"] + contracted_terms,
                     plates=terms["model"]["plate_vars"], eliminate=model_aux_vars
