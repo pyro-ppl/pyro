@@ -117,7 +117,7 @@ class AffineCoupling(TransformModule):
 
         y1 = x1
         y2 = torch.exp(log_scale) * x2 + mean
-        return torch.cat([y1, y2], dim=-1)
+        return torch.cat([y1, y2], dim=self.dim)
 
     def _inverse(self, y):
         """
@@ -134,7 +134,7 @@ class AffineCoupling(TransformModule):
         self._cached_log_scale = log_scale
 
         x2 = (y2 - mean) * torch.exp(-log_scale)
-        return torch.cat([x1, x2], dim=-1)
+        return torch.cat([x1, x2], dim=self.dim)
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -147,7 +147,10 @@ class AffineCoupling(TransformModule):
             x1, _ = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
             _, log_scale = self.nn(x1)
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
-        return log_scale.sum(-1)
+        result_size = log_scale.size()[:-self.event_dim] + (-1,)
+        result = log_scale.view(result_size).sum(-1)
+        shape = x.shape[:-self.event_dim]
+        return result.expand(shape)
 
 
 @copy_docs_from(ConditionalTransformModule)
