@@ -88,7 +88,7 @@ class AffineCoupling(TransformModule):
     codomain = constraints.real
     bijective = True
 
-    def __init__(self, split_dim, hypernet, dim=-1, log_scale_min_clip=-5., log_scale_max_clip=3.):
+    def __init__(self, split_dim, hypernet, *, dim=-1, log_scale_min_clip=-5., log_scale_max_clip=3.):
         super().__init__(cache_size=1)
         if dim >= 0:
             raise ValueError("'dim' keyword argument must be negative")
