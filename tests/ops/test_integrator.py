@@ -45,7 +45,9 @@ def register_model(init_args):
     )
 ])
 class HarmonicOscillator:
-    inverse_mass_matrix = torch.tensor([1.])
+    @staticmethod
+    def kinetic_grad(p):
+        return p
 
     @staticmethod
     def energy(q, p):
@@ -68,7 +70,9 @@ class HarmonicOscillator:
     )
 ])
 class CircularPlanetaryMotion:
-    inverse_mass_matrix = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    @staticmethod
+    def kinetic_grad(p):
+        return p
 
     @staticmethod
     def energy(q, p):
@@ -92,7 +96,9 @@ class CircularPlanetaryMotion:
     )
 ])
 class QuarticOscillator:
-    inverse_mass_matrix = torch.tensor([[1.]])
+    @staticmethod
+    def kinetic_grad(p):
+        return p
 
     @staticmethod
     def energy(q, p):
@@ -109,7 +115,7 @@ def test_trajectory(example):
     q_f, p_f, _, _ = velocity_verlet(args.q_i,
                                      args.p_i,
                                      model.potential_fn,
-                                     model.inverse_mass_matrix,
+                                     model.kinetic_grad,
                                      args.step_size,
                                      args.num_steps)
     logger.info("initial q: {}".format(args.q_i))
@@ -124,7 +130,7 @@ def test_energy_conservation(example):
     q_f, p_f, _, _ = velocity_verlet(args.q_i,
                                      args.p_i,
                                      model.potential_fn,
-                                     model.inverse_mass_matrix,
+                                     model.kinetic_grad,
                                      args.step_size,
                                      args.num_steps)
     energy_initial = model.energy(args.q_i, args.p_i)
@@ -140,14 +146,14 @@ def test_time_reversibility(example):
     q_forward, p_forward, _, _ = velocity_verlet(args.q_i,
                                                  args.p_i,
                                                  model.potential_fn,
-                                                 model.inverse_mass_matrix,
+                                                 model.kinetic_grad,
                                                  args.step_size,
                                                  args.num_steps)
     p_reverse = {key: -val for key, val in p_forward.items()}
     q_f, p_f, _, _ = velocity_verlet(q_forward,
                                      p_reverse,
                                      model.potential_fn,
-                                     model.inverse_mass_matrix,
+                                     model.kinetic_grad,
                                      args.step_size,
                                      args.num_steps)
     assert_equal(q_f, args.q_i, 1e-5)

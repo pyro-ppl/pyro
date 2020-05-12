@@ -10,14 +10,7 @@ from torch.nn.functional import pad
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.torch import MultivariateNormal
 from pyro.distributions.util import broadcast_shape
-
-
-def _precision_to_scale_tril(P):
-    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
-    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
-                               L_inv, upper=False)[0]
-    return L
+from pyro.ops.tensor_utils import precision_to_scale_tril
 
 
 class Gamma:
@@ -283,7 +276,7 @@ class GammaGaussian:
         Student-T distribution.
         """
         concentration = self.alpha - 0.5 * self.dim() + 1
-        scale_tril = _precision_to_scale_tril(self.precision)
+        scale_tril = precision_to_scale_tril(self.precision)
         scale_tril_t_u = scale_tril.transpose(-1, -2).matmul(self.info_vec.unsqueeze(-1)).squeeze(-1)
         u_Pinv_u = scale_tril_t_u.pow(2).sum(-1)
         rate = self.beta - 0.5 * u_Pinv_u

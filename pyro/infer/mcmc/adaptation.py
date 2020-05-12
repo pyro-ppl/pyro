@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-from collections import OrderedDict, namedtuple
+from collections import namedtuple
 
 import torch
 
 import pyro
-import pyro.distributions as dist
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.welford import WelfordCovariance
 
@@ -37,8 +36,7 @@ class WarmupAdapter:
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()
-        if adapt_mass_matrix:
-            self._mass_matrix_adapt_scheme = {}
+        self._mass_matrix_adapter = BlockMassMatrix()
 
         # We separate warmup_steps into windows:
         #   start_buffer + window 1 + window 2 + window 3 + ... + end_buffer
@@ -53,8 +51,6 @@ class WarmupAdapter:
 
         # configured later on setup
         self._warmup_steps = None
-        self._inverse_mass_matrix = OrderedDict()
-        self._r_dist = {}
         self._adaptation_schedule = []
 
     def _build_adaptation_schedule(self):
@@ -107,50 +103,39 @@ class WarmupAdapter:
         log_step_size, _ = self._step_size_adapt_scheme.get_state()
         self.step_size = math.exp(log_step_size)
 
-    def _update_r_dist(self):
-        for site_names, inv_mass_matrix in self._inverse_mass_matrix.items():
-            loc = inv_mass_matrix.new_zeros(inv_mass_matrix.size(0))
-            if inv_mass_matrix.dim() == 1:
-                self._r_dist[site_names] = dist.Normal(loc, inv_mass_matrix.rsqrt())
-            else:
-                self._r_dist[site_names] = dist.MultivariateNormal(loc, precision_matrix=inv_mass_matrix)
-
     def _end_adaptation(self):
         if self.adapt_step_size:
             _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
 
-    def configure(self, warmup_steps, initial_step_size=None, inv_mass_matrix=None,
-                  find_reasonable_step_size_fn=None):
+    def configure(self, warmup_steps, initial_step_size=None, mass_matrix_shape=None,
+                  find_reasonable_step_size_fn=None, options={}):
         r"""
         Model specific properties that are specified when the HMC kernel is setup.
 
         :param warmup_steps: Number of warmup steps that the sampler is initialized with.
         :param initial_step_size: Step size to use to initialize the Dual Averaging scheme.
-        :param inv_mass_matrix: Initial value of the inverse mass matrix.
+        :param mass_matrix_shape: Shape of the mass matrix.
         :param find_reasonable_step_size_fn: A callable to find reasonable step size when
             mass matrix is changed.
+        :param dict options: A dict which maps `dtype`, `device` to the corresponding default
+            tensor options. This is used to construct initial mass matrix in `mass_matrix_adapter`.
         """
         self._warmup_steps = warmup_steps
         self.step_size = initial_step_size if initial_step_size is not None else self._init_step_size
         if find_reasonable_step_size_fn is not None:
             self._find_reasonable_step_size = find_reasonable_step_size_fn
-        self.inverse_mass_matrix = inv_mass_matrix
-        if self.inverse_mass_matrix is None or self.step_size is None:
+        if mass_matrix_shape is None or self.step_size is None:
             raise ValueError("Incomplete configuration - step size and inverse mass matrix "
                              "need to be initialized.")
+        self.mass_matrix_adapter.configure(mass_matrix_shape, self.adapt_mass_matrix, options=options)
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
         self._current_window = 0  # starting window index
         if self.adapt_step_size:
             self._step_size_adapt_scheme.reset()
-        if self.adapt_mass_matrix:
-            for site_names, inv_mass_matrix in self._inverse_mass_matrix.items():
-                adapt_scheme = WelfordCovariance(diagonal=inv_mass_matrix.dim() == 1)
-                adapt_scheme.reset()
-                self._mass_matrix_adapt_scheme[site_names] = adapt_scheme
 
-    def step(self, t, z, accept_prob):
+    def step(self, t, z, accept_prob, z_grad=None):
         r"""
         Called at each step during the warmup phase to learn tunable
         parameters.
@@ -168,9 +153,7 @@ class WarmupAdapter:
         if self.adapt_step_size:
             self._update_step_size(accept_prob.item())
         if mass_matrix_adaptation_phase:
-            for site_names, adapt_scheme in self._mass_matrix_adapt_scheme.items():
-                z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
-                adapt_scheme.update(z_flat.detach())
+            self.mass_matrix_adapter.update(z, z_grad)
 
         if t == window.end:
             if self._current_window == num_windows - 1:
@@ -183,8 +166,7 @@ class WarmupAdapter:
                 return
 
             if mass_matrix_adaptation_phase:
-                self.inverse_mass_matrix = {site_names: scheme.get_covariance()
-                                            for site_names, scheme in self._mass_matrix_adapt_scheme.items()}
+                self.mass_matrix_adapter.end_adaptation()
                 if self.adapt_step_size:
                     self.reset_step_size_adaptation(z)
 
@@ -195,24 +177,176 @@ class WarmupAdapter:
         return self._adaptation_schedule
 
     @property
+    def mass_matrix_adapter(self):
+        return self._mass_matrix_adapter
+
+    @mass_matrix_adapter.setter
+    def mass_matrix_adapter(self, value):
+        self._mass_matrix_adapter = value
+
+
+# this works for diagonal matrix `x`
+def _matmul(x, y):
+    return x.mul(y) if x.dim() == 1 else x.matmul(y)
+
+
+def _cholesky(x):
+    return x.sqrt() if x.dim() == 1 else x.cholesky()
+
+
+def _transpose(x):
+    return x if x.dim() == 1 else x.t()
+
+
+def _upper_triangular_inverse(x):
+    if x.dim() == 1:
+        return x.reciprocal()
+    else:
+        identity = torch.eye(x.size(-1), dtype=x.dtype, device=x.device)
+        return torch.triangular_solve(identity, x, upper=True)[0]
+
+
+class BlockMassMatrix:
+    """
+    EXPERIMENTAL This class is used to adapt (inverse) mass matrix and provide
+    useful methods to calculate algebraic terms which involves the mass matrix.
+
+    The mass matrix will have block structure, which can be specified by
+    using the method :meth:`configure` with the corresponding structured
+    `mass_matrix_shape` arg.
+
+    :param float init_scale: initial scale to construct the initial mass matrix.
+    """
+    def __init__(self, init_scale=1.):
+        # TODO: we might allow users specify the initial mass matrix in the constructor.
+        self._init_scale = init_scale
+        self._adapt_scheme = {}
+        self._inverse_mass_matrix = {}
+        # NB: those sqrt matrices are upper triangular
+        self._mass_matrix_sqrt = {}
+        self._mass_matrix_sqrt_inverse = {}
+        self._mass_matrix_size = {}
+
+    @property
+    def mass_matrix_size(self):
+        """
+        A dict that maps site names to the size of the corresponding mass matrix.
+        """
+        return self._mass_matrix_size
+
+    @property
     def inverse_mass_matrix(self):
         return self._inverse_mass_matrix
 
     @inverse_mass_matrix.setter
     def inverse_mass_matrix(self, value):
-        # XXX: for backward compatibility (when users want to specify a fixed inverse mass matrix)
-        if torch.is_tensor(value):
-            assert len(self._inverse_mass_matrix) == 1
-            all_sites = list(self._inverse_mass_matrix.keys())[0]
-            value = {all_sites: value}
+        for site_names, inverse_mass_matrix in value.items():
+            if site_names in self._adapt_scheme:
+                self._adapt_scheme[site_names].reset()
+            mass_matrix_sqrt_inverse = _transpose(_cholesky(inverse_mass_matrix))
+            mass_matrix_sqrt = _upper_triangular_inverse(mass_matrix_sqrt_inverse)
+            self._inverse_mass_matrix[site_names] = inverse_mass_matrix
+            self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
+            self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
 
-        for site_names, inv_mass_matrix in value.items():
-            self._inverse_mass_matrix[site_names] = inv_mass_matrix
-        self._update_r_dist()
-        if self.adapt_mass_matrix:
-            for site_names, adapt_scheme in self._mass_matrix_adapt_scheme.items():
-                adapt_scheme.reset()
+    def configure(self, mass_matrix_shape, adapt_mass_matrix=True, options={}):
+        """
+        Sets up an initial mass matrix.
 
-    @property
-    def r_dist(self):
-        return self._r_dist
+        :param dict mass_matrix_shape: a dict that maps tuples of site names to the shape of
+            the corresponding mass matrix. Each tuple of site names corresponds to a block.
+        :param bool adapt_mass_matrix: a flag to decide whether an adaptation scheme will be used.
+        :param dict options: tensor options to construct the initial mass matrix.
+        """
+        inverse_mass_matrix = {}
+        for site_names, shape in mass_matrix_shape.items():
+            self._mass_matrix_size[site_names] = shape[0]
+            diagonal = len(shape) == 1
+            inverse_mass_matrix[site_names] = torch.full(shape, self._init_scale, **options) \
+                if diagonal else torch.eye(*shape, **options) * self._init_scale
+            if adapt_mass_matrix:
+                adapt_scheme = WelfordCovariance(diagonal=diagonal)
+                self._adapt_scheme[site_names] = adapt_scheme
+
+        self.inverse_mass_matrix = inverse_mass_matrix
+
+    def update(self, z, z_grad):
+        """
+        Updates the adaptation scheme using the new sample `z` or its grad `z_grad`.
+
+        :param dict z: the current value.
+        :param dict z_grad: grad of the current value.
+        """
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            z_flat = torch.cat([z[name].detach().reshape(-1) for name in site_names])
+            adapt_scheme.update(z_flat)
+
+    def end_adaptation(self):
+        """
+        Updates the current mass matrix using the adaptation scheme.
+        """
+        inverse_mass_matrix = {}
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            inverse_mass_matrix[site_names] = adapt_scheme.get_covariance(regularize=True)
+        self.inverse_mass_matrix = inverse_mass_matrix
+
+    def kinetic_grad(self, r):
+        """
+        Computes the gradient of kinetic energy w.r.t. the momentum `r`.
+        It is equivalent to compute velocity given the momentum `r`.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding gradient
+        """
+        v = {}
+        for site_names, inverse_mass_matrix in self._inverse_mass_matrix.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            v_flat = _matmul(inverse_mass_matrix, r_flat)
+
+            # unpacking
+            pos = 0
+            for site_name in site_names:
+                next_pos = pos + r[site_name].numel()
+                v[site_name] = v_flat[pos:next_pos].reshape(r[site_name].shape)
+                pos = next_pos
+        return v
+
+    def scale(self, r_unscaled, r_prototype):
+        """
+        Computes `M^{1/2} @ r_unscaled`.
+
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will scale it.
+
+        :param dict r_unscaled: a dictionary maps site names to a tensor momentum.
+        :param dict r_prototype: a dictionary mapes site names to prototype momentum.
+            Those prototype values are used to get shapes of the scaled version.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        s = {}
+        for site_names, mass_matrix_sqrt in self._mass_matrix_sqrt.items():
+            r_flat = _matmul(mass_matrix_sqrt, r_unscaled[site_names])
+
+            # unpacking
+            pos = 0
+            for site_name in site_names:
+                next_pos = pos + r_prototype[site_name].numel()
+                s[site_name] = r_flat[pos:next_pos].reshape(r_prototype[site_name].shape)
+                pos = next_pos
+        return s
+
+    def unscale(self, r):
+        """
+        Computes `inv(M^{1/2}) @ r`.
+
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will unscale it.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        u = {}
+        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            u[site_names] = _matmul(mass_matrix_sqrt_inverse, r_flat)
+        return u

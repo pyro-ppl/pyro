@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-import torch
 
 from pyro.infer.mcmc.adaptation import WarmupAdapter, adapt_window
 from tests.common import assert_equal
@@ -20,6 +19,6 @@ def test_adaptation_schedule(adapt_step_size, adapt_mass, warmup_steps, expected
     adapter = WarmupAdapter(0.1,
                             adapt_step_size=adapt_step_size,
                             adapt_mass_matrix=adapt_mass)
-    adapter.configure(warmup_steps, inv_mass_matrix={"z": torch.eye(5, 5)})
+    adapter.configure(warmup_steps, mass_matrix_shape={"z": (5, 5)})
     expected_schedule = [adapt_window(i, j) for i, j in expected]
     assert_equal(adapter.adaptation_schedule, expected_schedule, prec=0)
