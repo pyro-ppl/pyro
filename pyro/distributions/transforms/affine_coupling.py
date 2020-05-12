@@ -5,6 +5,7 @@ from functools import partial
 
 import torch
 from torch.distributions import constraints
+from torch.distributions.utils import _sum_rightmost
 
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
@@ -147,10 +148,7 @@ class AffineCoupling(TransformModule):
             x1, _ = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
             _, log_scale = self.nn(x1)
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
-        result_size = log_scale.size()[:-self.event_dim] + (-1,)
-        result = log_scale.view(result_size).sum(-1)
-        shape = x.shape[:-self.event_dim]
-        return result.expand(shape)
+        return _sum_rightmost(log_scale, -self.event_dim)
 
 
 @copy_docs_from(ConditionalTransformModule)

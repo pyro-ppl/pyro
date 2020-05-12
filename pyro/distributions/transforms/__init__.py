@@ -14,11 +14,10 @@ from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
-from pyro.distributions.transforms.generalized_channel_permute import (
-    ConditionalGeneralizedChannelPermute,
-    GeneralizedChannelPermute,
-    conditional_generalized_channel_permute,
-    generalized_channel_permute)
+from pyro.distributions.transforms.generalized_channel_permute import (ConditionalGeneralizedChannelPermute,
+                                                                       GeneralizedChannelPermute,
+                                                                       conditional_generalized_channel_permute,
+                                                                       generalized_channel_permute)
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
                                                        householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
