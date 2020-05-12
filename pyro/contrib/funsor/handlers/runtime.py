@@ -38,8 +38,10 @@ class DimType(Enum):
     VISIBLE = 2
 
 
-DimRequest = namedtuple('DimRequest', ['dim', 'dim_type'], defaults=(None, DimType.LOCAL))
-NameRequest = namedtuple('NameRequest', ['name', 'dim_type'], defaults=(None, DimType.LOCAL))
+DimRequest = namedtuple('DimRequest', ['dim', 'dim_type'])
+DimRequest.__new__.__defaults__ = (None, DimType.LOCAL)
+NameRequest = namedtuple('NameRequest', ['name', 'dim_type'])
+NameRequest.__new__.__defaults__ = (None, DimType.LOCAL)
 
 
 class DimStack:
