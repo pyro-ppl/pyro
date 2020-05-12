@@ -378,3 +378,11 @@ def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
     return x.triangular_solve(y, upper=upper, transpose=transpose).solution
+
+
+def precision_to_scale_tril(P):
+    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
+    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
+    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
+                               L_inv, upper=False)[0]
+    return L
