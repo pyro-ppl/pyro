@@ -36,6 +36,7 @@ Pyro Documentation
    contrib.epidemiology
    contrib.examples
    contrib.forecast
+   contrib.funsor
    contrib.gp
    contrib.minipyro
    contrib.oed
