@@ -210,8 +210,8 @@ def _upper_triangular_inverse(x):
 
 class BlockMassMatrix:
     """
-    This class is used to adapt (inverse) mass matrix and provide useful
-    methods to calculate algebraic terms which involves the mass matrix.
+    EXPERIMENTAL This class is used to adapt (inverse) mass matrix and provide
+    useful methods to calculate algebraic terms which involves the mass matrix.
 
     The mass matrix will have block structure, which can be specified by
     using the method :meth:`configure` with the corresponding structured
@@ -253,7 +253,7 @@ class BlockMassMatrix:
 
     def configure(self, mass_matrix_shape, adapt_mass_matrix=True, options={}):
         """
-        Setups initial mass matrix.
+        Sets up an initial mass matrix.
 
         :param dict mass_matrix_shape: a dict that maps tuples of site names to the shape of
             the corresponding mass matrix. Each tuple of site names corresponds to a block.
@@ -280,8 +280,8 @@ class BlockMassMatrix:
         :param dict z_grad: grad of the current value.
         """
         for site_names, adapt_scheme in self._adapt_scheme.items():
-            z_flat = torch.cat([z[name].reshape(-1) for name in site_names])
-            adapt_scheme.update(z_flat.detach())
+            z_flat = torch.cat([z[name].detach().reshape(-1) for name in site_names])
+            adapt_scheme.update(z_flat)
 
     def end_adaptation(self):
         """
@@ -318,7 +318,7 @@ class BlockMassMatrix:
         Computes `M^{1/2} @ r_unscaled`.
 
         Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
-        This method will unscale it.
+        This method will scale it.
 
         :param dict r_unscaled: a dictionary maps site names to a tensor momentum.
         :param dict r_prototype: a dictionary mapes site names to prototype momentum.
@@ -342,7 +342,7 @@ class BlockMassMatrix:
         Computes `inv(M^{1/2}) @ r`.
 
         Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
-        This method will unscaled it.
+        This method will unscale it.
 
         :param dict r: a dictionary maps site names to a tensor momentum.
         :returns: a dictionary maps site names to the corresponding tensor
