@@ -455,6 +455,9 @@ class ArrowheadMassMatrix:
 
     @property
     def mass_matrix_size(self):
+        """
+        A dict that maps site names to the size of the corresponding mass matrix.
+        """
         return self._mass_matrix_size
 
     @property
@@ -483,6 +486,14 @@ class ArrowheadMassMatrix:
             self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
 
     def configure(self, mass_matrix_shape, adapt_mass_matrix=True, options={}):
+        """
+        Sets up an initial mass matrix.
+
+        :param dict mass_matrix_shape: a dict that maps tuples of site names to the shape of
+            the corresponding mass matrix. Each tuple of site names corresponds to a block.
+        :param bool adapt_mass_matrix: a flag to decide whether an adaptation scheme will be used.
+        :param dict options: tensor options to construct the initial mass matrix.
+        """
         mass_matrix = {}
         for site_names, shape in mass_matrix_shape.items():
             size = shape[0]
@@ -500,11 +511,20 @@ class ArrowheadMassMatrix:
         self.mass_matrix = mass_matrix
 
     def update(self, z, z_grad):
+        """
+        Updates the adaptation scheme using the new sample `z` or its grad `z_grad`.
+
+        :param dict z: the current value.
+        :param dict z_grad: grad of the current value.
+        """
         for site_names, adapt_scheme in self._adapt_scheme.items():
             z_grad_flat = torch.cat([z_grad[name].reshape(-1) for name in site_names])
             adapt_scheme.update(z_grad_flat)
 
     def end_adaptation(self):
+        """
+        Updates the current mass matrix using the adaptation scheme.
+        """
         mass_matrix = {}
         for site_names, adapt_scheme in self._adapt_scheme.items():
             top, bottom_diag = adapt_scheme.get_covariance(regularize=True)
@@ -515,6 +535,7 @@ class ArrowheadMassMatrix:
         """
         Computes the gradient of kinetic energy w.r.t. the momentum `r`.
         It is equivalent to compute velocity given the momentum `r`.
+
         :param dict r: a dictionary maps site names to a tensor momentum.
         :returns: a dictionary maps site names to the corresponding gradient
         """
@@ -539,9 +560,13 @@ class ArrowheadMassMatrix:
     def scale(self, r_unscaled, r_prototype):
         """
         Computes `M^{1/2} @ r_unscaled`.
+
         Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
-        This method will unscaled it.
-        :param dict r: a dictionary maps site names to a tensor momentum.
+        This method will scale it.
+
+        :param dict r_unscaled: a dictionary maps site names to a tensor momentum.
+        :param dict r_prototype: a dictionary mapes site names to prototype momentum.
+            Those prototype values are used to get shapes of the scaled version.
         :returns: a dictionary maps site names to the corresponding tensor
         """
         s = {}
@@ -559,8 +584,10 @@ class ArrowheadMassMatrix:
     def unscale(self, r):
         """
         Computes `inv(M^{1/2}) @ r`.
+
         Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
-        This method will unscaled it.
+        This method will unscale it.
+
         :param dict r: a dictionary maps site names to a tensor momentum.
         :returns: a dictionary maps site names to the corresponding tensor
         """
