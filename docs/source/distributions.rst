@@ -399,9 +399,23 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
+ConditionalAffineAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalAffineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalAffineCoupling
 -------------------------
 .. autoclass:: pyro.distributions.transforms.ConditionalAffineCoupling
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalGeneralizedChannelPermute
+------------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalGeneralizedChannelPermute
     :members:
     :undoc-members:
     :show-inheritance:
@@ -537,9 +551,17 @@ block_autoregressive
 --------------------
 .. autofunction:: pyro.distributions.transforms.block_autoregressive
 
+conditional_affine_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_affine_autoregressive
+
 conditional_affine_coupling
 ---------------------------
 .. autofunction:: pyro.distributions.transforms.conditional_affine_coupling
+
+conditional_generalized_channel_permute
+---------------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_generalized_channel_permute
 
 conditional_householder
 -----------------------

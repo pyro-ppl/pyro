@@ -11,7 +11,7 @@ from pyro.distributions.util import copy_docs_from
 
 @copy_docs_from(Transform)
 class Permute(Transform):
-    """
+    r"""
     A bijection that reorders the input dimensions, that is, multiplies the input by
     a permutation matrix. This is useful in between
     :class:`~pyro.distributions.transforms.AffineAutoregressive` transforms to

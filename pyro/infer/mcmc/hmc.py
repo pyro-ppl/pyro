@@ -204,6 +204,8 @@ class HMC(MCMCKernel):
         options = {"dtype": self._potential_energy_last.dtype,
                    "device": self._potential_energy_last.device}
         for site_names, size in self.mass_matrix_adapter.mass_matrix_size.items():
+            # we want to sample from Normal distribution using `sample` method rather than
+            # `rsample` method because the former is a bit faster
             r_unscaled[site_names] = pyro.sample(
                 "{}_{}".format(name, site_names),
                 NonreparameterizedNormal(torch.zeros(size, **options), torch.ones(size, **options)))

@@ -14,17 +14,17 @@ from pyro.nn import AutoRegressiveNN
 
 @copy_docs_from(TransformModule)
 class Polynomial(TransformModule):
-    """
+    r"""
     An autoregressive bijective transform as described in Jaini et al. (2019)
     applying following equation element-wise,
 
-        :math:`y_n = c_n + \\int^{x_n}_0\\sum^K_{k=1}\\left(\\sum^R_{r=0}a^{(n)}_{r,k}u^r\\right)du`
+        :math:`y_n = c_n + \int^{x_n}_0\sum^K_{k=1}\left(\sum^R_{r=0}a^{(n)}_{r,k}u^r\right)du`
 
     where :math:`x_n` is the :math:`n`th input, :math:`y_n` is the :math:`n`th
-    output, and :math:`c_n\\in\\mathbb{R}`,
-    :math:`\\left\\{a^{(n)}_{r,k}\\in\\mathbb{R}\\right\\}` are learnable parameters
+    output, and :math:`c_n\in\mathbb{R}`,
+    :math:`\left\{a^{(n)}_{r,k}\in\mathbb{R}\right\}` are learnable parameters
     that are the output of an autoregressive NN inputting
-    :math:`x_{\\prec n}={x_1,x_2,\\ldots,x_{n-1}}`.
+    :math:`x_{\prec n}={x_1,x_2,\ldots,x_{n-1}}`.
 
     Together with :class:`~pyro.distributions.TransformedDistribution` this provides
     a way to create richer variational approximations.

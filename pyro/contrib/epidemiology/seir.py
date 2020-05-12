@@ -52,7 +52,7 @@ class SimpleSEIRModel(CompartmentalModel):
         tau_e = self.incubation_time
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+        rho = pyro.sample("rho", dist.Beta(2, 2))
         return R0, tau_e, tau_i, rho
 
     def initialize(self, params):
@@ -181,7 +181,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         k = pyro.sample("k", dist.Exponential(1.))
-        rho = pyro.sample("rho", dist.Uniform(0, 1))
+        rho = pyro.sample("rho", dist.Beta(2, 2))
         return R0, k, tau_e, tau_i, rho
 
     def initialize(self, params):

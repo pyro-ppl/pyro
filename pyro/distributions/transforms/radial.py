@@ -85,17 +85,17 @@ class ConditionedRadial(Transform):
 
 @copy_docs_from(ConditionedRadial)
 class Radial(ConditionedRadial, TransformModule):
-    """
+    r"""
     A 'radial' bijective transform using the equation,
 
-        :math:`\\mathbf{y} = \\mathbf{x} + \\beta h(\\alpha,r)(\\mathbf{x} - \\mathbf{x}_0)`
+        :math:`\mathbf{y} = \mathbf{x} + \beta h(\alpha,r)(\mathbf{x} - \mathbf{x}_0)`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    and the learnable parameters are :math:`\\alpha\\in\\mathbb{R}^+`,
-    :math:`\\beta\\in\\mathbb{R}`, :math:`\\mathbf{x}_0\\in\\mathbb{R}^D`, for input
-    dimension :math:`D`, :math:`r=||\\mathbf{x}-\\mathbf{x}_0||_2`,
-    :math:`h(\\alpha,r)=1/(\\alpha+r)`. For this to be an invertible transformation,
-    the condition :math:`\\beta>-\\alpha` is enforced.
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    and the learnable parameters are :math:`\alpha\in\mathbb{R}^+`,
+    :math:`\beta\in\mathbb{R}`, :math:`\mathbf{x}_0\in\mathbb{R}^D`, for input
+    dimension :math:`D`, :math:`r=||\mathbf{x}-\mathbf{x}_0||_2`,
+    :math:`h(\alpha,r)=1/(\alpha+r)`. For this to be an invertible transformation,
+    the condition :math:`\beta>-\alpha` is enforced.
 
     Together with :class:`~pyro.distributions.TransformedDistribution` this provides
     a way to create richer variational approximations.
@@ -146,6 +146,46 @@ class Radial(ConditionedRadial, TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalRadial(ConditionalTransformModule):
+    r"""
+    A conditional 'radial' bijective transform context using the equation,
+
+        :math:`\mathbf{y} = \mathbf{x} + \beta h(\alpha,r)(\mathbf{x} - \mathbf{x}_0)`
+
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    and :math:`\alpha\in\mathbb{R}^+`, :math:`\beta\in\mathbb{R}`,
+    and :math:`\mathbf{x}_0\in\mathbb{R}^D`, are the output of a function, e.g. a NN,
+    with input :math:`z\in\mathbb{R}^{M}` representing the context variable to
+    condition on. The input dimension is :math:`D`,
+    :math:`r=||\mathbf{x}-\mathbf{x}_0||_2`, and :math:`h(\alpha,r)=1/(\alpha+r)`.
+    For this to be an invertible transformation, the condition :math:`\beta>-\alpha`
+    is enforced.
+
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
+    a way to create richer variational approximations.
+
+    Example usage:
+
+    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
+    >>> transform = Radial(10)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
+    >>> flow_dist.sample()  # doctest: +SKIP
+
+    The inverse of this transform does not possess an analytical solution and is
+    left unimplemented. However, the inverse is cached when the forward operation is
+    called during sampling, and so samples drawn using the radial transform can be
+    scored.
+
+    :param input_dim: the dimension of the input (and output) variable.
+    :type input_dim: int
+
+    References:
+
+    [1] Danilo Jimenez Rezende, Shakir Mohamed. Variational Inference with
+    Normalizing Flows. [arXiv:1505.05770]
+
+    """
+
     domain = constraints.real
     codomain = constraints.real
     bijective = True
