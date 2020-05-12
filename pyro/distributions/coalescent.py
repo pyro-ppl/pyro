@@ -11,7 +11,6 @@ from torch.distributions import constraints
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.tensor_utils import safe_log
 
-from .torch import Exponential
 from .torch_distribution import TorchDistribution
 
 
@@ -268,8 +267,8 @@ def _make_phylogeny(leaf_times, coal_times):
     return _Phylogeny(times, signs, lineages, binomial, coal_binomial)
 
 
-@torch.no_grad()
 def _sample_coalescent_times(leaf_times):
+    leaf_times = leaf_times.detach()
     N = leaf_times.size(-1)
     batch_shape = leaf_times.shape[:-1]
 
@@ -282,14 +281,14 @@ def _sample_coalescent_times(leaf_times):
     assert leaf_times.shape == (N,)
 
     # Sequentially sample coalescent events from latest to earliest.
-    leaf_times = leaf_times.sort(dim=-1, descending=True).values
+    leaf_times = leaf_times.sort(dim=-1, descending=True).values.tolist()
     coal_times = []
     # Start with the minimum of two active leaves.
     leaf = 1
     t = leaf_times[leaf]
     active = 2
     binomial = active * (active - 1) / 2
-    for u in Exponential(1.).sample((N - 1,)):
+    for u in torch.empty(N - 1).exponential_().tolist():
         while leaf + 1 < N and u > (t - leaf_times[leaf + 1]) * binomial:
             # Move past the next leaf.
             leaf += 1
@@ -298,9 +297,9 @@ def _sample_coalescent_times(leaf_times):
             active += 1
             binomial = active * (active - 1) / 2
         # Add a coalescent event.
-        t = t - u / binomial
+        t -= u / binomial
         active -= 1
         binomial = active * (active - 1) / 2
         coal_times.append(t)
 
-    return torch.stack(coal_times)
+    return torch.tensor(coal_times)
