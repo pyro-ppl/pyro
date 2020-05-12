@@ -81,6 +81,10 @@ class DimStack:
     def global_frame(self):
         return self._stack[0]
 
+    @property
+    def current_env(self):
+        return (self.global_frame, self.current_frame) + self.current_frame.iter_parents + self.current_frame.parents
+
     def _gendim(self, name_request, dim_request):
         assert isinstance(name_request, NameRequest) and isinstance(dim_request, DimRequest)
         dim_type = dim_request.dim_type
@@ -90,8 +94,7 @@ class DimStack:
         else:
             fresh_name = name_request.name
 
-        conflict_frames = (self.current_frame, self.global_frame) + \
-            self.current_frame.parents + self.current_frame.iter_parents
+        conflict_frames = self.current_env
         if dim_request.dim is None:
             fresh_dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
             fresh_dim = -1 if fresh_dim is None else fresh_dim
@@ -114,11 +117,8 @@ class DimStack:
         elif isinstance(name, NameRequest):
             name, dim_type = name.name, name.dim_type
 
-        read_frames = (self.global_frame,) if dim_type != DimType.LOCAL else \
-            (self.current_frame,) + self.current_frame.parents + self.current_frame.iter_parents + (self.global_frame,)
-
         # read dimension
-        for frame in read_frames:
+        for frame in self.current_env:
             name, dim, found = frame.read(name, dim)
             if found:
                 break
