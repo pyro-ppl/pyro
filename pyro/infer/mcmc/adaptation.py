@@ -424,7 +424,7 @@ def _arrowhead_sqrt_inverse_to_inverse(x):
 
 class ArrowheadMassMatrix:
     """
-    This class is used to adapt (inverse) mass matrix and provide useful
+    EXPERIMENTAL This class is used to adapt (inverse) mass matrix and provide useful
     methods to calculate algebraic terms which involves the mass matrix.
 
     The mass matrix will have arrowhead structure, which can be specified by
