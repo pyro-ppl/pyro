@@ -47,7 +47,7 @@ with open(os.path.join(PROJECT_PATH, 'pyro', '_version.py'), 'w') as f:
 try:
     long_description = open('README.md', encoding='utf-8').read()
 except Exception as e:
-    sys.stderr.write('Failed to read README.md\n'.format(e))
+    sys.stderr.write('Failed to read README.md: {}\n'.format(e))
     sys.stderr.flush()
     long_description = ''
 
