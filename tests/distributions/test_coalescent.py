@@ -17,11 +17,13 @@ def test_sample_is_valid(num_leaves):
     leaf_times = torch.randn(num_leaves)
     coal_times = _sample_coalescent_times(leaf_times)
     assert CoalescentTimesConstraint(leaf_times).check(coal_times)
+    assert len(set(coal_times.tolist())) == len(coal_times)
 
     # Check with simultaneous leaves.
     leaf_times = torch.zeros(num_leaves)
     coal_times = _sample_coalescent_times(leaf_times)
     assert CoalescentTimesConstraint(leaf_times).check(coal_times)
+    assert len(set(coal_times.tolist())) == len(coal_times)
 
 
 @pytest.mark.parametrize("num_steps", [9])
