@@ -64,6 +64,13 @@ BetaBinomial
     :undoc-members:
     :show-inheritance:
 
+CoalescentTimes
+---------------
+.. autoclass:: pyro.distributions.CoalescentTimes
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 CoalescentTimesWithRate
 -----------------------
 .. autoclass:: pyro.distributions.CoalescentTimesWithRate

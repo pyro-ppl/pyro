@@ -2,14 +2,89 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import weakref
+from collections import namedtuple
 
 import torch
 from torch.distributions import constraints
 
+from pyro.distributions.util import broadcast_shape
 from pyro.ops.indexing import Vindex
 from pyro.ops.tensor_utils import safe_log
 
+from .torch import Exponential
 from .torch_distribution import TorchDistribution
+
+
+class CoalescentTimesConstraint(constraints.Constraint):
+    def __init__(self, leaf_times):
+        self.leaf_times = leaf_times
+
+    def check(self, value):
+        # The only constraint is that there is always at least one lineage.
+        coal_times = value
+        phylogeny = _make_phylogeny(self.leaf_times, coal_times)
+        return (phylogeny.lineages > 0).all(dim=-1)
+
+
+class CoalescentTimes(TorchDistribution):
+    """
+    Distribution over coalescent times given irregular sampled ``leaf_times``.
+
+    Sample values will be unordered sets of binary coalescent times. Each
+    sample ``value`` will have cardinality ``value.size(-1) =
+    leaf_times.size(-1) - 1``, so that phylogenies are complete binary trees.
+    This distribution can thus be batched over multiple samples of phylogenies
+    given fixed (number of) leaf times, e.g. over phylogeny samples from BEAST
+    or MrBayes.
+
+    **References**
+
+    [1] J.F.C. Kingman (1982)
+        "On the Genealogy of Large Populations"
+        Journal of Applied Probability
+    [2] J.F.C. Kingman (1982)
+        "The Coalescent"
+        Stochastic Processes and their Applications
+
+    :param torch.Tensor leaf_times: Vector of times of sampling events, i.e.
+        leaf nodes in the phylogeny. These can be arbitrary real numbers with
+        arbitrary order and duplicates.
+    """
+    arg_constraints = {"leaf_times": constraints.real}
+
+    def __init__(self, leaf_times, *, validate_args=None):
+        event_shape = (leaf_times.size(-1) - 1,)
+        batch_shape = leaf_times.shape[:-1]
+        self.leaf_times = leaf_times
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
+
+    @constraints.dependent_property
+    def support(self):
+        return CoalescentTimesConstraint(self.leaf_times)
+
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        coal_times = value
+        phylogeny = _make_phylogeny(self.leaf_times, coal_times)
+
+        # The coalescent process is simply like a Poisson process with rate
+        # binomial which changes at each event. Scaling by those rates, the
+        # density is that of a collection of independent Exponential intervals.
+        binomial = phylogeny.binomial[..., :-1]
+        interval = phylogeny.times[..., :-1] - phylogeny.times[..., 1:]
+        cumsum = (binomial * interval).cumsum(dim=-1)
+        index = torch.nn.functional.pad(phylogeny.coal_index - 1, (1, 0), value=0)
+        integral = Vindex(cumsum.unsqueeze(-2))[..., index]
+        u = integral[..., 1:] - integral[..., :-1]
+        log_prob = Exponential(1.).log_prob(u).sum(-1)
+        return log_prob
+
+    def sample(self, sample_shape=torch.Size()):
+        shape = self._extended_shape(sample_shape)[:-1]
+        leaf_times = self.leaf_times.expand(shape + (-1,))
+        return _sample_coalescent_times(leaf_times)
 
 
 class CoalescentTimesWithRate(TorchDistribution):
@@ -49,7 +124,6 @@ class CoalescentTimesWithRate(TorchDistribution):
     """
     arg_constraints = {"leaf_times": constraints.real,
                        "rate_grid": constraints.positive}
-    support = constraints.real  # partial constraint
 
     def __init__(self, leaf_times, rate_grid, *, validate_args=None):
         if leaf_times.dim() != 1:
@@ -60,6 +134,10 @@ class CoalescentTimesWithRate(TorchDistribution):
         self.rate_grid = rate_grid
         self._unbroadcasted_rate_grid = rate_grid
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
+
+    @constraints.dependent_property
+    def support(self):
+        return CoalescentTimesConstraint(self.leaf_times)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(CoalescentTimesWithRate, _instance)
@@ -88,23 +166,28 @@ class CoalescentTimesWithRate(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
         coal_times = value
-        times, binomial, coal_binomial = _preprocess(self.leaf_times, coal_times)
-        if self._validate_args:
-            if not (binomial >= 0).all():
-                raise ValueError("Invalid coalescent times")
+        phylogeny = _make_phylogeny(self.leaf_times, coal_times)
 
         # Compute survival factors for closed intervals.
         cumsum = self._unbroadcasted_rate_grid.cumsum(-1)
         cumsum = torch.nn.functional.pad(cumsum, (1, 0), value=0).unsqueeze(-2)
-        integral = _interpolate(cumsum, times[..., 1:])  # ignore the first lonely leaf
+        integral = _interpolate(cumsum, phylogeny.times[..., 1:])  # ignore the final lonely leaf
+        print("DEBUG cumsum.shape = {}".format(tuple(cumsum.shape)))
+        print("DEBUG times.shape = {}".format(tuple(phylogeny.times.shape)))
+        print("DEBUG integral.shape = {}".format(tuple(integral.shape)))
         integral = integral[..., :-1] - integral[..., 1:]
         integral = integral.clamp(min=torch.finfo(integral.dtype).tiny)  # avoid nan
-        log_prob = (binomial[..., 1:-1] * integral).sum(-1)
+        log_prob = (phylogeny.binomial[..., 1:-1] * integral).sum(-1)
+        print(f"DEBUG log_prob.shape = {tuple(log_prob.shape)}")
 
         # Compute density of coalescent events.
         i = coal_times.floor().clamp(min=0).long()
-        rates = coal_binomial * Vindex(self._unbroadcasted_rate_grid.unsqueeze(-2))[..., i]
+        print(f"DEBUG i.shape = {tuple(i.shape)}")
+        print(f"DEBUG _unbroadcasted_rate_grid.shape = {tuple(self._unbroadcasted_rate_grid.shape)}")
+        rates = phylogeny.coal_binomial * Vindex(self._unbroadcasted_rate_grid.unsqueeze(-2))[..., i]
+        print(f"DEBUG rates.shape = {tuple(rates.shape)}")
         log_prob = log_prob + safe_log(rates).sum(-1)
+        print(f"DEBUG log_prob.shape = {tuple(log_prob.shape)}")
 
         return log_prob
 
@@ -122,39 +205,101 @@ def _interpolate(array, x):
     return f0 * (x1 - x) + f1 * (x - x0)
 
 
-# TODO consider memoizing via WeakKeyDictionary or similar
+def _weak_memoize(fn):
+    cache = {}
+
+    @functools.wraps(fn)
+    def memoized_fn(*args):
+        print(f"DEBUG len(cache) = {len(cache)}")
+        key = tuple(map(id, args))
+        if key not in cache:
+            cache[key] = fn(*args)
+            for arg in args:
+                weakref.finalize(arg, cache.pop, key, None)
+        return cache[key]
+
+    return memoized_fn
+
+
+# This helper data structure has only timing information.
+_Phylogeny = namedtuple("_Phylogeny", (
+    "times", "signs", "lineages", "binomial", "coal_index", "coal_binomial",
+))
+
+
+@_weak_memoize
 @torch.no_grad()
-def _preprocess(leaf_times, coal_times):
-    assert leaf_times.dim() == 1
+def _make_phylogeny(leaf_times, coal_times):
     assert leaf_times.size(-1) == 1 + coal_times.size(-1)
     assert not leaf_times.requires_grad
     assert not coal_times.requires_grad
 
-    # Expand leaf_times to match coal_times.
+    # Expand shapes to match.
     N = leaf_times.size(-1)
-    batch_shape = coal_times.shape[:-1]
-    if batch_shape:
+    batch_shape = broadcast_shape(leaf_times.shape[:-1], coal_times.shape[:-1])
+    if leaf_times.shape[:-1] != batch_shape:
         leaf_times = leaf_times.expand(batch_shape + (N,))
+    if coal_times.shape[:-1] != batch_shape:
+        coal_times = coal_times.expand(batch_shape + (N - 1,))
 
-    # Combine N sampling events (leaf_times) and N-1 coalescent events
+    # Combine N sampling events (leaf_times) plus N-1 coalescent events
     # (coal_times) into a pair (times, signs) of arrays of length 2N-1, where
     # leaf sample sign is +1 and coalescent sign is -1.
     times = torch.cat([coal_times, leaf_times], dim=-1)
-    signs = torch.arange(1. - N, N).sign()  # e.g. [-1, -1, +1, +1, +1]
+    signs = torch.linspace(0.5 - N, 0.5 + N, 2 * N - 1).sign()  # e.g. [-1, -1, +1, +1, +1]
 
-    # Sort the events reverse-ordered in time.
+    # Sort the events reverse-ordered in time, i.e. latest to earliest.
     times, index = times.sort(dim=-1, descending=True)
     signs = Vindex(signs)[..., index]
     inv_index = index.new_empty(index.shape)
     inv_index[..., index] = torch.arange(2 * N - 1).expand_as(index)
+    print(f"DEBUG signs = {signs}")
 
     # Compute the number n of lineages preceding each event, then the binomial
     # coefficients that will multiply the base coalescence rate.
-    n = signs.cumsum(-1)
-    binomial = n * (n - 1) / 2
+    lineages = signs.cumsum(-1)
+    binomial = lineages * (lineages - 1) / 2
 
     # Compute the binomial coefficient following each coalescent event.
     coal_index = inv_index[..., :N - 1]
-    coal_binomial = Vindex(binomial.unsqueeze(-2))[..., coal_index + 1]
+    coal_binomial = Vindex(binomial.unsqueeze(-2))[..., coal_index - 1]
 
-    return times, binomial, coal_binomial
+    return _Phylogeny(times, signs, lineages, binomial, coal_index, coal_binomial)
+
+
+@torch.no_grad()
+def _sample_coalescent_times(leaf_times):
+    N = leaf_times.size(-1)
+    batch_shape = leaf_times.shape[:-1]
+
+    # We don't bother to implement a version that vectorizes over batches;
+    # instead we simply sequentially sample and stack.
+    if batch_shape:
+        flat_leaf_times = leaf_times.reshape(-1, N)
+        flat_coal_times = torch.stack(list(map(_sample_coalescent_times, flat_leaf_times)))
+        return flat_coal_times.reshape(batch_shape + (N - 1,))
+    assert leaf_times.shape == (N,)
+
+    # Sequentially sample coalescent events from latest to earliest.
+    leaf_times = leaf_times.sort(dim=-1, descending=True).values
+    coal_times = []
+    # Start with the minimum of two active leaves.
+    leaf = 1
+    t = leaf_times[leaf]
+    active = 2
+    binomial = active * (active - 1) / 2
+    for u in torch.empty(N - 1).exponential_():
+        while leaf + 1 < N and u > (t - leaf_times[leaf + 1]) * binomial:
+            # Move past the next leaf.
+            leaf += 1
+            u -= (t - leaf_times[leaf]) * binomial
+            t = leaf_times[leaf]
+            active += 1
+            binomial = active * (active - 1) / 2
+        # Add a coalescent event.
+        t -= u / binomial
+        active -= 1
+        binomial = active * (active - 1) / 2
+        coal_times.append(t)
+
+    return torch.stack(coal_times)
