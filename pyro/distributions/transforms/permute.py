@@ -94,7 +94,7 @@ class Permute(Transform):
         determinant is -1 or +1), and so returning a vector of zeros works.
         """
 
-        return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
+        return torch.zeros(x.size()[:-self.event_dim], dtype=x.dtype, layout=x.layout, device=x.device)
 
 
 def permute(input_dim, permutation=None):
