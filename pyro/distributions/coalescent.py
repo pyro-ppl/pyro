@@ -128,13 +128,11 @@ class CoalescentTimesWithRate(TorchDistribution):
                        "rate_grid": constraints.positive}
 
     def __init__(self, leaf_times, rate_grid, *, validate_args=None):
-        if leaf_times.dim() != 1:
-            raise ValueError("leaf_times does not support batching")
+        batch_shape = broadcast_shape(leaf_times.shape[:-1], rate_grid.shape[:-1])
         event_shape = (leaf_times.size(-1) - 1,)
-        batch_shape = rate_grid.shape[:-1]
         self.leaf_times = leaf_times
-        self.rate_grid = rate_grid
         self._unbroadcasted_rate_grid = rate_grid
+        self.rate_grid = rate_grid.expand(batch_shape + (-1,))
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @constraints.dependent_property
@@ -144,8 +142,8 @@ class CoalescentTimesWithRate(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(CoalescentTimesWithRate, _instance)
         new.leaf_times = self.leaf_times
-        new.rate_grid = self.rate_grid.expand(batch_shape + (-1,))
         new._unbroadcasted_rate_grid = self._unbroadcasted_rate_grid
+        new.rate_grid = self.rate_grid.expand(batch_shape + (-1,))
         super(CoalescentTimesWithRate, new).__init__(
             batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
@@ -179,7 +177,7 @@ class CoalescentTimesWithRate(TorchDistribution):
         integral = _interpolate(cumsum, phylogeny.times[..., 1:])  # ignore the final lonely leaf
         integral = integral[..., :-1] - integral[..., 1:]
         integral = integral.clamp(min=torch.finfo(integral.dtype).tiny)  # avoid nan
-        log_prob = (phylogeny.binomial[..., 1:-1] * integral).sum(-1)
+        log_prob = -(phylogeny.binomial[..., 1:-1] * integral).sum(-1)
 
         # Compute density of coalescent events.
         i = coal_times.floor().clamp(min=0).long()
