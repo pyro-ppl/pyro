@@ -10,7 +10,16 @@ from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType
 
 
 class DimStackCleanupMessenger(ReentrantMessenger):
+    """
+    This low-level effect handler ensures that the global _DIM_STACK is left
+    in a pristine state after all effect handlers that could modify it have exited.
 
+    Any effect handler that interacts with the _DIM_STACK, whether directly or through
+    the ``to_funsor``/``to_data`` primitives, should ultimately derive from
+    `DimStackCleanupMessenger` and should call ``super().__enter__()`` and
+    ``super().__exit__()`` in its ``__enter__()`` and ``__exit__()`` methods,
+    although it is unlikely that new effect handlers will inherit from it directly.
+    """
     def __init__(self):
         self._saved_dims = ()
         return super().__init__()
@@ -33,7 +42,13 @@ class DimStackCleanupMessenger(ReentrantMessenger):
 
 
 class NamedMessenger(DimStackCleanupMessenger):
+    """
+    This effect handler contains the default, effectful implementations of the two
+    primitives ``pyro.contrib.funsor.to_funsor`` and ``pyro.contrib.funsor.to_data``.
 
+    Any effect handler that invokes these primitives or wraps code that does should
+    ultimately derive from this class to ensure that the primitives behave as expected.
+    """
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_data(msg):
 
@@ -82,7 +97,9 @@ class NamedMessenger(DimStackCleanupMessenger):
 
 class LocalNamedMessenger(NamedMessenger):
     """
-    Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
+    This effect handler, which implements the ``pyro.markov`` primitive, is responsible
+    for updating the global _DIM_STACK to ensure that positional batch dimensions
+    can be recycled and reused to mean different things within a single execution.
 
     :param int history: The number of previous contexts visible from the
         current context. Defaults to 1. If zero, this is similar to
@@ -153,8 +170,7 @@ class LocalNamedMessenger(NamedMessenger):
         return super().__exit__(*args, **kwargs)
 
 
+# LocalNamedMessenger is perhaps a more descriptive name than pyro.markov,
+# but in the interest of matching Pyro we introduce a MarkovMessenger alias.
 class MarkovMessenger(LocalNamedMessenger):
-    """
-    LocalNamedMessenger is meant to be a drop-in replacement for pyro.markov.
-    """
     pass

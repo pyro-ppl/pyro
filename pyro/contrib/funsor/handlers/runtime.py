@@ -83,9 +83,21 @@ class DimStack:
 
     @property
     def current_env(self):
+        """
+        Collect all frames necessary to compute the full name <--> dim mapping
+        and interpret Funsor inputs or batch shapes at any point in a computation.
+        """
         return (self.global_frame, self.current_frame) + self.current_frame.iter_parents + self.current_frame.parents
 
     def _gendim(self, name_request, dim_request):
+        """
+        Given proposed values for a fresh (name, dim) pair, computes a new, possibly
+        identical (name, dim) pair consistent with the current name <--> dim mapping.
+        This function is pure and does not update the name <--> dim mapping itself.
+
+        The implementation here is only one of several possibilities, and was chosen
+        to match the behavior of Pyro's old enumeration machinery as closely as possible.
+        """
         assert isinstance(name_request, NameRequest) and isinstance(dim_request, DimRequest)
         dim_type = dim_request.dim_type
 
@@ -111,6 +123,11 @@ class DimStack:
         return fresh_name, fresh_dim
 
     def request(self, name, dim):
+        """
+        Given proposed, possibly empty values of a (name, dim) pair, this function
+        attempts to fill in the values according to the current name <--> dim mapping
+        and updates the global DimStack's state to reflect the result.
+        """
         assert isinstance(name, NameRequest) ^ isinstance(dim, DimRequest)
         if isinstance(dim, DimRequest):
             dim, dim_type = dim.dim, dim.dim_type
