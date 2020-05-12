@@ -41,9 +41,6 @@ class Messenger:
         pass
 
     def __call__(self, fn):
-        if not callable(fn):
-            raise ValueError(
-                "{} is not callable, did you mean to pass it as a keyword arg?".format(fn))
         wraps = _bound_partial(partial(_context_wrap, self, fn))
         return wraps
 

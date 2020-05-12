@@ -49,6 +49,7 @@ in just a few lines of code::
     monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()
 """
 
+import collections
 import functools
 import re
 
@@ -102,6 +103,9 @@ def _make_handler(msngr_cls):
     _re2 = re.compile('([a-z0-9])([A-Z])')
 
     def handler(fn=None, *args, **kwargs):
+        if fn is not None and not (callable(fn) or isinstance(fn, collections.abc.Iterable)):
+            raise ValueError(
+                "{} is not callable, did you mean to pass it as a keyword arg?".format(fn))
         msngr = msngr_cls(*args, **kwargs)
         return functools.update_wrapper(msngr(fn), fn, updated=()) if fn is not None else msngr
 
