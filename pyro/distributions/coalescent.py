@@ -72,11 +72,7 @@ class CoalescentTimes(TorchDistribution):
         # in the number of lineages, which changes at each event.
         binomial = phylogeny.binomial[..., :-1]
         interval = phylogeny.times[..., :-1] - phylogeny.times[..., 1:]
-        cumsum = (binomial * interval).cumsum(dim=-1)
-        index = torch.nn.functional.pad(phylogeny.coal_index - 1, (1, 0), value=0)
-        integral = cumsum.gather(-1, index)
-        u = integral[..., 1:] - integral[..., :-1]
-        log_prob = Exponential(1.).log_prob(u).sum(-1)
+        log_prob = -(binomial * interval).sum(-1)
 
         # Scaling by those rates and accounting for log|jacobian|, the density
         # is that of a collection of independent Exponential intervals.
@@ -229,7 +225,7 @@ def _weak_memoize(fn):
 
 # This helper data structure has only timing information.
 _Phylogeny = namedtuple("_Phylogeny", (
-    "times", "signs", "lineages", "binomial", "coal_index", "coal_binomial",
+    "times", "signs", "lineages", "binomial", "coal_binomial",
 ))
 
 
@@ -268,9 +264,8 @@ def _make_phylogeny(leaf_times, coal_times):
     # Compute the binomial coefficient following each coalescent event.
     coal_index = inv_index[..., :N - 1]
     coal_binomial = binomial.gather(-1, coal_index - 1)
-    assert (coal_binomial > 0).all()
 
-    return _Phylogeny(times, signs, lineages, binomial, coal_index, coal_binomial)
+    return _Phylogeny(times, signs, lineages, binomial, coal_binomial)
 
 
 @torch.no_grad()
