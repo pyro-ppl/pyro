@@ -6,10 +6,8 @@ This file contains reimplementations of some of Pyro's core enumeration machiner
 which should eventually be drop-in replacements for the current versions.
 """
 import functools
-import math
 from collections import OrderedDict
 
-import torch
 import funsor
 
 import pyro.poutine.runtime

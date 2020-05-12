@@ -20,7 +20,6 @@ class ReplayMessenger(OrigReplayMessenger):
             msg["funsor"] = {} if "funsor" not in msg else msg["funsor"]
             if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sample in trace".format(name))
-            # TODO make this work with sequential enumeration
             if guide_msg.get("funsor", {}).get("value", None) is not None:
                 msg["value"] = to_data(guide_msg["funsor"]["value"])  # only difference is here
             else:

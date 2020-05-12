@@ -6,8 +6,7 @@ import funsor
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
-from pyro.contrib.funsor.handlers.primitives import _EmptyDist, to_data, to_funsor
-from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
+from pyro.contrib.funsor.handlers.primitives import to_funsor
 
 
 class TraceMessenger(OrigTraceMessenger):
@@ -20,7 +19,7 @@ class TraceMessenger(OrigTraceMessenger):
     which can be passed directly to funsor.to_funsor.
     """
     def _pyro_post_sample(self, msg):
-        if msg["name"] in self.trace and isinstance(msg["fn"], _EmptyDist):
+        if msg["name"] in self.trace:
             return
         if "funsor" not in msg:
             msg["funsor"] = {}

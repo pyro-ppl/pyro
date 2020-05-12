@@ -18,6 +18,7 @@ _msngrs = [
     EnumMessenger,
     MarkovMessenger,
     NamedMessenger,
+    ReplayMessenger,
     TraceMessenger,
 ]
 
