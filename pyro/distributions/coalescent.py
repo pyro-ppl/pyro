@@ -29,6 +29,7 @@ class CoalescentTimesConstraint(constraints.Constraint):
 
         return ordered & at_least_one_lineage
 
+
 class CoalescentTimes(TorchDistribution):
     """
     Distribution over coalescent times given irregular sampled ``leaf_times``.
