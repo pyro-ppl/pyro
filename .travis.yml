@@ -83,7 +83,7 @@ jobs:
           python: 3.6
           script:
               - pip install git+https://github.com/pyro-ppl/funsor.git@master#egg=funsor[torch]
-              - pytest -vs --cov=pyro --cov-config .coveragerc --stage funsor
+              - pytest -vs --cov=pyro --cov-config .coveragerc --stage funsor --durations 10
 
 after_success:
           - coveralls
