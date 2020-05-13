@@ -19,22 +19,25 @@ class CoalescentTimesConstraint(constraints.Constraint):
         self.leaf_times = leaf_times
 
     def check(self, value):
-        # The only constraint is that there is always at least one lineage.
+        # Inputs must be ordered.
+        ordered = (value[..., :-1] <= value[..., 1:]).all(dim=-1)
+
+        # There must always at least one lineage.
         coal_times = value
         phylogeny = _make_phylogeny(self.leaf_times, coal_times)
-        return (phylogeny.lineages > 0).all(dim=-1)
+        at_least_one_lineage = (phylogeny.lineages > 0).all(dim=-1)
 
+        return ordered & at_least_one_lineage
 
 class CoalescentTimes(TorchDistribution):
     """
     Distribution over coalescent times given irregular sampled ``leaf_times``.
 
-    Sample values will be unordered sets of binary coalescent times. Each
-    sample ``value`` will have cardinality ``value.size(-1) =
-    leaf_times.size(-1) - 1``, so that phylogenies are complete binary trees.
-    This distribution can thus be batched over multiple samples of phylogenies
-    given fixed (number of) leaf times, e.g. over phylogeny samples from BEAST
-    or MrBayes.
+    Sample values will be ordered sets of binary coalescent times. Each sample
+    ``value`` will have cardinality ``value.size(-1) = leaf_times.size(-1) -
+    1``, so that phylogenies are complete binary trees.  This distribution can
+    thus be batched over multiple samples of phylogenies given fixed (number
+    of) leaf times, e.g. over phylogeny samples from BEAST or MrBayes.
 
     **References**
 
@@ -301,5 +304,6 @@ def _sample_coalescent_times(leaf_times):
         active -= 1
         binomial = active * (active - 1) / 2
         coal_times.append(t)
+    coal_times.reverse()
 
     return torch.tensor(coal_times)
