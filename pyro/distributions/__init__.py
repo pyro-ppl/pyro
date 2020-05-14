@@ -3,6 +3,7 @@
 
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
+from pyro.distributions.coalescent import CoalescentRateLikelihood, CoalescentTimes, CoalescentTimesWithRate
 from pyro.distributions.conditional import (ConditionalDistribution, ConditionalTransform,
                                             ConditionalTransformedDistribution, ConditionalTransformModule)
 from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson
@@ -40,6 +41,9 @@ from . import constraints, kl, transforms
 __all__ = [
     "AVFMultivariateNormal",
     "BetaBinomial",
+    "CoalescentRateLikelihood",
+    "CoalescentTimes",
+    "CoalescentTimesWithRate",
     "ComposeTransformModule",
     "ConditionalDistribution",
     "ConditionalTransform",

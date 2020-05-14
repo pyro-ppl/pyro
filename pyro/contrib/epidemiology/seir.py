@@ -137,6 +137,15 @@ class OverdispersedSEIRModel(CompartmentalModel):
     average), this model assumes they infect `BetaBinomial(k,...,S)`-many
     susceptible individuals but only on the final time step before recovering.
 
+    This model also adds an optional likelihood for observed phylogenetic data
+    in the form of coalescent times. These are provided as a pair
+    ``(leaf_times, coal_times)`` of times at which genomes are sequenced and
+    lineages coalesce, respectively. We incorporate this data using the
+    :class:`~pyro.distributions.CoalescentRateLikelihood` with base coalescence
+    rate computed from the ``S`` and ``I`` populations. This likelihood is
+    independent across time and preserves the Markov propert needed for
+    inference.
+
     **References**
 
     [1] J. O. Lloyd-Smith, S. J. Schreiber, P. E. Kopp, W. M. Getz (2005)
@@ -158,7 +167,8 @@ class OverdispersedSEIRModel(CompartmentalModel):
         transitions. This allows false negative but no false positives.
     """
 
-    def __init__(self, population, incubation_time, recovery_time, data):
+    def __init__(self, population, incubation_time, recovery_time, data, *,
+                 leaf_times=None, coal_times=None):
         compartments = ("S", "E", "I")  # R is implicit.
         duration = len(data)
         super().__init__(compartments, duration, population)
@@ -172,6 +182,13 @@ class OverdispersedSEIRModel(CompartmentalModel):
         self.recovery_time = recovery_time
 
         self.data = data
+
+        assert (leaf_times is None) == (coal_times is None)
+        if leaf_times is None:
+            self.coal_likelihood = None
+        else:
+            self.coal_likelihood = dist.CoalescentRateLikelihood(
+                leaf_times, coal_times, duration)
 
     series = ("S2E", "E2I", "I2R", "obs")
     full_mass = [("R0", "rho", "k")]
@@ -203,15 +220,20 @@ class OverdispersedSEIRModel(CompartmentalModel):
                                          population=self.population,
                                          concentration=k))
 
-        # Update compartements with flows.
-        state["S"] = state["S"] - S2E
-        state["E"] = state["E"] + S2E - E2I
-        state["I"] = state["I"] + E2I - I2R
-
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t] if t < self.duration else None)
+        if self.coal_likelihood is not None and t < self.duration:
+            R = R0 * state["S"] / self.population
+            coal_rate = R * (1. + 1. / k) / (tau_i * state["I"] + 1e-8)
+            pyro.factor("coalescent_{}".format(t),
+                        self.coal_likelihood(coal_rate, t))
+
+        # Update compartements with flows.
+        state["S"] = state["S"] - S2E
+        state["E"] = state["E"] + S2E - E2I
+        state["I"] = state["I"] + E2I - I2R
 
     def transition_bwd(self, params, prev, curr, t):
         R0, k, tau_e, tau_i, rho = params
@@ -240,3 +262,8 @@ class OverdispersedSEIRModel(CompartmentalModel):
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t])
+        if self.coal_likelihood is not None:
+            R = R0 * prev["S"] / self.population
+            coal_rate = R * (1. + 1. / k) / (tau_i * prev["I"] + 1e-8)
+            pyro.factor("coalescent_{}".format(t),
+                        self.coal_likelihood(coal_rate, t))
