@@ -106,6 +106,8 @@ class CoalescentTimesWithRate(TorchDistribution):
 
     This distribution implements :meth:`log_prob` but not ``.sample()``.
 
+    See also :class:`~pyro.distributions.CoalescentRateLikelihood`.
+
     **References**
 
     [1] J.F.C. Kingman (1982)
@@ -123,9 +125,9 @@ class CoalescentTimesWithRate(TorchDistribution):
         leaf nodes in the phylogeny. These can be arbitrary real numbers with
         arbitrary order and duplicates.
     :param torch.Tensor rate_grid: Tensor of base coalescent rates (pairwise
-        rate of coalescence). For example in SIR models this will be ``beta S /
-        I``. The rightmost dimension is time, and this tensor represents a
-        (batch of) rates that are piecwise constant in time.
+        rate of coalescence). For example in a simple SIR model this might be
+        ``beta S / I``. The rightmost dimension is time, and this tensor
+        represents a (batch of) rates that are piecwise constant in time.
     """
     arg_constraints = {"leaf_times": constraints.real,
                        "rate_grid": constraints.positive}
@@ -190,16 +192,12 @@ class CoalescentTimesWithRate(TorchDistribution):
         return log_prob
 
 
-Likelihood = namedtuple("Likelihood", ("const", "linear", "log"))
-
-
-def coalescent_rate_likelihood(leaf_times, coal_times, duration):
+class CoalescentRateLikelihood:
     """
-    Likelihood of [1] equations 7-9.
-
-    This acts as a transposed version of :class:`CoalescentTimesWithRate`
-    making the elements of ``rate_grid`` independent and thus compatible with
-    ``plate`` and ``poutine.markov``. For non-batched inputs the following are
+    EXPERIMENTAL This is not a :class:`~pyro.distributions.Distribution`, but
+    acts as a transposed version of :class:`CoalescentTimesWithRate` making the
+    elements of ``rate_grid`` independent and thus compatible with ``plate``
+    and ``poutine.markov``. For non-batched inputs the following are all
     equivalent likelihoods::
 
         # Version 1.
@@ -207,21 +205,19 @@ def coalescent_rate_likelihood(leaf_times, coal_times, duration):
                     CoalescentTimesWithRate(leaf_times, rate_grid),
                     obs=coal_times)
 
-        # Version 2.
+        # Version 2. using pyro.plate
+        likelihood = CoalescentRateLikelihood(leaf_times, coal_times, len(rate_grid))
         with pyro.plate("time", len(rate_grid)):
-            likelihood = coalescent_rate_likelihood(
-                leaf_times, coal_times, len(rate_grid))
-            pyro.factor("coalescent",
-                        likelihood.const +
-                        likelihood.linear * rate_grid +
-                        likelihood.log * safe_log(rate_grid))
+            pyro.factor("coalescent", likelihood(rate_grid))
 
-    **References**
+        # Version 3. using pyro.markov
+        likelihood = CoalescentRateLikelihood(leaf_times, coal_times, len(rate_grid))
+        for t in pyro.markov(range(len(rate_grid))):
+            pyro.factor("coalescent_{}".format(t), likelihood(rate_grid[t], t))
 
-    [1] A. Popinga, T. Vaughan, T. Statler, A.J. Drummond (2014)
-        "Inferring epidemiological dynamics with Bayesian coalescent inference:
-        The merits of deterministic and stochastic models"
-        https://arxiv.org/pdf/1407.1792.pdf
+    The third version is useful for e.g.
+    :class:`~pyro.infer.smcfilter.SMCFilter` where ``rate_grid`` might be
+    computed sequentially.
 
     :param torch.Tensor leaf_times: Tensor of times of sampling events, i.e.
         leaf nodes in the phylogeny. These can be arbitrary real numbers with
@@ -230,43 +226,69 @@ def coalescent_rate_likelihood(leaf_times, coal_times, duration):
         sets of size ``leaf_times.size(-1) - 1`` along the trailing dimension
         and should be sorted along that dimension.
     :param int duration: Size of the rate grid, ``rate_grid.size(-1)``.
-    :returns: A named tuple with elements ``.linear`` and ``.log``. The
-        log likelihood can be computed from the returned ``result`` as
-        ``result.linear.dot(rate_grid) + result.log.dot(rate.log())``.
     """
-    assert leaf_times.size(-1) == 1 + coal_times.size(-1)
-    assert isinstance(duration, int) and duration >= 2
-    if is_validation_enabled():
-        if not CoalescentTimesConstraint(leaf_times).check(coal_times).all():
-            raise ValueError("Invalid (leaf_times, coal_times)")
-        if leaf_times.min() < 0:
-            raise ValueError("Invalid leaf_times < 0")
-        if leaf_times.max() > duration:
-            raise ValueError("Invalid leaf_times > {}".format(duration))
-        if coal_times.min() < 0:
-            raise ValueError("Invalid coal_times < 0")
-        if coal_times.max() > duration:
-            raise ValueError("Invalid coal_times > {}".format(duration))
+    def __init__(self, leaf_times, coal_times, duration, *, validate_args=None):
+        assert leaf_times.size(-1) == 1 + coal_times.size(-1)
+        assert isinstance(duration, int) and duration >= 2
+        if validate_args is True or validate_args is None and is_validation_enabled:
+            if not CoalescentTimesConstraint(leaf_times).check(coal_times).all():
+                raise ValueError("Invalid (leaf_times, coal_times)")
+            if leaf_times.min() < 0:
+                raise ValueError("Invalid leaf_times < 0")
+            if leaf_times.max() > duration:
+                raise ValueError("Invalid leaf_times > {}".format(duration))
+            if coal_times.min() < 0:
+                raise ValueError("Invalid coal_times < 0")
+            if coal_times.max() > duration:
+                raise ValueError("Invalid coal_times > {}".format(duration))
 
-    phylogeny = _make_phylogeny(leaf_times, coal_times)
-    batch_shape = phylogeny.times.shape[:-1]
-    new_zeros = leaf_times.new_zeros
-    new_ones = leaf_times.new_ones
+        phylogeny = _make_phylogeny(leaf_times, coal_times)
+        batch_shape = phylogeny.times.shape[:-1]
+        new_zeros = leaf_times.new_zeros
+        new_ones = leaf_times.new_ones
 
-    # Construct linear part from intervals of survival.
-    sparse_diff = phylogeny.binomial[..., :-1] - phylogeny.binomial[..., 1:]
-    dense_diff = new_zeros(batch_shape + (1 + duration,))
-    _interpolate_scatter_add_(dense_diff, phylogeny.times[..., 1:], sparse_diff)
-    linear_part = dense_diff.flip([-1]).cumsum(-1)[..., :-1].flip([-1])
+        # Construct linear part from intervals of survival.
+        sparse_diff = phylogeny.binomial[..., :-1] - phylogeny.binomial[..., 1:]
+        dense_diff = new_zeros(batch_shape + (1 + duration,))
+        _interpolate_scatter_add_(dense_diff, phylogeny.times[..., 1:], sparse_diff)
+        self._linear = dense_diff.flip([-1]).cumsum(-1)[..., :-1].flip([-1])
 
-    # Construct const and log part from coalescent events.
-    coal_index = coal_times.floor().clamp(min=0, max=duration - 1).long()
-    const_part = new_zeros(batch_shape + (duration,))
-    const_part.scatter_add_(-1, coal_index, phylogeny.coal_binomial.log())
-    log_part = new_zeros(batch_shape + (duration,))
-    log_part.scatter_add_(-1, coal_index, new_ones(coal_index.shape))
+        # Construct const and log part from coalescent events.
+        coal_index = coal_times.floor().clamp(min=0, max=duration - 1).long()
+        self._const = new_zeros(batch_shape + (duration,))
+        self._const.scatter_add_(-1, coal_index, phylogeny.coal_binomial.log())
+        self._log = new_zeros(batch_shape + (duration,))
+        self._log.scatter_add_(-1, coal_index, new_ones(coal_index.shape))
 
-    return Likelihood(const_part, linear_part, log_part)
+    def __call__(self, rate_grid, t=slice(None)):
+        """
+        Computes the likelihood of [1] equations 7-9 for one or all time
+        points.
+
+        **References**
+
+        [1] A. Popinga, T. Vaughan, T. Statler, A.J. Drummond (2014)
+            "Inferring epidemiological dynamics with Bayesian coalescent
+            inference: The merits of deterministic and stochastic models"
+            https://arxiv.org/pdf/1407.1792.pdf
+
+        :param torch.Tensor rate_grid: Tensor of base coalescent rates
+            (pairwise rate of coalescence). For example in a simple SIR model
+            this might be ``beta S / I``. The rightmost dimension is time, and
+            this tensor represents a (batch of) rates that are piecwise
+            constant in time.
+        :param time: Optional time index by which the input was sliced, as in
+            ``rate_grid[..., t]`` This can be an integer for sequential models
+            or ``slice(None)`` for vectorized models.
+        :type time: int or slice
+        :returns: Likelihood ``p(coal_times | leaf_times, rate_grid)``,
+            or a part of that likelihood corresponding to a single time step.
+        :rtype: torch.Tensor
+        """
+        const = self._const[..., t]
+        linear = self._linear[..., t] * rate_grid
+        log = self._log[..., t] * rate_grid.clamp(min=torch.finfo(rate_grid.dtype).tiny).log()
+        return const + linear + log
 
 
 def _gather(tensor, dim, index):
