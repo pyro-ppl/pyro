@@ -66,9 +66,9 @@ class ConditionedHouseholder(Transform):
         return x
 
     def log_abs_det_jacobian(self, x, y):
-        """
+        r"""
         Calculates the elementwise determinant of the log jacobian. Householder flow
-        is measure preserving, so :math:`\\log(|detJ|) = 0`
+        is measure preserving, so :math:`\log(|detJ|) = 0`
         """
 
         return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
@@ -76,18 +76,18 @@ class ConditionedHouseholder(Transform):
 
 @copy_docs_from(TransformModule)
 class Householder(ConditionedHouseholder, TransformModule):
-    """
+    r"""
     Represents multiple applications of the Householder bijective transformation. A
     single Householder transformation takes the form,
 
-        :math:`\\mathbf{y} = (I - 2*\\frac{\\mathbf{u}\\mathbf{u}^T}{||\\mathbf{u}||^2})\\mathbf{x}`
+        :math:`\mathbf{y} = (I - 2*\frac{\mathbf{u}\mathbf{u}^T}{||\mathbf{u}||^2})\mathbf{x}`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    and the learnable parameters are :math:`\\mathbf{u}\\in\\mathbb{R}^D` for input
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    and the learnable parameters are :math:`\mathbf{u}\in\mathbb{R}^D` for input
     dimension :math:`D`.
 
-    The transformation represents the reflection of :math:`\\mathbf{x}` through the
-    plane passing through the origin with normal :math:`\\mathbf{u}`.
+    The transformation represents the reflection of :math:`\mathbf{x}` through the
+    plane passing through the origin with normal :math:`\mathbf{u}`.
 
     :math:`D` applications of this transformation are able to transform standard
     i.i.d. standard Gaussian noise into a Gaussian variable with an arbitrary
@@ -145,20 +145,20 @@ over-parametrization!".format(count_transforms, input_dim))
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalHouseholder(ConditionalTransformModule):
-    """
+    r"""
     Represents multiple applications of the Householder bijective transformation
     conditioning on an additional context. A single Householder transformation takes
     the form,
 
-        :math:`\\mathbf{y} = (I - 2*\\frac{\\mathbf{u}\\mathbf{u}^T}{||\\mathbf{u}||^2})\\mathbf{x}`
+        :math:`\mathbf{y} = (I - 2*\frac{\mathbf{u}\mathbf{u}^T}{||\mathbf{u}||^2})\mathbf{x}`
 
-    where :math:`\\mathbf{x}` are the inputs with dimension :math:`D`,
-    :math:`\\mathbf{y}` are the outputs, and :math:`\\mathbf{u}\\in\\mathbb{R}^D`
-    is the output of a function, e.g. a NN, with input :math:`z\\in\\mathbb{R}^{M}`
+    where :math:`\mathbf{x}` are the inputs with dimension :math:`D`,
+    :math:`\mathbf{y}` are the outputs, and :math:`\mathbf{u}\in\mathbb{R}^D`
+    is the output of a function, e.g. a NN, with input :math:`z\in\mathbb{R}^{M}`
     representing the context variable to condition on.
 
-    The transformation represents the reflection of :math:`\\mathbf{x}` through the
-    plane passing through the origin with normal :math:`\\mathbf{u}`.
+    The transformation represents the reflection of :math:`\mathbf{x}` through the
+    plane passing through the origin with normal :math:`\mathbf{u}`.
 
     :math:`D` applications of this transformation are able to transform standard
     i.i.d. standard Gaussian noise into a Gaussian variable with an arbitrary

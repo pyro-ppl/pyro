@@ -15,17 +15,17 @@ from pyro.nn import ConditionalDenseNN, DenseNN
 
 @copy_docs_from(TransformModule)
 class AffineCoupling(TransformModule):
-    """
+    r"""
     An implementation of the affine coupling layer of RealNVP (Dinh et al., 2017)
     that uses the bijective transform,
 
-        :math:`\\mathbf{y}_{1:d} = \\mathbf{x}_{1:d}`
-        :math:`\\mathbf{y}_{(d+1):D} = \\mu + \\sigma\\odot\\mathbf{x}_{(d+1):D}`
+        :math:`\mathbf{y}_{1:d} = \mathbf{x}_{1:d}`
+        :math:`\mathbf{y}_{(d+1):D} = \mu + \sigma\odot\mathbf{x}_{(d+1):D}`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    e.g. :math:`\\mathbf{x}_{1:d}` represents the first :math:`d` elements of the
-    inputs, and :math:`\\mu,\\sigma` are shift and translation parameters calculated
-    as the output of a function inputting only :math:`\\mathbf{x}_{1:d}`.
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    e.g. :math:`\mathbf{x}_{1:d}` represents the first :math:`d` elements of the
+    inputs, and :math:`\mu,\sigma` are shift and translation parameters calculated
+    as the output of a function inputting only :math:`\mathbf{x}_{1:d}`.
 
     That is, the first :math:`d` components remain unchanged, and the subsequent
     :math:`D-d` are shifted and translated by a function of the previous components.
@@ -145,19 +145,19 @@ class AffineCoupling(TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalAffineCoupling(ConditionalTransformModule):
-    """
+    r"""
     An implementation of the affine coupling layer of RealNVP (Dinh et al., 2017)
     that conditions on an additional context variable and uses the bijective
     transform,
 
-        :math:`\\mathbf{y}_{1:d} = \\mathbf{x}_{1:d}`
-        :math:`\\mathbf{y}_{(d+1):D} = \\mu + \\sigma\\odot\\mathbf{x}_{(d+1):D}`
+        :math:`\mathbf{y}_{1:d} = \mathbf{x}_{1:d}`
+        :math:`\mathbf{y}_{(d+1):D} = \mu + \sigma\odot\mathbf{x}_{(d+1):D}`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    e.g. :math:`\\mathbf{x}_{1:d}` represents the first :math:`d` elements of the
-    inputs, and :math:`\\mu,\\sigma` are shift and translation parameters calculated
-    as the output of a function input :math:`\\mathbf{x}_{1:d}` and a context
-    variable :math:`\\mathbf{z}\\in\\mathbb{R}^M`.
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    e.g. :math:`\mathbf{x}_{1:d}` represents the first :math:`d` elements of the
+    inputs, and :math:`\mu,\sigma` are shift and translation parameters calculated
+    as the output of a function input :math:`\mathbf{x}_{1:d}` and a context
+    variable :math:`\mathbf{z}\in\mathbb{R}^M`.
 
     That is, the first :math:`d` components remain unchanged, and the subsequent
     :math:`D-d` are shifted and translated by a function of the previous components.
@@ -167,7 +167,7 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
 
     Example usage:
 
-    >>> from pyro.nn import DenseNN
+    >>> from pyro.nn import ConditionalDenseNN
     >>> input_dim = 10
     >>> split_dim = 6
     >>> context_dim = 4

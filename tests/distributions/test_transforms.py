@@ -8,6 +8,7 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
+from pyro.nn import DenseNN
 
 from functools import partial
 
@@ -43,7 +44,7 @@ class TransformTests(TestCase):
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
         # Apply permutation for autoregressive flows with a network
-        if hasattr(transform, 'arn'):
+        if hasattr(transform, 'arn') and 'get_permutation' in dir(transform.arn):
             permutation = transform.arn.get_permutation()
             permuted_jacobian = jacobian.clone()
             for j in range(input_dim):
@@ -61,7 +62,7 @@ class TransformTests(TestCase):
         assert ldt_discrepancy < self.epsilon
 
         # Test that lower triangular with unit diagonal for autoregressive flows
-        if hasattr(transform, 'arn'):
+        if hasattr(transform, 'autoregressive'):
             diag_sum = torch.sum(torch.diag(nonzero(jacobian)))
             lower_sum = torch.sum(torch.tril(nonzero(jacobian), diagonal=-1))
             assert diag_sum == float(input_dim)
@@ -86,6 +87,7 @@ class TransformTests(TestCase):
     def _test(self, transform_factory, shape=True, jacobian=True, inverse=True):
         for input_dim in [2, 5, 10]:
             transform = transform_factory(input_dim)
+
             if jacobian:
                 self._test_jacobian(input_dim, transform)
             if inverse:
@@ -98,6 +100,7 @@ class TransformTests(TestCase):
         def transform_factory(input_dim, context_dim=context_dim):
             z = torch.rand(1, context_dim)
             return conditional_transform_factory(input_dim, context_dim).condition(z)
+
         self._test(transform_factory, **kwargs)
 
     def test_affine_autoregressive(self):
@@ -125,15 +128,56 @@ class TransformTests(TestCase):
         for residual in [None, 'normal', 'gated']:
             self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
 
+    def test_conditional_affine_autoregressive(self):
+        self._test_conditional(T.conditional_affine_autoregressive)
+
     def test_conditional_affine_coupling(self):
         self._test_conditional(T.conditional_affine_coupling)
+
+    def test_conditional_generalized_channel_permute(self, context_dim=3):
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
+            z = torch.rand(context_dim)
+            transform = T.conditional_generalized_channel_permute(context_dim=3, channels=shape[-3]).condition(z)
+            self._test_shape(shape, transform)
+            self._test_inverse(shape, transform)
+
+        channels = 3
+        from pyro.distributions.transforms.generalized_channel_permute import ConditionedGeneralizedChannelPermute
+        for width_dim in [2, 4, 6]:
+            # Do a bit of a hack until we merge in Reshape transform
+            class Flatten(ConditionedGeneralizedChannelPermute):
+                event_dim = 1
+
+                def __init__(self):
+                    z = torch.rand(context_dim)
+                    P = torch.arange(channels)
+                    permutation = torch.eye(len(P), len(P))[P.type(dtype=torch.int64)]
+                    LU = DenseNN(context_dim, [10 * channels, 10 * channels], param_dims=[channels * channels])(z)
+                    LU = LU.view(LU.shape[:-1] + (channels, channels))
+                    super(Flatten, self).__init__(permutation=permutation, LU=LU)
+
+                def _call(self, x):
+                    return super(Flatten, self)._call(x.view(3, width_dim, width_dim)).view_as(x)
+
+                def _inverse(self, x):
+                    return super(Flatten, self)._inverse(x.view(3, width_dim, width_dim)).view_as(x)
+
+                def log_abs_det_jacobian(self, x, y):
+                    return super(
+                        Flatten, self).log_abs_det_jacobian(
+                        x.view(
+                            3, width_dim, width_dim), y.view(
+                            3, width_dim, width_dim))
+
+            input_dim = (width_dim**2) * 3
+            self._test_jacobian(input_dim, Flatten())
 
     def test_conditional_householder(self):
         self._test_conditional(T.conditional_householder)
         self._test_conditional(partial(T.conditional_householder, count_transforms=2))
 
     def test_conditional_neural_autoregressive(self):
-        self._test_conditional(T.conditional_affine_coupling, inverse=False)
+        self._test_conditional(T.conditional_neural_autoregressive, inverse=False)
 
     def test_conditional_planar(self):
         self._test_conditional(T.conditional_planar, inverse=False)
@@ -164,10 +208,17 @@ class TransformTests(TestCase):
                 event_dim = 1
 
                 def _call(self, x):
-                    return super(Flatten, self)._call(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+                    return super(Flatten, self)._call(x.view(3, width_dim, width_dim)).view_as(x)
 
                 def _inverse(self, x):
-                    return super(Flatten, self)._inverse(x.view(-1, 3, width_dim, width_dim)).view_as(x)
+                    return super(Flatten, self)._inverse(x.view(3, width_dim, width_dim)).view_as(x)
+
+                def log_abs_det_jacobian(self, x, y):
+                    return super(
+                        Flatten, self).log_abs_det_jacobian(
+                        x.view(
+                            3, width_dim, width_dim), y.view(
+                            3, width_dim, width_dim))
 
             input_dim = (width_dim**2) * 3
             self._test_jacobian(input_dim, Flatten())
