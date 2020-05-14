@@ -8,7 +8,7 @@ from collections import namedtuple
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.util import broadcast_shape
+from pyro.distributions.util import broadcast_shape, is_validation_enabled
 from pyro.ops.tensor_utils import safe_log
 
 from .torch_distribution import TorchDistribution
@@ -34,7 +34,7 @@ class CoalescentTimes(TorchDistribution):
     """
     Distribution over coalescent times given irregular sampled ``leaf_times``.
 
-    Sample values will be ordered sets of binary coalescent times. Each sample
+    Sample values will be sorted sets of binary coalescent times. Each sample
     ``value`` will have cardinality ``value.size(-1) = leaf_times.size(-1) -
     1``, so that phylogenies are complete binary trees.  This distribution can
     thus be batched over multiple samples of phylogenies given fixed (number
@@ -98,12 +98,11 @@ class CoalescentTimesWithRate(TorchDistribution):
     rate_grid.size(-1)``. Leaves may be sampled at arbitrary real times, but
     are commonly sampled in the interval ``[0, T]``.
 
-    Sample values will be unordered sets of binary coalescent times. Each
-    sample ``value`` will have cardinality ``value.size(-1) =
-    leaf_times.size(-1) - 1``, so that phylogenies are complete binary trees.
-    This distribution can thus be batched over multiple samples of phylogenies
-    given fixed (number of) leaf times, e.g. over phylogeny samples from BEAST
-    or MrBayes.
+    Sample values will be sorted sets of binary coalescent times. Each sample
+    ``value`` will have cardinality ``value.size(-1) = leaf_times.size(-1) -
+    1``, so that phylogenies are complete binary trees.  This distribution can
+    thus be batched over multiple samples of phylogenies given fixed (number
+    of) leaf times, e.g. over phylogeny samples from BEAST or MrBayes.
 
     This distribution implements :meth:`log_prob` but not ``.sample()``.
 
@@ -120,8 +119,13 @@ class CoalescentTimesWithRate(TorchDistribution):
         The merits of deterministic and stochastic models"
         https://arxiv.org/pdf/1407.1792.pdf
 
-    :param torch.Tensor leaf_times:
-    :param torch.Tensor rate_grid:
+    :param torch.Tensor leaf_times: Tensor of times of sampling events, i.e.
+        leaf nodes in the phylogeny. These can be arbitrary real numbers with
+        arbitrary order and duplicates.
+    :param torch.Tensor rate_grid: Tensor of base coalescent rates (pairwise
+        rate of coalescence). For example in SIR models this will be ``beta S /
+        I``. The rightmost dimension is time, and this tensor represents a
+        (batch of) rates that are piecwise constant in time.
     """
     arg_constraints = {"leaf_times": constraints.real,
                        "rate_grid": constraints.positive}
@@ -130,8 +134,7 @@ class CoalescentTimesWithRate(TorchDistribution):
         batch_shape = broadcast_shape(leaf_times.shape[:-1], rate_grid.shape[:-1])
         event_shape = (leaf_times.size(-1) - 1,)
         self.leaf_times = leaf_times
-        self._unbroadcasted_rate_grid = rate_grid
-        self.rate_grid = rate_grid.expand(batch_shape + (-1,))
+        self.rate_grid = rate_grid
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @constraints.dependent_property
@@ -141,8 +144,7 @@ class CoalescentTimesWithRate(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(CoalescentTimesWithRate, _instance)
         new.leaf_times = self.leaf_times
-        new._unbroadcasted_rate_grid = self._unbroadcasted_rate_grid
-        new.rate_grid = self.rate_grid.expand(batch_shape + (-1,))
+        new.rate_grid = self.rate_grid
         super(CoalescentTimesWithRate, new).__init__(
             batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
@@ -161,7 +163,7 @@ class CoalescentTimesWithRate(TorchDistribution):
 
         :param torch.Tensor value: A tensor of coalescent times. These denote
             sets of size ``leaf_times.size(-1) - 1`` along the trailing
-            dimension and can be unordered along that dimension.
+            dimension and should be sorted along that dimension.
         :returns: Likelihood ``p(coal_times | leaf_times, rate_grid)``
         :rtype: torch.Tensor
         """
@@ -171,19 +173,100 @@ class CoalescentTimesWithRate(TorchDistribution):
         phylogeny = _make_phylogeny(self.leaf_times, coal_times)
 
         # Compute survival factors for closed intervals.
-        cumsum = self._unbroadcasted_rate_grid.cumsum(-1)
+        cumsum = self.rate_grid.cumsum(-1)
         cumsum = torch.nn.functional.pad(cumsum, (1, 0), value=0)
-        integral = _interpolate(cumsum, phylogeny.times[..., 1:])  # ignore the final lonely leaf
+        integral = _interpolate_gather(cumsum, phylogeny.times[..., 1:])  # ignore the final lonely leaf
         integral = integral[..., :-1] - integral[..., 1:]
         integral = integral.clamp(min=torch.finfo(integral.dtype).tiny)  # avoid nan
         log_prob = -(phylogeny.binomial[..., 1:-1] * integral).sum(-1)
 
         # Compute density of coalescent events.
         i = coal_times.floor().clamp(min=0).long()
-        rates = phylogeny.coal_binomial * _gather(self._unbroadcasted_rate_grid, -1, i)
+        rates = phylogeny.coal_binomial * _gather(self.rate_grid, -1, i)
         log_prob = log_prob + safe_log(rates).sum(-1)
 
+        batch_shape = broadcast_shape(self.batch_shape, value.shape[:-1])
+        log_prob = log_prob.expand(batch_shape)
         return log_prob
+
+
+Likelihood = namedtuple("Likelihood", ("const", "linear", "log"))
+
+
+def coalescent_rate_likelihood(leaf_times, coal_times, duration):
+    """
+    Likelihood of [1] equations 7-9.
+
+    This acts as a transposed version of :class:`CoalescentTimesWithRate`
+    making the elements of ``rate_grid`` independent and thus compatible with
+    ``plate`` and ``poutine.markov``. For non-batched inputs the following are
+    equivalent likelihoods::
+
+        # Version 1.
+        pyro.sample("coalescent",
+                    CoalescentTimesWithRate(leaf_times, rate_grid),
+                    obs=coal_times)
+
+        # Version 2.
+        with pyro.plate("time", len(rate_grid)):
+            likelihood = coalescent_rate_likelihood(
+                leaf_times, coal_times, len(rate_grid))
+            pyro.factor("coalescent",
+                        likelihood.const +
+                        likelihood.linear * rate_grid +
+                        likelihood.log * safe_log(rate_grid))
+
+    **References**
+
+    [1] A. Popinga, T. Vaughan, T. Statler, A.J. Drummond (2014)
+        "Inferring epidemiological dynamics with Bayesian coalescent inference:
+        The merits of deterministic and stochastic models"
+        https://arxiv.org/pdf/1407.1792.pdf
+
+    :param torch.Tensor leaf_times: Tensor of times of sampling events, i.e.
+        leaf nodes in the phylogeny. These can be arbitrary real numbers with
+        arbitrary order and duplicates.
+    :param torch.Tensor coal_times: A tensor of coalescent times. These denote
+        sets of size ``leaf_times.size(-1) - 1`` along the trailing dimension
+        and should be sorted along that dimension.
+    :param int duration: Size of the rate grid, ``rate_grid.size(-1)``.
+    :returns: A named tuple with elements ``.linear`` and ``.log``. The
+        log likelihood can be computed from the returned ``result`` as
+        ``result.linear.dot(rate_grid) + result.log.dot(rate.log())``.
+    """
+    assert leaf_times.size(-1) == 1 + coal_times.size(-1)
+    assert isinstance(duration, int) and duration >= 2
+    if is_validation_enabled():
+        if not CoalescentTimesConstraint(leaf_times).check(coal_times).all():
+            raise ValueError("Invalid (leaf_times, coal_times)")
+        if leaf_times.min() < 0:
+            raise ValueError("Invalid leaf_times < 0")
+        if leaf_times.max() > duration:
+            raise ValueError("Invalid leaf_times > {}".format(duration))
+        if coal_times.min() < 0:
+            raise ValueError("Invalid coal_times < 0")
+        if coal_times.max() > duration:
+            raise ValueError("Invalid coal_times > {}".format(duration))
+
+    phylogeny = _make_phylogeny(leaf_times, coal_times)
+    batch_shape = phylogeny.times.shape[:-1]
+    new_zeros = leaf_times.new_zeros
+    new_ones = leaf_times.new_ones
+
+    # Construct linear part from intervals of survival.
+    sparse_diff = phylogeny.binomial[..., :-1] - phylogeny.binomial[..., 1:]
+    dense_diff = new_zeros(batch_shape + (1 + duration,))
+    _interpolate_scatter_add_(dense_diff, phylogeny.times[..., 1:], sparse_diff)
+    linear_part = dense_diff.flip([-1]).cumsum(-1)[..., :-1].flip([-1])
+
+    # Construct const and log part from coalescent events.
+    coal_index = coal_times.floor().clamp(min=0, max=duration - 1).long()
+    const_part = new_zeros(batch_shape + (duration,))
+    const_part.scatter_add_(-1, coal_index, phylogeny.coal_binomial.log())
+    log_part = new_zeros(batch_shape + (duration,))
+    log_part.scatter_add_(-1, coal_index, new_ones(coal_index.shape))
+
+    return Likelihood(const_part, linear_part, log_part)
 
 
 def _gather(tensor, dim, index):
@@ -198,10 +281,10 @@ def _gather(tensor, dim, index):
     return tensor.gather(dim, index)
 
 
-def _interpolate(array, x):
+def _interpolate_gather(array, x):
     """
-    Continuously index into the rightmost dim of an array, linearly
-    interpolating between array values.
+    Like ``torch.gather(-1, array, x)`` but continuously indexes into the
+    rightmost dim of an array, linearly interpolating between array values.
     """
     with torch.no_grad():
         x0 = x.floor().clamp(min=0, max=array.size(-1) - 2)
@@ -209,6 +292,19 @@ def _interpolate(array, x):
     f0 = _gather(array, -1, x0.long())
     f1 = _gather(array, -1, x1.long())
     return f0 * (x1 - x) + f1 * (x - x0)
+
+
+def _interpolate_scatter_add_(dst, x, src):
+    """
+    Like ``dst.scatter_add_(-1, x, src)`` but continuously index into the
+    rightmost dim of an array, linearly interpolating between array values.
+    """
+    with torch.no_grad():
+        x0 = x.floor().clamp(min=0, max=dst.size(-1) - 2)
+        x1 = x0 + 1
+    dst.scatter_add_(-1, x0.long(), src * (x1 - x))
+    dst.scatter_add_(-1, x1.long(), src * (x - x0))
+    return dst
 
 
 def _weak_memoize(fn):

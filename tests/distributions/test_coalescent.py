@@ -6,7 +6,8 @@ import torch
 
 import pyro
 from pyro.distributions import CoalescentTimes, CoalescentTimesWithRate
-from pyro.distributions.coalescent import CoalescentTimesConstraint, _sample_coalescent_times
+from pyro.distributions.coalescent import (CoalescentTimesConstraint, _sample_coalescent_times,
+                                           coalescent_rate_likelihood)
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_close
 
@@ -95,3 +96,22 @@ def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape
 
     log_abs_det_jacobian = -coal_times_2.size(-1) * rate.log()
     assert_close(log_prob_1 - log_abs_det_jacobian, log_prob_2)
+
+
+@pytest.mark.parametrize("num_steps", [2, 5, 10, 20])
+@pytest.mark.parametrize("num_leaves", [2, 5, 10, 20])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+def test_likelihood(num_leaves, num_steps, batch_shape):
+    leaf_times = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
+    coal_times = CoalescentTimes(leaf_times).sample().clamp(min=0)
+    rate_grid = torch.rand(batch_shape + (num_steps,)) + 0.5
+
+    d = CoalescentTimesWithRate(leaf_times, rate_grid)
+    expected = d.log_prob(coal_times)
+
+    likelihood = coalescent_rate_likelihood(leaf_times, coal_times, num_steps)
+    actual = (likelihood.const +
+              likelihood.linear * rate_grid +
+              likelihood.log * rate_grid.log()).sum(-1)
+
+    assert_close(actual, expected)
