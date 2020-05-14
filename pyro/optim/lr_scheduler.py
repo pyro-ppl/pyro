@@ -23,7 +23,7 @@ class PyroLRScheduler(PyroOptim):
         for i in range(epochs):
             for minibatch in DataLoader(dataset, batch_size):
                 svi.step(minibatch)
-            scheduler.step(epoch=i)
+            scheduler.step()
     """
     def __init__(self, scheduler_constructor, optim_args, clip_args=None):
         # pytorch scheduler
@@ -45,7 +45,7 @@ class PyroLRScheduler(PyroOptim):
     def step(self, *args, **kwargs):
         """
         Takes the same arguments as the PyTorch scheduler
-        (optional ``epoch`` kwarg or ``loss`` in for ``ReduceLROnPlateau``)
+        (e.g. optional ``loss`` for ``ReduceLROnPlateau``)
         """
         for scheduler in self.optim_objs.values():
             scheduler.step(*args, **kwargs)
