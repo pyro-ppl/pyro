@@ -144,10 +144,18 @@ class _InitToGenerated:
 
 def init_to_generated(site=None, generate=lambda: init_to_uniform):
     """
-    Initialize to the value specified in the ``values`` dict returned by
-    ``values_fn``. This is similar to ``init_to_value(values=values_fn())`` but
-    calls ``values_fn`` once per model execution, thereby permitting multiple
-    randomized initializations.
+    Initialize to another initialization strategy returned by the callback
+    ``generate`` which is called once per model execution.
+
+    This is like :func:`init_to_value` but can produce different (e.g. random)
+    values once per model execution. For example to generate values and return
+    ``init_to_value`` you could define::
+
+        def generate():
+            values = {"x": torch.randn(100), "y": torch.rand(5)}
+            return init_to_value(values=values)
+
+        my_init_fn = init_to_generated(generate=generate)
 
     :param callable generate: A callable returning another initialization
         function, e.g. returning an ``init_to_value(values={...})`` populated

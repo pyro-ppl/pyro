@@ -115,7 +115,7 @@ def test_init_to_value():
     init_to_uniform(radius=0.1),
     init_to_value(values={"x": torch.tensor(3.)}),
     init_to_generated(
-        generate=lambda: init_to_value(values={"x": torch.randn(())})),
+        generate=lambda: init_to_value(values={"x": torch.rand(())})),
 ], ids=str)
 def test_init_strategy_smoke(init_strategy):
     def model():
