@@ -5,6 +5,10 @@
 # the high-level components of pyro.contrib.epidemiology. Command line
 # arguments and results should be similar.
 
+from types import SimpleNamespace
+import pickle
+from logger import get_logger
+
 import argparse
 import logging
 import math
@@ -13,6 +17,8 @@ import torch
 
 import pyro
 from pyro.contrib.epidemiology import OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel
+from pyro.infer.mcmc.util import summary
+
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -84,7 +90,7 @@ def infer(args, model):
         plt.title("MCMC energy trace")
         plt.tight_layout()
 
-    return model.samples
+    return model.samples, summary(mcmc._samples, prob=0.90)
 
 
 def evaluate(args, samples):
@@ -167,9 +173,31 @@ def predict(args, model, truth):
         plt.tight_layout()
 
 
+
+def create_namespace(d):
+    n = SimpleNamespace()
+    for k, v in d.items():
+        setattr(n, k, v)
+    return n
+
+
+def exp_runner(**args):
+    main(create_namespace(args))
+
+
 def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
+
+    tag = "sir.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.dct_{}.haar_{}."
+    tag += "tree_{}.nqb_{}.nc_{}"
+    tag = tag.format(args['population'], args['duration'], args['min_observations'],
+                               args['basic_reproduction_number'], args['response_rate'],
+                               args['dct'], args['haar'], args['max_tree_depth'], args['num_bins'], args['num_chains'])
+
+    log = get_logger(args['results_dir'], tag + '.log', use_local_logger=False)
+    log(args)
+
 
     # Generate data.
     dataset = generate_data(args)
