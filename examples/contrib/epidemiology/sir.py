@@ -78,6 +78,7 @@ def infer(args, model):
                      max_tree_depth=args.max_tree_depth,
                      num_quant_bins=args.num_bins,
                      dct=args.dct,
+                     haar=args.haar,
                      hook_fn=hook_fn)
 
     mcmc.summary()
@@ -189,11 +190,17 @@ def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
-    tag = "sir.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.dct_{}.haar_{}."
-    tag += "tree_{}.nqb_{}.nc_{}"
-    tag = tag.format(args['population'], args['duration'], args['min_observations'],
-                               args['basic_reproduction_number'], args['response_rate'],
-                               args['dct'], args['haar'], args['max_tree_depth'], args['num_bins'], args['num_chains'])
+    transform = 'none':
+    if args.haar:
+        transform = 'haar'
+    elif args.dct == 1.0:
+        transform = 'dct'
+
+    tag = "sir.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.trans_{}."
+    tag += "tree_{}.nqb_{}"
+    tag = tag.format(args.population, args.duration, args.min_observations,
+                     args.basic_reproduction_number, args.response_rate,
+                     transform, args.max_tree_depth, args.num_bins)
 
     log = get_logger(args['results_dir'], tag + '.log', use_local_logger=False)
     log(args)
@@ -232,6 +239,7 @@ if __name__ == "__main__":
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
+    parser.add_argument("--haar", action="store_true")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)

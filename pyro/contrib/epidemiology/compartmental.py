@@ -13,10 +13,10 @@ from torch.nn.functional import pad
 import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
-from pyro.distributions.transforms import DiscreteCosineTransform
+from pyro.distributions.transforms import DiscreteCosineTransform, HaarTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
 from pyro.infer.autoguide import init_to_value
-from pyro.infer.reparam import DiscreteCosineReparam
+from pyro.infer.reparam import DiscreteCosineReparam, HaarReparam
 from pyro.util import warn_if_nan
 
 from .util import quantize, quantize_enumerate
@@ -254,6 +254,7 @@ class CompartmentalModel(ABC):
         # Save these options for .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
         self._dct = options.pop("dct", None)
+        self._haar = options.pop("haar", False)
 
         # Heuristically initialze to feasible latents.
         logger.info("Heuristically initializing...")
@@ -269,6 +270,11 @@ class CompartmentalModel(ABC):
             x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
             x = DiscreteCosineTransform(smooth=self._dct)(x)
             init_values["auxiliary_dct"] = x
+        if self._haar:
+            x = init_values["auxiliary"]
+            x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
+            x = HaarTransform()(x)
+            init_values["auxiliary_dct"] = x
 
         # Configure a kernel.
         logger.info("Running inference...")
@@ -277,6 +283,9 @@ class CompartmentalModel(ABC):
         model = self._vectorized_model
         if self._dct is not None:
             rep = DiscreteCosineReparam(smooth=self._dct)
+            model = poutine.reparam(model, {"auxiliary": rep})
+        if self._haar:
+            rep = HaarReparam()
             model = poutine.reparam(model, {"auxiliary": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
@@ -321,6 +330,9 @@ class CompartmentalModel(ABC):
         if self._dct is not None:
             # Apply the same reparameterizer as during inference.
             rep = DiscreteCosineReparam(smooth=self._dct)
+            model = poutine.reparam(model, {"auxiliary": rep})
+        if self._haar:
+            rep = HaarReparam()
             model = poutine.reparam(model, {"auxiliary": rep})
         model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()

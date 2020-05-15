@@ -13,7 +13,7 @@ from pyro.distributions.transforms.affine_coupling import (AffineCoupling, Condi
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
-from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
+from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform, HaarTransform
 from pyro.distributions.transforms.generalized_channel_permute import (GeneralizedChannelPermute,
                                                                        generalized_channel_permute)
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
@@ -74,6 +74,7 @@ __all__ = [
     'DiscreteCosineTransform',
     'ELUTransform',
     'GeneralizedChannelPermute',
+    'HaarTransform',
     'Householder',
     'LeakyReLUTransform',
     'LowerCholeskyAffine',
