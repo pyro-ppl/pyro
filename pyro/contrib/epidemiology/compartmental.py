@@ -17,7 +17,7 @@ import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import DiscreteCosineTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
-from pyro.infer.autoguide import init_to_value
+from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.util import warn_if_nan
 
@@ -298,19 +298,24 @@ class CompartmentalModel(ABC):
             raise NotImplementedError("regional models do not support DiscreteCosineReparam")
 
         # Heuristically initialze to feasible latents.
-        logger.info("Heuristically initializing...")
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
-                             for k in list(options) if k.startswith("heuristic_")}
-        init_values = self.heuristic(**heuristic_options)
-        assert isinstance(init_values, dict)
-        assert "auxiliary" in init_values, \
-            ".heuristic() did not define auxiliary value"
-        if self._dct is not None:
-            # Also initialize DCT transformed coordinates.
-            x = init_values["auxiliary"]
-            x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-            x = DiscreteCosineTransform(smooth=self._dct)(x)
-            init_values["auxiliary_dct"] = x
+                             for k in list(options)
+                             if k.startswith("heuristic_")}
+
+        def heuristic():
+            logger.info("Heuristically initializing...")
+            with poutine.block():
+                init_values = self.heuristic(**heuristic_options)
+            assert isinstance(init_values, dict)
+            assert "auxiliary" in init_values, \
+                ".heuristic() did not define auxiliary value"
+            if self._dct is not None:
+                # Also initialize DCT transformed coordinates.
+                x = init_values["auxiliary"]
+                x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
+                x = DiscreteCosineTransform(smooth=self._dct)(x)
+                init_values["auxiliary_dct"] = x
+            return init_to_value(values=init_values)
 
         # Configure a kernel.
         logger.info("Running inference...")
@@ -322,7 +327,7 @@ class CompartmentalModel(ABC):
             model = poutine.reparam(model, {"auxiliary": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
-                      init_strategy=init_to_value(values=init_values),
+                      init_strategy=init_to_generated(generate=heuristic),
                       max_tree_depth=max_tree_depth)
 
         # Run mcmc.
