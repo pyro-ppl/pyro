@@ -100,7 +100,8 @@ def init_to_mean(site=None):
 
 def init_to_uniform(site=None, radius=2):
     """
-    Initialize to a random point in the area `(-radius, radius)` of unconstrained domain.
+    Initialize to a random point in the area ``(-radius, radius)`` of
+    unconstrained domain.
 
     :param float radius: specifies the range to draw an initial point in the unconstrained domain.
     """
@@ -114,8 +115,8 @@ def init_to_uniform(site=None, radius=2):
 
 def init_to_value(site=None, values={}):
     """
-    Initialize to the value specified in `values`. We defer to
-    :func:`init_to_uniform` strategy for sites which do not appear in `values`.
+    Initialize to the value specified in ``values``. We defer to
+    :func:`init_to_uniform` strategy for sites which do not appear in ``values``.
 
     :param dict values: dictionary of initial values keyed by site name.
     """
@@ -126,6 +127,34 @@ def init_to_value(site=None, values={}):
         return values[site["name"]]
     else:
         return init_to_uniform(site)
+
+
+class _InitToGenerated:
+    def __init__(self, generate):
+        self.generate = generate
+        self._init = None
+        self._seen = set()
+
+    def __call__(self, site):
+        if self._init is None or site["name"] in self._seen:
+            self._init = self.generate()
+            self._seen = {site["name"]}
+        return self._init(site)
+
+
+def init_to_generated(site=None, generate=lambda: init_to_uniform):
+    """
+    Initialize to the value specified in the ``values`` dict returned by
+    ``values_fn``. This is similar to ``init_to_value(values=values_fn())`` but
+    calls ``values_fn`` once per model execution, thereby permitting multiple
+    randomized initializations.
+
+    :param callable generate: A callable returning another initialization
+        function, e.g. returning an ``init_to_value(values={...})`` populated
+        with a dictionary of random samples.
+    """
+    init = _InitToGenerated(generate)
+    return init if site is None else init(site)
 
 
 class InitMessenger(Messenger):
