@@ -18,6 +18,7 @@ import pyro.poutine as poutine
 from pyro.distributions.transforms import DiscreteCosineTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
 from pyro.infer.autoguide import init_to_generated, init_to_value
+from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.util import warn_if_nan
 
@@ -281,6 +282,8 @@ class CompartmentalModel(ABC):
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
         :param full_mass: (Default ``False``). Specification of mass matrix
             of the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param bool arrowhead_mass: Whether to treat ``full_mass`` as the head
+            of an arrowhead matrix versus simply as a block. Defaults to False.
         :param int num_quant_bins: The number of quantization bins to use. Note
             that computational cost is exponential in `num_quant_bins`.
             Defaults to 4.
@@ -329,6 +332,8 @@ class CompartmentalModel(ABC):
                       full_mass=full_mass,
                       init_strategy=init_to_generated(generate=heuristic),
                       max_tree_depth=max_tree_depth)
+        if options.pop("arrowhead_mass", False):
+            kernel.mass_matrix_adapter = ArrowheadMassMatrix()
 
         # Run mcmc.
         mcmc = MCMC(kernel, **options)

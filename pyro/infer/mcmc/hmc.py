@@ -278,7 +278,7 @@ class HMC(MCMCKernel):
         assert len(diag_sites) + sum([len(sites) for sites in dense_sites_list]) == len(self.initial_params), \
             "Site names specified in full_mass are duplicated."
 
-        mass_matrix_shape = {}
+        mass_matrix_shape = OrderedDict()
         for dense_sites in dense_sites_list:
             size = sum([self.initial_params[site].numel() for site in dense_sites])
             mass_matrix_shape[dense_sites] = (size, size)
