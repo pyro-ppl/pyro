@@ -19,6 +19,7 @@ import pyro
 from pyro.contrib.epidemiology import OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel
 from pyro.infer.mcmc.util import summary
 
+import time
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -56,7 +57,7 @@ def generate_data(args):
         if obs_sum >= args.min_observations:
             logging.info("Observed {:d}/{:d} infections:\n{}".format(
                 obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)))
-            return {"new_I": new_I, "obs": obs}
+            return {"new_I": new_I, "obs": obs}, type(model).__name__
 
     raise ValueError("Failed to generate {} observations. Try increasing "
                      "--population or decreasing --min-observations"
@@ -72,6 +73,8 @@ def infer(args, model):
         if args.verbose:
             logging.info("potential = {:0.6g}".format(e))
 
+    t0 = time.time()
+
     mcmc = model.fit(heuristic_num_particles=args.num_particles,
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
@@ -79,7 +82,10 @@ def infer(args, model):
                      num_quant_bins=args.num_bins,
                      dct=args.dct,
                      haar=args.haar,
+                     arrowhead_mass=args.arrowhead,
                      hook_fn=hook_fn)
+
+    t1 = time.time()
 
     mcmc.summary()
     if args.plot:
@@ -91,7 +97,7 @@ def infer(args, model):
         plt.title("MCMC energy trace")
         plt.tight_layout()
 
-    return model.samples, summary(mcmc._samples, prob=0.90)
+    return model.samples, summary(mcmc._samples, prob=0.90), t1 - t0
 
 
 def evaluate(args, samples):
@@ -190,46 +196,62 @@ def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
-    transform = 'none':
+    transform = 'none'
     if args.haar:
         transform = 'haar'
     elif args.dct == 1.0:
         transform = 'dct'
 
-    tag = "sir.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.trans_{}."
-    tag += "tree_{}.nqb_{}"
-    tag = tag.format(args.population, args.duration, args.min_observations,
-                     args.basic_reproduction_number, args.response_rate,
-                     transform, args.max_tree_depth, args.num_bins)
-
-    log = get_logger(args['results_dir'], tag + '.log', use_local_logger=False)
-    log(args)
-
-
     # Generate data.
-    dataset = generate_data(args)
+    dataset, model_name = generate_data(args)
     obs = dataset["obs"]
+
+    tag = "{}.pop_{}.dur_{}.minobs_{}.R0_{:.1f}.rho_{:.1f}.trans_{}.arrow_{}."
+    tag += "tau_{:.1f}.inc_{:.1f}.conc_{}.tree_{}.nqb_{}"
+    tag = tag.format(model_name,
+                     args.population, args.duration, args.min_observations,
+                     args.basic_reproduction_number, args.response_rate,
+                     transform, args.arrowhead,
+                     args.recovery_time, args.incubation_time, args.concentration,
+                     args.max_tree_depth, args.num_bins)
+
+    log = get_logger(args.results_dir, tag + '.log', use_local_logger=False)
+    log(args)
 
     # Run inference.
     model = Model(args, obs)
-    samples = infer(args, model)
+    samples, summary, fit_time = infer(args, model)
+
+    log("Fit time: {:.3f}".format(fit_time))
+
+    for k, v in summary.items():
+        for k2, v2 in v.items():
+            summary[k][k2] = v2.data.cpu().numpy().tolist()
+
+    log(summary)
+
+    summary['args'] = args
+    summary['fit_time'] = fit_time
+
+    with open(args.results_dir + '/' + tag  +'.pkl', 'wb') as f:
+        pickle.dump(summary, f, protocol=2)
 
     # Evaluate fit.
-    evaluate(args, samples)
+    # evaluate(args, samples)
 
     # Predict latent time series.
-    if args.forecast:
-        predict(args, model, truth=dataset["new_I"])
+    # if args.forecast:
+    #    predict(args, model, truth=dataset["new_I"])
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    #assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
-    parser.add_argument("-p", "--population", default=1000, type=int)
-    parser.add_argument("-m", "--min-observations", default=3, type=int)
-    parser.add_argument("-d", "--duration", default=20, type=int)
-    parser.add_argument("-f", "--forecast", default=10, type=int)
+    parser.add_argument("-p", "--population", default=20000, type=int)
+    parser.add_argument("-m", "--min-observations", default=100, type=int)
+    parser.add_argument("-d", "--duration", default=32, type=int)
+    parser.add_argument("-f", "--forecast", default=0, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-e", "--incubation-time", default=0.0, type=float,
@@ -240,13 +262,15 @@ if __name__ == "__main__":
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("--haar", action="store_true")
-    parser.add_argument("-n", "--num-samples", default=200, type=int)
+    parser.add_argument("-n", "--num-samples", default=50, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
-    parser.add_argument("-w", "--warmup-steps", default=100, type=int)
+    parser.add_argument("-w", "--warmup-steps", default=50, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
+    parser.add_argument("--results-dir", default="./test/", type=str)
     parser.add_argument("--double", action="store_true")
+    parser.add_argument("--arrowhead", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")

@@ -273,7 +273,7 @@ class CompartmentalModel(ABC):
         if self._haar:
             x = init_values["auxiliary"]
             x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-            x = HaarTransform()(x)
+            x = HaarTransform(size=self.duration)(x)
             init_values["auxiliary_dct"] = x
 
         # Configure a kernel.
@@ -285,7 +285,7 @@ class CompartmentalModel(ABC):
             rep = DiscreteCosineReparam(smooth=self._dct)
             model = poutine.reparam(model, {"auxiliary": rep})
         if self._haar:
-            rep = HaarReparam()
+            rep = HaarReparam(size=self.duration)
             model = poutine.reparam(model, {"auxiliary": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
@@ -332,7 +332,7 @@ class CompartmentalModel(ABC):
             rep = DiscreteCosineReparam(smooth=self._dct)
             model = poutine.reparam(model, {"auxiliary": rep})
         if self._haar:
-            rep = HaarReparam()
+            rep = HaarReparam(size=self.duration)
             model = poutine.reparam(model, {"auxiliary": rep})
         model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
