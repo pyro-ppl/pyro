@@ -38,3 +38,7 @@ Distributions
 .. automodule:: pyro.contrib.epidemiology.distributions
     :members:
     :member-order: bysource
+
+.. autoclass:: pyro.distributions.CoalescentRateLikelihood
+    :members:
+    :special-members: __call__
