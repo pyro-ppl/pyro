@@ -6,7 +6,7 @@ from torch.distributions.transforms import ComposeTransform
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
+from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform, HaarTransform
 
 from .reparam import Reparam
 
@@ -50,6 +50,30 @@ class DiscreteCosineReparam(Reparam):
         # TODO Use biject_to(fn.support).inv.with_cache(1) once the following merges:
         # https://github.com/probtorch/pytorch/pull/153
         dct = DiscreteCosineTransform(dim=self.dim, smooth=self.smooth, cache_size=1)
+        transform = ComposeTransform([biject_to(fn.support).inv, dct])
+        x_dct = pyro.sample("{}_dct".format(name),
+                            dist.TransformedDistribution(fn, transform))
+
+        # Differentiably transform.
+        x = transform.inv(x_dct)  # should be free due to transform cache
+
+        # Simulate a pyro.deterministic() site.
+        new_fn = dist.Delta(x, event_dim=fn.event_dim)
+        return new_fn, x
+
+
+class HaarReparam(Reparam):
+    def __init__(self, dim=-1, size=4):
+        assert isinstance(dim, int) and dim < 0
+        self.dim = dim
+        self.size = size
+
+    def __call__(self, name, fn, obs):
+        assert obs is None, "TransformReparam does not support observe statements"
+        assert fn.event_dim >= -self.dim, ("Cannot transform along batch dimension; "
+                                           "try converting a batch dimension to an event dimension")
+
+        dct = HaarTransform(dim=self.dim, size=self.size, cache_size=1)
         transform = ComposeTransform([biject_to(fn.support).inv, dct])
         x_dct = pyro.sample("{}_dct".format(name),
                             dist.TransformedDistribution(fn, transform))

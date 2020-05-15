@@ -7,6 +7,9 @@ from torch.distributions.transforms import Transform
 
 from pyro.ops.tensor_utils import dct, idct
 
+import numpy as np
+import math
+
 
 class DiscreteCosineTransform(Transform):
     """
@@ -67,6 +70,64 @@ class DiscreteCosineTransform(Transform):
         if self.smooth:
             y = y / self._weight(y)
         x = idct(y)
+        if dim != -1:
+            x = x.transpose(dim, -1)
+        return x
+
+    def log_abs_det_jacobian(self, x, y):
+        return x.new_zeros((1,) * self.event_dim)
+
+
+def haar_matrix(n):
+    assert 2 ** int(math.log(n, 2.0)) == n
+    return _haar_matrix(n) / math.sqrt(n)
+
+
+def _haar_matrix(n):
+    if n > 2:
+        h = _haar_matrix(n / 2)
+    else:
+        return np.array([[1, 1], [1, -1]])
+
+    h_n = np.kron(h, [1, 1])
+    h_i = np.sqrt(n/2)*np.kron(np.eye(len(h)), [1, -1])
+    h = np.vstack((h_n, h_i))
+    return h
+
+
+class HaarTransform(Transform):
+    domain = constraints.real
+    codomain = constraints.real
+    bijective = True
+
+    def __init__(self, dim=-1, size=0., cache_size=0):
+        assert isinstance(dim, int) and dim < 0
+        self.event_dim = -dim
+        self.size = size
+        self.mat = torch.from_numpy(haar_matrix(size))
+        super().__init__(cache_size=cache_size)
+
+    def __eq__(self, other):
+        return (type(self) == type(other) and self.event_dim == other.event_dim)
+
+    def _call(self, x):
+        if self.mat.type != x.type:
+            self.mat = self.mat.type_as(x)
+        dim = -self.event_dim
+        if dim != -1:
+            x = x.transpose(dim, -1)
+        y = torch.matmul(self.mat, x.unsqueeze(-1)).squeeze(-1)
+        if dim != -1:
+            y = y.transpose(dim, -1)
+        return y
+
+    def _inverse(self, y):
+        if self.mat.type != y.type:
+            self.mat = self.mat.type_as(y)
+        dim = -self.event_dim
+        if dim != -1:
+            y = y.transpose(dim, -1)
+        x = torch.matmul(self.mat.t(), y.unsqueeze(-1)).squeeze(-1)
         if dim != -1:
             x = x.transpose(dim, -1)
         return x
