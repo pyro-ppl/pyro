@@ -77,7 +77,7 @@ class WelfordArrowheadCovariance:
 
     def get_covariance(self, regularize=True):
         """
-        Gets the covariance in arrowhead form: (top, bottom_diag) where `top = cov[head_size:]`
+        Gets the covariance in arrowhead form: (top, bottom_diag) where `top = cov[:head_size]`
         and `bottom_diag = cov.diag()[head_size:]`.
         """
         if self.n_samples < 2:

@@ -5,11 +5,6 @@ import pytest
 import torch
 
 from pyro.infer.mcmc.adaptation import (
-    _arrowhead_sqrt,
-    _arrowhead_sqrt_inverse_to_inverse,
-    _arrowhead_sqrt_matmul,
-    _arrowhead_sqrt_to_sqrt_inverse,
-    ArrowheadMatrix,
     ArrowheadMassMatrix,
     BlockMassMatrix,
     WarmupAdapter,
@@ -42,7 +37,7 @@ def test_arrowhead_mass_matrix(diagonal):
 
     size = shape[0] * shape[1]
     block_adapter = BlockMassMatrix()
-    arrowhead_adapter = ArrowheadMassMatrix(head_size=0 if diagonal else size)
+    arrowhead_adapter = ArrowheadMassMatrix()
     mass_matrix_shape = (size,) if diagonal else (size, size)
     block_adapter.configure({("z",): mass_matrix_shape})
     arrowhead_adapter.configure({("z",): mass_matrix_shape})
@@ -65,42 +60,3 @@ def test_arrowhead_mass_matrix(diagonal):
     assert_close(arrowhead_adapter.inverse_mass_matrix[('z',)],
                  block_adapter.inverse_mass_matrix[('z',)],
                  atol=0.3, rtol=0.3)
-
-
-@pytest.mark.parametrize('head_size', [0, 2, 5])
-def test_arrowhead_utilities(head_size):
-    size = 5
-    cov = torch.randn(size, size)
-    cov = torch.mm(cov, cov.t())
-
-    mask = torch.ones(size, size)
-    mask[head_size:, head_size:] = 0.
-    mask.view(-1)[::size + 1][head_size:] = 1.
-    arrowhead_full = mask * cov
-    expected = torch.flip(torch.flip(arrowhead_full, (-2, -1)).cholesky(), (-2, -1))
-    # test if those flip ops give expected upper triangular values
-    assert_close(expected.triu(), expected)
-    assert_close(expected.matmul(expected.t()), arrowhead_full)
-
-    # test arrowhead_sqrt
-    arrowhead = ArrowheadMatrix(cov[:head_size], cov.diag()[head_size:])
-    actual = _arrowhead_sqrt(arrowhead)
-    assert_close(actual.top, expected[:head_size])
-    assert_close(actual.bottom_diag, expected.diag()[head_size:])
-
-    # test arrowhead_sqrt_inverse
-    expected = expected.inverse()
-    actual = _arrowhead_sqrt_to_sqrt_inverse(actual)
-    assert_close(actual.top, expected[:head_size])
-    assert_close(actual.bottom_diag, expected.diag()[head_size:])
-
-    # test arrowhead_sqrt_matmul
-    v = torch.randn(size)
-    assert_close(_arrowhead_sqrt_matmul(actual, v), expected.matmul(v))
-    assert_close(_arrowhead_sqrt_matmul(actual, v, transpose=True),
-                 expected.t().matmul(v))
-
-    # test arrowhead_sqrt_inverse_to_inverse
-    actual = _arrowhead_sqrt_inverse_to_inverse(actual)
-    expected = arrowhead_full.inverse() if head_size > 0 else arrowhead_full.diag().reciprocal()
-    assert_close(actual, expected)
