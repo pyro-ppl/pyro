@@ -58,8 +58,8 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
 
     def sample(self, sample_shape=torch.Size()):
         if self.approx_sample_thresh < math.inf:
-            if (self.approx_sample_thresh < self.total_count).all():
-                # Return a moment-matched clamped Poisson approximation.
+            if self.approx_sample_thresh < self.total_count.min():
+                # Approximate with a moment-matched clamped Poisson.
                 with torch.no_grad():
                     shape = self._extended_shape(sample_shape)
                     p = self.probs
@@ -67,10 +67,9 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
                     mean = torch.min(p, q) * self.total_count
                     variance = p * q * self.total_count
                     shift = (mean - variance).round()
-                    result = torch.poisson(variance.expand(shape)) + shift
-                    result = torch.min(result, self.total_count)
-                    return torch.where((p < q).expand(shape),
-                                       result, self.total_count - result)
+                    result = torch.poisson(variance.expand(shape))
+                    result = torch.min(result + shift, self.total_count)
+                    return torch.where(p < q, result, self.total_count - result)
         return super().sample(sample_shape)
 
 
