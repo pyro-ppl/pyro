@@ -83,7 +83,6 @@ def infer(args, model):
                      num_quant_bins=args.num_bins,
                      dct=args.dct,
                      haar=args.haar,
-                     arrowhead_mass=args.arrowhead,
                      hook_fn=hook_fn)
 
     t1 = time.time()
@@ -212,7 +211,7 @@ def main(args):
     tag = tag.format(model_name,
                      args.population, args.duration, args.min_observations,
                      args.basic_reproduction_number, args.response_rate,
-                     transform, args.arrowhead,
+                     transform, args.arrowhead_mass,
                      args.recovery_time, args.incubation_time, args.concentration,
                      args.max_tree_depth, args.num_bins)
 
@@ -272,7 +271,6 @@ if __name__ == "__main__":
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
     parser.add_argument("--results-dir", default="./test/", type=str)
     parser.add_argument("--double", action="store_true")
-    parser.add_argument("--arrowhead", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
