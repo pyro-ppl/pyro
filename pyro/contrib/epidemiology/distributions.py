@@ -83,7 +83,7 @@ def infection_dist(*,
         overdispersed models of superspreaders [1,2]. This defaults to minimum
         variance ``concentration = ∞``.
     :param approx_sample_thresh: Population threshold above which Binomial
-        samples will be approximated as clampled Poisson samples, including
+        samples will be approximated as clamped Poisson samples, including
         internally in BetaBinomial sampling. Defaults to the global value which
         defaults to 10000.
     """
