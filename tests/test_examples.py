@@ -40,6 +40,7 @@ CPU_EXAMPLES = [
     'contrib/epidemiology/sir.py -np=128 -t=2 -w=2 -n=4 -d=20 -p=1000 -f 2 --dct=1',
     'contrib/epidemiology/sir.py -np=128 -t=2 -w=2 -n=4 -d=20 -p=1000 -f 2 -nb=8',
     'contrib/epidemiology/sir.py -np=128 -t=2 -w=2 -n=4 -d=20 -p=1000 -f 2 -nb=16 --dct=1',
+    'contrib/epidemiology/sir.py -np=128 -t=2 -w=2 -n=4 -d=20 -p=1000 -f 2 -a',
     'contrib/epidemiology/regional.py -t=2 -w=2 -n=4 -r=3 -d=20 -p=1000 -f 2',
     'contrib/forecast/bart.py --num-steps=2 --stride=99999',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',

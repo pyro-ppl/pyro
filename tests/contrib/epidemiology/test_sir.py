@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
     {"num_quant_bins": 8},
     {"num_quant_bins": 12},
     {"num_quant_bins": 16},
+    {"arrowhead_mass": True},
 ], ids=str)
 def test_simple_smoke(duration, forecast, options):
     population = 100
