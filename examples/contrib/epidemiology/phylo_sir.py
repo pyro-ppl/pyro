@@ -1,26 +1,77 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-# This script aims to replicate the behavior of examples/sir_hmc.py but using
-# the high-level components of pyro.contrib.epidemiology. Command line
-# arguments and results should be similar.
-
 import argparse
+import datetime
 import logging
-import math
 import os
-import pickle
+import re
 
+import pandas as pd
 import torch
+from Bio import Phylo
 
 import pyro
 from pyro.contrib.epidemiology import OverdispersedSEIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
+# The following data files were copied on 2020-05-14 from
+# https://github.com/czbiohub/EpiGen-COVID19/tree/master/files
+DIRNAME = os.path.dirname(os.path.abspath(__file__))
+TIMESERIES_FILE = os.path.join(DIRNAME, "california_timeseries.txt")
+TIMETREE_FILE = os.path.join(DIRNAME, "california_timetree.nexus")
 
-DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "processed_epigen_data.pkl")
+
+def load_data(args):
+    # Load time series.
+    logging.info("loading {}".format(args.timeseries_file))
+    df = pd.read_csv(args.timeseries_file, sep="\t")
+    df["date"] = pd.to_datetime(df["date"])
+    start_date = df["date"][0]
+    new_cases = torch.tensor(df["new_cases"], dtype=torch.float)
+
+    # Load time tree.
+    logging.info("loading {}".format(args.timetree_file))
+    with open(args.timetree_file) as f:
+        for tree in Phylo.parse(f, "nexus"):
+            break
+    if args.plot:
+        # Fix a parsing error for whereby internal nodes interpret .name as
+        # .confidence
+        for clade in tree.find_clades():
+            if clade.confidence:
+                clade.name = clade.confidence
+                clade.confidence = None
+        Phylo.draw(tree, do_show=False)
+
+    # The only data needed from the tree are the times of events.
+    leaf_times = []
+    coal_times = []
+    start_days_after_2020 = (start_date - datetime.datetime(2020, 1, 1, 0, 0)).days
+    for clade in tree.find_clades():
+        # Parse comments with time in years, e.g. "[&date=2020.16]"
+        date_string = re.search(r"date=(\d\d\d\d\.\d\d)", clade.comment).group(1)
+        days_after_2020 = (float(date_string) - 2020) * 365.25
+        time = days_after_2020 - start_days_after_2020
+
+        # Split nodes into leaves = tips, and binary coalescent events.
+        num_children = len(clade)
+        if num_children == 0:
+            leaf_times.append(time)
+        else:
+            # Pyro expects binary coalescent events, so we split n-ary events
+            # into n-1 separate binary events.
+            for _ in range(num_children - 1):
+                coal_times.append(time)
+    assert len(leaf_times) == 1 + len(coal_times)
+
+    coal_times.sort()  # Pyro expects coal_times to be sorted.
+    leaf_times = torch.tensor(leaf_times, dtype=torch.float)
+    coal_times = torch.tensor(coal_times, dtype=torch.float)
+    coal_times.clamp_(min=0)  # Pyro requires nonnegative coal_times.
+
+    return new_cases, leaf_times, coal_times
 
 
 def infer(args, model):
@@ -55,9 +106,8 @@ def infer(args, model):
 def evaluate(args, samples):
     # Print estimated values.
     names = {"basic_reproduction_number": "R0",
-             "response_rate": "rho"}
-    if args.concentration < math.inf:
-        names["concentration"] = "k"
+             "response_rate": "rho",
+             "concentration": "k"}
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
@@ -116,27 +166,16 @@ def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
-    # Generate data.
-    with open(args.data_path, 'rb') as f:
-        dataset = pickle.load(f)
-
-    obs_epi = torch.tensor(dataset["epi"][3::4])
-    obs_phy = [{k: torch.tensor(v) for k, v in row.items()}
-               for row in dataset["phy"][3::4]]
-
-    assert len(obs_epi) == len(obs_phy)
-    if args.duration is not None:
-        obs_epi = obs_epi[:args.duration]
-        obs_phy = obs_phy[:args.duration]
-
-    args.duration = len(obs_epi)
-
+    # Load data.
+    new_cases, leaf_times, coal_times = load_data(args)
+    args.duration = len(new_cases)
     logging.info("Observed {:d} infections:\n{}".format(
-        int(obs_epi.sum().item()), " ".join(str(int(x)) for x in obs_epi)))
+        int(new_cases.sum().item()), " ".join(str(int(x)) for x in new_cases)))
 
     # Run inference.
     model = OverdispersedSEIRModel(args.population, args.incubation_time,
-                                   args.recovery_time, obs_epi, phy_data=obs_phy)
+                                   args.recovery_time, new_cases,
+                                   leaf_times=leaf_times, coal_times=coal_times)
     samples = infer(args, model)
 
     # Evaluate fit.
@@ -151,15 +190,14 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
-    parser.add_argument("-p", "--population", default=1000, type=int)
+    parser.add_argument("--timeseries-file", default=TIMESERIES_FILE)
+    parser.add_argument("--timetree-file", default=TIMETREE_FILE)
+    parser.add_argument("-p", "--population", default=10000, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
-    parser.add_argument("-d", "--duration", type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=2.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=14.0, type=float)
-    parser.add_argument("-e", "--incubation-time", default=2.0, type=float,
-                        help="If zero, use SIR model; if > 1 use SEIR model.")
-    parser.add_argument("-k", "--concentration", default=1.0, type=float,
-                        help="If finite, use a superspreader model.")
+    parser.add_argument("-e", "--incubation-time", default=5.5, type=float)
+    parser.add_argument("-k", "--concentration", default=1.0, type=float)
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
@@ -168,19 +206,12 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
-    parser.add_argument("--double", action="store_true")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
-    parser.add_argument("--data-path", default=DEFAULT_DATA_FILE)
     args = parser.parse_args()
 
-    if args.double:
-        if args.cuda:
-            torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-        else:
-            torch.set_default_tensor_type(torch.DoubleTensor)
-    elif args.cuda:
+    if args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     main(args)
