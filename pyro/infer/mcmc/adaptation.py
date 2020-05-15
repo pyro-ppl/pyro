@@ -398,6 +398,8 @@ class ArrowheadMassMatrix:
     @mass_matrix.setter
     def mass_matrix(self, value):
         for site_names, mass_matrix in value.items():
+            # XXX: consider to add a try/except here:
+            # if mass_matrix is not positive definite, we won't reset adapt_scheme
             self._adapt_scheme[site_names].reset()
             mass_matrix_sqrt = sqrt(mass_matrix)
             mass_matrix_sqrt_inverse = triu_inverse(mass_matrix_sqrt)
