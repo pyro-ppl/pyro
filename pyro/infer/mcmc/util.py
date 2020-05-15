@@ -288,9 +288,10 @@ class _PEMaker:
                 _pe_jit = ignore_jit_warnings()(_pe_jit)
             self._compiled_fn = torch.jit.trace(_pe_jit, vals, **jit_options)
 
+            result = self._compiled_fn(*vals)
             for v in tmp:
                 v.requires_grad_(True)
-            return self._compiled_fn(*vals)
+        return result
 
     def get_potential_fn(self, jit_compile=False, skip_jit_warnings=True, jit_options=None):
         if jit_compile:
