@@ -163,7 +163,7 @@ class Distribution(object, metaclass=ABCMeta):
         :rtype: Distribution
         """
         if not (value is True or value is False):
-            raise ValueError("Expected value in {False,True}, actual {}".format(value))
+            raise ValueError("Expected value in [False,True], actual {}".format(value))
         self.has_rsample = value
         return self
 

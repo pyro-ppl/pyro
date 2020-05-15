@@ -192,7 +192,7 @@ class Trace:
                     except ValueError:
                         _, exc_value, traceback = sys.exc_info()
                         shapes = self.format_shapes(last_site=site["name"])
-                        raise ValueError("Error while computing log_prob_sum at site '{}':\n{}\n"
+                        raise ValueError("Error while computing log_prob_sum at site '{}':\n{}\n{}\n"
                                          .format(name, exc_value, shapes)).with_traceback(traceback)
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
                     site["log_prob_sum"] = log_p

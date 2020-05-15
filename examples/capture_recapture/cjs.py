@@ -247,7 +247,7 @@ def main(args):
         sex = torch.tensor(np.genfromtxt(sex_file, delimiter=',')).float()[:, 1]
         print("Loaded dipper sex data.")
     elif args.dataset == "vole" and args.model in ["4", "5"]:
-        raise ValueError("Cannot run model_{} on meadow voles data, since we lack sex " +
+        raise ValueError("Cannot run model_{} on meadow voles data, since we lack sex "
                          "information for these animals.".format(args.model))
     else:
         sex = None

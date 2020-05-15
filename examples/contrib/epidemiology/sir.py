@@ -79,6 +79,7 @@ def infer(args, model):
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
+                     arrowhead_mass=args.arrowhead_mass,
                      num_quant_bins=args.num_bins,
                      dct=args.dct,
                      haar=args.haar,
@@ -266,6 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-w", "--warmup-steps", default=50, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
+    parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
     parser.add_argument("--results-dir", default="./test/", type=str)
