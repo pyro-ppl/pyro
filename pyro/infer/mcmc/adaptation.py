@@ -7,8 +7,9 @@ from collections import namedtuple
 import torch
 
 import pyro
+from pyro.ops.arrowhead import SymmArrowhead, sqrt, triu_gram, triu_inverse, triu_matvecmul
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.welford import WelfordCovariance
+from pyro.ops.welford import WelfordCovariance, WelfordArrowheadCovariance
 
 adapt_window = namedtuple("adapt_window", ["start", "end"])
 
@@ -186,7 +187,7 @@ class WarmupAdapter:
 
 
 # this works for diagonal matrix `x`
-def _matmul(x, y):
+def _matvecmul(x, y):
     return x.mul(y) if x.dim() == 1 else x.matmul(y)
 
 
@@ -198,7 +199,7 @@ def _transpose(x):
     return x if x.dim() == 1 else x.t()
 
 
-def _upper_triangular_inverse(x):
+def _triu_inverse(x):
     if x.dim() == 1:
         return x.reciprocal()
     else:
@@ -244,7 +245,7 @@ class BlockMassMatrix:
             if site_names in self._adapt_scheme:
                 self._adapt_scheme[site_names].reset()
             mass_matrix_sqrt_inverse = _transpose(_cholesky(inverse_mass_matrix))
-            mass_matrix_sqrt = _upper_triangular_inverse(mass_matrix_sqrt_inverse)
+            mass_matrix_sqrt = _triu_inverse(mass_matrix_sqrt_inverse)
             self._inverse_mass_matrix[site_names] = inverse_mass_matrix
             self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
             self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
@@ -301,7 +302,7 @@ class BlockMassMatrix:
         v = {}
         for site_names, inverse_mass_matrix in self._inverse_mass_matrix.items():
             r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
-            v_flat = _matmul(inverse_mass_matrix, r_flat)
+            v_flat = _matvecmul(inverse_mass_matrix, r_flat)
 
             # unpacking
             pos = 0
@@ -325,7 +326,7 @@ class BlockMassMatrix:
         """
         s = {}
         for site_names, mass_matrix_sqrt in self._mass_matrix_sqrt.items():
-            r_flat = _matmul(mass_matrix_sqrt, r_unscaled[site_names])
+            r_flat = _matvecmul(mass_matrix_sqrt, r_unscaled[site_names])
 
             # unpacking
             pos = 0
@@ -348,5 +349,181 @@ class BlockMassMatrix:
         u = {}
         for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
             r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
-            u[site_names] = _matmul(mass_matrix_sqrt_inverse, r_flat)
+            u[site_names] = _matvecmul(mass_matrix_sqrt_inverse, r_flat)
+        return u
+
+
+class ArrowheadMassMatrix:
+    """
+    EXPERIMENTAL This class is used to adapt (inverse) mass matrix and provide useful
+    methods to calculate algebraic terms which involves the mass matrix.
+
+    The mass matrix will have arrowhead structure, with the head including all
+    dense sites specified in the argument `full_mass` of the HMC/NUTS kernels.
+
+    :param float init_scale: initial scale to construct the initial mass matrix.
+    """
+    def __init__(self, init_scale=1.):
+        self._init_scale = init_scale
+        self._adapt_scheme = {}
+        self._mass_matrix = {}
+        # NB: like BlockMassMatrix, those sqrt matrices are upper triangular
+        self._mass_matrix_sqrt = {}
+        self._mass_matrix_sqrt_inverse = {}
+        self._mass_matrix_size = {}
+
+    @property
+    def mass_matrix_size(self):
+        """
+        A dict that maps site names to the size of the corresponding mass matrix.
+        """
+        return self._mass_matrix_size
+
+    @property
+    def inverse_mass_matrix(self):
+        # NB: this computation is O(N^2 x head_size)
+        # however, HMC/NUTS kernel does not require us computing inverse_mass_matrix;
+        # so all linear algebra cost in HMC/NUTS is still O(N x head_size^2);
+        # we still expose this property for testing and for backward compatibility
+        inverse_mass_matrix = {}
+        for site_names, sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            inverse_mass_matrix[site_names] = triu_gram(sqrt_inverse)
+        return inverse_mass_matrix
+
+    @property
+    def mass_matrix(self):
+        return self._mass_matrix
+
+    @mass_matrix.setter
+    def mass_matrix(self, value):
+        for site_names, mass_matrix in value.items():
+            # XXX: consider to add a try/except here:
+            # if mass_matrix is not positive definite, we won't reset adapt_scheme
+            self._adapt_scheme[site_names].reset()
+            mass_matrix_sqrt = sqrt(mass_matrix)
+            mass_matrix_sqrt_inverse = triu_inverse(mass_matrix_sqrt)
+            self._mass_matrix[site_names] = mass_matrix
+            self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
+            self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
+
+    def configure(self, mass_matrix_shape, adapt_mass_matrix=True, options={}):
+        """
+        Sets up an initial mass matrix.
+
+        :param dict mass_matrix_shape: a dict that maps tuples of site names to the shape of
+            the corresponding mass matrix. Each tuple of site names corresponds to a block.
+        :param bool adapt_mass_matrix: a flag to decide whether an adaptation scheme will be used.
+        :param dict options: tensor options to construct the initial mass matrix.
+        """
+        mass_matrix = {}
+        dense_sites = ()
+        dense_size = 0
+        diag_sites = ()
+        diag_size = 0
+        for site_names, shape in mass_matrix_shape.items():
+            if len(shape) == 2:
+                dense_sites = dense_sites + site_names
+                dense_size = dense_size + shape[0]
+            else:
+                diag_sites = diag_sites + site_names
+                diag_size = diag_size + shape[0]
+
+        size = dense_size + diag_size
+        head_size = dense_size
+        all_sites = dense_sites + diag_sites
+        self._mass_matrix_size[all_sites] = size
+        top = torch.eye(head_size, size, **options) * self._init_scale
+        bottom_diag = torch.full((size - head_size,), self._init_scale, **options)
+        mass_matrix[all_sites] = SymmArrowhead(top, bottom_diag)
+        if adapt_mass_matrix:
+            adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
+            self._adapt_scheme[all_sites] = adapt_scheme
+
+        self.mass_matrix = mass_matrix
+
+    def update(self, z, z_grad):
+        """
+        Updates the adaptation scheme using the new sample `z` or its grad `z_grad`.
+
+        :param dict z: the current value.
+        :param dict z_grad: grad of the current value.
+        """
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            z_grad_flat = torch.cat([z_grad[name].reshape(-1) for name in site_names])
+            adapt_scheme.update(z_grad_flat)
+
+    def end_adaptation(self):
+        """
+        Updates the current mass matrix using the adaptation scheme.
+        """
+        mass_matrix = {}
+        for site_names, adapt_scheme in self._adapt_scheme.items():
+            top, bottom_diag = adapt_scheme.get_covariance(regularize=True)
+            mass_matrix[site_names] = SymmArrowhead(top, bottom_diag)
+        self.mass_matrix = mass_matrix
+
+    def kinetic_grad(self, r):
+        """
+        Computes the gradient of kinetic energy w.r.t. the momentum `r`.
+        It is equivalent to compute velocity given the momentum `r`.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding gradient
+        """
+        v = {}
+        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            # NB: using inverse_mass_matrix as in BlockMassMatrix will cost
+            # O(N^2 x head_size) operators and O(N^2) memory requirement;
+            # here, we will leverage mass_matrix_sqrt_inverse to reduce the cost to
+            # O(N x head_size^2) operators and O(N x head_size) memory requirement.
+            r_unscaled = triu_matvecmul(mass_matrix_sqrt_inverse, r_flat)
+            v_flat = triu_matvecmul(mass_matrix_sqrt_inverse, r_unscaled, transpose=True)
+
+            # unpacking
+            pos = 0
+            for site_name in site_names:
+                next_pos = pos + r[site_name].numel()
+                v[site_name] = v_flat[pos:next_pos].reshape(r[site_name].shape)
+                pos = next_pos
+        return v
+
+    def scale(self, r_unscaled, r_prototype):
+        """
+        Computes `M^{1/2} @ r_unscaled`.
+
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will scale it.
+
+        :param dict r_unscaled: a dictionary maps site names to a tensor momentum.
+        :param dict r_prototype: a dictionary mapes site names to prototype momentum.
+            Those prototype values are used to get shapes of the scaled version.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        s = {}
+        for site_names, mass_matrix_sqrt in self._mass_matrix_sqrt.items():
+            r_flat = triu_matvecmul(mass_matrix_sqrt, r_unscaled[site_names])
+
+            # unpacking
+            pos = 0
+            for site_name in site_names:
+                next_pos = pos + r_prototype[site_name].numel()
+                s[site_name] = r_flat[pos:next_pos].reshape(r_prototype[site_name].shape)
+                pos = next_pos
+        return s
+
+    def unscale(self, r):
+        """
+        Computes `inv(M^{1/2}) @ r`.
+
+        Note that `r` is generated from a gaussian with scale `mass_matrix_sqrt`.
+        This method will unscale it.
+
+        :param dict r: a dictionary maps site names to a tensor momentum.
+        :returns: a dictionary maps site names to the corresponding tensor
+        """
+        u = {}
+        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+            r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
+            u[site_names] = triu_matvecmul(mass_matrix_sqrt_inverse, r_flat)
         return u
