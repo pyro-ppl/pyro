@@ -75,7 +75,7 @@ class BetaBinomial(TorchDistribution):
         batch_shape = torch.Size(batch_shape)
         new._beta = self._beta.expand(batch_shape)
         new.total_count = self.total_count.expand_as(new._beta.concentration0)
-        self.approx_sample_thresh = self.approx_sample_thresh
+        new.approx_sample_thresh = self.approx_sample_thresh
         super(BetaBinomial, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
