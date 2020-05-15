@@ -196,11 +196,17 @@ def main(args):
     pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
+    if args.concentration < 0.0:
+        args.concentration = math.inf
+
     transform = 'none'
     if args.haar:
         transform = 'haar'
-    elif args.dct == 1.0:
+
+    if args.dct == 1.0:
         transform = 'dct'
+    else:
+        args.dct = None
 
     # Generate data.
     dataset, model_name = generate_data(args)

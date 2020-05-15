@@ -30,6 +30,9 @@ def sqrt(x):
     Dsqrt = x.bottom_diag.sqrt()
     B_Dsqrt = B / Dsqrt.unsqueeze(-2)  # shape: head_size x N
     schur_complement = A - B_Dsqrt.matmul(B_Dsqrt.t())  # complexity: head_size^2 x N
+    schur_complement = schur_complement + 1.0e-3 * torch.eye(schur_complement.size(-1),
+                                                             dtype=schur_complement.dtype,
+                                                             device=schur_complement.device)
     # we will decompose schur_complement to U @ U.T (so that the sqrt matrix
     # is upper triangular) using some `flip` operators:
     #   flip(cholesky(flip(schur_complement)))
