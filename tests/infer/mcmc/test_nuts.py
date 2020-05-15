@@ -423,7 +423,7 @@ def test_arrowhead_mass():
         pyro.sample("obs", dist.MultivariateNormal(torch.zeros(6), precision_matrix=prec), obs=wyxz)
 
     A = torch.randn(6, 12)
-    prec = A @ A.t()
+    prec = A @ A.t() * 0.1
 
     # smoke tests
     for dense_mass in [True, False]:
@@ -440,8 +440,8 @@ def test_arrowhead_mass():
     mass_matrix = kernel.mass_matrix_adapter.mass_matrix[("w", "y", "x", "z")]
     assert mass_matrix.top.shape == (4, 6)
     assert mass_matrix.bottom_diag.shape == (2,)
-    assert_close(mass_matrix.top, prec[:4], atol=0.5, rtol=0.5)
-    assert_close(mass_matrix.bottom_diag, prec.diag()[4:], atol=0.5, rtol=0.5)
+    assert_close(mass_matrix.top, prec[:4], atol=0.2, rtol=0.2)
+    assert_close(mass_matrix.bottom_diag, prec.diag()[4:], atol=0.2, rtol=0.2)
 
 
 def test_dirichlet_categorical_grad_adapt():
