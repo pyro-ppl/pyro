@@ -442,3 +442,21 @@ def test_arrowhead_mass():
     assert mass_matrix.bottom_diag.shape == (2,)
     assert_close(mass_matrix.top, prec[:4], atol=0.5, rtol=0.5)
     assert_close(mass_matrix.bottom_diag, prec.diag()[4:], atol=0.5, rtol=0.5)
+
+
+def test_dirichlet_categorical_grad_adapt():
+    def model(data):
+        concentration = torch.tensor([1.0, 1.0, 1.0])
+        p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
+        pyro.sample("obs", dist.Categorical(p_latent), obs=data)
+        return p_latent
+
+    true_probs = torch.tensor([0.1, 0.6, 0.3])
+    data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
+    nuts_kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True)
+    nuts_kernel.mass_matrix_adapter = ArrowheadMassMatrix()
+    mcmc = MCMC(nuts_kernel, num_samples=200, warmup_steps=100)
+    mcmc.run(data)
+    samples = mcmc.get_samples()
+    posterior = samples["p_latent"]
+    assert_equal(posterior.mean(0), true_probs, prec=0.02)
