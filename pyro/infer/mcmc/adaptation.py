@@ -358,9 +358,8 @@ class ArrowheadMassMatrix:
     EXPERIMENTAL This class is used to adapt (inverse) mass matrix and provide useful
     methods to calculate algebraic terms which involves the mass matrix.
 
-    The mass matrix will have arrowhead structure, which can be specified by
-    using the method :meth:`configure` with the corresponding structured
-    `mass_matrix_shape` arg together with the arg `head_size` in the constructor.
+    The mass matrix will have arrowhead structure, with the head including all
+    dense sites specified in the argument `full_mass` of the HMC/NUTS kernels.
 
     :param float init_scale: initial scale to construct the initial mass matrix.
     """
