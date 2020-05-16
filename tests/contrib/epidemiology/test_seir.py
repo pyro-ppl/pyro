@@ -79,12 +79,7 @@ def test_overdispersed_smoke(duration, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"dct": 1.},
-    {"num_quant_bins": 8},
-], ids=str)
-def test_coalescent_likelihood_smoke(duration, forecast, options):
+def test_coalescent_likelihood_smoke(duration, forecast):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -99,14 +94,14 @@ def test_coalescent_likelihood_smoke(duration, forecast, options):
     assert data.sum() > 0, "failed to generate positive data"
     leaf_times = torch.rand(5).pow(0.5) * duration
     coal_times = dist.CoalescentTimes(leaf_times).sample()
+    coal_times = coal_times[..., torch.randperm(coal_times.size(-1))]
 
     # Infer.
     model = OverdispersedSEIRModel(
         population, incubation_time, recovery_time, data,
         leaf_times=leaf_times, coal_times=coal_times)
     num_samples = 5
-    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
-              **options)
+    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
