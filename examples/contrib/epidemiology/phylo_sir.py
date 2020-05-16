@@ -30,6 +30,8 @@ def load_data(args):
     df["date"] = pd.to_datetime(df["date"])
     start_date = df["date"][0]
     new_cases = torch.tensor(df["new_cases"], dtype=torch.float)
+    if not args.timetree_file:
+        return new_cases, None, None
 
     # Load time tree.
     logging.info("loading {}".format(args.timetree_file))
