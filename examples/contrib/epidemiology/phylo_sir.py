@@ -65,11 +65,8 @@ def load_data(args):
             for _ in range(num_children - 1):
                 coal_times.append(time)
     assert len(leaf_times) == 1 + len(coal_times)
-
-    coal_times.sort()  # Pyro expects coal_times to be sorted.
     leaf_times = torch.tensor(leaf_times, dtype=torch.float)
     coal_times = torch.tensor(coal_times, dtype=torch.float)
-    coal_times.clamp_(min=0)  # Pyro requires nonnegative coal_times.
 
     return new_cases, leaf_times, coal_times
 
