@@ -22,6 +22,7 @@ from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import DiscreteCosineReparam
 from pyro.util import warn_if_nan
 
+from .distributions import set_approx_sample_thresh
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
@@ -143,6 +144,7 @@ class CompartmentalModel(ABC):
     full_mass = False
 
     @torch.no_grad()
+    @set_approx_sample_thresh(1000)
     def heuristic(self, num_particles=1024):
         """
         Finds an initial feasible guess of all latent variables, consistent
