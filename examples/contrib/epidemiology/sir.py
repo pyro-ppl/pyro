@@ -180,16 +180,8 @@ def predict(args, model, truth):
         plt.tight_layout()
 
 
-
-def create_namespace(d):
-    n = SimpleNamespace()
-    for k, v in d.items():
-        setattr(n, k, v)
-    return n
-
-
 def exp_runner(**args):
-    main(create_namespace(args))
+    main(SimpleNamespace(**args))
 
 
 def main(args):
