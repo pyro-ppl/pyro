@@ -76,6 +76,7 @@ def infer(args, model):
     t0 = time.time()
 
     mcmc = model.fit(heuristic_num_particles=args.num_particles,
+                     heuristic_ess_threshold=args.ess_threshold,
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
@@ -262,7 +263,8 @@ if __name__ == "__main__":
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-n", "--num-samples", default=50, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
-    parser.add_argument("-w", "--warmup-steps", default=50, type=int)
+    parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
+    parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)

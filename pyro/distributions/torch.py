@@ -1,9 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+import numbers
+
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property
 
 from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
@@ -27,6 +29,47 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
 
         log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
         return updated, log_normalizer
+
+
+class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
+    def __init__(self, total_count=1, probs=None, logits=None, validate_args=None, *,
+                 approx_sample_thresh=math.inf):
+        assert isinstance(approx_sample_thresh, numbers.Number)
+        assert approx_sample_thresh >= 0
+        super().__init__(total_count=total_count, probs=probs, logits=logits,
+                         validate_args=validate_args)
+        self.approx_sample_thresh = approx_sample_thresh
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(Binomial, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new.total_count = self.total_count.expand(batch_shape)
+        if 'probs' in self.__dict__:
+            new.probs = self.probs.expand(batch_shape)
+            new._param = new.probs
+        if 'logits' in self.__dict__:
+            new.logits = self.logits.expand(batch_shape)
+            new._param = new.logits
+        new.approx_sample_thresh = self.approx_sample_thresh
+        super(torch.distributions.Binomial, new).__init__(batch_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
+    def sample(self, sample_shape=torch.Size()):
+        if self.approx_sample_thresh < math.inf:
+            if self.approx_sample_thresh < self.total_count.min():
+                # Approximate with a moment-matched clamped Poisson.
+                with torch.no_grad():
+                    shape = self._extended_shape(sample_shape)
+                    p = self.probs
+                    q = 1 - self.probs
+                    mean = torch.min(p, q) * self.total_count
+                    variance = p * q * self.total_count
+                    shift = (mean - variance).round()
+                    result = torch.poisson(variance.expand(shape))
+                    result = torch.min(result + shift, self.total_count)
+                    return torch.where(p < q, result, self.total_count - result)
+        return super().sample(sample_shape)
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
@@ -116,13 +159,6 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
-
-    # TODO: remove this in the PyTorch release > 1.4.0
-    @lazy_property
-    def precision_matrix(self):
-        identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
-        return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
-            self._batch_shape + self._event_shape + self._event_shape)
 
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):

@@ -288,13 +288,6 @@ Unit
     :undoc-members:
     :show-inheritance:
 
-VonMises
---------
-.. autoclass:: pyro.distributions.VonMises
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 VonMises3D
 ----------
 .. autoclass:: pyro.distributions.VonMises3D
@@ -364,13 +357,6 @@ LowerCholeskyAffine
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-TanhTransform
--------------
-.. autoclass:: pyro.distributions.transforms.TanhTransform
     :members:
     :undoc-members:
     :show-inheritance:

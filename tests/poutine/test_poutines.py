@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import io
 import logging
 import pickle
 import warnings
@@ -852,8 +853,11 @@ def _model(a=torch.tensor(1.), b=torch.tensor(1.)):
 ])
 def test_pickling(wrapper):
     wrapped = wrapper(_model)
+    buffer = io.BytesIO()
     # default protocol cannot serialize torch.Size objects (see https://github.com/pytorch/pytorch/issues/20823)
-    deserialized = pickle.loads(pickle.dumps(wrapped, protocol=pickle.HIGHEST_PROTOCOL))
+    torch.save(wrapped, buffer, pickle_protocol=pickle.HIGHEST_PROTOCOL)
+    buffer.seek(0)
+    deserialized = torch.load(buffer)
     obs = torch.tensor(0.5)
     pyro.set_rng_seed(0)
     actual_trace = poutine.trace(deserialized).get_trace(obs)

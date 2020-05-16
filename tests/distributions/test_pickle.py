@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import io
 
 import pytest
 import pickle
@@ -75,7 +76,9 @@ def test_pickle(Dist):
     except Exception:
         pytest.skip(msg='cannot construct distribution')
 
+    buffer = io.BytesIO()
     # Note that pickling torch.Size() requires protocol >= 2
-    serialized = pickle.dumps(dist, pickle.HIGHEST_PROTOCOL)
-    deserialized = pickle.loads(serialized)
+    torch.save(dist, buffer, pickle_protocol=pickle.HIGHEST_PROTOCOL)
+    buffer.seek(0)
+    deserialized = torch.load(buffer)
     assert isinstance(deserialized, Dist)

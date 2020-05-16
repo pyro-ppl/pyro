@@ -97,12 +97,19 @@ def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape
     assert_close(log_prob_1 - log_abs_det_jacobian, log_prob_2)
 
 
+@pytest.mark.parametrize("clamped", [True, False], ids=["clamped", "unclamped"])
 @pytest.mark.parametrize("num_steps", [2, 5, 10, 20])
 @pytest.mark.parametrize("num_leaves", [2, 5, 10, 20])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
-def test_likelihood_vectorized(num_leaves, num_steps, batch_shape):
-    leaf_times = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
-    coal_times = CoalescentTimes(leaf_times).sample().clamp(min=0)
+def test_likelihood_vectorized(num_leaves, num_steps, batch_shape, clamped):
+    if clamped:
+        leaf_times = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
+        coal_times = CoalescentTimes(leaf_times).sample().clamp(min=0)
+    else:
+        leaf_times = torch.randn(batch_shape + (num_leaves,))
+        leaf_times.mul_(0.25).add_(0.75).mul_(num_steps)
+        coal_times = CoalescentTimes(leaf_times).sample()
+
     rate_grid = torch.rand(batch_shape + (num_steps,)) + 0.5
 
     d = CoalescentTimesWithRate(leaf_times, rate_grid)
@@ -114,12 +121,19 @@ def test_likelihood_vectorized(num_leaves, num_steps, batch_shape):
     assert_close(actual, expected)
 
 
+@pytest.mark.parametrize("clamped", [True, False], ids=["clamped", "unclamped"])
 @pytest.mark.parametrize("num_steps", [2, 5, 10, 20])
 @pytest.mark.parametrize("num_leaves", [2, 5, 10, 20])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
-def test_likelihood_sequential(num_leaves, num_steps, batch_shape):
-    leaf_times = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
-    coal_times = CoalescentTimes(leaf_times).sample().clamp(min=0)
+def test_likelihood_sequential(num_leaves, num_steps, batch_shape, clamped):
+    if clamped:
+        leaf_times = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
+        coal_times = CoalescentTimes(leaf_times).sample().clamp(min=0)
+    else:
+        leaf_times = torch.randn(batch_shape + (num_leaves,))
+        leaf_times.mul_(0.25).add_(0.75).mul_(num_steps)
+        coal_times = CoalescentTimes(leaf_times).sample()
+
     rate_grid = torch.rand(batch_shape + (num_steps,)) + 0.5
 
     d = CoalescentTimesWithRate(leaf_times, rate_grid)
