@@ -25,8 +25,8 @@ from pyro.distributions.transforms.householder import (ConditionalHouseholder, H
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
 from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, ELUTransform,
                                                                  LeakyReLUTransform, NeuralAutoregressive,
-                                                                 TanhTransform, conditional_neural_autoregressive, elu,
-                                                                 leaky_relu, neural_autoregressive, tanh)
+                                                                 conditional_neural_autoregressive, elu, leaky_relu,
+                                                                 neural_autoregressive, tanh)
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
@@ -90,7 +90,6 @@ __all__ = [
     'Radial',
     'Spline',
     'Sylvester',
-    'TanhTransform',
     'affine_autoregressive',
     'affine_coupling',
     'batchnorm',
