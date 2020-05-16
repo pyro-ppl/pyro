@@ -43,7 +43,6 @@ class CompartmentalModel(ABC):
         # First implement a concrete derived class.
         class MyModel(CompartmentalModel):
             def __init__(self, ...): ...
-            def heuristic(self): ...
             def global_model(self): ...
             def initialize(self, params): ...
             def transition_fwd(self, params, state, t): ...
@@ -145,7 +144,7 @@ class CompartmentalModel(ABC):
 
     @torch.no_grad()
     @set_approx_sample_thresh(1000)
-    def heuristic(self, num_particles=1024):
+    def heuristic(self, num_particles=1024, ess_threshold=0.5):
         """
         Finds an initial feasible guess of all latent variables, consistent
         with observed data. This is needed because not all hypotheses are
@@ -157,6 +156,7 @@ class CompartmentalModel(ABC):
         performs poorly e.g. in high-dimensional models.
 
         :param int num_particles: Number of particles used for SMC.
+        :param float ess_threshold: Effective sample size threshold for SMC.
         :returns: A dictionary mapping sample site name to tensor value.
         :rtype: dict
         """
@@ -164,6 +164,7 @@ class CompartmentalModel(ABC):
         model = _SMCModel(self)
         guide = _SMCGuide(self)
         smc = SMCFilter(model, guide, num_particles=num_particles,
+                        ess_threshold=ess_threshold,
                         max_plate_nesting=self.max_plate_nesting)
         smc.init()
         for t in range(1, self.duration):

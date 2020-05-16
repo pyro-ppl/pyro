@@ -52,6 +52,7 @@ def infer(args, model):
             logging.info("potential = {:0.6g}".format(e))
 
     mcmc = model.fit(heuristic_num_particles=args.num_particles,
+                     heuristic_ess_threshold=args.ess_threshold,
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
@@ -136,6 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
+    parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
