@@ -84,6 +84,7 @@ def infer(args, model):
             logging.info("potential = {:0.6g}".format(e))
 
     mcmc = model.fit(heuristic_num_particles=args.num_particles,
+                     heuristic_ess_threshold=args.ess_threshold,
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
@@ -190,15 +191,13 @@ if __name__ == "__main__":
     parser.add_argument("--timetree-file", default=TIMETREE_FILE)
     parser.add_argument("-p", "--population", default=40000000, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
-    parser.add_argument("-R0", "--basic-reproduction-number", default=2.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=14.0, type=float)
     parser.add_argument("-e", "--incubation-time", default=5.5, type=float)
-    parser.add_argument("-k", "--concentration", default=1.0, type=float)
-    parser.add_argument("-rho", "--response-rate", default=0.25, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
+    parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)

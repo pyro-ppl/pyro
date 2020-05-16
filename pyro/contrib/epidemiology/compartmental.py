@@ -155,6 +155,7 @@ class CompartmentalModel(ABC):
         prior.  However this method may be overridden in cases where SMC
         performs poorly e.g. in high-dimensional models.
 
+        :
         :param int num_particles: Number of particles used for SMC.
         :param float ess_threshold: Effective sample size threshold for SMC.
         :returns: A dictionary mapping sample site name to tensor value.
