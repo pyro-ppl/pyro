@@ -83,7 +83,8 @@ def infer(args, model):
         if args.verbose:
             logging.info("potential = {:0.6g}".format(e))
 
-    mcmc = model.fit(warmup_steps=args.warmup_steps,
+    mcmc = model.fit(heuristic_num_particles=args.num_particles,
+                     warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
                      num_quant_bins=args.num_bins,
@@ -111,8 +112,7 @@ def evaluate(args, samples):
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
-        logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
-                     .format(key, getattr(args, name), mean, std))
+        logging.info("{}: estimate = {:0.3g} \u00B1 {:0.3g}".format(key, mean, std))
 
     # Optionally plot histograms.
     if args.plot:
@@ -121,16 +121,14 @@ def evaluate(args, samples):
         fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
-            truth = getattr(args, name)
             sns.distplot(samples[key], ax=ax, label="posterior")
-            ax.axvline(truth, color="k", label="truth")
             ax.set_xlabel(key + " = " + name.replace("_", " "))
             ax.set_yticks(())
             ax.legend(loc="best")
         plt.tight_layout()
 
 
-def predict(args, model, truth):
+def predict(args, model):
     samples = model.predict(forecast=args.forecast)
 
     obs = model.data
@@ -150,8 +148,6 @@ def predict(args, model, truth):
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
         plt.plot(time, median, "r-", label="median")
         plt.plot(time[:args.duration], obs, "k.", label="observed")
-        if truth is not None:
-            plt.plot(time, truth, "k--", label="truth")
         plt.axvline(args.duration - 0.5, color="gray", lw=1)
         plt.xlim(0, len(time) - 1)
         plt.ylim(0, None)
@@ -192,16 +188,17 @@ if __name__ == "__main__":
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("--timeseries-file", default=TIMESERIES_FILE)
     parser.add_argument("--timetree-file", default=TIMETREE_FILE)
-    parser.add_argument("-p", "--population", default=10000, type=int)
+    parser.add_argument("-p", "--population", default=40000000, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=2.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=14.0, type=float)
     parser.add_argument("-e", "--incubation-time", default=5.5, type=float)
     parser.add_argument("-k", "--concentration", default=1.0, type=float)
-    parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
+    parser.add_argument("-rho", "--response-rate", default=0.25, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
+    parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-r", "--rng-seed", default=0, type=int)

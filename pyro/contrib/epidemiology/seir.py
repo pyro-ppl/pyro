@@ -210,9 +210,11 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         # Sample flows between compartments.
         E2I = pyro.sample("E2I_{}".format(t),
-                          dist.Binomial(state["E"], 1 / tau_e))
+                          dist.Binomial(state["E"], 1 / tau_e,
+                                        approx_sample_thresh=1e4))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.Binomial(state["I"], 1 / tau_i))
+                          dist.Binomial(state["I"], 1 / tau_i,
+                                        approx_sample_thresh=1e4))
         S2E = pyro.sample("S2E_{}".format(t),
                           infection_dist(individual_rate=R0,
                                          num_susceptible=state["S"],
@@ -222,7 +224,8 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2E, rho),
+                    dist.ExtendedBinomial(S2E, rho,
+                                          approx_sample_thresh=1e4),
                     obs=self.data[t] if t < self.duration else None)
         if self.coal_likelihood is not None and t < self.duration:
             R = R0 * state["S"] / self.population
