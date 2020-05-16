@@ -123,7 +123,7 @@ def test_dynamic_lr(scheduler):
             assert abs(pyro.param('loc').item()) > 1e-5
             assert abs(pyro.param('scale').item() - 0.5) > 1e-5
         if epoch == 2:
-            scheduler.step(epoch=epoch)
+            scheduler.step()
             assert opt_loc.state_dict()['param_groups'][0]['lr'] == 0.04
             assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.04
 
