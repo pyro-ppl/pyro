@@ -130,14 +130,28 @@ class SMCFilter:
             return
         # Decide whether to resample based on ESS.
         logp = self.state._log_weights
-        logp -= logp.logsumexp(dim=-1)
-        ess = logp.mul(2).exp().sum().reciprocal()
+        logp -= logp.logsumexp(-1)
+        probs = logp.exp()
+        ess = probs.dot(probs).reciprocal()
+        print(f"DEBUG ess = {ess:0.1f}")
         if ess < self.ess_threshold * self.num_particles:
-            self._importance_resample()
+            self._importance_resample(probs)
 
-    def _importance_resample(self):
-        index = dist.Categorical(logits=self.state._log_weights).sample(sample_shape=(self.num_particles,))
+    def _importance_resample(self, probs):
+        index = _systematic_sample(probs)
         self.state._resample(index)
+
+
+def _systematic_sample(probs):
+    # Systematic sampling preserves diversity better than multinomial sampling
+    # via Categorical(probs).sample().
+    batch_shape, size = probs.shape[:-1], probs.size(-1)
+    n = probs.cumsum(-1).mul_(size).add_(torch.rand(batch_shape + (1,)))
+    n = n.floor_().clamp_(min=0, max=size).long()
+    diff = probs.new_zeros(batch_shape + (size + 1,))
+    diff.scatter_add_(-1, n, torch.ones_like(probs))
+    index = diff[..., :-1].cumsum(-1).long()
+    return index
 
 
 class SMCState(dict):
