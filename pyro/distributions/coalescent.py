@@ -15,18 +15,20 @@ from .torch_distribution import TorchDistribution
 
 
 class CoalescentTimesConstraint(constraints.Constraint):
-    def __init__(self, leaf_times):
+    def __init__(self, leaf_times, *, ordered=True):
         self.leaf_times = leaf_times
+        self.ordered = ordered
 
     def check(self, value):
-        # Inputs must be ordered.
-        ordered = (value[..., :-1] <= value[..., 1:]).all(dim=-1)
-
         # There must always at least one lineage.
         coal_times = value
         phylogeny = _make_phylogeny(self.leaf_times, coal_times)
         at_least_one_lineage = (phylogeny.lineages > 0).all(dim=-1)
+        if not self.ordered:
+            return at_least_one_lineage
 
+        # Inputs must be ordered.
+        ordered = (value[..., :-1] <= value[..., 1:]).all(dim=-1)
         return ordered & at_least_one_lineage
 
 
@@ -143,6 +145,10 @@ class CoalescentTimesWithRate(TorchDistribution):
     def support(self):
         return CoalescentTimesConstraint(self.leaf_times)
 
+    @property
+    def duration(self):
+        return self.rate_grid.size(-1)
+
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(CoalescentTimesWithRate, _instance)
         new.leaf_times = self.leaf_times
@@ -183,7 +189,7 @@ class CoalescentTimesWithRate(TorchDistribution):
         log_prob = -(phylogeny.binomial[..., 1:-1] * integral).sum(-1)
 
         # Compute density of coalescent events.
-        i = coal_times.floor().clamp(min=0).long()
+        i = coal_times.floor().clamp(min=0, max=self.duration - 1).long()
         rates = phylogeny.coal_binomial * _gather(self.rate_grid, -1, i)
         log_prob = log_prob + safe_log(rates).sum(-1)
 
@@ -231,27 +237,32 @@ class CoalescentRateLikelihood:
         assert leaf_times.size(-1) == 1 + coal_times.size(-1)
         assert isinstance(duration, int) and duration >= 2
         if validate_args is True or validate_args is None and is_validation_enabled:
-            if not CoalescentTimesConstraint(leaf_times).check(coal_times).all():
+            constraint = CoalescentTimesConstraint(leaf_times, ordered=False)
+            if not constraint.check(coal_times).all():
                 raise ValueError("Invalid (leaf_times, coal_times)")
-            if leaf_times.min() < 0:
-                raise ValueError("Invalid leaf_times < 0")
-            if leaf_times.max() > duration:
-                raise ValueError("Invalid leaf_times > {}".format(duration))
-            if coal_times.min() < 0:
-                raise ValueError("Invalid coal_times < 0")
-            if coal_times.max() > duration:
-                raise ValueError("Invalid coal_times > {}".format(duration))
 
         phylogeny = _make_phylogeny(leaf_times, coal_times)
         batch_shape = phylogeny.times.shape[:-1]
         new_zeros = leaf_times.new_zeros
         new_ones = leaf_times.new_ones
 
-        # Construct linear part from intervals of survival.
+        # Construct linear part from intervals of survival outside of [0,duration].
+        times = phylogeny.times.clamp(max=0)
+        intervals = times[..., 1:] - times[..., :-1]
+        pre_linear = (phylogeny.binomial[..., :-1] * intervals).sum(-1, keepdim=True)
+        times = phylogeny.times.clamp(min=duration)
+        intervals = times[..., 1:] - times[..., :-1]
+        post_linear = (phylogeny.binomial[..., :-1] * intervals).sum(-1, keepdim=True)
+        self._linear = torch.cat([pre_linear,
+                                  new_zeros(pre_linear.shape[:-1] + (duration - 2,)),
+                                  post_linear], dim=-1)
+
+        # Construct linear part from intervals of survival within [0, duration].
+        times = phylogeny.times.clamp(min=0, max=duration)
         sparse_diff = phylogeny.binomial[..., :-1] - phylogeny.binomial[..., 1:]
         dense_diff = new_zeros(batch_shape + (1 + duration,))
-        _interpolate_scatter_add_(dense_diff, phylogeny.times[..., 1:], sparse_diff)
-        self._linear = dense_diff.flip([-1]).cumsum(-1)[..., :-1].flip([-1])
+        _interpolate_scatter_add_(dense_diff, times[..., 1:], sparse_diff)
+        self._linear += dense_diff.flip([-1]).cumsum(-1)[..., :-1].flip([-1])
 
         # Construct const and log part from coalescent events.
         coal_index = coal_times.floor().clamp(min=0, max=duration - 1).long()
