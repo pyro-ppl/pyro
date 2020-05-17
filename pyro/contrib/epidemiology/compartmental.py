@@ -321,7 +321,7 @@ class CompartmentalModel(ABC):
                 x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
                 x = DiscreteCosineTransform(smooth=self._dct)(x)
                 init_values["auxiliary_dct"] = x
-            if self._haar is not None:
+            if self._haar:
                 x = init_values["auxiliary"]
                 x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
                 x = HaarTransform(size=self.duration)(x)
