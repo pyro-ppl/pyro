@@ -400,11 +400,15 @@ class ArrowheadMassMatrix:
             # XXX: consider to add a try/except here:
             # if mass_matrix is not positive definite, we won't reset adapt_scheme
             self._adapt_scheme[site_names].reset()
-            mass_matrix_sqrt = sqrt(mass_matrix)
-            mass_matrix_sqrt_inverse = triu_inverse(mass_matrix_sqrt)
-            self._mass_matrix[site_names] = mass_matrix
-            self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
-            self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
+            try:
+                mass_matrix_sqrt = sqrt(mass_matrix)
+                mass_matrix_sqrt_inverse = triu_inverse(mass_matrix_sqrt)
+                self._mass_matrix[site_names] = mass_matrix
+                self._mass_matrix_sqrt[site_names] = mass_matrix_sqrt
+                self._mass_matrix_sqrt_inverse[site_names] = mass_matrix_sqrt_inverse
+                print("Succeeded in resetting adapt_scheme in ArrowheadMassMatrix.mass_matrix")
+            except:
+                print("Failed to reset adapt_scheme in ArrowheadMassMatrix.mass_matrix")
 
     def configure(self, mass_matrix_shape, adapt_mass_matrix=True, options={}):
         """

@@ -85,9 +85,9 @@ class WelfordArrowheadCovariance:
         top = self._m2_top / (self.n_samples - 1)
         bottom_diag = self._m2_bottom_diag / (self.n_samples - 1)
         if regularize:
-            top = top * (self.n_samples / (self.n_samples + 15.))
-            bottom_diag = bottom_diag * (self.n_samples / (self.n_samples + 15.))
-            shrinkage = 1e-2 * (15. / (self.n_samples + 15.0))
+            top = top * (self.n_samples / (self.n_samples + 5.))
+            bottom_diag = bottom_diag * (self.n_samples / (self.n_samples + 5.))
+            shrinkage = 5e-3 * (5. / (self.n_samples + 5.0))
             top.view(-1)[::top.size(-1) + 1] += shrinkage
             bottom_diag = bottom_diag + shrinkage
 
