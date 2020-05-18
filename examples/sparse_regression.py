@@ -96,6 +96,8 @@ as for quadratic coefficients theta_ij for a given (in our case MAP) estimate of
 hyperparameters (eta1, xisq, ...).
 Compare to theorem 5.1 in reference [1].
 """
+
+
 @torch.no_grad()
 def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-4):
     N, P = X.shape

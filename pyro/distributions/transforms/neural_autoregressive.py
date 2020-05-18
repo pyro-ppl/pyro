@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import constraints
-from torch.distributions.transforms import SigmoidTransform, Transform
+from torch.distributions.transforms import SigmoidTransform, TanhTransform, Transform
 
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
@@ -82,33 +82,6 @@ def leaky_relu():
     return LeakyReLUTransform()
 
 
-class TanhTransform(Transform):
-    r"""
-    Bijective transform via the mapping :math:`y = \text{tanh}(x)`.
-    """
-    domain = constraints.real
-    codomain = constraints.interval(-1., 1.)
-    bijective = True
-    sign = +1
-
-    @staticmethod
-    def atanh(x):
-        return 0.5 * (x.log1p() - (-x).log1p())
-
-    def __eq__(self, other):
-        return isinstance(other, TanhTransform)
-
-    def _call(self, x):
-        return torch.tanh(x)
-
-    def _inverse(self, y):
-        eps = torch.finfo(y.dtype).eps
-        return self.atanh(y.clamp(min=-1. + eps, max=1. - eps))
-
-    def log_abs_det_jacobian(self, x, y):
-        return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
-
-
 def tanh():
     """
     A helper function to create a
@@ -120,7 +93,7 @@ def tanh():
 
 @copy_docs_from(TransformModule)
 class NeuralAutoregressive(TransformModule):
-    """
+    r"""
     An implementation of the deep Neural Autoregressive Flow (NAF) bijective
     transform of the "IAF flavour" that can be used for sampling and scoring samples
     drawn from it (but not arbitrary ones).
@@ -162,6 +135,7 @@ class NeuralAutoregressive(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    autoregressive = True
 
     def __init__(self, autoregressive_nn, hidden_units=16, activation='sigmoid'):
         super().__init__(cache_size=1)
@@ -235,7 +209,7 @@ class NeuralAutoregressive(TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalNeuralAutoregressive(ConditionalTransformModule):
-    """
+    r"""
     An implementation of the deep Neural Autoregressive Flow (NAF) bijective
     transform of the "IAF flavour" conditioning on an additiona context variable
     that can be used for sampling and scoring samples drawn from it (but not
@@ -287,11 +261,19 @@ class ConditionalNeuralAutoregressive(ConditionalTransformModule):
 
     def __init__(self, autoregressive_nn, **kwargs):
         super().__init__()
-        self.arn = autoregressive_nn
+        self.nn = autoregressive_nn
         self.kwargs = kwargs
 
     def condition(self, context):
-        cond_nn = partial(self.arn, context=context)
+        """
+        Conditions on a context variable, returning a non-conditional transform of
+        of type :class:`~pyro.distributions.transforms.NeuralAutoregressive`.
+        """
+
+        # Note that nn.condition doesn't copy the weights of the ConditionalAutoregressiveNN
+        cond_nn = partial(self.nn, context=context)
+        cond_nn.permutation = cond_nn.func.permutation
+        cond_nn.get_permutation = cond_nn.func.get_permutation
         return NeuralAutoregressive(cond_nn, **self.kwargs)
 
 

@@ -7,7 +7,8 @@ import math
 import pytest
 import torch
 
-from pyro.contrib.epidemiology import OverdispersedSIRModel, SimpleSIRModel, SparseSIRModel, UnknownStartSIRModel
+from pyro.contrib.epidemiology import (OverdispersedSIRModel, RegionalSIRModel, SimpleSIRModel, SparseSIRModel,
+                                       UnknownStartSIRModel)
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
     {"num_quant_bins": 8},
     {"num_quant_bins": 12},
     {"num_quant_bins": 16},
+    {"arrowhead_mass": True},
 ], ids=str)
 def test_simple_smoke(duration, forecast, options):
     population = 100
@@ -157,3 +159,36 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     for I, ti in zip(samples["I"], t):
         assert (I[:ti] == 0).all()
         assert I[ti] > 0
+
+
+@pytest.mark.parametrize("duration", [3, 7])
+@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("options", [
+    {},
+    {"num_quant_bins": 8},
+], ids=str)
+def test_regional_smoke(duration, forecast, options):
+    num_regions = 6
+    coupling = torch.eye(num_regions).clamp(min=0.1)
+    population = torch.tensor([2., 3., 4., 10., 100., 1000.])
+    recovery_time = 7.0
+
+    # Generate data.
+    model = RegionalSIRModel(population, coupling, recovery_time,
+                             data=[None] * duration)
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
+        assert data.shape == (duration, num_regions)
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = RegionalSIRModel(population, coupling, recovery_time, data)
+    num_samples = 5
+    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast, num_regions)
+    assert samples["I"].shape == (num_samples, duration + forecast, num_regions)

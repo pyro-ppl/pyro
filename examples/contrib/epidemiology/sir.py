@@ -67,9 +67,11 @@ def infer(args, model):
             logging.info("potential = {:0.6g}".format(e))
 
     mcmc = model.fit(heuristic_num_particles=args.num_particles,
+                     heuristic_ess_threshold=args.ess_threshold,
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      max_tree_depth=args.max_tree_depth,
+                     arrowhead_mass=args.arrowhead_mass,
                      num_quant_bins=args.num_bins,
                      dct=args.dct,
                      hook_fn=hook_fn)
@@ -206,8 +208,10 @@ if __name__ == "__main__":
                         help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
+    parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
+    parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
     parser.add_argument("--double", action="store_true")

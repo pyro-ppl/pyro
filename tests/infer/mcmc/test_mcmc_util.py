@@ -9,8 +9,8 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer import Predictive
-from pyro.infer.autoguide import (init_to_feasible, init_to_mean, init_to_median,
-                                  init_to_sample, init_to_uniform, init_to_value)
+from pyro.infer.autoguide import (init_to_feasible, init_to_generated, init_to_mean, init_to_median, init_to_sample,
+                                  init_to_uniform, init_to_value)
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.util import initialize_model
@@ -114,7 +114,9 @@ def test_init_to_value():
     init_to_sample(),
     init_to_uniform(radius=0.1),
     init_to_value(values={"x": torch.tensor(3.)}),
-])
+    init_to_generated(
+        generate=lambda: init_to_value(values={"x": torch.rand(())})),
+], ids=str)
 def test_init_strategy_smoke(init_strategy):
     def model():
         pyro.sample("x", dist.LogNormal(0, 1))

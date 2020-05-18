@@ -12,16 +12,16 @@ from pyro.distributions.util import copy_docs_from
 
 @copy_docs_from(TransformModule)
 class Sylvester(Householder):
-    """
+    r"""
     An implementation of the Sylvester bijective transform of the Householder
     variety (Van den Berg Et Al., 2018),
 
-        :math:`\\mathbf{y} = \\mathbf{x} + QR\\tanh(SQ^T\\mathbf{x}+\\mathbf{b})`
+        :math:`\mathbf{y} = \mathbf{x} + QR\tanh(SQ^T\mathbf{x}+\mathbf{b})`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs,
-    :math:`R,S\\sim D\\times D` are upper triangular matrices for input dimension
-    :math:`D`, :math:`Q\\sim D\\times D` is an orthogonal matrix, and
-    :math:`\\mathbf{b}\\sim D` is learnable bias term.
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    :math:`R,S\sim D\times D` are upper triangular matrices for input dimension
+    :math:`D`, :math:`Q\sim D\times D` is an orthogonal matrix, and
+    :math:`\mathbf{b}\sim D` is learnable bias term.
 
     The Sylvester transform is a generalization of
     :class:`~pyro.distributions.transforms.Planar`. In the Householder type of the

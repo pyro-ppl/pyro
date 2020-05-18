@@ -303,8 +303,8 @@ class Dice:
                     if torch._C._get_tracing_state() or not mask.all():
                         mask._pyro_dims = prob._pyro_dims
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
-                        prob = prob[mask]
-                        cost = cost[mask]
+                        prob = prob.masked_select(mask)
+                        cost = cost.masked_select(mask)
                     else:
                         cost, prob = packed.broadcast_all(cost, prob)
                     expected_cost = expected_cost + scale * torch.tensordot(prob, cost, prob.dim())

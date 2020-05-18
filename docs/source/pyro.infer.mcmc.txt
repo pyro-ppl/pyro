@@ -29,6 +29,14 @@ NUTS
     :undoc-members:
     :show-inheritance:
 
+BlockMassMatrix
+---------------
+
+.. autoclass:: pyro.infer.mcmc.BlockMassMatrix
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Utilities
 ---------
 

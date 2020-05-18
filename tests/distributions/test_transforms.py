@@ -70,7 +70,7 @@ class TransformTests(TestCase):
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
         # Apply permutation for autoregressive flows with a network
-        if hasattr(transform, 'arn'):
+        if hasattr(transform, 'arn') and 'get_permutation' in dir(transform.arn):
             permutation = transform.arn.get_permutation()
             permuted_jacobian = jacobian.clone()
             for j in range(input_dim):
@@ -88,7 +88,7 @@ class TransformTests(TestCase):
         assert ldt_discrepancy < self.epsilon
 
         # Test that lower triangular with unit diagonal for autoregressive flows
-        if hasattr(transform, 'arn'):
+        if hasattr(transform, 'autoregressive'):
             diag_sum = torch.sum(torch.diag(nonzero(jacobian)))
             lower_sum = torch.sum(torch.tril(nonzero(jacobian), diagonal=-1))
             assert diag_sum == float(input_dim)
@@ -129,7 +129,7 @@ class TransformTests(TestCase):
 
     def _test_conditional(self, conditional_transform_factory, context_dim=3, event_dim=1, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
-            z = torch.rand(context_dim)
+            z = torch.rand(1, context_dim)
             return conditional_transform_factory(input_dim, context_dim).condition(z)
         self._test(transform_factory, event_dim=event_dim, **kwargs)
 
@@ -158,6 +158,9 @@ class TransformTests(TestCase):
 
         for residual in [None, 'normal', 'gated']:
             self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
+
+    def test_conditional_affine_autoregressive(self):
+        self._test_conditional(T.conditional_affine_autoregressive)
 
     def test_conditional_affine_coupling(self):
         for dim in [-1, -2]:
