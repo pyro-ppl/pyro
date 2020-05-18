@@ -19,8 +19,8 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 # The following data files were copied on 2020-05-14 from
 # https://github.com/czbiohub/EpiGen-COVID19/tree/master/files
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
-TIMESERIES_FILE = os.path.join(DIRNAME, "california_timeseries.txt")
-TIMETREE_FILE = os.path.join(DIRNAME, "california_timetree.nexus")
+TIMESERIES_FILE = os.path.join(DIRNAME, "japan_timeseries.txt")
+TIMETREE_FILE = os.path.join(DIRNAME, "japan_timetree.nexus")
 
 
 def load_data(args):
@@ -29,6 +29,9 @@ def load_data(args):
     df = pd.read_csv(args.timeseries_file, sep="\t")
     df["date"] = pd.to_datetime(df["date"])
     start_date = df["date"][0]
+    new_cases = list(df["new_cases"])
+    if new_cases[-1]:
+        new_cases.pop(-1)
     new_cases = torch.tensor(df["new_cases"], dtype=torch.float)
     if not args.timetree_file:
         return new_cases, None, None
@@ -188,14 +191,14 @@ if __name__ == "__main__":
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("--timeseries-file", default=TIMESERIES_FILE)
     parser.add_argument("--timetree-file", default=TIMETREE_FILE)
-    parser.add_argument("-p", "--population", default=40000000, type=int)
+    parser.add_argument("-p", "--population", default=10000, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
     parser.add_argument("-tau", "--recovery-time", default=14.0, type=float)
     parser.add_argument("-e", "--incubation-time", default=5.5, type=float)
     parser.add_argument("--dct", type=float,
                         help="smoothing for discrete cosine reparameterizer")
     parser.add_argument("-n", "--num-samples", default=200, type=int)
-    parser.add_argument("-np", "--num-particles", default=1024, type=int)
+    parser.add_argument("-np", "--num-particles", default=2048, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
