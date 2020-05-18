@@ -8,7 +8,6 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
-from pyro.nn import DenseNN
 
 from functools import partial, reduce
 import operator
@@ -40,6 +39,7 @@ class Flatten(dist.TransformModule):
 
     def log_abs_det_jacobian(self, x, y):
         return self.transform.log_abs_det_jacobian(self._unflatten(x), self._unflatten(y))
+
 
 class TransformTests(TestCase):
     def setUp(self):
