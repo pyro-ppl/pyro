@@ -28,15 +28,28 @@ def sqrt(x):
     # NB: the complexity is O(N * head_size^2)
     # ref: https://en.wikipedia.org/wiki/Schur_complement#Background
     Dsqrt = x.bottom_diag.sqrt()
-    B_Dsqrt = B / Dsqrt.unsqueeze(-2)  # shape: head_size x N
-    schur_complement = A - B_Dsqrt.matmul(B_Dsqrt.t())  # complexity: head_size^2 x N
-    schur_complement = schur_complement + 1.0e-5 * torch.eye(schur_complement.size(-1),
-                                                             dtype=schur_complement.dtype,
-                                                             device=schur_complement.device)
-    # we will decompose schur_complement to U @ U.T (so that the sqrt matrix
-    # is upper triangular) using some `flip` operators:
-    #   flip(cholesky(flip(schur_complement)))
-    top_left = torch.flip(torch.flip(schur_complement, (-2, -1)).cholesky(), (-2, -1))
+
+    failed = True
+    for i in range(6):
+        try:
+            B_Dsqrt = B / Dsqrt.unsqueeze(-2)  # shape: head_size x N
+            schur_complement = A - B_Dsqrt.matmul(B_Dsqrt.t())  # complexity: head_size^2 x N
+            # schur_complement = schur_complement + 1.0e-5 * torch.eye(schur_complement.size(-1),
+            #                                                          dtype=schur_complement.dtype,
+            #                                                          device=schur_complement.device)
+            # we will decompose schur_complement to U @ U.T (so that the sqrt matrix
+            # is upper triangular) using some `flip` operators:
+            #   flip(cholesky(flip(schur_complement)))
+            top_left = torch.flip(torch.cholesky(torch.flip(schur_complement, (-2, -1))), (-2, -1))
+            failed = False
+            break
+        except RuntimeError:
+            scale = 2 ** (-i - 1)
+            print("scale B by", scale)
+            B = B * 2 ** (-i)
+    if failed:
+        raise RuntimeError("singular schur complement")
+
     top_right = B_Dsqrt
     top = torch.cat([top_left, top_right], -1)
     bottom_diag = Dsqrt
