@@ -330,7 +330,7 @@ class CompartmentalModel(ABC):
                 x = DiscreteCosineTransform(smooth=self._dct)(x)
                 init_values["auxiliary_dct"] = x
             logger.info("Heuristic init: {}".format(", ".join(
-                "{}={:0.3g}".format(k, v)
+                "{}={:0.3g}".format(k, v.item())
                 for k, v in init_values.items()
                 if v.numel() == 1)))
             return init_to_value(values=init_values)
