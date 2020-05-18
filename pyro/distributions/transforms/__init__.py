@@ -113,7 +113,7 @@ __all__ = [
     'polynomial',
     'radial',
     'spline',
-    'sylvester',
+    'sylvester'
 ]
 
 __all__.extend(torch_transforms)

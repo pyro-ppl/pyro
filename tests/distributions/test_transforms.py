@@ -261,7 +261,3 @@ class TransformTests(TestCase):
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
-
-    def test_tanh(self):
-        # NOTE: Need following since helper function mistakenly doesn't take input dim
-        self._test(lambda input_dim: T.tanh())
