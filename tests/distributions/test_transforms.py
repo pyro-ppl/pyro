@@ -111,7 +111,7 @@ class TransformTests(TestCase):
         assert sample.shape == base_shape
 
     def _test(self, transform_factory, shape=True, jacobian=True, inverse=True, event_dim=1):
-        for event_shape in [(2,), (5,), (10,)]:
+        for event_shape in [(2,), (5,)]:
             if event_dim > 1:
                 event_shape = tuple([event_shape[0] + i for i in range(event_dim)])
             transform = transform_factory(event_shape[0] if len(event_shape) == 1 else event_shape)
@@ -258,52 +258,3 @@ class TransformTests(TestCase):
     def test_tanh(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
         self._test(lambda input_dim: T.tanh())
-
-
-if __name__ == "__main__":
-    """def _test_shape(base_shape, transform):
-        base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
-        sample = dist.TransformedDistribution(base_dist, [transform]).sample()
-        assert sample.shape == base_shape
-
-    transform_factory = T.permute
-    dim = True
-
-    for input_dim in [2, 5, 10]:
-        transform = transform_factory(input_dim)
-        #if jacobian:
-        #    self._test_jacobian(input_dim, transform)
-        #if inverse:
-        #    self._test_inverse(input_dim, transform)
-        for shape in [(3,), (3, 4), (3, 4, 5)]:
-            base_shape = shape + (input_dim,)
-            if dim:
-                transform = transform_factory(base_shape[-len(shape):], dim=-len(shape))
-            _test_shape(base_shape, transform)"""
-
-    torch.set_default_tensor_type(torch.DoubleTensor)
-    tt = TransformTests()
-    tt.setUp()
-    #tt.test_permute()
-    #tt.test_generalized_channel_permute()
-    #tt.test_affine_coupling()
-    #tt.test_conditional_affine_coupling()
-    tt.test_conditional_neural_autoregressive()
-
-    """event_dim = 2
-    transform = T.permute
-    for event_shape in [(2,), (5,), (10,)]:
-        if event_dim > 1:
-            event_shape = tuple([event_shape[0] + i for i in range(event_dim)])
-        transform = transform_factory(event_shape)
-
-        if jacobian:
-            if event_dim > 1:
-                transform = Flatten(transform, event_shape)
-            self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
-        if inverse:
-            self._test_inverse(event_shape, transform)
-        if shape:
-            for shape in [(3,), (3, 4), (3, 4, 5)]:
-                base_shape = shape + event_shape
-                self._test_shape(base_shape, transform)"""

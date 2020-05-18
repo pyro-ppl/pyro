@@ -1,8 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import partial, reduce
 import operator
+from functools import partial, reduce
 
 import torch
 from torch.distributions import constraints
@@ -114,11 +114,9 @@ class AffineCoupling(TransformModule):
         x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
 
         # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
-        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim]+(-1,)))
-        #temp1 = mean.shape[:(1-self.event_dim)]
-        #temp2 = x2.shape[(1-self.event_dim):]
-        mean = mean.reshape(mean.shape[:-1]+x2.shape[-self.event_dim:])
-        log_scale = log_scale.reshape(log_scale.shape[:-1]+x2.shape[-self.event_dim:])
+        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim] + (-1,)))
+        mean = mean.reshape(mean.shape[:-1] + x2.shape[-self.event_dim:])
+        log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[-self.event_dim:])
 
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
@@ -139,11 +137,9 @@ class AffineCoupling(TransformModule):
         x1 = y1
 
         # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
-        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim]+(-1,)))
-        temp1 = mean.shape[:(1-self.event_dim)]
-        temp2 = y2.shape[-self.event_dim:]
-        mean = mean.reshape(mean.shape[:-1]+y2.shape[-self.event_dim:])
-        log_scale = log_scale.reshape(log_scale.shape[:-1]+y2.shape[-self.event_dim:])
+        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim] + (-1,)))
+        mean = mean.reshape(mean.shape[:-1] + y2.shape[-self.event_dim:])
+        log_scale = log_scale.reshape(log_scale.shape[:-1] + y2.shape[-self.event_dim:])
 
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
@@ -160,8 +156,8 @@ class AffineCoupling(TransformModule):
             log_scale = self._cached_log_scale
         else:
             x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
-            _, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim]+(-1,)))
-            log_scale = log_scale.reshape(log_scale.shape[:-1]+x2.shape[-self.event_dim:])
+            _, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim] + (-1,)))
+            log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[-self.event_dim:])
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         return _sum_rightmost(log_scale, self.event_dim)
 
@@ -287,18 +283,21 @@ def affine_coupling(input_dim, hidden_dims=None, split_dim=None, dim=-1, **kwarg
         if len(input_dim) != -dim:
             raise ValueError('event shape {} must have same length as event_dim {}'.format(input_dim, -dim))
         event_shape = input_dim
-        extra_dims = reduce(operator.mul, event_shape[(dim+1):], 1)
+        extra_dims = reduce(operator.mul, event_shape[(dim + 1):], 1)
     else:
         event_shape = [input_dim]
         extra_dims = 1
     event_shape = list(event_shape)
-    
+
     if split_dim is None:
         split_dim = event_shape[dim] // 2
     if hidden_dims is None:
         hidden_dims = [10 * event_shape[dim] * extra_dims]
-    
-    hypernet = DenseNN(split_dim * extra_dims, hidden_dims, [(event_shape[dim] - split_dim)*extra_dims, (event_shape[dim] - split_dim)*extra_dims])
+
+    hypernet = DenseNN(split_dim * extra_dims,
+                       hidden_dims,
+                       [(event_shape[dim] - split_dim) * extra_dims,
+                        (event_shape[dim] - split_dim) * extra_dims])
     return AffineCoupling(split_dim, hypernet, dim=dim, **kwargs)
 
 
@@ -334,7 +333,7 @@ def conditional_affine_coupling(input_dim, context_dim, hidden_dims=None, split_
         if len(input_dim) != -dim:
             raise ValueError('event shape {} must have same length as event_dim {}'.format(input_dim, -dim))
         event_shape = input_dim
-        extra_dims = reduce(operator.mul, event_shape[(dim+1):], 1)
+        extra_dims = reduce(operator.mul, event_shape[(dim + 1):], 1)
     else:
         event_shape = [input_dim]
         extra_dims = 1
@@ -345,5 +344,6 @@ def conditional_affine_coupling(input_dim, context_dim, hidden_dims=None, split_
     if hidden_dims is None:
         hidden_dims = [10 * event_shape[dim] * extra_dims]
 
-    nn = ConditionalDenseNN(split_dim * extra_dims, context_dim, hidden_dims, [(event_shape[dim] - split_dim)*extra_dims, (event_shape[dim] - split_dim)*extra_dims])
+    nn = ConditionalDenseNN(split_dim * extra_dims, context_dim, hidden_dims,
+                            [(event_shape[dim] - split_dim) * extra_dims, (event_shape[dim] - split_dim) * extra_dims])
     return ConditionalAffineCoupling(split_dim, nn, dim=dim, **kwargs)
