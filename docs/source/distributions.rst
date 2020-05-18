@@ -354,13 +354,6 @@ Permute
     :undoc-members:
     :show-inheritance:
 
-TanhTransform
--------------
-.. autoclass:: pyro.distributions.transforms.TanhTransform
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 DiscreteCosineTransform
 -----------------------
 .. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
@@ -611,7 +604,3 @@ spline
 sylvester
 ---------
 .. autofunction:: pyro.distributions.transforms.sylvester
-
-tanh
-----
-.. autofunction:: pyro.distributions.transforms.tanh

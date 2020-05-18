@@ -20,14 +20,15 @@ from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
 
 
-def _search_sorted(bin_locations, inputs, eps=1e-6):
+def _searchsorted(sorted_sequence, values):
     """
     Searches for which bin an input belongs to (in a way that is parallelizable and
     amenable to autodiff)
+
+    TODO: Replace with torch.searchsorted once it is released
     """
-    bin_locations[..., -1] += eps
     return torch.sum(
-        inputs[..., None] >= bin_locations,
+        values[..., None] >= sorted_sequence,
         dim=-1
     ) - 1
 
@@ -47,10 +48,6 @@ def _select_bins(x, idx):
     if len(idx.shape) >= len(x.shape):
         x = x.reshape((1,) * (len(idx.shape) - len(x.shape)) + x.shape)
         x = x.expand(idx.shape[:-2] + (-1,) * 2)
-    # Broadcast dimensions of x over idx
-    elif len(idx.shape) <= len(x.shape):
-        idx = idx.reshape((1,) * (len(x.shape) - len(idx.shape)) + idx.shape)
-        idx = idx.expand(x.shape[:-2] + (-1,) * 2)
 
     return x.gather(-1, idx).squeeze(-1)
 
@@ -85,7 +82,8 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
                                min_bin_width=1e-3,
                                min_bin_height=1e-3,
                                min_derivative=1e-3,
-                               min_lambda=0.025):
+                               min_lambda=0.025,
+                               eps=1e-6):
     """
     Calculating a monotonic rational spline (linear for now) or its inverse, plus
     the log(abs(detJ)) required for normalizing flows.
@@ -136,7 +134,7 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     # Get the index of the bin that each input is in
     # bin_idx ~ (batch_dim, input_dim, 1)
-    bin_idx = _search_sorted(cumheights if inverse else cumwidths, inputs)[..., None]
+    bin_idx = _searchsorted(cumheights + eps if inverse else cumwidths + eps, inputs)[..., None]
 
     # Select the value for the relevant bin for the variables used in the main calculation
     input_widths = _select_bins(widths, bin_idx)
@@ -501,3 +499,18 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
                              input_dim * (count_bins - 1),
                              input_dim * count_bins])
     return ConditionalSpline(nn, input_dim, count_bins, bound=bound)
+
+if __name__ == "__main__":
+    from pyro.nn.dense_nn import DenseNN
+    import pyro.distributions as dist
+    input_dim = 10
+    context_dim = 5
+    batch_size = 3
+    count_bins = 8
+    base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    param_dims = [input_dim * count_bins, input_dim * count_bins, input_dim * (count_bins - 1), input_dim * count_bins]
+    hypernet = DenseNN(context_dim, [50, 50], param_dims)
+    transform = ConditionalSpline(hypernet, input_dim, count_bins)
+    z = torch.rand(5, batch_size, context_dim)
+    flow_dist = dist.ConditionalTransformedDistribution(base_dist, [transform]).condition(z)
+    print(flow_dist.sample(sample_shape=torch.Size([batch_size])))
