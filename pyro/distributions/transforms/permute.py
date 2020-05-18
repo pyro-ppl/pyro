@@ -45,8 +45,8 @@ class Permute(Transform):
     event_dim = 1
     volume_preserving = True
 
-    def __init__(self, permutation):
-        super().__init__(cache_size=1)
+    def __init__(self, permutation, cache_size=1):
+        super().__init__(cache_size=cache_size)
 
         self.permutation = permutation
 
@@ -90,6 +90,11 @@ class Permute(Transform):
         """
 
         return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
+
+    def with_cache(self, cache_size=1):
+        if self._cache_size == cache_size:
+            return self
+        return Permute(self.permutation, cache_size=cache_size)
 
 
 def permute(input_dim, permutation=None):
