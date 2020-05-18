@@ -20,6 +20,7 @@ from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
 from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import DiscreteCosineReparam
+from pyro.infer.smcfilter import SMCFailed
 from pyro.util import warn_if_nan
 
 from .distributions import set_approx_sample_thresh
@@ -144,7 +145,7 @@ class CompartmentalModel(ABC):
 
     @torch.no_grad()
     @set_approx_sample_thresh(1000)
-    def heuristic(self, num_particles=1024, ess_threshold=0.5):
+    def heuristic(self, num_particles=1024, ess_threshold=0.5, retries=10):
         """
         Finds an initial feasible guess of all latent variables, consistent
         with observed data. This is needed because not all hypotheses are
@@ -163,12 +164,20 @@ class CompartmentalModel(ABC):
         # Run SMC.
         model = _SMCModel(self)
         guide = _SMCGuide(self)
-        smc = SMCFilter(model, guide, num_particles=num_particles,
-                        ess_threshold=ess_threshold,
-                        max_plate_nesting=self.max_plate_nesting)
-        smc.init()
-        for t in range(1, self.duration):
-            smc.step()
+        for attempt in range(1, 1 + retries):
+            smc = SMCFilter(model, guide, num_particles=num_particles,
+                            ess_threshold=ess_threshold,
+                            max_plate_nesting=self.max_plate_nesting)
+            try:
+                smc.init()
+                for t in range(1, self.duration):
+                    smc.step()
+                break
+            except SMCFailed as e:
+                if attempt == retries:
+                    raise
+                logger.info("{}. Retrying...".format(e))
+                continue
 
         # Select the most probable hypothesis.
         i = int(smc.state._log_weights.max(0).indices)
@@ -309,7 +318,6 @@ class CompartmentalModel(ABC):
                              if k.startswith("heuristic_")}
 
         def heuristic():
-            logger.info("Heuristically initializing...")
             with poutine.block():
                 init_values = self.heuristic(**heuristic_options)
             assert isinstance(init_values, dict)
@@ -321,6 +329,10 @@ class CompartmentalModel(ABC):
                 x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
                 x = DiscreteCosineTransform(smooth=self._dct)(x)
                 init_values["auxiliary_dct"] = x
+            logger.info("Heuristic init: {}".format(", ".join(
+                "{}={:0.3g}".format(k, v.item())
+                for k, v in init_values.items()
+                if v.numel() == 1)))
             return init_to_value(values=init_values)
 
         # Configure a kernel.
