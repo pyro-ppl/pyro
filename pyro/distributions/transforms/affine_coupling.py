@@ -1,7 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import partial
+from functools import partial, reduce
+import operator
 
 import torch
 from torch.distributions import constraints
@@ -112,7 +113,13 @@ class AffineCoupling(TransformModule):
         """
         x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
 
-        mean, log_scale = self.nn(x1)
+        # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
+        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim]+(-1,)))
+        #temp1 = mean.shape[:(1-self.event_dim)]
+        #temp2 = x2.shape[(1-self.event_dim):]
+        mean = mean.reshape(mean.shape[:-1]+x2.shape[-self.event_dim:])
+        log_scale = log_scale.reshape(log_scale.shape[:-1]+x2.shape[-self.event_dim:])
+
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
 
@@ -130,7 +137,14 @@ class AffineCoupling(TransformModule):
         """
         y1, y2 = y.split([self.split_dim, y.size(self.dim) - self.split_dim], dim=self.dim)
         x1 = y1
-        mean, log_scale = self.nn(x1)
+
+        # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
+        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim]+(-1,)))
+        temp1 = mean.shape[:(1-self.event_dim)]
+        temp2 = y2.shape[-self.event_dim:]
+        mean = mean.reshape(mean.shape[:-1]+y2.shape[-self.event_dim:])
+        log_scale = log_scale.reshape(log_scale.shape[:-1]+y2.shape[-self.event_dim:])
+
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
 
@@ -145,10 +159,11 @@ class AffineCoupling(TransformModule):
         if self._cached_log_scale is not None and x is x_old and y is y_old:
             log_scale = self._cached_log_scale
         else:
-            x1, _ = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
-            _, log_scale = self.nn(x1)
+            x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
+            _, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim]+(-1,)))
+            log_scale = log_scale.reshape(log_scale.shape[:-1]+x2.shape[-self.event_dim:])
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
-        return _sum_rightmost(log_scale, -self.event_dim)
+        return _sum_rightmost(log_scale, self.event_dim)
 
 
 @copy_docs_from(ConditionalTransformModule)
@@ -242,13 +257,14 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
         return AffineCoupling(self.split_dim, cond_nn, **self.kwargs)
 
 
-def affine_coupling(input_dim, hidden_dims=None, split_dim=None, **kwargs):
+def affine_coupling(input_dim, hidden_dims=None, split_dim=None, dim=-1, **kwargs):
     """
     A helper function to create an
     :class:`~pyro.distributions.transforms.AffineCoupling` object that takes care of
     constructing a dense network with the correct input/output dimensions.
 
-    :param input_dim: Dimension of input variable
+    :param input_dim: Dimension(s) of input variable to permute. Note that when
+        `dim < -1` this must be a tuple corresponding to the event shape.
     :type input_dim: int
     :param hidden_dims: The desired hidden dimensions of the dense network. Defaults
         to using [10*input_dim]
@@ -256,6 +272,9 @@ def affine_coupling(input_dim, hidden_dims=None, split_dim=None, **kwargs):
     :param split_dim: The dimension to split the input on for the coupling
         transform. Defaults to using input_dim // 2
     :type split_dim: int
+    :param dim: the tensor dimension on which to split. This value must be negative
+        and defines the event dim as `abs(dim)`.
+    :type dim: int
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from
         the autoregressive NN
     :type log_scale_min_clip: float
@@ -264,15 +283,26 @@ def affine_coupling(input_dim, hidden_dims=None, split_dim=None, **kwargs):
     :type log_scale_max_clip: float
 
     """
+    if not isinstance(input_dim, int):
+        if len(input_dim) != -dim:
+            raise ValueError('event shape {} must have same length as event_dim {}'.format(input_dim, -dim))
+        event_shape = input_dim
+        extra_dims = reduce(operator.mul, event_shape[(dim+1):], 1)
+    else:
+        event_shape = [input_dim]
+        extra_dims = 1
+    event_shape = list(event_shape)
+    
     if split_dim is None:
-        split_dim = input_dim // 2
+        split_dim = event_shape[dim] // 2
     if hidden_dims is None:
-        hidden_dims = [10 * input_dim]
-    hypernet = DenseNN(split_dim, hidden_dims, [input_dim - split_dim, input_dim - split_dim])
-    return AffineCoupling(split_dim, hypernet, **kwargs)
+        hidden_dims = [10 * event_shape[dim] * extra_dims]
+    
+    hypernet = DenseNN(split_dim * extra_dims, hidden_dims, [(event_shape[dim] - split_dim)*extra_dims, (event_shape[dim] - split_dim)*extra_dims])
+    return AffineCoupling(split_dim, hypernet, dim=dim, **kwargs)
 
 
-def conditional_affine_coupling(input_dim, context_dim, hidden_dims=None, split_dim=None, **kwargs):
+def conditional_affine_coupling(input_dim, context_dim, hidden_dims=None, split_dim=None, dim=-1, **kwargs):
     """
     A helper function to create an
     :class:`~pyro.distributions.transforms.ConditionalAffineCoupling` object that
@@ -289,6 +319,9 @@ def conditional_affine_coupling(input_dim, context_dim, hidden_dims=None, split_
     :param split_dim: The dimension to split the input on for the coupling
         transform. Defaults to using input_dim // 2
     :type split_dim: int
+    :param dim: the tensor dimension on which to split. This value must be negative
+        and defines the event dim as `abs(dim)`.
+    :type dim: int
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from
         the autoregressive NN
     :type log_scale_min_clip: float
@@ -297,9 +330,20 @@ def conditional_affine_coupling(input_dim, context_dim, hidden_dims=None, split_
     :type log_scale_max_clip: float
 
     """
+    if not isinstance(input_dim, int):
+        if len(input_dim) != -dim:
+            raise ValueError('event shape {} must have same length as event_dim {}'.format(input_dim, -dim))
+        event_shape = input_dim
+        extra_dims = reduce(operator.mul, event_shape[(dim+1):], 1)
+    else:
+        event_shape = [input_dim]
+        extra_dims = 1
+    event_shape = list(event_shape)
+
     if split_dim is None:
-        split_dim = input_dim // 2
+        split_dim = event_shape[dim] // 2
     if hidden_dims is None:
-        hidden_dims = [10 * input_dim]
-    nn = ConditionalDenseNN(split_dim, context_dim, hidden_dims, [input_dim - split_dim, input_dim - split_dim])
-    return ConditionalAffineCoupling(split_dim, nn, **kwargs)
+        hidden_dims = [10 * event_shape[dim] * extra_dims]
+
+    nn = ConditionalDenseNN(split_dim * extra_dims, context_dim, hidden_dims, [(event_shape[dim] - split_dim)*extra_dims, (event_shape[dim] - split_dim)*extra_dims])
+    return ConditionalAffineCoupling(split_dim, nn, dim=dim, **kwargs)

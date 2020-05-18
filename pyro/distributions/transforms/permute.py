@@ -39,6 +39,7 @@ class Permute(Transform):
     :type permutation: torch.LongTensor
     :param dim: the tensor dimension to permute. This value must be negative and
         defines the event dim as `abs(dim)`.
+    :type dim: int
 
     """
 
@@ -97,19 +98,27 @@ class Permute(Transform):
         return torch.zeros(x.size()[:-self.event_dim], dtype=x.dtype, layout=x.layout, device=x.device)
 
 
-def permute(input_dim, permutation=None):
+def permute(input_dim, permutation=None, dim=-1):
     """
     A helper function to create a :class:`~pyro.distributions.transforms.Permute`
     object for consistency with other helpers.
 
-    :param input_dim: Dimension of input variable
+    :param input_dim: Dimension(s) of input variable to permute. Note that when
+        `dim < -1` this must be a tuple corresponding to the event shape.
     :type input_dim: int
     :param permutation: Torch tensor of integer indices representing permutation.
         Defaults to a random permutation.
     :type permutation: torch.LongTensor
+    :param dim: the tensor dimension to permute. This value must be negative and
+        defines the event dim as `abs(dim)`.
+    :type dim: int
 
     """
+    if dim < -1 or not isinstance(input_dim, int):
+        if len(input_dim) != -dim:
+            raise ValueError('event shape {} must have same length as event_dim {}'.format(input_dim, -dim))
+        input_dim = input_dim[dim]
 
     if permutation is None:
         permutation = torch.randperm(input_dim)
-    return Permute(permutation)
+    return Permute(permutation, dim=dim)
