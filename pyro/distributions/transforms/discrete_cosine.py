@@ -77,4 +77,4 @@ class DiscreteCosineTransform(Transform):
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
             return self
-        return DiscreteCosineTransform(-self.event_dim, self.smooth, cache_size)
+        return DiscreteCosineTransform(-self.event_dim, self.smooth, cache_size=cache_size)

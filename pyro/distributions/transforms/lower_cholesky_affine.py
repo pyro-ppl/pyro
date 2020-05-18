@@ -68,4 +68,4 @@ class LowerCholeskyAffine(Transform):
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
             return self
-        return LowerCholeskyAffine(self.loc, self.scale_tril, cache_size)
+        return LowerCholeskyAffine(self.loc, self.scale_tril, cache_size=cache_size)

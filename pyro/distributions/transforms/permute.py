@@ -94,7 +94,7 @@ class Permute(Transform):
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
             return self
-        return Permute(self.permutation, cache_size)
+        return Permute(self.permutation, cache_size=cache_size)
 
 
 def permute(input_dim, permutation=None):
