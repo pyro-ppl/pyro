@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import constraints
-from torch.distributions.transforms import SigmoidTransform, TanhTransform, Transform
+from torch.distributions.transforms import SigmoidTransform, TanhTransform
 
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
