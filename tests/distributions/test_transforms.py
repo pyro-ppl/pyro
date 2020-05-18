@@ -284,7 +284,8 @@ if __name__ == "__main__":
     #tt.test_permute()
     #tt.test_generalized_channel_permute()
     #tt.test_affine_coupling()
-    tt.test_conditional_affine_coupling()
+    #tt.test_conditional_affine_coupling()
+    tt.test_conditional_neural_autoregressive()
 
     """event_dim = 2
     transform = T.permute

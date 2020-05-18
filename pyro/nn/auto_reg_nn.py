@@ -224,6 +224,9 @@ class ConditionalAutoRegressiveNN(nn.Module):
         """
         The forward method
         """
+        # We must be able to broadcast the size of the context over the input
+        context = context.expand(x.size()[:-1]+(context.size(-1),))
+        
         x = torch.cat([context, x], dim=-1)
         return self._forward(x)
 
