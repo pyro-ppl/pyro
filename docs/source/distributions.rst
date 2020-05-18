@@ -622,7 +622,3 @@ spline
 sylvester
 ---------
 .. autofunction:: pyro.distributions.transforms.sylvester
-
-tanh
-----
-.. autofunction:: pyro.distributions.transforms.tanh
