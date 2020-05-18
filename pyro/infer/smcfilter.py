@@ -13,6 +13,14 @@ from pyro.infer.util import is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
 
 
+class SMCFailed(ValueError):
+    """
+    Exception raised when :class:`SMCFilter` fails to find any hypothesis with
+    nonzero probability.
+    """
+    pass
+
+
 class SMCFilter:
     """
     :class:`SMCFilter` is the top-level interface for filtering via sequential
@@ -112,16 +120,16 @@ class SMCFilter:
                 log_q = guide_site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 self.state._log_weights += log_p - log_q
                 if not (self.state._log_weights.max() > -math.inf):
-                    raise ValueError("Failed to find feasible hypothesis after site {}"
-                                     .format(name))
+                    raise SMCFailed("Failed to find feasible hypothesis after site {}"
+                                    .format(name))
 
         for site in model_trace.nodes.values():
             if site["type"] == "sample" and site["is_observed"]:
                 log_p = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 self.state._log_weights += log_p
                 if not (self.state._log_weights.max() > -math.inf):
-                    raise ValueError("Failed to find feasible hypothesis after site {}"
-                                     .format(site["name"]))
+                    raise SMCFailed("Failed to find feasible hypothesis after site {}"
+                                    .format(site["name"]))
 
         self.state._log_weights -= self.state._log_weights.max()
 
