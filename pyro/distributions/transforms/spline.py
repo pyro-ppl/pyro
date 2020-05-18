@@ -259,19 +259,19 @@ class SplineLayer(nn.Module):
 
 @copy_docs_from(TransformModule)
 class Spline(TransformModule):
-    """
+    r"""
     An implementation of the element-wise rational spline bijections of linear
     and quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020).
     Rational splines are functions that are comprised of segments that are the
     ratio of two polynomials. For instance, for the :math:`d`-th dimension and
     the :math:`k`-th segment on the spline, the function will take the form,
 
-        :math:`y_d = \\frac{\\alpha^{(k)}(x_d)}{\\beta^{(k)}(x_d)},`
+        :math:`y_d = \frac{\alpha^{(k)}(x_d)}{\beta^{(k)}(x_d)},`
 
-    where :math:`\\alpha^{(k)}` and :math:`\\beta^{(k)}` are two polynomials of
+    where :math:`\alpha^{(k)}` and :math:`\beta^{(k)}` are two polynomials of
     order :math:`d`. For :math:`d=1`, we say that the spline is linear, and for
     :math:`d=2`, quadratic. The spline is constructed on the specified bounding
-    box, :math:`[-K,K]\\times[-K,K]`, with the identity function used elsewhere
+    box, :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere
     .
 
     Rational splines offer an excellent combination of functional flexibility
@@ -294,7 +294,7 @@ class Spline(TransformModule):
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
     :param bound: The quantity :math:`K` determining the bounding box,
-        :math:`[-K,K]\\times[-K,K]`, of the spline.
+        :math:`[-K,K]\times[-K,K]`, of the spline.
     :type bound: float
     :param order: One of ['linear', 'quadratic'] specifying the order of the
         spline.

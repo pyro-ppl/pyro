@@ -64,6 +64,20 @@ BetaBinomial
     :undoc-members:
     :show-inheritance:
 
+CoalescentTimes
+---------------
+.. autoclass:: pyro.distributions.CoalescentTimes
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+CoalescentTimesWithRate
+-----------------------
+.. autoclass:: pyro.distributions.CoalescentTimesWithRate
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalDistribution
 -----------------------
 .. autoclass:: pyro.distributions.ConditionalDistribution
@@ -274,13 +288,6 @@ Unit
     :undoc-members:
     :show-inheritance:
 
-VonMises
---------
-.. autoclass:: pyro.distributions.VonMises
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 VonMises3D
 ----------
 .. autoclass:: pyro.distributions.VonMises3D
@@ -354,13 +361,6 @@ Permute
     :undoc-members:
     :show-inheritance:
 
-TanhTransform
--------------
-.. autoclass:: pyro.distributions.transforms.TanhTransform
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 DiscreteCosineTransform
 -----------------------
 .. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
@@ -395,6 +395,13 @@ BatchNorm
 BlockAutoregressive
 -------------------
 .. autoclass:: pyro.distributions.transforms.BlockAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalAffineAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalAffineAutoregressive
     :members:
     :undoc-members:
     :show-inheritance:
@@ -543,6 +550,10 @@ batchnorm
 block_autoregressive
 --------------------
 .. autofunction:: pyro.distributions.transforms.block_autoregressive
+
+conditional_affine_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_affine_autoregressive
 
 conditional_affine_coupling
 ---------------------------

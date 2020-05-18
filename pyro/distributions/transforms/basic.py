@@ -4,7 +4,7 @@
 import math
 
 import torch
-from torch.distributions.transforms import Transform
+from torch.distributions.transforms import Transform, TanhTransform
 from torch.distributions import constraints
 import torch.nn.functional as F
 
@@ -73,35 +73,6 @@ def leaky_relu():
     consistency with other helpers.
     """
     return LeakyReLUTransform()
-
-# TODO: Move upstream
-
-
-class TanhTransform(Transform):
-    r"""
-    Bijective transform via the mapping :math:`y = \text{tanh}(x)`.
-    """
-    domain = constraints.real
-    codomain = constraints.interval(-1., 1.)
-    bijective = True
-    sign = +1
-
-    @staticmethod
-    def atanh(x):
-        return 0.5 * (x.log1p() - (-x).log1p())
-
-    def __eq__(self, other):
-        return isinstance(other, TanhTransform)
-
-    def _call(self, x):
-        return torch.tanh(x)
-
-    def _inverse(self, y):
-        eps = torch.finfo(y.dtype).eps
-        return self.atanh(y.clamp(min=-1. + eps, max=1. - eps))
-
-    def log_abs_det_jacobian(self, x, y):
-        return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
 
 
 def tanh():

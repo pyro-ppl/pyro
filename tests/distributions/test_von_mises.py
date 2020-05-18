@@ -9,8 +9,51 @@ import torch
 from torch import optim
 
 from pyro.distributions import VonMises, VonMises3D
-from pyro.distributions.von_mises import _log_modified_bessel_fn
 from tests.common import skipif_param
+
+
+def _eval_poly(y, coef):
+    coef = list(coef)
+    result = coef.pop()
+    while coef:
+        result = coef.pop() + y * result
+    return result
+
+
+_I0_COEF_SMALL = [1.0, 3.5156229, 3.0899424, 1.2067492, 0.2659732, 0.360768e-1, 0.45813e-2]
+_I0_COEF_LARGE = [0.39894228, 0.1328592e-1, 0.225319e-2, -0.157565e-2, 0.916281e-2,
+                  -0.2057706e-1, 0.2635537e-1, -0.1647633e-1,  0.392377e-2]
+_I1_COEF_SMALL = [0.5, 0.87890594, 0.51498869, 0.15084934, 0.2658733e-1, 0.301532e-2, 0.32411e-3]
+_I1_COEF_LARGE = [0.39894228, -0.3988024e-1, -0.362018e-2, 0.163801e-2, -0.1031555e-1,
+                  0.2282967e-1, -0.2895312e-1, 0.1787654e-1, -0.420059e-2]
+
+_COEF_SMALL = [_I0_COEF_SMALL, _I1_COEF_SMALL]
+_COEF_LARGE = [_I0_COEF_LARGE, _I1_COEF_LARGE]
+
+
+def _log_modified_bessel_fn(x, order=0):
+    """
+    Returns ``log(I_order(x))`` for ``x > 0``,
+    where `order` is either 0 or 1.
+    """
+    assert order == 0 or order == 1
+
+    # compute small solution
+    y = (x / 3.75).pow(2)
+    small = _eval_poly(y, _COEF_SMALL[order])
+    if order == 1:
+        small = x.abs() * small
+    small = small.log()
+
+    # compute large solution
+    y = 3.75 / x
+    large = x - 0.5 * x.log() + _eval_poly(y, _COEF_LARGE[order]).log()
+
+    mask = (x < 3.75)
+    result = large
+    if mask.any():
+        result[mask] = small[mask]
+    return result
 
 
 def _fit_params_from_samples(samples, n_iter):

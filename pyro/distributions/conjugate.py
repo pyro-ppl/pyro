@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 import numbers
 
 import torch
@@ -40,17 +41,25 @@ class BetaBinomial(TorchDistribution):
     :param float or torch.Tensor concentration0: 2nd concentration parameter (beta) for the
         Beta distribution.
     :param int or torch.Tensor total_count: number of Bernoulli trials.
+    :param approx_sample_thresh: EXPERIMENTAL total_count above which sampling
+        will use a clamped Poisson approximation for Binomial samples. This is useful
+        for sampling very large populations.
+    :type approx_sample_thresh: int or float
     """
     arg_constraints = {'concentration1': constraints.positive, 'concentration0': constraints.positive,
                        'total_count': constraints.nonnegative_integer}
     has_enumerate_support = True
     support = Binomial.support
 
-    def __init__(self, concentration1, concentration0, total_count=1, validate_args=None):
+    def __init__(self, concentration1, concentration0, total_count=1, validate_args=None,
+                 *, approx_sample_thresh=math.inf):
+        assert isinstance(approx_sample_thresh, numbers.Number)
+        assert approx_sample_thresh >= 0
         concentration1, concentration0, total_count = broadcast_all(
             concentration1, concentration0, total_count)
         self._beta = Beta(concentration1, concentration0)
         self.total_count = total_count
+        self.approx_sample_thresh = approx_sample_thresh
         super().__init__(self._beta._batch_shape, validate_args=validate_args)
 
     @property
@@ -66,13 +75,15 @@ class BetaBinomial(TorchDistribution):
         batch_shape = torch.Size(batch_shape)
         new._beta = self._beta.expand(batch_shape)
         new.total_count = self.total_count.expand_as(new._beta.concentration0)
+        new.approx_sample_thresh = self.approx_sample_thresh
         super(BetaBinomial, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
     def sample(self, sample_shape=()):
         probs = self._beta.sample(sample_shape)
-        return Binomial(self.total_count, probs).sample()
+        return Binomial(self.total_count, probs,
+                        approx_sample_thresh=self.approx_sample_thresh).sample()
 
     def log_prob(self, value):
         if self._validate_args:

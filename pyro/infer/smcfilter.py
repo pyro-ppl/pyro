@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+import math
 
 import torch
 
@@ -37,13 +38,19 @@ class SMCFilter:
         distribution.
     :param int max_plate_nesting: Bound on max number of nested
         :func:`pyro.plate` contexts.
+    :param float ess_threshold: Effective sample size threshold for deciding
+        when to importance resample: resampling occurs when
+        ``ess < ess_threshold * num_particles``.
     """
     # TODO: Add window kwarg that defaults to float("inf")
-    def __init__(self, model, guide, num_particles, max_plate_nesting):
+    def __init__(self, model, guide, num_particles, max_plate_nesting, *,
+                 ess_threshold=0.5):
+        assert 0 < ess_threshold <= 1
         self.model = model
         self.guide = guide
         self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting
+        self.ess_threshold = ess_threshold
 
         # Equivalent to an empirical distribution, but allows a
         # user-defined dynamic collection of tensors.
@@ -104,16 +111,28 @@ class SMCFilter:
                 log_p = model_site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 log_q = guide_site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 self.state._log_weights += log_p - log_q
+                if not (self.state._log_weights.max() > -math.inf):
+                    raise ValueError("Failed to find feasible hypothesis after site {}"
+                                     .format(name))
 
         for site in model_trace.nodes.values():
             if site["type"] == "sample" and site["is_observed"]:
                 log_p = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 self.state._log_weights += log_p
+                if not (self.state._log_weights.max() > -math.inf):
+                    raise ValueError("Failed to find feasible hypothesis after site {}"
+                                     .format(site["name"]))
 
         self.state._log_weights -= self.state._log_weights.max()
 
     def _maybe_importance_resample(self):
-        if self.state:  # TODO check perplexity
+        if not self.state:
+            return
+        # Decide whether to resample based on ESS.
+        logp = self.state._log_weights
+        logp -= logp.logsumexp(dim=-1)
+        ess = logp.mul(2).exp().sum().reciprocal()
+        if ess < self.ess_threshold * self.num_particles:
             self._importance_resample()
 
     def _importance_resample(self):
