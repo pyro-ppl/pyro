@@ -50,6 +50,15 @@ Discrete Cosine Transform
     :special-members: __call__
     :show-inheritance:
 
+UnitJacobianReparam
+-------------------
+.. automodule:: pyro.infer.reparam.unit_jacobian
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 StudentT Distributions
 ----------------------
 .. automodule:: pyro.infer.reparam.studentt

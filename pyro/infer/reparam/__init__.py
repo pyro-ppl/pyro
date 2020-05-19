@@ -9,6 +9,7 @@ from .conjugate import ConjugateReparam
 from .stable import LatentStableReparam, StableReparam, SymmetricStableReparam
 from .studentt import StudentTReparam
 from .transform import TransformReparam
+from .unit_jacobian import UnitJacobianReparam
 
 __all__ = [
     "ConjugateReparam",
@@ -21,4 +22,5 @@ __all__ = [
     "StudentTReparam",
     "SymmetricStableReparam",
     "TransformReparam",
+    "UnitJacobianReparam",
 ]
