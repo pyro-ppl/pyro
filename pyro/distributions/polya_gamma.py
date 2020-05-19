@@ -3,10 +3,14 @@
 
 import math
 
-from pyro.distributions import constraints, Gamma
+import torch
+from torch.distributions import constraints
+
+from pyro.distributions.torch import Gamma
+from pyro.distributions.torch_distribution import TorchDistribution
 
 
-class TruncatedPolyaGamma(Binomial):
+class TruncatedPolyaGamma(TorchDistribution):
     """
     This is a PolyaGamma(0, 1) distribution truncated to have finite support in
     the interval (0, 2.5). See [1] for details. As a consequence of the truncation
@@ -36,7 +40,15 @@ class TruncatedPolyaGamma(Binomial):
     def __init__(self, prototype, validate_args=None):
         self.dtype = prototype.dtype
         self.device = prototype.device
-        super(TruncatedPolyaGamma, self).__init__(batch_shape=(), validate_args=validate_args)
+        super(TruncatedPolyaGamma, self).__init__(batch_shape=(), event_shape=(), validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(TruncatedPolyaGamma, _instance)
+        super(TruncatedPolyaGamma, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self.__dict__.get("_validate_args")
+        new.dtype = self.dtype
+        new.device = self.device
+        return new
 
     def sample(self, sample_shape=()):
         denom = torch.arange(0.5, self.num_gamma_variates).pow(2.0)
@@ -44,7 +56,7 @@ class TruncatedPolyaGamma(Binomial):
                           dtype=self.dtype, device=self.device)
         x = Gamma(ones, ones).sample()
         x = (x / denom).sum(-1)
-        return torch.clip(x * (0.5 / math.pi ** 2), max=self.truncation_point)
+        return torch.clamp(x * (0.5 / math.pi ** 2), max=self.truncation_point)
 
     def log_prob(self, value):
         value = value.unsqueeze(-1)
