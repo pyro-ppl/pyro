@@ -6,7 +6,7 @@ import math
 import torch
 
 
-root_two_inverse = 1.0 / math.sqrt(2.0)
+_ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
 
 
 class _SafeLog(torch.autograd.Function):
@@ -365,8 +365,8 @@ def haar_transform(x):
     """
     n = x.size(-1) // 2
     even, odd, end = x[..., 0:n+n:2], x[..., 1:n+n:2], x[..., n+n:]
-    hi = root_two_inverse * (even - odd)
-    lo = root_two_inverse * (even + odd)
+    hi = _ROOT_TWO_INVERSE * (even - odd)
+    lo = _ROOT_TWO_INVERSE * (even + odd)
     if n >= 2:
         lo = haar_transform(lo)
     x = torch.cat([lo, hi, end], dim=-1)
@@ -385,8 +385,8 @@ def inverse_haar_transform(x):
     lo, hi, end = x[..., :n], x[..., n:n+n], x[..., n+n:]
     if n >= 2:
         lo = inverse_haar_transform(lo)
-    even = root_two_inverse * (lo + hi)
-    odd = root_two_inverse * (lo - hi)
+    even = _ROOT_TWO_INVERSE * (lo + hi)
+    odd = _ROOT_TWO_INVERSE * (lo - hi)
     even_odd = torch.stack([even, odd], dim=-1).reshape(even.shape[:-1] + (-1,))
     x = torch.cat([even_odd, end], dim=-1)
     return x

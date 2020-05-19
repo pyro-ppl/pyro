@@ -34,7 +34,8 @@ class HaarTransform(Transform):
         super().__init__(cache_size=cache_size)
 
     def __eq__(self, other):
-        return (type(self) == type(other) and self.event_dim == other.event_dim)
+        return (type(self) == type(other) and self.event_dim == other.event_dim and
+                self.flip == other.flip)
 
     def _call(self, x):
         dim = -self.event_dim
