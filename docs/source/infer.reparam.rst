@@ -50,6 +50,15 @@ Discrete Cosine Transform
     :special-members: __call__
     :show-inheritance:
 
+Haar Transform
+--------------
+.. automodule:: pyro.infer.reparam.haar
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 UnitJacobianReparam
 -------------------
 .. automodule:: pyro.infer.reparam.unit_jacobian

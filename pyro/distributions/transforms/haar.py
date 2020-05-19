@@ -61,3 +61,8 @@ class HaarTransform(Transform):
 
     def log_abs_det_jacobian(self, x, y):
         return x.new_zeros(x.shape[:-self.event_dim])
+
+    def with_cache(self, cache_size=1):
+        if self._cache_size == cache_size:
+            return self
+        return HaarTransform(-self.event_dim, cache_size=cache_size)

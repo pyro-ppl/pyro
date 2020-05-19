@@ -1,15 +1,15 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
+from pyro.distributions.transforms.haar import HaarTransform
 
 from .unit_jacobian import UnitJacobianReparam
 
 
-class DiscreteCosineReparam(UnitJacobianReparam):
+class HaarReparam(UnitJacobianReparam):
     """
-    Discrete Cosine reparamterizer, using a
-    :class:`~pyro.distributions.transforms.DiscreteCosineTransform` .
+    Haar wavelet reparamterizer, using a
+    :class:`~pyro.distributions.transforms.HaarTransform`.
 
     This is useful for sequential models where coupling along a time-like axis
     (e.g. a banded precision matrix) introduces long-range correlation. This
@@ -26,11 +26,9 @@ class DiscreteCosineReparam(UnitJacobianReparam):
 
     :param int dim: Dimension along which to transform. Must be negative.
         This is an absolute dim counting from the right.
-    :param float smooth: Smoothing parameter. When 0, this transforms white
-        noise to white noise; when 1 this transforms Brownian noise to to white
-        noise; when -1 this transforms violet noise to white noise; etc. Any
-        real number is allowed. https://en.wikipedia.org/wiki/Colors_of_noise.
+    :param bool flip: Whether to flip the time axis before applying the
+        Haar transform. Defaults to false.
     """
-    def __init__(self, dim=-1, smooth=0.):
-        transform = DiscreteCosineTransform(dim=dim, smooth=smooth, cache_size=1)
-        super().__init__(transform, suffix="dct")
+    def __init__(self, dim=-1, flip=False):
+        transform = HaarTransform(dim=dim, flip=flip, cache_size=1)
+        super().__init__(transform, suffix="haar")

@@ -15,11 +15,11 @@ from torch.distributions import biject_to, constraints
 import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
-from pyro.distributions.transforms import DiscreteCosineTransform
+from pyro.distributions.transforms import HaarTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
 from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
-from pyro.infer.reparam import DiscreteCosineReparam
+from pyro.infer.reparam import HaarReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.util import warn_if_nan
 
@@ -300,8 +300,7 @@ class CompartmentalModel(ABC):
         :param int num_quant_bins: The number of quantization bins to use. Note
             that computational cost is exponential in `num_quant_bins`.
             Defaults to 4.
-        :param float dct: If provided, use a discrete cosine reparameterizer
-            with this value as smoothness.
+        :param bool haar: Whether to use a Haar wavelet reparameterizer.
         :param int heuristic_num_particles: Passed to :meth:`heuristic` as
             ``num_particles``. Defaults to 1024.
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
@@ -309,9 +308,7 @@ class CompartmentalModel(ABC):
         """
         # Save these options for .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
-        self._dct = options.pop("dct", None)
-        if self._dct is not None and self.is_regional:
-            raise NotImplementedError("regional models do not support DiscreteCosineReparam")
+        self._haar = options.pop("haar", False)
 
         # Heuristically initialze to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
@@ -324,12 +321,12 @@ class CompartmentalModel(ABC):
             assert isinstance(init_values, dict)
             assert "auxiliary" in init_values, \
                 ".heuristic() did not define auxiliary value"
-            if self._dct is not None:
-                # Also initialize DCT transformed coordinates.
+            if self._haar:
+                # Also initialize Haar transformed coordinates.
                 x = init_values["auxiliary"]
                 x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-                x = DiscreteCosineTransform(smooth=self._dct)(x)
-                init_values["auxiliary_dct"] = x
+                x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True)(x)
+                init_values["auxiliary_haar"] = x
             logger.info("Heuristic init: {}".format(", ".join(
                 "{}={:0.3g}".format(k, v.item())
                 for k, v in init_values.items()
@@ -341,8 +338,8 @@ class CompartmentalModel(ABC):
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
         model = self._vectorized_model
-        if self._dct is not None:
-            rep = DiscreteCosineReparam(smooth=self._dct)
+        if self._haar:
+            rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
@@ -391,9 +388,9 @@ class CompartmentalModel(ABC):
         model = self._sequential_model
         model = poutine.condition(model, samples)
         model = particle_plate(model)
-        if self._dct is not None:
+        if self._haar:
             # Apply the same reparameterizer as during inference.
-            rep = DiscreteCosineReparam(smooth=self._dct)
+            rep = HaarReparam(dim=-2 if self.is_regional else -2, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
         model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
