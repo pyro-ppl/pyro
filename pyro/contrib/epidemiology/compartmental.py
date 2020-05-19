@@ -144,7 +144,7 @@ class CompartmentalModel(ABC):
     full_mass = False
 
     @torch.no_grad()
-    @set_approx_sample_thresh(1000)
+    @set_approx_sample_thresh(100)  # This is robust to gross approximation.
     def heuristic(self, num_particles=1024, ess_threshold=0.5, retries=10):
         """
         Finds an initial feasible guess of all latent variables, consistent
@@ -258,6 +258,7 @@ class CompartmentalModel(ABC):
     # Inference interface ########################################
 
     @torch.no_grad()
+    @set_approx_sample_thresh(1000)
     def generate(self, fixed={}):
         """
         Generate data from the prior.
@@ -361,6 +362,7 @@ class CompartmentalModel(ABC):
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
+    @set_approx_sample_thresh(10000)
     def predict(self, forecast=0):
         """
         Predict latent variables and optionally forecast forward.

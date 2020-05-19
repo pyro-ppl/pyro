@@ -8,25 +8,36 @@ import torch
 
 import pyro.distributions as dist
 
-_APPROX_SAMPLE_THRESH = 10000
-
 
 @contextmanager
 def set_approx_sample_thresh(thresh):
     """
-    Temporarily set global approx_sample_thresh in ``infection_dist``.
-    The default global value is 10000.
+    EXPERIMENTAL Temporarily set the global default value of
+    ``Binomial.approx_sample_thresh``, thereby decreasing the computational
+    complexity of sampling from :class:`~pyro.distributions.Binomial`,
+    :class:`~pyro.distributions.BetaBinomial`,
+    :class:`~pyro.distributions.ExtendedBinomial`,
+    :class:`~pyro.distributions.ExtendedBetaBinomial`, and distributions
+    returned by :func:`infection_dist`.
+
+    This is useful for sampling from very large ``total_count``.
+
+    This is used internally by
+    :class:`~pyro.contrib.epidemiology.compartmental.CompartmentalModel`.
 
     :param thresh: New temporary threshold.
     :type thresh: int or float.
     """
-    global _APPROX_SAMPLE_THRESH
-    old = _APPROX_SAMPLE_THRESH
+    assert isinstance(thresh, (float, int))
+    assert thresh > 0
+    old = dist.Binomial.approx_sample_thresh
     try:
-        _APPROX_SAMPLE_THRESH = thresh
+        dist.Binomial.approx_sample_thresh = thresh
+        print("DEBUG", dist.Binomial.approx_sample_thresh)
         yield
     finally:
-        _APPROX_SAMPLE_THRESH = old
+        dist.Binomial.approx_sample_thresh = old
+        print("DEBUG", dist.Binomial.approx_sample_thresh)
 
 
 def infection_dist(*,
@@ -34,8 +45,7 @@ def infection_dist(*,
                    num_infectious,
                    num_susceptible=math.inf,
                    population=math.inf,
-                   concentration=math.inf,
-                   approx_sample_thresh=None):
+                   concentration=math.inf):
     """
     Create a :class:`~pyro.distributions.Distribution` over the number of new
     infections at a discrete time step.
@@ -82,10 +92,6 @@ def infection_dist(*,
     :param concentration: The concentration or dispersion parameter ``k`` in
         overdispersed models of superspreaders [1,2]. This defaults to minimum
         variance ``concentration = ∞``.
-    :param approx_sample_thresh: Population threshold above which Binomial
-        samples will be approximated as clamped Poisson samples, including
-        internally in BetaBinomial sampling. Defaults to the global value which
-        defaults to 10000.
     """
     # Convert to colloquial variable names.
     R = individual_rate
@@ -110,19 +116,15 @@ def infection_dist(*,
         # Combine infections from all individuals.
         combined_p = p.neg().log1p().mul(I).expm1().neg()  # = 1 - (1 - p)**I
         combined_p = combined_p.clamp(min=1e-6)
-        if approx_sample_thresh is None:
-            approx_sample_thresh = _APPROX_SAMPLE_THRESH
 
         if isinstance(k, float) and k == math.inf:
             # Return a pure Binomial model, combining the independent Binomial
             # models of each infectious individual.
-            return dist.ExtendedBinomial(
-                S, combined_p, approx_sample_thresh=approx_sample_thresh)
+            return dist.ExtendedBinomial(S, combined_p)
         else:
             # Return an overdispersed Beta-Binomial model, combining
             # independent BetaBinomial(c1,c0,S) models for each infectious
             # individual.
             c1 = (k * I).clamp(min=1e-6)
             c0 = c1 * (combined_p.reciprocal() - 1).clamp(min=1e-6)
-            return dist.ExtendedBetaBinomial(
-                c1, c0, S, approx_sample_thresh=approx_sample_thresh)
+            return dist.ExtendedBetaBinomial(c1, c0, S)
