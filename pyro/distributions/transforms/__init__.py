@@ -17,6 +17,7 @@ from pyro.distributions.transforms.basic import ELUTransform, LeakyReLUTransform
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
+from pyro.distributions.transforms.haar import HaarTransform
 from pyro.distributions.transforms.generalized_channel_permute import (ConditionalGeneralizedChannelPermute,
                                                                        GeneralizedChannelPermute,
                                                                        conditional_generalized_channel_permute,
@@ -82,6 +83,7 @@ __all__ = [
     'DiscreteCosineTransform',
     'ELUTransform',
     'GeneralizedChannelPermute',
+    'HaarTransform',
     'Householder',
     'LeakyReLUTransform',
     'LowerCholeskyAffine',
