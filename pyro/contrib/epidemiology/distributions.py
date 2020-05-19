@@ -33,11 +33,9 @@ def set_approx_sample_thresh(thresh):
     old = dist.Binomial.approx_sample_thresh
     try:
         dist.Binomial.approx_sample_thresh = thresh
-        print("DEBUG", dist.Binomial.approx_sample_thresh)
         yield
     finally:
         dist.Binomial.approx_sample_thresh = old
-        print("DEBUG", dist.Binomial.approx_sample_thresh)
 
 
 def infection_dist(*,
