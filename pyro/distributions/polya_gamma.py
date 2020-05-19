@@ -12,7 +12,7 @@ from pyro.distributions.torch_distribution import TorchDistribution
 
 class TruncatedPolyaGamma(TorchDistribution):
     """
-    This is a PolyaGamma(0, 1) distribution truncated to have finite support in
+    This is a PolyaGamma(1, 0) distribution truncated to have finite support in
     the interval (0, 2.5). See [1] for details. As a consequence of the truncation
     the `log_prob` method is only accurate to about six decimal places. In
     addition the provided sampler is a rough approximation that is only meant to
