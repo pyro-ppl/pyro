@@ -23,8 +23,8 @@ class HaarTransform(Transform):
     :param bool flip: Whether to flip the time axis before applying the
         Haar transform. Defaults to false.
     """
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
 
     def __init__(self, dim=-1, flip=False, cache_size=0):
@@ -60,4 +60,4 @@ class HaarTransform(Transform):
         return x
 
     def log_abs_det_jacobian(self, x, y):
-        return x.new_zeros((1,) * self.event_dim)
+        return x.new_zeros(x.shape[:-self.event_dim])
