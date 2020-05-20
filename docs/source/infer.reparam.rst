@@ -59,8 +59,8 @@ Haar Transform
     :special-members: __call__
     :show-inheritance:
 
-UnitJacobianReparam
--------------------
+Unit Jacobian Transforms
+------------------------
 .. automodule:: pyro.infer.reparam.unit_jacobian
     :members:
     :undoc-members:

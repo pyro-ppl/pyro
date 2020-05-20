@@ -65,4 +65,4 @@ class HaarTransform(Transform):
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
             return self
-        return HaarTransform(-self.event_dim, cache_size=cache_size)
+        return HaarTransform(-self.event_dim, flip=self.flip, cache_size=cache_size)
