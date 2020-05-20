@@ -48,8 +48,8 @@ class SplitReparam(Reparam):
     :func:`torch.split`.
 
     This is useful for treating different parts of a tensor with different
-    other reparameterizers or inference methods. For example when performing
-    HMC inference on a time series, you can first apply
+    reparameterizers or inference methods. For example when performing HMC
+    inference on a time series, you can first apply
     :class:`~pyro.infer.reparam.discrete_cosine.DiscreteCosineReparam` or
     :class:`~pyro.infer.reparam.haar.HaarReparam`, then apply
     :class:`SplitReparam` to split into low-frequency and high-frequency

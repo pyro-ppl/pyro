@@ -319,7 +319,7 @@ class CompartmentalModel(ABC):
         haar_full_mass = min(haar_full_mass, self.duration)
         haar = haar or (haar_full_mass > 0)
 
-        # Heuristically initialze to feasible latents.
+        # Heuristically initialize to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
                              for k in list(options)
                              if k.startswith("heuristic_")}
