@@ -50,6 +50,24 @@ Discrete Cosine Transform
     :special-members: __call__
     :show-inheritance:
 
+Haar Transform
+--------------
+.. automodule:: pyro.infer.reparam.haar
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
+Unit Jacobian Transforms
+------------------------
+.. automodule:: pyro.infer.reparam.unit_jacobian
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 StudentT Distributions
 ----------------------
 .. automodule:: pyro.infer.reparam.studentt

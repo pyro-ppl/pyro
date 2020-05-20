@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"dct": 1.},
+    {"haar": True},
     {"num_quant_bins": 8},
     {"num_quant_bins": 12},
     {"num_quant_bins": 16},
@@ -50,7 +50,7 @@ def test_simple_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"dct": 1.},
+    {"haar": True},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_overdispersed_smoke(duration, forecast, options):
@@ -80,7 +80,7 @@ def test_overdispersed_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [7])
 @pytest.mark.parametrize("options", [
     {},
-    {"dct": 1.},
+    {"haar": True},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_sparse_smoke(duration, forecast, options):
@@ -121,7 +121,7 @@ def test_sparse_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"dct": 1.},
+    {"haar": True},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
@@ -165,6 +165,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
+    {"haar": True},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_regional_smoke(duration, forecast, options):

@@ -340,6 +340,13 @@ ELUTransform
     :undoc-members:
     :show-inheritance:
 
+HaarTransform
+-------------
+.. autoclass:: pyro.distributions.transforms.HaarTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LeakyReLUTransform
 ------------------
 .. autoclass:: pyro.distributions.transforms.LeakyReLUTransform
