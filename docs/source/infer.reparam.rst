@@ -95,6 +95,15 @@ Hidden Markov Models
     :special-members: __call__
     :show-inheritance:
 
+Site Splitting
+--------------
+.. automodule:: pyro.infer.reparam.split
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Neural Transport
 ----------------
 .. automodule:: pyro.infer.reparam.neutra

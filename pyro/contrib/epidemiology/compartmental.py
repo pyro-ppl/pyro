@@ -19,7 +19,7 @@ from pyro.distributions.transforms import HaarTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
 from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
-from pyro.infer.reparam import HaarReparam
+from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.util import warn_if_nan
 
@@ -301,14 +301,23 @@ class CompartmentalModel(ABC):
             that computational cost is exponential in `num_quant_bins`.
             Defaults to 4.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
+        :param int haar_full_mass: Number of low frequency Haar components to
+            include in the full mass matrix. If nonzero this implies
+            ``haar=True``.
         :param int heuristic_num_particles: Passed to :meth:`heuristic` as
             ``num_particles``. Defaults to 1024.
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
         :rtype: ~pyro.infer.mcmc.api.MCMC
         """
-        # Save these options for .predict().
+        # Parse options, saving some for use in .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
         haar = options.pop("haar", False)
+        assert isinstance(haar, bool)
+        haar_full_mass = options.pop("haar_full_mass", 0)
+        assert isinstance(haar_full_mass, int)
+        assert haar_full_mass >= 0
+        haar_full_mass = min(haar_full_mass, self.duration)
+        haar = haar or (haar_full_mass > 0)
 
         # Heuristically initialze to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
@@ -327,6 +336,13 @@ class CompartmentalModel(ABC):
                 x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
                 x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True)(x)
                 init_values["auxiliary_haar"] = x
+            if haar_full_mass:
+                # Also split into low- and high-frequency parts.
+                x0, x1 = init_values["auxiliary_haar"].split(
+                    [haar_full_mass, self.duration - haar_full_mass],
+                    dim=-2 if self.is_regional else -1)
+                init_values["auxiliary_haar_split_0"] = x0
+                init_values["auxiliary_haar_split_1"] = x1
             logger.info("Heuristic init: {}".format(", ".join(
                 "{}={:0.3g}".format(k, v.item())
                 for k, v in init_values.items()
@@ -341,9 +357,17 @@ class CompartmentalModel(ABC):
         if haar:
             rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
+        if haar_full_mass:
+            assert full_mass and isinstance(full_mass, list)
+            full_mass = full_mass[:]
+            full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
+            rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
+                               dim=-2 if self.is_regional else -1)
+            model = poutine.reparam(model, {"auxiliary_haar": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
                       init_strategy=init_to_generated(generate=heuristic),
+                      max_plate_nesting=self.max_plate_nesting,
                       max_tree_depth=max_tree_depth)
         if options.pop("arrowhead_mass", False):
             kernel.mass_matrix_adapter = ArrowheadMassMatrix()
@@ -352,6 +376,12 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
+        if haar_full_mass:
+            # Transform back from SplitReparam coordinates.
+            self.samples["auxiliary_haar"] = torch.cat([
+                self.samples.pop("auxiliary_haar_split_0"),
+                self.samples.pop("auxiliary_haar_split_1"),
+            ], dim=-2 if self.is_regional else -1)
         if haar:
             # Transform back from Haar coordinates.
             x = self.samples.pop("auxiliary_haar")
@@ -361,7 +391,7 @@ class CompartmentalModel(ABC):
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        self.samples = align_samples(self.samples, model,
+        self.samples = align_samples(self.samples, self._vectorized_model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
 
