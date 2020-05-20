@@ -281,6 +281,13 @@ Stable
     :undoc-members:
     :show-inheritance:
 
+TruncatedPolyaGamma
+-------------------
+.. autoclass:: pyro.distributions.TruncatedPolyaGamma
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit

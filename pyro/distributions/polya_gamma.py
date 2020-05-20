@@ -6,7 +6,7 @@ import math
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch import Gamma
+from pyro.distributions.torch import Exponential
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -38,33 +38,29 @@ class TruncatedPolyaGamma(TorchDistribution):
     has_rsample = False
 
     def __init__(self, prototype, validate_args=None):
-        self.dtype = prototype.dtype
-        self.device = prototype.device
+        self.prototype = prototype
         super(TruncatedPolyaGamma, self).__init__(batch_shape=(), event_shape=(), validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(TruncatedPolyaGamma, _instance)
         super(TruncatedPolyaGamma, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
-        new.dtype = self.dtype
-        new.device = self.device
+        new.prototype = self.prototype
         return new
 
     def sample(self, sample_shape=()):
-        denom = torch.arange(0.5, self.num_gamma_variates).pow(2.0)
-        ones = torch.ones(self.batch_shape + sample_shape + (self.num_gamma_variates,),
-                          dtype=self.dtype, device=self.device)
-        x = Gamma(ones, ones).sample()
+        denom = torch.arange(0.5, self.num_gamma_variates, device=self.prototype.device).pow(2.0)
+        ones = self.prototype.new_ones((self.num_gamma_variates))
+        x = Exponential(ones).sample(self.batch_shape + sample_shape)
         x = (x / denom).sum(-1)
         return torch.clamp(x * (0.5 / math.pi ** 2), max=self.truncation_point)
 
     def log_prob(self, value):
         value = value.unsqueeze(-1)
-        all_indices = torch.arange(0, self.num_log_prob_terms)
-        two_n_plus_one = 2.0 * all_indices + 1.0
+        two_n_plus_one = 2.0 * torch.arange(0, self.num_log_prob_terms, device=self.prototype.device) + 1.0
         log_terms = two_n_plus_one.log() - 1.5 * value.log() - 0.125 * two_n_plus_one.pow(2.0) / value
-        even_terms = torch.index_select(log_terms, -1, all_indices[::2])
-        odd_terms = torch.index_select(log_terms, -1, all_indices[1::2])
+        even_terms = log_terms[..., ::2]
+        odd_terms = log_terms[..., 1::2]
         sum_even = torch.logsumexp(even_terms, dim=-1).exp()
         sum_odd = torch.logsumexp(odd_terms, dim=-1).exp()
         return (sum_even - sum_odd).log() - 0.5 * math.log(2.0 * math.pi)
