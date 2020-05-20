@@ -72,7 +72,6 @@ def align_samples(samples, model, particle_dim):
             raise ValueError("Cannot align samples, try moving particle_dim left")
         if pad > 0:
             shape = value.shape[:1] + (1,) * pad + value.shape[1:]
-            print("DEBUG reshaping {} : {} -> {}".format(name, value.shape, shape))
             samples[name] = value.reshape(shape)
 
     return samples
