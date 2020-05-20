@@ -8,12 +8,12 @@ from .unit_jacobian import UnitJacobianReparam
 
 class DiscreteCosineReparam(UnitJacobianReparam):
     """
-    Discrete Cosine reparamterizer, using a
+    Discrete Cosine reparameterizer, using a
     :class:`~pyro.distributions.transforms.DiscreteCosineTransform` .
 
     This is useful for sequential models where coupling along a time-like axis
     (e.g. a banded precision matrix) introduces long-range correlation. This
-    reparameterizes to a frequency-domain represetation where posterior
+    reparameterizes to a frequency-domain representation where posterior
     covariance should be closer to diagonal, thereby improving the accuracy of
     diagonal guides in SVI and improving the effectiveness of a diagonal mass
     matrix in HMC.

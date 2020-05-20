@@ -21,7 +21,7 @@ class UnitJacobianReparam(Reparam):
     Reparameterizer for :class:`~torch.distributions.transforms.Transform`
     objects whose Jacobian determinant is one.
 
-    :param transform: A transform whose Jaciobian has determinant 1.
+    :param transform: A transform whose Jacobian has determinant 1.
     :type transform: ~torch.distributions.transforms.Transform
     :param str suffix: A suffix to append to the transformed site.
     """
@@ -43,7 +43,6 @@ class UnitJacobianReparam(Reparam):
 
         # Differentiably transform.
         x = transform.inv(x_trans)  # should be free due to transform cache
-        print(f"DEBUG {x}")
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(x, event_dim=fn.event_dim)

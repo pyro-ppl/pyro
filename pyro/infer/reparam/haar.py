@@ -8,19 +8,15 @@ from .unit_jacobian import UnitJacobianReparam
 
 class HaarReparam(UnitJacobianReparam):
     """
-    Haar wavelet reparamterizer, using a
+    Haar wavelet reparameterizer, using a
     :class:`~pyro.distributions.transforms.HaarTransform`.
 
     This is useful for sequential models where coupling along a time-like axis
     (e.g. a banded precision matrix) introduces long-range correlation. This
-    reparameterizes to a frequency-domain represetation where posterior
+    reparameterizes to a frequency-domain representation where posterior
     covariance should be closer to diagonal, thereby improving the accuracy of
     diagonal guides in SVI and improving the effectiveness of a diagonal mass
     matrix in HMC.
-
-    When reparameterizing variables that are approximately continuous along the
-    time dimension, set ``smooth=1``. For variables that are approximately
-    continuously differentiable along the time axis, set ``smooth=2``.
 
     This reparameterization works only for latent variables, not likelihoods.
 
