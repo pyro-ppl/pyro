@@ -38,11 +38,12 @@ class UnitJacobianReparam(Reparam):
         # Draw noise from the base distribution.
         transform = ComposeTransform([_with_cache(biject_to(fn.support).inv),
                                       self.transform])
-        x_ortho = pyro.sample("{}_{}".format(name, self.suffix),
+        x_trans = pyro.sample("{}_{}".format(name, self.suffix),
                               dist.TransformedDistribution(fn, transform))
 
         # Differentiably transform.
-        x = transform.inv(x_ortho)  # should be free due to transform cache
+        x = transform.inv(x_trans)  # should be free due to transform cache
+        print(f"DEBUG {x}")
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(x, event_dim=fn.event_dim)

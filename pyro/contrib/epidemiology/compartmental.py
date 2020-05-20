@@ -308,7 +308,7 @@ class CompartmentalModel(ABC):
         """
         # Save these options for .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
-        self._haar = options.pop("haar", False)
+        haar = options.pop("haar", False)
 
         # Heuristically initialze to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
@@ -321,7 +321,7 @@ class CompartmentalModel(ABC):
             assert isinstance(init_values, dict)
             assert "auxiliary" in init_values, \
                 ".heuristic() did not define auxiliary value"
-            if self._haar:
+            if haar:
                 # Also initialize Haar transformed coordinates.
                 x = init_values["auxiliary"]
                 x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
@@ -338,7 +338,7 @@ class CompartmentalModel(ABC):
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
         model = self._vectorized_model
-        if self._haar:
+        if haar:
             rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
         kernel = NUTS(model,
@@ -352,6 +352,13 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
+        if haar:
+            # Transform back from Haar coordinates.
+            x = self.samples.pop("auxiliary_haar")
+            x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True).inv(x)
+            x = biject_to(constraints.interval(-0.5, self.population + 0.5))(x)
+            self.samples["auxiliary"] = x
+
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
         self.samples = align_samples(self.samples, model,
@@ -388,10 +395,6 @@ class CompartmentalModel(ABC):
         model = self._sequential_model
         model = poutine.condition(model, samples)
         model = particle_plate(model)
-        if self._haar:
-            # Apply the same reparameterizer as during inference.
-            rep = HaarReparam(dim=-2 if self.is_regional else -2, flip=True)
-            model = poutine.reparam(model, {"auxiliary": rep})
         model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
         samples = OrderedDict((name, site["value"])
