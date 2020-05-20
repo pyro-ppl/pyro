@@ -12,6 +12,10 @@ from .reparam import Reparam
 
 
 class _ImproperUniform(dist.TorchDistribution):
+    """
+    Internal helper distribution with zero :meth:`log_prob` and undefined
+    :meth:`sample`.
+    """
     arg_constraints = {}
 
     def __init__(self, support, batch_shape, event_shape):
@@ -40,10 +44,10 @@ class _ImproperUniform(dist.TorchDistribution):
 
 class SplitReparam(Reparam):
     """
-    Reparameterizer to split an unconstrained random variable along a
-    dimension, similar to :func:`torch.split`.
+    Reparameterizer to split a random variable along a dimension, similar to
+    :func:`torch.split`.
 
-    This is useful for treeating different parts of a tensor with different
+    This is useful for treating different parts of a tensor with different
     other reparameterizers or inference methods. For example when performing
     HMC inference on a time series, you can first apply
     :class:`~pyro.infer.reparam.discrete_cosine.DiscreteCosineReparam` or
