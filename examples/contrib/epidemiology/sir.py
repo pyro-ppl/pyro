@@ -74,6 +74,7 @@ def infer(args, model):
                      arrowhead_mass=args.arrowhead_mass,
                      num_quant_bins=args.num_bins,
                      haar=args.haar,
+                     haar_full_mass=args.haar_full_mass,
                      hook_fn=hook_fn)
 
     mcmc.summary()
@@ -205,6 +206,7 @@ if __name__ == "__main__":
                         help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("--haar", action="store_true")
+    parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
