@@ -73,7 +73,7 @@ class SplitReparam(Reparam):
         assert obs is None, "SplitReparam does not support observe statements"
 
         # Draw independent parts.
-        dim = -self.event_dim
+        dim = fn.event_dim - self.event_dim
         left_shape = fn.event_shape[:dim]
         right_shape = fn.event_shape[1 + dim:]
         parts = []
@@ -82,7 +82,7 @@ class SplitReparam(Reparam):
             parts.append(pyro.sample(
                 "{}_split_{}".format(name, i),
                 _ImproperUniform(fn.support, fn.batch_shape, event_shape)))
-        value = torch.cat(parts, dim=dim)
+        value = torch.cat(parts, dim=-self.event_dim)
 
         # Combine parts.
         log_prob = fn.log_prob(value)
