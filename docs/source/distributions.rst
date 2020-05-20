@@ -281,6 +281,13 @@ Stable
     :undoc-members:
     :show-inheritance:
 
+TruncatedPolyaGamma
+-------------------
+.. autoclass:: pyro.distributions.TruncatedPolyaGamma
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit
@@ -336,6 +343,13 @@ CorrLCholeskyTransform
 ELUTransform
 ------------
 .. autoclass:: pyro.distributions.transforms.ELUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+HaarTransform
+-------------
+.. autoclass:: pyro.distributions.transforms.HaarTransform
     :members:
     :undoc-members:
     :show-inheritance:

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-import numbers
 
 import torch
 from torch.distributions import constraints
@@ -32,33 +31,16 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
 
 
 class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
-    def __init__(self, total_count=1, probs=None, logits=None, validate_args=None, *,
-                 approx_sample_thresh=math.inf):
-        assert isinstance(approx_sample_thresh, numbers.Number)
-        assert approx_sample_thresh >= 0
-        super().__init__(total_count=total_count, probs=probs, logits=logits,
-                         validate_args=validate_args)
-        self.approx_sample_thresh = approx_sample_thresh
-
-    def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(Binomial, _instance)
-        batch_shape = torch.Size(batch_shape)
-        new.total_count = self.total_count.expand(batch_shape)
-        if 'probs' in self.__dict__:
-            new.probs = self.probs.expand(batch_shape)
-            new._param = new.probs
-        if 'logits' in self.__dict__:
-            new.logits = self.logits.expand(batch_shape)
-            new._param = new.logits
-        new.approx_sample_thresh = self.approx_sample_thresh
-        super(torch.distributions.Binomial, new).__init__(batch_shape, validate_args=False)
-        new._validate_args = self._validate_args
-        return new
+    # EXPERIMENTAL threshold on total_count above which sampling will use a
+    # clamped Poisson approximation for Binomial samples. This is useful for
+    # sampling very large populations.
+    approx_sample_thresh = math.inf
 
     def sample(self, sample_shape=torch.Size()):
         if self.approx_sample_thresh < math.inf:
-            if self.approx_sample_thresh < self.total_count.min():
-                # Approximate with a moment-matched clamped Poisson.
+            exact = self.total_count <= self.approx_sample_thresh
+            if not exact.all():
+                # Approximate large counts with a moment-matched clamped Poisson.
                 with torch.no_grad():
                     shape = self._extended_shape(sample_shape)
                     p = self.probs
@@ -68,7 +50,15 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
                     shift = (mean - variance).round()
                     result = torch.poisson(variance.expand(shape))
                     result = torch.min(result + shift, self.total_count)
-                    return torch.where(p < q, result, self.total_count - result)
+                    sample = torch.where(p < q, result, self.total_count - result)
+                # Draw exact samples for remaining items.
+                if exact.any():
+                    total_count = torch.where(exact, self.total_count,
+                                              torch.zeros_like(self.total_count))
+                    exact_sample = torch.distributions.Binomial(
+                        total_count, self.probs, validate_args=False).sample(sample_shape)
+                    sample = torch.where(exact, exact_sample, sample)
+                return sample
         return super().sample(sample_shape)
 
 
