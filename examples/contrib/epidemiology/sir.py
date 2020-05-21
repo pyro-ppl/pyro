@@ -194,12 +194,7 @@ def main(args):
 
     transform = 'none'
     if args.haar:
-        transform = 'haar'
-
-    if args.dct == 1.0:
-        transform = 'dct'
-    else:
-        args.dct = None
+        transform = 'haar{}'.format(args.haar_full_mass)
 
     # Generate data.
     dataset, model_name = generate_data(args)
