@@ -15,11 +15,12 @@ from torch.distributions import biject_to, constraints
 import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
-from pyro.distributions.transforms import DiscreteCosineTransform, HaarTransform
+from pyro.distributions.transforms import HaarTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
-from pyro.infer.reparam import DiscreteCosineReparam, HaarReparam
 from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
+from pyro.infer.reparam import HaarReparam, SplitReparam
+from pyro.infer.smcfilter import SMCFailed
 from pyro.util import warn_if_nan
 
 from .distributions import set_approx_sample_thresh
@@ -143,8 +144,8 @@ class CompartmentalModel(ABC):
     full_mass = False
 
     @torch.no_grad()
-    @set_approx_sample_thresh(1000)
-    def heuristic(self, num_particles=1024, ess_threshold=0.5):
+    @set_approx_sample_thresh(100)  # This is robust to gross approximation.
+    def heuristic(self, num_particles=1024, ess_threshold=0.5, retries=10):
         """
         Finds an initial feasible guess of all latent variables, consistent
         with observed data. This is needed because not all hypotheses are
@@ -163,12 +164,20 @@ class CompartmentalModel(ABC):
         # Run SMC.
         model = _SMCModel(self)
         guide = _SMCGuide(self)
-        smc = SMCFilter(model, guide, num_particles=num_particles,
-                        ess_threshold=ess_threshold,
-                        max_plate_nesting=self.max_plate_nesting)
-        smc.init()
-        for t in range(1, self.duration):
-            smc.step()
+        for attempt in range(1, 1 + retries):
+            smc = SMCFilter(model, guide, num_particles=num_particles,
+                            ess_threshold=ess_threshold,
+                            max_plate_nesting=self.max_plate_nesting)
+            try:
+                smc.init()
+                for t in range(1, self.duration):
+                    smc.step()
+                break
+            except SMCFailed as e:
+                if attempt == retries:
+                    raise
+                logger.info("{}. Retrying...".format(e))
+                continue
 
         # Select the most probable hypothesis.
         i = int(smc.state._log_weights.max(0).indices)
@@ -249,6 +258,7 @@ class CompartmentalModel(ABC):
     # Inference interface ########################################
 
     @torch.no_grad()
+    @set_approx_sample_thresh(1000)
     def generate(self, fixed={}):
         """
         Generate data from the prior.
@@ -290,42 +300,53 @@ class CompartmentalModel(ABC):
         :param int num_quant_bins: The number of quantization bins to use. Note
             that computational cost is exponential in `num_quant_bins`.
             Defaults to 4.
-        :param float dct: If provided, use a discrete cosine reparameterizer
-            with this value as smoothness.
+        :param bool haar: Whether to use a Haar wavelet reparameterizer.
+        :param int haar_full_mass: Number of low frequency Haar components to
+            include in the full mass matrix. If nonzero this implies
+            ``haar=True``.
         :param int heuristic_num_particles: Passed to :meth:`heuristic` as
             ``num_particles``. Defaults to 1024.
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
         :rtype: ~pyro.infer.mcmc.api.MCMC
         """
-        # Save these options for .predict().
+        # Parse options, saving some for use in .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
-        self._dct = options.pop("dct", None)
-        self._haar = options.pop("haar", False)
-        if self._dct is not None and self.is_regional:
-            raise NotImplementedError("regional models do not support DiscreteCosineReparam")
+        haar = options.pop("haar", False)
+        assert isinstance(haar, bool)
+        haar_full_mass = options.pop("haar_full_mass", 0)
+        assert isinstance(haar_full_mass, int)
+        assert haar_full_mass >= 0
+        haar_full_mass = min(haar_full_mass, self.duration)
+        haar = haar or (haar_full_mass > 0)
 
-        # Heuristically initialze to feasible latents.
+        # Heuristically initialize to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
-                             for k in list(options) if k.startswith("heuristic_")}
+                             for k in list(options)
+                             if k.startswith("heuristic_")}
 
         def heuristic():
-            logger.info("Heuristically initializing...")
             with poutine.block():
                 init_values = self.heuristic(**heuristic_options)
             assert isinstance(init_values, dict)
             assert "auxiliary" in init_values, \
                 ".heuristic() did not define auxiliary value"
-            if self._dct is not None:
-                # Also initialize DCT transformed coordinates.
+            if haar:
+                # Also initialize Haar transformed coordinates.
                 x = init_values["auxiliary"]
                 x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-                x = DiscreteCosineTransform(smooth=self._dct)(x)
-                init_values["auxiliary_dct"] = x
-            if self._haar:
-                x = init_values["auxiliary"]
-                x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-                x = HaarTransform(size=self.duration)(x)
-                init_values["auxiliary_dct"] = x
+                x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True)(x)
+                init_values["auxiliary_haar"] = x
+            if haar_full_mass:
+                # Also split into low- and high-frequency parts.
+                x0, x1 = init_values["auxiliary_haar"].split(
+                    [haar_full_mass, self.duration - haar_full_mass],
+                    dim=-2 if self.is_regional else -1)
+                init_values["auxiliary_haar_split_0"] = x0
+                init_values["auxiliary_haar_split_1"] = x1
+            logger.info("Heuristic init: {}".format(", ".join(
+                "{}={:0.3g}".format(k, v.item())
+                for k, v in init_values.items()
+                if v.numel() == 1)))
             return init_to_value(values=init_values)
 
         # Configure a kernel.
@@ -333,15 +354,20 @@ class CompartmentalModel(ABC):
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
         model = self._vectorized_model
-        if self._dct is not None:
-            rep = DiscreteCosineReparam(smooth=self._dct)
+        if haar:
+            rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
-        if self._haar:
-            rep = HaarReparam(size=self.duration)
-            model = poutine.reparam(model, {"auxiliary": rep})
+        if haar_full_mass:
+            assert full_mass and isinstance(full_mass, list)
+            full_mass = full_mass[:]
+            full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
+            rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
+                               dim=-2 if self.is_regional else -1)
+            model = poutine.reparam(model, {"auxiliary_haar": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
                       init_strategy=init_to_generated(generate=heuristic),
+                      max_plate_nesting=self.max_plate_nesting,
                       max_tree_depth=max_tree_depth)
         if options.pop("arrowhead_mass", False):
             kernel.mass_matrix_adapter = ArrowheadMassMatrix()
@@ -350,13 +376,27 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
+        if haar_full_mass:
+            # Transform back from SplitReparam coordinates.
+            self.samples["auxiliary_haar"] = torch.cat([
+                self.samples.pop("auxiliary_haar_split_0"),
+                self.samples.pop("auxiliary_haar_split_1"),
+            ], dim=-2 if self.is_regional else -1)
+        if haar:
+            # Transform back from Haar coordinates.
+            x = self.samples.pop("auxiliary_haar")
+            x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True).inv(x)
+            x = biject_to(constraints.interval(-0.5, self.population + 0.5))(x)
+            self.samples["auxiliary"] = x
+
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        self.samples = align_samples(self.samples, model,
+        self.samples = align_samples(self.samples, self._vectorized_model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
+    @set_approx_sample_thresh(10000)
     def predict(self, forecast=0):
         """
         Predict latent variables and optionally forecast forward.
@@ -385,13 +425,6 @@ class CompartmentalModel(ABC):
         model = self._sequential_model
         model = poutine.condition(model, samples)
         model = particle_plate(model)
-        if self._dct is not None:
-            # Apply the same reparameterizer as during inference.
-            rep = DiscreteCosineReparam(smooth=self._dct)
-            model = poutine.reparam(model, {"auxiliary": rep})
-        if self._haar:
-            rep = HaarReparam(size=self.duration)
-            model = poutine.reparam(model, {"auxiliary": rep})
         model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
         samples = OrderedDict((name, site["value"])

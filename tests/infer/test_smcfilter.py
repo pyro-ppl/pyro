@@ -8,7 +8,25 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SMCFilter
+from pyro.infer.smcfilter import _systematic_sample
 from tests.common import assert_close
+
+
+@pytest.mark.parametrize("size", range(1, 32))
+def test_systematic_sample(size):
+    pyro.set_rng_seed(size)
+    probs = torch.randn(size).exp()
+    probs /= probs.sum()
+
+    num_samples = 20000
+    index = _systematic_sample(probs.expand(num_samples, size))
+    histogram = torch.zeros_like(probs)
+    histogram.scatter_add_(-1, index.reshape(-1),
+                           probs.new_ones(1).expand(num_samples * size))
+
+    expected = probs * size
+    actual = histogram / num_samples
+    assert_close(actual, expected, atol=0.01)
 
 
 class SmokeModel:

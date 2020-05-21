@@ -12,7 +12,8 @@ from pyro.contrib.epidemiology import OverdispersedSEIRModel, SimpleSEIRModel
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"dct": 1.},
+    {"haar": True},
+    {"haar_full_mass": 2},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_simple_smoke(duration, forecast, options):
@@ -46,7 +47,8 @@ def test_simple_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"dct": 1.},
+    {"haar": True},
+    {"haar_full_mass": 2},
     {"num_quant_bins": 8},
 ], ids=str)
 def test_overdispersed_smoke(duration, forecast, options):
