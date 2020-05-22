@@ -37,18 +37,25 @@ class Permute(Transform):
 
     :param permutation: a permutation ordering that is applied to the inputs.
     :type permutation: torch.LongTensor
+    :param dim: the tensor dimension to permute. This value must be negative and
+        defines the event dim as `abs(dim)`.
+    :type dim: int
 
     """
 
     codomain = constraints.real
     bijective = True
-    event_dim = 1
     volume_preserving = True
 
-    def __init__(self, permutation, cache_size=1):
+    def __init__(self, permutation, *, dim=-1, cache_size=1):
         super().__init__(cache_size=cache_size)
 
+        if dim >= 0:
+            raise ValueError("'dim' keyword argument must be negative")
+
         self.permutation = permutation
+        self.dim = dim
+        self.event_dim = -dim
 
     @lazy_property
     def inv_permutation(self):
@@ -68,7 +75,7 @@ class Permute(Transform):
         the base distribution (or the output of a previous transform)
         """
 
-        return x[..., self.permutation]
+        return x.index_select(self.dim, self.permutation)
 
     def _inverse(self, y):
         """
@@ -77,8 +84,7 @@ class Permute(Transform):
 
         Inverts y => x.
         """
-
-        return y[..., self.inv_permutation]
+        return y.index_select(self.dim, self.inv_permutation)
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -89,7 +95,7 @@ class Permute(Transform):
         determinant is -1 or +1), and so returning a vector of zeros works.
         """
 
-        return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
+        return torch.zeros(x.size()[:-self.event_dim], dtype=x.dtype, layout=x.layout, device=x.device)
 
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
@@ -97,19 +103,27 @@ class Permute(Transform):
         return Permute(self.permutation, cache_size=cache_size)
 
 
-def permute(input_dim, permutation=None):
+def permute(input_dim, permutation=None, dim=-1):
     """
     A helper function to create a :class:`~pyro.distributions.transforms.Permute`
     object for consistency with other helpers.
 
-    :param input_dim: Dimension of input variable
+    :param input_dim: Dimension(s) of input variable to permute. Note that when
+        `dim < -1` this must be a tuple corresponding to the event shape.
     :type input_dim: int
     :param permutation: Torch tensor of integer indices representing permutation.
         Defaults to a random permutation.
     :type permutation: torch.LongTensor
+    :param dim: the tensor dimension to permute. This value must be negative and
+        defines the event dim as `abs(dim)`.
+    :type dim: int
 
     """
+    if dim < -1 or not isinstance(input_dim, int):
+        if len(input_dim) != -dim:
+            raise ValueError('event shape {} must have same length as event_dim {}'.format(input_dim, -dim))
+        input_dim = input_dim[dim]
 
     if permutation is None:
         permutation = torch.randperm(input_dim)
-    return Permute(permutation)
+    return Permute(permutation, dim=dim)
