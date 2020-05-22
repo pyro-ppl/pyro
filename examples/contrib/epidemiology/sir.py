@@ -10,6 +10,7 @@ import logging
 import math
 
 import torch
+from torch.distributions import biject_to, constraints
 
 import pyro
 from pyro.contrib.epidemiology import OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel
@@ -73,7 +74,8 @@ def infer(args, model):
                      max_tree_depth=args.max_tree_depth,
                      arrowhead_mass=args.arrowhead_mass,
                      num_quant_bins=args.num_bins,
-                     dct=args.dct,
+                     haar=args.haar,
+                     haar_full_mass=args.haar_full_mass,
                      hook_fn=hook_fn)
 
     mcmc.summary()
@@ -89,7 +91,7 @@ def infer(args, model):
     return model.samples
 
 
-def evaluate(args, samples):
+def evaluate(args, model, samples):
     # Print estimated values.
     names = {"basic_reproduction_number": "R0",
              "response_rate": "rho"}
@@ -106,6 +108,7 @@ def evaluate(args, samples):
         import matplotlib.pyplot as plt
         import seaborn as sns
 
+        # Plot individual histograms.
         fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
@@ -117,6 +120,7 @@ def evaluate(args, samples):
             ax.legend(loc="best")
         plt.tight_layout()
 
+        # Plot pairwise joint distributions for selected variables.
         covariates = [(name, samples[name]) for name in names.values()]
         for i, aux in enumerate(samples["auxiliary"].unbind(-2)):
             covariates.append(("aux[{},0]".format(i), aux[:, 0]))
@@ -135,6 +139,36 @@ def evaluate(args, samples):
                            lw=0, color="darkblue", alpha=0.3)
         plt.tight_layout()
         plt.subplots_adjust(wspace=0, hspace=0)
+
+        # Plot Pearson correlation for every pair of unconstrained variables.
+        def unconstrain(constraint, value):
+            value = biject_to(constraint).inv(value)
+            return value.reshape(args.num_samples, -1)
+
+        covariates = [
+            ("R1", unconstrain(constraints.positive, samples["R0"])),
+            ("rho", unconstrain(constraints.unit_interval, samples["rho"]))]
+        if "k" in samples:
+            covariates.append(
+                ("k", unconstrain(constraints.positive, samples["k"])))
+        constraint = constraints.interval(-0.5, model.population + 0.5)
+        for name, aux in zip(model.compartments, samples["auxiliary"].unbind(-2)):
+            covariates.append((name, unconstrain(constraint, aux)))
+        x = torch.cat([v for _, v in covariates], dim=-1)
+        x -= x.mean(0)
+        x /= x.std(0)
+        x = x.t().matmul(x)
+        x /= args.num_samples
+        x.clamp_(min=-1, max=1)
+        plt.figure(figsize=(8, 8))
+        plt.imshow(x, cmap="bwr")
+        ticks = torch.tensor([0] + [v.size(-1) for _, v in covariates]).cumsum(0)
+        ticks = (ticks[1:] + ticks[:-1]) / 2
+        plt.yticks(ticks, [name for name, _ in covariates])
+        plt.xticks(())
+        plt.tick_params(length=0)
+        plt.title("Pearson correlation (unconstrained coordinates)")
+        plt.tight_layout()
 
 
 def predict(args, model, truth):
@@ -182,7 +216,7 @@ def main(args):
     samples = infer(args, model)
 
     # Evaluate fit.
-    evaluate(args, samples)
+    evaluate(args, model, samples)
 
     # Predict latent time series.
     if args.forecast:
@@ -204,8 +238,8 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--concentration", default=math.inf, type=float,
                         help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
-    parser.add_argument("--dct", type=float,
-                        help="smoothing for discrete cosine reparameterizer")
+    parser.add_argument("--haar", action="store_true")
+    parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)

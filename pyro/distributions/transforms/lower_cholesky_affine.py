@@ -28,8 +28,8 @@ class LowerCholeskyAffine(Transform):
     event_dim = 1
     volume_preserving = False
 
-    def __init__(self, loc, scale_tril):
-        super().__init__(cache_size=1)
+    def __init__(self, loc, scale_tril, cache_size=0):
+        super().__init__(cache_size=cache_size)
         self.loc = loc
         self.scale_tril = scale_tril
         assert loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2), \
@@ -64,3 +64,8 @@ class LowerCholeskyAffine(Transform):
         """
         return torch.ones(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device) * \
             self.scale_tril.diag().log().sum()
+
+    def with_cache(self, cache_size=1):
+        if self._cache_size == cache_size:
+            return self
+        return LowerCholeskyAffine(self.loc, self.scale_tril, cache_size=cache_size)

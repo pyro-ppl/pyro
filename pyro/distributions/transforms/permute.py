@@ -47,8 +47,8 @@ class Permute(Transform):
     bijective = True
     volume_preserving = True
 
-    def __init__(self, permutation, dim=-1):
-        super().__init__(cache_size=1)
+    def __init__(self, permutation, *, dim=-1, cache_size=1):
+        super().__init__(cache_size=cache_size)
 
         if dim >= 0:
             raise ValueError("'dim' keyword argument must be negative")
@@ -96,6 +96,11 @@ class Permute(Transform):
         """
 
         return torch.zeros(x.size()[:-self.event_dim], dtype=x.dtype, layout=x.layout, device=x.device)
+
+    def with_cache(self, cache_size=1):
+        if self._cache_size == cache_size:
+            return self
+        return Permute(self.permutation, cache_size=cache_size)
 
 
 def permute(input_dim, permutation=None, dim=-1):
