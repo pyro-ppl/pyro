@@ -5,7 +5,7 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.contrib.epidemiology import OverdispersedSEIRModel, SimpleSEIRModel
+from pyro.contrib.epidemiology import SimpleSEIRModel, SuperspreadingSEIRModel
 
 
 @pytest.mark.parametrize("duration", [3, 7])
@@ -57,7 +57,7 @@ def test_overdispersed_smoke(duration, forecast, options):
     recovery_time = 7.0
 
     # Generate data.
-    model = OverdispersedSEIRModel(
+    model = SuperspreadingSEIRModel(
         population, incubation_time, recovery_time, [None] * duration)
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
@@ -66,7 +66,7 @@ def test_overdispersed_smoke(duration, forecast, options):
     assert data.sum() > 0, "failed to generate positive data"
 
     # Infer.
-    model = OverdispersedSEIRModel(
+    model = SuperspreadingSEIRModel(
         population, incubation_time, recovery_time, data)
     num_samples = 5
     model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
@@ -87,7 +87,7 @@ def test_coalescent_likelihood_smoke(duration, forecast):
     recovery_time = 7.0
 
     # Generate data.
-    model = OverdispersedSEIRModel(
+    model = SuperspreadingSEIRModel(
         population, incubation_time, recovery_time, [None] * duration)
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
@@ -99,7 +99,7 @@ def test_coalescent_likelihood_smoke(duration, forecast):
     coal_times = coal_times[..., torch.randperm(coal_times.size(-1))]
 
     # Infer.
-    model = OverdispersedSEIRModel(
+    model = SuperspreadingSEIRModel(
         population, incubation_time, recovery_time, data,
         leaf_times=leaf_times, coal_times=coal_times)
     num_samples = 5

@@ -111,17 +111,11 @@ class SimpleSEIRModel(CompartmentalModel):
                     obs=self.data[t])
 
 
-class OverdispersedSEIRModel(CompartmentalModel):
+class SuperspreadingSEIRModel(CompartmentalModel):
     r"""
-    Overdispersed Susceptible-Exposed-Infected-Recovered model.
+    Generalizes :class:`SimpleSEIRModel` by adding superspreading effects.
 
     To customize this model we recommend forking and editing this class.
-
-    This is a stochastic discrete-time discrete-state model with four
-    compartments: "S" for susceptible, "E" for exposed, "I" for infected,
-    and "R" for recovered individuals (the recovered individuals are
-    implicit: ``R = population - S - E - I``) with transitions
-    ``S -> E -> I -> R``.
 
     This model accounts for superspreading (overdispersed individual
     reproductive number) by assuming each infected individual infects

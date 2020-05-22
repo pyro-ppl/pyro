@@ -7,7 +7,7 @@ import math
 import pytest
 import torch
 
-from pyro.contrib.epidemiology import (OverdispersedSIRModel, RegionalSIRModel, SimpleSIRModel, SparseSIRModel,
+from pyro.contrib.epidemiology import (RegionalSIRModel, SimpleSIRModel, SparseSIRModel, SuperspreadingSIRModel,
                                        UnknownStartSIRModel)
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def test_overdispersed_smoke(duration, forecast, options):
     recovery_time = 7.0
 
     # Generate data.
-    model = OverdispersedSIRModel(population, recovery_time, [None] * duration)
+    model = SuperspreadingSIRModel(population, recovery_time, [None] * duration)
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
         if data.sum():
@@ -68,7 +68,7 @@ def test_overdispersed_smoke(duration, forecast, options):
     assert data.sum() > 0, "failed to generate positive data"
 
     # Infer.
-    model = OverdispersedSIRModel(population, recovery_time, data)
+    model = SuperspreadingSIRModel(population, recovery_time, data)
     num_samples = 5
     model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
 

@@ -99,16 +99,11 @@ class SimpleSIRModel(CompartmentalModel):
                     obs=self.data[t])
 
 
-class OverdispersedSIRModel(CompartmentalModel):
+class SuperspreadingSIRModel(CompartmentalModel):
     """
-    Overdispersed Susceptible-Infected-Recovered model.
+    Generalizes :class:`SimpleSIRModel` by adding superspreading effects.
 
     To customize this model we recommend forking and editing this class.
-
-    This is a stochastic discrete-time discrete-state model with three
-    compartments: "S" for susceptible, "I" for infected, and "R" for
-    recovered individuals (the recovered individuals are implicit: ``R =
-    population - S - I``) with transitions ``S -> I -> R``.
 
     This model accounts for superspreading (overdispersed individual
     reproductive number) by assuming each infected individual infects
@@ -217,14 +212,9 @@ class OverdispersedSIRModel(CompartmentalModel):
 
 class SparseSIRModel(CompartmentalModel):
     """
-    Susceptible-Infected-Recovered model with sparsely observed infections.
+    Generalizes :class:`SimpleSIRModel` to allow sparsely observed infections.
 
     To customize this model we recommend forking and editing this class.
-
-    This is a stochastic discrete-time discrete-state model with four
-    compartments: "S" for susceptible, "I" for infected, and "R" for
-    recovered individuals (the recovered individuals are implicit: ``R =
-    population - S - I``) with transitions ``S -> I -> R``.
 
     This model allows observations of **cumulative** infections at uneven time
     intervals. To preserve Markov structure (and hence tractable inference)
@@ -325,14 +315,10 @@ class SparseSIRModel(CompartmentalModel):
 
 class UnknownStartSIRModel(CompartmentalModel):
     """
-    Susceptible-Infected-Recovered model with unknown date of first infection.
+    Generalizes :class:`SimpleSIRModel` by allowing unknown date of first
+    infection.
 
     To customize this model we recommend forking and editing this class.
-
-    This is a stochastic discrete-time discrete-state model with three
-    compartments: "S" for susceptible, "I" for infected, and "R" for
-    recovered individuals (the recovered individuals are implicit: ``R =
-    population - S - I``) with transitions ``S -> I -> R``.
 
     This model demonstrates:
 
@@ -480,14 +466,10 @@ class UnknownStartSIRModel(CompartmentalModel):
 
 class RegionalSIRModel(CompartmentalModel):
     r"""
-    Susceptible-Infected-Recovered model with coupling across regions.
+    Generalizes :class:`SimpleSIRModel` to simultaneously model multiple
+    regions with weak coupling across regions.
 
     To customize this model we recommend forking and editing this class.
-
-    This is a stochastic discrete-time discrete-state model with three
-    compartments in each region: "S" for susceptible, "I" for infected, and "R"
-    for recovered individuals (the recovered individuals are implicit: ``R =
-    population - S - I``) with transitions ``S -> I -> R``.
 
     Regions are coupled by a ``coupling`` matrix with entries in ``[0,1]``.
     The all ones matrix is equivalent to a single region. The identity matrix
