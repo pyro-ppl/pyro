@@ -21,15 +21,9 @@ Base Compartmental Model
     :members:
     :member-order: bysource
 
-SIR Models
-----------
-.. automodule:: pyro.contrib.epidemiology.sir
-    :members:
-    :member-order: bysource
-
-SEIR Models
------------
-.. automodule:: pyro.contrib.epidemiology.seir
+Example Models
+--------------
+.. automodule:: pyro.contrib.epidemiology.models
     :members:
     :member-order: bysource
 

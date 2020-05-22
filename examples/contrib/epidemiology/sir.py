@@ -13,7 +13,7 @@ import torch
 from torch.distributions import biject_to, constraints
 
 import pyro
-from pyro.contrib.epidemiology import OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel
+from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -26,13 +26,13 @@ def Model(args, data):
             return SimpleSEIRModel(args.population, args.incubation_time,
                                    args.recovery_time, data)
         else:
-            return OverdispersedSEIRModel(args.population, args.incubation_time,
-                                          args.recovery_time, data)
+            return SuperspreadingSEIRModel(args.population, args.incubation_time,
+                                           args.recovery_time, data)
     else:
         if args.concentration == math.inf:
             return SimpleSIRModel(args.population, args.recovery_time, data)
         else:
-            return OverdispersedSIRModel(args.population, args.recovery_time, data)
+            return SuperspreadingSIRModel(args.population, args.recovery_time, data)
 
 
 def generate_data(args):

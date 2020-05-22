@@ -3,17 +3,17 @@
 
 from .compartmental import CompartmentalModel
 from .distributions import infection_dist
-from .seir import OverdispersedSEIRModel, SimpleSEIRModel
-from .sir import OverdispersedSIRModel, RegionalSIRModel, SimpleSIRModel, SparseSIRModel, UnknownStartSIRModel
+from .models import (RegionalSIRModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel, SuperspreadingSEIRModel,
+                     SuperspreadingSIRModel, UnknownStartSIRModel)
 
 __all__ = [
     "CompartmentalModel",
-    "OverdispersedSEIRModel",
-    "OverdispersedSIRModel",
     "RegionalSIRModel",
     "SimpleSEIRModel",
     "SimpleSIRModel",
     "SparseSIRModel",
+    "SuperspreadingSEIRModel",
+    "SuperspreadingSIRModel",
     "UnknownStartSIRModel",
     "infection_dist",
 ]
