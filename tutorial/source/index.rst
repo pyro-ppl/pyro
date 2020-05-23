@@ -27,6 +27,7 @@ Welcome to Pyro Examples and Tutorials!
    minipyro
    effect_handlers
    modules
+   normalizing_flows_i
 
 .. toctree::
    :maxdepth: 2
