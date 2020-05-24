@@ -32,11 +32,14 @@ class BetaBinomial(TorchDistribution):
     is unknown and randomly drawn from a :class:`~pyro.distributions.Beta` distribution
     prior to a certain number of Bernoulli trials given by ``total_count``.
 
-    :param float or torch.Tensor concentration1: 1st concentration parameter (alpha) for the
+    :param concentration1: 1st concentration parameter (alpha) for the
         Beta distribution.
-    :param float or torch.Tensor concentration0: 2nd concentration parameter (beta) for the
+    :type concentration1: float or torch.Tensor
+    :param concentration0: 2nd concentration parameter (beta) for the
         Beta distribution.
-    :param int or torch.Tensor total_count: number of Bernoulli trials.
+    :type concentration0: float or torch.Tensor
+    :param total_count: Number of Bernoulli trials.
+    :type total_count: float or torch.Tensor
     """
     arg_constraints = {'concentration1': constraints.positive, 'concentration0': constraints.positive,
                        'total_count': constraints.nonnegative_integer}
