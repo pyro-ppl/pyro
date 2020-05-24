@@ -23,7 +23,7 @@ from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.util import warn_if_nan
 
-from .distributions import set_approx_sample_thresh
+from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
@@ -144,6 +144,7 @@ class CompartmentalModel(ABC):
     full_mass = False
 
     @torch.no_grad()
+    @set_approx_log_prob_tol(0.1)
     @set_approx_sample_thresh(100)  # This is robust to gross approximation.
     def heuristic(self, num_particles=1024, ess_threshold=0.5, retries=10):
         """

@@ -42,8 +42,8 @@ def log_beta_stirling(x, y, tol=0.1):
 
     :param torch.Tensor x: A positive tensor.
     :param torch.Tensor y: A positive tensor.
-    :param float tol: Bound on maximum absolute error. Defaults to 0.1.
-        For very small ``tol``, this function simply defers to :func:`log_beta`.
+    :param float tol: Bound on maximum absolute error. Defaults to 0.1. For
+        very small ``tol``, this function simply defers to :func:`log_beta`.
     """
     assert isinstance(tol, (float, int)) and tol >= 0
     if tol < 0.02:
