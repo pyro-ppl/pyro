@@ -42,7 +42,8 @@ def generate_data(args):
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
                                   "rho": args.response_rate,
-                                  "k": args.concentration})
+                                  "k": args.concentration,
+                                  "od": args.overdispersion})
         obs = samples["obs"][:args.duration]
         new_I = samples.get("S2I", samples.get("E2I"))
 
@@ -97,6 +98,8 @@ def evaluate(args, model, samples):
              "response_rate": "rho"}
     if args.concentration < math.inf:
         names["concentration"] = "k"
+    if "od" in samples:
+        names["overdispersion"] = "od"
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
@@ -238,6 +241,7 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--concentration", default=math.inf, type=float,
                         help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
+    parser.add_argument("-o", "--overdispersion", default=0., type=float)
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
@@ -248,7 +252,8 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
-    parser.add_argument("--double", action="store_true")
+    parser.add_argument("--double", action="store_true", default=True)
+    parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
@@ -258,7 +263,7 @@ if __name__ == "__main__":
         if args.cuda:
             torch.set_default_tensor_type(torch.cuda.DoubleTensor)
         else:
-            torch.set_default_tensor_type(torch.DoubleTensor)
+            torch.set_default_dtype(torch.float64)
     elif args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
