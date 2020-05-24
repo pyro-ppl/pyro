@@ -22,8 +22,11 @@ class ExtendedBinomial(Binomial):
     support = constraints.integer
 
     def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+
+        invalid = (value < 0) | (value > self.total_count)
         result = super().log_prob(value)
-        invalid = ~super().support.check(value)
         return result.masked_fill(invalid, -math.inf)
 
 
@@ -40,6 +43,9 @@ class ExtendedBetaBinomial(BetaBinomial):
     support = constraints.integer
 
     def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+
+        invalid = (value < 0) | (value > self.total_count)
         result = super().log_prob(value)
-        invalid = ~super().support.check(value)
         return result.masked_fill(invalid, -math.inf)

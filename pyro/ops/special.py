@@ -39,6 +39,11 @@ def log_beta(x, y, tol=0.):
     :rtype: torch.Tensor
     """
     assert isinstance(tol, (float, int)) and tol >= 0
+
+    # Avoid nans in gradients.
+    x = x.clamp(min=torch.finfo(x.dtype).eps)
+    y = y.clamp(min=torch.finfo(y.dtype).eps)
+
     if tol < 0.02:
         # At small tolerance it is cheaper to defer to torch.lgamma().
         return x.lgamma() + y.lgamma() - (x + y).lgamma()
