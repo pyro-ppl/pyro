@@ -5,24 +5,16 @@ import functools
 import math
 import operator
 
+import torch
 
-def log_beta(x, y):
+
+def log_beta(x, y, tol=0.):
     """
-    Log Beta function.
+    Computes log Beta function.
 
-    :param torch.Tensor x: A positive tensor.
-    :param torch.Tensor y: A positive tensor.
-    """
-    return x.lgamma() + y.lgamma() - (x + y).lgamma()
-
-
-def log_beta_stirling(x, y, tol=0.1):
-    """
-    Shifted Stirling's approximation to the log Beta function.
-
-    This is useful as a cheaper alternative to :func:`log_beta`.
-
-    This adapts Stirling's approximation of the log Gamma function::
+    When ``tol >= 0.02`` this uses a shifted Stirling's approximation to the
+    log Beta function. The approximation adapts Stirling's approximation of the
+    log Gamma function::
 
         lgamma(z) ≈ (z - 1/2) * log(z) - z + log(2 * pi) / 2
 
@@ -31,8 +23,8 @@ def log_beta_stirling(x, y, tol=0.1):
         log_beta(x, y) ≈ ((x-1/2) * log(x) + (y-1/2) * log(y)
                           - (x+y-1/2) * log(x+y) + log(2*pi)/2)
 
-    This additionally improves accuracy near zero by iteratively shifting
-    the log Gamma approximation using the recursion::
+    The approximation additionally improves accuracy near zero by iteratively
+    shifting the log Gamma approximation using the recursion::
 
         lgamma(x) = lgamma(x + 1) - log(x)
 
@@ -44,11 +36,12 @@ def log_beta_stirling(x, y, tol=0.1):
     :param torch.Tensor y: A positive tensor.
     :param float tol: Bound on maximum absolute error. Defaults to 0.1. For
         very small ``tol``, this function simply defers to :func:`log_beta`.
+    :rtype: torch.Tensor
     """
     assert isinstance(tol, (float, int)) and tol >= 0
     if tol < 0.02:
-        # Eventually it is cheaper to defer to torch.lgamma().
-        return log_beta(x, y)
+        # At small tolerance it is cheaper to defer to torch.lgamma().
+        return x.lgamma() + y.lgamma() - (x + y).lgamma()
 
     # This bound holds for arbitrary x,y. We could do better with large x,y.
     shift = int(math.ceil(0.082 / tol))
@@ -65,3 +58,24 @@ def log_beta_stirling(x, y, tol=0.1):
 
     return (log_factor + (x - 0.5) * x.log() + (y - 0.5) * y.log()
             - (xy - 0.5) * xy.log() + (math.log(2 * math.pi) / 2 - shift))
+
+
+@torch.no_grad()
+def log_binomial(n, k, tol=0.):
+    """
+    Computes log binomial coefficient.
+
+    When ``tol >= 0.02`` this uses a shifted Stirling's approximation to the
+    log Beta function via :func:`log_beta`.
+
+    :param torch.Tensor n: A nonnegative integer tensor.
+    :param torch.Tensor k: An integer tensor ranging in ``[0, n]``.
+    :rtype: torch.Tensor
+    """
+    assert isinstance(tol, (float, int)) and tol >= 0
+    n_plus_1 = n + 1
+    if tol < 0.02:
+        # At small tolerance it is cheaper to defer to torch.lgamma().
+        return n_plus_1.lgamma() - (k + 1).lgamma() - (n_plus_1 - k).lgamma()
+
+    return -n_plus_1.log() - log_beta(k + 1, n_plus_1 - k, tol=tol)

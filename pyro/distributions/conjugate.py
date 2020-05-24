@@ -1,7 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import functools
 import numbers
 
 import torch
@@ -10,7 +9,7 @@ from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.torch import Beta, Binomial, Dirichlet, Gamma, Multinomial, Poisson
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.ops.special import log_beta, log_beta_stirling
+from pyro.ops.special import log_beta, log_binomial
 
 
 def _log_beta_1(alpha, value, is_sparse):
@@ -44,9 +43,9 @@ class BetaBinomial(TorchDistribution):
     has_enumerate_support = True
     support = Binomial.support
 
-    # EXPERIMENTAL If set to a positive value, the .log_prob() method will use a
-    # shifted Sterling's approximation to the Beta function, reducing
-    # computational cost from 9 lgamma() evaluations to four log() evaluations
+    # EXPERIMENTAL If set to a positive value, the .log_prob() method will use
+    # a shifted Sterling's approximation to the Beta function, reducing
+    # computational cost from 9 lgamma() evaluations to 12 log() evaluations
     # plus arithmetic. Recommended values are between 0.1 and 0.01.
     approx_log_prob_tol = 0.
 
@@ -82,16 +81,12 @@ class BetaBinomial(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
 
-        if self.approx_log_prob_tol > 0:
-            lbeta = functools.partial(log_beta_stirling, tol=self.approx_log_prob_tol)
-        else:
-            lbeta = log_beta
-
         n = self.total_count
         k = value
         a = self.concentration1
         b = self.concentration0
-        return lbeta(k + a, n - k + b) - lbeta(a, b) - lbeta(k + 1, n - k + 1) - n.log1p()
+        tol = self.approx_log_prob_tol
+        return log_binomial(n, k, tol) + log_beta(k + a, n - k + b, tol) - log_beta(a, b, tol)
 
     @property
     def mean(self):
