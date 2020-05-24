@@ -8,7 +8,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.tensor_utils import safe_log
+from pyro.ops.special import safe_log
 
 
 def clamp(tensor, *, min=None, max=None):
