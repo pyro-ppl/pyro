@@ -38,6 +38,30 @@ def set_approx_sample_thresh(thresh):
         dist.Binomial.approx_sample_thresh = old
 
 
+@contextmanager
+def set_approx_log_prob_tol(tol):
+    """
+    EXPERIMENTAL Temporarily set the global default value of
+    ``BetaBinomial.approx_log_prob_tol``, thereby decreasing the computational
+    complexity of scoring :class:`~pyro.distributions.BetaBinomial`
+    distributions.
+
+    This is used internally by
+    :class:`~pyro.contrib.epidemiology.compartmental.CompartmentalModel`.
+
+    :param tol: New temporary tolold.
+    :type tol: int or float.
+    """
+    assert isinstance(tol, (float, int))
+    assert tol > 0
+    old = dist.BetaBinomial.approx_log_prob_tol
+    try:
+        dist.BetaBinomial.approx_log_prob_tol = tol
+        yield
+    finally:
+        dist.BetaBinomial.approx_log_prob_tol = old
+
+
 def infection_dist(*,
                    individual_rate,
                    num_infectious,
