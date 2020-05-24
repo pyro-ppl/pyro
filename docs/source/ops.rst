@@ -34,6 +34,15 @@ Newton Optimizers
     :show-inheritance:
     :member-order: bysource
 
+Special Functions
+-----------------
+
+.. automodule:: pyro.ops.special
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Tensor Utilities
 ----------------
 
