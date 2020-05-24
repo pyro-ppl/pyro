@@ -9,10 +9,7 @@ from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.torch import Beta, Binomial, Dirichlet, Gamma, Multinomial, Poisson
 from pyro.distributions.torch_distribution import TorchDistribution
-
-
-def _log_beta(x, y):
-    return torch.lgamma(x) + torch.lgamma(y) - torch.lgamma(x + y)
+from pyro.ops.special import log_beta, log_binomial
 
 
 def _log_beta_1(alpha, value, is_sparse):
@@ -46,6 +43,12 @@ class BetaBinomial(TorchDistribution):
     has_enumerate_support = True
     support = Binomial.support
 
+    # EXPERIMENTAL If set to a positive value, the .log_prob() method will use
+    # a shifted Sterling's approximation to the Beta function, reducing
+    # computational cost from 9 lgamma() evaluations to 12 log() evaluations
+    # plus arithmetic. Recommended values are between 0.1 and 0.01.
+    approx_log_prob_tol = 0.
+
     def __init__(self, concentration1, concentration0, total_count=1, validate_args=None):
         concentration1, concentration0, total_count = broadcast_all(
             concentration1, concentration0, total_count)
@@ -77,12 +80,13 @@ class BetaBinomial(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        log_factorial_n = torch.lgamma(self.total_count + 1)
-        log_factorial_k = torch.lgamma(value + 1)
-        log_factorial_nmk = torch.lgamma(self.total_count - value + 1)
-        return (log_factorial_n - log_factorial_k - log_factorial_nmk +
-                _log_beta(value + self.concentration1, self.total_count - value + self.concentration0) -
-                _log_beta(self.concentration0, self.concentration1))
+
+        n = self.total_count
+        k = value
+        a = self.concentration1
+        b = self.concentration0
+        tol = self.approx_log_prob_tol
+        return log_binomial(n, k, tol) + log_beta(k + a, n - k + b, tol) - log_beta(a, b, tol)
 
     @property
     def mean(self):
@@ -223,7 +227,7 @@ class GammaPoisson(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
         post_value = self.concentration + value
-        return -_log_beta(self.concentration, value + 1) - post_value.log() + \
+        return -log_beta(self.concentration, value + 1) - post_value.log() + \
             self.concentration * self.rate.log() - post_value * (1 + self.rate).log()
 
     @property
