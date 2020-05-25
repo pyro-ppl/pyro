@@ -8,6 +8,26 @@ import operator
 import torch
 
 
+class _SafeLog(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return x.log()
+
+    @staticmethod
+    def backward(ctx, grad):
+        x, = ctx.saved_tensors
+        return grad / x.clamp(min=torch.finfo(x.dtype).eps)
+
+
+def safe_log(x):
+    """
+    Like :func:`torch.log` but avoids infinite gradients at log(0)
+    by clamping them to at most ``1 / finfo.eps``.
+    """
+    return _SafeLog.apply(x)
+
+
 def log_beta(x, y, tol=0.):
     """
     Computes log Beta function.

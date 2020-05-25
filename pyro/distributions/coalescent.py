@@ -9,7 +9,7 @@ import torch
 from torch.distributions import constraints
 
 from pyro.distributions.util import broadcast_shape, is_validation_enabled
-from pyro.ops.tensor_utils import safe_log
+from pyro.ops.special import safe_log
 
 from .torch_distribution import TorchDistribution
 

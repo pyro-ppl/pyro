@@ -54,7 +54,7 @@ def set_approx_log_prob_tol(tol):
     :type tol: int or float.
     """
     assert isinstance(tol, (float, int))
-    assert tol > 0
+    assert tol >= 0
     old1 = dist.Binomial.approx_log_prob_tol
     old2 = dist.BetaBinomial.approx_log_prob_tol
     try:

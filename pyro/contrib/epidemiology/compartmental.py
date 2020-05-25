@@ -281,6 +281,7 @@ class CompartmentalModel(ABC):
         self._concat_series(samples)
         return samples
 
+    @set_approx_log_prob_tol(0.1)
     def fit(self, **options):
         r"""
         Runs inference to generate posterior samples.
@@ -397,6 +398,7 @@ class CompartmentalModel(ABC):
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
+    @set_approx_log_prob_tol(0.1)
     @set_approx_sample_thresh(10000)
     def predict(self, forecast=0):
         """
