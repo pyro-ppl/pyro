@@ -13,7 +13,6 @@ Pyro Documentation
    :maxdepth: 2
    :caption: Pyro Core:
 
-   installation
    getting_started
    primitives 
    inference
