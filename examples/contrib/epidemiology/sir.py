@@ -49,14 +49,17 @@ def generate_data(args):
 
         obs_sum = int(obs.sum())
         new_I_sum = int(new_I[:args.duration].sum())
-        if obs_sum >= args.min_observations:
+        assert 0 <= args.min_obs_portion < args.max_obs_portion <= 1
+        min_obs = int(math.ceil(args.min_obs_portion * args.population))
+        max_obs = int(math.floor(args.max_obs_portion * args.population))
+        if min_obs <= obs_sum <= max_obs:
             logging.info("Observed {:d}/{:d} infections:\n{}".format(
                 obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)))
             return {"new_I": new_I, "obs": obs}
 
-    raise ValueError("Failed to generate {} observations. Try increasing "
-                     "--population or decreasing --min-observations"
-                     .format(args.min_observations))
+    raise ValueError("Failed to generate {}-{} observations. Try decreasing "
+                     "--min-obs-portion or increasing --max-obs-portion"
+                     .format(min_obs, max_obs))
 
 
 def infer(args, model):
@@ -231,7 +234,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=int)
-    parser.add_argument("-m", "--min-observations", default=3, type=int)
+    parser.add_argument("-m", "--min-obs-portion", default=0.05, type=float)
+    parser.add_argument("-M", "--max-obs-portion", default=0.2, type=float)
     parser.add_argument("-d", "--duration", default=20, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
