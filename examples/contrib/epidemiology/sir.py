@@ -234,8 +234,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=int)
-    parser.add_argument("-m", "--min-obs-portion", default=0.05, type=float)
-    parser.add_argument("-M", "--max-obs-portion", default=0.2, type=float)
+    parser.add_argument("-m", "--min-obs-portion", default=0.01, type=float)
+    parser.add_argument("-M", "--max-obs-portion", default=0.99, type=float)
     parser.add_argument("-d", "--duration", default=20, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
