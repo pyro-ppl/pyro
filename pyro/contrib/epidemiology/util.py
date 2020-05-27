@@ -112,10 +112,13 @@ def compute_bin_probs(s, num_quant_bins=3):
     bins. `s` is a real-valued tensor with values in [0, 1]. Returns probabilities
     of shape `s.shape` + `(num_quant_bins,)`
     """
-    if num_quant_bins not in [4, 8, 12, 16]:
-        raise ValueError("Supported quantization strategies have 4, 8, 12, or 16 bins")
 
     t = 1 - s
+
+    if num_quant_bins == 2:
+        probs = torch.stack([t, s], dim=-1)
+        return probs
+
     ss = s * s
     tt = t * t
 
@@ -128,7 +131,9 @@ def compute_bin_probs(s, num_quant_bins=3):
             4 + tt * (3 * t - 6),
             s * ss,
         ], dim=-1) * (1/6)
-    elif num_quant_bins == 8:
+        return probs
+
+    if num_quant_bins == 8:
         # This quintic spline interpolates over the nearest eight integers, ensuring
         # piecewise quartic gradients.
         s3 = ss * s
@@ -149,7 +154,9 @@ def compute_bin_probs(s, num_quant_bins=3):
             2 + 10 * s + 20 * ss + 20 * s3 + 10 * s4 - 7 * s5,
             2 * s5
         ], dim=-1) * (1/840)
-    elif num_quant_bins == 12:
+        return probs
+
+    if num_quant_bins == 12:
         # This septic spline interpolates over the nearest 12 integers
         s3 = ss * s
         s4 = ss * ss
@@ -177,7 +184,9 @@ def compute_bin_probs(s, num_quant_bins=3):
             693 + 4851 * s + 14553 * ss + 24255 * s3 + 24255 * s4 + 14553 * s5 + 4851 * s6 - 3267 * s7,
             693 * s7,
         ], dim=-1) * (1/32931360)
-    elif num_quant_bins == 16:
+        return probs
+
+    if num_quant_bins == 16:
         # This nonic spline interpolates over the nearest 16 integers
         w16 = torch.from_numpy(W16).to(s.device).type_as(s)
         s_powers = s.unsqueeze(-1).unsqueeze(-1).pow(torch.arange(10.))
@@ -187,8 +196,9 @@ def compute_bin_probs(s, num_quant_bins=3):
         index = [0, 1, 2, 3, 4, 5, 6, 15, 7, 14, 13, 12, 11, 10, 9, 8]
         probs = torch.cat([splines_t, splines_s], dim=-1)
         probs = probs.index_select(-1, torch.tensor(index))
+        return probs
 
-    return probs
+    raise ValueError("Unsupported num_quant_bins: {}".format(num_quant_bins))
 
 
 def _all(x):
