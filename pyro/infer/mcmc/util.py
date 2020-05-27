@@ -319,6 +319,11 @@ def _find_valid_initial_params(model, model_args, model_kwargs, transforms, pote
         params = {k: transforms[k](v) for k, v in samples.items()}
         pe_grad, pe = potential_grad(potential_fn, params)
 
+        if not torch.isfinite(pe):
+            print("DEBUG energy is not finite")
+        elif not all(torch.isfinite(g).all() for g in pe_grad.values()):
+            print("DEBUG grad is not finite")
+
         if torch.isfinite(pe) and all(map(torch.all, map(torch.isfinite, pe_grad.values()))):
             for k, v in params.items():
                 params_per_chain[k].append(v)

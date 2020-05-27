@@ -295,8 +295,12 @@ class CompartmentalModel(ABC):
             pulled out and have special meaning.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
-        :param full_mass: (Default ``False``). Specification of mass matrix
-            of the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param bool relax: Whether to use a relaxed model rather than the
+            default discrete model. The relaxed model is a biased approximation
+            of the discrete model, but is cheaper, allowing more MCMC samples
+            and hence lower variance. Defaults to False.
+        :param full_mass: Specification of mass matrix of the
+            :class:`~pyro.infer.mcmc.nuts.NUTS` kernel. Defaults to False.
         :param bool arrowhead_mass: Whether to treat ``full_mass`` as the head
             of an arrowhead matrix versus simply as a block. Defaults to False.
         :param int num_quant_bins: The number of quantization bins to use. Note
@@ -353,9 +357,10 @@ class CompartmentalModel(ABC):
 
         # Configure a kernel.
         logger.info("Running inference...")
+        relax = options.pop("relax", False)
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
-        model = self._vectorized_model
+        model = self._relaxed_model if relax else self._vectorized_model
         if haar:
             rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
@@ -603,6 +608,52 @@ class CompartmentalModel(ABC):
         logp = logp.reshape(-1, Q ** C * Q ** C).logsumexp(-1).sum()
         warn_if_nan(logp)
         pyro.factor("transition", logp)
+
+        self._clear_plates()
+
+    def _relaxed_model(self):
+        """
+        Relaxed vectorized model used for approximate inference.
+        """
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
+        # Sample global parameters.
+        params = self.global_model()
+
+        # Sample the continuous reparameterizing variable.
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event())
+        assert auxiliary.shape == shape, "particle plates are not supported"
+
+        # Constrain.
+        curr = clamp(auxiliary, min=0, max=self.population)
+        curr = dict(zip(self.compartments, curr))
+
+        # Truncate final value from the right then pad initial value onto the left.
+        init = self.initialize(params)
+        prev = {}
+        for name in self.compartments:
+            value = init[name]
+            if isinstance(value, torch.Tensor):
+                value = value[..., None]  # Because curr is enumerated on the right.
+            prev[name] = cat2(value, curr[name][:-1], dim=-2 if self.is_regional else -1)
+
+        # Enable approximate inference by using aux as a non-enumerated proxy
+        # for enumerated compartment values.
+        for name in self.approximate:
+            curr[name + "_approx"] = curr[name]
+            prev[name + "_approx"] = prev[name]
+
+        # Transition.
+        with poutine.block(), poutine.trace() as tr:
+            with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
+                t = slice(None)  # Used to slice data tensors.
+                self.transition_bwd(params, prev, curr, t)
+        assert torch.isfinite(tr.trace.log_prob_sum())  # DEBUG
 
         self._clear_plates()
 
