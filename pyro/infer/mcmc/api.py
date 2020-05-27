@@ -375,7 +375,7 @@ class MCMC:
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
-        with optional(pyro.validation_enabled(not self._disable_validation),
+        with optional(pyro.validation_enabled(not self.disable_validation),
                       self.disable_validation is not None):
             for x, chain_id in self.sampler.run(*args, **kwargs):
                 if num_samples[chain_id] == 0:
