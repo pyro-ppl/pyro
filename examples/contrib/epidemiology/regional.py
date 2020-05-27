@@ -58,6 +58,7 @@ def infer(args, model):
                      relax=args.relax,
                      max_tree_depth=args.max_tree_depth,
                      num_quant_bins=args.num_bins,
+                     dct=args.dct,
                      haar=args.haar,
                      haar_full_mass=args.haar_full_mass,
                      hook_fn=hook_fn)
@@ -139,6 +140,7 @@ if __name__ == "__main__":
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("--relax", action="store_true")
+    parser.add_argument("--dct", type=float)
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
