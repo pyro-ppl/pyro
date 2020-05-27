@@ -290,9 +290,10 @@ class MCMC:
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
-    :param bool disable_validation: Disables distribution validation check. This is
-        disabled by default, since divergent transitions will lead to exceptions.
-        Switch to ``False`` for debugging purposes.
+    :param bool disable_validation: Disables distribution validation check.
+        Defaults to ``True``, disabling validation, since divergent transitions
+        will lead to exceptions. Switch to ``False`` to enable validation, or
+        to ``None`` to preserve existing global values.
     :param dict transforms: dictionary that specifies a transform for a sample site
         with constrained support to unconstrained space.
     """
@@ -374,7 +375,8 @@ class MCMC:
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
-        with optional(pyro.validation_enabled(False), self.disable_validation):
+        with optional(pyro.validation_enabled(not self._disable_validation),
+                      self.disable_validation is not None):
             for x, chain_id in self.sampler.run(*args, **kwargs):
                 if num_samples[chain_id] == 0:
                     num_samples[chain_id] += 1
