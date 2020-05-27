@@ -22,11 +22,12 @@ import torch
 import torch.multiprocessing as mp
 
 import pyro
-from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.nuts import NUTS
-from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
 import pyro.poutine as poutine
+from pyro.infer.mcmc.hmc import HMC
+from pyro.infer.mcmc.logger import DIAGNOSTIC_MSG, ProgressBar, TqdmHandler, initialize_logger
+from pyro.infer.mcmc.nuts import NUTS
+from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
+from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
 
@@ -291,7 +292,7 @@ class MCMC:
     :param bool disable_progbar: Disable progress bar and diagnostics update.
     :param bool disable_validation: Disables distribution validation check. This is
         disabled by default, since divergent transitions will lead to exceptions.
-        Switch to `True` for debugging purposes.
+        Switch to ``False`` for debugging purposes.
     :param dict transforms: dictionary that specifies a transform for a sample site
         with constrained support to unconstrained space.
     """
@@ -373,7 +374,7 @@ class MCMC:
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
-        with pyro.validation_enabled(not self.disable_validation):
+        with optional(pyro.validation_enabled(False), self.disable_validation):
             for x, chain_id in self.sampler.run(*args, **kwargs):
                 if num_samples[chain_id] == 0:
                     num_samples[chain_id] += 1
