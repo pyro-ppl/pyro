@@ -375,7 +375,7 @@ class CompartmentalModel(ABC):
             kernel.mass_matrix_adapter = ArrowheadMassMatrix()
 
         # Run mcmc.
-        options.setdefault("disable_validation", False)
+        options.setdefault("disable_validation", None)
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
