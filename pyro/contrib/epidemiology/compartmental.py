@@ -24,7 +24,7 @@ from pyro.infer.smcfilter import SMCFailed
 from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
-from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
+from .util import align_samples, cat2, clamp, differentiably_round, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
 
@@ -585,7 +585,7 @@ class CompartmentalModel(ABC):
         # Enable approximate inference by using aux as a non-enumerated proxy
         # for enumerated compartment values.
         for name in self.approximate:
-            aux = auxiliary[self.compartments.index(name)]
+            aux = differentiably_round(auxiliary[self.compartments.index(name)])
             curr[name + "_approx"] = aux
             prev[name + "_approx"] = cat2(init[name], aux[:-1],
                                           dim=-2 if self.is_regional else -1)
@@ -630,17 +630,12 @@ class CompartmentalModel(ABC):
         assert auxiliary.shape == shape, "particle plates are not supported"
 
         # Constrain.
-        curr = clamp(auxiliary, min=0, max=self.population)
-        curr = dict(zip(self.compartments, curr))
+        curr = dict(zip(self.compartments, differentiably_round(auxiliary)))
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
-        prev = {}
-        for name in self.compartments:
-            value = init[name]
-            if isinstance(value, torch.Tensor):
-                value = value[..., None]  # Because curr is enumerated on the right.
-            prev[name] = cat2(value, curr[name][:-1], dim=-2 if self.is_regional else -1)
+        prev = {name: cat2(init[name], value[:-1], dim=-2 if self.is_regional else -1)
+                for name, value in curr.items()}
 
         # Enable approximate inference by using aux as a non-enumerated proxy
         # for enumerated compartment values.
@@ -649,11 +644,9 @@ class CompartmentalModel(ABC):
             prev[name + "_approx"] = prev[name]
 
         # Transition.
-        with poutine.block(), poutine.trace() as tr:
-            with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
-                t = slice(None)  # Used to slice data tensors.
-                self.transition_bwd(params, prev, curr, t)
-        assert torch.isfinite(tr.trace.log_prob_sum())  # DEBUG
+        with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
+            t = slice(None)  # Used to slice data tensors.
+            self.transition_bwd(params, prev, curr, t)
 
         self._clear_plates()
 

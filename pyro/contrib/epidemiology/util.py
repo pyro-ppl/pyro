@@ -52,6 +52,23 @@ def cat2(lhs, rhs, *, dim=-1):
     return torch.cat([lhs.expand(shape), rhs.expand(shape)], dim=dim)
 
 
+class _Round(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        return x.round()
+
+    @staticmethod
+    def backward(ctx, grad):
+        return grad
+
+
+def differentiably_round(x):
+    """
+    Like :func:`torch.round` but passes gradients as if no rounding occurred.
+    """
+    return _Round.apply(x)
+
+
 @torch.no_grad()
 def align_samples(samples, model, particle_dim):
     """

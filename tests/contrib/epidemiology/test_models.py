@@ -56,6 +56,7 @@ def test_simple_sir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_simple_seir_smoke(duration, forecast, options):
     population = 100
@@ -91,6 +92,7 @@ def test_simple_seir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_superspreading_sir_smoke(duration, forecast, options):
     population = 100
@@ -122,6 +124,7 @@ def test_superspreading_sir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_superspreading_seir_smoke(duration, forecast, options):
     population = 100
@@ -272,12 +275,13 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
 
 
 @pytest.mark.parametrize("duration", [3, 7])
-@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("forecast", [9])
 @pytest.mark.parametrize("options", [
     {},
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_regional_smoke(duration, forecast, options):
     num_regions = 6
