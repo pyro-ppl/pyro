@@ -416,7 +416,7 @@ class ExpandedDistribution(TorchDistribution):
         return ScoreParts(log_prob, score_function, entropy_term)
 
     def enumerate_support(self, expand=True):
-        samples = self.base_dist.enumerate_support(expand=expand)
+        samples = self.base_dist.enumerate_support(expand=False)
         enum_shape = samples.shape[:1]
         samples = samples.reshape(enum_shape + (1,) * len(self.batch_shape))
         if expand:

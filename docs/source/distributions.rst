@@ -64,6 +64,20 @@ BetaBinomial
     :undoc-members:
     :show-inheritance:
 
+CoalescentTimes
+---------------
+.. autoclass:: pyro.distributions.CoalescentTimes
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+CoalescentTimesWithRate
+-----------------------
+.. autoclass:: pyro.distributions.CoalescentTimesWithRate
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalDistribution
 -----------------------
 .. autoclass:: pyro.distributions.ConditionalDistribution
@@ -267,16 +281,16 @@ Stable
     :undoc-members:
     :show-inheritance:
 
-Unit
-----
-.. autoclass:: pyro.distributions.Unit
+TruncatedPolyaGamma
+-------------------
+.. autoclass:: pyro.distributions.TruncatedPolyaGamma
     :members:
     :undoc-members:
     :show-inheritance:
 
-VonMises
---------
-.. autoclass:: pyro.distributions.VonMises
+Unit
+----
+.. autoclass:: pyro.distributions.Unit
     :members:
     :undoc-members:
     :show-inheritance:
@@ -329,6 +343,13 @@ CorrLCholeskyTransform
 ELUTransform
 ------------
 .. autoclass:: pyro.distributions.transforms.ELUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+HaarTransform
+-------------
+.. autoclass:: pyro.distributions.transforms.HaarTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -392,9 +413,23 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
+ConditionalAffineAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalAffineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalAffineCoupling
 -------------------------
 .. autoclass:: pyro.distributions.transforms.ConditionalAffineCoupling
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalGeneralizedChannelPermute
+------------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalGeneralizedChannelPermute
     :members:
     :undoc-members:
     :show-inheritance:
@@ -537,9 +572,17 @@ block_autoregressive
 --------------------
 .. autofunction:: pyro.distributions.transforms.block_autoregressive
 
+conditional_affine_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_affine_autoregressive
+
 conditional_affine_coupling
 ---------------------------
 .. autofunction:: pyro.distributions.transforms.conditional_affine_coupling
+
+conditional_generalized_channel_permute
+---------------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_generalized_channel_permute
 
 conditional_householder
 -----------------------

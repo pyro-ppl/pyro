@@ -288,9 +288,10 @@ class _PEMaker:
                 _pe_jit = ignore_jit_warnings()(_pe_jit)
             self._compiled_fn = torch.jit.trace(_pe_jit, vals, **jit_options)
 
+            result = self._compiled_fn(*vals)
             for v in tmp:
                 v.requires_grad_(True)
-            return self._compiled_fn(*vals)
+            return result
 
     def get_potential_fn(self, jit_compile=False, skip_jit_warnings=True, jit_options=None):
         if jit_compile:
@@ -301,7 +302,7 @@ class _PEMaker:
 
 def _find_valid_initial_params(model, model_args, model_kwargs, transforms, potential_fn,
                                prototype_params, max_tries_initial_params=100, num_chains=1,
-                               init_strategy=init_to_uniform):
+                               init_strategy=init_to_uniform, trace=None):
     params = prototype_params
 
     # For empty models, exit early
@@ -312,7 +313,8 @@ def _find_valid_initial_params(model, model_args, model_kwargs, transforms, pote
     num_found = 0
     model = InitMessenger(init_strategy)(model)
     for attempt in range(num_chains * max_tries_initial_params):
-        trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+        if trace is None:
+            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
         samples = {name: trace.nodes[name]["value"].detach() for name in params}
         params = {k: transforms[k](v) for k, v in samples.items()}
         pe_grad, pe = potential_grad(potential_fn, params)
@@ -326,6 +328,7 @@ def _find_valid_initial_params(model, model_args, model_kwargs, transforms, pote
                     return {k: v[0] for k, v in params_per_chain.items()}
                 else:
                     return {k: torch.stack(v) for k, v in params_per_chain.items()}
+        trace = None
     raise ValueError("Model specification seems incorrect - cannot find valid initial params.")
 
 
@@ -381,7 +384,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     # No-op if model does not have any discrete latents.
     model = poutine.enum(config_enumerate(model),
                          first_available_dim=-1 - max_plate_nesting)
-    model_trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+    prototype_model = poutine.trace(InitMessenger(init_strategy)(model))
+    model_trace = prototype_model.get_trace(*model_args, **model_kwargs)
     has_enumerable_sites = False
     prototype_samples = {}
     for name, node in model_trace.iter_stochastic_nodes():
@@ -410,9 +414,11 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
         # Note that we deliberately do not exercise jit compilation here so as to
         # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
+        # We pass model_trace merely for computational savings.
         initial_params = _find_valid_initial_params(model, model_args, model_kwargs, transforms,
                                                     pe_maker.get_potential_fn(), prototype_params,
-                                                    num_chains=num_chains, init_strategy=init_strategy)
+                                                    num_chains=num_chains, init_strategy=init_strategy,
+                                                    trace=model_trace)
     potential_fn = pe_maker.get_potential_fn(jit_compile, skip_jit_warnings, jit_options)
     return initial_params, potential_fn, transforms, model_trace
 

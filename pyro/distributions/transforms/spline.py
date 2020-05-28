@@ -273,6 +273,7 @@ class ConditionedSpline(Transform):
         return y, log_detJ
 
 
+<<<<<<< HEAD
 @copy_docs_from(ConditionedSpline)
 class Spline(ConditionedSpline, TransformModule):
     r"""
@@ -281,13 +282,29 @@ class Spline(ConditionedSpline, TransformModule):
     are functions that are comprised of segments that are the ratio of two
     polynomials. For instance, for the :math:`d`-th dimension and the :math:`k`-th
     segment on the spline, the function will take the form,
+=======
+@copy_docs_from(TransformModule)
+class Spline(TransformModule):
+    r"""
+    An implementation of the element-wise rational spline bijections of linear
+    and quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020).
+    Rational splines are functions that are comprised of segments that are the
+    ratio of two polynomials. For instance, for the :math:`d`-th dimension and
+    the :math:`k`-th segment on the spline, the function will take the form,
+>>>>>>> faf9d5ca2f06752ed7c53e036c52bf368259d100
 
         :math:`y_d = \frac{\alpha^{(k)}(x_d)}{\beta^{(k)}(x_d)},`
 
     where :math:`\alpha^{(k)}` and :math:`\beta^{(k)}` are two polynomials of
     order :math:`d`. For :math:`d=1`, we say that the spline is linear, and for
+<<<<<<< HEAD
     :math:`d=2`, quadratic. The spline is constructed on the specified bounding box,
     :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere.
+=======
+    :math:`d=2`, quadratic. The spline is constructed on the specified bounding
+    box, :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere
+    .
+>>>>>>> faf9d5ca2f06752ed7c53e036c52bf368259d100
 
     Rational splines offer an excellent combination of functional flexibility whilst
     maintaining a numerically stable inverse that is of the same computational and

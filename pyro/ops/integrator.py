@@ -1,11 +1,10 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
 from torch.autograd import grad
 
 
-def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_steps=1, z_grads=None):
+def velocity_verlet(z, r, potential_fn, kinetic_grad, step_size, num_steps=1, z_grads=None):
     r"""
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
@@ -17,9 +16,8 @@ def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_step
         for each sample site. The negative gradient of the function with respect
         to ``z`` determines the rate of change of the corresponding sites'
         momenta ``r``.
-    :param torch.Tensor inverse_mass_matrix: a tensor :math:`M^{-1}` which is used
-        to calculate kinetic energy: :math:`E_{kinetic} = \frac{1}{2}z^T M^{-1} z`.
-        Here :math:`M` can be a 1D tensor (diagonal matrix) or a 2D tensor (dense matrix).
+    :param callable kinetic_grad: a function calculating gradient of kinetic energy
+        w.r.t. momentum variable.
     :param float step_size: step size for each time step iteration.
     :param int num_steps: number of discrete time steps over which to integrate.
     :param torch.Tensor z_grads: optional gradients of potential energy at current ``z``.
@@ -32,13 +30,13 @@ def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_step
         z_next, r_next, z_grads, potential_energy = _single_step_verlet(z_next,
                                                                         r_next,
                                                                         potential_fn,
-                                                                        inverse_mass_matrix,
+                                                                        kinetic_grad,
                                                                         step_size,
                                                                         z_grads)
     return z_next, r_next, z_grads, potential_energy
 
 
-def _single_step_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
+def _single_step_verlet(z, r, potential_fn, kinetic_grad, step_size, z_grads=None):
     r"""
     Single step velocity verlet that modifies the `z`, `r` dicts in place.
     """
@@ -48,7 +46,7 @@ def _single_step_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_gr
     for site_name in r:
         r[site_name] = r[site_name] + 0.5 * step_size * (-z_grads[site_name])  # r(n+1/2)
 
-    r_grads = _kinetic_grad(inverse_mass_matrix, r)
+    r_grads = kinetic_grad(r)
     for site_name in z:
         z[site_name] = z[site_name] + step_size * r_grads[site_name]  # z(n+1)
 
@@ -87,27 +85,3 @@ def potential_grad(potential_fn, z):
     for node in z_nodes:
         node.requires_grad_(False)
     return dict(zip(z_keys, grads)), potential_energy.detach()
-
-
-def _kinetic_grad(inverse_mass_matrix, r):
-    if torch.is_tensor(inverse_mass_matrix):
-        inverse_mass_matrix = {tuple(sorted(r)): inverse_mass_matrix}
-
-    grads_dict = {}
-    for site_names, inv_mass_matrix in inverse_mass_matrix.items():
-        r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
-        if inv_mass_matrix.dim() == 1:
-            grads_dict[site_names] = inv_mass_matrix * r_flat
-        else:
-            grads_dict[site_names] = inv_mass_matrix.matmul(r_flat)
-
-    # unpacking
-    grads = {}
-    for site_names, grads_flat in grads_dict.items():
-        pos = 0
-        for site_name in site_names:
-            next_pos = pos + r[site_name].numel()
-            grads[site_name] = grads_flat[pos:next_pos].reshape(r[site_name].shape)
-            pos = next_pos
-        assert pos == grads_flat.size(0)
-    return grads

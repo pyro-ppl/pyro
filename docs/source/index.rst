@@ -13,7 +13,6 @@ Pyro Documentation
    :maxdepth: 2
    :caption: Pyro Core:
 
-   installation
    getting_started
    primitives 
    inference
@@ -39,6 +38,7 @@ Pyro Documentation
    contrib.gp
    contrib.minipyro
    contrib.oed
+   contrib.randomvariable
    contrib.timeseries
    contrib.tracking
 

@@ -2,12 +2,79 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy
-
 import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.ops.tensor_utils import safe_log
+import pyro.poutine as poutine
+from pyro.distributions.util import broadcast_shape
+from pyro.ops.special import safe_log
+
+
+def clamp(tensor, *, min=None, max=None):
+    """
+    Like :func:`torch.clamp` but dispatches to :func:`torch.min` and/or
+    :func:`torch.max` if ``min`` and/or ``max`` is a :class:`~torch.Tensor`.
+    """
+    if isinstance(min, torch.Tensor):
+        tensor = torch.max(tensor, min)
+        min = None
+    if isinstance(max, torch.Tensor):
+        tensor = torch.min(tensor, max)
+        max = None
+    if min is None and max is None:
+        return tensor
+    return tensor.clamp(min=min, max=max)
+
+
+def cat2(lhs, rhs, *, dim=-1):
+    """
+    Like ``torch.cat([lhs, rhs], dim=dim)`` but dispatches to
+    :func:`torch.nn.functional.pad` in case one of ``lhs`` or ``rhs`` is a
+    scalar.
+    """
+    assert dim < 0
+    if not isinstance(lhs, torch.Tensor):
+        pad = (0, 0) * (-1 - dim) + (1, 0)
+        return torch.nn.functional.pad(rhs, pad, value=lhs)
+    if not isinstance(rhs, torch.Tensor):
+        pad = (0, 0) * (-1 - dim) + (0, 1)
+        return torch.nn.functional.pad(lhs, pad, value=rhs)
+
+    diff = lhs.dim() - rhs.dim()
+    if diff > 0:
+        rhs = rhs.expand((1,) * diff + rhs.shape)
+    elif diff < 0:
+        diff = -diff
+        lhs = lhs.expand((1,) * diff + lhs.shape)
+    shape = list(broadcast_shape(lhs.shape, rhs.shape))
+    shape[dim] = -1
+    return torch.cat([lhs.expand(shape), rhs.expand(shape)], dim=dim)
+
+
+@torch.no_grad()
+def align_samples(samples, model, particle_dim):
+    """
+    Unsqueeze stacked samples such that their particle dim all aligns.
+    This traces ``model`` to determine the ``event_dim`` of each site.
+    """
+    assert particle_dim < 0
+
+    sample = {name: value[0] for name, value in samples.items()}
+    with poutine.block(), poutine.trace() as tr, poutine.condition(data=sample):
+        model()
+
+    samples = samples.copy()
+    for name, value in samples.items():
+        event_dim = tr.trace.nodes[name]["fn"].event_dim
+        pad = event_dim - particle_dim - value.dim()
+        if pad < 0:
+            raise ValueError("Cannot align samples, try moving particle_dim left")
+        if pad > 0:
+            shape = value.shape[:1] + (1,) * pad + value.shape[1:]
+            samples[name] = value.reshape(shape)
+
+    return samples
 
 
 # this 8 x 10 tensor encodes the coefficients of 8 10-dimensional polynomials
@@ -124,9 +191,17 @@ def compute_bin_probs(s, num_quant_bins=3):
     return probs
 
 
+def _all(x):
+    return x.all() if isinstance(x, torch.Tensor) else x
+
+
+def _unsqueeze(x):
+    return x.unsqueeze(-1) if isinstance(x, torch.Tensor) else x
+
+
 def quantize(name, x_real, min, max, num_quant_bins=4):
     """Randomly quantize in a way that preserves probability mass."""
-    assert min < max
+    assert _all(min < max)
     lb = x_real.detach().floor()
 
     probs = compute_bin_probs(x_real - lb, num_quant_bins=num_quant_bins)
@@ -144,7 +219,7 @@ def quantize(name, x_real, min, max, num_quant_bins=4):
 
 def quantize_enumerate(x_real, min, max, num_quant_bins=4):
     """Quantize, then manually enumerate."""
-    assert min < max
+    assert _all(min < max)
     lb = x_real.detach().floor()
 
     probs = compute_bin_probs(x_real - lb, num_quant_bins=num_quant_bins)
@@ -155,7 +230,7 @@ def quantize_enumerate(x_real, min, max, num_quant_bins=4):
     q = torch.arange(arange_min, arange_max)
 
     x = lb.unsqueeze(-1) + q
-    x = torch.max(x, 2 * min - 1 - x)
-    x = torch.min(x, 2 * max + 1 - x)
+    x = torch.max(x, 2 * _unsqueeze(min) - 1 - x)
+    x = torch.min(x, 2 * _unsqueeze(max) + 1 - x)
 
     return x, logits

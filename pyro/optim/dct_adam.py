@@ -129,8 +129,8 @@ class DCTAdam(Optimizer):
         state['step'] += 1
 
         # Decay the first and second moment running average coefficient
-        exp_avg.mul_(beta1).add_(1 - beta1, grad)
-        exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+        exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+        exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
         denom = exp_avg_sq.sqrt().add_(group['eps'])
 
@@ -139,7 +139,7 @@ class DCTAdam(Optimizer):
         step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
 
         if time_dim is None:
-            p.data.addcdiv_(-step_size, exp_avg, denom)
+            p.data.addcdiv_(exp_avg, denom, value=-step_size)
         else:
             step = _transform_inverse(exp_avg / denom, time_dim, duration)
             p.data.add_(step.mul_(-step_size))
@@ -172,10 +172,10 @@ class DCTAdam(Optimizer):
         state['step'].masked_scatter_(mask, state_step)
 
         # Decay the first and second moment running average coefficient
-        exp_avg = state['exp_avg'].masked_select(mask).mul_(beta1).add_(1 - beta1, grad)
+        exp_avg = state['exp_avg'].masked_select(mask).mul_(beta1).add_(grad, alpha=1 - beta1)
         state['exp_avg'].masked_scatter_(mask, exp_avg)
 
-        exp_avg_sq = state['exp_avg_sq'].masked_select(mask).mul_(beta2).addcmul_(1 - beta2, grad, grad)
+        exp_avg_sq = state['exp_avg_sq'].masked_select(mask).mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
         state['exp_avg_sq'].masked_scatter_(mask, exp_avg_sq)
 
         denom = exp_avg_sq.sqrt_().add_(group['eps'])

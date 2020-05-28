@@ -4,7 +4,7 @@
 import torch
 
 from pyro.ops.einsum.util import Tensordot
-from pyro.ops.tensor_utils import safe_log
+from pyro.ops.special import safe_log
 
 
 def transpose(a, axes):
