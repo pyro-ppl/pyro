@@ -8,7 +8,7 @@ import torch
 from pyro.contrib.epidemiology.util import compute_bin_probs
 
 
-@pytest.mark.parametrize("num_quant_bins", [4, 8, 12, 16])
+@pytest.mark.parametrize("num_quant_bins", [2, 4, 8, 12, 16])
 def test_quantization_scheme(num_quant_bins, num_samples=1000 * 1000):
     min, max = 0, 7
     probs = torch.zeros(max + 1)

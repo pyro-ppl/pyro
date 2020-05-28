@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
     {},
     {"haar": True},
     {"haar_full_mass": 2},
+    {"num_quant_bins": 2},
     {"num_quant_bins": 8},
     {"num_quant_bins": 12},
     {"num_quant_bins": 16},
