@@ -6,24 +6,7 @@ import math
 import torch
 
 
-class _SafeLog(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return x.log()
-
-    @staticmethod
-    def backward(ctx, grad):
-        x, = ctx.saved_tensors
-        return grad / x.clamp(min=torch.finfo(x.dtype).eps)
-
-
-def safe_log(x):
-    """
-    Like :func:`torch.log` but avoids infinite gradients at log(0)
-    by clamping them to at most ``1 / finfo.eps``.
-    """
-    return _SafeLog.apply(x)
+_ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
 
 
 def block_diag_embed(mat):
@@ -350,6 +333,45 @@ def idct(x, dim=-1):
     return torch.stack([y, y.flip(-1)], axis=-1).reshape(x.shape[:-1] + (-1,))[..., :N]
 
 
+def haar_transform(x):
+    """
+    Discrete Haar transform.
+
+    Performs a Haar transform along the final dimension.
+    This is the inverse of :func:`inverse_haar_transform`.
+
+    :param Tensor x: The input signal.
+    :rtype: Tensor
+    """
+    n = x.size(-1) // 2
+    even, odd, end = x[..., 0:n+n:2], x[..., 1:n+n:2], x[..., n+n:]
+    hi = _ROOT_TWO_INVERSE * (even - odd)
+    lo = _ROOT_TWO_INVERSE * (even + odd)
+    if n >= 2:
+        lo = haar_transform(lo)
+    x = torch.cat([lo, hi, end], dim=-1)
+    return x
+
+
+def inverse_haar_transform(x):
+    """
+    Performs an inverse Haar transform along the final dimension.
+    This is the inverse of :func:`haar_transform`.
+
+    :param Tensor x: The input signal.
+    :rtype: Tensor
+    """
+    n = x.size(-1) // 2
+    lo, hi, end = x[..., :n], x[..., n:n+n], x[..., n+n:]
+    if n >= 2:
+        lo = inverse_haar_transform(lo)
+    even = _ROOT_TWO_INVERSE * (lo + hi)
+    odd = _ROOT_TWO_INVERSE * (lo - hi)
+    even_odd = torch.stack([even, odd], dim=-1).reshape(even.shape[:-1] + (-1,))
+    x = torch.cat([even_odd, end], dim=-1)
+    return x
+
+
 def cholesky(x):
     if x.size(-1) == 1:
         return x.sqrt()
@@ -378,3 +400,11 @@ def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
     return x.triangular_solve(y, upper=upper, transpose=transpose).solution
+
+
+def precision_to_scale_tril(P):
+    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
+    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
+    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
+                               L_inv, upper=False)[0]
+    return L

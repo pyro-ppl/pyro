@@ -23,8 +23,8 @@ class DiscreteCosineTransform(Transform):
         noise; when -1 this transforms violet noise to white noise; etc. Any
         real number is allowed. https://en.wikipedia.org/wiki/Colors_of_noise.
     """
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
 
     def __init__(self, dim=-1, smooth=0., cache_size=0):
@@ -72,4 +72,9 @@ class DiscreteCosineTransform(Transform):
         return x
 
     def log_abs_det_jacobian(self, x, y):
-        return x.new_zeros((1,) * self.event_dim)
+        return x.new_zeros(x.shape[:-self.event_dim])
+
+    def with_cache(self, cache_size=1):
+        if self._cache_size == cache_size:
+            return self
+        return DiscreteCosineTransform(-self.event_dim, self.smooth, cache_size=cache_size)

@@ -7,22 +7,29 @@ from torch.distributions.transforms import __all__ as torch_transforms
 
 from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
 from pyro.distributions.torch_transform import ComposeTransformModule
-from pyro.distributions.transforms.affine_autoregressive import AffineAutoregressive, affine_autoregressive
+from pyro.distributions.transforms.affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive,
+                                                                 affine_autoregressive,
+                                                                 conditional_affine_autoregressive)
 from pyro.distributions.transforms.affine_coupling import (AffineCoupling, ConditionalAffineCoupling, affine_coupling,
                                                            conditional_affine_coupling)
 from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
+from pyro.distributions.transforms.basic import ELUTransform, LeakyReLUTransform, elu, leaky_relu
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
 from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
 from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
-from pyro.distributions.transforms.generalized_channel_permute import (GeneralizedChannelPermute,
+from pyro.distributions.transforms.haar import HaarTransform
+from pyro.distributions.transforms.generalized_channel_permute import (ConditionalGeneralizedChannelPermute,
+                                                                       GeneralizedChannelPermute,
+                                                                       conditional_generalized_channel_permute,
                                                                        generalized_channel_permute)
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
                                                        householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
-from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, ELUTransform,
-                                                                 LeakyReLUTransform, NeuralAutoregressive,
-                                                                 TanhTransform, conditional_neural_autoregressive, elu,
-                                                                 leaky_relu, neural_autoregressive, tanh)
+from pyro.distributions.transforms.neural_autoregressive import (
+    ConditionalNeuralAutoregressive,
+    NeuralAutoregressive,
+    conditional_neural_autoregressive,
+    neural_autoregressive)
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
@@ -66,7 +73,9 @@ __all__ = [
     'BatchNorm',
     'BlockAutoregressive',
     'ComposeTransformModule',
+    'ConditionalAffineAutoregressive',
     'ConditionalAffineCoupling',
+    'ConditionalGeneralizedChannelPermute',
     'ConditionalHouseholder',
     'ConditionalNeuralAutoregressive',
     'ConditionalPlanar',
@@ -76,6 +85,7 @@ __all__ = [
     'DiscreteCosineTransform',
     'ELUTransform',
     'GeneralizedChannelPermute',
+    'HaarTransform',
     'Householder',
     'LeakyReLUTransform',
     'LowerCholeskyAffine',
@@ -87,12 +97,13 @@ __all__ = [
     'Spline',
     'SplineCoupling',
     'Sylvester',
-    'TanhTransform',
     'affine_autoregressive',
     'affine_coupling',
     'batchnorm',
     'block_autoregressive',
+    'conditional_affine_autoregressive',
     'conditional_affine_coupling',
+    'conditional_generalized_channel_permute',
     'conditional_householder',
     'conditional_neural_autoregressive',
     'conditional_planar',
@@ -110,7 +121,6 @@ __all__ = [
     'spline',
     'spline_coupling',
     'sylvester',
-    'tanh',
 ]
 
 __all__.extend(torch_transforms)

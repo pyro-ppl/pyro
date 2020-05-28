@@ -7,28 +7,14 @@ import numpy as np
 import pytest
 import scipy.fftpack as fftpack
 import torch
-from torch.autograd import grad
 
 import pyro
 from pyro.ops.tensor_utils import (block_diag_embed, block_diagonal, convolve, dct, idct, next_fast_len,
-                                   periodic_cumsum, periodic_features, periodic_repeat, repeated_matmul, safe_log)
+                                   periodic_cumsum, periodic_features, periodic_repeat, precision_to_scale_tril,
+                                   repeated_matmul)
 from tests.common import assert_close, assert_equal
 
 pytestmark = pytest.mark.stage('unit')
-
-
-def test_safe_log():
-    # Test values.
-    x = torch.randn(1000).exp().requires_grad_()
-    expected = x.log()
-    actual = safe_log(x)
-    assert_equal(actual, expected)
-    assert_equal(grad(actual.sum(), [x])[0], grad(expected.sum(), [x])[0])
-
-    # Test gradients.
-    x = torch.tensor(0., requires_grad=True)
-    assert not torch.isfinite(grad(x.log(), [x])[0])
-    assert torch.isfinite(grad(safe_log(x), [x])[0])
 
 
 @pytest.mark.parametrize('batch_size', [1, 2, 3])
@@ -170,3 +156,15 @@ def test_dct_dim(fn, dim):
 def test_next_fast_len():
     for size in range(1, 1000):
         assert next_fast_len(size) == fftpack.next_fast_len(size)
+
+
+@pytest.mark.parametrize('batch_shape,event_shape', [
+    ((), (5,)),
+    ((3,), (4,)),
+])
+def test_precision_to_scale_tril(batch_shape, event_shape):
+    x = torch.randn(batch_shape + event_shape + event_shape)
+    precision = x.matmul(x.transpose(-2, -1))
+    actual = precision_to_scale_tril(precision)
+    expected = precision.inverse().cholesky()
+    assert_close(actual, expected)

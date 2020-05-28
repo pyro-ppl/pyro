@@ -100,7 +100,8 @@ def init_to_mean(site=None):
 
 def init_to_uniform(site=None, radius=2):
     """
-    Initialize to a random point in the area `(-radius, radius)` of unconstrained domain.
+    Initialize to a random point in the area ``(-radius, radius)`` of
+    unconstrained domain.
 
     :param float radius: specifies the range to draw an initial point in the unconstrained domain.
     """
@@ -114,8 +115,8 @@ def init_to_uniform(site=None, radius=2):
 
 def init_to_value(site=None, values={}):
     """
-    Initialize to the value specified in `values`. We defer to
-    :func:`init_to_uniform` strategy for sites which do not appear in `values`.
+    Initialize to the value specified in ``values``. We defer to
+    :func:`init_to_uniform` strategy for sites which do not appear in ``values``.
 
     :param dict values: dictionary of initial values keyed by site name.
     """
@@ -126,6 +127,42 @@ def init_to_value(site=None, values={}):
         return values[site["name"]]
     else:
         return init_to_uniform(site)
+
+
+class _InitToGenerated:
+    def __init__(self, generate):
+        self.generate = generate
+        self._init = None
+        self._seen = set()
+
+    def __call__(self, site):
+        if self._init is None or site["name"] in self._seen:
+            self._init = self.generate()
+            self._seen = {site["name"]}
+        return self._init(site)
+
+
+def init_to_generated(site=None, generate=lambda: init_to_uniform):
+    """
+    Initialize to another initialization strategy returned by the callback
+    ``generate`` which is called once per model execution.
+
+    This is like :func:`init_to_value` but can produce different (e.g. random)
+    values once per model execution. For example to generate values and return
+    ``init_to_value`` you could define::
+
+        def generate():
+            values = {"x": torch.randn(100), "y": torch.rand(5)}
+            return init_to_value(values=values)
+
+        my_init_fn = init_to_generated(generate=generate)
+
+    :param callable generate: A callable returning another initialization
+        function, e.g. returning an ``init_to_value(values={...})`` populated
+        with a dictionary of random samples.
+    """
+    init = _InitToGenerated(generate)
+    return init if site is None else init(site)
 
 
 class InitMessenger(Messenger):

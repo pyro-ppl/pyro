@@ -27,7 +27,7 @@ def log_matrix_product(A, B):
 
 @copy_docs_from(TransformModule)
 class BlockAutoregressive(TransformModule):
-    """
+    r"""
     An implementation of Block Neural Autoregressive Flow (block-NAF)
     (De Cao et al., 2019) bijective transform. Block-NAF uses a similar
     transformation to deep dense NAF, building the autoregressive NN into the
@@ -58,9 +58,9 @@ class BlockAutoregressive(TransformModule):
         'sigmoid', or 'tanh'.
     :type activation: string
     :param residual: Type of residual connections to use. Choices are "None",
-        "normal" for :math:`\\mathbf{y}+f(\\mathbf{y})`, and "gated" for
-        :math:`\\alpha\\mathbf{y} + (1 - \\alpha\\mathbf{y})` for learnable
-        parameter :math:`\\alpha`.
+        "normal" for :math:`\mathbf{y}+f(\mathbf{y})`, and "gated" for
+        :math:`\alpha\mathbf{y} + (1 - \alpha\mathbf{y})` for learnable
+        parameter :math:`\alpha`.
     :type residual: string
 
     References:
@@ -243,7 +243,7 @@ class MaskedBlockLinear(torch.nn.Module):
 
 
 def block_autoregressive(input_dim, **kwargs):
-    """
+    r"""
     A helper function to create a
     :class:`~pyro.distributions.transforms.BlockAutoregressive` object for
     consistency with other helpers.
@@ -258,9 +258,9 @@ def block_autoregressive(input_dim, **kwargs):
         'sigmoid', or 'tanh'.
     :type activation: string
     :param residual: Type of residual connections to use. Choices are "None",
-        "normal" for :math:`\\mathbf{y}+f(\\mathbf{y})`, and "gated" for
-        :math:`\\alpha\\mathbf{y} + (1 - \\alpha\\mathbf{y})` for learnable
-        parameter :math:`\\alpha`.
+        "normal" for :math:`\mathbf{y}+f(\mathbf{y})`, and "gated" for
+        :math:`\alpha\mathbf{y} + (1 - \alpha\mathbf{y})` for learnable
+        parameter :math:`\alpha`.
     :type residual: string
 
     """

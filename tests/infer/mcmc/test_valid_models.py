@@ -1,8 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import io
 import logging
-import pickle
 
 import pytest
 import torch
@@ -372,7 +372,11 @@ def test_potential_fn_pickling(jit):
     _, potential_fn, _, _ = initialize_model(_beta_bernoulli, (data,), jit_compile=jit,
                                              skip_jit_warnings=True)
     test_data = {'p_latent': torch.tensor([0.2, 0.6])}
-    assert_close(pickle.loads(pickle.dumps(potential_fn))(test_data), potential_fn(test_data))
+    buffer = io.BytesIO()
+    torch.save(potential_fn, buffer)
+    buffer.seek(0)
+    deser_potential_fn = torch.load(buffer)
+    assert_close(deser_potential_fn(test_data), potential_fn(test_data))
 
 
 @pytest.mark.parametrize("kernel, kwargs", [

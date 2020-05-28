@@ -1,13 +1,20 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property
 
 from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.distributions.util import sum_rightmost
+from pyro.ops.special import log_binomial
+
+
+def _clamp_by_zero(x):
+    # works like clamp(x, min=0) but has grad at 0 is 0.5
+    return (x.clamp(min=0) + x - x.clamp(max=0)) / 2
 
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
@@ -27,6 +34,59 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
 
         log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
         return updated, log_normalizer
+
+
+class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
+    # EXPERIMENTAL threshold on total_count above which sampling will use a
+    # clamped Poisson approximation for Binomial samples. This is useful for
+    # sampling very large populations.
+    approx_sample_thresh = math.inf
+
+    # EXPERIMENTAL If set to a positive value, the .log_prob() method will use
+    # a shifted Sterling's approximation to the Beta function, reducing
+    # computational cost from 3 lgamma() evaluations to 4 log() evaluations
+    # plus arithmetic. Recommended values are between 0.1 and 0.01.
+    approx_log_prob_tol = 0.
+
+    def sample(self, sample_shape=torch.Size()):
+        if self.approx_sample_thresh < math.inf:
+            exact = self.total_count <= self.approx_sample_thresh
+            if not exact.all():
+                # Approximate large counts with a moment-matched clamped Poisson.
+                with torch.no_grad():
+                    shape = self._extended_shape(sample_shape)
+                    p = self.probs
+                    q = 1 - self.probs
+                    mean = torch.min(p, q) * self.total_count
+                    variance = p * q * self.total_count
+                    shift = (mean - variance).round()
+                    result = torch.poisson(variance.expand(shape))
+                    result = torch.min(result + shift, self.total_count)
+                    sample = torch.where(p < q, result, self.total_count - result)
+                # Draw exact samples for remaining items.
+                if exact.any():
+                    total_count = torch.where(exact, self.total_count,
+                                              torch.zeros_like(self.total_count))
+                    exact_sample = torch.distributions.Binomial(
+                        total_count, self.probs, validate_args=False).sample(sample_shape)
+                    sample = torch.where(exact, exact_sample, sample)
+                return sample
+        return super().sample(sample_shape)
+
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+
+        n = self.total_count
+        k = value
+        # k * log(p) + (n - k) * log(1 - p) = k * (log(p) - log(1 - p)) + n * log(1 - p)
+        #     (case logit < 0)              = k * logit - n * log1p(e^logit)
+        #     (case logit > 0)              = k * logit - n * (log(p) - log(1 - p)) + n * log(p)
+        #                                   = k * logit - n * logit - n * log1p(e^-logit)
+        #     (merge two cases)             = k * logit - n * max(logit, 0) - n * log1p(e^-|logit|)
+        normalize_term = n * (_clamp_by_zero(self.logits) + self.logits.abs().neg().exp().log1p())
+        return (k * self.logits - normalize_term
+                + log_binomial(n, k, tol=self.approx_log_prob_tol))
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
@@ -116,13 +176,6 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
-
-    # TODO: remove this in the PyTorch release > 1.4.0
-    @lazy_property
-    def precision_matrix(self):
-        identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
-        return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
-            self._batch_shape + self._event_shape + self._event_shape)
 
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):

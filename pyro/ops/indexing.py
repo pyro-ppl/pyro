@@ -8,6 +8,76 @@ def _is_batched(arg):
     return isinstance(arg, torch.Tensor) and arg.dim()
 
 
+def _flatten(args, out):
+    if isinstance(args, tuple):
+        for arg in args:
+            _flatten(arg, out)
+    else:
+        # Combine consecutive Ellipsis.
+        if args is Ellipsis and out and out[-1] is Ellipsis:
+            return
+        out.append(args)
+
+
+def index(tensor, args):
+    """
+    Indexing with nested tuples.
+
+    See also the convenience wrapper :class:`Index`.
+
+    This is useful for writing indexing code that is compatible with multiple
+    interpretations, e.g. scalar evaluation, vectorized evaluation, or
+    reshaping.
+
+    For example suppose ``x`` is a parameter with ``x.dim() == 2`` and we wish
+    to generalize the expression ``x[..., t]`` where ``t`` can be any of:
+
+    - a scalar ``t=1`` as in ``x[..., 1]``;
+    - a slice ``t=slice(None)`` equivalent to ``x[..., :]``; or
+    - a reshaping operation ``t=(Ellipsis, None)`` equivalent to
+      ``x.unsqueeze(-1)``.
+
+    While naive indexing would work for the first two , the third example would
+    result in a nested tuple ``(Ellipsis, (Ellipsis, None))``. This helper
+    flattens that nested tuple and combines consecutive ``Ellipsis``.
+
+    :param torch.Tensor tensor: A tensor to be indexed.
+    :param tuple args: An index, as args to ``__getitem__``.
+    :returns: A flattened interpetation of ``tensor[args]``.
+    :rtype: torch.Tensor
+    """
+    if not isinstance(args, tuple):
+        return tensor[args]
+    if not args:
+        return tensor
+
+    # Flatten.
+    flat = []
+    _flatten(args, flat)
+    args = tuple(flat)
+
+    return tensor[args]
+
+
+class Index:
+    """
+    Convenience wrapper around :func:`index`.
+
+    The following are equivalent::
+
+        Index(x)[..., i, j, :]
+        index(x, (Ellipsis, i, j, slice(None)))
+
+    :param torch.Tensor tensor: A tensor to be indexed.
+    :return: An object with a special :meth:`__getitem__` method.
+    """
+    def __init__(self, tensor):
+        self._tensor = tensor
+
+    def __getitem__(self, args):
+        return index(self._tensor, args)
+
+
 def vindex(tensor, args):
     """
     Vectorized advanced indexing with broadcasting semantics.

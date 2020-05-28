@@ -30,6 +30,9 @@ class ParamStoreDict:
       two different modules each of which contains a parameter named `weight`. by contrast, a user
       can only have one top-level parameter named `weight` (outside of any module).
     - parameters can be saved and loaded from disk using `save` and `load`.
+    - in general parameters are associated with both *constrained* and *unconstrained* values. for
+      example, under the hood a parameter that is constrained to be positive is represented as an
+      unconstrained tensor in log space.
     """
 
     # -------------------------------------------------------------------------------
@@ -53,7 +56,8 @@ class ParamStoreDict:
 
     def items(self):
         """
-        Iterate over ``(name, constrained_param)`` pairs.
+        Iterate over ``(name, constrained_param)`` pairs. Note that `constrained_param` is
+        in the constrained (i.e. user-facing) space.
         """
         for name in self._params:
             yield name, self[name]
@@ -96,7 +100,7 @@ class ParamStoreDict:
 
     def __getitem__(self, name):
         """
-        Get the constrained value of a named parameter.
+        Get the *constrained* value of a named parameter.
         """
         unconstrained_value = self._params[name]
 
@@ -110,7 +114,7 @@ class ParamStoreDict:
     def __setitem__(self, name, new_constrained_value):
         """
         Set the constrained value of an existing parameter, or the value of a
-        new unconstrained parameter. To declare a new parameter with
+        new *unconstrained* parameter. To declare a new parameter with
         constraint, use :meth:`setdefault`.
         """
         # store constraint, defaulting to unconstrained
@@ -129,7 +133,7 @@ class ParamStoreDict:
 
     def setdefault(self, name, init_constrained_value, constraint=constraints.real):
         """
-        Retrieve a constrained parameter value from the if it exists, otherwise
+        Retrieve a *constrained* parameter value from the if it exists, otherwise
         set the initial value. Note that this is a little fancier than
         :meth:`dict.setdefault`.
 
@@ -168,7 +172,8 @@ class ParamStoreDict:
     def named_parameters(self):
         """
         Returns an iterator over ``(name, unconstrained_value)`` tuples for
-        each parameter in the ParamStore.
+        each parameter in the ParamStore. Note that, in the event the parameter is constrained,
+        `unconstrained_value` is in the unconstrained space implicitly used by the constraint.
         """
         return self._params.items()
 
