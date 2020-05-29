@@ -172,7 +172,7 @@ class SimpleSEIRModel(CompartmentalModel):
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2E, rho),
-                    obs=self.data[t] if t < self.duration else None)
+                    obs=self.data[t] if isinstance(t, slice) or t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, tau_e, tau_i, rho = params
@@ -286,7 +286,7 @@ class SuperspreadingSIRModel(CompartmentalModel):
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I, rho),
-                    obs=self.data[t] if t < self.duration else None)
+                    obs=self.data[t] if isinstance(t, slice) or t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, k, tau, rho = params
@@ -417,10 +417,11 @@ class SuperspreadingSEIRModel(CompartmentalModel):
                                          concentration=k))
 
         # Condition on observations.
+        observed_t = isinstance(t, slice) or t < self.duration
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2E, rho),
-                    obs=self.data[t] if t < self.duration else None)
-        if self.coal_likelihood is not None and t < self.duration:
+                    obs=self.data[t] if observed_t else None)
+        if self.coal_likelihood is not None and observed_t:
             R = R0 * state["S"] / self.population
             coal_rate = R * (1. + 1. / k) / (tau_i * state["I"] + 1e-8)
             pyro.factor("coalescent_{}".format(t),
@@ -534,8 +535,8 @@ class SparseSIRModel(CompartmentalModel):
         state["O"] = state["O"] + S2O
 
         # Condition on cumulative observations.
-        mask_t = self.mask[t] if t < self.duration else False
-        data_t = self.data[t] if t < self.duration else None
+        mask_t = self.mask[t] if isinstance(t, slice) or t < self.duration else False
+        data_t = self.data[t] if isinstance(t, slice) or t < self.duration else None
         pyro.sample("obs_{}".format(t),
                     dist.Delta(state["O"]).mask(mask_t),
                     obs=data_t)
@@ -666,8 +667,9 @@ class UnknownStartSIRModel(CompartmentalModel):
 
         # In .transition_fwd() t will always be an integer but may lie outside
         # of [0,self.duration) when forecasting.
-        rho_t = rho[..., t] if t < self.duration else rho[..., -1]
-        data_t = self.data[t] if t < self.duration else None
+        observed_t = isinstance(t, slice) or t < self.duration
+        rho_t = rho[..., t] if observed_t else rho[..., -1]
+        data_t = self.data[t] if observed_t else None
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
@@ -831,7 +833,7 @@ class RegionalSIRModel(CompartmentalModel):
             # Condition on observations.
             pyro.sample("obs_{}".format(t),
                         dist.ExtendedBinomial(S2I, rho),
-                        obs=self.data[t] if t < self.duration else None)
+                        obs=self.data[t] if isinstance(t, slice) or t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, tau, rho = params

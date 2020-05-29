@@ -17,7 +17,7 @@ import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import HaarTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
-from pyro.infer.autoguide import init_to_generated, init_to_uniform, init_to_value
+from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
@@ -183,13 +183,26 @@ class CompartmentalModel(ABC):
 
         # Select the most probable hypothesis.
         i = int(smc.state._log_weights.max(0).indices)
-        init = {key: value[i] for key, value in smc.state.items()}
+        guess = {key: value[i] for key, value in smc.state.items()}
 
         # Fill in sample site values.
-        init = self.generate(init)
-        aux = torch.stack([init[name] for name in self.compartments], dim=0)
-        init["auxiliary"] = clamp(aux, min=0.5, max=self.population - 0.5)
-        return init
+        guess = self.generate(guess)
+        if self.relaxed:
+            with poutine.block(), poutine.condition(data=guess):
+                params = self.global_model()
+                init = self.initialize(params)
+            flux = {}
+            state = {}
+            for c1, c2 in zip(self.compartments, self.compartments[1:] + ("R",)):
+                flux[c1] = guess["{}2{}".format(c1, c2)]
+                state[c1] = guess[c1]
+            aux = _differentiate_flux(self.compartments, init, flux, state)
+            guess["auxiliary"] = torch.stack([aux[name] for name in self.compartments])
+        else:
+            aux = torch.stack([guess[name] for name in self.compartments])
+            guess["auxiliary"] = clamp(aux, min=0.5, max=self.population - 0.5)
+
+        return guess
 
     def global_model(self):
         """
@@ -314,6 +327,7 @@ class CompartmentalModel(ABC):
         """
         # Parse options, saving some for use in .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
+        self.relaxed = options.pop("relax", False)
         haar = options.pop("haar", False)
         assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
@@ -321,9 +335,12 @@ class CompartmentalModel(ABC):
         assert haar_full_mass >= 0
         haar_full_mass = min(haar_full_mass, self.duration)
         haar = haar or (haar_full_mass > 0)
-        relax = options.pop("relax", False)
 
         # Heuristically initialize to feasible latents.
+        if self.relaxed:
+            aux_constraint = constraints.unit_interval
+        else:
+            aux_constraint = constraints.interval(-0.5, self.population + 0.5)
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
                              for k in list(options)
                              if k.startswith("heuristic_")}
@@ -337,7 +354,7 @@ class CompartmentalModel(ABC):
             if haar:
                 # Also initialize Haar transformed coordinates.
                 x = init_values["auxiliary"]
-                x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
+                x = biject_to(aux_constraint).inv(x)
                 x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True)(x)
                 init_values["auxiliary_haar"] = x
             if haar_full_mass:
@@ -357,25 +374,20 @@ class CompartmentalModel(ABC):
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
-        if relax:
-            init_strategy = init_to_uniform
-            model = self._relaxed_model
-        else:
-            init_strategy = init_to_generated(generate=heuristic)
-            model = self._vectorized_model
-            if haar:
-                rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
-                model = poutine.reparam(model, {"auxiliary": rep})
-            if haar_full_mass:
-                assert full_mass and isinstance(full_mass, list)
-                full_mass = full_mass[:]
-                full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
-                rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
-                                   dim=-2 if self.is_regional else -1)
-                model = poutine.reparam(model, {"auxiliary_haar": rep})
+        model = self._relaxed_model if self.relaxed else self._vectorized_model
+        if haar:
+            rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
+            model = poutine.reparam(model, {"auxiliary": rep})
+        if haar_full_mass:
+            assert full_mass and isinstance(full_mass, list)
+            full_mass = full_mass[:]
+            full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
+            rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
+                               dim=-2 if self.is_regional else -1)
+            model = poutine.reparam(model, {"auxiliary_haar": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
-                      init_strategy=init_strategy,
+                      init_strategy=init_to_generated(generate=heuristic),
                       max_plate_nesting=self.max_plate_nesting,
                       max_tree_depth=max_tree_depth)
         if options.pop("arrowhead_mass", False):
@@ -396,12 +408,12 @@ class CompartmentalModel(ABC):
             # Transform back from Haar coordinates.
             x = self.samples.pop("auxiliary_haar")
             x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True).inv(x)
-            x = biject_to(constraints.interval(-0.5, self.population + 0.5))(x)
+            x = biject_to(aux_constraint)(x)
             self.samples["auxiliary"] = x
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        model = self._relaxed_model if relax else self._vectorized_model
+        model = self._relaxed_model if self.relaxed else self._vectorized_model
         self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
@@ -428,24 +440,25 @@ class CompartmentalModel(ABC):
         particle_plate = pyro.plate("particles", num_samples,
                                     dim=-1 - self.max_plate_nesting)
 
-        # Sample discrete auxiliary variables conditioned on the continuous
-        # variables sampled by _vectorized_model. This samples only time steps
-        # [0:duration]. Here infer_discrete runs a forward-filter
-        # backward-sample algorithm.
-        logger.info("Predicting latent variables for {} time steps..."
-                    .format(self.duration))
-        model = self._sequential_model
-        model = poutine.condition(model, samples)
-        model = particle_plate(model)
-        model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
-        trace = poutine.trace(model).get_trace()
-        samples = OrderedDict((name, site["value"])
-                              for name, site in trace.nodes.items()
-                              if site["type"] == "sample")
+        if not self.relaxed:
+            # Sample discrete auxiliary variables conditioned on the continuous
+            # variables sampled by _vectorized_model. This samples only time steps
+            # [0:duration]. Here infer_discrete runs a forward-filter
+            # backward-sample algorithm.
+            logger.info("Predicting latent variables for {} time steps..."
+                        .format(self.duration))
+            model = self._sequential_model
+            model = poutine.condition(model, samples)
+            model = particle_plate(model)
+            model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
+            trace = poutine.trace(model).get_trace()
+            samples = OrderedDict((name, site["value"])
+                                  for name, site in trace.nodes.items()
+                                  if site["type"] == "sample")
 
         # Optionally forecast with the forward _generative_model. This samples
         # time steps [duration:duration+forecast].
-        if forecast:
+        if forecast or self.relaxed:
             logger.info("Forecasting {} steps ahead...".format(forecast))
             model = self._generative_model
             model = poutine.condition(model, samples)
@@ -618,27 +631,29 @@ class CompartmentalModel(ABC):
         C = len(self.compartments)
         T = self.duration
         R_shape = getattr(self.population, "shape", ())  # Region shape.
+        if R_shape:
+            raise NotImplementedError("TODO")
 
         # Sample global parameters.
         params = self.global_model()
 
         # Sample the continuous reparameterizing variable.
         shape = (C, T) + R_shape
-        aux_flux = pyro.sample("aux_flux",
-                               dist.Uniform(0, 1)
-                                   .mask(False).expand(shape).to_event())
-        assert aux_flux.shape == shape, "particle plates are not supported"
-        aux_flux = dict(zip(self.compartments, aux_flux))
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(0, 1)
+                                    .mask(False).expand(shape).to_event())
+        assert auxiliary.shape == shape, "particle plates are not supported"
+        auxiliary = dict(zip(self.compartments, auxiliary))
 
         # Integrate flux.
         init = self.initialize(params)
-        flux, state = _integrate_flux(self.compartments, init, aux_flux)
+        flux, state = _integrate_flux(self.compartments, init, auxiliary)
 
         # Truncate from left and right.
         prev = {k: v[..., :-1] for k, v in state.items()}
         curr = {k: v[..., 1:] for k, v in state.items()}
-        auxiliary = torch.stack([curr[c] for c in self.compartments])
-        pyro.deterministic("auxiliary", auxiliary)
+        for name in self.compartments:
+            pyro.deterministic(name, curr[name])
 
         # Record transition factors.
         t = slice(None)
@@ -678,6 +693,10 @@ def _quantize(x, total_count):
     return _DifferentiableFloor.apply(x * (1 + total_count))
 
 
+def _dequantize(x, total_count):
+    return (x + 0.5) / (1 + total_count)
+
+
 def _integrate(init, aux_flux, shift=None):
     """
     flux[t] = _quantize(aux_flux[t], state[t])
@@ -687,13 +706,13 @@ def _integrate(init, aux_flux, shift=None):
     if not isinstance(init, torch.Tensor):
         init = torch.as_tensor(float(init))
     flux = []
-    state = [init.expand_as(aux_flux[..., 0])]
+    state = [init.expand_as(aux_flux[0])]
     # TODO vectorize
     for t in range(aux_flux.size(-1)):
-        flux.append(_quantize(aux_flux[..., t], state[-1]))
+        flux.append(_quantize(aux_flux[t], state[-1]))
         curr = state[-1] - flux[-1]
         if shift is not None:
-            curr = curr + shift[..., t]
+            curr = curr + shift[t]
         state.append(curr)
     flux = torch.stack(flux, dim=-1)
     state = torch.stack(state, dim=-1)
@@ -703,11 +722,19 @@ def _integrate(init, aux_flux, shift=None):
 def _integrate_flux(compartments, init, aux_flux):
     flux = {}
     state = {}
-    # TODO vectorize
     for c, name in enumerate(compartments):
         flux[name], state[name] = _integrate(init[name], aux_flux[name],
                                              flux[compartments[c - 1]] if c else None)
     return flux, state
+
+
+@torch.no_grad()
+def _differentiate_flux(compartments, init, flux, curr):
+    aux_flux = {}
+    for name in compartments:
+        prev = cat2(init[name], curr[name][:-1], dim=-1)
+        aux_flux[name] = _dequantize(flux[name], prev)
+    return aux_flux
 
 
 class _SMCModel:

@@ -10,6 +10,7 @@ import torch
 import pyro.distributions as dist
 from pyro.contrib.epidemiology import (RegionalSIRModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel,
                                        SuperspreadingSEIRModel, SuperspreadingSIRModel, UnknownStartSIRModel)
+from tests.common import xfail_if_not_implemented
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
     {"num_quant_bins": 12},
     {"num_quant_bins": 16},
     {"arrowhead_mass": True},
-    {"relax": True, "num_quant_bins": 2},
+    {"relax": True},
 ], ids=str)
 def test_simple_sir_smoke(duration, forecast, options):
     population = 100
@@ -57,6 +58,7 @@ def test_simple_sir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_simple_seir_smoke(duration, forecast, options):
     population = 100
@@ -92,6 +94,7 @@ def test_simple_seir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_superspreading_sir_smoke(duration, forecast, options):
     population = 100
@@ -123,6 +126,7 @@ def test_superspreading_sir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_superspreading_seir_smoke(duration, forecast, options):
     population = 100
@@ -234,6 +238,7 @@ def test_sparse_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 4},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     population = 100
@@ -272,6 +277,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
         assert I[ti] > 0
 
 
+@xfail_if_not_implemented()
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
@@ -279,6 +285,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_regional_smoke(duration, forecast, options):
     num_regions = 6
