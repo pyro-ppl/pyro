@@ -16,6 +16,7 @@ Welcome to Pyro Examples and Tutorials!
    svi_part_ii
    svi_part_iii
    tensor_shapes
+   mle_map
 
 .. toctree::
    :maxdepth: 2
