@@ -21,6 +21,7 @@ from pyro.infer.autoguide import init_to_generated, init_to_uniform, init_to_val
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
+from pyro.infer.util import is_validation_enabled
 from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
@@ -320,7 +321,7 @@ class CompartmentalModel(ABC):
         assert haar_full_mass >= 0
         haar_full_mass = min(haar_full_mass, self.duration)
         haar = haar or (haar_full_mass > 0)
-        quantize = options.pop("quantize", False)
+        relax = options.pop("relax", False)
 
         # Heuristically initialize to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
@@ -356,9 +357,9 @@ class CompartmentalModel(ABC):
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
-        if quantize:
+        if relax:
             init_strategy = init_to_uniform
-            model = self._quantized_model
+            model = self._relaxed_model
         else:
             init_strategy = init_to_generated(generate=heuristic)
             model = self._vectorized_model
@@ -400,7 +401,7 @@ class CompartmentalModel(ABC):
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        model = self._quantized_model if quantize else self._vectorized_model
+        model = self._relaxed_model if relax else self._vectorized_model
         self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
@@ -613,7 +614,7 @@ class CompartmentalModel(ABC):
 
         self._clear_plates()
 
-    def _quantized_model(self):
+    def _relaxed_model(self):
         C = len(self.compartments)
         T = self.duration
         R_shape = getattr(self.population, "shape", ())  # Region shape.
@@ -633,18 +634,32 @@ class CompartmentalModel(ABC):
         init = self.initialize(params)
         flux, state = _integrate_flux(self.compartments, init, aux_flux)
 
-        # Truncate final value from the right.
+        # Truncate from left and right.
         prev = {k: v[..., :-1] for k, v in state.items()}
-        curr = torch.stack([state[c][..., 1:] for c in self.compartments])
-        pyro.deterministic("auxiliary", curr)
+        curr = {k: v[..., 1:] for k, v in state.items()}
+        auxiliary = torch.stack([curr[c] for c in self.compartments])
+        pyro.deterministic("auxiliary", auxiliary)
 
         # Record transition factors.
         t = slice(None)
         compartments = self.compartments + ("R",)
         data = {"{}2{}_{}".format(c1, c2, t): flux[c1]
-                for c1, c2 in zip(compartments, compartments[1:]) }
+                for c1, c2 in zip(compartments, compartments[1:])}
         with poutine.condition(data=data):
             self.transition_fwd(params, prev, t)
+
+        # Validate that .transition_fwd() correctly updated prev to curr.
+        if is_validation_enabled():
+            if set(prev.keys()) != set(self.compartments):
+                raise ValueError("\n".join([
+                    "Incorrect state update keys in .transition_fwd():",
+                    "Expected: {}".format(set(self.compartments)),
+                    "Actual: {}".format(set(prev.keys())),
+                ]))
+            for key in self.compartments:
+                if not torch.allclose(prev[key], curr[key]):
+                    raise ValueError("Incorrect state['{}'] update in .transition_fwd()"
+                                     .format(key))
 
         self._clear_plates()
 
