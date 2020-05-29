@@ -73,7 +73,7 @@ class SimpleSIRModel(CompartmentalModel):
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2I, rho),
-                    obs=self.data[t] if t < self.duration else None)
+                    obs=self.data[t] if isinstance(t, slice) or t < self.duration else None)
 
     def transition_bwd(self, params, prev, curr, t):
         R0, tau, rho = params

@@ -17,7 +17,7 @@ import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import HaarTransform
 from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
-from pyro.infer.autoguide import init_to_generated, init_to_value
+from pyro.infer.autoguide import init_to_generated, init_to_uniform, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
@@ -320,6 +320,7 @@ class CompartmentalModel(ABC):
         assert haar_full_mass >= 0
         haar_full_mass = min(haar_full_mass, self.duration)
         haar = haar or (haar_full_mass > 0)
+        quantize = options.pop("quantize", False)
 
         # Heuristically initialize to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
@@ -355,20 +356,25 @@ class CompartmentalModel(ABC):
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
-        model = self._vectorized_model
-        if haar:
-            rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
-            model = poutine.reparam(model, {"auxiliary": rep})
-        if haar_full_mass:
-            assert full_mass and isinstance(full_mass, list)
-            full_mass = full_mass[:]
-            full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
-            rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
-                               dim=-2 if self.is_regional else -1)
-            model = poutine.reparam(model, {"auxiliary_haar": rep})
+        if quantize:
+            init_strategy = init_to_uniform
+            model = self._quantized_model
+        else:
+            init_strategy = init_to_generated(generate=heuristic)
+            model = self._vectorized_model
+            if haar:
+                rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
+                model = poutine.reparam(model, {"auxiliary": rep})
+            if haar_full_mass:
+                assert full_mass and isinstance(full_mass, list)
+                full_mass = full_mass[:]
+                full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
+                rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
+                                   dim=-2 if self.is_regional else -1)
+                model = poutine.reparam(model, {"auxiliary_haar": rep})
         kernel = NUTS(model,
                       full_mass=full_mass,
-                      init_strategy=init_to_generated(generate=heuristic),
+                      init_strategy=init_strategy,
                       max_plate_nesting=self.max_plate_nesting,
                       max_tree_depth=max_tree_depth)
         if options.pop("arrowhead_mass", False):
@@ -394,7 +400,8 @@ class CompartmentalModel(ABC):
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        self.samples = align_samples(self.samples, self._vectorized_model,
+        model = self._quantized_model if quantize else self._vectorized_model
+        self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
 
@@ -605,6 +612,87 @@ class CompartmentalModel(ABC):
         pyro.factor("transition", logp)
 
         self._clear_plates()
+
+    def _quantized_model(self):
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
+        # Sample global parameters.
+        params = self.global_model()
+
+        # Sample the continuous reparameterizing variable.
+        shape = (C, T) + R_shape
+        aux_flux = pyro.sample("aux_flux",
+                               dist.Uniform(0, 1)
+                                   .mask(False).expand(shape).to_event())
+        assert aux_flux.shape == shape, "particle plates are not supported"
+        aux_flux = dict(zip(self.compartments, aux_flux))
+
+        # Integrate flux.
+        init = self.initialize(params)
+        flux, state = _integrate_flux(self.compartments, init, aux_flux)
+
+        # Truncate final value from the right.
+        prev = {k: v[..., :-1] for k, v in state.items()}
+        curr = torch.stack([state[c][..., 1:] for c in self.compartments])
+        pyro.deterministic("auxiliary", curr)
+
+        # Record transition factors.
+        t = slice(None)
+        compartments = self.compartments + ("R",)
+        data = {"{}2{}_{}".format(c1, c2, t): flux[c1]
+                for c1, c2 in zip(compartments, compartments[1:]) }
+        with poutine.condition(data=data):
+            self.transition_fwd(params, prev, t)
+
+        self._clear_plates()
+
+
+class _DifferentiableFloor(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        return x.floor()
+
+    @staticmethod
+    def backward(ctx, grad):
+        return grad
+
+
+def _quantize(x, total_count):
+    return _DifferentiableFloor.apply(x * (1 + total_count))
+
+
+def _integrate(init, aux_flux, shift=None):
+    """
+    flux[t] = _quantize(aux_flux[t], state[t])
+    state[0] = init
+    state[t+1] = state[t] - flux[t] + shift[t]
+    """
+    if not isinstance(init, torch.Tensor):
+        init = torch.as_tensor(float(init))
+    flux = []
+    state = [init.expand_as(aux_flux[..., 0])]
+    # TODO vectorize
+    for t in range(aux_flux.size(-1)):
+        flux.append(_quantize(aux_flux[..., t], state[-1]))
+        curr = state[-1] - flux[-1]
+        if shift is not None:
+            curr = curr + shift[..., t]
+        state.append(curr)
+    flux = torch.stack(flux, dim=-1)
+    state = torch.stack(state, dim=-1)
+    return flux, state
+
+
+def _integrate_flux(compartments, init, aux_flux):
+    flux = {}
+    state = {}
+    # TODO vectorize
+    for c, name in enumerate(compartments):
+        flux[name], state[name] = _integrate(init[name], aux_flux[name],
+                                             flux[compartments[c - 1]] if c else None)
+    return flux, state
 
 
 class _SMCModel:
