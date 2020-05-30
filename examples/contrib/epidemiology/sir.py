@@ -13,7 +13,8 @@ import torch
 from torch.distributions import biject_to, constraints
 
 import pyro
-from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel
+from pyro.contrib.epidemiology import (OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel,
+                                       SuperspreadingSEIRModel, SuperspreadingSIRModel)
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -22,17 +23,22 @@ def Model(args, data):
     """Dispatch between different model classes."""
     if args.incubation_time > 0:
         assert args.incubation_time > 1
-        if args.concentration == math.inf:
-            return SimpleSEIRModel(args.population, args.incubation_time,
-                                   args.recovery_time, data)
-        else:
+        if args.concentration < math.inf:
             return SuperspreadingSEIRModel(args.population, args.incubation_time,
                                            args.recovery_time, data)
-    else:
-        if args.concentration == math.inf:
-            return SimpleSIRModel(args.population, args.recovery_time, data)
+        elif args.overdispersion > 0:
+            return OverdispersedSEIRModel(args.population, args.incubation_time,
+                                          args.recovery_time, data)
         else:
+            return SimpleSEIRModel(args.population, args.incubation_time,
+                                   args.recovery_time, data)
+    else:
+        if args.concentration < math.inf:
             return SuperspreadingSIRModel(args.population, args.recovery_time, data)
+        elif args.overdispersion > 0:
+            return OverdispersedSIRModel(args.population, args.recovery_time, data)
+        else:
+            return SimpleSIRModel(args.population, args.recovery_time, data)
 
 
 def generate_data(args):
@@ -42,20 +48,29 @@ def generate_data(args):
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
                                   "rho": args.response_rate,
-                                  "k": args.concentration})
+                                  "k": args.concentration,
+                                  "od": args.overdispersion})
         obs = samples["obs"][:args.duration]
         new_I = samples.get("S2I", samples.get("E2I"))
 
         obs_sum = int(obs.sum())
         new_I_sum = int(new_I[:args.duration].sum())
-        if obs_sum >= args.min_observations:
+        assert 0 <= args.min_obs_portion < args.max_obs_portion <= 1
+        min_obs = int(math.ceil(args.min_obs_portion * args.population))
+        max_obs = int(math.floor(args.max_obs_portion * args.population))
+        if min_obs <= obs_sum <= max_obs:
             logging.info("Observed {:d}/{:d} infections:\n{}".format(
                 obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)))
             return {"new_I": new_I, "obs": obs}
 
-    raise ValueError("Failed to generate {} observations. Try increasing "
-                     "--population or decreasing --min-observations"
-                     .format(args.min_observations))
+    if obs_sum < min_obs:
+        raise ValueError("Failed to generate >={} observations. "
+                         "Try decreasing --min-obs-portion (currently {})."
+                         .format(min_obs, args.min_obs_portion))
+    else:
+        raise ValueError("Failed to generate <={} observations. "
+                         "Try increasing --max-obs-portion (currently {})."
+                         .format(max_obs, args.max_obs_portion))
 
 
 def infer(args, model):
@@ -97,6 +112,8 @@ def evaluate(args, model, samples):
              "response_rate": "rho"}
     if args.concentration < math.inf:
         names["concentration"] = "k"
+    if "od" in samples:
+        names["overdispersion"] = "od"
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
@@ -227,8 +244,9 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
-    parser.add_argument("-p", "--population", default=1000, type=int)
-    parser.add_argument("-m", "--min-observations", default=3, type=int)
+    parser.add_argument("-p", "--population", default=1000, type=float)
+    parser.add_argument("-m", "--min-obs-portion", default=0.01, type=float)
+    parser.add_argument("-M", "--max-obs-portion", default=0.99, type=float)
     parser.add_argument("-d", "--duration", default=20, type=int)
     parser.add_argument("-f", "--forecast", default=10, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
@@ -238,6 +256,7 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--concentration", default=math.inf, type=float,
                         help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
+    parser.add_argument("-o", "--overdispersion", default=0., type=float)
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
@@ -248,17 +267,19 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
-    parser.add_argument("--double", action="store_true")
+    parser.add_argument("--double", action="store_true", default=True)
+    parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
+    args.population = int(args.population)  # to allow e.g. --population=1e6
 
     if args.double:
         if args.cuda:
             torch.set_default_tensor_type(torch.cuda.DoubleTensor)
         else:
-            torch.set_default_tensor_type(torch.DoubleTensor)
+            torch.set_default_dtype(torch.float64)
     elif args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
