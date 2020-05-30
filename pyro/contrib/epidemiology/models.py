@@ -212,7 +212,26 @@ class OverdispersedSIRModel(CompartmentalModel):
     overdispersion of the transition and observation distributions. See
     :func:`~pyro.contrib.epidemiology.distributions.binomial_dist` and
     :func:`~pyro.contrib.epidemiology.distributions.beta_binomial_dist` for
-    distributional details.
+    distributional details. For prior work incorporating overdispersed
+    distributions see [1,2,3,4].
+
+    **References:**
+
+    [1] D. Champredon, M. Li, B. Bolker. J. Dushoff (2018)
+        "Two approaches to forecast Ebola synthetic epidemics"
+        https://www.sciencedirect.com/science/article/pii/S1755436517300233
+    [2] Carrie Reed et al. (2015)
+        "Estimating Influenza Disease Burden from Population-Based Surveillance
+        Data in the United States"
+        https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4349859/
+    [3] A. Leonard, D. Weissman, B. Greenbaum, E. Ghedin, K. Koelle (2017)
+        "Transmission Bottleneck Size Estimation from Pathogen Deep-Sequencing
+        Data, with an Application to Human Influenza A Virus"
+        https://jvi.asm.org/content/jvi/91/14/e00171-17.full.pdf
+    [4] A. Miller, N. Foti, J. Lewnard, N. Jewell, C. Guestrin, E. Fox (2020)
+        "Mobility trends provide a leading indicator of changes in
+        SARS-CoV-2 transmission"
+        https://www.medrxiv.org/content/medrxiv/early/2020/05/11/2020.05.07.20094441.full.pdf
 
     :param int population: Total ``population = S + I + R``.
     :param float recovery_time: Mean recovery time (duration in state
@@ -305,7 +324,26 @@ class OverdispersedSEIRModel(CompartmentalModel):
     overdispersion of the transition and observation distributions. See
     :func:`~pyro.contrib.epidemiology.distributions.binomial_dist` and
     :func:`~pyro.contrib.epidemiology.distributions.beta_binomial_dist` for
-    distributional details.
+    distributional details. For prior work incorporating overdispersed
+    distributions see [1,2,3,4].
+
+    **References:**
+
+    [1] D. Champredon, M. Li, B. Bolker. J. Dushoff (2018)
+        "Two approaches to forecast Ebola synthetic epidemics"
+        https://www.sciencedirect.com/science/article/pii/S1755436517300233
+    [2] Carrie Reed et al. (2015)
+        "Estimating Influenza Disease Burden from Population-Based Surveillance
+        Data in the United States"
+        https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4349859/
+    [3] A. Leonard, D. Weissman, B. Greenbaum, E. Ghedin, K. Koelle (2017)
+        "Transmission Bottleneck Size Estimation from Pathogen Deep-Sequencing
+        Data, with an Application to Human Influenza A Virus"
+        https://jvi.asm.org/content/jvi/91/14/e00171-17.full.pdf
+    [4] A. Miller, N. Foti, J. Lewnard, N. Jewell, C. Guestrin, E. Fox (2020)
+        "Mobility trends provide a leading indicator of changes in
+        SARS-CoV-2 transmission"
+        https://www.medrxiv.org/content/medrxiv/early/2020/05/11/2020.05.07.20094441.full.pdf
 
     :param int population: Total ``population = S + E + I + R``.
     :param float incubation_time: Mean incubation time (duration in state
