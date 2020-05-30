@@ -26,8 +26,7 @@ def generate_data(args):
     for attempt in range(100):
         samples = model.generate({"R0": args.basic_reproduction_number,
                                   "rho_c1": 10 * args.response_rate,
-                                  "rho_c0": 10 * (1 - args.response_rate),
-                                  "od": args.overdispersion})
+                                  "rho_c0": 10 * (1 - args.response_rate)})
         obs = samples["obs"][:args.duration]
         S2I = samples["S2I"]
 
@@ -138,7 +137,6 @@ if __name__ == "__main__":
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
-    parser.add_argument("-o", "--overdispersion", default=0., type=float)
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)

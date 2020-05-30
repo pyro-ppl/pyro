@@ -13,7 +13,8 @@ import torch
 from torch.distributions import biject_to, constraints
 
 import pyro
-from pyro.contrib.epidemiology import SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel
+from pyro.contrib.epidemiology import (OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel,
+                                       SuperspreadingSEIRModel, SuperspreadingSIRModel)
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -22,17 +23,22 @@ def Model(args, data):
     """Dispatch between different model classes."""
     if args.incubation_time > 0:
         assert args.incubation_time > 1
-        if args.concentration == math.inf:
-            return SimpleSEIRModel(args.population, args.incubation_time,
-                                   args.recovery_time, data)
-        else:
+        if args.concentration < math.inf:
             return SuperspreadingSEIRModel(args.population, args.incubation_time,
                                            args.recovery_time, data)
-    else:
-        if args.concentration == math.inf:
-            return SimpleSIRModel(args.population, args.recovery_time, data)
+        elif args.overdispersion > 0:
+            return OverdispersedSEIRModel(args.population, args.incubation_time,
+                                          args.recovery_time, data)
         else:
+            return SimpleSEIRModel(args.population, args.incubation_time,
+                                   args.recovery_time, data)
+    else:
+        if args.concentration < math.inf:
             return SuperspreadingSIRModel(args.population, args.recovery_time, data)
+        elif args.overdispersion > 0:
+            return OverdispersedSIRModel(args.population, args.recovery_time, data)
+        else:
+            return SimpleSIRModel(args.population, args.recovery_time, data)
 
 
 def generate_data(args):
@@ -57,9 +63,14 @@ def generate_data(args):
                 obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)))
             return {"new_I": new_I, "obs": obs}
 
-    raise ValueError("Failed to generate {}-{} observations. Try decreasing "
-                     "--min-obs-portion or increasing --max-obs-portion"
-                     .format(min_obs, max_obs))
+    if obs_sum < min_obs:
+        raise ValueError("Failed to generate >={} observations. "
+                         "Try decreasing --min-obs-portion (currently {})."
+                         .format(min_obs, args.min_obs_portion))
+    else:
+        raise ValueError("Failed to generate <={} observations. "
+                         "Try increasing --max-obs-portion (currently {})."
+                         .format(max_obs, args.max_obs_portion))
 
 
 def infer(args, model):
@@ -233,7 +244,7 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.3.1')
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
-    parser.add_argument("-p", "--population", default=1000, type=int)
+    parser.add_argument("-p", "--population", default=1000, type=float)
     parser.add_argument("-m", "--min-obs-portion", default=0.01, type=float)
     parser.add_argument("-M", "--max-obs-portion", default=0.99, type=float)
     parser.add_argument("-d", "--duration", default=20, type=int)
@@ -262,6 +273,7 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
+    args.population = int(args.population)  # to allow e.g. --population=1e6
 
     if args.double:
         if args.cuda:
