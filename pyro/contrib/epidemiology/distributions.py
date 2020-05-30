@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-import warnings
 from contextlib import contextmanager
 
 import torch
@@ -127,10 +126,6 @@ def binomial_dist(total_count, probs, *,
     _validate_overdispersion(overdispersion)
     if _is_zero(overdispersion):
         return dist.ExtendedBinomial(total_count, probs)
-    if getattr(probs, "dtype", torch.float64) != torch.float64:
-        warnings.warn("binomial_dist is unstable for dtypes less than torch.float64; "
-                      "try torch.set_default_dtype(torch.float64)",
-                      RuntimeWarning)
 
     p = probs
     q = 1 - p
@@ -164,11 +159,6 @@ def beta_binomial_dist(concentration1, concentration0, total_count, *,
     """
     _validate_overdispersion(overdispersion)
     if not _is_zero(overdispersion):
-        if getattr(concentration1, "dtype", torch.float64) != torch.float64:
-            warnings.warn("beta_binomial_dist is unstable for dtypes less than torch.float64; "
-                          "try torch.set_default_dtype(torch.float64)",
-                          RuntimeWarning)
-
         # Compute harmonic sum of two sources of concentration resulting in
         # final concentration c = 1 / (1 / c_1 + 1 / c_2)
         od2 = (overdispersion + 1e-8) ** 2

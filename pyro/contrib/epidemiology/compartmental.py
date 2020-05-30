@@ -4,6 +4,7 @@
 import logging
 import operator
 import re
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from contextlib import ExitStack
@@ -27,6 +28,13 @@ from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
+
+
+def _require_double_precision():
+    if torch.get_default_dtype() != torch.float64:
+        warnings.warn("CompartmentalModel is unstable for dtypes less than torch.float64; "
+                      "try torch.set_default_dtype(torch.float64)",
+                      RuntimeWarning)
 
 
 class CompartmentalModel(ABC):
@@ -311,6 +319,8 @@ class CompartmentalModel(ABC):
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
         :rtype: ~pyro.infer.mcmc.api.MCMC
         """
+        _require_double_precision()
+
         # Parse options, saving some for use in .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
         haar = options.pop("haar", False)
@@ -413,8 +423,10 @@ class CompartmentalModel(ABC):
             to a tensor whose first dimension corresponds to sample batching.
         :rtype: dict
         """
+        _require_double_precision()
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
+
         samples = self.samples
         num_samples = len(next(iter(samples.values())))
         particle_plate = pyro.plate("particles", num_samples,
