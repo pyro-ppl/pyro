@@ -600,7 +600,7 @@ class CompartmentalModel(ABC):
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
             with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
-                t = slice(0, T)  # Used to slice data tensors.
+                t = slice(None)  # Used to slice data tensors.
                 self.transition_bwd(params, prev, curr, t)
         tr.trace.compute_log_prob()
         for name, site in tr.trace.nodes.items():
