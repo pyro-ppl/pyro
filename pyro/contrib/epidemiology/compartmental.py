@@ -481,6 +481,30 @@ class CompartmentalModel(ABC):
                 series = torch.broadcast_tensors(*map(torch.as_tensor, series))
                 samples[name] = torch.stack(series, dim=-2 if self.is_regional else -1)
 
+    def _initialize(self, params):
+        """
+        Validating wrapper around .initialize().
+        """
+        state = self.initialize(params)
+        if not isinstance(state, dict):
+            raise TypeError("Expected {}.initialize() to return a dict, but got {}"
+                            .format(type(self).__name__, type(state)))
+        if set(state.keys()) != set(self.compartments):
+            raise ValueError("Expected {}.initialize().keys() to be {} but got {}"
+                             .format(type(self).__name__, set(self.compartments),
+                                     set(state.keys())))
+        return state
+
+    def _transition_fwd(self, params, state, t):
+        """
+        Validating wrapper around .transition_fwd().
+        """
+        assert state.keys() == set(self.compartments)
+        self.transition_fwd(params, state, t)
+        if set(state.keys()) != set(self.compartments):
+            raise ValueError("Expected {}.transition() to preserve state.keys() but got {}"
+                             .format(type(self).__name__, set(state.keys())))
+
     def _generative_model(self, forecast=0):
         """
         Forward generative model used for simulation and forecasting.
@@ -489,13 +513,13 @@ class CompartmentalModel(ABC):
         params = self.global_model()
 
         # Sample initial values.
-        state = self.initialize(params)
+        state = self._initialize(params)
         state = {k: v if isinstance(v, torch.Tensor) else torch.tensor(float(v))
                  for k, v in state.items()}
 
         # Sequentially transition.
         for t in range(self.duration + forecast):
-            self.transition_fwd(params, state, t)
+            self._transition_fwd(params, state, t)
             with self.region_plate:
                 for name in self.compartments:
                     pyro.deterministic("{}_{}".format(name, t), state[name])
@@ -600,7 +624,7 @@ class CompartmentalModel(ABC):
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
             with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
-                t = slice(None)  # Used to slice data tensors.
+                t = slice(0, T)  # Used to slice data tensors.
                 self.transition_bwd(params, prev, curr, t)
         tr.trace.compute_log_prob()
         for name, site in tr.trace.nodes.items():
@@ -635,14 +659,14 @@ class _SMCModel:
                 state[name] = site["value"]
 
         self.t = 0
-        state.update(self.model.initialize(params))
+        state.update(self.model._initialize(params))
         self.step(state)  # Take one step since model.initialize is deterministic.
 
     def step(self, state):
         with poutine.block(), poutine.condition(data=state):
             params = self.model.global_model()
         with poutine.trace() as tr:
-            self.model.transition_fwd(params, state, self.t)
+            self.model._transition_fwd(params, state, self.t)
         for name, site in tr.trace.nodes.items():
             if site["type"] == "sample" and not site["is_observed"]:
                 state[name] = site["value"]
