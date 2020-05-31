@@ -257,7 +257,7 @@ class CompartmentalModel(ABC):
 
             compartment_names = ("S", "E", "I")
 
-        the default implementation computes at time step ``t=9``
+        the default implementation computes at time step ``t = 9``::
 
             flows["S2E_9"] = prev["S"] - curr["S"]
             flows["E2I_9"] = prev["E"] - curr["E"] + flows["S2E_9"]
