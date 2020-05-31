@@ -506,7 +506,9 @@ class CompartmentalModel(ABC):
         """
         # Run .transition() conditioned on computed flows.
         flows = self.compute_flows(prev, curr, t)
-        with poutine.condition(data=flows):
+        cond_data = curr.copy()
+        cond_data.update(flows)
+        with poutine.condition(data=cond_data):
             state = prev.copy()
             self.transition(params, state, t)  # Mutates state.
 
@@ -613,6 +615,7 @@ class CompartmentalModel(ABC):
             if isinstance(value, torch.Tensor):
                 value = value[..., None]  # Because curr is enumerated on the right.
             prev[name] = cat2(value, curr[name][:-1], dim=-3 if self.is_regional else -2)
+        # FIXME prev also needs values of heterogeneous variables.
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         def enum_reshape(tensor, position):

@@ -8,9 +8,9 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.contrib.epidemiology import (OverdispersedSEIRModel, OverdispersedSIRModel, RegionalSIRModel, SimpleSEIRModel,
-                                       SimpleSIRModel, SparseSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel,
-                                       UnknownStartSIRModel)
+from pyro.contrib.epidemiology import (HeterogeneousSIRModel, OverdispersedSEIRModel, OverdispersedSIRModel,
+                                       RegionalSIRModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel,
+                                       SuperspreadingSEIRModel, SuperspreadingSIRModel, UnknownStartSIRModel)
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +239,36 @@ def test_coalescent_likelihood_smoke(duration, forecast):
     assert samples["S"].shape == (num_samples, duration + forecast)
     assert samples["E"].shape == (num_samples, duration + forecast)
     assert samples["I"].shape == (num_samples, duration + forecast)
+
+
+@pytest.mark.parametrize("duration", [3, 7])
+@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("options", [
+    {"num_quant_bins": 2},
+    {"haar_full_mass": 2},
+], ids=str)
+def test_heterogeneous_sir_smoke(duration, forecast, options):
+    population = 100
+    recovery_time = 7.0
+
+    # Generate data.
+    model = HeterogeneousSIRModel(population, recovery_time, [None] * duration)
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5})["obs"]
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = HeterogeneousSIRModel(population, recovery_time, data)
+    num_samples = 5
+    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast)
+    assert samples["I"].shape == (num_samples, duration + forecast)
+    assert samples["Re"].shape == (num_samples, duration + forecast)
 
 
 @pytest.mark.parametrize("duration", [4, 12])
