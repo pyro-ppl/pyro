@@ -272,6 +272,8 @@ class CompartmentalModel(ABC):
             slice (for vectorized inference) or an integer time index. During
             prediction ``t`` will be integer time index.
         :type t: int or slice
+        :returns: A dict mapping flow name to tensor value.
+        :rtype: dict
         """
         flows = {}
         flow = 0
