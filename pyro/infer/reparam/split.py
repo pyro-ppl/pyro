@@ -2,44 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import broadcast_shape
 
 from .reparam import Reparam
-
-
-class _ImproperUniform(dist.TorchDistribution):
-    """
-    Internal helper distribution with zero :meth:`log_prob` and undefined
-    :meth:`sample`.
-    """
-    arg_constraints = {}
-
-    def __init__(self, support, batch_shape, event_shape):
-        self._support = support
-        super().__init__(batch_shape, event_shape)
-
-    @constraints.dependent_property
-    def support(self):
-        return self._support
-
-    def expand(self, batch_shape, _instance=None):
-        batch_shape = torch.Size(batch_shape)
-        new = self._get_checked_instance(_ImproperUniform, _instance)
-        new._support = self._support
-        super(_ImproperUniform, new).__init__(batch_shape, self.event_shape)
-        return new
-
-    def log_prob(self, value):
-        batch_shape = value.shape[:value.dim() - self.event_dim]
-        batch_shape = broadcast_shape(batch_shape, self.batch_shape)
-        return torch.zeros(()).expand(batch_shape)
-
-    def sample(self, sample_shape=torch.Size()):
-        raise NotImplementedError("SplitReparam does not support sampling")
 
 
 class SplitReparam(Reparam):
@@ -81,7 +48,7 @@ class SplitReparam(Reparam):
             event_shape = left_shape + (size,) + right_shape
             parts.append(pyro.sample(
                 "{}_split_{}".format(name, i),
-                _ImproperUniform(fn.support, fn.batch_shape, event_shape)))
+                dist.ImproperUniform(fn.support, fn.batch_shape, event_shape)))
         value = torch.cat(parts, dim=-self.event_dim)
 
         # Combine parts.
