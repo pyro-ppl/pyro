@@ -12,6 +12,7 @@ from functools import reduce
 
 import torch
 from torch.distributions import biject_to, constraints
+from torch.distributions.utils import lazy_property
 
 import pyro.distributions as dist
 import pyro.distributions.hmm
@@ -499,6 +500,34 @@ class CompartmentalModel(ABC):
                 series = torch.broadcast_tensors(*map(torch.as_tensor, series))
                 samples[name] = torch.stack(series, dim=-2 if self.is_regional else -1)
 
+    @lazy_property
+    @torch.no_grad()
+    def _non_compartmental(self):
+        """
+        A dict mapping name -> distribution for all non-compartmental sites in
+        :meth:`transition`. For simple models this is often empty; for
+        time-heterogeneous models this may contain time-local latent variables.
+        """
+        # Trace a simple invocation of .transition().
+        with torch.no_grad(), poutine.block():
+            params = self.global_model()
+            prev = self.initialize(params)
+            curr = prev.copy()
+            with poutine.trace() as tr:
+                self.transition(params, curr, 0)
+            flows = self.compute_flows(prev, curr, 0)
+
+        # Extract latent variables that are not compartmental flows.
+        result = OrderedDict()
+        for name, site in tr.trace.iter_stochastic_nodes():
+            if name in flows:
+                continue
+            assert name.endswith("_0"), name
+            name = name[:-2]
+            assert name in self.series, name
+            result[name] = site["fn"]
+        return result
+
     def _transition_bwd(self, params, prev, curr, t):
         """
         Helper to collect probabilty factors from .transition() conditioned on
@@ -554,7 +583,16 @@ class CompartmentalModel(ABC):
         # Sample global parameters.
         params = self.global_model()
 
-        # Sample the continuous reparameterizing variable.
+        # Sample any non-compartmental time series in batch.
+        non_compartmental = OrderedDict()
+        for name, fn in self._non_compartmental.items():
+            if fn.event_shape:
+                raise NotImplementedError(
+                    ".transition() currently supports only univariate distributions")
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, (T,))
+            non_compartmental[name] = pyro.sample(name, fn)
+
+        # Sample the compartmental continuous reparameterizing variable.
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
@@ -569,6 +607,12 @@ class CompartmentalModel(ABC):
         for t, aux_t in poutine.markov(enumerate(auxiliary.unbind(2))):
             with self.region_plate:
                 prev, curr = curr, {}
+
+                # Extract any non-compartmental variables.
+                for name, value in non_compartmental.items():
+                    curr[name] = value[..., t]
+
+                # Extract and enumerate all compartmental variables.
                 for name, aux in zip(self.compartments, aux_t.unbind(1)):
                     curr[name] = quantize("{}_{}".format(name, t), aux,
                                           min=0, max=self.population,
@@ -578,6 +622,7 @@ class CompartmentalModel(ABC):
                     if name in self.approximate:
                         curr[name + "_approx"] = aux
                         prev.setdefault(name + "_approx", prev[name])
+
             self._transition_bwd(params, prev, curr, t)
 
         self._clear_plates()
@@ -591,10 +636,19 @@ class CompartmentalModel(ABC):
         Q = self.num_quant_bins
         R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters.
+        # Sample global parameters and initial state.
         params = self.global_model()
 
-        # Sample the continuous reparameterizing variable.
+        # Sample any non-compartmental time series in batch.
+        non_compartmental = OrderedDict()
+        for name, fn in self._non_compartmental.items():
+            if fn.event_shape:
+                raise NotImplementedError(
+                    ".transition() currently supports only univariate distributions")
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, (T,))
+            non_compartmental[name] = pyro.sample(name, fn)
+
+        # Sample the compartmental continuous reparameterizing variable.
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
@@ -610,12 +664,14 @@ class CompartmentalModel(ABC):
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
         prev = {}
+        for name in non_compartmental:
+            if name in init:
+                prev[name] = cat2(init[name], curr[name][..., :-1], dim=-1)
         for name in self.compartments:
             value = init[name]
             if isinstance(value, torch.Tensor):
                 value = value[..., None]  # Because curr is enumerated on the right.
-            prev[name] = cat2(value, curr[name][:-1], dim=-3 if self.is_regional else -2)
-        # FIXME prev also needs values of heterogeneous variables.
+            prev[name] = cat2(value, curr[name][:-1], dim=0)
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         def enum_reshape(tensor, position):
