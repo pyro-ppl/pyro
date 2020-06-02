@@ -37,12 +37,12 @@ class ImproperUniform(TorchDistribution):
 
     :param support: The support of the distribution.
     :type support: ~torch.distributions.constraints.Constraint
-    :param torch.Size batch_shape: Defaults to empty.
-    :param torch.Size event_shape: Defaults to empty.
+    :param torch.Size batch_shape: The batch shape.
+    :param torch.Size event_shape: The event shape.
     """
     arg_constraints = {}
 
-    def __init__(self, support, batch_shape=torch.Size(), event_shape=torch.Size()):
+    def __init__(self, support, batch_shape, event_shape):
         assert isinstance(support, constraints.Constraint)
         self._support = support
         super().__init__(batch_shape, event_shape)
