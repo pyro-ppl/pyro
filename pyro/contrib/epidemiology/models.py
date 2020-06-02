@@ -623,7 +623,7 @@ class HeterogeneousSIRModel(CompartmentalModel):
                                          num_infectious=state["I"],
                                          population=self.population))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.Binomial(state["I"], 1 / tau))
+                          dist.ExtendedBinomial(state["I"], 1 / tau))
 
         # Update compartments and heterogeneous variables.
         state["S"] = state["S"] - S2I

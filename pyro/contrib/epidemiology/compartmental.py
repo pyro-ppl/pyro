@@ -110,12 +110,12 @@ class CompartmentalModel(ABC):
             assert population.dim() == 1
             assert (population >= 1).all()
             self.is_regional = True
-            self.max_plate_nesting = 1
+            self.max_plate_nesting = 2  # [time, region]
         else:
             assert isinstance(population, int)
             assert population >= 2
             self.is_regional = False
-            self.max_plate_nesting = 0
+            self.max_plate_nesting = 1  # [time]
         self.population = population
 
         compartments = tuple(compartments)
@@ -583,15 +583,6 @@ class CompartmentalModel(ABC):
         # Sample global parameters.
         params = self.global_model()
 
-        # Sample any non-compartmental time series in batch.
-        non_compartmental = OrderedDict()
-        for name, fn in self._non_compartmental.items():
-            if fn.event_shape:
-                raise NotImplementedError(
-                    ".transition() currently supports only univariate distributions")
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, (T,))
-            non_compartmental[name] = pyro.sample(name, fn)
-
         # Sample the compartmental continuous reparameterizing variable.
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
@@ -602,6 +593,15 @@ class CompartmentalModel(ABC):
             # to allow aux below to have shape (particle, R) for region_plate.
             auxiliary = auxiliary.squeeze(-4)
 
+        # Sample any non-compartmental time series in batch.
+        # TODO consider using pyro.contrib.forecast.util.reshape_batch to
+        # support DiscreteCosineReparam and HaarReparam along the time dim.
+        non_compartmental = OrderedDict()
+        with pyro.plate("time", T, dim=-self.max_plate_nesting):
+            for name, fn in self._non_compartmental.items():
+                fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+                non_compartmental[name] = pyro.sample(name, fn)
+
         # Sequentially transition.
         curr = self.initialize(params)
         for t, aux_t in poutine.markov(enumerate(auxiliary.unbind(2))):
@@ -610,7 +610,7 @@ class CompartmentalModel(ABC):
 
                 # Extract any non-compartmental variables.
                 for name, value in non_compartmental.items():
-                    curr[name] = value[..., t]
+                    curr[name] = value[:, t]
 
                 # Extract and enumerate all compartmental variables.
                 for name, aux in zip(self.compartments, aux_t.unbind(1)):
@@ -639,15 +639,6 @@ class CompartmentalModel(ABC):
         # Sample global parameters and initial state.
         params = self.global_model()
 
-        # Sample any non-compartmental time series in batch.
-        non_compartmental = OrderedDict()
-        for name, fn in self._non_compartmental.items():
-            if fn.event_shape:
-                raise NotImplementedError(
-                    ".transition() currently supports only univariate distributions")
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, (T,))
-            non_compartmental[name] = pyro.sample(name, fn)
-
         # Sample the compartmental continuous reparameterizing variable.
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
@@ -661,17 +652,25 @@ class CompartmentalModel(ABC):
         curr = OrderedDict(zip(self.compartments, curr))
         logp = OrderedDict(zip(self.compartments, logp))
 
+        # Sample any non-compartmental time series in batch.
+        # TODO consider using pyro.contrib.forecast.util.reshape_batch to
+        # support DiscreteCosineReparam and HaarReparam along the time dim.
+        with pyro.plate("time", T, dim=-self.max_plate_nesting):
+            for name, fn in self._non_compartmental.items():
+                fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+                curr[name] = pyro.sample(name, fn)
+
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
         prev = {}
-        for name in non_compartmental:
-            if name in init:
-                prev[name] = cat2(init[name], curr[name][..., :-1], dim=-1)
-        for name in self.compartments:
-            value = init[name]
-            if isinstance(value, torch.Tensor):
-                value = value[..., None]  # Because curr is enumerated on the right.
-            prev[name] = cat2(value, curr[name][:-1], dim=0)
+        for name, value in init.items():
+            if name in self.compartments:
+                if isinstance(value, torch.Tensor):
+                    value = value[..., None]  # Because curr is enumerated on the right.
+                prev[name] = cat2(value, curr[name][:-1],
+                                  dim=-3 if self.is_regional else -2)
+            else:  # non-compartmental
+                prev[name] = cat2(init[name], curr[name][..., :-1], dim=-curr[name].dim())
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         def enum_reshape(tensor, position):
@@ -697,7 +696,7 @@ class CompartmentalModel(ABC):
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
-            with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
+            with pyro.plate("time", T, dim=-self.max_plate_nesting):
                 t = slice(0, T, 1)  # Used to slice data tensors.
                 self._transition_bwd(params, prev, curr, t)
         tr.trace.compute_log_prob()
