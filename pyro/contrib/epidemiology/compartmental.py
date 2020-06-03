@@ -555,9 +555,8 @@ class CompartmentalModel(ABC):
         previous and current enumerated states.
         """
         # Run .transition() conditioned on computed flows.
-        flows = self.compute_flows(prev, curr, t)
-        cond_data = curr.copy()
-        cond_data.update(flows)
+        cond_data = {"{}_{}".format(k, t): v for k, v in curr.items()}
+        cond_data.update(self.compute_flows(prev, curr, t))
         with poutine.condition(data=cond_data):
             state = prev.copy()
             self.transition(params, state, t)  # Mutates state.
@@ -619,11 +618,10 @@ class CompartmentalModel(ABC):
         # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
         # support DiscreteCosineReparam and HaarReparam along the time dim.
         non_compartmental = OrderedDict()
-        with self.time_plate, self.region_plate:
-            for name, (fn, is_regional) in self._non_compartmental.items():
-                fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-                with optional(self.region_plate, is_regional):
-                    non_compartmental[name] = pyro.sample(name, fn)
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            with self.time_plate, optional(self.region_plate, is_regional):
+                non_compartmental[name] = pyro.sample(name, fn)
 
         # Sequentially transition.
         curr = self.initialize(params)
@@ -678,11 +676,10 @@ class CompartmentalModel(ABC):
         # Sample any non-compartmental time series in batch.
         # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
         # support DiscreteCosineReparam and HaarReparam along the time dim.
-        with self.time_plate:
-            for name, (fn, is_regional) in self._non_compartmental.items():
-                fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-                with optional(self.region_plate, is_regional):
-                    curr[name] = pyro.sample(name, fn)
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            with self.time_plate, optional(self.region_plate, is_regional):
+                curr[name] = pyro.sample(name, fn)
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
@@ -726,6 +723,13 @@ class CompartmentalModel(ABC):
         tr.trace.compute_log_prob()
         for name, site in tr.trace.nodes.items():
             if site["type"] == "sample":
+                log_prob = site["log_prob"]
+                if log_prob.dim() <= self.max_plate_nesting:  # Not enumerated.
+                    pyro.factor("transition_" + name, site["log_prob_sum"])
+                    continue
+                if self.is_regional and log_prob.shape[-1:] != R_shape:
+                    # Poor man's tensor variable elimination.
+                    log_prob = log_prob.expand(log_prob.shape[:-1] + R_shape) / R_shape[0]
                 logp[name] = site["log_prob"]
 
         # Manually perform variable elimination.

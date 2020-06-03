@@ -575,8 +575,7 @@ class HeterogeneousSIRModel(CompartmentalModel):
 
         self.data = data
 
-    series = ("S2I", "I2R", "beta", "obs")
-    # full_mass = [("R0", "beta", "rho0", "rho1", "rho2")]
+    series = ("S2I", "I2R", "beta", "Re", "rho", "obs")
     full_mass = [("R0", "rho0", "rho1", "rho2")]
 
     def global_model(self):
@@ -613,7 +612,7 @@ class HeterogeneousSIRModel(CompartmentalModel):
         # This assumes beta slowly drifts via Brownian motion in log space.
         beta = pyro.sample("beta_{}".format(t),
                            dist.LogNormal(state["beta"].log(), 0.1))
-        Re = R0 * beta
+        Re = pyro.deterministic("Re_{}".format(t), R0 * beta)
 
         # Sample flows between compartments.
         S2I = pyro.sample("S2I_{}".format(t),
