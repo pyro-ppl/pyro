@@ -268,7 +268,7 @@ def test_heterogeneous_sir_smoke(duration, forecast, options):
     samples = model.predict(forecast=forecast)
     assert samples["S"].shape == (num_samples, duration + forecast)
     assert samples["I"].shape == (num_samples, duration + forecast)
-    assert samples["Re"].shape == (num_samples, duration + forecast)
+    assert samples["beta"].shape == (num_samples, duration + forecast)
 
 
 @pytest.mark.parametrize("duration", [4, 12])

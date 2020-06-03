@@ -551,7 +551,7 @@ class SuperspreadingSEIRModel(CompartmentalModel):
 
 class HeterogeneousSIRModel(CompartmentalModel):
     """
-    Generalizes :class:`SimpleSIRModel` by allowing ``Rt`` and ``rho`` to vary
+    Generalizes :class:`SimpleSIRModel` by allowing ``Re`` and ``rho`` to vary
     in time.
 
     To customize this model we recommend forking and editing this class.
@@ -575,11 +575,13 @@ class HeterogeneousSIRModel(CompartmentalModel):
 
         self.data = data
 
-    series = ("S2I", "I2R", "Re", "obs")
+    series = ("S2I", "I2R", "beta", "obs")
+    # full_mass = [("R0", "beta", "rho0", "rho1", "rho2")]
     full_mass = [("R0", "rho0", "rho1", "rho2")]
 
     def global_model(self):
         tau = self.recovery_time
+        R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
 
         # Let's consider a piecewise constant response rate, say low rate for
         # two weeks, then intermediate rate as testing capacity increases, and
@@ -596,29 +598,24 @@ class HeterogeneousSIRModel(CompartmentalModel):
         # We can also save the time series for output in self.samples.
         pyro.deterministic("rho", rho, event_dim=1)
 
-        return tau, rho
+        return R0, tau, rho
 
     def initialize(self, params):
-        tau, rho = params
-
-        # Let's sample an initial reproductive number.
-        R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-
+        R0, tau, rho = params
         # Start with a single infection.
-        # We also store the initial Re value in the state dict.
-        return {"S": self.population - 1, "I": 1, "Re": R0}
+        # We also store the initial beta value in the state dict.
+        return {"S": self.population - 1, "I": 1, "beta": torch.tensor(1.)}
 
     def transition(self, params, state, t):
-        tau, rho = params
+        R0, tau, rho = params
 
         # Sample heterogeneous variables.
-        # This assumes Re slowly drifts via Brownian motion in log space.
-        Re = pyro.sample("Re_{}".format(t),
-                         dist.LogNormal(state["Re"].log(), 0.1))
-        print("DEBUG Re_{}.shape = {}".format(t, Re.shape))
+        # This assumes beta slowly drifts via Brownian motion in log space.
+        beta = pyro.sample("beta_{}".format(t),
+                           dist.LogNormal(state["beta"].log(), 0.1))
+        Re = R0 * beta
 
         # Sample flows between compartments.
-        print("DEBUG S.shape = {}".format(getattr(state["S"], "shape", ())))
         S2I = pyro.sample("S2I_{}".format(t),
                           infection_dist(individual_rate=Re / tau,
                                          num_susceptible=state["S"],
@@ -630,7 +627,7 @@ class HeterogeneousSIRModel(CompartmentalModel):
         # Update compartments and heterogeneous variables.
         state["S"] = state["S"] - S2I
         state["I"] = state["I"] + S2I - I2R
-        state["Re"] = Re  # We store the latest Re value in the state dict.
+        state["beta"] = beta  # We store the latest beta value in the state dict.
 
         # Condition on observations.
         # Note that, since rho may be batched over particles or samples, we

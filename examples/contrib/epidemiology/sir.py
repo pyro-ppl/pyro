@@ -13,15 +13,19 @@ import torch
 from torch.distributions import biject_to, constraints
 
 import pyro
-from pyro.contrib.epidemiology import (OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel,
-                                       SuperspreadingSEIRModel, SuperspreadingSIRModel)
+from pyro.contrib.epidemiology import (HeterogeneousSIRModel, OverdispersedSEIRModel, OverdispersedSIRModel,
+                                       SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel)
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
 def Model(args, data):
     """Dispatch between different model classes."""
-    if args.incubation_time > 0:
+    if args.heterogeneous:
+        assert args.incubation_time == 0
+        assert args.overdispersion == 0
+        return HeterogeneousSIRModel(args.population, args.recovery_time, data)
+    elif args.incubation_time > 0:
         assert args.incubation_time > 1
         if args.concentration < math.inf:
             return SuperspreadingSEIRModel(args.population, args.incubation_time,
@@ -257,6 +261,7 @@ if __name__ == "__main__":
                         help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("-o", "--overdispersion", default=0., type=float)
+    parser.add_argument("-hg", "--heterogeneous", action="store_true")
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
