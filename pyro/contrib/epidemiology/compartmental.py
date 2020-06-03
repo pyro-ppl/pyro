@@ -489,12 +489,12 @@ class CompartmentalModel(ABC):
                                   for name, site in trace.nodes.items()
                                   if site["type"] == "sample")
 
-        self._concat_series(samples, forecast)
+        self._concat_series(samples, forecast, vectorized=True)
         return samples
 
     # Internal helpers ########################################
 
-    def _concat_series(self, samples, forecast=0):
+    def _concat_series(self, samples, forecast=0, vectorized=False):
         """
         Concatenate sequential time series into tensors, in-place.
 
@@ -506,10 +506,14 @@ class CompartmentalModel(ABC):
             for key in list(samples):
                 if re.match(pattern, key):
                     series.append(samples.pop(key))
-            if series:
-                assert len(series) == self.duration + forecast
-                series = torch.broadcast_tensors(*map(torch.as_tensor, series))
-                samples[name] = torch.stack(series, dim=1 if series[0].dim() else 0)
+            if not series:
+                continue
+            assert len(series) == self.duration + forecast
+            series = torch.broadcast_tensors(*map(torch.as_tensor, series))
+            if vectorized and name != "obs":  # TODO Generalize.
+                samples[name] = torch.cat(series, dim=1)
+            else:
+                samples[name] = torch.stack(series)
 
     @lazy_property
     @torch.no_grad()
@@ -524,6 +528,8 @@ class CompartmentalModel(ABC):
         with torch.no_grad(), poutine.block():
             params = self.global_model()
             prev = self.initialize(params)
+            for name in self.approximate:
+                prev[name + "_approx"] = prev[name]
             curr = prev.copy()
             with poutine.trace() as tr:
                 self.transition(params, curr, 0)
@@ -605,11 +611,9 @@ class CompartmentalModel(ABC):
                                     .mask(False).expand(shape).to_event())
         num_samples = auxiliary.size(0)
         if self.is_regional:
-            assert auxiliary.shape == (num_samples, 1, 1, C, T) + R_shape
-            aux = [aux.unbind(3) for aux in auxiliary.unbind(3)]  # C T num_samples 1 R
-        else:
-            assert auxiliary.shape == (num_samples, 1, C, T)
-            aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]  # C T num_samples 1
+            auxiliary = auxiliary.squeeze(1)
+        assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
+        aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
 
         # Sample any non-compartmental time series in batch.
         # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
