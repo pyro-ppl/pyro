@@ -163,53 +163,6 @@ class CompartmentalModel(ABC):
     series = ()
     full_mass = False
 
-    @torch.no_grad()
-    @set_approx_log_prob_tol(0.1)
-    @set_approx_sample_thresh(100)  # This is robust to gross approximation.
-    def heuristic(self, num_particles=1024, ess_threshold=0.5, retries=10):
-        """
-        Finds an initial feasible guess of all latent variables, consistent
-        with observed data. This is needed because not all hypotheses are
-        feasible and HMC needs to start at a feasible solution to progress.
-
-        The default implementation attempts to find a feasible state using
-        :class:`~pyro.infer.smcfilter.SMCFilter` with proprosals from the
-        prior.  However this method may be overridden in cases where SMC
-        performs poorly e.g. in high-dimensional models.
-
-        :param int num_particles: Number of particles used for SMC.
-        :param float ess_threshold: Effective sample size threshold for SMC.
-        :returns: A dictionary mapping sample site name to tensor value.
-        :rtype: dict
-        """
-        # Run SMC.
-        model = _SMCModel(self)
-        guide = _SMCGuide(self)
-        for attempt in range(1, 1 + retries):
-            smc = SMCFilter(model, guide, num_particles=num_particles,
-                            ess_threshold=ess_threshold,
-                            max_plate_nesting=self.max_plate_nesting)
-            try:
-                smc.init()
-                for t in range(1, self.duration):
-                    smc.step()
-                break
-            except SMCFailed as e:
-                if attempt == retries:
-                    raise
-                logger.info("{}. Retrying...".format(e))
-                continue
-
-        # Select the most probable hypothesis.
-        i = int(smc.state._log_weights.max(0).indices)
-        init = {key: value[i, 0] for key, value in smc.state.items()}
-
-        # Fill in sample site values.
-        init = self.generate(init)
-        aux = torch.stack([init[name] for name in self.compartments], dim=0)
-        init["auxiliary"] = clamp(aux, min=0.5, max=self.population - 0.5)
-        return init
-
     def global_model(self):
         """
         Samples and returns any global parameters.
@@ -491,6 +444,53 @@ class CompartmentalModel(ABC):
 
         self._concat_series(samples, forecast, vectorized=True)
         return samples
+
+    @torch.no_grad()
+    @set_approx_log_prob_tol(0.1)
+    @set_approx_sample_thresh(100)  # This is robust to gross approximation.
+    def heuristic(self, num_particles=1024, ess_threshold=0.5, retries=10):
+        """
+        Finds an initial feasible guess of all latent variables, consistent
+        with observed data. This is needed because not all hypotheses are
+        feasible and HMC needs to start at a feasible solution to progress.
+
+        The default implementation attempts to find a feasible state using
+        :class:`~pyro.infer.smcfilter.SMCFilter` with proprosals from the
+        prior.  However this method may be overridden in cases where SMC
+        performs poorly e.g. in high-dimensional models.
+
+        :param int num_particles: Number of particles used for SMC.
+        :param float ess_threshold: Effective sample size threshold for SMC.
+        :returns: A dictionary mapping sample site name to tensor value.
+        :rtype: dict
+        """
+        # Run SMC.
+        model = _SMCModel(self)
+        guide = _SMCGuide(self)
+        for attempt in range(1, 1 + retries):
+            smc = SMCFilter(model, guide, num_particles=num_particles,
+                            ess_threshold=ess_threshold,
+                            max_plate_nesting=self.max_plate_nesting)
+            try:
+                smc.init()
+                for t in range(1, self.duration):
+                    smc.step()
+                break
+            except SMCFailed as e:
+                if attempt == retries:
+                    raise
+                logger.info("{}. Retrying...".format(e))
+                continue
+
+        # Select the most probable hypothesis.
+        i = int(smc.state._log_weights.max(0).indices)
+        init = {key: value[i, 0] for key, value in smc.state.items()}
+
+        # Fill in sample site values.
+        init = self.generate(init)
+        aux = torch.stack([init[name] for name in self.compartments], dim=0)
+        init["auxiliary"] = clamp(aux, min=0.5, max=self.population - 0.5)
+        return init
 
     # Internal helpers ########################################
 

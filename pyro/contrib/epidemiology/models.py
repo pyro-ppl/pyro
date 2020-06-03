@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import re
+
 import torch
 from torch.nn.functional import pad
 
@@ -977,3 +979,20 @@ class RegionalSIRModel(CompartmentalModel):
             pyro.sample("obs_{}".format(t),
                         dist.ExtendedBinomial(S2I, rho),
                         obs=self.data[t] if t_is_observed else None)
+
+
+# Create sphinx documentation.
+__all__ = []
+for _name, _Model in list(locals().items()):
+    if isinstance(_Model, type) and issubclass(_Model, CompartmentalModel):
+        if _Model is not CompartmentalModel:
+            __all__.append(_name)
+__all__.sort(key=lambda name, vals=locals(): vals[name].__init__.__code__.co_firstlineno)
+__doc__ = "\n\n".join([
+    """
+    {}
+    ----------------------------------------------------------------
+    .. autoclass:: pyro.contrib.epidemiology.models.{}
+    """.format(re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name)
+    for _name in __all__
+])
