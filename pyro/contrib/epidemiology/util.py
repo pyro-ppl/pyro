@@ -224,7 +224,7 @@ def quantize(name, x_real, min, max, num_quant_bins=4):
     x = torch.max(x, 2 * min - 1 - x)
     x = torch.min(x, 2 * max + 1 - x)
 
-    return pyro.deterministic(name, x)
+    return pyro.deterministic(name, x, event_dim=0)
 
 
 def quantize_enumerate(x_real, min, max, num_quant_bins=4):

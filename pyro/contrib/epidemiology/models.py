@@ -592,9 +592,9 @@ class HeterogeneousSIRModel(CompartmentalModel):
         # Later .transition() will index into this time series as rho[..., t].
         rho = torch.cat([rho0.unsqueeze(-1).expand(rho0.shape + (14,)),
                          rho1.unsqueeze(-1).expand(rho1.shape + (7,)),
-                         rho2.unsqueeze(-1).expand(rho2.shape + (90,))], dim=-1)
+                         rho2.unsqueeze(-1).expand(rho2.shape + (60,))], dim=-1)
         # We can also save the time series for output in self.samples.
-        pyro.deterministic("rho", rho)
+        pyro.deterministic("rho", rho, event_dim=1)
 
         return tau, rho
 
@@ -615,8 +615,10 @@ class HeterogeneousSIRModel(CompartmentalModel):
         # This assumes Re slowly drifts via Brownian motion in log space.
         Re = pyro.sample("Re_{}".format(t),
                          dist.LogNormal(state["Re"].log(), 0.1))
+        print("DEBUG Re_{}.shape = {}".format(t, Re.shape))
 
         # Sample flows between compartments.
+        print("DEBUG S.shape = {}".format(getattr(state["S"], "shape", ())))
         S2I = pyro.sample("S2I_{}".format(t),
                           infection_dist(individual_rate=Re / tau,
                                          num_susceptible=state["S"],
@@ -654,7 +656,7 @@ class SparseSIRModel(CompartmentalModel):
 
     This model demonstrates how to implement a custom :meth:`compute_flows`
     method. A custom method is needed in this model because inhabitants of the
-    ``S`` compartment can transition to both the ``I`` and ``o`` compartments,
+    ``S`` compartment can transition to both the ``I`` and ``O`` compartments,
     allowing duplication.
 
     :param int population: Total ``population = S + I + R``.

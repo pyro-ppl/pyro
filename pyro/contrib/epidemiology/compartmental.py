@@ -24,7 +24,7 @@ from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.infer.util import is_validation_enabled
-from pyro.util import warn_if_nan
+from pyro.util import optional, warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
@@ -132,6 +132,16 @@ class CompartmentalModel(ABC):
         self._clear_plates()
 
     @property
+    def time_plate(self):
+        """
+        A ``pyro.plate`` for the time dimension.
+        """
+        if self._time_plate is None:
+            self._time_plate = pyro.plate("time", self.duration,
+                                          dim=-2 if self.is_regional else -1)
+        return self._time_plate
+
+    @property
     def region_plate(self):
         """
         Either a ``pyro.plate`` or a trivial ``ExitStack`` depending on whether
@@ -145,6 +155,7 @@ class CompartmentalModel(ABC):
         return self._region_plate
 
     def _clear_plates(self):
+        self._time_plate = None
         self._region_plate = None
 
     # Overridable attributes and methods ########################################
@@ -191,7 +202,7 @@ class CompartmentalModel(ABC):
 
         # Select the most probable hypothesis.
         i = int(smc.state._log_weights.max(0).indices)
-        init = {key: value[i] for key, value in smc.state.items()}
+        init = {key: value[i, 0] for key, value in smc.state.items()}
 
         # Fill in sample site values.
         init = self.generate(init)
@@ -498,15 +509,16 @@ class CompartmentalModel(ABC):
             if series:
                 assert len(series) == self.duration + forecast
                 series = torch.broadcast_tensors(*map(torch.as_tensor, series))
-                samples[name] = torch.stack(series, dim=-2 if self.is_regional else -1)
+                samples[name] = torch.stack(series, dim=1 if series[0].dim() else 0)
 
     @lazy_property
     @torch.no_grad()
     def _non_compartmental(self):
         """
-        A dict mapping name -> distribution for all non-compartmental sites in
-        :meth:`transition`. For simple models this is often empty; for
-        time-heterogeneous models this may contain time-local latent variables.
+        A dict mapping name -> (distribution, is_regional) for all
+        non-compartmental sites in :meth:`transition`. For simple models this
+        is often empty; for time-heterogeneous models this may contain
+        time-local latent variables.
         """
         # Trace a simple invocation of .transition().
         with torch.no_grad(), poutine.block():
@@ -525,7 +537,10 @@ class CompartmentalModel(ABC):
             assert name.endswith("_0"), name
             name = name[:-2]
             assert name in self.series, name
-            result[name] = site["fn"]
+            # TODO This supports only the region_plate. For full plate support,
+            # this could be replaced by a self.plate() method as in EasyGuide.
+            is_regional = any(f.name == "region" for f in site["cond_indep_stack"])
+            result[name] = site["fn"], is_regional
         return result
 
     def _transition_bwd(self, params, prev, curr, t):
@@ -568,7 +583,7 @@ class CompartmentalModel(ABC):
             self.transition(params, state, t)
             with self.region_plate:
                 for name in self.compartments:
-                    pyro.deterministic("{}_{}".format(name, t), state[name])
+                    pyro.deterministic("{}_{}".format(name, t), state[name], event_dim=0)
 
         self._clear_plates()
 
@@ -588,39 +603,43 @@ class CompartmentalModel(ABC):
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False).expand(shape).to_event())
+        num_samples = auxiliary.size(0)
         if self.is_regional:
-            # This reshapes from (particle, 1, C, T, R) -> (particle, C, T, R)
-            # to allow aux below to have shape (particle, R) for region_plate.
-            auxiliary = auxiliary.squeeze(-4)
+            assert auxiliary.shape == (num_samples, 1, 1, C, T) + R_shape
+            aux = [aux.unbind(3) for aux in auxiliary.unbind(3)]  # C T num_samples 1 R
+        else:
+            assert auxiliary.shape == (num_samples, 1, C, T)
+            aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]  # C T num_samples 1
 
         # Sample any non-compartmental time series in batch.
-        # TODO consider using pyro.contrib.forecast.util.reshape_batch to
+        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
         # support DiscreteCosineReparam and HaarReparam along the time dim.
         non_compartmental = OrderedDict()
-        with pyro.plate("time", T, dim=-self.max_plate_nesting):
-            for name, fn in self._non_compartmental.items():
+        with self.time_plate, self.region_plate:
+            for name, (fn, is_regional) in self._non_compartmental.items():
                 fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-                non_compartmental[name] = pyro.sample(name, fn)
+                with optional(self.region_plate, is_regional):
+                    non_compartmental[name] = pyro.sample(name, fn)
 
         # Sequentially transition.
         curr = self.initialize(params)
-        for t, aux_t in poutine.markov(enumerate(auxiliary.unbind(2))):
+        for t in poutine.markov(range(T)):
             with self.region_plate:
                 prev, curr = curr, {}
 
                 # Extract any non-compartmental variables.
                 for name, value in non_compartmental.items():
-                    curr[name] = value[:, t]
+                    curr[name] = value[:, t:t+1]
 
                 # Extract and enumerate all compartmental variables.
-                for name, aux in zip(self.compartments, aux_t.unbind(1)):
-                    curr[name] = quantize("{}_{}".format(name, t), aux,
+                for c, name in enumerate(self.compartments):
+                    curr[name] = quantize("{}_{}".format(name, t), aux[c][t],
                                           min=0, max=self.population,
                                           num_quant_bins=self.num_quant_bins)
                     # Enable approximate inference by using aux as a
                     # non-enumerated proxy for enumerated compartment values.
                     if name in self.approximate:
-                        curr[name + "_approx"] = aux
+                        curr[name + "_approx"] = aux[c][t]
                         prev.setdefault(name + "_approx", prev[name])
 
             self._transition_bwd(params, prev, curr, t)
@@ -636,7 +655,7 @@ class CompartmentalModel(ABC):
         Q = self.num_quant_bins
         R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters and initial state.
+        # Sample global parameters.
         params = self.global_model()
 
         # Sample the compartmental continuous reparameterizing variable.
@@ -653,12 +672,13 @@ class CompartmentalModel(ABC):
         logp = OrderedDict(zip(self.compartments, logp))
 
         # Sample any non-compartmental time series in batch.
-        # TODO consider using pyro.contrib.forecast.util.reshape_batch to
+        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
         # support DiscreteCosineReparam and HaarReparam along the time dim.
-        with pyro.plate("time", T, dim=-self.max_plate_nesting):
-            for name, fn in self._non_compartmental.items():
+        with self.time_plate:
+            for name, (fn, is_regional) in self._non_compartmental.items():
                 fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-                curr[name] = pyro.sample(name, fn)
+                with optional(self.region_plate, is_regional):
+                    curr[name] = pyro.sample(name, fn)
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
@@ -670,7 +690,7 @@ class CompartmentalModel(ABC):
                 prev[name] = cat2(value, curr[name][:-1],
                                   dim=-3 if self.is_regional else -2)
             else:  # non-compartmental
-                prev[name] = cat2(init[name], curr[name][..., :-1], dim=-curr[name].dim())
+                prev[name] = cat2(init[name], curr[name][:-1], dim=-curr[name].dim())
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         def enum_reshape(tensor, position):
@@ -696,7 +716,7 @@ class CompartmentalModel(ABC):
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
-            with pyro.plate("time", T, dim=-self.max_plate_nesting):
+            with self.time_plate:
                 t = slice(0, T, 1)  # Used to slice data tensors.
                 self._transition_bwd(params, prev, curr, t)
         tr.trace.compute_log_prob()
