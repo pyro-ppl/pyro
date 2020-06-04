@@ -558,6 +558,11 @@ class HeterogeneousSIRModel(CompartmentalModel):
 
     To customize this model we recommend forking and editing this class.
 
+    In this model, the response rate ``rho`` is piecewise constant with unknown
+    value over three pieces. The reproductive number ``Re`` is a the product of
+    a constant ``R0`` with a factor ``beta`` that drifts via Brownian motion in
+    log space. Both ``rho`` and ``Re`` are available as time series.
+
     :param int population: Total ``population = S + I + R``.
     :param float recovery_time: Mean recovery time (duration in state
         ``I``). Must be greater than 1.
