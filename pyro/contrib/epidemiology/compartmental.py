@@ -182,10 +182,10 @@ class CompartmentalModel(ABC):
         Note that this method is called under multiple different
         interpretations, including batched and vectorized interpretations.
         During :meth:`generate` this is called to generate a single sample.
-        During :meth:`heuristic` this is called to generate a batch of sample
+        During :meth:`heuristic` this is called to generate a batch of samples
         for SMC.  During :meth:`fit` this is called both in vectorized form
-        (vectorizing over time) and insequential form (for a single time step);
-        both forms enumerate over discrete latent variables.  During
+        (vectorizing over time) and in sequential form (for a single time
+        step); both forms enumerate over discrete latent variables.  During
         :meth:`predict` this is called to forecast a batch of samples,
         conditioned on posterior samples for the time interval
         ``[0:duration]``.

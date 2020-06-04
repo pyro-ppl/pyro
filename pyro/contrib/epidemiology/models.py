@@ -566,7 +566,7 @@ class SparseSIRModel(CompartmentalModel):
 
     This model demonstrates how to implement a custom :meth:`compute_flows`
     method. A custom method is needed in this model because inhabitants of the
-    ``S`` compartment can transition to both the ``I`` and ``o`` compartments,
+    ``S`` compartment can transition to both the ``I`` and ``O`` compartments,
     allowing duplication.
 
     :param int population: Total ``population = S + I + R``.
