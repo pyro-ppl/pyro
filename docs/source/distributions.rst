@@ -176,6 +176,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+ImproperUniform
+---------------
+.. autoclass:: pyro.distributions.improper_uniform.ImproperUniform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 IndependentHMM
 --------------
 .. autoclass:: pyro.distributions.IndependentHMM
