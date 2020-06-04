@@ -482,6 +482,9 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
     :type hidden_dims: list[int]
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
+    :param bound: The quantity :math:`K` determining the bounding box,
+        :math:`[-K,K]\times[-K,K]`, of the spline.
+    :type bound: float
 
     """
 
@@ -495,18 +498,3 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
                              input_dim * (count_bins - 1),
                              input_dim * count_bins])
     return ConditionalSpline(nn, input_dim, count_bins, bound=bound)
-
-
-if __name__ == "__main__":
-    import pyro.distributions as dist
-    input_dim = 10
-    context_dim = 5
-    batch_size = 3
-    count_bins = 8
-    base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
-    param_dims = [input_dim * count_bins, input_dim * count_bins, input_dim * (count_bins - 1), input_dim * count_bins]
-    hypernet = DenseNN(context_dim, [50, 50], param_dims)
-    transform = ConditionalSpline(hypernet, input_dim, count_bins)
-    z = torch.rand(1, context_dim)
-    flow_dist = dist.ConditionalTransformedDistribution(base_dist, [transform]).condition(z)
-    print(flow_dist.sample(sample_shape=torch.Size([batch_size])))
