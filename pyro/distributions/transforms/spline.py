@@ -40,11 +40,14 @@ def _select_bins(x, idx):
     idx = idx.clamp(min=0, max=x.size(-1) - 1)
 
     """
-    idx ~ (context_batch_dims, input_dim, 1)
-    x ~ (batch_dims, input_dim, count_bins)
-    """
+    Broadcast dimensions of idx over x
 
-    # Broadcast dimensions of idx over x
+    idx ~ (batch_dims, input_dim, 1)
+    x ~ (context_batch_dims, input_dim, count_bins)
+
+    Note that by convention, the context variable batch dimensions must broadcast
+    over the input batch dimensions.
+    """
     if len(idx.shape) >= len(x.shape):
         x = x.reshape((1,) * (len(idx.shape) - len(x.shape)) + x.shape)
         x = x.expand(idx.shape[:-2] + (-1,) * 2)
@@ -199,13 +202,6 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
         logabsdet = torch.log(derivative_numerator) - 2 * torch.log(torch.abs(denominator))
 
     # Apply the identity function outside the bounding box
-    extra_dims = len(outputs.shape) - len(inputs.shape)
-    assert extra_dims >= 0
-
-    new_shape = (1,) * extra_dims + inputs.shape
-    outside_interval_mask = outside_interval_mask.reshape(new_shape).expand_as(outputs)
-    inputs = inputs.reshape(new_shape).expand_as(outputs)
-
     outputs[outside_interval_mask] = inputs[outside_interval_mask]
     logabsdet[outside_interval_mask] = 0.0
     return outputs, logabsdet
@@ -273,7 +269,6 @@ class ConditionedSpline(Transform):
         return y, log_detJ
 
 
-<<<<<<< HEAD
 @copy_docs_from(ConditionedSpline)
 class Spline(ConditionedSpline, TransformModule):
     r"""
@@ -282,29 +277,13 @@ class Spline(ConditionedSpline, TransformModule):
     are functions that are comprised of segments that are the ratio of two
     polynomials. For instance, for the :math:`d`-th dimension and the :math:`k`-th
     segment on the spline, the function will take the form,
-=======
-@copy_docs_from(TransformModule)
-class Spline(TransformModule):
-    r"""
-    An implementation of the element-wise rational spline bijections of linear
-    and quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020).
-    Rational splines are functions that are comprised of segments that are the
-    ratio of two polynomials. For instance, for the :math:`d`-th dimension and
-    the :math:`k`-th segment on the spline, the function will take the form,
->>>>>>> faf9d5ca2f06752ed7c53e036c52bf368259d100
 
         :math:`y_d = \frac{\alpha^{(k)}(x_d)}{\beta^{(k)}(x_d)},`
 
     where :math:`\alpha^{(k)}` and :math:`\beta^{(k)}` are two polynomials of
     order :math:`d`. For :math:`d=1`, we say that the spline is linear, and for
-<<<<<<< HEAD
     :math:`d=2`, quadratic. The spline is constructed on the specified bounding box,
     :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere.
-=======
-    :math:`d=2`, quadratic. The spline is constructed on the specified bounding
-    box, :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere
-    .
->>>>>>> faf9d5ca2f06752ed7c53e036c52bf368259d100
 
     Rational splines offer an excellent combination of functional flexibility whilst
     maintaining a numerically stable inverse that is of the same computational and
@@ -517,8 +496,8 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
                              input_dim * count_bins])
     return ConditionalSpline(nn, input_dim, count_bins, bound=bound)
 
+
 if __name__ == "__main__":
-    from pyro.nn.dense_nn import DenseNN
     import pyro.distributions as dist
     input_dim = 10
     context_dim = 5
@@ -528,6 +507,6 @@ if __name__ == "__main__":
     param_dims = [input_dim * count_bins, input_dim * count_bins, input_dim * (count_bins - 1), input_dim * count_bins]
     hypernet = DenseNN(context_dim, [50, 50], param_dims)
     transform = ConditionalSpline(hypernet, input_dim, count_bins)
-    z = torch.rand(5, batch_size, context_dim)
+    z = torch.rand(1, context_dim)
     flow_dist = dist.ConditionalTransformedDistribution(base_dist, [transform]).condition(z)
     print(flow_dist.sample(sample_shape=torch.Size([batch_size])))
