@@ -809,22 +809,22 @@ class UnknownStartSIRModel(CompartmentalModel):
 
         # Model external infections as an infectious pseudo-individual added
         # to num_infectious when sampling S2I below.
-        X = self.external_rate * tau / R0
+        I_external = self.external_rate * tau / R0
 
-        return R0, X, tau, rho
+        return R0, I_external, tau, rho
 
     def initialize(self, params):
         # Start with no internal infections.
         return {"S": self.population, "I": 0}
 
     def transition(self, params, state, t):
-        R0, X, tau, rho = params
+        R0, I_external, tau, rho = params
 
         # Sample flows between compartments.
         S2I = pyro.sample("S2I_{}".format(t),
                           infection_dist(individual_rate=R0 / tau,
                                          num_susceptible=state["S"],
-                                         num_infectious=state["I"] + X,
+                                         num_infectious=state["I"] + I_external,
                                          population=self.population))
         I2R = pyro.sample("I2R_{}".format(t),
                           dist.ExtendedBinomial(state["I"], 1 / tau))
