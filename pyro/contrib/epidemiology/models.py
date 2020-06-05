@@ -49,7 +49,7 @@ class SimpleSIRModel(CompartmentalModel):
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Beta(2, 2))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
         return R0, tau, rho
 
     def initialize(self, params):
@@ -123,7 +123,7 @@ class SimpleSEIRModel(CompartmentalModel):
         tau_e = self.incubation_time
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Beta(2, 2))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
         return R0, tau_e, tau_i, rho
 
     def initialize(self, params):
@@ -212,7 +212,7 @@ class OverdispersedSIRModel(CompartmentalModel):
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Beta(2, 2))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
         od = pyro.sample("od", dist.Beta(2, 6))
         return R0, tau, rho, od
 
@@ -308,7 +308,7 @@ class OverdispersedSEIRModel(CompartmentalModel):
         tau_e = self.incubation_time
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Beta(2, 2))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
         od = pyro.sample("od", dist.Beta(2, 6))
         return R0, tau_e, tau_i, rho, od
 
@@ -400,7 +400,7 @@ class SuperspreadingSIRModel(CompartmentalModel):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         k = pyro.sample("k", dist.Exponential(1.))
-        rho = pyro.sample("rho", dist.Beta(2, 2))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
         return R0, k, tau, rho
 
     def initialize(self, params):
@@ -512,7 +512,7 @@ class SuperspreadingSEIRModel(CompartmentalModel):
         tau_i = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
         k = pyro.sample("k", dist.Exponential(1.))
-        rho = pyro.sample("rho", dist.Beta(2, 2))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
         return R0, k, tau_e, tau_i, rho
 
     def initialize(self, params):
@@ -549,6 +549,99 @@ class SuperspreadingSEIRModel(CompartmentalModel):
         state["S"] = state["S"] - S2E
         state["E"] = state["E"] + S2E - E2I
         state["I"] = state["I"] + E2I - I2R
+
+
+class HeterogeneousSIRModel(CompartmentalModel):
+    """
+    Generalizes :class:`SimpleSIRModel` by allowing ``Re`` and ``rho`` to vary
+    in time.
+
+    To customize this model we recommend forking and editing this class.
+
+    In this model, the response rate ``rho`` is piecewise constant with unknown
+    value over three pieces. The reproductive number ``Re`` is a product of a
+    constant ``R0`` with a factor ``beta`` that drifts via Brownian motion in
+    log space. Both ``rho`` and ``Re`` are available as time series.
+
+    :param int population: Total ``population = S + I + R``.
+    :param float recovery_time: Mean recovery time (duration in state
+        ``I``). Must be greater than 1.
+    :param iterable data: Time series of new observed infections. Each time
+        step is Binomial distributed between 0 and the number of ``S -> I``
+        transitions. This allows false negative but no false positives.
+    """
+
+    def __init__(self, population, recovery_time, data):
+        compartments = ("S", "I")  # R is implicit.
+        duration = len(data)
+        super().__init__(compartments, duration, population)
+
+        assert isinstance(recovery_time, float)
+        assert recovery_time > 1
+        self.recovery_time = recovery_time
+
+        self.data = data
+
+    series = ("S2I", "I2R", "beta", "Re", "rho", "obs")
+    full_mass = [("R0", "rho0", "rho1", "rho2")]
+
+    def global_model(self):
+        tau = self.recovery_time
+        R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
+
+        # Let's consider a piecewise constant response rate, say low rate for
+        # two weeks, then intermediate rate as testing capacity increases, and
+        # finally high rate for a few months (as far into the future as we'd
+        # like to forecast). We don't know exactly what the rates are, but we
+        # can specify increasingly informative priors.
+        rho0 = pyro.sample("rho0", dist.Beta(2, 4))
+        rho1 = pyro.sample("rho1", dist.Beta(4, 4))
+        rho2 = pyro.sample("rho2", dist.Beta(8, 4))
+        # Later .transition() will index into this time series as rho[..., t].
+        rho = torch.cat([rho0.unsqueeze(-1).expand(rho0.shape + (14,)),
+                         rho1.unsqueeze(-1).expand(rho1.shape + (7,)),
+                         rho2.unsqueeze(-1).expand(rho2.shape + (60,))], dim=-1)
+        # We can also save the time series for output in self.samples.
+        pyro.deterministic("rho", rho, event_dim=1)
+
+        return R0, tau, rho
+
+    def initialize(self, params):
+        R0, tau, rho = params
+        # Start with a single infection.
+        # We also store the initial beta value in the state dict.
+        return {"S": self.population - 1, "I": 1, "beta": torch.tensor(1.)}
+
+    def transition(self, params, state, t):
+        R0, tau, rho = params
+
+        # Sample heterogeneous variables.
+        # This assumes beta slowly drifts via Brownian motion in log space.
+        beta = pyro.sample("beta_{}".format(t),
+                           dist.LogNormal(state["beta"].log(), 0.1))
+        Re = pyro.deterministic("Re_{}".format(t), R0 * beta)
+
+        # Sample flows between compartments.
+        S2I = pyro.sample("S2I_{}".format(t),
+                          infection_dist(individual_rate=Re / tau,
+                                         num_susceptible=state["S"],
+                                         num_infectious=state["I"],
+                                         population=self.population))
+        I2R = pyro.sample("I2R_{}".format(t),
+                          dist.ExtendedBinomial(state["I"], 1 / tau))
+
+        # Update compartments and heterogeneous variables.
+        state["S"] = state["S"] - S2I
+        state["I"] = state["I"] + S2I - I2R
+        state["beta"] = beta  # We store the latest beta value in the state dict.
+
+        # Condition on observations.
+        # Note that, since rho may be batched over particles or samples, we
+        # need to index it via rho[..., t] rather than a simple rho[t].
+        t_is_observed = isinstance(t, slice) or t < self.duration
+        pyro.sample("obs_{}".format(t),
+                    dist.ExtendedBinomial(S2I, rho[..., t]),
+                    obs=self.data[t] if t_is_observed else None)
 
 
 class SparseSIRModel(CompartmentalModel):
@@ -598,7 +691,7 @@ class SparseSIRModel(CompartmentalModel):
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
-        rho = pyro.sample("rho", dist.Beta(2, 2))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
         return R0, tau, rho
 
     def initialize(self, params):
@@ -705,8 +798,8 @@ class UnknownStartSIRModel(CompartmentalModel):
         # Assume two different response rates: rho0 before any observations
         # were made (in pre_obs_window), followed by a higher response rate rho1
         # after observations were made (in post_obs_window).
-        rho0 = pyro.sample("rho0", dist.Beta(2, 2))
-        rho1 = pyro.sample("rho1", dist.Beta(2, 2))
+        rho0 = pyro.sample("rho0", dist.Beta(10, 10))
+        rho1 = pyro.sample("rho1", dist.Beta(10, 10))
         # Whereas each of rho0,rho1 are scalars (possibly batched over samples),
         # we construct a time series rho with an extra time dim on the right.
         rho = torch.cat([
@@ -847,8 +940,8 @@ class RegionalSIRModel(CompartmentalModel):
 
         # Assume response rate is heterogeneous and model it with a
         # hierarchical Gamma-Beta prior.
-        rho_c1 = pyro.sample("rho_c1", dist.Gamma(2, 1))
-        rho_c0 = pyro.sample("rho_c0", dist.Gamma(2, 1))
+        rho_c1 = pyro.sample("rho_c1", dist.Gamma(10, 1))
+        rho_c0 = pyro.sample("rho_c0", dist.Gamma(10, 1))
         with self.region_plate:
             rho = pyro.sample("rho", dist.Beta(rho_c1, rho_c0))
 
