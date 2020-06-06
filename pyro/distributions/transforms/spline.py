@@ -20,14 +20,15 @@ from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
 
 
-def _search_sorted(bin_locations, inputs, eps=1e-6):
+def _searchsorted(sorted_sequence, values):
     """
     Searches for which bin an input belongs to (in a way that is parallelizable and
     amenable to autodiff)
+
+    TODO: Replace with torch.searchsorted once it is released
     """
-    bin_locations[..., -1] += eps
     return torch.sum(
-        inputs[..., None] >= bin_locations,
+        values[..., None] >= sorted_sequence,
         dim=-1
     ) - 1
 
@@ -37,10 +38,21 @@ def _select_bins(x, idx):
     Performs gather to select the bin in the correct way on batched inputs
     """
     idx = idx.clamp(min=0, max=x.size(-1) - 1)
-    extra_dims = len(idx.shape) - len(x.shape)
-    x = x.reshape((1,) * extra_dims + x.shape)
-    expanded_x = x.expand(idx.shape[:-2] + (-1,) * 2)
-    return expanded_x.gather(-1, idx).squeeze(-1)
+
+    """
+    Broadcast dimensions of idx over x
+
+    idx ~ (batch_dims, input_dim, 1)
+    x ~ (context_batch_dims, input_dim, count_bins)
+
+    Note that by convention, the context variable batch dimensions must broadcast
+    over the input batch dimensions.
+    """
+    if len(idx.shape) >= len(x.shape):
+        x = x.reshape((1,) * (len(idx.shape) - len(x.shape)) + x.shape)
+        x = x.expand(idx.shape[:-2] + (-1,) * 2)
+
+    return x.gather(-1, idx).squeeze(-1)
 
 
 def _calculate_knots(lengths, lower, upper):
@@ -73,7 +85,8 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
                                min_bin_width=1e-3,
                                min_bin_height=1e-3,
                                min_derivative=1e-3,
-                               min_lambda=0.025):
+                               min_lambda=0.025,
+                               eps=1e-6):
     """
     Calculating a monotonic rational spline (linear for now) or its inverse, plus
     the log(abs(detJ)) required for normalizing flows.
@@ -124,7 +137,7 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     # Get the index of the bin that each input is in
     # bin_idx ~ (batch_dim, input_dim, 1)
-    bin_idx = _search_sorted(cumheights if inverse else cumwidths, inputs)[..., None]
+    bin_idx = _searchsorted(cumheights + eps if inverse else cumwidths + eps, inputs)[..., None]
 
     # Select the value for the relevant bin for the variables used in the main calculation
     input_widths = _select_bins(widths, bin_idx)
@@ -189,13 +202,6 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
         logabsdet = torch.log(derivative_numerator) - 2 * torch.log(torch.abs(denominator))
 
     # Apply the identity function outside the bounding box
-    extra_dims = len(outputs.shape) - len(inputs.shape)
-    assert extra_dims >= 0
-
-    new_shape = (1,) * extra_dims + inputs.shape
-    outside_interval_mask = outside_interval_mask.reshape(new_shape).expand_as(outputs)
-    inputs = inputs.reshape(new_shape).expand_as(outputs)
-
     outputs[outside_interval_mask] = inputs[outside_interval_mask]
     logabsdet[outside_interval_mask] = 0.0
     return outputs, logabsdet
@@ -292,8 +298,8 @@ class Spline(ConditionedSpline, TransformModule):
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
 
-    :param input_dim: Dimension of the input vector. Despite operating element-wise,
-        this is required so we know how many parameters to store.
+    :param input_dim: Dimension of the input vector. This is required so we know how
+        many parameters to store.
     :type input_dim: int
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
@@ -390,8 +396,8 @@ class ConditionalSpline(ConditionalTransformModule):
     ... [transform]).condition(z)
     >>> flow_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
-    :param input_dim: Dimension of the input vector. Despite operating element-wise,
-        this is required so we know how many parameters to store.
+    :param input_dim: Dimension of the input vector. This is required so we know how
+        many parameters to store.
     :type input_dim: int
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
@@ -476,6 +482,9 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
     :type hidden_dims: list[int]
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
+    :param bound: The quantity :math:`K` determining the bounding box,
+        :math:`[-K,K]\times[-K,K]`, of the spline.
+    :type bound: float
 
     """
 

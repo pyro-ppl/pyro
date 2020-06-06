@@ -73,6 +73,8 @@ class SplineCoupling(TransformModule):
     def __init__(self, input_dim, split_dim, hypernet, count_bins=8, bound=3., order='linear', identity=False):
         super(SplineCoupling, self).__init__(cache_size=1)
 
+        # One part of the input is (optionally) put through an element-wise spline and the other part through a
+        # conditional one that inputs the first part.
         self.lower_spline = Spline(split_dim, count_bins, bound, order)
         self.upper_spline = ConditionalSpline(hypernet, input_dim - split_dim, count_bins, bound, order)
 
