@@ -469,6 +469,13 @@ ConditionalRadial
     :undoc-members:
     :show-inheritance:
 
+ConditionalSpline
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalSpline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransformModule
 --------------------------
 .. autoclass:: pyro.distributions.ConditionalTransformModule
@@ -599,6 +606,10 @@ conditional_planar
 conditional_radial
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_radial
+
+conditional_spline
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_spline
 
 elu
 ---
