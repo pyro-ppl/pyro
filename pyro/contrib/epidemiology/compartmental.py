@@ -461,6 +461,7 @@ class CompartmentalModel(ABC):
 
         :param int num_particles: Number of particles used for SMC.
         :param float ess_threshold: Effective sample size threshold for SMC.
+        :param int retries: Number of attempts to find a feasible hypothesis.
         :returns: A dictionary mapping sample site name to tensor value.
         :rtype: dict
         """
@@ -477,9 +478,13 @@ class CompartmentalModel(ABC):
                     smc.step()
                 break
             except SMCFailed as e:
+                for name, value in sorted(smc.state.items()):
+                    if not re.match(".*_[0-9]+", name):  # Ignore long time series.
+                        logger.info("{} = {:0.3g} ± {:0.3g}".format(
+                            name, value.mean().item(), value.std().item()))
                 if attempt == retries:
                     raise
-                logger.info("{}. Retrying...".format(e))
+                logger.info("{}\nRetrying...".format(e))
                 continue
 
         # Select the most probable hypothesis.

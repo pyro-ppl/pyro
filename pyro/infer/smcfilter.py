@@ -141,6 +141,7 @@ class SMCFilter:
         logp -= logp.logsumexp(-1)
         probs = logp.exp()
         ess = probs.dot(probs).reciprocal()
+        print("DEBUG ess = {:0.1f}".format(ess.item()))
         if ess < self.ess_threshold * self.num_particles:
             self._importance_resample(probs)
 
