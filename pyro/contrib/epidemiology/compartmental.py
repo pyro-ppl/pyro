@@ -23,7 +23,7 @@ from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
-from pyro.infer.util import is_validation_enabled
+from pyro.infer.util import is_validation_enabled, site_is_subsample
 from pyro.util import optional, warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
@@ -543,7 +543,7 @@ class CompartmentalModel(ABC):
         # Extract latent variables that are not compartmental flows.
         result = OrderedDict()
         for name, site in tr.trace.iter_stochastic_nodes():
-            if name in flows:
+            if name in flows or site_is_subsample(site):
                 continue
             assert name.endswith("_0"), name
             name = name[:-2]

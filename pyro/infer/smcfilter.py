@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+import logging
 import math
 
 import torch
@@ -11,6 +12,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
+
+logger = logging.getLogger(__name__)
 
 
 class SMCFailed(ValueError):
@@ -140,8 +143,8 @@ class SMCFilter:
         logp = self.state._log_weights
         logp -= logp.logsumexp(-1)
         probs = logp.exp()
-        ess = probs.dot(probs).reciprocal()
-        print("DEBUG ess = {:0.1f}".format(ess.item()))
+        ess = probs.dot(probs).reciprocal().item()
+        logger.debug("ESS = {:0.1f}".format(ess))
         if ess < self.ess_threshold * self.num_particles:
             self._importance_resample(probs)
 
