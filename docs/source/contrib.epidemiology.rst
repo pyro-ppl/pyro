@@ -24,8 +24,6 @@ Base Compartmental Model
 Example Models
 --------------
 .. automodule:: pyro.contrib.epidemiology.models
-    :members:
-    :member-order: bysource
 
 Distributions
 -------------

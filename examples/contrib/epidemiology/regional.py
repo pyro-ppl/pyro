@@ -145,13 +145,20 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--warmup-steps", default=100, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
+    parser.add_argument("--double", action="store_true", default=True)
+    parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--rng-seed", default=0, type=int)
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
 
-    if args.cuda:
+    if args.double:
+        if args.cuda:
+            torch.set_default_tensor_type(torch.cuda.DoubleTensor)
+        else:
+            torch.set_default_dtype(torch.float64)
+    elif args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     main(args)

@@ -2,12 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .compartmental import CompartmentalModel
-from .distributions import infection_dist
-from .models import (RegionalSIRModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel, SuperspreadingSEIRModel,
-                     SuperspreadingSIRModel, UnknownStartSIRModel)
+from .distributions import beta_binomial_dist, binomial_dist, infection_dist
+from .models import (HeterogeneousSIRModel, OverdispersedSEIRModel, OverdispersedSIRModel, RegionalSIRModel,
+                     SimpleSEIRModel, SimpleSIRModel, SparseSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel,
+                     UnknownStartSIRModel)
 
 __all__ = [
     "CompartmentalModel",
+    "HeterogeneousSIRModel",
+    "OverdispersedSEIRModel",
+    "OverdispersedSIRModel",
     "RegionalSIRModel",
     "SimpleSEIRModel",
     "SimpleSIRModel",
@@ -15,5 +19,7 @@ __all__ = [
     "SuperspreadingSEIRModel",
     "SuperspreadingSIRModel",
     "UnknownStartSIRModel",
+    "beta_binomial_dist",
+    "binomial_dist",
     "infection_dist",
 ]
