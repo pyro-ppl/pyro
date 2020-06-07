@@ -998,6 +998,9 @@ __doc__ = "\n\n".join([
     {}
     ----------------------------------------------------------------
     .. autoclass:: pyro.contrib.epidemiology.models.{}
+        :members:
+        :show-inheritance:
+        :member-order: bysource
     """.format(re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name)
     for _name in __all__
 ])
