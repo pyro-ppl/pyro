@@ -161,7 +161,8 @@ class CompartmentalModel(ABC):
         """
         with torch.no_grad(), poutine.block(), poutine.trace() as tr:
             self.global_model()
-        return [tuple(name for name, site in tr.trace.iter_stochastic_nodes())]
+        return [tuple(name for name, site in tr.trace.iter_stochastic_nodes()
+                      if not site_is_subsample(site))]
 
     @lazy_property
     def series(self):

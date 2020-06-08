@@ -384,7 +384,7 @@ def test_regional_smoke(duration, forecast, options):
     # Generate data.
     model = RegionalSIRModel(population, coupling, recovery_time,
                              data=[None] * duration)
-    assert model.full_mass == [("R0", "rho")]
+    assert model.full_mass == [("R0", "rho_c1", "rho_c0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         assert data.shape == (duration, num_regions)
