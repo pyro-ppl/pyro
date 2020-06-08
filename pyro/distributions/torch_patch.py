@@ -55,4 +55,10 @@ def _Multinomial_support(self):
     return torch.distributions.constraints.integer_interval(0, total_count)
 
 
+# This adds a __call__ method to satisfy sphinx.
+@patch_dependency('torch.distributions.utils.lazy_property.__call__')
+def _lazy_property__call__(self):
+    raise NotImplementedError
+
+
 __all__ = []
