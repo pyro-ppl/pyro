@@ -33,6 +33,7 @@ def test_simple_sir_smoke(duration, forecast, options):
 
     # Generate data.
     model = SimpleSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -66,6 +67,7 @@ def test_simple_seir_smoke(duration, forecast, options):
     # Generate data.
     model = SimpleSEIRModel(population, incubation_time, recovery_time,
                             [None] * duration)
+    assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -94,6 +96,7 @@ def test_overdispersed_sir_smoke(duration, forecast, options):
 
     # Generate data.
     model = OverdispersedSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "rho", "od")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -122,6 +125,7 @@ def test_overdispersed_seir_smoke(duration, forecast, options):
     # Generate data.
     model = OverdispersedSEIRModel(population, incubation_time, recovery_time,
                                    [None] * duration)
+    assert model.full_mass == [("R0", "rho", "od")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -155,6 +159,7 @@ def test_superspreading_sir_smoke(duration, forecast, options):
 
     # Generate data.
     model = SuperspreadingSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "k", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
         if data.sum():
@@ -188,6 +193,7 @@ def test_superspreading_seir_smoke(duration, forecast, options):
     # Generate data.
     model = SuperspreadingSEIRModel(
         population, incubation_time, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "k", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
         if data.sum():
@@ -253,6 +259,7 @@ def test_heterogeneous_sir_smoke(duration, forecast, options):
 
     # Generate data.
     model = HeterogeneousSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "rho0", "rho1", "rho2")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5})["obs"]
         if data.sum():
@@ -287,6 +294,7 @@ def test_sparse_smoke(duration, forecast, options):
     data = [None] * duration
     mask = torch.arange(duration) % 4 == 3
     model = SparseSIRModel(population, recovery_time, data, mask)
+    assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -328,6 +336,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     # Generate data.
     data = [None] * duration
     model = UnknownStartSIRModel(population, recovery_time, pre_obs_window, data)
+    assert model.full_mass == [("R0", "rho0", "rho1")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho0": 0.1, "rho1": 0.5})["obs"]
         assert len(data) == pre_obs_window + duration
@@ -375,6 +384,7 @@ def test_regional_smoke(duration, forecast, options):
     # Generate data.
     model = RegionalSIRModel(population, coupling, recovery_time,
                              data=[None] * duration)
+    assert model.full_mass == [("R0", "rho_c1", "rho_c0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         assert data.shape == (duration, num_regions)
