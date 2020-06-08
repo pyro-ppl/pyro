@@ -43,9 +43,6 @@ class SimpleSIRModel(CompartmentalModel):
 
         self.data = data
 
-    series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho")]
-
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
@@ -115,9 +112,6 @@ class SimpleSEIRModel(CompartmentalModel):
         self.recovery_time = recovery_time
 
         self.data = data
-
-    series = ("S2E", "E2I", "I2R", "obs")
-    full_mass = [("R0", "rho")]
 
     def global_model(self):
         tau_e = self.incubation_time
@@ -205,9 +199,6 @@ class OverdispersedSIRModel(CompartmentalModel):
         self.recovery_time = recovery_time
 
         self.data = data
-
-    series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho", "od")]
 
     def global_model(self):
         tau = self.recovery_time
@@ -301,9 +292,6 @@ class OverdispersedSEIRModel(CompartmentalModel):
 
         self.data = data
 
-    series = ("S2E", "E2I", "I2R", "obs")
-    full_mass = [("R0", "rho")]
-
     def global_model(self):
         tau_e = self.incubation_time
         tau_i = self.recovery_time
@@ -392,9 +380,6 @@ class SuperspreadingSIRModel(CompartmentalModel):
         self.recovery_time = recovery_time
 
         self.data = data
-
-    series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho", "k")]
 
     def global_model(self):
         tau = self.recovery_time
@@ -504,9 +489,6 @@ class SuperspreadingSEIRModel(CompartmentalModel):
             self.coal_likelihood = dist.CoalescentRateLikelihood(
                 leaf_times, coal_times, duration)
 
-    series = ("S2E", "E2I", "I2R", "obs")
-    full_mass = [("R0", "rho", "k")]
-
     def global_model(self):
         tau_e = self.incubation_time
         tau_i = self.recovery_time
@@ -539,11 +521,12 @@ class SuperspreadingSEIRModel(CompartmentalModel):
         pyro.sample("obs_{}".format(t),
                     dist.ExtendedBinomial(S2E, rho),
                     obs=self.data[t] if t_is_observed else None)
-        if self.coal_likelihood is not None and t_is_observed:
+        if self.coal_likelihood is not None:
             R = R0 * state["S"] / self.population
             coal_rate = R * (1. + 1. / k) / (tau_i * state["I"] + 1e-8)
             pyro.factor("coalescent_{}".format(t),
-                        self.coal_likelihood(coal_rate, t))
+                        self.coal_likelihood(coal_rate, t)
+                        if t_is_observed else torch.tensor(0.))
 
         # Update compartements with flows.
         state["S"] = state["S"] - S2E
@@ -581,9 +564,6 @@ class HeterogeneousSIRModel(CompartmentalModel):
         self.recovery_time = recovery_time
 
         self.data = data
-
-    series = ("S2I", "I2R", "beta", "Re", "rho", "obs")
-    full_mass = [("R0", "rho0", "rho1", "rho2")]
 
     def global_model(self):
         tau = self.recovery_time
@@ -685,9 +665,6 @@ class SparseSIRModel(CompartmentalModel):
         self.data = data
         self.mask = mask
 
-    series = ("S2I", "I2R", "S2O", "obs")
-    full_mass = [("R0", "rho")]
-
     def global_model(self):
         tau = self.recovery_time
         R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
@@ -787,9 +764,6 @@ class UnknownStartSIRModel(CompartmentalModel):
         else:
             data = pad(data, (self.pre_obs_window, 0), value=0.)
         self.data = data
-
-    series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho0", "rho1")]
 
     def global_model(self):
         tau = self.recovery_time
@@ -927,9 +901,6 @@ class RegionalSIRModel(CompartmentalModel):
         self.coupling = coupling
         self.recovery_time = recovery_time
         self.data = data
-
-    series = ("S2I", "I2R", "obs")
-    full_mass = [("R0", "rho")]
 
     def global_model(self):
         # Assume recovery time is a known constant.

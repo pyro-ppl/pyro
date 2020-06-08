@@ -23,7 +23,7 @@ from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
-from pyro.infer.util import is_validation_enabled
+from pyro.infer.util import is_validation_enabled, site_is_subsample
 from pyro.util import optional, warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
@@ -44,10 +44,9 @@ class CompartmentalModel(ABC):
     Abstract base class for discrete-time discrete-value stochastic
     compartmental models.
 
-    Derived classes must implement methods :meth:`heuristic`,
-    :meth:`initialize`, and :meth:`transition`. Derived classes may optionally
-    implement :meth:`global_model` and :meth:`compute_flows` and may override
-    the ``series`` and ``full_mass`` attributes.
+    Derived classes must implement methods :meth:`initialize` and
+    :meth:`transition`. Derived classes may optionally implement
+    :meth:`global_model`, :meth:`compute_flows`, and :meth:`heuristic`.
 
     Example usage::
 
@@ -79,9 +78,6 @@ class CompartmentalModel(ABC):
         effect = samples2["my_result"].mean() - samples1["my_result"].mean()
         print("average effect = {:0.3g}".format(effect))
 
-    :cvar tuple series: Tuple of names of time series names, in addition to
-        ``self.compartments``. These will be concatenated along the time axis
-        in returned sample dictionaries.
     :ivar dict samples: Dictionary of posterior samples.
     :param list compartments: A list of strings of compartment names.
     :param int duration: The number of discrete time steps in this model.
@@ -158,16 +154,41 @@ class CompartmentalModel(ABC):
         self._time_plate = None
         self._region_plate = None
 
-    # Overridable attributes and methods ########################################
+    @lazy_property
+    def full_mass(self):
+        """
+        A list of a single tuple of the names of global random variables.
+        """
+        with torch.no_grad(), poutine.block(), poutine.trace() as tr:
+            self.global_model()
+        return [tuple(name for name, site in tr.trace.iter_stochastic_nodes())]
 
-    series = ()
-    full_mass = False
+    @lazy_property
+    def series(self):
+        """
+        A frozenset of names of sample sites that are sampled each time step.
+        """
+        # Trace a simple invocation of .transition().
+        with torch.no_grad(), poutine.block():
+            params = self.global_model()
+            prev = self.initialize(params)
+            for name in self.approximate:
+                prev[name + "_approx"] = prev[name]
+            curr = prev.copy()
+            with poutine.trace() as tr:
+                self.transition(params, curr, 0)
+        return frozenset(re.match("(.*)_0", name).group(1)
+                         for name, site in tr.trace.nodes.items()
+                         if site["type"] == "sample"
+                         if not site_is_subsample(site))
+
+    # Overridable attributes and methods ########################################
 
     def global_model(self):
         """
         Samples and returns any global parameters.
 
-        :returns: An arbitrary object of parameters (e.g. ``None``).
+        :returns: An arbitrary object of parameters (e.g. ``None`` or a tuple).
         """
         return None
 
@@ -286,8 +307,9 @@ class CompartmentalModel(ABC):
             pulled out and have special meaning.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
-        :param full_mass: (Default ``False``). Specification of mass matrix
-            of the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param full_mass: Specification of mass matrix of the
+            :class:`~pyro.infer.mcmc.nuts.NUTS` kernel. Defaults to full mass
+            over global random variables.
         :param bool arrowhead_mass: Whether to treat ``full_mass`` as the head
             of an arrowhead matrix versus simply as a block. Defaults to False.
         :param int num_quant_bins: The number of quantization bins to use. Note
@@ -500,7 +522,7 @@ class CompartmentalModel(ABC):
 
         :param dict samples: A dictionary of samples.
         """
-        for name in self.compartments + self.series:
+        for name in set(self.compartments).union(self.series):
             pattern = name + "_[0-9]+"
             series = []
             for key in list(samples):
