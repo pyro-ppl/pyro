@@ -61,7 +61,8 @@ Welcome to Pyro Examples and Tutorials!
    working_memory
    elections
    dirichlet_process_mixture
-   boosting_bbvi	
+   boosting_bbvi
+   epi_regional
 
 .. toctree::
    :maxdepth: 2
