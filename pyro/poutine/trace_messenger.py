@@ -166,7 +166,9 @@ class TraceHandler:
             except (ValueError, RuntimeError):
                 exc_type, exc_value, traceback = sys.exc_info()
                 shapes = self.msngr.trace.format_shapes()
-                raise exc_type(u"{}\n{}".format(exc_value, shapes)).with_traceback(traceback)
+                exc = exc_type(u"{}\n{}".format(exc_value, shapes))
+                exc = exc.with_traceback(traceback)
+                raise exc from None
             self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 

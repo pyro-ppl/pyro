@@ -176,6 +176,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+ImproperUniform
+---------------
+.. autoclass:: pyro.distributions.improper_uniform.ImproperUniform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 IndependentHMM
 --------------
 .. autoclass:: pyro.distributions.IndependentHMM
@@ -281,6 +288,13 @@ Stable
     :undoc-members:
     :show-inheritance:
 
+TruncatedPolyaGamma
+-------------------
+.. autoclass:: pyro.distributions.TruncatedPolyaGamma
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Unit
 ----
 .. autoclass:: pyro.distributions.Unit
@@ -336,6 +350,13 @@ CorrLCholeskyTransform
 ELUTransform
 ------------
 .. autoclass:: pyro.distributions.transforms.ELUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+HaarTransform
+-------------
+.. autoclass:: pyro.distributions.transforms.HaarTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -444,6 +465,13 @@ ConditionalPlanar
 ConditionalRadial
 -----------------
 .. autoclass:: pyro.distributions.transforms.ConditionalRadial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalSpline
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalSpline
     :members:
     :undoc-members:
     :show-inheritance:
@@ -578,6 +606,10 @@ conditional_planar
 conditional_radial
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_radial
+
+conditional_spline
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_spline
 
 elu
 ---

@@ -8,6 +8,6 @@ def pytest_collection_modifyitems(items):
     for item in items:
         if item.nodeid.startswith("tests/contrib"):
             if "stage" not in item.keywords:
-                item.add_marker(pytest.mark.stage("unit"))
+                item.add_marker(pytest.mark.stage("integration_batch_1"))
             if "init" not in item.keywords:
                 item.add_marker(pytest.mark.init(rng_seed=123))

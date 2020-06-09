@@ -8,11 +8,37 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
-from pyro.nn import DenseNN
 
-from functools import partial
+from functools import partial, reduce
+import operator
 
 pytestmark = pytest.mark.init(rng_seed=123)
+
+
+class Flatten(dist.TransformModule):
+    """
+    Used to handle transforms with `event_dim > 1` until we have a Reshape transform in PyTorch
+    """
+    event_dim = 1
+
+    def __init__(self, transform, input_shape):
+        super().__init__(cache_size=1)
+        assert(transform.event_dim == len(input_shape))
+
+        self.transform = transform
+        self.input_shape = input_shape
+
+    def _unflatten(self, x):
+        return x.view(x.shape[:-1] + self.input_shape)
+
+    def _call(self, x):
+        return self.transform._call(self._unflatten(x)).view_as(x)
+
+    def _inverse(self, x):
+        return self.transform._inverse(self._unflatten(x)).view_as(x)
+
+    def log_abs_det_jacobian(self, x, y):
+        return self.transform.log_abs_det_jacobian(self._unflatten(x), self._unflatten(y))
 
 
 class TransformTests(TestCase):
@@ -69,46 +95,54 @@ class TransformTests(TestCase):
             assert lower_sum == float(0.0)
 
     def _test_inverse(self, shape, transform):
+        # Test g^{-1}(g(x)) = x
+        # NOTE: Calling _call and _inverse directly bypasses caching
         base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
-
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
-
-        # Cache is empty, hence must be calculating inverse afresh
+        J_1 = transform.log_abs_det_jacobian(x_true, y)
         x_calculated = transform._inverse(y)
+        J_2 = transform.log_abs_det_jacobian(x_true, y)
+        assert (x_true - x_calculated).abs().max().item() < self.delta
 
-        assert torch.norm(x_true - x_calculated, dim=-1).max().item() < self.delta
+        # Test that Jacobian after inverse op is same as after forward
+        assert (J_1 - J_2).abs().max().item() < self.delta
 
     def _test_shape(self, base_shape, transform):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
         sample = dist.TransformedDistribution(base_dist, [transform]).sample()
         assert sample.shape == base_shape
 
-    def _test(self, transform_factory, shape=True, jacobian=True, inverse=True):
-        for input_dim in [2, 5, 10]:
-            transform = transform_factory(input_dim)
+    def _test(self, transform_factory, shape=True, jacobian=True, inverse=True, event_dim=1):
+        for event_shape in [(2,), (5,)]:
+            if event_dim > 1:
+                event_shape = tuple([event_shape[0] + i for i in range(event_dim)])
+            transform = transform_factory(event_shape[0] if len(event_shape) == 1 else event_shape)
 
-            if jacobian:
-                self._test_jacobian(input_dim, transform)
             if inverse:
-                self._test_inverse(input_dim, transform)
+                self._test_inverse(event_shape, transform)
             if shape:
-                for shape in [(3,), (3, 4)]:
-                    self._test_shape(shape + (input_dim,), transform)
+                for shape in [(3,), (3, 4), (3, 4, 5)]:
+                    base_shape = shape + event_shape
+                    self._test_shape(base_shape, transform)
+            if jacobian:
+                if event_dim > 1:
+                    transform = Flatten(transform, event_shape)
+                self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
 
-    def _test_conditional(self, conditional_transform_factory, context_dim=3, **kwargs):
+    def _test_conditional(self, conditional_transform_factory, context_dim=3, event_dim=1, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
             z = torch.rand(1, context_dim)
             return conditional_transform_factory(input_dim, context_dim).condition(z)
-
-        self._test(transform_factory, **kwargs)
+        self._test(transform_factory, event_dim=event_dim, **kwargs)
 
     def test_affine_autoregressive(self):
         for stable in [True, False]:
             self._test(partial(T.affine_autoregressive, stable=stable))
 
     def test_affine_coupling(self):
-        self._test(T.affine_coupling)
+        for dim in [-1, -2]:
+            self._test(partial(T.affine_coupling, dim=dim), event_dim=-dim)
 
     def test_batchnorm(self):
         # Need to make moving average statistics non-zeros/ones and set to eval so inverse is valid
@@ -132,45 +166,21 @@ class TransformTests(TestCase):
         self._test_conditional(T.conditional_affine_autoregressive)
 
     def test_conditional_affine_coupling(self):
-        self._test_conditional(T.conditional_affine_coupling)
+        for dim in [-1, -2]:
+            self._test_conditional(partial(T.conditional_affine_coupling, dim=dim), event_dim=-dim)
 
     def test_conditional_generalized_channel_permute(self, context_dim=3):
-        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 3, 64, 64)]:
+            # NOTE: Without changing the interface to generalized_channel_permute I can't reuse general
+            # test for `event_dim > 1` transforms
             z = torch.rand(context_dim)
             transform = T.conditional_generalized_channel_permute(context_dim=3, channels=shape[-3]).condition(z)
             self._test_shape(shape, transform)
             self._test_inverse(shape, transform)
 
-        channels = 3
-        from pyro.distributions.transforms.generalized_channel_permute import ConditionedGeneralizedChannelPermute
         for width_dim in [2, 4, 6]:
-            # Do a bit of a hack until we merge in Reshape transform
-            class Flatten(ConditionedGeneralizedChannelPermute):
-                event_dim = 1
-
-                def __init__(self):
-                    z = torch.rand(context_dim)
-                    P = torch.arange(channels)
-                    permutation = torch.eye(len(P), len(P))[P.type(dtype=torch.int64)]
-                    LU = DenseNN(context_dim, [10 * channels, 10 * channels], param_dims=[channels * channels])(z)
-                    LU = LU.view(LU.shape[:-1] + (channels, channels))
-                    super(Flatten, self).__init__(permutation=permutation, LU=LU)
-
-                def _call(self, x):
-                    return super(Flatten, self)._call(x.view(3, width_dim, width_dim)).view_as(x)
-
-                def _inverse(self, x):
-                    return super(Flatten, self)._inverse(x.view(3, width_dim, width_dim)).view_as(x)
-
-                def log_abs_det_jacobian(self, x, y):
-                    return super(
-                        Flatten, self).log_abs_det_jacobian(
-                        x.view(
-                            3, width_dim, width_dim), y.view(
-                            3, width_dim, width_dim))
-
             input_dim = (width_dim**2) * 3
-            self._test_jacobian(input_dim, Flatten())
+            self._test_jacobian(input_dim, Flatten(transform, (3, width_dim, width_dim)))
 
     def test_conditional_householder(self):
         self._test_conditional(T.conditional_householder)
@@ -185,6 +195,9 @@ class TransformTests(TestCase):
     def test_conditional_radial(self):
         self._test_conditional(T.conditional_radial, inverse=False)
 
+    def test_conditional_spline(self):
+        self._test_conditional(T.conditional_spline)
+
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
         self._test(lambda input_dim: T.DiscreteCosineTransform())
@@ -192,36 +205,26 @@ class TransformTests(TestCase):
         self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=1.0))
         self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=2.0))
 
+    def test_haar_transform(self):
+        # NOTE: Need following since helper function unimplemented
+        self._test(lambda input_dim: T.HaarTransform(flip=True))
+        self._test(lambda input_dim: T.HaarTransform(flip=False))
+
     def test_elu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
         self._test(lambda input_dim: T.elu())
 
     def test_generalized_channel_permute(self):
-        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 9, 64, 64)]:
+        for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 3, 64, 64)]:
+            # NOTE: Without changing the interface to generalized_channel_permute I can't reuse general
+            # test for `event_dim > 1` transforms
             transform = T.generalized_channel_permute(channels=shape[-3])
             self._test_shape(shape, transform)
             self._test_inverse(shape, transform)
 
         for width_dim in [2, 4, 6]:
-            # Do a bit of a hack until we merge in Reshape transform
-            class Flatten(T.GeneralizedChannelPermute):
-                event_dim = 1
-
-                def _call(self, x):
-                    return super(Flatten, self)._call(x.view(3, width_dim, width_dim)).view_as(x)
-
-                def _inverse(self, x):
-                    return super(Flatten, self)._inverse(x.view(3, width_dim, width_dim)).view_as(x)
-
-                def log_abs_det_jacobian(self, x, y):
-                    return super(
-                        Flatten, self).log_abs_det_jacobian(
-                        x.view(
-                            3, width_dim, width_dim), y.view(
-                            3, width_dim, width_dim))
-
             input_dim = (width_dim**2) * 3
-            self._test_jacobian(input_dim, Flatten())
+            self._test_jacobian(input_dim, Flatten(transform, (3, width_dim, width_dim)))
 
     def test_householder(self):
         self._test(partial(T.householder, count_transforms=2))
@@ -245,7 +248,8 @@ class TransformTests(TestCase):
             self._test(partial(T.neural_autoregressive, activation=activation), inverse=False)
 
     def test_permute(self):
-        self._test(T.permute)
+        for dim in [-1, -2]:
+            self._test(partial(T.permute, dim=dim), event_dim=-dim)
 
     def test_planar(self):
         self._test(T.planar, inverse=False)

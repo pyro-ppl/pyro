@@ -16,11 +16,13 @@ from pyro.distributions.extended import ExtendedBetaBinomial, ExtendedBinomial
 from pyro.distributions.folded import FoldedDistribution
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
 from pyro.distributions.hmm import DiscreteHMM, GammaGaussianHMM, GaussianHMM, GaussianMRF, IndependentHMM, LinearHMM
+from pyro.distributions.improper_uniform import ImproperUniform
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJCorrCholesky
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
+from pyro.distributions.polya_gamma import TruncatedPolyaGamma
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
                                                          RelaxedOneHotCategoricalStraightThrough)
@@ -61,6 +63,7 @@ __all__ = [
     "GaussianHMM",
     "GaussianMRF",
     "GaussianScaleMixture",
+    "ImproperUniform",
     "IndependentHMM",
     "InverseGamma",
     "LinearHMM",
@@ -78,6 +81,7 @@ __all__ = [
     "Stable",
     "TorchDistribution",
     "TransformModule",
+    "TruncatedPolyaGamma",
     "Unit",
     "VonMises3D",
     "ZeroInflatedPoisson",

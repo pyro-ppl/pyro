@@ -26,7 +26,8 @@ import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.infer import MCMC, NUTS, config_enumerate, infer_discrete
 from pyro.infer.autoguide import init_to_value
-from pyro.ops.tensor_utils import convolve, safe_log
+from pyro.ops.special import safe_log
+from pyro.ops.tensor_utils import convolve
 from pyro.util import warn_if_nan
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
