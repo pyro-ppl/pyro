@@ -1,6 +1,9 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+import warnings
+
 import numpy
 import torch
 
@@ -227,13 +230,11 @@ def quantize(name, x_real, min, max, num_quant_bins=4):
     return pyro.deterministic(name, x, event_dim=0)
 
 
-def quantize_enumerate(x_real, min, max, num_quant_bins=4):
+def quantize_enumerate(x_real, min, max, num_quant_bins=4, pathwise_radius=math.inf):
     """Quantize, then manually enumerate."""
     assert _all(min < max)
+    assert pathwise_radius >= 0
     lb = x_real.detach().floor()
-
-    probs = compute_bin_probs(x_real - lb, num_quant_bins=num_quant_bins)
-    logits = safe_log(probs)
 
     arange_min = 1 - num_quant_bins // 2
     arange_max = 1 + num_quant_bins // 2
@@ -243,4 +244,31 @@ def quantize_enumerate(x_real, min, max, num_quant_bins=4):
     x = torch.max(x, 2 * _unsqueeze(min) - 1 - x)
     x = torch.min(x, 2 * _unsqueeze(max) + 1 - x)
 
+    x_fractional = x_real - lb
+    if pathwise_radius < math.inf:
+        radius = pathwise_radius + num_quant_bins / 2
+        mask = (min + radius < x_real) & (x_real < max - radius)
+        x_fractional, x = _QuantizeEnumerate.apply(x_real, mask, x_fractional, x)
+    elif x_real.dtype != torch.float64:
+        warnings.warn("Inference is unstable for dtypes less than torch.float64; "
+                      "try torch.set_default_dtype(torch.float64)",
+                      RuntimeWarning)
+
+    probs = compute_bin_probs(x_fractional, num_quant_bins=num_quant_bins)
+    logits = safe_log(probs)
+
     return x, logits
+
+
+class _QuantizeEnumerate(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x_real, mask, x_fractional, x):
+        ctx.save_for_backward(mask)
+        return x_fractional, x.requires_grad_()
+
+    @staticmethod
+    def backward(ctx, x_fractional_grad, x_grad):
+        mask, = ctx.saved_tensors
+        mask = mask & x_grad.ne(0).all(dim=-1)
+        x_real_grad = torch.where(mask, x_grad.sum(-1), x_fractional_grad)
+        return x_real_grad, None, None, None

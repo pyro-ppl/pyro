@@ -295,6 +295,7 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("-nb", "--num-bins", default=4, type=int)
+    parser.add_argument("-sr", "--stabilize-radius", default=math.inf, type=float)
     parser.add_argument("--double", action="store_true", default=True)
     parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--cuda", action="store_true")

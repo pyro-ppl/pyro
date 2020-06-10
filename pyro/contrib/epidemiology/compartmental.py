@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import math
 import operator
 import re
-import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from contextlib import ExitStack
@@ -30,13 +30,6 @@ from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
-
-
-def _require_double_precision():
-    if torch.get_default_dtype() != torch.float64:
-        warnings.warn("CompartmentalModel is unstable for dtypes less than torch.float64; "
-                      "try torch.set_default_dtype(torch.float64)",
-                      RuntimeWarning)
 
 
 class CompartmentalModel(ABC):
@@ -90,12 +83,9 @@ class CompartmentalModel(ABC):
         continuous-valued non-enumerated point estimate of ``state["I"]``.
         Approximations are useful to reduce computational cost. Approximations
         are continuous-valued with support ``(-0.5, population + 0.5)``.
-    :param int num_quant_bins: Number of quantization bins in the auxiliary
-        variable spline. Defaults to 4.
     """
 
-    def __init__(self, compartments, duration, population, *,
-                 num_quant_bins=4, approximate=()):
+    def __init__(self, compartments, duration, population, *, approximate=()):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -316,6 +306,11 @@ class CompartmentalModel(ABC):
         :param int num_quant_bins: The number of quantization bins to use. Note
             that computational cost is exponential in `num_quant_bins`.
             Defaults to 4.
+        :param float pathwise_radius: If finite, then quantized values farther
+            than this distance from a boundary (0 or population) will use
+            analytically continued pathwise derivatives rather than spline
+            weight derivatives, thereby enabling low precision floating point
+            representations. Defaults to infinity.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
         :param int haar_full_mass: Number of low frequency Haar components to
             include in the full mass matrix. If nonzero this implies
@@ -325,10 +320,10 @@ class CompartmentalModel(ABC):
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
         :rtype: ~pyro.infer.mcmc.api.MCMC
         """
-        _require_double_precision()
 
         # Parse options, saving some for use in .predict().
         self.num_quant_bins = options.pop("num_quant_bins", 4)
+        self.pathwise_radius = options.pop("pathwise_radius", math.inf)
         haar = options.pop("haar", False)
         assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
@@ -429,7 +424,6 @@ class CompartmentalModel(ABC):
             to a tensor whose first dimension corresponds to sample batching.
         :rtype: dict
         """
-        _require_double_precision()
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
 
@@ -692,7 +686,8 @@ class CompartmentalModel(ABC):
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
-                                        num_quant_bins=self.num_quant_bins)
+                                        num_quant_bins=self.num_quant_bins,
+                                        pathwise_radius=self.pathwise_radius)
         curr = OrderedDict(zip(self.compartments, curr))
         logp = OrderedDict(zip(self.compartments, logp))
 
