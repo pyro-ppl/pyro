@@ -212,6 +212,10 @@ def _unsqueeze(x):
 def quantize(name, x_real, min, max, num_quant_bins=4):
     """Randomly quantize in a way that preserves probability mass."""
     assert _all(min < max)
+    if num_quant_bins == 1:
+        x = x_real.detach().round()
+        return pyro.deterministic(name, x, event_dim=0)
+
     lb = x_real.detach().floor()
 
     probs = compute_bin_probs(x_real - lb, num_quant_bins=num_quant_bins)

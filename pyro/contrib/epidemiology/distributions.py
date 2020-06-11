@@ -5,6 +5,7 @@ import math
 from contextlib import contextmanager
 
 import torch
+from torch.distributions.utils import broadcast_all
 
 import pyro.distributions as dist
 from pyro.distributions.util import is_validation_enabled
@@ -103,6 +104,8 @@ def _relaxed_binomial(total_count, probs, *, min_variance=0.25):
     a :class:`~pyro.distributions.Binomial` but allowing arbitrary real
     ``total_count`` and ``probs`` and lower-bounding variance.
     """
+    total_count, probs = broadcast_all(total_count, probs)
+
     mean = probs * total_count
     variance = total_count * probs * (1 - probs)
 
@@ -111,6 +114,9 @@ def _relaxed_binomial(total_count, probs, *, min_variance=0.25):
 
 
 def _relaxed_beta_binomial(concentration1, concentration0, total_count, *, min_variance=0.25):
+    concentration1, concentration0, total_count = broadcast_all(
+        concentration1, concentration0, total_count)
+
     c = concentration1 + concentration0
     beta_mean = concentration1 / c
     beta_variance = concentration1 * concentration0 / (c * c * (c + 1))

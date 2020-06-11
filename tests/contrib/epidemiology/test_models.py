@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
     {"num_quant_bins": 12},
     {"num_quant_bins": 16},
     {"arrowhead_mass": True},
+    {"relax": True},
 ], ids=str)
 def test_simple_sir_smoke(duration, forecast, options):
     population = 100
@@ -58,6 +59,7 @@ def test_simple_sir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_simple_seir_smoke(duration, forecast, options):
     population = 100
@@ -152,6 +154,7 @@ def test_overdispersed_seir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_superspreading_sir_smoke(duration, forecast, options):
     population = 100
@@ -184,6 +187,7 @@ def test_superspreading_sir_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_superspreading_seir_smoke(duration, forecast, options):
     population = 100
@@ -216,7 +220,11 @@ def test_superspreading_seir_smoke(duration, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-def test_coalescent_likelihood_smoke(duration, forecast):
+@pytest.mark.parametrize("options", [
+    {},
+    {"relax": True},
+], ids=str)
+def test_coalescent_likelihood_smoke(duration, forecast, options):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -238,7 +246,8 @@ def test_coalescent_likelihood_smoke(duration, forecast):
         population, incubation_time, recovery_time, data,
         leaf_times=leaf_times, coal_times=coal_times)
     num_samples = 5
-    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2)
+    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
+              **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -252,6 +261,7 @@ def test_coalescent_likelihood_smoke(duration, forecast):
 @pytest.mark.parametrize("options", [
     {"num_quant_bins": 2},
     {"haar_full_mass": 2},
+    {"relax": True},
 ], ids=str)
 def test_heterogeneous_sir_smoke(duration, forecast, options):
     population = 100
@@ -328,6 +338,7 @@ def test_sparse_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 4},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     population = 100
@@ -374,6 +385,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 8},
+    {"relax": True},
 ], ids=str)
 def test_regional_smoke(duration, forecast, options):
     num_regions = 6
