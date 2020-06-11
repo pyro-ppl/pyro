@@ -308,6 +308,9 @@ class CompartmentalModel(ABC):
             pulled out and have special meaning.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param bool relax: Whether to use relaxed continuous-valued inference.
+            This approximation is cheaper and more stable in large populations.
+            Defaults to False.
         :param full_mass: Specification of mass matrix of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel. Defaults to full mass
             over global random variables.
@@ -315,7 +318,7 @@ class CompartmentalModel(ABC):
             of an arrowhead matrix versus simply as a block. Defaults to False.
         :param int num_quant_bins: The number of quantization bins to use. Note
             that computational cost is exponential in `num_quant_bins`.
-            Defaults to 4.
+            Ignored if ``relax=True``. Defaults to 4.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
         :param int haar_full_mass: Number of low frequency Haar components to
             include in the full mass matrix. If nonzero this implies

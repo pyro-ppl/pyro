@@ -102,7 +102,7 @@ def _relaxed_binomial(total_count, probs, *, min_variance=0.25):
     """
     Returns a moment-matched :class:`~pyro.distributions.Normal` approximating
     a :class:`~pyro.distributions.Binomial` but allowing arbitrary real
-    ``total_count`` and ``probs`` and lower-bounding variance.
+    ``total_count`` and lower-bounding variance.
     """
     total_count, probs = broadcast_all(total_count, probs)
 
@@ -114,6 +114,11 @@ def _relaxed_binomial(total_count, probs, *, min_variance=0.25):
 
 
 def _relaxed_beta_binomial(concentration1, concentration0, total_count, *, min_variance=0.25):
+    """
+    Returns a moment-matched :class:`~pyro.distributions.Normal` approximating
+    a :class:`~pyro.distributions.BetaBinomial` but allowing arbitrary real
+    ``total_count`` and lower-bounding variance.
+    """
     concentration1, concentration0, total_count = broadcast_all(
         concentration1, concentration0, total_count)
 
