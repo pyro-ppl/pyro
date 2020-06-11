@@ -59,7 +59,6 @@ def infer(args, model):
                      num_quant_bins=args.num_bins,
                      haar=args.haar,
                      haar_full_mass=args.haar_full_mass,
-                     relax=args.relax,
                      hook_fn=hook_fn)
 
     mcmc.summary()
@@ -145,8 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
     parser.add_argument("-w", "--warmup-steps", type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
-    parser.add_argument("-nb", "--num-bins", default=4, type=int)
-    parser.add_argument("--relax", action="store_true")
+    parser.add_argument("-nb", "--num-bins", default=1, type=int)
     parser.add_argument("--double", action="store_true", default=True)
     parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--rng-seed", default=0, type=int)

@@ -699,6 +699,7 @@ class SparseSIRModel(CompartmentalModel):
         mask_t = self.mask[t] if t_is_observed else False
         data_t = self.data[t] if t_is_observed else None
         pyro.sample("obs_{}".format(t),
+                    # FIXME Delta is incompatible with relaxed inference.
                     dist.Delta(state["O"]).mask(mask_t),
                     obs=data_t)
 

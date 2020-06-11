@@ -90,12 +90,10 @@ class CompartmentalModel(ABC):
         continuous-valued non-enumerated point estimate of ``state["I"]``.
         Approximations are useful to reduce computational cost. Approximations
         are continuous-valued with support ``(-0.5, population + 0.5)``.
-    :param int num_quant_bins: Number of quantization bins in the auxiliary
-        variable spline. Defaults to 4.
     """
 
     def __init__(self, compartments, duration, population, *,
-                 num_quant_bins=4, approximate=()):
+                 approximate=()):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -308,17 +306,16 @@ class CompartmentalModel(ABC):
             pulled out and have special meaning.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
-        :param bool relax: Whether to use relaxed continuous-valued inference.
-            This approximation is cheaper and more stable in large populations.
-            Defaults to False.
         :param full_mass: Specification of mass matrix of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel. Defaults to full mass
             over global random variables.
         :param bool arrowhead_mass: Whether to treat ``full_mass`` as the head
             of an arrowhead matrix versus simply as a block. Defaults to False.
-        :param int num_quant_bins: The number of quantization bins to use. Note
-            that computational cost is exponential in `num_quant_bins`.
-            Ignored if ``relax=True``. Defaults to 4.
+        :param int num_quant_bins: If greater than 1, use asymptotically exact
+            inference via local enumeration over this many quantization bins.
+            If equal to 1, use continuous-valued relaxed approximate inference.
+            Note that computational cost is exponential in `num_quant_bins`.
+            Defaults to 1 for relaxed inference.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
         :param int haar_full_mass: Number of low frequency Haar components to
             include in the full mass matrix. If nonzero this implies
@@ -331,10 +328,10 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
-        self.num_quant_bins = options.pop("num_quant_bins", 4)
-        self.relaxed = options.pop("relax", False)
-        if self.relaxed:
-            self.num_quant_bins = 1  # Round rather than enumerate.
+        self.num_quant_bins = options.pop("num_quant_bins", 1)
+        assert isinstance(self.num_quant_bins, int)
+        assert self.num_quant_bins >= 1
+        self.relaxed = self.num_quant_bins == 1
         haar = options.pop("haar", False)
         assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
@@ -437,7 +434,6 @@ class CompartmentalModel(ABC):
         :rtype: dict
         """
         _require_double_precision()
-
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit() first")
 
@@ -455,7 +451,7 @@ class CompartmentalModel(ABC):
         model = self._sequential_model
         model = poutine.condition(model, samples)
         model = particle_plate(model)
-        if self.num_quant_bins > 1:
+        if not self.relaxed:
             model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
         samples = OrderedDict((name, site["value"])
