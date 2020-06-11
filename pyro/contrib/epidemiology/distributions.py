@@ -9,6 +9,8 @@ import torch
 import pyro.distributions as dist
 from pyro.distributions.util import is_validation_enabled
 
+_RELAX = False
+
 
 def _all(x):
     return x.all() if isinstance(x, torch.Tensor) else x
@@ -76,12 +78,47 @@ def set_approx_log_prob_tol(tol):
         dist.BetaBinomial.approx_log_prob_tol = old2
 
 
+@contextmanager
+def set_relaxed_distributions(relaxed=True):
+    global _RELAX
+    old = _RELAX
+    try:
+        _RELAX = relaxed
+        yield
+    finally:
+        _RELAX = old
+
+
 def _validate_overdispersion(overdispersion):
     if is_validation_enabled():
         if not _all(0 <= overdispersion):
             raise ValueError("Expected overdispersion >= 0")
         if not _all(overdispersion < 2):
             raise ValueError("Expected overdispersion < 2")
+
+
+def _relaxed_binomial(total_count, probs, *, min_variance=0.25):
+    """
+    Returns a moment-matched :class:`~pyro.distributions.Normal` approximating
+    a :class:`~pyro.distributions.Binomial` but allowing arbitrary real
+    ``total_count`` and ``probs`` and lower-bounding variance.
+    """
+    mean = probs * total_count
+    variance = total_count * probs * (1 - probs)
+
+    scale = variance.clamp(min=min_variance).sqrt()
+    return dist.Normal(mean, scale)
+
+
+def _relaxed_beta_binomial(concentration1, concentration0, total_count, *, min_variance=0.25):
+    c = concentration1 + concentration0
+    beta_mean = concentration1 / c
+    beta_variance = concentration1 * concentration0 / (c * c * (c + 1))
+    mean = beta_mean * total_count
+    variance = beta_variance * total_count * (c + total_count)
+
+    scale = variance.clamp(min=min_variance).sqrt()
+    return dist.Normal(mean, scale)
 
 
 def binomial_dist(total_count, probs, *,
@@ -125,6 +162,8 @@ def binomial_dist(total_count, probs, *,
     """
     _validate_overdispersion(overdispersion)
     if _is_zero(overdispersion):
+        if _RELAX:
+            return _relaxed_binomial(total_count, probs)
         return dist.ExtendedBinomial(total_count, probs)
 
     p = probs
@@ -135,6 +174,8 @@ def binomial_dist(total_count, probs, *,
     # At this point we have
     #   concentration1 + concentration0 == 1 / (p + q + od2 + 1e-8) - 1
 
+    if _RELAX:
+        return _relaxed_beta_binomial(concentration1, concentration0, total_count)
     return dist.ExtendedBetaBinomial(concentration1, concentration0, total_count)
 
 
@@ -168,6 +209,8 @@ def beta_binomial_dist(concentration1, concentration0, total_count, *,
         concentration1 = concentration1 / factor
         concentration0 = concentration0 / factor
 
+    if _RELAX:
+        return _relaxed_beta_binomial(concentration1, concentration0, total_count)
     return dist.ExtendedBetaBinomial(concentration1, concentration0, total_count)
 
 
