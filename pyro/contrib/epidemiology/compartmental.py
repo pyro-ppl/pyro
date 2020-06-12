@@ -26,7 +26,7 @@ from pyro.infer.smcfilter import SMCFailed
 from pyro.infer.util import is_validation_enabled, site_is_subsample
 from pyro.util import optional, warn_if_nan
 
-from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
+from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
@@ -90,12 +90,10 @@ class CompartmentalModel(ABC):
         continuous-valued non-enumerated point estimate of ``state["I"]``.
         Approximations are useful to reduce computational cost. Approximations
         are continuous-valued with support ``(-0.5, population + 0.5)``.
-    :param int num_quant_bins: Number of quantization bins in the auxiliary
-        variable spline. Defaults to 4.
     """
 
     def __init__(self, compartments, duration, population, *,
-                 num_quant_bins=4, approximate=()):
+                 approximate=()):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -313,9 +311,11 @@ class CompartmentalModel(ABC):
             over global random variables.
         :param bool arrowhead_mass: Whether to treat ``full_mass`` as the head
             of an arrowhead matrix versus simply as a block. Defaults to False.
-        :param int num_quant_bins: The number of quantization bins to use. Note
-            that computational cost is exponential in `num_quant_bins`.
-            Defaults to 4.
+        :param int num_quant_bins: If greater than 1, use asymptotically exact
+            inference via local enumeration over this many quantization bins.
+            If equal to 1, use continuous-valued relaxed approximate inference.
+            Note that computational cost is exponential in `num_quant_bins`.
+            Defaults to 1 for relaxed inference.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
         :param int haar_full_mass: Number of low frequency Haar components to
             include in the full mass matrix. If nonzero this implies
@@ -328,7 +328,10 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
-        self.num_quant_bins = options.pop("num_quant_bins", 4)
+        self.num_quant_bins = options.pop("num_quant_bins", 1)
+        assert isinstance(self.num_quant_bins, int)
+        assert self.num_quant_bins >= 1
+        self.relaxed = self.num_quant_bins == 1
         haar = options.pop("haar", False)
         assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
@@ -371,7 +374,7 @@ class CompartmentalModel(ABC):
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
-        model = self._vectorized_model
+        model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
             rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
@@ -410,7 +413,8 @@ class CompartmentalModel(ABC):
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        self.samples = align_samples(self.samples, self._vectorized_model,
+        model = self._relaxed_model if self.relaxed else self._quantized_model
+        self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
 
@@ -439,7 +443,7 @@ class CompartmentalModel(ABC):
                                     dim=-1 - self.max_plate_nesting)
 
         # Sample discrete auxiliary variables conditioned on the continuous
-        # variables sampled by _vectorized_model. This samples only time steps
+        # variables sampled by _quantized_model. This samples only time steps
         # [0:duration]. Here infer_discrete runs a forward-filter
         # backward-sample algorithm.
         logger.info("Predicting latent variables for {} time steps..."
@@ -447,7 +451,8 @@ class CompartmentalModel(ABC):
         model = self._sequential_model
         model = poutine.condition(model, samples)
         model = particle_plate(model)
-        model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
+        if not self.relaxed:
+            model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
         samples = OrderedDict((name, site["value"])
                               for name, site in trace.nodes.items()
@@ -587,7 +592,7 @@ class CompartmentalModel(ABC):
         # Validate that .transition() matches .compute_flows().
         if is_validation_enabled():
             for key in self.compartments:
-                if not (state[key] - curr[key]).eq(0).all():
+                if not torch.allclose(state[key], curr[key]):
                     raise ValueError("Incorrect state['{}'] update in .transition(), "
                                      "check that .transition() matches .compute_flows()."
                                      .format(key))
@@ -618,6 +623,7 @@ class CompartmentalModel(ABC):
     def _sequential_model(self):
         """
         Sequential model used to sample latents in the interval [0:duration].
+        This is compatible with both quantized and relaxed inference.
         """
         C = len(self.compartments)
         T = self.duration
@@ -671,9 +677,9 @@ class CompartmentalModel(ABC):
 
         self._clear_plates()
 
-    def _vectorized_model(self):
+    def _quantized_model(self):
         """
-        Vectorized model used for inference.
+        Quantized vectorized model used for parallel-scan enumerated inference.
         """
         C = len(self.compartments)
         T = self.duration
@@ -763,6 +769,50 @@ class CompartmentalModel(ABC):
         logp = logp.reshape(-1, Q ** C * Q ** C).logsumexp(-1).sum()
         warn_if_nan(logp)
         pyro.factor("transition", logp)
+
+        self._clear_plates()
+
+    @set_relaxed_distributions()
+    def _relaxed_model(self):
+        """
+        Relaxed vectorized model used for continuous inference.
+        """
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
+        # Sample global parameters.
+        params = self.global_model()
+
+        # Sample the compartmental continuous reparameterizing variable.
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event())
+        assert auxiliary.shape == shape, "particle plates are not supported"
+        curr = dict(zip(self.compartments, auxiliary))
+
+        # Sample any non-compartmental time series in batch.
+        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
+        # support DiscreteCosineReparam and HaarReparam along the time dim.
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            with self.time_plate, optional(self.region_plate, is_regional):
+                curr[name] = pyro.sample(name, fn)
+
+        # Truncate final value from the right then pad initial value onto the left.
+        prev = {name: cat2(value, curr[name][:-1], dim=-curr[name].dim())
+                for name, value in self.initialize(params).items()}
+
+        # Enable approximate inference.
+        for name in self.approximate:
+            curr[name + "_approx"] = curr[name]
+            prev[name + "_approx"] = prev[name]
+
+        # Transition.
+        with self.time_plate:
+            t = slice(0, T, 1)  # Used to slice data tensors.
+            self._transition_bwd(params, prev, curr, t)
 
         self._clear_plates()
 
