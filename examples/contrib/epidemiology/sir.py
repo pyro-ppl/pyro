@@ -290,11 +290,11 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
-    parser.add_argument("-w", "--warmup-steps", default=100, type=int)
+    parser.add_argument("-w", "--warmup-steps", type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
-    parser.add_argument("-nb", "--num-bins", default=4, type=int)
+    parser.add_argument("-nb", "--num-bins", default=1, type=int)
     parser.add_argument("--double", action="store_true", default=True)
     parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--cuda", action="store_true")
@@ -303,6 +303,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.population = int(args.population)  # to allow e.g. --population=1e6
 
+    if args.warmup_steps is None:
+        args.warmup_steps = args.num_samples
     if args.double:
         if args.cuda:
             torch.set_default_tensor_type(torch.cuda.DoubleTensor)
