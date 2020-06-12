@@ -374,7 +374,7 @@ class CompartmentalModel(ABC):
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
-        model = self._relaxed_model if self.relaxed else self._vectorized_model
+        model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
             rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
@@ -413,7 +413,7 @@ class CompartmentalModel(ABC):
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        model = self._relaxed_model if self.relaxed else self._vectorized_model
+        model = self._relaxed_model if self.relaxed else self._quantized_model
         self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
@@ -443,7 +443,7 @@ class CompartmentalModel(ABC):
                                     dim=-1 - self.max_plate_nesting)
 
         # Sample discrete auxiliary variables conditioned on the continuous
-        # variables sampled by _vectorized_model. This samples only time steps
+        # variables sampled by _quantized_model. This samples only time steps
         # [0:duration]. Here infer_discrete runs a forward-filter
         # backward-sample algorithm.
         logger.info("Predicting latent variables for {} time steps..."
@@ -623,6 +623,7 @@ class CompartmentalModel(ABC):
     def _sequential_model(self):
         """
         Sequential model used to sample latents in the interval [0:duration].
+        This is compatible with both quantized and relaxed inference.
         """
         C = len(self.compartments)
         T = self.duration
@@ -676,9 +677,9 @@ class CompartmentalModel(ABC):
 
         self._clear_plates()
 
-    def _vectorized_model(self):
+    def _quantized_model(self):
         """
-        Vectorized model used for inference.
+        Quantized vectorized model used for parallel-scan enumerated inference.
         """
         C = len(self.compartments)
         T = self.duration
