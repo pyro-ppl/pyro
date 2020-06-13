@@ -7,7 +7,7 @@ import logging
 import torch
 
 import pyro
-from pyro.contrib.epidemiology import RegionalSIRModel
+from pyro.contrib.epidemiology.models import RegionalSIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 

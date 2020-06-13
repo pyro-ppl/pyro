@@ -400,9 +400,7 @@ class CompartmentalModel(ABC):
         mcmc.run()
         self.samples = mcmc.get_samples()
         if haar:
-            print(f"DEBUG {list(self.samples.keys())}")
             haar.aux_to_user(self.samples)
-            print(f"DEBUG {list(self.samples.keys())}")
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
@@ -588,7 +586,9 @@ class CompartmentalModel(ABC):
         non_compartmental = OrderedDict()
         for name, (fn, is_regional) in self._non_compartmental.items():
             fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            shape = (T,) + R_shape if is_regional else (T,)
+            shape = (T,)
+            if self.is_regional:
+                shape += R_shape if is_regional else (1,)
             # Manually expand, avoiding plates to enable HaarReparam and SplitReparam.
             non_compartmental[name] = pyro.sample(name, fn.expand(shape).to_event())
 
@@ -651,11 +651,11 @@ class CompartmentalModel(ABC):
         params = self.global_model()
         auxiliary, non_compartmental = self._sample_auxiliary()
 
-        # Reshape to accomodate the time_plate below.
+        # Reshape to accommodate the time_plate below.
         if self.is_regional:
             auxiliary = auxiliary.squeeze(1)
-            non_compartmental = {name: value.squeeze(1)
-                                 for name, value in non_compartmental.items()}
+            for name, value in non_compartmental.items():
+                non_compartmental[name] = value.squeeze(1)
         assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
         aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
 
