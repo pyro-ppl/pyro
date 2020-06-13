@@ -332,13 +332,36 @@ class CompartmentalModel(ABC):
         assert isinstance(self.num_quant_bins, int)
         assert self.num_quant_bins >= 1
         self.relaxed = self.num_quant_bins == 1
+
+        # Setup Haar wavelet transform.
         haar = options.pop("haar", False)
-        assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
-        assert isinstance(haar_full_mass, int)
-        assert haar_full_mass >= 0
+        full_mass = options.pop("full_mass", self.full_mass)
+        assert isinstance(haar, bool)
+        assert isinstance(haar_full_mass, int) and haar_full_mass >= 0
+        assert isinstance(full_mass, (bool, list))
         haar_full_mass = min(haar_full_mass, self.duration)
-        haar = haar or (haar_full_mass > 0)
+        if haar_full_mass:
+            haar = True
+        if full_mass is True:
+            haar_full_mass = 0  # No need to split.
+        elif haar_full_mass >= self.duration:
+            full_mass = True  # Effectively full mass.
+            haar_full_mass = 0
+        if haar:
+            time_dim = -2 if self.is_regional else -1
+            dims = {"auxiliary": time_dim}
+            event_dims = {"auxiliary": 3 if self.is_regional else 2}
+            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
+            for name, (fn, is_regional) in self._non_compartmental.items():
+                dims[name] = time_dim - fn.event_dim
+                supports[name] = fn.support
+                event_dims[name] = fn.event_dim
+            haar = _HaarSplitReparam(haar_full_mass, self.duration, dims, supports, event_dims)
+        if haar_full_mass:
+            assert full_mass and isinstance(full_mass, list)
+            full_mass = full_mass[:]
+            full_mass[0] += tuple(name + "_haar_split_0" for name in sorted(dims))
 
         # Heuristically initialize to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
@@ -352,18 +375,7 @@ class CompartmentalModel(ABC):
             assert "auxiliary" in init_values, \
                 ".heuristic() did not define auxiliary value"
             if haar:
-                # Also initialize Haar transformed coordinates.
-                x = init_values["auxiliary"]
-                x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-                x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True)(x)
-                init_values["auxiliary_haar"] = x
-            if haar_full_mass:
-                # Also split into low- and high-frequency parts.
-                x0, x1 = init_values["auxiliary_haar"].split(
-                    [haar_full_mass, self.duration - haar_full_mass],
-                    dim=-2 if self.is_regional else -1)
-                init_values["auxiliary_haar_split_0"] = x0
-                init_values["auxiliary_haar_split_1"] = x1
+                haar.user_to_aux(init_values)
             logger.info("Heuristic init: {}".format(", ".join(
                 "{}={:0.3g}".format(k, v.item())
                 for k, v in init_values.items()
@@ -373,18 +385,9 @@ class CompartmentalModel(ABC):
         # Configure a kernel.
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
-        full_mass = options.pop("full_mass", self.full_mass)
         model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
-            rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
-            model = poutine.reparam(model, {"auxiliary": rep})
-        if haar_full_mass:
-            assert full_mass and isinstance(full_mass, list)
-            full_mass = full_mass[:]
-            full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
-            rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
-                               dim=-2 if self.is_regional else -1)
-            model = poutine.reparam(model, {"auxiliary_haar": rep})
+            model = haar.reparam(model)
         kernel = NUTS(model,
                       full_mass=full_mass,
                       init_strategy=init_to_generated(generate=heuristic),
@@ -398,18 +401,8 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
-        if haar_full_mass:
-            # Transform back from SplitReparam coordinates.
-            self.samples["auxiliary_haar"] = torch.cat([
-                self.samples.pop("auxiliary_haar_split_0"),
-                self.samples.pop("auxiliary_haar_split_1"),
-            ], dim=-2 if self.is_regional else -1)
         if haar:
-            # Transform back from Haar coordinates.
-            x = self.samples.pop("auxiliary_haar")
-            x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True).inv(x)
-            x = biject_to(constraints.interval(-0.5, self.population + 0.5))(x)
-            self.samples["auxiliary"] = x
+            haar.aux_to_user(self.samples)
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
@@ -868,3 +861,79 @@ class _SMCGuide(_SMCModel):
     def step(self, state):
         with poutine.block(hide_types=["observe"]):
             super().step(state.copy())
+
+
+class _HaarSplitReparam:
+    """
+    Wrapper around ``HaarReparam`` and ``SplitReparam`` to additionally convert
+    sample dicts between user-facing and auxiliary coordinates.
+    """
+    def __init__(self, split, duration, dims, supports, event_dims):
+        assert 0 <= split < duration
+        self.split = split
+        self.duration = duration
+        self.dims = dims
+        self.supports = supports
+        self.event_dims = event_dims
+
+    def __bool__(self):
+        return True
+
+    def reparam(self, model):
+        """
+        Wrap a model with ``poutine.reparam``.
+        """
+        # Transform to Haar coordinates.
+        config = {}
+        for name, dim in self.dims.items():
+            config[name] = HaarReparam(dim=dim, flip=True,
+                                       experimental_event_dim=self.event_dims[name])
+        model = poutine.reparam(model, config)
+
+        if self.split:
+            # Split into low- and high-frequency parts.
+            splits = [self.split, self.duration - self.split]
+            config = {}
+            for name, dim in self.dims.items():
+                config[name + "_haar"] = SplitReparam(splits, dim=dim)
+            model = poutine.reparam(model, config)
+
+        return model
+
+    def user_to_aux(self, samples):
+        """
+        Convert from user-facing samples to auxiliary samples, in-place.
+        """
+        # Transform to Haar coordinates.
+        for name, dim in self.dims.items():
+            x = samples.pop(name)
+            x = biject_to(self.supports[name]).inv(x)
+            x = HaarTransform(dim=dim, flip=True)(x)
+            samples[name + "_haar"] = x
+
+        if self.split:
+            # Split into low- and high-frequency parts.
+            splits = [self.split, self.duration - self.split]
+            for name, dim in self.dims.items():
+                x0, x1 = samples.pop(name + "_haar").split(splits, dim=dim)
+                samples[name + "_haar_split_0"] = x0
+                samples[name + "_haar_split_1"] = x1
+
+    def aux_to_user(self, samples):
+        """
+        Convert from auxiliary samples to user-facing samples, in-place.
+        """
+        if self.split:
+            # Transform back from SplitReparam coordinates.
+            for name, dim in self.dims.items():
+                samples[name + "_haar"] = torch.cat([
+                    samples.pop(name + "_haar_split_0"),
+                    samples.pop(name + "_haar_split_1"),
+                ], dim=dim)
+
+        # Transform back from Haar coordinates.
+        for name, dim in self.dims.items():
+            x = samples.pop(name + "_haar")
+            x = HaarTransform(dim=dim, flip=True).inv(x)
+            x = biject_to(self.supports[name])(x)
+            samples[name] = x

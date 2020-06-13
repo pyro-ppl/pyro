@@ -24,7 +24,13 @@ class HaarReparam(UnitJacobianReparam):
         This is an absolute dim counting from the right.
     :param bool flip: Whether to flip the time axis before applying the
         Haar transform. Defaults to false.
+    :param experimental_event_dim: EXPERIMENTAL Optional ``event_dim``,
+        overriding the default of ``event_dim = -dim``. This results in a
+        proper transform only if ``event_dim >= -dim``; however an improper
+        transform (that mixes elements across batches) can still be used in
+        some applications, such as reparameterization without subsampling.
     """
-    def __init__(self, dim=-1, flip=False):
-        transform = HaarTransform(dim=dim, flip=flip, cache_size=1)
+    def __init__(self, dim=-1, flip=False, *, experimental_event_dim=None):
+        transform = HaarTransform(dim=dim, flip=flip, cache_size=1,
+                                  experimental_event_dim=experimental_event_dim)
         super().__init__(transform, suffix="haar")

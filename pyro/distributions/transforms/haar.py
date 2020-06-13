@@ -22,23 +22,33 @@ class HaarTransform(Transform):
         This is an absolute dim counting from the right.
     :param bool flip: Whether to flip the time axis before applying the
         Haar transform. Defaults to false.
+    :param experimental_event_dim: EXPERIMENTAL Optional ``event_dim``,
+        overriding the default of ``event_dim = -dim``. This results in a
+        proper transform only if ``event_dim >= -dim``; however an improper
+        transform (that mixes elements across batches) can still be used in
+        some applications, such as reparameterization without subsampling.
     """
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
 
-    def __init__(self, dim=-1, flip=False, cache_size=0):
+    def __init__(self, dim=-1, flip=False, *,
+                 experimental_event_dim=None, cache_size=0):
         assert isinstance(dim, int) and dim < 0
-        self.event_dim = -dim
+        self.dim = dim
         self.flip = flip
+        self.event_dim = -dim
+        if experimental_event_dim is not None:
+            assert experimental_event_dim >= 0
+            self.event_dim = experimental_event_dim
         super().__init__(cache_size=cache_size)
 
     def __eq__(self, other):
-        return (type(self) == type(other) and self.event_dim == other.event_dim and
-                self.flip == other.flip)
+        return (type(self) == type(other) and self.dim == other.dim and
+                self.flip == other.flip and self.event_dim == other.event_dim)
 
     def _call(self, x):
-        dim = -self.event_dim
+        dim = self.dim
         if dim != -1:
             x = x.transpose(dim, -1)
         if self.flip:
@@ -49,7 +59,7 @@ class HaarTransform(Transform):
         return y
 
     def _inverse(self, y):
-        dim = -self.event_dim
+        dim = self.dim
         if dim != -1:
             y = y.transpose(dim, -1)
         x = inverse_haar_transform(y)
@@ -60,9 +70,10 @@ class HaarTransform(Transform):
         return x
 
     def log_abs_det_jacobian(self, x, y):
-        return x.new_zeros(x.shape[:-self.event_dim])
+        return x.new_zeros(x.shape[:x.dim() - self.event_dim])
 
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
             return self
-        return HaarTransform(-self.event_dim, flip=self.flip, cache_size=cache_size)
+        return HaarTransform(self.dim, flip=self.flip, cache_size=cache_size,
+                             experimental_event_dim=self.experimental_event_dim)
