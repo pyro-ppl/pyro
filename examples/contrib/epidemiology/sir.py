@@ -13,8 +13,9 @@ import torch
 from torch.distributions import biject_to, constraints
 
 import pyro
-from pyro.contrib.epidemiology import (HeterogeneousSIRModel, OverdispersedSEIRModel, OverdispersedSIRModel,
-                                       SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel)
+from pyro.contrib.epidemiology.models import (HeterogeneousSIRModel, OverdispersedSEIRModel, OverdispersedSIRModel,
+                                              SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel,
+                                              SuperspreadingSIRModel)
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
