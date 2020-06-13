@@ -63,10 +63,10 @@ class AffineCoupling(TransformModule):
     :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/
         output split for transformation.
     :type split_dim: int
-    :param hypernet: an autoregressive neural network whose forward call returns a
-        real-valued mean and logit-scale as a tuple. The input should have final
-        dimension split_dim and the output final dimension input_dim-split_dim for
-        each member of the tuple.
+    :param hypernet: a neural network whose forward call returns a real-valued mean
+        and logit-scale as a tuple. The input should have final dimension split_dim
+        and the output final dimension input_dim-split_dim for each member of the
+        tuple.
     :type hypernet: callable
     :param dim: the tensor dimension on which to split. This value must be negative
         and defines the event dim as `abs(dim)`.

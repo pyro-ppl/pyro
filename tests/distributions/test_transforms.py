@@ -195,8 +195,8 @@ class TransformTests(TestCase):
     def test_conditional_radial(self):
         self._test_conditional(T.conditional_radial, inverse=False)
 
-    def test_conditional_spline_coupling(self):
-        self._test(T.conditional_spline_coupling)
+    def test_conditional_spline(self):
+        self._test_conditional(T.conditional_spline)
 
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented

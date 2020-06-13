@@ -12,6 +12,7 @@ from functools import reduce
 
 import torch
 from torch.distributions import biject_to, constraints
+from torch.distributions.utils import lazy_property
 
 import pyro.distributions as dist
 import pyro.distributions.hmm
@@ -22,9 +23,10 @@ from pyro.infer.autoguide import init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
-from pyro.util import warn_if_nan
+from pyro.infer.util import is_validation_enabled, site_is_subsample
+from pyro.util import optional, warn_if_nan
 
-from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh
+from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
@@ -42,10 +44,9 @@ class CompartmentalModel(ABC):
     Abstract base class for discrete-time discrete-value stochastic
     compartmental models.
 
-    Derived classes must implement methods :meth:`heuristic`,
-    :meth:`initialize`, :meth:`transition_fwd`, :meth:`transition_bwd`.
-    Derived classes may optionally implement :meth:`global_model` and override
-    the ``series`` attribute.
+    Derived classes must implement methods :meth:`initialize` and
+    :meth:`transition`. Derived classes may optionally implement
+    :meth:`global_model`, :meth:`compute_flows`, and :meth:`heuristic`.
 
     Example usage::
 
@@ -54,8 +55,7 @@ class CompartmentalModel(ABC):
             def __init__(self, ...): ...
             def global_model(self): ...
             def initialize(self, params): ...
-            def transition_fwd(self, params, state, t): ...
-            def transition_bwd(self, params, prev, curr, t): ...
+            def transition(self, params, state, t): ...
 
         # Run inference to fit the model to data.
         model = MyModel(...)
@@ -78,9 +78,6 @@ class CompartmentalModel(ABC):
         effect = samples2["my_result"].mean() - samples1["my_result"].mean()
         print("average effect = {:0.3g}".format(effect))
 
-    :cvar tuple series: Tuple of names of time series names, in addition to
-        ``self.compartments``. These will be concatenated along the time axis
-        in returned sample dictionaries.
     :ivar dict samples: Dictionary of posterior samples.
     :param list compartments: A list of strings of compartment names.
     :param int duration: The number of discrete time steps in this model.
@@ -88,17 +85,15 @@ class CompartmentalModel(ABC):
         a tensor of each region's population in a regional model.
     :type population: int or torch.Tensor
     :param tuple approximate: Names of compartments for which pointwise
-        approximations should be provided in :meth:`transition_bwd`, e.g. if you
-        specify ``approximate=("I")`` then the ``prev["I_approx"]`` will be a
-        continuous-valued non-enumerated point estimate of ``prev["I"]``.
+        approximations should be provided in :meth:`transition`, e.g. if you
+        specify ``approximate=("I")`` then the ``state["I_approx"]`` will be a
+        continuous-valued non-enumerated point estimate of ``state["I"]``.
         Approximations are useful to reduce computational cost. Approximations
         are continuous-valued with support ``(-0.5, population + 0.5)``.
-    :param int num_quant_bins: Number of quantization bins in the auxiliary
-        variable spline. Defaults to 4.
     """
 
     def __init__(self, compartments, duration, population, *,
-                 num_quant_bins=4, approximate=()):
+                 approximate=()):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -109,12 +104,12 @@ class CompartmentalModel(ABC):
             assert population.dim() == 1
             assert (population >= 1).all()
             self.is_regional = True
-            self.max_plate_nesting = 1
+            self.max_plate_nesting = 2  # [time, region]
         else:
             assert isinstance(population, int)
             assert population >= 2
             self.is_regional = False
-            self.max_plate_nesting = 0
+            self.max_plate_nesting = 1  # [time]
         self.population = population
 
         compartments = tuple(compartments)
@@ -131,6 +126,16 @@ class CompartmentalModel(ABC):
         self._clear_plates()
 
     @property
+    def time_plate(self):
+        """
+        A ``pyro.plate`` for the time dimension.
+        """
+        if self._time_plate is None:
+            self._time_plate = pyro.plate("time", self.duration,
+                                          dim=-2 if self.is_regional else -1)
+        return self._time_plate
+
+    @property
     def region_plate(self):
         """
         Either a ``pyro.plate`` or a trivial ``ExitStack`` depending on whether
@@ -144,18 +149,45 @@ class CompartmentalModel(ABC):
         return self._region_plate
 
     def _clear_plates(self):
+        self._time_plate = None
         self._region_plate = None
 
-    # Overridable attributes and methods ########################################
+    @lazy_property
+    def full_mass(self):
+        """
+        A list of a single tuple of the names of global random variables.
+        """
+        with torch.no_grad(), poutine.block(), poutine.trace() as tr:
+            self.global_model()
+        return [tuple(name for name, site in tr.trace.iter_stochastic_nodes()
+                      if not site_is_subsample(site))]
 
-    series = ()
-    full_mass = False
+    @lazy_property
+    def series(self):
+        """
+        A frozenset of names of sample sites that are sampled each time step.
+        """
+        # Trace a simple invocation of .transition().
+        with torch.no_grad(), poutine.block():
+            params = self.global_model()
+            prev = self.initialize(params)
+            for name in self.approximate:
+                prev[name + "_approx"] = prev[name]
+            curr = prev.copy()
+            with poutine.trace() as tr:
+                self.transition(params, curr, 0)
+        return frozenset(re.match("(.*)_0", name).group(1)
+                         for name, site in tr.trace.nodes.items()
+                         if site["type"] == "sample"
+                         if not site_is_subsample(site))
+
+    # Overridable attributes and methods ########################################
 
     def global_model(self):
         """
         Samples and returns any global parameters.
 
-        :returns: An arbitrary object of parameters (e.g. ``None``).
+        :returns: An arbitrary object of parameters (e.g. ``None`` or a tuple).
         """
         return None
 
@@ -172,50 +204,68 @@ class CompartmentalModel(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def transition_fwd(self, params, state, t):
+    def transition(self, params, state, t):
         """
         Forward generative process for dynamics.
 
         This inputs a current ``state`` and stochastically updates that
         state in-place.
 
-        Note that this method is called under two different interpretations.
+        Note that this method is called under multiple different
+        interpretations, including batched and vectorized interpretations.
         During :meth:`generate` this is called to generate a single sample.
-        During :meth:`predict` thsi is called to forecast a batch of samples,
+        During :meth:`heuristic` this is called to generate a batch of samples
+        for SMC.  During :meth:`fit` this is called both in vectorized form
+        (vectorizing over time) and in sequential form (for a single time
+        step); both forms enumerate over discrete latent variables.  During
+        :meth:`predict` this is called to forecast a batch of samples,
         conditioned on posterior samples for the time interval
         ``[0:duration]``.
 
         :param params: The global params returned by :meth:`global_model`.
         :param dict state: A dictionary mapping compartment name to current
             tensor value. This should be updated in-place.
-        :param int t: Time index.
+        :param t: A time-like index. During inference ``t`` may be either a
+            slice (for vectorized inference) or an integer time index. During
+            prediction ``t`` will be integer time index.
+        :type t: int or slice
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def transition_bwd(self, params, prev, curr, t):
+    def compute_flows(self, prev, curr, t):
         """
-        Backward factor graph for dynamics.
+        Computes flows between compartments, given compartment populations
+        before and after time step t.
 
-        This inputs hypotheses for two subsequent time steps
-        (``prev``,``curr``) and makes observe statements
-        ``pyro.sample(..., obs=...)`` to declare probability factors.
+        The default implementation assumes sequential flows terminating in an
+        implicit compartment named "R". For example if::
 
-        Note that this method is called under two different interpretations.
-        During inference it is called vectorizing over time but with a single
-        sample. During prediction it is called sequentially for each time
-        step, but always vectorizing over samples.
+            compartment_names = ("S", "E", "I")
 
-        :param params: The global params returned by :meth:`global_model`.
-        :param dict prev: A dictionary mapping compartment name to previous
-            tensor value. This should not be modified.
-        :param dict curr: A dictionary mapping compartment name to current
-            tensor value. This should not be modified.
-        :param t: A time-like index. During inference ``t`` will be
-            an indexing tuple that reshapes data tensors. During prediction
-            ``t`` will be an actual integer time index.
+        the default implementation computes at time step ``t = 9``::
+
+            flows["S2E_9"] = prev["S"] - curr["S"]
+            flows["E2I_9"] = prev["E"] - curr["E"] + flows["S2E_9"]
+            flows["I2R_9"] = prev["I"] - curr["I"] + flows["E2I_9"]
+
+        For more complex flows (non-sequential, branching, looping,
+        duplicating, etc.), users may override this method.
+
+        :param dict state: A dictionary mapping compartment name to current
+            tensor value. This should be updated in-place.
+        :param t: A time-like index. During inference ``t`` may be either a
+            slice (for vectorized inference) or an integer time index. During
+            prediction ``t`` will be integer time index.
+        :type t: int or slice
+        :returns: A dict mapping flow name to tensor value.
+        :rtype: dict
         """
-        raise NotImplementedError
+        flows = {}
+        flow = 0
+        for source, destin in zip(self.compartments, self.compartments[1:] + ("R",)):
+            flow = prev[source] - curr[source] + flow
+            flows["{}2{}_{}".format(source, destin, t)] = flow
+        return flows
 
     # Inference interface ########################################
 
@@ -256,13 +306,16 @@ class CompartmentalModel(ABC):
             pulled out and have special meaning.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
-        :param full_mass: (Default ``False``). Specification of mass matrix
-            of the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
+        :param full_mass: Specification of mass matrix of the
+            :class:`~pyro.infer.mcmc.nuts.NUTS` kernel. Defaults to full mass
+            over global random variables.
         :param bool arrowhead_mass: Whether to treat ``full_mass`` as the head
             of an arrowhead matrix versus simply as a block. Defaults to False.
-        :param int num_quant_bins: The number of quantization bins to use. Note
-            that computational cost is exponential in `num_quant_bins`.
-            Defaults to 4.
+        :param int num_quant_bins: If greater than 1, use asymptotically exact
+            inference via local enumeration over this many quantization bins.
+            If equal to 1, use continuous-valued relaxed approximate inference.
+            Note that computational cost is exponential in `num_quant_bins`.
+            Defaults to 1 for relaxed inference.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
         :param int haar_full_mass: Number of low frequency Haar components to
             include in the full mass matrix. If nonzero this implies
@@ -275,7 +328,10 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
-        self.num_quant_bins = options.pop("num_quant_bins", 4)
+        self.num_quant_bins = options.pop("num_quant_bins", 1)
+        assert isinstance(self.num_quant_bins, int)
+        assert self.num_quant_bins >= 1
+        self.relaxed = self.num_quant_bins == 1
         haar = options.pop("haar", False)
         assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
@@ -318,7 +374,7 @@ class CompartmentalModel(ABC):
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
         full_mass = options.pop("full_mass", self.full_mass)
-        model = self._vectorized_model
+        model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
             rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
             model = poutine.reparam(model, {"auxiliary": rep})
@@ -357,7 +413,8 @@ class CompartmentalModel(ABC):
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
-        self.samples = align_samples(self.samples, self._vectorized_model,
+        model = self._relaxed_model if self.relaxed else self._quantized_model
+        self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
 
@@ -386,7 +443,7 @@ class CompartmentalModel(ABC):
                                     dim=-1 - self.max_plate_nesting)
 
         # Sample discrete auxiliary variables conditioned on the continuous
-        # variables sampled by _vectorized_model. This samples only time steps
+        # variables sampled by _quantized_model. This samples only time steps
         # [0:duration]. Here infer_discrete runs a forward-filter
         # backward-sample algorithm.
         logger.info("Predicting latent variables for {} time steps..."
@@ -394,7 +451,8 @@ class CompartmentalModel(ABC):
         model = self._sequential_model
         model = poutine.condition(model, samples)
         model = particle_plate(model)
-        model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
+        if not self.relaxed:
+            model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
         samples = OrderedDict((name, site["value"])
                               for name, site in trace.nodes.items()
@@ -412,7 +470,7 @@ class CompartmentalModel(ABC):
                                   for name, site in trace.nodes.items()
                                   if site["type"] == "sample")
 
-        self._concat_series(samples, forecast)
+        self._concat_series(samples, forecast, vectorized=True)
         return samples
 
     @torch.no_grad()
@@ -454,7 +512,7 @@ class CompartmentalModel(ABC):
 
         # Select the most probable hypothesis.
         i = int(smc.state._log_weights.max(0).indices)
-        init = {key: value[i] for key, value in smc.state.items()}
+        init = {key: value[i, 0] for key, value in smc.state.items()}
 
         # Fill in sample site values.
         init = self.generate(init)
@@ -464,22 +522,80 @@ class CompartmentalModel(ABC):
 
     # Internal helpers ########################################
 
-    def _concat_series(self, samples, forecast=0):
+    def _concat_series(self, samples, forecast=0, vectorized=False):
         """
         Concatenate sequential time series into tensors, in-place.
 
         :param dict samples: A dictionary of samples.
         """
-        for name in self.compartments + self.series:
+        for name in set(self.compartments).union(self.series):
             pattern = name + "_[0-9]+"
             series = []
             for key in list(samples):
                 if re.match(pattern, key):
                     series.append(samples.pop(key))
-            if series:
-                assert len(series) == self.duration + forecast
-                series = torch.broadcast_tensors(*map(torch.as_tensor, series))
-                samples[name] = torch.stack(series, dim=-2 if self.is_regional else -1)
+            if not series:
+                continue
+            assert len(series) == self.duration + forecast
+            series = torch.broadcast_tensors(*map(torch.as_tensor, series))
+            if vectorized and name != "obs":  # TODO Generalize.
+                samples[name] = torch.cat(series, dim=1)
+            else:
+                samples[name] = torch.stack(series)
+
+    @lazy_property
+    @torch.no_grad()
+    def _non_compartmental(self):
+        """
+        A dict mapping name -> (distribution, is_regional) for all
+        non-compartmental sites in :meth:`transition`. For simple models this
+        is often empty; for time-heterogeneous models this may contain
+        time-local latent variables.
+        """
+        # Trace a simple invocation of .transition().
+        with torch.no_grad(), poutine.block():
+            params = self.global_model()
+            prev = self.initialize(params)
+            for name in self.approximate:
+                prev[name + "_approx"] = prev[name]
+            curr = prev.copy()
+            with poutine.trace() as tr:
+                self.transition(params, curr, 0)
+            flows = self.compute_flows(prev, curr, 0)
+
+        # Extract latent variables that are not compartmental flows.
+        result = OrderedDict()
+        for name, site in tr.trace.iter_stochastic_nodes():
+            if name in flows:
+                continue
+            assert name.endswith("_0"), name
+            name = name[:-2]
+            assert name in self.series, name
+            # TODO This supports only the region_plate. For full plate support,
+            # this could be replaced by a self.plate() method as in EasyGuide.
+            is_regional = any(f.name == "region" for f in site["cond_indep_stack"])
+            result[name] = site["fn"], is_regional
+        return result
+
+    def _transition_bwd(self, params, prev, curr, t):
+        """
+        Helper to collect probabilty factors from .transition() conditioned on
+        previous and current enumerated states.
+        """
+        # Run .transition() conditioned on computed flows.
+        cond_data = {"{}_{}".format(k, t): v for k, v in curr.items()}
+        cond_data.update(self.compute_flows(prev, curr, t))
+        with poutine.condition(data=cond_data):
+            state = prev.copy()
+            self.transition(params, state, t)  # Mutates state.
+
+        # Validate that .transition() matches .compute_flows().
+        if is_validation_enabled():
+            for key in self.compartments:
+                if not torch.allclose(state[key], curr[key]):
+                    raise ValueError("Incorrect state['{}'] update in .transition(), "
+                                     "check that .transition() matches .compute_flows()."
+                                     .format(key))
 
     def _generative_model(self, forecast=0):
         """
@@ -495,16 +611,19 @@ class CompartmentalModel(ABC):
 
         # Sequentially transition.
         for t in range(self.duration + forecast):
-            self.transition_fwd(params, state, t)
+            for name in self.approximate:
+                state[name + "_approx"] = state[name]
+            self.transition(params, state, t)
             with self.region_plate:
                 for name in self.compartments:
-                    pyro.deterministic("{}_{}".format(name, t), state[name])
+                    pyro.deterministic("{}_{}".format(name, t), state[name], event_dim=0)
 
         self._clear_plates()
 
     def _sequential_model(self):
         """
         Sequential model used to sample latents in the interval [0:duration].
+        This is compatible with both quantized and relaxed inference.
         """
         C = len(self.compartments)
         T = self.duration
@@ -513,37 +632,54 @@ class CompartmentalModel(ABC):
         # Sample global parameters.
         params = self.global_model()
 
-        # Sample the continuous reparameterizing variable.
+        # Sample the compartmental continuous reparameterizing variable.
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False).expand(shape).to_event())
+        num_samples = auxiliary.size(0)
         if self.is_regional:
-            # This reshapes from (particle, 1, C, T, R) -> (particle, C, T, R)
-            # to allow aux below to have shape (particle, R) for region_plate.
-            auxiliary = auxiliary.squeeze(-4)
+            auxiliary = auxiliary.squeeze(1)
+        assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
+        aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
+
+        # Sample any non-compartmental time series in batch.
+        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
+        # support DiscreteCosineReparam and HaarReparam along the time dim.
+        non_compartmental = OrderedDict()
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            with self.time_plate, optional(self.region_plate, is_regional):
+                non_compartmental[name] = pyro.sample(name, fn)
 
         # Sequentially transition.
         curr = self.initialize(params)
-        for t, aux_t in poutine.markov(enumerate(auxiliary.unbind(2))):
+        for t in poutine.markov(range(T)):
             with self.region_plate:
                 prev, curr = curr, {}
-                for name, aux in zip(self.compartments, aux_t.unbind(1)):
-                    curr[name] = quantize("{}_{}".format(name, t), aux,
+
+                # Extract any non-compartmental variables.
+                for name, value in non_compartmental.items():
+                    curr[name] = value[:, t:t+1]
+
+                # Extract and enumerate all compartmental variables.
+                for c, name in enumerate(self.compartments):
+                    curr[name] = quantize("{}_{}".format(name, t), aux[c][t],
                                           min=0, max=self.population,
                                           num_quant_bins=self.num_quant_bins)
                     # Enable approximate inference by using aux as a
                     # non-enumerated proxy for enumerated compartment values.
                     if name in self.approximate:
-                        curr[name + "_approx"] = aux
+                        curr[name + "_approx"] = aux[c][t]
                         prev.setdefault(name + "_approx", prev[name])
-            self.transition_bwd(params, prev, curr, t)
+
+            self._transition_bwd(params, prev, curr, t)
 
         self._clear_plates()
 
-    def _vectorized_model(self):
+    def _quantized_model(self):
         """
-        Vectorized model used for inference.
+        Quantized vectorized model used for parallel-scan enumerated inference.
         """
         C = len(self.compartments)
         T = self.duration
@@ -553,7 +689,7 @@ class CompartmentalModel(ABC):
         # Sample global parameters.
         params = self.global_model()
 
-        # Sample the continuous reparameterizing variable.
+        # Sample the compartmental continuous reparameterizing variable.
         shape = (C, T) + R_shape
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
@@ -566,14 +702,25 @@ class CompartmentalModel(ABC):
         curr = OrderedDict(zip(self.compartments, curr))
         logp = OrderedDict(zip(self.compartments, logp))
 
+        # Sample any non-compartmental time series in batch.
+        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
+        # support DiscreteCosineReparam and HaarReparam along the time dim.
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            with self.time_plate, optional(self.region_plate, is_regional):
+                curr[name] = pyro.sample(name, fn)
+
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
         prev = {}
-        for name in self.compartments:
-            value = init[name]
-            if isinstance(value, torch.Tensor):
-                value = value[..., None]  # Because curr is enumerated on the right.
-            prev[name] = cat2(value, curr[name][:-1], dim=-3 if self.is_regional else -2)
+        for name, value in init.items():
+            if name in self.compartments:
+                if isinstance(value, torch.Tensor):
+                    value = value[..., None]  # Because curr is enumerated on the right.
+                prev[name] = cat2(value, curr[name][:-1],
+                                  dim=-3 if self.is_regional else -2)
+            else:  # non-compartmental
+                prev[name] = cat2(init[name], curr[name][:-1], dim=-curr[name].dim())
 
         # Reshape to support broadcasting, similar to EnumMessenger.
         def enum_reshape(tensor, position):
@@ -599,12 +746,19 @@ class CompartmentalModel(ABC):
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
-            with pyro.plate("time", T, dim=-1 - self.max_plate_nesting):
-                t = slice(None)  # Used to slice data tensors.
-                self.transition_bwd(params, prev, curr, t)
+            with self.time_plate:
+                t = slice(0, T, 1)  # Used to slice data tensors.
+                self._transition_bwd(params, prev, curr, t)
         tr.trace.compute_log_prob()
         for name, site in tr.trace.nodes.items():
             if site["type"] == "sample":
+                log_prob = site["log_prob"]
+                if log_prob.dim() <= self.max_plate_nesting:  # Not enumerated.
+                    pyro.factor("transition_" + name, site["log_prob_sum"])
+                    continue
+                if self.is_regional and log_prob.shape[-1:] != R_shape:
+                    # Poor man's tensor variable elimination.
+                    log_prob = log_prob.expand(log_prob.shape[:-1] + R_shape) / R_shape[0]
                 logp[name] = site["log_prob"]
 
         # Manually perform variable elimination.
@@ -615,6 +769,50 @@ class CompartmentalModel(ABC):
         logp = logp.reshape(-1, Q ** C * Q ** C).logsumexp(-1).sum()
         warn_if_nan(logp)
         pyro.factor("transition", logp)
+
+        self._clear_plates()
+
+    @set_relaxed_distributions()
+    def _relaxed_model(self):
+        """
+        Relaxed vectorized model used for continuous inference.
+        """
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
+        # Sample global parameters.
+        params = self.global_model()
+
+        # Sample the compartmental continuous reparameterizing variable.
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event())
+        assert auxiliary.shape == shape, "particle plates are not supported"
+        curr = dict(zip(self.compartments, auxiliary))
+
+        # Sample any non-compartmental time series in batch.
+        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
+        # support DiscreteCosineReparam and HaarReparam along the time dim.
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            with self.time_plate, optional(self.region_plate, is_regional):
+                curr[name] = pyro.sample(name, fn)
+
+        # Truncate final value from the right then pad initial value onto the left.
+        prev = {name: cat2(value, curr[name][:-1], dim=-curr[name].dim())
+                for name, value in self.initialize(params).items()}
+
+        # Enable approximate inference.
+        for name in self.approximate:
+            curr[name + "_approx"] = curr[name]
+            prev[name + "_approx"] = prev[name]
+
+        # Transition.
+        with self.time_plate:
+            t = slice(0, T, 1)  # Used to slice data tensors.
+            self._transition_bwd(params, prev, curr, t)
 
         self._clear_plates()
 
@@ -641,8 +839,19 @@ class _SMCModel:
     def step(self, state):
         with poutine.block(), poutine.condition(data=state):
             params = self.model.global_model()
+
         with poutine.trace() as tr:
-            self.model.transition_fwd(params, state, self.t)
+            # Temporarily extend state with approximations.
+            extended_state = dict(state)
+            for name in self.model.approximate:
+                extended_state[name + "_approx"] = state[name]
+
+            self.model.transition(params, extended_state, self.t)
+
+            for name in self.model.approximate:
+                del extended_state[name + "_approx"]
+            state.update(extended_state)
+
         for name, site in tr.trace.nodes.items():
             if site["type"] == "sample" and not site["is_observed"]:
                 state[name] = site["value"]

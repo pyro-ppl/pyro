@@ -2,57 +2,65 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.distributions import constraints
 
 from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions.transforms.spline import ConditionalSpline, Spline
 from pyro.distributions.util import copy_docs_from
-from pyro.distributions.transforms.spline import Spline, ConditionalSpline
 from pyro.nn import DenseNN
 
 
 @copy_docs_from(TransformModule)
 class SplineCoupling(TransformModule):
     r"""
-    An implementation of the element-wise rational spline bijections of linear
-    and quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020).
-    Rational splines are functions that are comprised of segments that are the
-    ratio of two polynomials. For instance, for the :math:`d`-th dimension and
-    the :math:`k`-th segment on the spline, the function will take the form,
+    An implementation of the coupling layer with rational spline bijections of
+    linear and quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020).
+    Rational splines are functions that are comprised of segments that are the ratio
+    of two polynomials (see :class:`~pyro.distributions.transforms.Spline`).
 
-        :math:`y_d = \frac{\alpha^{(k)}(x_d)}{\beta^{(k)}(x_d)},`
+    The spline coupling layer uses the transformation,
 
-    where :math:`\alpha^{(k)}` and :math:`\beta^{(k)}` are two polynomials of
-    order :math:`d`. For :math:`d=1`, we say that the spline is linear, and for
-    :math:`d=2`, quadratic. The spline is constructed on the specified bounding
-    box, :math:`[-K,K]\times[-K,K]`, with the identity function used elsewhere
-    .
+        :math:`\mathbf{y}_{1:d} = g_\theta(\mathbf{x}_{1:d})`
+        :math:`\mathbf{y}_{(d+1):D} = h_\phi(\mathbf{x}_{(d+1):D};\mathbf{x}_{1:d})`
 
-    Rational splines offer an excellent combination of functional flexibility
-    whilst maintaining a numerically stable inverse that is of the same
-    computational and space complexities as the forward operation. This
-    element-wise transform permits the accurate represention of complex
-    univariate distributions.
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    e.g. :math:`\mathbf{x}_{1:d}` represents the first :math:`d` elements of the
+    inputs, :math:`g_\theta` is either the identity function or an elementwise
+    rational monotonic spline with parameters :math:`\theta`, and :math:`h_\phi` is
+    a conditional elementwise spline spline, conditioning on the first :math:`d`
+    elements.
 
     Example usage:
 
-    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> transform = Spline(10, count_bins=4, bound=3.)
+    >>> from pyro.nn import DenseNN
+    >>> input_dim = 10
+    >>> split_dim = 6
+    >>> count_bins = 8
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> param_dims = [(input_dim - split_dim) * count_bins,
+    ... (input_dim - split_dim) * count_bins,
+    ... (input_dim - split_dim) * (count_bins - 1),
+    ... (input_dim - split_dim) * count_bins])
+    >>> hypernet = DenseNN(split_dim, [10*input_dim], param_dims)
+    >>> transform = SplineCoupling(input_dim, split_dim, hypernet)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
 
-    :param input_dim: Dimension of the input vector. Despite operating
-        element-wise, this is required so we know how many parameters to store.
+    :param input_dim: Dimension of the input vector. Despite operating element-wise,
+        this is required so we know how many parameters to store.
     :type input_dim: int
+    :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/
+        output split for transformation.
+    :param hypernet: a neural network whose forward call returns a tuple of spline
+        parameters (see :class:`~pyro.distributions.transforms.ConditionalSpline`).
+    :type hypernet: callable
     :param count_bins: The number of segments comprising the spline.
     :type count_bins: int
     :param bound: The quantity :math:`K` determining the bounding box,
         :math:`[-K,K]\times[-K,K]`, of the spline.
     :type bound: float
-    :param order: One of ['linear', 'quadratic'] specifying the order of the
-        spline.
+    :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
     :type order: string
 
     References:
@@ -68,7 +76,7 @@ class SplineCoupling(TransformModule):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    event_dim = 0
+    event_dim = 1
 
     def __init__(self, input_dim, split_dim, hypernet, count_bins=8, bound=3., order='linear', identity=False):
         super(SplineCoupling, self).__init__(cache_size=1)
@@ -77,6 +85,8 @@ class SplineCoupling(TransformModule):
         # conditional one that inputs the first part.
         self.lower_spline = Spline(split_dim, count_bins, bound, order)
         self.upper_spline = ConditionalSpline(hypernet, input_dim - split_dim, count_bins, bound, order)
+        self.split_dim = split_dim
+        self.identity = identity
 
     def _call(self, x):
         """
@@ -90,15 +100,18 @@ class SplineCoupling(TransformModule):
         x1, x2 = x[..., :self.split_dim], x[..., self.split_dim:]
 
         if not self.identity:
-            y1, log_detK = self.lower_spline(x1)
+            y1 = self.lower_spline(x1)
+            log_detK = self.lower_spline._cache_log_detJ
         else:
             y1 = x1
 
-        y2, log_detJ = self.upper_spline.condition(x1)(x2)
+        upper_spline = self.upper_spline.condition(x1)
+        y2 = upper_spline(x2)
+        log_detJ = upper_spline._cache_log_detJ
 
         if not self.identity:
             log_detJ = torch.cat([log_detJ, log_detK], dim=-1)
-        self._cached_log_detJ = log_detJ
+        self._cache_log_detJ = log_detJ
 
         return torch.cat([y1, y2], dim=-1)
 
@@ -113,15 +126,18 @@ class SplineCoupling(TransformModule):
         y1, y2 = y[..., :self.split_dim], y[..., self.split_dim:]
 
         if not self.identity:
-            x1, log_detK = self.lower_spline.inverse(y1)
+            x1 = self.lower_spline._inv_call(y1)
+            log_detK = self.lower_spline._cache_log_detJ
         else:
             x1 = y1
 
-        x2, log_detJ = self.upper_spline.condition(x1).inverse(y2)
+        upper_spline = self.upper_spline.condition(x1)
+        x2 = upper_spline._inv_call(y2)
+        log_detJ = upper_spline._cache_log_detJ
 
         if not self.identity:
             log_detJ = torch.cat([log_detJ, log_detK], dim=-1)
-        self._cached_log_detJ = -log_detJ
+        self._cache_log_detJ = log_detJ
 
         return torch.cat([x1, x2], dim=-1)
 
@@ -141,8 +157,8 @@ class SplineCoupling(TransformModule):
 def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0):
     """
     A helper function to create a
-    :class:`~pyro.distributions.transforms.Spline` object for consistency with
-    other helpers.
+    :class:`~pyro.distributions.transforms.SplineCoupling` object for consistency
+    with other helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
@@ -150,7 +166,6 @@ def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, b
     """
 
     if split_dim is None:
-        # TODO: Check this works!
         split_dim = input_dim // 2
 
     if hidden_dims is None:
@@ -158,9 +173,9 @@ def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, b
 
     nn = DenseNN(split_dim,
                  hidden_dims,
-                 param_dims=[input_dim * count_bins,
-                             input_dim * count_bins,
-                             input_dim * (count_bins - 1),
-                             input_dim * count_bins])
+                 param_dims=[(input_dim - split_dim) * count_bins,
+                             (input_dim - split_dim) * count_bins,
+                             (input_dim - split_dim) * (count_bins - 1),
+                             (input_dim - split_dim) * count_bins])
 
     return SplineCoupling(input_dim, split_dim, nn, count_bins, bound)

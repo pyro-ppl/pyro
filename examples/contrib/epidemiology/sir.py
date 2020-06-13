@@ -13,15 +13,19 @@ import torch
 from torch.distributions import biject_to, constraints
 
 import pyro
-from pyro.contrib.epidemiology import (OverdispersedSEIRModel, OverdispersedSIRModel, SimpleSEIRModel, SimpleSIRModel,
-                                       SuperspreadingSEIRModel, SuperspreadingSIRModel)
+from pyro.contrib.epidemiology import (HeterogeneousSIRModel, OverdispersedSEIRModel, OverdispersedSIRModel,
+                                       SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel, SuperspreadingSIRModel)
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
 def Model(args, data):
     """Dispatch between different model classes."""
-    if args.incubation_time > 0:
+    if args.heterogeneous:
+        assert args.incubation_time == 0
+        assert args.overdispersion == 0
+        return HeterogeneousSIRModel(args.population, args.recovery_time, data)
+    elif args.incubation_time > 0:
         assert args.incubation_time > 1
         if args.concentration < math.inf:
             return SuperspreadingSEIRModel(args.population, args.incubation_time,
@@ -108,8 +112,9 @@ def infer(args, model):
 
 def evaluate(args, model, samples):
     # Print estimated values.
-    names = {"basic_reproduction_number": "R0",
-             "response_rate": "rho"}
+    names = {"basic_reproduction_number": "R0"}
+    if not args.heterogeneous:
+        names["response_rate"] = "rho"
     if args.concentration < math.inf:
         names["concentration"] = "k"
     if "od" in samples:
@@ -127,6 +132,8 @@ def evaluate(args, model, samples):
 
         # Plot individual histograms.
         fig, axes = plt.subplots(len(names), 1, figsize=(5, 2.5 * len(names)))
+        if len(names) == 1:
+            axes = [axes]
         axes[0].set_title("Posterior parameter estimates")
         for ax, (name, key) in zip(axes, names.items()):
             truth = getattr(args, name)
@@ -139,7 +146,7 @@ def evaluate(args, model, samples):
 
         # Plot pairwise joint distributions for selected variables.
         covariates = [(name, samples[name]) for name in names.values()]
-        for i, aux in enumerate(samples["auxiliary"].unbind(-2)):
+        for i, aux in enumerate(samples["auxiliary"].squeeze(1).unbind(-2)):
             covariates.append(("aux[{},0]".format(i), aux[:, 0]))
             covariates.append(("aux[{},-1]".format(i), aux[:, -1]))
         N = len(covariates)
@@ -162,9 +169,10 @@ def evaluate(args, model, samples):
             value = biject_to(constraint).inv(value)
             return value.reshape(args.num_samples, -1)
 
-        covariates = [
-            ("R1", unconstrain(constraints.positive, samples["R0"])),
-            ("rho", unconstrain(constraints.unit_interval, samples["rho"]))]
+        covariates = [("R1", unconstrain(constraints.positive, samples["R0"]))]
+        if not args.heterogeneous:
+            covariates.append(
+                ("rho", unconstrain(constraints.unit_interval, samples["rho"])))
         if "k" in samples:
             covariates.append(
                 ("k", unconstrain(constraints.positive, samples["k"])))
@@ -219,6 +227,25 @@ def predict(args, model, truth):
         plt.legend(loc="upper left")
         plt.tight_layout()
 
+        # Plot Re time series.
+        if args.heterogeneous:
+            plt.figure()
+            Re = samples["Re"]
+            median = Re.median(dim=0).values
+            p05 = Re.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
+            p95 = Re.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
+            plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
+            plt.plot(time, median, "r-", label="median")
+            plt.plot(time[:args.duration], obs, "k.", label="observed")
+            plt.axvline(args.duration - 0.5, color="gray", lw=1)
+            plt.xlim(0, len(time) - 1)
+            plt.ylim(0, None)
+            plt.xlabel("day after first infection")
+            plt.ylabel("Re")
+            plt.title("Effective reproductive number over time")
+            plt.legend(loc="upper left")
+            plt.tight_layout()
+
 
 def main(args):
     pyro.enable_validation(__debug__)
@@ -257,16 +284,17 @@ if __name__ == "__main__":
                         help="If finite, use a superspreader model.")
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("-o", "--overdispersion", default=0., type=float)
+    parser.add_argument("-hg", "--heterogeneous", action="store_true")
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
-    parser.add_argument("-w", "--warmup-steps", default=100, type=int)
+    parser.add_argument("-w", "--warmup-steps", type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
-    parser.add_argument("-nb", "--num-bins", default=4, type=int)
+    parser.add_argument("-nb", "--num-bins", default=1, type=int)
     parser.add_argument("--double", action="store_true", default=True)
     parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--cuda", action="store_true")
@@ -275,6 +303,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.population = int(args.population)  # to allow e.g. --population=1e6
 
+    if args.warmup_steps is None:
+        args.warmup_steps = args.num_samples
     if args.double:
         if args.cuda:
             torch.set_default_tensor_type(torch.cuda.DoubleTensor)
