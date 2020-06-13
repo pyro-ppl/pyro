@@ -1035,7 +1035,6 @@ class HeterogeneousRegionalSIRModel(CompartmentalModel):
         # Sample region-global time-heterogeneous variables.
         R_factor = pyro.sample("R_factor_{}".format(t),
                                dist.LogNormal(state["R_factor"].log(), R_drift))
-        print(f"DEBUG R_factor.shape = {R_factor.shape}")
         Rt = pyro.deterministic("Rt_{}".format(t), R0 * R_factor)
 
         with self.region_plate:
