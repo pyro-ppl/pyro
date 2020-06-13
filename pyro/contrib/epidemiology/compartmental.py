@@ -24,7 +24,7 @@ from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.infer.util import is_validation_enabled, site_is_subsample
-from pyro.util import optional, warn_if_nan
+from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
@@ -351,13 +351,11 @@ class CompartmentalModel(ABC):
         if haar:
             time_dim = -2 if self.is_regional else -1
             dims = {"auxiliary": time_dim}
-            event_dims = {"auxiliary": 3 if self.is_regional else 2}
             supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
             for name, (fn, is_regional) in self._non_compartmental.items():
                 dims[name] = time_dim - fn.event_dim
                 supports[name] = fn.support
-                event_dims[name] = fn.event_dim
-            haar = _HaarSplitReparam(haar_full_mass, self.duration, dims, supports, event_dims)
+            haar = _HaarSplitReparam(haar_full_mass, self.duration, dims, supports)
         if haar_full_mass:
             assert full_mass and isinstance(full_mass, list)
             full_mass = full_mass[:]
@@ -402,7 +400,9 @@ class CompartmentalModel(ABC):
         mcmc.run()
         self.samples = mcmc.get_samples()
         if haar:
+            print(f"DEBUG {list(self.samples.keys())}")
             haar.aux_to_user(self.samples)
+            print(f"DEBUG {list(self.samples.keys())}")
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
@@ -559,7 +559,7 @@ class CompartmentalModel(ABC):
         # Extract latent variables that are not compartmental flows.
         result = OrderedDict()
         for name, site in tr.trace.iter_stochastic_nodes():
-            if name in flows:
+            if name in flows or site_is_subsample(site):
                 continue
             assert name.endswith("_0"), name
             name = name[:-2]
@@ -569,6 +569,30 @@ class CompartmentalModel(ABC):
             is_regional = any(f.name == "region" for f in site["cond_indep_stack"])
             result[name] = site["fn"], is_regional
         return result
+
+    def _sample_auxiliary(self):
+        """
+        Sample both compartmental and non-compartmental auxiliary variables.
+        """
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
+        # Sample the compartmental continuous reparameterizing variable.
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event())
+
+        # Sample any non-compartmental time series in batch.
+        non_compartmental = OrderedDict()
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            shape = (T,) + R_shape if is_regional else (T,)
+            # Manually expand, avoiding plates to enable HaarReparam and SplitReparam.
+            non_compartmental[name] = pyro.sample(name, fn.expand(shape).to_event())
+
+        return auxiliary, non_compartmental
 
     def _transition_bwd(self, params, prev, curr, t):
         """
@@ -621,29 +645,19 @@ class CompartmentalModel(ABC):
         C = len(self.compartments)
         T = self.duration
         R_shape = getattr(self.population, "shape", ())  # Region shape.
+        num_samples = len(next(iter(self.samples.values())))
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        num_samples = auxiliary.size(0)
+        # Reshape to accomodate the time_plate below.
         if self.is_regional:
             auxiliary = auxiliary.squeeze(1)
+            non_compartmental = {name: value.squeeze(1)
+                                 for name, value in non_compartmental.items()}
         assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
         aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        non_compartmental = OrderedDict()
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                non_compartmental[name] = pyro.sample(name, fn)
 
         # Sequentially transition.
         curr = self.initialize(params)
@@ -653,7 +667,7 @@ class CompartmentalModel(ABC):
 
                 # Extract any non-compartmental variables.
                 for name, value in non_compartmental.items():
-                    curr[name] = value[:, t:t+1]
+                    curr[name] = value[:, :, t]
 
                 # Extract and enumerate all compartmental variables.
                 for c, name in enumerate(self.compartments):
@@ -679,29 +693,16 @@ class CompartmentalModel(ABC):
         Q = self.num_quant_bins
         R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
-
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        assert auxiliary.shape == shape, "particle plates are not supported"
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
                                         num_quant_bins=self.num_quant_bins)
         curr = OrderedDict(zip(self.compartments, curr))
         logp = OrderedDict(zip(self.compartments, logp))
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                curr[name] = pyro.sample(name, fn)
+        curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
@@ -770,28 +771,15 @@ class CompartmentalModel(ABC):
         """
         Relaxed vectorized model used for continuous inference.
         """
-        C = len(self.compartments)
         T = self.duration
-        R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        assert auxiliary.shape == shape, "particle plates are not supported"
+        # Split tenors into current state.
         curr = dict(zip(self.compartments, auxiliary))
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                curr[name] = pyro.sample(name, fn)
+        curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
         prev = {name: cat2(value, curr[name][:-1], dim=-curr[name].dim())
@@ -868,13 +856,12 @@ class _HaarSplitReparam:
     Wrapper around ``HaarReparam`` and ``SplitReparam`` to additionally convert
     sample dicts between user-facing and auxiliary coordinates.
     """
-    def __init__(self, split, duration, dims, supports, event_dims):
+    def __init__(self, split, duration, dims, supports):
         assert 0 <= split < duration
         self.split = split
         self.duration = duration
         self.dims = dims
         self.supports = supports
-        self.event_dims = event_dims
 
     def __bool__(self):
         return True
@@ -886,8 +873,7 @@ class _HaarSplitReparam:
         # Transform to Haar coordinates.
         config = {}
         for name, dim in self.dims.items():
-            config[name] = HaarReparam(dim=dim, flip=True,
-                                       experimental_event_dim=self.event_dims[name])
+            config[name] = HaarReparam(dim=dim, flip=True)
         model = poutine.reparam(model, config)
 
         if self.split:
