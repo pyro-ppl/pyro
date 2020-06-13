@@ -970,12 +970,19 @@ class HeterogeneousRegionalSIRModel(CompartmentalModel):
     regions. Both parameters drift according to transformed Brownian motion
     with learned drift rate.
 
-    :param int population: Total ``population = S + I + R``.
-    :param float recovery_time: Mean recovery time (duration in state
-        ``I``). Must be greater than 1.
-    :param iterable data: Time series of new observed infections. Each time
-        step is Binomial distributed between 0 and the number of ``S -> I``
-        transitions. This allows false negative but no false positives.
+    This model demonstrates how to model hierarchical latent time series,
+    other than compartmental variables.
+
+    :param torch.Tensor population: Tensor of per-region populations, defining
+        ``population = S + I + R``.
+    :param torch.Tensor coupling: Pairwise coupling matrix. Entries should be
+        in ``[0,1]``.
+    :param float recovery_time: Mean recovery time (duration in state ``I``).
+        Must be greater than 1.
+    :param iterable data: Time x Region sized tensor of new observed
+        infections. Each time step is vector of Binomials distributed between
+        0 and the number of ``S -> I`` transitions. This allows false negative
+        but no false positives.
     """
 
     def __init__(self, population, coupling, recovery_time, data):
