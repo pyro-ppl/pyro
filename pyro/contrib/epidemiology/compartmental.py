@@ -777,7 +777,7 @@ class CompartmentalModel(ABC):
         params = self.global_model()
         auxiliary, non_compartmental = self._sample_auxiliary()
 
-        # Split tenors into current state.
+        # Split tensors into current state.
         curr = dict(zip(self.compartments, auxiliary))
         curr.update(non_compartmental)
 
