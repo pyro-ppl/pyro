@@ -24,7 +24,7 @@ from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.infer.util import is_validation_enabled, site_is_subsample
-from pyro.util import optional, warn_if_nan
+from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
@@ -332,13 +332,34 @@ class CompartmentalModel(ABC):
         assert isinstance(self.num_quant_bins, int)
         assert self.num_quant_bins >= 1
         self.relaxed = self.num_quant_bins == 1
+
+        # Setup Haar wavelet transform.
         haar = options.pop("haar", False)
-        assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
-        assert isinstance(haar_full_mass, int)
-        assert haar_full_mass >= 0
+        full_mass = options.pop("full_mass", self.full_mass)
+        assert isinstance(haar, bool)
+        assert isinstance(haar_full_mass, int) and haar_full_mass >= 0
+        assert isinstance(full_mass, (bool, list))
         haar_full_mass = min(haar_full_mass, self.duration)
-        haar = haar or (haar_full_mass > 0)
+        if haar_full_mass:
+            haar = True
+        if full_mass is True:
+            haar_full_mass = 0  # No need to split.
+        elif haar_full_mass >= self.duration:
+            full_mass = True  # Effectively full mass.
+            haar_full_mass = 0
+        if haar:
+            time_dim = -2 if self.is_regional else -1
+            dims = {"auxiliary": time_dim}
+            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
+            for name, (fn, is_regional) in self._non_compartmental.items():
+                dims[name] = time_dim - fn.event_dim
+                supports[name] = fn.support
+            haar = _HaarSplitReparam(haar_full_mass, self.duration, dims, supports)
+        if haar_full_mass:
+            assert full_mass and isinstance(full_mass, list)
+            full_mass = full_mass[:]
+            full_mass[0] += tuple(name + "_haar_split_0" for name in sorted(dims))
 
         # Heuristically initialize to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
@@ -352,18 +373,7 @@ class CompartmentalModel(ABC):
             assert "auxiliary" in init_values, \
                 ".heuristic() did not define auxiliary value"
             if haar:
-                # Also initialize Haar transformed coordinates.
-                x = init_values["auxiliary"]
-                x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-                x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True)(x)
-                init_values["auxiliary_haar"] = x
-            if haar_full_mass:
-                # Also split into low- and high-frequency parts.
-                x0, x1 = init_values["auxiliary_haar"].split(
-                    [haar_full_mass, self.duration - haar_full_mass],
-                    dim=-2 if self.is_regional else -1)
-                init_values["auxiliary_haar_split_0"] = x0
-                init_values["auxiliary_haar_split_1"] = x1
+                haar.user_to_aux(init_values)
             logger.info("Heuristic init: {}".format(", ".join(
                 "{}={:0.3g}".format(k, v.item())
                 for k, v in init_values.items()
@@ -373,18 +383,9 @@ class CompartmentalModel(ABC):
         # Configure a kernel.
         logger.info("Running inference...")
         max_tree_depth = options.pop("max_tree_depth", 5)
-        full_mass = options.pop("full_mass", self.full_mass)
         model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
-            rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
-            model = poutine.reparam(model, {"auxiliary": rep})
-        if haar_full_mass:
-            assert full_mass and isinstance(full_mass, list)
-            full_mass = full_mass[:]
-            full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
-            rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
-                               dim=-2 if self.is_regional else -1)
-            model = poutine.reparam(model, {"auxiliary_haar": rep})
+            model = haar.reparam(model)
         kernel = NUTS(model,
                       full_mass=full_mass,
                       init_strategy=init_to_generated(generate=heuristic),
@@ -398,18 +399,8 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
-        if haar_full_mass:
-            # Transform back from SplitReparam coordinates.
-            self.samples["auxiliary_haar"] = torch.cat([
-                self.samples.pop("auxiliary_haar_split_0"),
-                self.samples.pop("auxiliary_haar_split_1"),
-            ], dim=-2 if self.is_regional else -1)
         if haar:
-            # Transform back from Haar coordinates.
-            x = self.samples.pop("auxiliary_haar")
-            x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True).inv(x)
-            x = biject_to(constraints.interval(-0.5, self.population + 0.5))(x)
-            self.samples["auxiliary"] = x
+            haar.aux_to_user(self.samples)
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
@@ -582,6 +573,32 @@ class CompartmentalModel(ABC):
             result[name] = site["fn"], is_regional
         return result
 
+    def _sample_auxiliary(self):
+        """
+        Sample both compartmental and non-compartmental auxiliary variables.
+        """
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
+        # Sample the compartmental continuous reparameterizing variable.
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event())
+
+        # Sample any non-compartmental time series in batch.
+        non_compartmental = OrderedDict()
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            shape = (T,)
+            if self.is_regional:
+                shape += R_shape if is_regional else (1,)
+            # Manually expand, avoiding plates to enable HaarReparam and SplitReparam.
+            non_compartmental[name] = pyro.sample(name, fn.expand(shape).to_event())
+
+        return auxiliary, non_compartmental
+
     def _transition_bwd(self, params, prev, curr, t):
         """
         Helper to collect probabilty factors from .transition() conditioned on
@@ -633,29 +650,19 @@ class CompartmentalModel(ABC):
         C = len(self.compartments)
         T = self.duration
         R_shape = getattr(self.population, "shape", ())  # Region shape.
+        num_samples = len(next(iter(self.samples.values())))
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        num_samples = auxiliary.size(0)
+        # Reshape to accommodate the time_plate below.
         if self.is_regional:
             auxiliary = auxiliary.squeeze(1)
+            for name, value in non_compartmental.items():
+                non_compartmental[name] = value.squeeze(1)
         assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
         aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        non_compartmental = OrderedDict()
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                non_compartmental[name] = pyro.sample(name, fn)
 
         # Sequentially transition.
         curr = self.initialize(params)
@@ -665,7 +672,7 @@ class CompartmentalModel(ABC):
 
                 # Extract any non-compartmental variables.
                 for name, value in non_compartmental.items():
-                    curr[name] = value[:, t:t+1]
+                    curr[name] = value[:, :, t]
 
                 # Extract and enumerate all compartmental variables.
                 for c, name in enumerate(self.compartments):
@@ -691,29 +698,16 @@ class CompartmentalModel(ABC):
         Q = self.num_quant_bins
         R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
-
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        assert auxiliary.shape == shape, "particle plates are not supported"
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
                                         num_quant_bins=self.num_quant_bins)
         curr = OrderedDict(zip(self.compartments, curr))
         logp = OrderedDict(zip(self.compartments, logp))
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                curr[name] = pyro.sample(name, fn)
+        curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
@@ -782,28 +776,15 @@ class CompartmentalModel(ABC):
         """
         Relaxed vectorized model used for continuous inference.
         """
-        C = len(self.compartments)
         T = self.duration
-        R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        assert auxiliary.shape == shape, "particle plates are not supported"
+        # Split tensors into current state.
         curr = dict(zip(self.compartments, auxiliary))
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                curr[name] = pyro.sample(name, fn)
+        curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
         prev = {name: cat2(value, curr[name][:-1], dim=-curr[name].dim())
@@ -873,3 +854,77 @@ class _SMCGuide(_SMCModel):
     def step(self, state):
         with poutine.block(hide_types=["observe"]):
             super().step(state.copy())
+
+
+class _HaarSplitReparam:
+    """
+    Wrapper around ``HaarReparam`` and ``SplitReparam`` to additionally convert
+    sample dicts between user-facing and auxiliary coordinates.
+    """
+    def __init__(self, split, duration, dims, supports):
+        assert 0 <= split < duration
+        self.split = split
+        self.duration = duration
+        self.dims = dims
+        self.supports = supports
+
+    def __bool__(self):
+        return True
+
+    def reparam(self, model):
+        """
+        Wrap a model with ``poutine.reparam``.
+        """
+        # Transform to Haar coordinates.
+        config = {}
+        for name, dim in self.dims.items():
+            config[name] = HaarReparam(dim=dim, flip=True)
+        model = poutine.reparam(model, config)
+
+        if self.split:
+            # Split into low- and high-frequency parts.
+            splits = [self.split, self.duration - self.split]
+            config = {}
+            for name, dim in self.dims.items():
+                config[name + "_haar"] = SplitReparam(splits, dim=dim)
+            model = poutine.reparam(model, config)
+
+        return model
+
+    def user_to_aux(self, samples):
+        """
+        Convert from user-facing samples to auxiliary samples, in-place.
+        """
+        # Transform to Haar coordinates.
+        for name, dim in self.dims.items():
+            x = samples.pop(name)
+            x = biject_to(self.supports[name]).inv(x)
+            x = HaarTransform(dim=dim, flip=True)(x)
+            samples[name + "_haar"] = x
+
+        if self.split:
+            # Split into low- and high-frequency parts.
+            splits = [self.split, self.duration - self.split]
+            for name, dim in self.dims.items():
+                x0, x1 = samples.pop(name + "_haar").split(splits, dim=dim)
+                samples[name + "_haar_split_0"] = x0
+                samples[name + "_haar_split_1"] = x1
+
+    def aux_to_user(self, samples):
+        """
+        Convert from auxiliary samples to user-facing samples, in-place.
+        """
+        if self.split:
+            # Transform back from SplitReparam coordinates.
+            for name, dim in self.dims.items():
+                samples[name + "_haar"] = torch.cat([
+                    samples.pop(name + "_haar_split_0"),
+                    samples.pop(name + "_haar_split_1"),
+                ], dim=dim)
+
+        # Transform back from Haar coordinates.
+        for name, dim in self.dims.items():
+            x = samples.pop(name + "_haar")
+            x = HaarTransform(dim=dim, flip=True).inv(x)
+            x = biject_to(self.supports[name])(x)
+            samples[name] = x
