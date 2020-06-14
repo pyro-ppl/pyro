@@ -382,7 +382,6 @@ class CompartmentalModel(ABC):
 
         # Configure a kernel.
         logger.info("Running inference...")
-        max_tree_depth = options.pop("max_tree_depth", 5)
         model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
             model = haar.reparam(model)
@@ -390,7 +389,11 @@ class CompartmentalModel(ABC):
                       full_mass=full_mass,
                       init_strategy=init_to_generated(generate=heuristic),
                       max_plate_nesting=self.max_plate_nesting,
-                      max_tree_depth=max_tree_depth)
+                      jit_compile=options.pop("jit_compile", False),
+                      jit_options=options.pop("jit_options", None),
+                      ignore_jit_warnings=options.pop("ignore_jit_warnings", True),
+                      target_accept_prob=options.pop("target_accept_prob", 0.8),
+                      max_tree_depth=options.pop("max_tree_depth", 5))
         if options.pop("arrowhead_mass", False):
             kernel.mass_matrix_adapter = ArrowheadMassMatrix()
 
@@ -700,8 +703,8 @@ class CompartmentalModel(ABC):
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
                                         num_quant_bins=self.num_quant_bins)
-        curr = OrderedDict(zip(self.compartments, curr))
-        logp = OrderedDict(zip(self.compartments, logp))
+        curr = OrderedDict(zip(self.compartments, curr.unbind(0)))
+        logp = OrderedDict(zip(self.compartments, logp.unbind(0)))
         curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
@@ -778,7 +781,7 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Split tensors into current state.
-        curr = dict(zip(self.compartments, auxiliary))
+        curr = dict(zip(self.compartments, auxiliary.unbind(0)))
         curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.

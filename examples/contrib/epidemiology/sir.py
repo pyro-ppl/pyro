@@ -96,6 +96,7 @@ def infer(args, model):
                      num_quant_bins=args.num_bins,
                      haar=args.haar,
                      haar_full_mass=args.haar_full_mass,
+                     jit_compile=args.jit,
                      hook_fn=hook_fn)
 
     mcmc.summary()
@@ -299,6 +300,7 @@ if __name__ == "__main__":
     parser.add_argument("--double", action="store_true", default=True)
     parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--jit", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()

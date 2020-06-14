@@ -157,6 +157,8 @@ JIT_EXAMPLES = [
     'baseball.py --num-samples=200 --warmup-steps=100 --jit',
     'contrib/autoname/mixture.py --num-epochs=1 --jit',
     'contrib/cevae/synthetic.py --num-epochs=1 --jit',
+    'contrib/epidemiology/sir.py -np=128 -t=2 -w=2 -n=4 -d=20 -p=1000 -f 2 --jit',
+    'contrib/epidemiology/regional.py -t=2 -w=2 -n=4 -r=3 -d=20 -p=1000 -f 2 --jit',
     xfail_jit('lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --jit'),
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),

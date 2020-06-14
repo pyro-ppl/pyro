@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
     {"num_quant_bins": 16},
     {"num_quant_bins": 2, "haar": True},
     {"arrowhead_mass": True},
+    {"jit_compile": True},
+    {"jit_compile": True, "haar_full_mass": 2},
+    {"jit_compile": True, "num_quant_bins": 2},
 ], ids=str)
 def test_simple_sir_smoke(duration, forecast, options):
     population = 100
@@ -429,6 +432,9 @@ def test_regional_smoke(duration, forecast, options):
     {"haar": True},
     {"haar_full_mass": 2},
     {"num_quant_bins": 2},
+    {"jit_compile": True},
+    {"jit_compile": True, "haar_full_mass": 2},
+    {"jit_compile": True, "num_quant_bins": 2},
 ], ids=str)
 def test_hetero_regional_smoke(duration, forecast, options):
     num_regions = 6
