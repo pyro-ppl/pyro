@@ -198,6 +198,9 @@ class TransformTests(TestCase):
     def test_conditional_spline(self):
         self._test_conditional(T.conditional_spline)
 
+    def test_conditional_spline_autoregressive(self):
+        self._test_conditional(T.conditional_spline_autoregressive)
+
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
         self._test(lambda input_dim: T.DiscreteCosineTransform())
@@ -263,5 +266,15 @@ class TransformTests(TestCase):
     def test_spline(self):
         self._test(T.spline)
 
+    def test_spline_autoregressive(self):
+        self._test(T.spline_autoregressive)
+
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
+
+if __name__ == "__main__":
+    #torch.set_default_tensor_type(torch.DoubleTensor)
+    tt = TransformTests()
+    tt.setUp()
+    tt.test_spline_autoregressive()
+    #tt.test_conditional_spline()
