@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 import logging
 import operator
 import re
@@ -289,7 +290,7 @@ class CompartmentalModel(ABC):
                               for name, site in trace.nodes.items()
                               if site["type"] == "sample")
 
-        self._concat_series(samples)
+        self._concat_series(samples, trace)
         return samples
 
     @set_approx_log_prob_tol(0.1)
@@ -365,20 +366,8 @@ class CompartmentalModel(ABC):
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
                              for k in list(options)
                              if k.startswith("heuristic_")}
-
-        def heuristic():
-            with poutine.block():
-                init_values = self.heuristic(**heuristic_options)
-            assert isinstance(init_values, dict)
-            assert "auxiliary" in init_values, \
-                ".heuristic() did not define auxiliary value"
-            if haar:
-                haar.user_to_aux(init_values)
-            logger.info("Heuristic init: {}".format(", ".join(
-                "{}={:0.3g}".format(k, v.item())
-                for k, v in init_values.items()
-                if v.numel() == 1)))
-            return init_to_value(values=init_values)
+        init_strategy = init_to_generated(
+            generate=functools.partial(self._heuristic, haar, **heuristic_options))
 
         # Configure a kernel.
         logger.info("Running inference...")
@@ -387,7 +376,7 @@ class CompartmentalModel(ABC):
             model = haar.reparam(model)
         kernel = NUTS(model,
                       full_mass=full_mass,
-                      init_strategy=init_to_generated(generate=heuristic),
+                      init_strategy=init_strategy,
                       max_plate_nesting=self.max_plate_nesting,
                       jit_compile=options.pop("jit_compile", False),
                       jit_options=options.pop("jit_options", None),
@@ -464,7 +453,7 @@ class CompartmentalModel(ABC):
                                   for name, site in trace.nodes.items()
                                   if site["type"] == "sample")
 
-        self._concat_series(samples, forecast, vectorized=True)
+        self._concat_series(samples, trace, forecast)
         return samples
 
     @torch.no_grad()
@@ -516,12 +505,27 @@ class CompartmentalModel(ABC):
 
     # Internal helpers ########################################
 
-    def _concat_series(self, samples, forecast=0, vectorized=False):
+    def _heuristic(self, haar, **options):
+        with poutine.block():
+            init_values = self.heuristic(**options)
+        assert isinstance(init_values, dict)
+        assert "auxiliary" in init_values, \
+            ".heuristic() did not define auxiliary value"
+        if haar:
+            haar.user_to_aux(init_values)
+        logger.info("Heuristic init: {}".format(", ".join(
+            "{}={:0.3g}".format(k, v.item())
+            for k, v in init_values.items()
+            if v.numel() == 1)))
+        return init_to_value(values=init_values)
+
+    def _concat_series(self, samples, trace, forecast=0):
         """
         Concatenate sequential time series into tensors, in-place.
 
         :param dict samples: A dictionary of samples.
         """
+        time_dim = -2 if self.is_regional else -1
         for name in set(self.compartments).union(self.series):
             pattern = name + "_[0-9]+"
             series = []
@@ -532,8 +536,9 @@ class CompartmentalModel(ABC):
                 continue
             assert len(series) == self.duration + forecast
             series = torch.broadcast_tensors(*map(torch.as_tensor, series))
-            if vectorized and name != "obs":  # TODO Generalize.
-                samples[name] = torch.cat(series, dim=1)
+            dim = time_dim - trace.nodes[name + "_0"]["fn"].event_dim
+            if series[0].dim() >= -dim:
+                samples[name] = torch.cat(series, dim=dim)
             else:
                 samples[name] = torch.stack(series)
 

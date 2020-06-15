@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
     {"jit_compile": True},
     {"jit_compile": True, "haar_full_mass": 2},
     {"jit_compile": True, "num_quant_bins": 2},
+    {"num_chains": 2},
+    {"num_chains": 2, "num_quant_bins": 2},
+    {"num_chains": 2, "jit_compile": True},
 ], ids=str)
 def test_simple_sir_smoke(duration, forecast, options):
     population = 100
@@ -54,6 +57,7 @@ def test_simple_sir_smoke(duration, forecast, options):
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
+    num_samples *= options.get("num_chains", 1)
     assert samples["S"].shape == (num_samples, duration + forecast)
     assert samples["I"].shape == (num_samples, duration + forecast)
 
