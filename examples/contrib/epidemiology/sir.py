@@ -91,6 +91,7 @@ def infer(args, model):
                      heuristic_ess_threshold=args.ess_threshold,
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
+                     num_chains=args.num_chains,
                      max_tree_depth=args.max_tree_depth,
                      arrowhead_mass=args.arrowhead_mass,
                      num_quant_bins=args.num_bins,
@@ -293,6 +294,7 @@ if __name__ == "__main__":
     parser.add_argument("-np", "--num-particles", default=1024, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
     parser.add_argument("-w", "--warmup-steps", type=int)
+    parser.add_argument("-c", "--num-chains", default=1, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
