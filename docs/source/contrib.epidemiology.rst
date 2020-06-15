@@ -1,5 +1,5 @@
-Epidemiological Models
-======================
+Epidemiology
+============
 .. automodule:: pyro.contrib.epidemiology
 
 .. warning:: Code in ``pyro.contrib.epidemiology`` is under development.
@@ -19,6 +19,7 @@ Base Compartmental Model
 ------------------------
 .. automodule:: pyro.contrib.epidemiology.compartmental
     :members:
+    :show-inheritance:
     :member-order: bysource
 
 Example Models
@@ -29,8 +30,11 @@ Distributions
 -------------
 .. automodule:: pyro.contrib.epidemiology.distributions
     :members:
+    :show-inheritance:
     :member-order: bysource
 
 .. autoclass:: pyro.distributions.CoalescentRateLikelihood
     :members:
+    :show-inheritance:
+    :member-order: bysource
     :special-members: __call__

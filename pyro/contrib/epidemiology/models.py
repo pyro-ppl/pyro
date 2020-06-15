@@ -63,7 +63,7 @@ class SimpleSIRModel(CompartmentalModel):
                                          num_infectious=state["I"],
                                          population=self.population))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.ExtendedBinomial(state["I"], 1 / tau))
+                          binomial_dist(state["I"], 1 / tau))
 
         # Update compartments with flows.
         state["S"] = state["S"] - S2I
@@ -72,7 +72,7 @@ class SimpleSIRModel(CompartmentalModel):
         # Condition on observations.
         t_is_observed = isinstance(t, slice) or t < self.duration
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho),
+                    binomial_dist(S2I, rho),
                     obs=self.data[t] if t_is_observed else None)
 
 
@@ -134,9 +134,9 @@ class SimpleSEIRModel(CompartmentalModel):
                                          num_infectious=state["I"],
                                          population=self.population))
         E2I = pyro.sample("E2I_{}".format(t),
-                          dist.ExtendedBinomial(state["E"], 1 / tau_e))
+                          binomial_dist(state["E"], 1 / tau_e))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.ExtendedBinomial(state["I"], 1 / tau_i))
+                          binomial_dist(state["I"], 1 / tau_i))
 
         # Update compartments with flows.
         state["S"] = state["S"] - S2E
@@ -146,7 +146,7 @@ class SimpleSEIRModel(CompartmentalModel):
         # Condition on observations.
         t_is_observed = isinstance(t, slice) or t < self.duration
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2E, rho),
+                    binomial_dist(S2E, rho),
                     obs=self.data[t] if t_is_observed else None)
 
 
@@ -397,7 +397,7 @@ class SuperspreadingSIRModel(CompartmentalModel):
 
         # Sample flows between compartments.
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.ExtendedBinomial(state["I"], 1 / tau))
+                          binomial_dist(state["I"], 1 / tau))
         S2I = pyro.sample("S2I_{}".format(t),
                           infection_dist(individual_rate=R0,
                                          num_susceptible=state["S"],
@@ -412,7 +412,7 @@ class SuperspreadingSIRModel(CompartmentalModel):
         # Condition on observations.
         t_is_observed = isinstance(t, slice) or t < self.duration
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho),
+                    binomial_dist(S2I, rho),
                     obs=self.data[t] if t_is_observed else None)
 
 
@@ -506,9 +506,9 @@ class SuperspreadingSEIRModel(CompartmentalModel):
 
         # Sample flows between compartments.
         E2I = pyro.sample("E2I_{}".format(t),
-                          dist.ExtendedBinomial(state["E"], 1 / tau_e))
+                          binomial_dist(state["E"], 1 / tau_e))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.ExtendedBinomial(state["I"], 1 / tau_i))
+                          binomial_dist(state["I"], 1 / tau_i))
         S2E = pyro.sample("S2E_{}".format(t),
                           infection_dist(individual_rate=R0,
                                          num_susceptible=state["S"],
@@ -519,7 +519,7 @@ class SuperspreadingSEIRModel(CompartmentalModel):
         # Condition on observations.
         t_is_observed = isinstance(t, slice) or t < self.duration
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2E, rho),
+                    binomial_dist(S2E, rho),
                     obs=self.data[t] if t_is_observed else None)
         if self.coal_likelihood is not None:
             R = R0 * state["S"] / self.population
@@ -536,15 +536,15 @@ class SuperspreadingSEIRModel(CompartmentalModel):
 
 class HeterogeneousSIRModel(CompartmentalModel):
     """
-    Generalizes :class:`SimpleSIRModel` by allowing ``Re`` and ``rho`` to vary
+    Generalizes :class:`SimpleSIRModel` by allowing ``Rt`` and ``rho`` to vary
     in time.
 
     To customize this model we recommend forking and editing this class.
 
     In this model, the response rate ``rho`` is piecewise constant with unknown
-    value over three pieces. The reproductive number ``Re`` is a product of a
+    value over three pieces. The reproductive number ``Rt`` is a product of a
     constant ``R0`` with a factor ``beta`` that drifts via Brownian motion in
-    log space. Both ``rho`` and ``Re`` are available as time series.
+    log space. Both ``rho`` and ``Rt`` are available as time series.
 
     :param int population: Total ``population = S + I + R``.
     :param float recovery_time: Mean recovery time (duration in state
@@ -599,16 +599,16 @@ class HeterogeneousSIRModel(CompartmentalModel):
         # This assumes beta slowly drifts via Brownian motion in log space.
         beta = pyro.sample("beta_{}".format(t),
                            dist.LogNormal(state["beta"].log(), 0.1))
-        Re = pyro.deterministic("Re_{}".format(t), R0 * beta)
+        Rt = pyro.deterministic("Rt_{}".format(t), R0 * beta)
 
         # Sample flows between compartments.
         S2I = pyro.sample("S2I_{}".format(t),
-                          infection_dist(individual_rate=Re / tau,
+                          infection_dist(individual_rate=Rt / tau,
                                          num_susceptible=state["S"],
                                          num_infectious=state["I"],
                                          population=self.population))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.ExtendedBinomial(state["I"], 1 / tau))
+                          binomial_dist(state["I"], 1 / tau))
 
         # Update compartments and heterogeneous variables.
         state["S"] = state["S"] - S2I
@@ -620,7 +620,7 @@ class HeterogeneousSIRModel(CompartmentalModel):
         # need to index it via rho[..., t] rather than a simple rho[t].
         t_is_observed = isinstance(t, slice) or t < self.duration
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho[..., t]),
+                    binomial_dist(S2I, rho[..., t]),
                     obs=self.data[t] if t_is_observed else None)
 
 
@@ -685,9 +685,9 @@ class SparseSIRModel(CompartmentalModel):
                                          num_infectious=state["I"],
                                          population=self.population))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.ExtendedBinomial(state["I"], 1 / tau))
+                          binomial_dist(state["I"], 1 / tau))
         S2O = pyro.sample("S2O_{}".format(t),
-                          dist.ExtendedBinomial(S2I, rho))
+                          binomial_dist(S2I, rho))
 
         # Update compartments with flows.
         state["S"] = state["S"] - S2I
@@ -699,6 +699,7 @@ class SparseSIRModel(CompartmentalModel):
         mask_t = self.mask[t] if t_is_observed else False
         data_t = self.data[t] if t_is_observed else None
         pyro.sample("obs_{}".format(t),
+                    # FIXME Delta is incompatible with relaxed inference.
                     dist.Delta(state["O"]).mask(mask_t),
                     obs=data_t)
 
@@ -801,7 +802,7 @@ class UnknownStartSIRModel(CompartmentalModel):
                                          num_infectious=state["I"] + X,
                                          population=self.population))
         I2R = pyro.sample("I2R_{}".format(t),
-                          dist.ExtendedBinomial(state["I"], 1 / tau))
+                          binomial_dist(state["I"], 1 / tau))
 
         # Update compartments with flows.
         state["S"] = state["S"] - S2I
@@ -815,7 +816,7 @@ class UnknownStartSIRModel(CompartmentalModel):
 
         # Condition on observations.
         pyro.sample("obs_{}".format(t),
-                    dist.ExtendedBinomial(S2I, rho_t),
+                    binomial_dist(S2I, rho_t),
                     obs=data_t)
 
     def predict(self, forecast=0):
@@ -944,7 +945,7 @@ class RegionalSIRModel(CompartmentalModel):
                                              num_infectious=I_coupled,
                                              population=pop_coupled))
             I2R = pyro.sample("I2R_{}".format(t),
-                              dist.ExtendedBinomial(state["I"], 1 / tau))
+                              binomial_dist(state["I"], 1 / tau))
 
             # Update compartments with flows.
             state["S"] = state["S"] - S2I
@@ -953,7 +954,122 @@ class RegionalSIRModel(CompartmentalModel):
             # Condition on observations.
             t_is_observed = isinstance(t, slice) or t < self.duration
             pyro.sample("obs_{}".format(t),
-                        dist.ExtendedBinomial(S2I, rho),
+                        binomial_dist(S2I, rho),
+                        obs=self.data[t] if t_is_observed else None)
+
+
+class HeterogeneousRegionalSIRModel(CompartmentalModel):
+    """
+    Generalizes :class:`RegionalSIRModel` by allowing ``Rt`` and ``rho`` to vary
+    in time.
+
+    To customize this model we recommend forking and editing this class.
+
+    In this model, the response rate ``rho`` varies across time and region,
+    whereas the reproductive number ``Rt`` varies in time but is shared among
+    regions. Both parameters drift according to transformed Brownian motion
+    with learned drift rate.
+
+    This model demonstrates how to model hierarchical latent time series,
+    other than compartmental variables.
+
+    :param torch.Tensor population: Tensor of per-region populations, defining
+        ``population = S + I + R``.
+    :param torch.Tensor coupling: Pairwise coupling matrix. Entries should be
+        in ``[0,1]``.
+    :param float recovery_time: Mean recovery time (duration in state ``I``).
+        Must be greater than 1.
+    :param iterable data: Time x Region sized tensor of new observed
+        infections. Each time step is vector of Binomials distributed between
+        0 and the number of ``S -> I`` transitions. This allows false negative
+        but no false positives.
+    """
+
+    def __init__(self, population, coupling, recovery_time, data):
+        duration = len(data)
+        num_regions, = population.shape
+        assert coupling.shape == (num_regions, num_regions)
+        assert (0 <= coupling).all()
+        assert (coupling <= 1).all()
+        assert isinstance(recovery_time, float)
+        assert recovery_time > 1
+        if isinstance(data, torch.Tensor):
+            # Data tensors should be oriented as (time, region).
+            assert data.shape == (duration, num_regions)
+        compartments = ("S", "I")  # R is implicit.
+
+        # We create a regional model by passing a vector of populations.
+        super().__init__(compartments, duration, population, approximate=("I",))
+
+        self.coupling = coupling
+        self.recovery_time = recovery_time
+        self.data = data
+
+    def global_model(self):
+        tau = self.recovery_time
+
+        # Assume reproductive number is heterogeneous but shared among regions.
+        R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
+        R_drift = pyro.sample("R_drift", dist.LogNormal(-3., 1.))
+
+        # Assume response rate is heterogeneous in time and region.
+        with self.region_plate:
+            rho0 = pyro.sample("rho0", dist.Beta(4, 4))
+        rho_drift = pyro.sample("rho_drift", dist.LogNormal(-3., 1.))
+
+        return tau, R0, R_drift, rho0, rho_drift
+
+    def initialize(self, params):
+        # Start with a single infection in region 0.
+        I = torch.zeros_like(self.population)
+        I[0] += 1
+        S = self.population - I
+        return {"S": S, "I": I,
+                "R_factor": torch.tensor(1.),
+                "rho_shift": torch.tensor(0.)}
+
+    def transition(self, params, state, t):
+        tau, R0, R_drift, rho0, rho_drift = params
+
+        # Account for infections from all regions. This uses approximate (point
+        # estimate) counts I_approx for infection from other regions, but uses
+        # the exact (enumerated) count I for infections from one's own region.
+        I_coupled = state["I_approx"] @ self.coupling
+        I_coupled = I_coupled + (state["I"] - state["I_approx"]) * self.coupling.diag()
+        I_coupled = I_coupled.clamp(min=0)  # In case I_approx is negative.
+        pop_coupled = self.population @ self.coupling
+
+        # Sample region-global time-heterogeneous variables.
+        R_factor = pyro.sample("R_factor_{}".format(t),
+                               dist.LogNormal(state["R_factor"].log(), R_drift))
+        Rt = pyro.deterministic("Rt_{}".format(t), R0 * R_factor)
+
+        with self.region_plate:
+            # Sample region-local time-heterogeneous variables.
+            rho_shift = pyro.sample("rho_shift_{}".format(t),
+                                    dist.Normal(state["rho_shift"], rho_drift))
+            rho = pyro.deterministic("rho_{}".format(t),
+                                     (rho0.log() - (-rho0).log1p() + rho_shift).sigmoid())
+
+            # Sample flows between compartments.
+            S2I = pyro.sample("S2I_{}".format(t),
+                              infection_dist(individual_rate=Rt / tau,
+                                             num_susceptible=state["S"],
+                                             num_infectious=I_coupled,
+                                             population=pop_coupled))
+            I2R = pyro.sample("I2R_{}".format(t),
+                              binomial_dist(state["I"], 1 / tau))
+
+            # Update compartments and heterogeneous variables.
+            state["S"] = state["S"] - S2I
+            state["I"] = state["I"] + S2I - I2R
+            state["R_factor"] = R_factor
+            state["rho_shift"] = rho_shift
+
+            # Condition on observations.
+            t_is_observed = isinstance(t, slice) or t < self.duration
+            pyro.sample("obs_{}".format(t),
+                        binomial_dist(S2I, rho),
                         obs=self.data[t] if t_is_observed else None)
 
 
