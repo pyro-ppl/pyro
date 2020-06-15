@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
     {"jit_compile": True},
     {"jit_compile": True, "haar_full_mass": 2},
     {"jit_compile": True, "num_quant_bins": 2},
-    {"num_chains": 2},
-    {"num_chains": 2, "num_quant_bins": 2},
-    {"num_chains": 2, "jit_compile": True},
+    {"num_chains": 2, "mp_context": "spawn"},
+    {"num_chains": 2, "mp_context": "spawn", "num_quant_bins": 2},
+    {"num_chains": 2, "mp_context": "spawn", "jit_compile": True},
 ], ids=str)
 def test_simple_sir_smoke(duration, forecast, options):
     population = 100

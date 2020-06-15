@@ -79,6 +79,7 @@ def generate_data(args):
 
 
 def infer(args, model):
+    parallel = args.num_chains > 1
     energies = []
 
     def hook_fn(kernel, *unused):
@@ -92,16 +93,17 @@ def infer(args, model):
                      warmup_steps=args.warmup_steps,
                      num_samples=args.num_samples,
                      num_chains=args.num_chains,
+                     mp_context="spawn" if parallel else None,
                      max_tree_depth=args.max_tree_depth,
                      arrowhead_mass=args.arrowhead_mass,
                      num_quant_bins=args.num_bins,
                      haar=args.haar,
                      haar_full_mass=args.haar_full_mass,
                      jit_compile=args.jit,
-                     hook_fn=hook_fn)
+                     hook_fn=None if parallel else hook_fn)
 
     mcmc.summary()
-    if args.plot:
+    if args.plot and energies:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(6, 3))
         plt.plot(energies)
