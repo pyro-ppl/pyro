@@ -7,8 +7,8 @@ on:
     branches: [dev, master]
 
 env:
-  CXX="g++-8"
-  CC="gcc-8"
+  CXX: g++-8
+  CC: gcc-8
 
 jobs:
   lint:
@@ -31,7 +31,7 @@ jobs:
         make lint
   docs:
     runs-on: ubuntu-latest
-    uses: lint
+    needs: lint
     strategy:
       matrix:
         python-version: [3.5]
@@ -57,7 +57,7 @@ jobs:
           make doctest
   unit:
     runs-on: ubuntu-latest
-    uses: docs
+    needs: docs
     strategy:
       matrix:
         python-version: [3.5]
@@ -80,7 +80,7 @@ jobs:
           pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
   examples:
     runs-on: ubuntu-latest
-    uses: docs
+    needs: docs
     strategy:
       matrix:
         python-version: [3.5]
@@ -105,7 +105,7 @@ jobs:
                             | CI=1 xargs pytest -vx --nbval-lax --current-env
   integration_1:
     runs-on: ubuntu-latest
-    uses: docs
+    needs: docs
     strategy:
       matrix:
         python-version: [3.5]
@@ -128,7 +128,7 @@ jobs:
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
   integration_2:
     runs-on: ubuntu-latest
-    uses: docs
+    needs: docs
     strategy:
       matrix:
         python-version: [3.5]
