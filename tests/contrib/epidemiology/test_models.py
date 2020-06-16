@@ -17,6 +17,7 @@ from tests.common import xfail_param
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.filterwarnings("ignore:num_chains")
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
