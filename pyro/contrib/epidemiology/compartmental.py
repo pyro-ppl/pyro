@@ -19,12 +19,13 @@ import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import HaarTransform
-from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
-from pyro.infer.autoguide import init_to_generated, init_to_value
+from pyro.infer import MCMC, NUTS, SVI, JitTrace_ELBO, SMCFilter, Trace_ELBO, infer_discrete
+from pyro.infer.autoguide import AutoLowRankMultivariateNormal, init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.infer.util import is_validation_enabled, site_is_subsample
+from pyro.optim import ClippedAdam
 from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
@@ -60,7 +61,7 @@ class CompartmentalModel(ABC):
 
         # Run inference to fit the model to data.
         model = MyModel(...)
-        model.fit(num_samples=100)
+        model.fit_mcmc(num_samples=100)
         R0 = model.samples["R0"]  # An example parameter.
         print("R0 = {:0.3g} \u00B1 {:0.3g}".format(R0.mean(), R0.std()))
 
@@ -216,7 +217,7 @@ class CompartmentalModel(ABC):
         interpretations, including batched and vectorized interpretations.
         During :meth:`generate` this is called to generate a single sample.
         During :meth:`heuristic` this is called to generate a batch of samples
-        for SMC.  During :meth:`fit` this is called both in vectorized form
+        for SMC.  During :meth:`fit_mcmc` this is called both in vectorized form
         (vectorizing over time) and in sequential form (for a single time
         step); both forms enumerate over discrete latent variables.  During
         :meth:`predict` this is called to forecast a batch of samples,
@@ -294,7 +295,7 @@ class CompartmentalModel(ABC):
         return samples
 
     @set_approx_log_prob_tol(0.1)
-    def fit(self, **options):
+    def fit_mcmc(self, **options):
         r"""
         Runs inference to generate posterior samples.
 
@@ -401,6 +402,83 @@ class CompartmentalModel(ABC):
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
 
+    def fit_svi(self, *,
+                num_samples=100,
+                num_steps=5000,
+                num_particles=32,
+                learning_rate=0.1,
+                learning_rate_decay=0.1,
+                betas=(0.8, 0.99),
+                init_scale=0.1,
+                haar=True,
+                guide_rank=None,
+                jit=False,
+                log_every=100,
+                **options):
+        """
+        Runs variational inference to generate a posterior.
+        """
+        _require_double_precision()
+        self.num_quant_bins = 1
+        self.relaxed = True
+
+        # Setup Haar wavelet transform.
+        haar = options.pop("haar", False)
+        assert isinstance(haar, bool)
+        if haar:
+            time_dim = -2 if self.is_regional else -1
+            dims = {"auxiliary": time_dim}
+            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
+            for name, (fn, is_regional) in self._non_compartmental.items():
+                dims[name] = time_dim - fn.event_dim
+                supports[name] = fn.support
+            haar = _HaarSplitReparam(0, self.duration, dims, supports)
+
+        # Heuristically initialize to feasible latents.
+        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
+                             for k in list(options)
+                             if k.startswith("heuristic_")}
+        assert not options, "unrecognized options: {}".format(", ".join(options))
+        init_strategy = self._heuristic(haar, **heuristic_options)
+
+        # Configure variational inference.
+        logger.info("Running inference...")
+        model = self._relaxed_model
+        if haar:
+            model = haar.reparam(model)
+        guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
+                                              init_scale=init_scale, rank=guide_rank)
+
+        Elbo = JitTrace_ELBO if jit else Trace_ELBO
+        elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
+                    num_particles=num_particles, vectorize_particles=True,
+                    ignore_jit_warnings=True)
+        optim = ClippedAdam({"lr": learning_rate, 'betas': betas,
+                             "lrd": learning_rate_decay ** (1 / num_steps)})
+        svi = SVI(model, guide, optim, elbo)
+
+        # Run inference.
+        losses = []
+        for step in range(1 + num_steps):
+            loss = svi.step() / self.duration
+            if step % log_every == 0:
+                logger.info("step {} loss = {:0.4g}".format(step, loss))
+            losses.append(loss)
+
+        # Draw posterior samples.
+        with torch.no_grad():
+            particle_plate = pyro.plate("particles", num_samples,
+                                        dim=-1 - self.max_plate_nesting)
+            guide_trace = poutine.trace(particle_plate(guide)).get_trace()
+            model_trace = poutine.trace(
+                poutine.replay(particle_plate(model), guide_trace)).get_trace()
+            self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
+                            if site["type"] == "sample"}
+            if haar:
+                haar.aux_to_user(self.samples)
+
+        return losses
+
     @torch.no_grad()
     @set_approx_log_prob_tol(0.1)
     @set_approx_sample_thresh(10000)
@@ -408,8 +486,8 @@ class CompartmentalModel(ABC):
         """
         Predict latent variables and optionally forecast forward.
 
-        This may be run only after :meth:`fit` and draws the same
-        ``num_samples`` as passed to :meth:`fit`.
+        This may be run only after :meth:`fit_mcmc` and draws the same
+        ``num_samples`` as passed to :meth:`fit_mcmc`.
 
         :param int forecast: The number of time steps to forecast forward.
         :returns: A dictionary mapping sample site name (or compartment name)
@@ -418,7 +496,7 @@ class CompartmentalModel(ABC):
         """
         _require_double_precision()
         if not self.samples:
-            raise RuntimeError("Missing samples, try running .fit() first")
+            raise RuntimeError("Missing samples, try running .fit_mcmc() first")
 
         samples = self.samples
         num_samples = len(next(iter(samples.values())))
@@ -784,13 +862,21 @@ class CompartmentalModel(ABC):
         # Sample global parameters and auxiliary variables.
         params = self.global_model()
         auxiliary, non_compartmental = self._sample_auxiliary()
+        for _ in range(2 if self.is_regional else 1):
+            auxiliary = auxiliary.squeeze(1)
+            for name, value in non_compartmental.items():
+                non_compartmental[name] = value.squeeze(1)
 
         # Split tensors into current state.
-        curr = dict(zip(self.compartments, auxiliary.unbind(0)))
+        # FIXME support nontrivial event_dim.
+        dim = -3 if self.is_regional else -2
+        curr = dict(zip(self.compartments, auxiliary.unbind(dim)))
         curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
-        prev = {name: cat2(value, curr[name][:-1], dim=-curr[name].dim())
+        # FIXME support regional models.
+        # FIXME support nontrivial event_dim.
+        prev = {name: cat2(value, curr[name][..., :-1], dim=-1)
                 for name, value in self.initialize(params).items()}
 
         # Enable approximate inference.

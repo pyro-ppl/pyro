@@ -151,7 +151,7 @@ if __name__ == "__main__":
     parser.add_argument("--rng-seed", default=0, type=int)
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--jit", action="store_true", default=True)
-    parser.add_argument("--nojit", action="store_true", dest="jit")
+    parser.add_argument("--nojit", action="store_false", dest="jit")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
