@@ -61,7 +61,7 @@ class CompartmentalModel(ABC):
 
         # Run inference to fit the model to data.
         model = MyModel(...)
-        model.fit_mcmc(num_samples=100)
+        model.fit_svi(num_samples=100)  # or .fit_mcmc(...)
         R0 = model.samples["R0"]  # An example parameter.
         print("R0 = {:0.3g} \u00B1 {:0.3g}".format(R0.mean(), R0.std()))
 

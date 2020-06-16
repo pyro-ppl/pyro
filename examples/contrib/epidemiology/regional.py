@@ -51,7 +51,7 @@ def infer_mcmc(args, model):
         if args.verbose:
             logging.info("potential = {:0.6g}".format(e))
 
-    mcmc = model.fit_mcmc(heuristic_num_particles=args.num_particles,
+    mcmc = model.fit_mcmc(heuristic_num_particles=args.smc_particles,
                           heuristic_ess_threshold=args.ess_threshold,
                           warmup_steps=args.warmup_steps,
                           num_samples=args.num_samples,
@@ -72,8 +72,6 @@ def infer_mcmc(args, model):
         plt.title("MCMC energy trace")
         plt.tight_layout()
 
-    return model.samples
-
 
 def infer_svi(args, model):
     losses = model.fit_svi(heuristic_num_particles=args.smc_particles,
@@ -92,8 +90,6 @@ def infer_svi(args, model):
         plt.ylabel("loss")
         plt.title("SVI Convergence")
         plt.tight_layout()
-
-    return model.samples
 
 
 def predict(args, model, truth):
@@ -141,7 +137,7 @@ def main(args):
     # Run inference.
     model = Model(args, obs)
     infer = {"mcmc": infer_mcmc, "svi": infer_svi}[args.infer]
-    samples = infer(args, model)
+    infer(args, model)
 
     # Predict latent time series.
     predict(args, model, truth=dataset["S2I"])
@@ -166,7 +162,7 @@ if __name__ == "__main__":
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
-    parser.add_argument("-np", "--num-particles", default=1024, type=int)
+    parser.add_argument("-np", "--smc-particles", default=1024, type=int)
     parser.add_argument("-ss", "--svi-steps", default=5000, type=int)
     parser.add_argument("-sp", "--svi-particles", default=32, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)

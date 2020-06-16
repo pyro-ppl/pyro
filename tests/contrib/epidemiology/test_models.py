@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
     ("mcmc", {}),
     ("mcmc", {"haar": True}),
     ("mcmc", {"haar_full_mass": 2}),
@@ -37,8 +39,6 @@ logger = logging.getLogger(__name__)
     ("mcmc", {"num_chains": 2, "mp_context": "spawn"}),
     ("mcmc", {"num_chains": 2, "mp_context": "spawn", "num_quant_bins": 2}),
     ("mcmc", {"num_chains": 2, "mp_context": "spawn", "jit_compile": True}),
-    ("svi", {}),
-    ("svi", {"haar": False}),
 ], ids=str)
 def test_simple_sir_smoke(duration, forecast, options, algo):
     population = 100
@@ -70,13 +70,15 @@ def test_simple_sir_smoke(duration, forecast, options, algo):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"haar": True},
-    {"haar_full_mass": 2},
-    {"num_quant_bins": 2},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
-def test_simple_seir_smoke(duration, forecast, options):
+def test_simple_seir_smoke(duration, forecast, options, algo):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -94,8 +96,10 @@ def test_simple_seir_smoke(duration, forecast, options):
     # Infer.
     model = SimpleSEIRModel(population, incubation_time, recovery_time, data)
     num_samples = 5
-    model.fit_mcmc(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
-                   **options)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -437,16 +441,18 @@ def test_regional_smoke(duration, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"haar": True},
-    {"haar_full_mass": 2},
-    {"num_quant_bins": 2},
-    {"jit_compile": True},
-    {"jit_compile": True, "haar_full_mass": 2},
-    {"jit_compile": True, "num_quant_bins": 2},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
+    ("mcmc", {"jit_compile": True}),
+    ("mcmc", {"jit_compile": True, "haar_full_mass": 2}),
+    ("mcmc", {"jit_compile": True, "num_quant_bins": 2}),
 ], ids=str)
-def test_hetero_regional_smoke(duration, forecast, options):
+def test_hetero_regional_smoke(duration, forecast, options, algo):
     num_regions = 6
     coupling = torch.eye(num_regions).clamp(min=0.1)
     population = torch.tensor([2., 3., 4., 10., 100., 1000.])
@@ -466,7 +472,10 @@ def test_hetero_regional_smoke(duration, forecast, options):
     # Infer.
     model = HeterogeneousRegionalSIRModel(population, coupling, recovery_time, data)
     num_samples = 5
-    model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
