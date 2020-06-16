@@ -17,6 +17,7 @@ from tests.common import xfail_param
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.filterwarnings("ignore:num_chains")
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
     {"jit_compile": True},
     {"jit_compile": True, "haar_full_mass": 2},
     {"jit_compile": True, "num_quant_bins": 2},
+    {"num_chains": 2, "mp_context": "spawn"},
+    {"num_chains": 2, "mp_context": "spawn", "num_quant_bins": 2},
+    {"num_chains": 2, "mp_context": "spawn", "jit_compile": True},
 ], ids=str)
 def test_simple_sir_smoke(duration, forecast, options):
     population = 100
@@ -54,6 +58,7 @@ def test_simple_sir_smoke(duration, forecast, options):
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
+    num_samples *= options.get("num_chains", 1)
     assert samples["S"].shape == (num_samples, duration + forecast)
     assert samples["I"].shape == (num_samples, duration + forecast)
 

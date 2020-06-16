@@ -11,6 +11,7 @@ import pyro.distributions as dist
 from pyro.distributions.util import is_validation_enabled
 
 _RELAX = False
+_RELAX_MIN_VARIANCE = 0.1
 
 
 def _all(x):
@@ -98,7 +99,7 @@ def _validate_overdispersion(overdispersion):
             raise ValueError("Expected overdispersion < 2")
 
 
-def _relaxed_binomial(total_count, probs, *, min_variance=0.25):
+def _relaxed_binomial(total_count, probs):
     """
     Returns a moment-matched :class:`~pyro.distributions.Normal` approximating
     a :class:`~pyro.distributions.Binomial` but allowing arbitrary real
@@ -109,11 +110,11 @@ def _relaxed_binomial(total_count, probs, *, min_variance=0.25):
     mean = probs * total_count
     variance = total_count * probs * (1 - probs)
 
-    scale = variance.clamp(min=min_variance).sqrt()
+    scale = variance.clamp(min=_RELAX_MIN_VARIANCE).sqrt()
     return dist.Normal(mean, scale)
 
 
-def _relaxed_beta_binomial(concentration1, concentration0, total_count, *, min_variance=0.25):
+def _relaxed_beta_binomial(concentration1, concentration0, total_count):
     """
     Returns a moment-matched :class:`~pyro.distributions.Normal` approximating
     a :class:`~pyro.distributions.BetaBinomial` but allowing arbitrary real
@@ -128,7 +129,7 @@ def _relaxed_beta_binomial(concentration1, concentration0, total_count, *, min_v
     mean = beta_mean * total_count
     variance = beta_variance * total_count * (c + total_count)
 
-    scale = variance.clamp(min=min_variance).sqrt()
+    scale = variance.clamp(min=_RELAX_MIN_VARIANCE).sqrt()
     return dist.Normal(mean, scale)
 
 
