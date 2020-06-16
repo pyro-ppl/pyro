@@ -48,8 +48,8 @@ jobs:
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
+          apt-get install graphviz
           pip install -r docs/requirements.txt
-          pip install coveralls
           pip freeze
       - name: Build docs and run doctest
         run: |
