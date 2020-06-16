@@ -294,6 +294,102 @@ class CompartmentalModel(ABC):
         self._concat_series(samples, trace)
         return samples
 
+    def fit_svi(self, *,
+                num_samples=100,
+                num_steps=5000,
+                num_particles=32,
+                learning_rate=0.1,
+                learning_rate_decay=0.1,
+                betas=(0.8, 0.99),
+                haar=True,
+                init_scale=0.1,
+                guide_rank=None,
+                jit=False,
+                log_every=200,
+                **options):
+        """
+        Runs stochastic variational inference to generate posterior samples.
+
+        :param int num_samples: Number of posterior samples to draw from the
+            trained guide.
+        :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
+        :param int num_particles: Number of :class:`~pyro.infer.svi.SVI` particles per step.
+        :param int learning_rate: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param int learning_rate_decay: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer. Note this
+            is decay over the entire schedule, not per-step decay.
+        :param tuple betas: Momentum parameters for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param bool haar: Whether to use a Haar wavelet reparameterizer.
+        :param int guide_rank: Rank of the
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+        :param float init_scale: Initial scale of the
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+        :param bool jit: Whether to use a jit compiled ELBO.
+        :param int log_every: How often to log svi losses.
+        :param int heuristic_num_particles: Passed to :meth:`heuristic` as
+            ``num_particles``. Defaults to 1024.
+        :returns: Time series of SVI losses (useful to diagnose convergence).
+        :rtype: list
+        """
+        self.relaxed = True
+        self.num_quant_bins = 1
+
+        # Setup Haar wavelet transform.
+        if haar:
+            time_dim = -2 if self.is_regional else -1
+            dims = {"auxiliary": time_dim}
+            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
+            for name, (fn, is_regional) in self._non_compartmental.items():
+                dims[name] = time_dim - fn.event_dim
+                supports[name] = fn.support
+            haar = _HaarSplitReparam(0, self.duration, dims, supports)
+
+        # Heuristically initialize to feasible latents.
+        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
+                             for k in list(options)
+                             if k.startswith("heuristic_")}
+        assert not options, "unrecognized options: {}".format(", ".join(options))
+        init_strategy = self._heuristic(haar, **heuristic_options)
+
+        # Configure variational inference.
+        logger.info("Running inference...")
+        model = self._relaxed_model
+        if haar:
+            model = haar.reparam(model)
+        guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
+                                              init_scale=init_scale, rank=guide_rank)
+        Elbo = JitTrace_ELBO if jit else Trace_ELBO
+        elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
+                    num_particles=num_particles, vectorize_particles=True,
+                    ignore_jit_warnings=True)
+        optim = ClippedAdam({"lr": learning_rate, "betas": betas,
+                             "lrd": learning_rate_decay ** (1 / num_steps)})
+        svi = SVI(model, guide, optim, elbo)
+
+        # Run inference.
+        losses = []
+        for step in range(1 + num_steps):
+            loss = svi.step() / self.duration
+            if step % log_every == 0:
+                logger.info("step {} loss = {:0.4g}".format(step, loss))
+            losses.append(loss)
+
+        # Draw posterior samples.
+        with torch.no_grad():
+            particle_plate = pyro.plate("particles", num_samples,
+                                        dim=-1 - self.max_plate_nesting)
+            guide_trace = poutine.trace(particle_plate(guide)).get_trace()
+            model_trace = poutine.trace(
+                poutine.replay(particle_plate(model), guide_trace)).get_trace()
+            self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
+                            if site["type"] == "sample"}
+            if haar:
+                haar.aux_to_user(self.samples)
+
+        return losses
+
     @set_approx_log_prob_tol(0.1)
     def fit_mcmc(self, **options):
         r"""
@@ -401,102 +497,6 @@ class CompartmentalModel(ABC):
         self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
         return mcmc  # E.g. so user can run mcmc.summary().
-
-    def fit_svi(self, *,
-                num_samples=100,
-                num_steps=5000,
-                num_particles=32,
-                learning_rate=0.1,
-                learning_rate_decay=0.1,
-                betas=(0.8, 0.99),
-                haar=True,
-                init_scale=0.1,
-                guide_rank=None,
-                jit=False,
-                log_every=200,
-                **options):
-        """
-        Runs stochastic variational inference to generate posterior samples.
-
-        :param int num_samples: Number of posterior samples to draw from the
-            trained guide.
-        :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
-        :param int num_particles: Number of :class:`~pyro.infer.svi.SVI` particles per step.
-        :param int learning_rate: Learning rate for the
-            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
-        :param int learning_rate_decay: Learning rate for the
-            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer. Note this
-            is decay over the entire schedule, not per-step decay.
-        :param tuple betas: Momentum parameters for the
-            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
-        :param bool haar: Whether to use a Haar wavelet reparameterizer.
-        :param int guide_rank: Rank of the
-            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
-        :param float init_scale: Initial scale of the
-            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
-        :param bool jit: Whether to use a jit compiled ELBO.
-        :param int log_every: How often to log svi losses.
-        :param int heuristic_num_particles: Passed to :meth:`heuristic` as
-            ``num_particles``. Defaults to 1024.
-        :returns: Time series of SVI losses (useful to diagnose convergence).
-        :rtype: list
-        """
-        self.relaxed = True
-        self.num_quant_bins = 1
-
-        # Setup Haar wavelet transform.
-        if haar:
-            time_dim = -2 if self.is_regional else -1
-            dims = {"auxiliary": time_dim}
-            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
-            for name, (fn, is_regional) in self._non_compartmental.items():
-                dims[name] = time_dim - fn.event_dim
-                supports[name] = fn.support
-            haar = _HaarSplitReparam(0, self.duration, dims, supports)
-
-        # Heuristically initialize to feasible latents.
-        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
-                             for k in list(options)
-                             if k.startswith("heuristic_")}
-        assert not options, "unrecognized options: {}".format(", ".join(options))
-        init_strategy = self._heuristic(haar, **heuristic_options)
-
-        # Configure variational inference.
-        logger.info("Running inference...")
-        model = self._relaxed_model
-        if haar:
-            model = haar.reparam(model)
-        guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
-                                              init_scale=init_scale, rank=guide_rank)
-        Elbo = JitTrace_ELBO if jit else Trace_ELBO
-        elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
-                    num_particles=num_particles, vectorize_particles=True,
-                    ignore_jit_warnings=True)
-        optim = ClippedAdam({"lr": learning_rate, "betas": betas,
-                             "lrd": learning_rate_decay ** (1 / num_steps)})
-        svi = SVI(model, guide, optim, elbo)
-
-        # Run inference.
-        losses = []
-        for step in range(1 + num_steps):
-            loss = svi.step() / self.duration
-            if step % log_every == 0:
-                logger.info("step {} loss = {:0.4g}".format(step, loss))
-            losses.append(loss)
-
-        # Draw posterior samples.
-        with torch.no_grad():
-            particle_plate = pyro.plate("particles", num_samples,
-                                        dim=-1 - self.max_plate_nesting)
-            guide_trace = poutine.trace(particle_plate(guide)).get_trace()
-            model_trace = poutine.trace(
-                poutine.replay(particle_plate(model), guide_trace)).get_trace()
-            self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
-                            if site["type"] == "sample"}
-            if haar:
-                haar.aux_to_user(self.samples)
-
-        return losses
 
     @torch.no_grad()
     @set_approx_log_prob_tol(0.1)
