@@ -1,0 +1,152 @@
+name: Pyro CI
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [dev, master]
+
+env:
+  CXX="g++-8"
+  CC="gcc-8"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.5]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 nbstripout nbformat
+    - name: Lint with flake8
+      run: |
+        make lint
+  docs:
+    runs-on: ubuntu-latest
+    uses: lint
+    strategy:
+      matrix:
+        python-version: [3.5]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          # Keep track of pyro-api master branch
+          pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
+          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install .[test]
+          pip install -r docs/requirements.txt
+          pip install coveralls
+          pip freeze
+      - name: Build docs and run doctest
+        run: |
+          make docs
+          make doctest
+  unit:
+    runs-on: ubuntu-latest
+    uses: docs
+    strategy:
+      matrix:
+        python-version: [3.5]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          # Keep track of pyro-api master branch
+          pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
+          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install .[test]
+          pip freeze
+      - name: Unit tests
+        run: |
+          pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
+  examples:
+    runs-on: ubuntu-latest
+    uses: docs
+    strategy:
+      matrix:
+        python-version: [3.5]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          # Keep track of pyro-api master branch
+          pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
+          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install .[test]
+          pip freeze
+      - name: Examples
+        run: |
+          CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
+          grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                            | CI=1 xargs pytest -vx --nbval-lax --current-env
+  integration_1:
+    runs-on: ubuntu-latest
+    uses: docs
+    strategy:
+      matrix:
+        python-version: [3.5]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          # Keep track of pyro-api master branch
+          pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
+          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install .[test]
+          pip freeze
+      - name: Integration Test (batch 1)
+        run: |
+          pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
+  integration_2:
+    runs-on: ubuntu-latest
+    uses: docs
+    strategy:
+      matrix:
+        python-version: [3.5]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          # Keep track of pyro-api master branch
+          pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
+          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install .[test]
+          pip freeze
+      - name: Integration Test (batch 2)
+        run: |
+          pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10 
+
