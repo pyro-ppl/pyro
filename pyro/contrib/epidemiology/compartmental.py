@@ -686,6 +686,7 @@ class CompartmentalModel(ABC):
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False).expand(shape).to_event())
+        extra_dims = auxiliary.dim() - len(shape)
 
         # Sample any non-compartmental time series in batch.
         non_compartmental = OrderedDict()
@@ -696,6 +697,14 @@ class CompartmentalModel(ABC):
                 shape += R_shape if is_regional else (1,)
             # Manually expand, avoiding plates to enable HaarReparam and SplitReparam.
             non_compartmental[name] = pyro.sample(name, fn.expand(shape).to_event())
+
+        # Move event dims to time_plate and region_plate dims.
+        if extra_dims:  # If inside particle_plate.
+            shape = auxiliary.shape[:1] + auxiliary.shape[extra_dims:]
+            auxiliary = auxiliary.reshape(shape)
+            for name, value in non_compartmental.items():
+                shape = value.shape[:1] + value.shape[extra_dims:]
+                non_compartmental[name] = value.reshape(shape)
 
         return auxiliary, non_compartmental
 
@@ -747,6 +756,7 @@ class CompartmentalModel(ABC):
         Sequential model used to sample latents in the interval [0:duration].
         This is compatible with both quantized and relaxed inference.
         """
+        # This method is called only inside particle_plate.
         C = len(self.compartments)
         T = self.duration
         R_shape = getattr(self.population, "shape", ())  # Region shape.
@@ -757,12 +767,8 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Reshape to accommodate the time_plate below.
-        if self.is_regional:
-            auxiliary = auxiliary.squeeze(1)
-            for name, value in non_compartmental.items():
-                non_compartmental[name] = value.squeeze(1)
-        assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
-        aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
+        assert auxiliary.shape == (num_samples, C, T) + R_shape
+        aux = [aux.unbind(2) for aux in auxiliary.unsqueeze(1).unbind(2)]
 
         # Sequentially transition.
         curr = self.initialize(params)
@@ -772,7 +778,7 @@ class CompartmentalModel(ABC):
 
                 # Extract any non-compartmental variables.
                 for name, value in non_compartmental.items():
-                    curr[name] = value[:, :, t]
+                    curr[name] = value[:, t:t+1]
 
                 # Extract and enumerate all compartmental variables.
                 for c, name in enumerate(self.compartments):
@@ -793,6 +799,7 @@ class CompartmentalModel(ABC):
         """
         Quantized vectorized model used for parallel-scan enumerated inference.
         """
+        # This method is called only outside particle_plate.
         C = len(self.compartments)
         T = self.duration
         Q = self.num_quant_bins
@@ -876,27 +883,25 @@ class CompartmentalModel(ABC):
         """
         Relaxed vectorized model used for continuous inference.
         """
+        # This method may be called either inside or outside particle_plate.
         T = self.duration
 
         # Sample global parameters and auxiliary variables.
         params = self.global_model()
         auxiliary, non_compartmental = self._sample_auxiliary()
-        for _ in range(2 if self.is_regional else 1):
-            auxiliary = auxiliary.squeeze(1)
-            for name, value in non_compartmental.items():
-                non_compartmental[name] = value.squeeze(1)
+        particle_dims = auxiliary.dim() - (3 if self.is_regional else 2)
+        assert particle_dims in (0, 1)
 
         # Split tensors into current state.
-        # FIXME support nontrivial event_dim.
-        dim = -3 if self.is_regional else -2
-        curr = dict(zip(self.compartments, auxiliary.unbind(dim)))
+        curr = dict(zip(self.compartments, auxiliary.unbind(particle_dims)))
         curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
-        # FIXME support regional models.
-        # FIXME support nontrivial event_dim.
-        prev = {name: cat2(value, curr[name][..., :-1], dim=-1)
-                for name, value in self.initialize(params).items()}
+        prev = {}
+        for name, value in self.initialize(params).items():
+            dim = particle_dims - curr[name].dim()
+            t = (slice(None),) * particle_dims + (slice(0, -1),)
+            prev[name] = cat2(value, curr[name][t], dim=dim)
 
         # Enable approximate inference.
         for name in self.approximate:

@@ -405,13 +405,15 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"haar": True},
-    {"haar_full_mass": 2},
-    {"num_quant_bins": 2},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
-def test_regional_smoke(duration, forecast, options):
+def test_regional_smoke(duration, forecast, options, algo):
     num_regions = 6
     coupling = torch.eye(num_regions).clamp(min=0.1)
     population = torch.tensor([2., 3., 4., 10., 100., 1000.])
@@ -431,7 +433,10 @@ def test_regional_smoke(duration, forecast, options):
     # Infer.
     model = RegionalSIRModel(population, coupling, recovery_time, data)
     num_samples = 5
-    model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -475,7 +480,7 @@ def test_hetero_regional_smoke(duration, forecast, options, algo):
     if algo == "mcmc":
         model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
     else:
-        model.fit_svi(num_samples=num_samples, **options)
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
