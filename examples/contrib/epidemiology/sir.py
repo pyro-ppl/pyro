@@ -78,7 +78,8 @@ def generate_data(args):
                          .format(max_obs, args.max_obs_portion))
 
 
-def infer(args, model):
+def infer_mcmc(args, model):
+    parallel = args.num_chains > 1
     energies = []
 
     def hook_fn(kernel, *unused):
@@ -87,26 +88,49 @@ def infer(args, model):
         if args.verbose:
             logging.info("potential = {:0.6g}".format(e))
 
-    mcmc = model.fit(heuristic_num_particles=args.num_particles,
-                     heuristic_ess_threshold=args.ess_threshold,
-                     warmup_steps=args.warmup_steps,
-                     num_samples=args.num_samples,
-                     max_tree_depth=args.max_tree_depth,
-                     arrowhead_mass=args.arrowhead_mass,
-                     num_quant_bins=args.num_bins,
-                     haar=args.haar,
-                     haar_full_mass=args.haar_full_mass,
-                     jit_compile=args.jit,
-                     hook_fn=hook_fn)
+    mcmc = model.fit_mcmc(heuristic_num_particles=args.smc_particles,
+                          heuristic_ess_threshold=args.ess_threshold,
+                          warmup_steps=args.warmup_steps,
+                          num_samples=args.num_samples,
+                          num_chains=args.num_chains,
+                          mp_context="spawn" if parallel else None,
+                          max_tree_depth=args.max_tree_depth,
+                          arrowhead_mass=args.arrowhead_mass,
+                          num_quant_bins=args.num_bins,
+                          haar=args.haar,
+                          haar_full_mass=args.haar_full_mass,
+                          jit_compile=args.jit,
+                          hook_fn=None if parallel else hook_fn)
 
     mcmc.summary()
-    if args.plot:
+    if args.plot and energies:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(6, 3))
         plt.plot(energies)
         plt.xlabel("MCMC step")
         plt.ylabel("potential energy")
         plt.title("MCMC energy trace")
+        plt.tight_layout()
+
+    return model.samples
+
+
+def infer_svi(args, model):
+    losses = model.fit_svi(heuristic_num_particles=args.smc_particles,
+                           heuristic_ess_threshold=args.ess_threshold,
+                           num_samples=args.num_samples,
+                           num_steps=args.svi_steps,
+                           num_particles=args.svi_particles,
+                           haar=args.haar,
+                           jit=args.jit)
+
+    if args.plot:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(6, 3))
+        plt.plot(losses)
+        plt.xlabel("SVI step")
+        plt.ylabel("loss")
+        plt.title("SVI Convergence")
         plt.tight_layout()
 
     return model.samples
@@ -259,6 +283,7 @@ def main(args):
 
     # Run inference.
     model = Model(args, obs)
+    infer = {"mcmc": infer_mcmc, "svi": infer_svi}[args.infer]
     samples = infer(args, model)
 
     # Evaluate fit.
@@ -287,12 +312,18 @@ if __name__ == "__main__":
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
     parser.add_argument("-o", "--overdispersion", default=0., type=float)
     parser.add_argument("-hg", "--heterogeneous", action="store_true")
+    parser.add_argument("--infer", default="mcmc")
+    parser.add_argument("--mcmc", action="store_const", const="mcmc", dest="infer")
+    parser.add_argument("--svi", action="store_const", const="svi", dest="infer")
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
-    parser.add_argument("-np", "--num-particles", default=1024, type=int)
+    parser.add_argument("-np", "--smc-particles", default=1024, type=int)
+    parser.add_argument("-ss", "--svi-steps", default=5000, type=int)
+    parser.add_argument("-sp", "--svi-particles", default=32, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
     parser.add_argument("-w", "--warmup-steps", type=int)
+    parser.add_argument("-c", "--num-chains", default=1, type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
     parser.add_argument("-a", "--arrowhead-mass", action="store_true")
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
@@ -301,7 +332,7 @@ if __name__ == "__main__":
     parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--jit", action="store_true", default=True)
-    parser.add_argument("--nojit", action="store_true", dest="jit")
+    parser.add_argument("--nojit", action="store_false", dest="jit")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
