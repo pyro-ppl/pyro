@@ -297,7 +297,7 @@ class CompartmentalModel(ABC):
     @set_approx_log_prob_tol(0.1)
     def fit_mcmc(self, **options):
         r"""
-        Runs inference to generate posterior samples.
+        Runs NUTS inference to generate posterior samples.
 
         This uses the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel to run
         :class:`~pyro.infer.mcmc.api.MCMC`, setting the ``.samples``
@@ -409,22 +409,42 @@ class CompartmentalModel(ABC):
                 learning_rate=0.1,
                 learning_rate_decay=0.1,
                 betas=(0.8, 0.99),
-                init_scale=0.1,
                 haar=True,
+                init_scale=0.1,
                 guide_rank=None,
                 jit=False,
-                log_every=100,
+                log_every=200,
                 **options):
         """
-        Runs variational inference to generate a posterior.
+        Runs stochastic variational inference to generate posterior samples.
+
+        :param int num_samples: Number of posterior samples to draw from the
+            trained guide.
+        :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
+        :param int num_particles: Number of :class:`~pyro.infer.svi.SVI` particles per step.
+        :param int learning_rate: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param int learning_rate_decay: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer. Note this
+            is decay over the entire schedule, not per-step decay.
+        :param tuple betas: Momentum parameters for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param bool haar: Whether to use a Haar wavelet reparameterizer.
+        :param int guide_rank: Rank of the
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+        :param float init_scale: Initial scale of the
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+        :param bool jit: Whether to use a jit compiled ELBO.
+        :param int log_every: How often to log svi losses.
+        :param int heuristic_num_particles: Passed to :meth:`heuristic` as
+            ``num_particles``. Defaults to 1024.
+        :returns: Time series of SVI losses (useful to diagnose convergence).
+        :rtype: list
         """
-        _require_double_precision()
-        self.num_quant_bins = 1
         self.relaxed = True
+        self.num_quant_bins = 1
 
         # Setup Haar wavelet transform.
-        haar = options.pop("haar", False)
-        assert isinstance(haar, bool)
         if haar:
             time_dim = -2 if self.is_regional else -1
             dims = {"auxiliary": time_dim}
@@ -448,12 +468,11 @@ class CompartmentalModel(ABC):
             model = haar.reparam(model)
         guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
                                               init_scale=init_scale, rank=guide_rank)
-
         Elbo = JitTrace_ELBO if jit else Trace_ELBO
         elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
                     num_particles=num_particles, vectorize_particles=True,
                     ignore_jit_warnings=True)
-        optim = ClippedAdam({"lr": learning_rate, 'betas': betas,
+        optim = ClippedAdam({"lr": learning_rate, "betas": betas,
                              "lrd": learning_rate_decay ** (1 / num_steps)})
         svi = SVI(model, guide, optim, elbo)
 
