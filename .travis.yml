@@ -80,5 +80,3 @@ jobs:
           python: 3.5
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
 
-after_success:
-          - coveralls
