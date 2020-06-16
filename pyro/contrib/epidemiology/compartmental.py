@@ -765,8 +765,8 @@ class CompartmentalModel(ABC):
         """
         Sequential model used to sample latents in the interval [0:duration].
         This is compatible with both quantized and relaxed inference.
+        This method is called only inside particle_plate.
         """
-        # This method is called only inside particle_plate.
         C = len(self.compartments)
         T = self.duration
         R_shape = getattr(self.population, "shape", ())  # Region shape.
@@ -777,7 +777,7 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Reshape to accommodate the time_plate below.
-        assert auxiliary.shape == (num_samples, C, T) + R_shape
+        assert auxiliary.shape == (num_samples, C, T) + R_shape, auxiliary.shape
         aux = [aux.unbind(2) for aux in auxiliary.unsqueeze(1).unbind(2)]
 
         # Sequentially transition.
@@ -808,8 +808,8 @@ class CompartmentalModel(ABC):
     def _quantized_model(self):
         """
         Quantized vectorized model used for parallel-scan enumerated inference.
+        This method is called only outside particle_plate.
         """
-        # This method is called only outside particle_plate.
         C = len(self.compartments)
         T = self.duration
         Q = self.num_quant_bins
@@ -892,8 +892,8 @@ class CompartmentalModel(ABC):
     def _relaxed_model(self):
         """
         Relaxed vectorized model used for continuous inference.
+        This method may be called either inside or outside particle_plate.
         """
-        # This method may be called either inside or outside particle_plate.
         T = self.duration
 
         # Sample global parameters and auxiliary variables.
