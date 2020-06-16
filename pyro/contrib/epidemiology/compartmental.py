@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from contextlib import ExitStack
 from functools import reduce
+from timeit import default_timer
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -299,7 +300,7 @@ class CompartmentalModel(ABC):
                 num_steps=5000,
                 num_particles=32,
                 learning_rate=0.1,
-                learning_rate_decay=0.1,
+                learning_rate_decay=0.01,
                 betas=(0.8, 0.99),
                 haar=True,
                 init_scale=0.1,
@@ -333,6 +334,7 @@ class CompartmentalModel(ABC):
         :returns: Time series of SVI losses (useful to diagnose convergence).
         :rtype: list
         """
+        # Save configuration for .predict().
         self.relaxed = True
         self.num_quant_bins = 1
 
@@ -369,12 +371,16 @@ class CompartmentalModel(ABC):
         svi = SVI(model, guide, optim, elbo)
 
         # Run inference.
+        start_time = default_timer()
         losses = []
         for step in range(1 + num_steps):
             loss = svi.step() / self.duration
             if step % log_every == 0:
                 logger.info("step {} loss = {:0.4g}".format(step, loss))
             losses.append(loss)
+        elapsed = default_timer() - start_time
+        logger.info("SVI took {:0.1f} seconds, {:0.1f} step/sec"
+                    .format(elapsed, (1 + num_steps) / elapsed))
 
         # Draw posterior samples.
         with torch.no_grad():
