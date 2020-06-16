@@ -516,7 +516,8 @@ class CompartmentalModel(ABC):
             to a tensor whose first dimension corresponds to sample batching.
         :rtype: dict
         """
-        _require_double_precision()
+        if self.num_quant_bins > 1:
+            _require_double_precision()
         if not self.samples:
             raise RuntimeError("Missing samples, try running .fit_mcmc() first")
 
