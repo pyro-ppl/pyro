@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from contextlib import ExitStack
 from functools import reduce
+from timeit import default_timer
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -19,12 +20,13 @@ import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import HaarTransform
-from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
-from pyro.infer.autoguide import init_to_generated, init_to_value
+from pyro.infer import MCMC, NUTS, SVI, JitTrace_ELBO, SMCFilter, Trace_ELBO, infer_discrete
+from pyro.infer.autoguide import AutoLowRankMultivariateNormal, init_to_generated, init_to_value
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
 from pyro.infer.util import is_validation_enabled, site_is_subsample
+from pyro.optim import ClippedAdam
 from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
@@ -60,7 +62,7 @@ class CompartmentalModel(ABC):
 
         # Run inference to fit the model to data.
         model = MyModel(...)
-        model.fit(num_samples=100)
+        model.fit_svi(num_samples=100)  # or .fit_mcmc(...)
         R0 = model.samples["R0"]  # An example parameter.
         print("R0 = {:0.3g} \u00B1 {:0.3g}".format(R0.mean(), R0.std()))
 
@@ -216,7 +218,7 @@ class CompartmentalModel(ABC):
         interpretations, including batched and vectorized interpretations.
         During :meth:`generate` this is called to generate a single sample.
         During :meth:`heuristic` this is called to generate a batch of samples
-        for SMC.  During :meth:`fit` this is called both in vectorized form
+        for SMC.  During :meth:`fit_mcmc` this is called both in vectorized form
         (vectorizing over time) and in sequential form (for a single time
         step); both forms enumerate over discrete latent variables.  During
         :meth:`predict` this is called to forecast a batch of samples,
@@ -293,10 +295,111 @@ class CompartmentalModel(ABC):
         self._concat_series(samples, trace)
         return samples
 
+    def fit_svi(self, *,
+                num_samples=100,
+                num_steps=5000,
+                num_particles=32,
+                learning_rate=0.1,
+                learning_rate_decay=0.01,
+                betas=(0.8, 0.99),
+                haar=True,
+                init_scale=0.1,
+                guide_rank=None,
+                jit=False,
+                log_every=200,
+                **options):
+        """
+        Runs stochastic variational inference to generate posterior samples.
+
+        :param int num_samples: Number of posterior samples to draw from the
+            trained guide. Defaults to 100.
+        :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
+        :param int num_particles: Number of :class:`~pyro.infer.svi.SVI` particles per step.
+        :param int learning_rate: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param int learning_rate_decay: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer. Note this
+            is decay over the entire schedule, not per-step decay.
+        :param tuple betas: Momentum parameters for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param bool haar: Whether to use a Haar wavelet reparameterizer.
+        :param int guide_rank: Rank of the
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+        :param float init_scale: Initial scale of the
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+        :param bool jit: Whether to use a jit compiled ELBO.
+        :param int log_every: How often to log svi losses.
+        :param int heuristic_num_particles: Passed to :meth:`heuristic` as
+            ``num_particles``. Defaults to 1024.
+        :returns: Time series of SVI losses (useful to diagnose convergence).
+        :rtype: list
+        """
+        # Save configuration for .predict().
+        self.relaxed = True
+        self.num_quant_bins = 1
+
+        # Setup Haar wavelet transform.
+        if haar:
+            time_dim = -2 if self.is_regional else -1
+            dims = {"auxiliary": time_dim}
+            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
+            for name, (fn, is_regional) in self._non_compartmental.items():
+                dims[name] = time_dim - fn.event_dim
+                supports[name] = fn.support
+            haar = _HaarSplitReparam(0, self.duration, dims, supports)
+
+        # Heuristically initialize to feasible latents.
+        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
+                             for k in list(options)
+                             if k.startswith("heuristic_")}
+        assert not options, "unrecognized options: {}".format(", ".join(options))
+        init_strategy = self._heuristic(haar, **heuristic_options)
+
+        # Configure variational inference.
+        logger.info("Running inference...")
+        model = self._relaxed_model
+        if haar:
+            model = haar.reparam(model)
+        guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
+                                              init_scale=init_scale, rank=guide_rank)
+        Elbo = JitTrace_ELBO if jit else Trace_ELBO
+        elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
+                    num_particles=num_particles, vectorize_particles=True,
+                    ignore_jit_warnings=True)
+        optim = ClippedAdam({"lr": learning_rate, "betas": betas,
+                             "lrd": learning_rate_decay ** (1 / num_steps)})
+        svi = SVI(model, guide, optim, elbo)
+
+        # Run inference.
+        start_time = default_timer()
+        losses = []
+        for step in range(1 + num_steps):
+            loss = svi.step() / self.duration
+            if step % log_every == 0:
+                logger.info("step {} loss = {:0.4g}".format(step, loss))
+            losses.append(loss)
+        elapsed = default_timer() - start_time
+        logger.info("SVI took {:0.1f} seconds, {:0.1f} step/sec"
+                    .format(elapsed, (1 + num_steps) / elapsed))
+
+        # Draw posterior samples.
+        with torch.no_grad():
+            particle_plate = pyro.plate("particles", num_samples,
+                                        dim=-1 - self.max_plate_nesting)
+            guide_trace = poutine.trace(particle_plate(guide)).get_trace()
+            model_trace = poutine.trace(
+                poutine.replay(particle_plate(model), guide_trace)).get_trace()
+            self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
+                            if site["type"] == "sample"}
+            if haar:
+                haar.aux_to_user(self.samples)
+
+        return losses
+
     @set_approx_log_prob_tol(0.1)
-    def fit(self, **options):
+    def fit_mcmc(self, **options):
         r"""
-        Runs inference to generate posterior samples.
+        Runs NUTS inference to generate posterior samples.
 
         This uses the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel to run
         :class:`~pyro.infer.mcmc.api.MCMC`, setting the ``.samples``
@@ -305,6 +408,8 @@ class CompartmentalModel(ABC):
         :param \*\*options: Options passed to
             :class:`~pyro.infer.mcmc.api.MCMC`. The remaining options are
             pulled out and have special meaning.
+        :param int num_samples: Number of posterior samples to draw via mcmc.
+            Defaults to 100.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
         :param full_mass: Specification of mass matrix of the
@@ -329,6 +434,7 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
+        options.setdefault("num_samples", 100)
         self.num_quant_bins = options.pop("num_quant_bins", 1)
         assert isinstance(self.num_quant_bins, int)
         assert self.num_quant_bins >= 1
@@ -408,17 +514,18 @@ class CompartmentalModel(ABC):
         """
         Predict latent variables and optionally forecast forward.
 
-        This may be run only after :meth:`fit` and draws the same
-        ``num_samples`` as passed to :meth:`fit`.
+        This may be run only after :meth:`fit_mcmc` and draws the same
+        ``num_samples`` as passed to :meth:`fit_mcmc`.
 
         :param int forecast: The number of time steps to forecast forward.
         :returns: A dictionary mapping sample site name (or compartment name)
             to a tensor whose first dimension corresponds to sample batching.
         :rtype: dict
         """
-        _require_double_precision()
+        if self.num_quant_bins > 1:
+            _require_double_precision()
         if not self.samples:
-            raise RuntimeError("Missing samples, try running .fit() first")
+            raise RuntimeError("Missing samples, try running .fit_mcmc() first")
 
         samples = self.samples
         num_samples = len(next(iter(samples.values())))
@@ -589,6 +696,7 @@ class CompartmentalModel(ABC):
         auxiliary = pyro.sample("auxiliary",
                                 dist.Uniform(-0.5, self.population + 0.5)
                                     .mask(False).expand(shape).to_event())
+        extra_dims = auxiliary.dim() - len(shape)
 
         # Sample any non-compartmental time series in batch.
         non_compartmental = OrderedDict()
@@ -599,6 +707,14 @@ class CompartmentalModel(ABC):
                 shape += R_shape if is_regional else (1,)
             # Manually expand, avoiding plates to enable HaarReparam and SplitReparam.
             non_compartmental[name] = pyro.sample(name, fn.expand(shape).to_event())
+
+        # Move event dims to time_plate and region_plate dims.
+        if extra_dims:  # If inside particle_plate.
+            shape = auxiliary.shape[:1] + auxiliary.shape[extra_dims:]
+            auxiliary = auxiliary.reshape(shape)
+            for name, value in non_compartmental.items():
+                shape = value.shape[:1] + value.shape[extra_dims:]
+                non_compartmental[name] = value.reshape(shape)
 
         return auxiliary, non_compartmental
 
@@ -649,6 +765,7 @@ class CompartmentalModel(ABC):
         """
         Sequential model used to sample latents in the interval [0:duration].
         This is compatible with both quantized and relaxed inference.
+        This method is called only inside particle_plate.
         """
         C = len(self.compartments)
         T = self.duration
@@ -660,12 +777,8 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Reshape to accommodate the time_plate below.
-        if self.is_regional:
-            auxiliary = auxiliary.squeeze(1)
-            for name, value in non_compartmental.items():
-                non_compartmental[name] = value.squeeze(1)
-        assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
-        aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
+        assert auxiliary.shape == (num_samples, C, T) + R_shape, auxiliary.shape
+        aux = [aux.unbind(2) for aux in auxiliary.unsqueeze(1).unbind(2)]
 
         # Sequentially transition.
         curr = self.initialize(params)
@@ -675,7 +788,7 @@ class CompartmentalModel(ABC):
 
                 # Extract any non-compartmental variables.
                 for name, value in non_compartmental.items():
-                    curr[name] = value[:, :, t]
+                    curr[name] = value[:, t:t+1]
 
                 # Extract and enumerate all compartmental variables.
                 for c, name in enumerate(self.compartments):
@@ -695,6 +808,7 @@ class CompartmentalModel(ABC):
     def _quantized_model(self):
         """
         Quantized vectorized model used for parallel-scan enumerated inference.
+        This method is called only outside particle_plate.
         """
         C = len(self.compartments)
         T = self.duration
@@ -778,20 +892,26 @@ class CompartmentalModel(ABC):
     def _relaxed_model(self):
         """
         Relaxed vectorized model used for continuous inference.
+        This method may be called either inside or outside particle_plate.
         """
         T = self.duration
 
         # Sample global parameters and auxiliary variables.
         params = self.global_model()
         auxiliary, non_compartmental = self._sample_auxiliary()
+        particle_dims = auxiliary.dim() - (3 if self.is_regional else 2)
+        assert particle_dims in (0, 1)
 
         # Split tensors into current state.
-        curr = dict(zip(self.compartments, auxiliary.unbind(0)))
+        curr = dict(zip(self.compartments, auxiliary.unbind(particle_dims)))
         curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
-        prev = {name: cat2(value, curr[name][:-1], dim=-curr[name].dim())
-                for name, value in self.initialize(params).items()}
+        prev = {}
+        for name, value in self.initialize(params).items():
+            dim = particle_dims - curr[name].dim()
+            t = (slice(None),) * particle_dims + (slice(0, -1),)
+            prev[name] = cat2(value, curr[name][t], dim=dim)
 
         # Enable approximate inference.
         for name in self.approximate:
