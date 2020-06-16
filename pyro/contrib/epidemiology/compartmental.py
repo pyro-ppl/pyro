@@ -311,7 +311,7 @@ class CompartmentalModel(ABC):
         Runs stochastic variational inference to generate posterior samples.
 
         :param int num_samples: Number of posterior samples to draw from the
-            trained guide.
+            trained guide. Defaults to 100.
         :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
         :param int num_particles: Number of :class:`~pyro.infer.svi.SVI` particles per step.
         :param int learning_rate: Learning rate for the
@@ -402,6 +402,8 @@ class CompartmentalModel(ABC):
         :param \*\*options: Options passed to
             :class:`~pyro.infer.mcmc.api.MCMC`. The remaining options are
             pulled out and have special meaning.
+        :param int num_samples: Number of posterior samples to draw via mcmc.
+            Defaults to 100.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
         :param full_mass: Specification of mass matrix of the
@@ -426,6 +428,7 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
+        options.setdefault("num_samples", 100)
         self.num_quant_bins = options.pop("num_quant_bins", 1)
         assert isinstance(self.num_quant_bins, int)
         assert self.num_quant_bins >= 1
