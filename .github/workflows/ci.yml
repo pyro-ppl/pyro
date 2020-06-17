@@ -9,6 +9,8 @@ on:
 env:
   CXX: g++-8
   CC: gcc-8
+  COVERALLS_PARALLEL: true
+  COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   lint:
@@ -75,10 +77,13 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
+          pip install coveralls
           pip freeze
       - name: Run unit tests
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
+      - name: Submit to coveralls
+        run: coveralls
   examples:
     runs-on: ubuntu-latest
     needs: docs
@@ -99,12 +104,15 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
+          pip install coveralls
           pip freeze
       - name: Run examples
         run: |
           CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
           grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                             | CI=1 xargs pytest -vx --nbval-lax --current-env
+      - name: Submit to coveralls
+        run: coveralls
   integration_1:
     runs-on: ubuntu-latest
     needs: docs
@@ -125,10 +133,13 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
+          pip install coveralls
           pip freeze
       - name: Run integration test (batch 1)
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
+      - name: Submit to coveralls
+        run: coveralls
   integration_2:
     runs-on: ubuntu-latest
     needs: docs
@@ -149,7 +160,19 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
+          pip install coveralls
           pip freeze
       - name: Run integration test (batch 2)
         run: |
-          pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10 
+          pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
+      - name: Submit to coveralls
+        run: coveralls
+  finish:
+    needs: unit, examples, integration_1, integration_2
+    runs-on: ubuntu-latest
+    steps:
+    - name: Coveralls Finished
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.github_token }}
+        parallel-finished: true
