@@ -168,7 +168,7 @@ jobs:
       - name: Submit to coveralls
         run: coveralls
   finish:
-    needs: unit, examples, integration_1, integration_2
+    needs: [unit, examples, integration_1, integration_2]
     runs-on: ubuntu-latest
     steps:
     - name: Coveralls Finished
