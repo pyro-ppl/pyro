@@ -25,8 +25,9 @@ from pyro.infer.autoguide import AutoLowRankMultivariateNormal, init_to_generate
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
-from pyro.infer.util import is_validation_enabled, site_is_subsample
+from pyro.infer.util import is_validation_enabled
 from pyro.optim import ClippedAdam
+from pyro.poutine.util import site_is_factor, site_is_subsample
 from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
@@ -390,9 +391,13 @@ class CompartmentalModel(ABC):
             model_trace = poutine.trace(
                 poutine.replay(particle_plate(model), guide_trace)).get_trace()
             self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
-                            if site["type"] == "sample"}
+                            if site["type"] == "sample"
+                            if not site["is_observed"]
+                            if not site_is_subsample(site)}
             if haar:
                 haar.aux_to_user(self.samples)
+        assert all(v.size(0) == num_samples for v in self.samples.values()), \
+            {k: tuple(v.shape) for k, v in self.samples.items()}
 
         return losses
 
@@ -434,7 +439,8 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
-        options.setdefault("num_samples", 100)
+        num_samples = options.setdefault("num_samples", 100)
+        num_chains = options.setdefault("num_chains", 1)
         self.num_quant_bins = options.pop("num_quant_bins", 1)
         assert isinstance(self.num_quant_bins, int)
         assert self.num_quant_bins >= 1
@@ -505,6 +511,9 @@ class CompartmentalModel(ABC):
         model = self._relaxed_model if self.relaxed else self._quantized_model
         self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
+        assert all(v.size(0) == num_samples * num_chains for v in self.samples.values()), \
+            {k: tuple(v.shape) for k, v in self.samples.items()}
+
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
@@ -544,9 +553,13 @@ class CompartmentalModel(ABC):
         if not self.relaxed:
             model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
-        samples = OrderedDict((name, site["value"])
+        samples = OrderedDict((name, site["value"].expand(site["fn"].shape()))
                               for name, site in trace.nodes.items()
-                              if site["type"] == "sample")
+                              if site["type"] == "sample"
+                              if not site_is_subsample(site)
+                              if not site_is_factor(site))
+        assert all(v.size(0) == num_samples for v in samples.values()), \
+            {k: tuple(v.shape) for k, v in samples.items()}
 
         # Optionally forecast with the forward _generative_model. This samples
         # time steps [duration:duration+forecast].
@@ -558,9 +571,13 @@ class CompartmentalModel(ABC):
             trace = poutine.trace(model).get_trace(forecast)
             samples = OrderedDict((name, site["value"])
                                   for name, site in trace.nodes.items()
-                                  if site["type"] == "sample")
+                                  if site["type"] == "sample"
+                                  if not site_is_subsample(site)
+                                  if not site_is_factor(site))
 
         self._concat_series(samples, trace, forecast)
+        assert all(v.size(0) == num_samples for v in samples.values()), \
+            {k: tuple(v.shape) for k, v in samples.items()}
         return samples
 
     @torch.no_grad()
@@ -777,7 +794,8 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Reshape to accommodate the time_plate below.
-        assert auxiliary.shape == (num_samples, C, T) + R_shape, auxiliary.shape
+        assert auxiliary.shape == (num_samples, C, T) + R_shape, \
+            (auxiliary.shape, (num_samples, C, T) + R_shape)
         aux = [aux.unbind(2) for aux in auxiliary.unsqueeze(1).unbind(2)]
 
         # Sequentially transition.
