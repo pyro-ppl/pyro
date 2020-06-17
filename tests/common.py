@@ -29,7 +29,6 @@ EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
 
 
 def xfail_param(*args, **kwargs):
-    kwargs.setdefault("reason", "unknown")
     return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
 
 
