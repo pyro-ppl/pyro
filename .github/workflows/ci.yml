@@ -48,7 +48,7 @@ jobs:
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
-          apt-get install graphviz
+          sudo apt-get install graphviz
           pip install -r docs/requirements.txt
           pip freeze
       - name: Build docs and run doctest
@@ -75,7 +75,7 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip freeze
-      - name: Unit tests
+      - name: Run unit tests
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
   examples:
@@ -98,7 +98,7 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip freeze
-      - name: Examples
+      - name: Run examples
         run: |
           CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
           grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
@@ -123,7 +123,7 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip freeze
-      - name: Integration Test (batch 1)
+      - name: Run integration test (batch 1)
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
   integration_2:
@@ -146,7 +146,7 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip freeze
-      - name: Integration Test (batch 2)
+      - name: Run integration test (batch 2)
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10 
 
