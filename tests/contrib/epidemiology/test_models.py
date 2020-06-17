@@ -295,7 +295,7 @@ def test_coalescent_likelihood_smoke(duration, forecast, options, algo):
     ("mcmc", {"haar_full_mass": 2}),
     ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
-def test_heterogeneous_sir_smoke(duration, forecast, options):
+def test_heterogeneous_sir_smoke(duration, forecast, options, algo):
     population = 100
     recovery_time = 7.0
 
