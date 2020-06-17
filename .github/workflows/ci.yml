@@ -73,6 +73,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          sudo apt-get install ninja-build
           pip install .[test]
           pip freeze
       - name: Run unit tests
@@ -96,6 +97,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          sudo apt-get install ninja-build
           pip install .[test]
           pip freeze
       - name: Run examples
@@ -121,6 +123,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          sudo apt-get install ninja-build
           pip install .[test]
           pip freeze
       - name: Run integration test (batch 1)
@@ -144,9 +147,9 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          sudo apt-get install ninja-build
           pip install .[test]
           pip freeze
       - name: Run integration test (batch 2)
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10 
-
