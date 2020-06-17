@@ -245,11 +245,13 @@ def test_superspreading_seir_smoke(duration, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"num_quant_bins": 2},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
-def test_coalescent_likelihood_smoke(duration, forecast, options):
+def test_coalescent_likelihood_smoke(duration, forecast, options, algo):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -271,8 +273,11 @@ def test_coalescent_likelihood_smoke(duration, forecast, options):
         population, incubation_time, recovery_time, data,
         leaf_times=leaf_times, coal_times=coal_times)
     num_samples = 5
-    model.fit_mcmc(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
-                   **options)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
+                       **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -283,10 +288,12 @@ def test_coalescent_likelihood_smoke(duration, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"haar_full_mass": 2},
-    {"num_quant_bins": 2},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
 def test_heterogeneous_sir_smoke(duration, forecast, options):
     population = 100
