@@ -10,7 +10,7 @@ env:
   CXX: g++-8
   CC: gcc-8
   COVERALLS_PARALLEL: true
-  COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
 jobs:
   lint:
