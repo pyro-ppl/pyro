@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("algo,options", [
-    ("svi", {}),
-    ("svi", {"haar": False}),
+    xfail_param("svi", {}),
+    xfail_param("svi", {"haar": False}),
     ("mcmc", {}),
     ("mcmc", {"haar": True}),
     ("mcmc", {"haar_full_mass": 2}),
@@ -71,8 +71,8 @@ def test_simple_sir_smoke(duration, forecast, options, algo):
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("algo,options", [
-    ("svi", {}),
-    ("svi", {"haar": False}),
+    xfail_param("svi", {}),
+    xfail_param("svi", {"haar": False}),
     ("mcmc", {}),
     ("mcmc", {"haar": True}),
     ("mcmc", {"haar_full_mass": 2}),
@@ -406,8 +406,8 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("algo,options", [
-    ("svi", {}),
-    ("svi", {"haar": False}),
+    xfail_param("svi", {}),
+    xfail_param("svi", {"haar": False}),
     ("mcmc", {}),
     ("mcmc", {"haar": True}),
     ("mcmc", {"haar_full_mass": 2}),
@@ -447,8 +447,8 @@ def test_regional_smoke(duration, forecast, options, algo):
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("algo,options", [
-    ("svi", {}),
-    ("svi", {"haar": False}),
+    xfail_param("svi", {}),
+    xfail_param("svi", {"haar": False}),
     ("mcmc", {}),
     ("mcmc", {"haar": True}),
     ("mcmc", {"haar_full_mass": 2}),
