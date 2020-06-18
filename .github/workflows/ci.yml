@@ -1,4 +1,4 @@
-name: Pyro CI
+name: CI
 
 on:
   push:
@@ -83,7 +83,7 @@ jobs:
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
       - name: Submit to coveralls
-        run: coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   examples:
     runs-on: ubuntu-latest
     needs: docs
@@ -112,7 +112,7 @@ jobs:
           grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                             | CI=1 xargs pytest -vx --nbval-lax --current-env
       - name: Submit to coveralls
-        run: coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   integration_1:
     runs-on: ubuntu-latest
     needs: docs
@@ -139,7 +139,7 @@ jobs:
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
       - name: Submit to coveralls
-        run: coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   integration_2:
     runs-on: ubuntu-latest
     needs: docs
@@ -166,7 +166,7 @@ jobs:
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
       - name: Submit to coveralls
-        run: coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   finish:
     needs: [unit, examples, integration_1, integration_2]
     runs-on: ubuntu-latest
