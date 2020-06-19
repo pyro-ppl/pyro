@@ -1,6 +1,25 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+"""
+ A toy mixture model to provide a simple example for implementing discrete enumeration.
+
+ (A) -> [B] -> (C)
+
+ A is an observed Bernoulli variable with Beta prior.
+ B is a hidden variable which is a mixture of two Bernoulli distributions (with Beta priors),
+ chosen by A being true or false.
+ C is observed, and like B, is a mixture of two Bernoulli distributions (with Beta priors),
+ chosen by B being true or false.
+ There is a plate over the three variables for n independent observations of data.
+
+ Because B is hidden and discrete we wish to marginalize it out of the model.
+ This is done by:
+    1) marking the model method with `@pyro.infer.config_enumerate`
+    2) marking the B sample site in the model with `infer={"enumerate": "parallel"}`
+    3) passing `pyro.infer.SVI` the `pyro.infer.TraceEnum_ELBO` loss function
+"""
+
 import os
 
 import matplotlib.pyplot as plt
@@ -21,24 +40,6 @@ smoke_test = ('CI' in os.environ)
 
 
 def main():
-    """
-     A toy mixture model to provide a simple example for implementing discrete enumeration.
-
-     (A) -> [B] -> (C)
-
-     A is an observed Bernoulli variable with Beta prior.
-     B is a hidden variable which is a mixture of two Bernoulli distributions (with Beta priors),
-     chosen by A being true or false.
-     C is observed, and like B, is a mixture of two Bernoulli distributions (with Beta priors),
-     chosen by B being true or false.
-     There is a plate over the three variables for n independent observations of data.
-
-     Because B is hidden and discrete we wish to marginalize it out of the model.
-     This is done by:
-        1) marking the model method with `@pyro.infer.config_enumerate`
-        2) marking the B sample site in the model with `infer={"enumerate": "parallel"}`
-        3) passing `pyro.infer.SVI` the `pyro.infer.TraceEnum_ELBO` loss function
-    """
 
     # number of observations
     n = 10000
