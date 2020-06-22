@@ -20,7 +20,9 @@
     3) passing `pyro.infer.SVI` the `pyro.infer.TraceEnum_ELBO` loss function
 """
 
+import argparse
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -28,6 +30,7 @@ from torch.distributions import constraints
 from torch.distributions.bernoulli import Bernoulli
 from torch.distributions.beta import Beta
 from tqdm import tqdm
+
 import pyro
 import pyro.distributions as dist
 import pyro.infer
@@ -37,14 +40,15 @@ from pyro.ops.indexing import Vindex
 smoke_test = ('CI' in os.environ)
 
 
-def main():
-    n = 10000  # number of observations
-    prior, CPDs, data = generate_data(n)
-    posterior_params = train(prior, data, n)
+def main(args):
+    num_obs = args.num_obs
+    num_steps = args.num_steps
+    prior, CPDs, data = generate_data(num_obs)
+    posterior_params = train(prior, data, num_steps, num_obs)
     evaluate(CPDs, posterior_params)
 
 
-def generate_data(n):
+def generate_data(num_obs):
     # domain = [False, True]
     prior = {'A': torch.tensor([1., 10.]),
              'B': torch.tensor([[10., 1.],
@@ -55,25 +59,25 @@ def generate_data(n):
             'p_B': Beta(prior['B'][:, 0], prior['B'][:, 1]).sample(),
             'p_C': Beta(prior['C'][:, 0], prior['C'][:, 1]).sample(),
             }
-    data = {'A': Bernoulli(torch.ones(n) * CPDs['p_A']).sample()}
+    data = {'A': Bernoulli(torch.ones(num_obs) * CPDs['p_A']).sample()}
     data['B'] = Bernoulli(torch.gather(CPDs['p_B'], 0, data['A'].type(torch.long))).sample()
     data['C'] = Bernoulli(torch.gather(CPDs['p_C'], 0, data['B'].type(torch.long))).sample()
     return prior, CPDs, data
 
 
 @pyro.infer.config_enumerate
-def model(prior, obs, n):
+def model(prior, obs, num_obs):
     p_A = pyro.sample('p_A', dist.Beta(1, 1))
     p_B = pyro.sample('p_B', dist.Beta(torch.ones(2), torch.ones(2)).to_event(1))
     p_C = pyro.sample('p_C', dist.Beta(torch.ones(2), torch.ones(2)).to_event(1))
-    with pyro.plate('data_plate', n):
-        A = pyro.sample('A', dist.Bernoulli(p_A.expand(n)), obs=obs['A'])
+    with pyro.plate('data_plate', num_obs):
+        A = pyro.sample('A', dist.Bernoulli(p_A.expand(num_obs)), obs=obs['A'])
         # Vindex used to ensure proper indexing into the enumerated sample sites
         B = pyro.sample('B', dist.Bernoulli(Vindex(p_B)[A.type(torch.long)]), infer={"enumerate": "parallel"})
         pyro.sample('C', dist.Bernoulli(Vindex(p_C)[B.type(torch.long)]), obs=obs['C'])
 
 
-def guide(prior, obs, n):
+def guide(prior, obs, num_obs):
     a = pyro.param('a', prior['A'], constraint=constraints.positive)
     pyro.sample('p_A', dist.Beta(a[0], a[1]))
     b = pyro.param('b', prior['B'], constraint=constraints.positive)
@@ -82,7 +86,7 @@ def guide(prior, obs, n):
     pyro.sample('p_C', dist.Beta(c[:, 0], c[:, 1]).to_event(1))
 
 
-def train(prior, data, n):
+def train(prior, data, num_steps, num_obs):
     pyro.enable_validation(True)
     pyro.clear_param_store()
     # max_plate_nesting = 1 because there is a single plate in the model
@@ -92,10 +96,9 @@ def train(prior, data, n):
                          pyro.optim.Adam({'lr': .01}),
                          loss=loss_func
                          )
-    num_steps = 4000 if not smoke_test else 1
     losses = []
     for _ in tqdm(range(num_steps)):
-        loss = svi.step(prior, data, n)
+        loss = svi.step(prior, data, num_obs)
         losses.append(loss)
     plt.figure()
     plt.plot(losses)
@@ -126,5 +129,10 @@ def get_true_pred_CPDs(CPD, posterior_param):
     return true_p, pred_p
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    assert pyro.__version__.startswith('1.3.1')
+    parser = argparse.ArgumentParser(description="Toy mixture model")
+    parser.add_argument("-n", "--num-steps", default=4000, type=int)
+    parser.add_argument("-o", "--num-obs", default=10000, type=int)
+    args = parser.parse_args()
+    main(args)
