@@ -80,6 +80,7 @@ Welcome to Pyro Examples and Tutorials!
    timeseries
    smcfilter
    sir_hmc
+   toy_mixture_model
 
 Indices and tables
 ==================
