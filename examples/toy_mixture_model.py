@@ -21,7 +21,6 @@
 """
 
 import argparse
-import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,8 +35,6 @@ import pyro.distributions as dist
 import pyro.infer
 import pyro.optim
 from pyro.ops.indexing import Vindex
-
-smoke_test = ('CI' in os.environ)
 
 
 def main(args):
