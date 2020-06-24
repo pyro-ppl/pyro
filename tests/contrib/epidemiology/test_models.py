@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("algo,options", [
     ("svi", {}),
     ("svi", {"haar": False}),
+    ("svi", {"guide_rank": None}),
+    ("svi", {"guide_rank": 2}),
+    ("svi", {"guide_rank": "full"}),
     ("mcmc", {}),
     ("mcmc", {"haar": True}),
     ("mcmc", {"haar_full_mass": 2}),

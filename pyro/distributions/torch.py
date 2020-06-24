@@ -43,7 +43,7 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
     approx_sample_thresh = math.inf
 
     # EXPERIMENTAL If set to a positive value, the .log_prob() method will use
-    # a shifted Sterling's approximation to the Beta function, reducing
+    # a shifted Stirling's approximation to the Beta function, reducing
     # computational cost from 3 lgamma() evaluations to 4 log() evaluations
     # plus arithmetic. Recommended values are between 0.1 and 0.01.
     approx_log_prob_tol = 0.

@@ -24,6 +24,7 @@ from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.polya_gamma import TruncatedPolyaGamma
 from pyro.distributions.rejector import Rejector
+from pyro.distributions.relaxed_beta_binomial import RelaxedBetaBinomial
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
                                                          RelaxedOneHotCategoricalStraightThrough)
 from pyro.distributions.spanning_tree import SpanningTree
@@ -76,6 +77,7 @@ __all__ = [
     "OMTMultivariateNormal",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
+    "RelaxedBetaBinomial",
     "RelaxedOneHotCategoricalStraightThrough",
     "SpanningTree",
     "Stable",
