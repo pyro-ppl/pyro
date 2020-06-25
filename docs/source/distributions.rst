@@ -260,6 +260,13 @@ RelaxedBernoulliStraightThrough
     :undoc-members:
     :show-inheritance:
 
+RelaxedBetaBinomial
+-------------------
+.. autoclass:: pyro.distributions.RelaxedBetaBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RelaxedOneHotCategoricalStraightThrough
 ---------------------------------------
 .. autoclass:: pyro.distributions.RelaxedOneHotCategoricalStraightThrough
