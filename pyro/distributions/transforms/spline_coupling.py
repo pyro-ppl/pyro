@@ -40,7 +40,7 @@ class SplineCoupling(TransformModule):
     >>> param_dims = [(input_dim - split_dim) * count_bins,
     ... (input_dim - split_dim) * count_bins,
     ... (input_dim - split_dim) * (count_bins - 1),
-    ... (input_dim - split_dim) * count_bins])
+    ... (input_dim - split_dim) * count_bins]
     >>> hypernet = DenseNN(split_dim, [10*input_dim], param_dims)
     >>> transform = SplineCoupling(input_dim, split_dim, hypernet)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
