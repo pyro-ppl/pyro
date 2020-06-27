@@ -8,29 +8,48 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.contrib.epidemiology import (RegionalSIRModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel,
-                                       SuperspreadingSEIRModel, SuperspreadingSIRModel, UnknownStartSIRModel)
+from pyro.contrib.epidemiology.models import (HeterogeneousRegionalSIRModel, HeterogeneousSIRModel,
+                                              OverdispersedSEIRModel, OverdispersedSIRModel, RegionalSIRModel,
+                                              SimpleSEIRModel, SimpleSIRModel, SparseSIRModel, SuperspreadingSEIRModel,
+                                              SuperspreadingSIRModel, UnknownStartSIRModel)
+from tests.common import xfail_param
 
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.filterwarnings("ignore:num_chains")
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"haar": True},
-    {"haar_full_mass": 2},
-    {"num_quant_bins": 8},
-    {"num_quant_bins": 12},
-    {"num_quant_bins": 16},
-    {"arrowhead_mass": True},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("svi", {"guide_rank": None}),
+    ("svi", {"guide_rank": 2}),
+    ("svi", {"guide_rank": "full"}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
+    ("mcmc", {"num_quant_bins": 4}),
+    ("mcmc", {"num_quant_bins": 8}),
+    ("mcmc", {"num_quant_bins": 12}),
+    ("mcmc", {"num_quant_bins": 16}),
+    ("mcmc", {"num_quant_bins": 2, "haar": True}),
+    ("mcmc", {"arrowhead_mass": True}),
+    ("mcmc", {"jit_compile": True}),
+    ("mcmc", {"jit_compile": True, "haar_full_mass": 2}),
+    ("mcmc", {"jit_compile": True, "num_quant_bins": 2}),
+    ("mcmc", {"num_chains": 2, "mp_context": "spawn"}),
+    ("mcmc", {"num_chains": 2, "mp_context": "spawn", "num_quant_bins": 2}),
+    ("mcmc", {"num_chains": 2, "mp_context": "spawn", "jit_compile": True}),
 ], ids=str)
-def test_simple_sir_smoke(duration, forecast, options):
+def test_simple_sir_smoke(duration, forecast, options, algo):
     population = 100
     recovery_time = 7.0
 
     # Generate data.
     model = SimpleSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -40,23 +59,29 @@ def test_simple_sir_smoke(duration, forecast, options):
     # Infer.
     model = SimpleSIRModel(population, recovery_time, data)
     num_samples = 5
-    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
+    num_samples *= options.get("num_chains", 1)
     assert samples["S"].shape == (num_samples, duration + forecast)
     assert samples["I"].shape == (num_samples, duration + forecast)
 
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"haar": True},
-    {"haar_full_mass": 2},
-    {"num_quant_bins": 8},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
-def test_simple_seir_smoke(duration, forecast, options):
+def test_simple_seir_smoke(duration, forecast, options, algo):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -64,6 +89,7 @@ def test_simple_seir_smoke(duration, forecast, options):
     # Generate data.
     model = SimpleSEIRModel(population, incubation_time, recovery_time,
                             [None] * duration)
+    assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -73,8 +99,76 @@ def test_simple_seir_smoke(duration, forecast, options):
     # Infer.
     model = SimpleSEIRModel(population, incubation_time, recovery_time, data)
     num_samples = 5
-    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
-              **options)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast)
+    assert samples["E"].shape == (num_samples, duration + forecast)
+    assert samples["I"].shape == (num_samples, duration + forecast)
+
+
+@pytest.mark.parametrize("duration", [3])
+@pytest.mark.parametrize("forecast", [7])
+@pytest.mark.parametrize("options", [
+    {},
+    {"num_quant_bins": 2},
+    {"haar_full_mass": 2},
+], ids=str)
+def test_overdispersed_sir_smoke(duration, forecast, options):
+    population = 100
+    recovery_time = 7.0
+
+    # Generate data.
+    model = OverdispersedSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "rho", "od")]
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = OverdispersedSIRModel(population, recovery_time, data)
+    num_samples = 5
+    model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast)
+    assert samples["I"].shape == (num_samples, duration + forecast)
+
+
+@pytest.mark.parametrize("duration", [3])
+@pytest.mark.parametrize("forecast", [7])
+@pytest.mark.parametrize("options", [
+    {},
+    {"haar_full_mass": 2},
+    {"num_quant_bins": 2},
+], ids=str)
+def test_overdispersed_seir_smoke(duration, forecast, options):
+    population = 100
+    incubation_time = 2.0
+    recovery_time = 7.0
+
+    # Generate data.
+    model = OverdispersedSEIRModel(population, incubation_time, recovery_time,
+                                   [None] * duration)
+    assert model.full_mass == [("R0", "rho", "od")]
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = OverdispersedSEIRModel(population, incubation_time, recovery_time, data)
+    num_samples = 5
+    model.fit_mcmc(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
+                   **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -89,7 +183,7 @@ def test_simple_seir_smoke(duration, forecast, options):
     {},
     {"haar": True},
     {"haar_full_mass": 2},
-    {"num_quant_bins": 8},
+    {"num_quant_bins": 2},
 ], ids=str)
 def test_superspreading_sir_smoke(duration, forecast, options):
     population = 100
@@ -97,6 +191,7 @@ def test_superspreading_sir_smoke(duration, forecast, options):
 
     # Generate data.
     model = SuperspreadingSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "k", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
         if data.sum():
@@ -106,7 +201,7 @@ def test_superspreading_sir_smoke(duration, forecast, options):
     # Infer.
     model = SuperspreadingSIRModel(population, recovery_time, data)
     num_samples = 5
-    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -120,7 +215,7 @@ def test_superspreading_sir_smoke(duration, forecast, options):
     {},
     {"haar": True},
     {"haar_full_mass": 2},
-    {"num_quant_bins": 8},
+    {"num_quant_bins": 2},
 ], ids=str)
 def test_superspreading_seir_smoke(duration, forecast, options):
     population = 100
@@ -130,6 +225,7 @@ def test_superspreading_seir_smoke(duration, forecast, options):
     # Generate data.
     model = SuperspreadingSEIRModel(
         population, incubation_time, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "k", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
         if data.sum():
@@ -140,8 +236,8 @@ def test_superspreading_seir_smoke(duration, forecast, options):
     model = SuperspreadingSEIRModel(
         population, incubation_time, recovery_time, data)
     num_samples = 5
-    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
-              **options)
+    model.fit_mcmc(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
+                   **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -152,7 +248,13 @@ def test_superspreading_seir_smoke(duration, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-def test_coalescent_likelihood_smoke(duration, forecast):
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"num_quant_bins": 2}),
+], ids=str)
+def test_coalescent_likelihood_smoke(duration, forecast, options, algo):
     population = 100
     incubation_time = 2.0
     recovery_time = 7.0
@@ -174,7 +276,11 @@ def test_coalescent_likelihood_smoke(duration, forecast):
         population, incubation_time, recovery_time, data,
         leaf_times=leaf_times, coal_times=coal_times)
     num_samples = 5
-    model.fit(warmup_steps=2, num_samples=num_samples, max_tree_depth=2)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=2, num_samples=num_samples, max_tree_depth=2,
+                       **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -183,13 +289,48 @@ def test_coalescent_likelihood_smoke(duration, forecast):
     assert samples["I"].shape == (num_samples, duration + forecast)
 
 
+@pytest.mark.parametrize("duration", [3, 7])
+@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
+], ids=str)
+def test_heterogeneous_sir_smoke(duration, forecast, options, algo):
+    population = 100
+    recovery_time = 7.0
+
+    # Generate data.
+    model = HeterogeneousSIRModel(population, recovery_time, [None] * duration)
+    assert model.full_mass == [("R0", "rho0", "rho1", "rho2")]
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5})["obs"]
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = HeterogeneousSIRModel(population, recovery_time, data)
+    num_samples = 5
+    model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast)
+    assert samples["I"].shape == (num_samples, duration + forecast)
+    assert samples["beta"].shape == (num_samples, duration + forecast)
+
+
 @pytest.mark.parametrize("duration", [4, 12])
 @pytest.mark.parametrize("forecast", [7])
 @pytest.mark.parametrize("options", [
-    {},
-    {"haar": True},
-    {"haar_full_mass": 3},
-    {"num_quant_bins": 8},
+    xfail_param({}, reason="Delta is incompatible with relaxed inference"),
+    {"num_quant_bins": 2},
+    {"num_quant_bins": 2, "haar": True},
+    {"num_quant_bins": 2, "haar_full_mass": 3},
+    {"num_quant_bins": 4},
 ], ids=str)
 def test_sparse_smoke(duration, forecast, options):
     population = 100
@@ -199,6 +340,7 @@ def test_sparse_smoke(duration, forecast, options):
     data = [None] * duration
     mask = torch.arange(duration) % 4 == 3
     model = SparseSIRModel(population, recovery_time, data, mask)
+    assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
@@ -211,7 +353,7 @@ def test_sparse_smoke(duration, forecast, options):
     # Infer.
     model = SparseSIRModel(population, recovery_time, data, mask)
     num_samples = 5
-    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -231,7 +373,7 @@ def test_sparse_smoke(duration, forecast, options):
     {},
     {"haar": True},
     {"haar_full_mass": 4},
-    {"num_quant_bins": 8},
+    {"num_quant_bins": 2},
 ], ids=str)
 def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     population = 100
@@ -240,6 +382,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     # Generate data.
     data = [None] * duration
     model = UnknownStartSIRModel(population, recovery_time, pre_obs_window, data)
+    assert model.full_mass == [("R0", "rho0", "rho1")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho0": 0.1, "rho1": 0.5})["obs"]
         assert len(data) == pre_obs_window + duration
@@ -252,7 +395,7 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     # Infer.
     model = UnknownStartSIRModel(population, recovery_time, pre_obs_window, data)
     num_samples = 5
-    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)
@@ -272,13 +415,15 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
 
 @pytest.mark.parametrize("duration", [3, 7])
 @pytest.mark.parametrize("forecast", [0, 7])
-@pytest.mark.parametrize("options", [
-    {},
-    {"haar": True},
-    {"haar_full_mass": 2},
-    {"num_quant_bins": 8},
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
-def test_regional_smoke(duration, forecast, options):
+def test_regional_smoke(duration, forecast, options, algo):
     num_regions = 6
     coupling = torch.eye(num_regions).clamp(min=0.1)
     population = torch.tensor([2., 3., 4., 10., 100., 1000.])
@@ -287,6 +432,7 @@ def test_regional_smoke(duration, forecast, options):
     # Generate data.
     model = RegionalSIRModel(population, coupling, recovery_time,
                              data=[None] * duration)
+    assert model.full_mass == [("R0", "rho_c1", "rho_c0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         assert data.shape == (duration, num_regions)
@@ -297,7 +443,54 @@ def test_regional_smoke(duration, forecast, options):
     # Infer.
     model = RegionalSIRModel(population, coupling, recovery_time, data)
     num_samples = 5
-    model.fit(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast, num_regions)
+    assert samples["I"].shape == (num_samples, duration + forecast, num_regions)
+
+
+@pytest.mark.parametrize("duration", [3, 7])
+@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"num_quant_bins": 2}),
+    ("mcmc", {"jit_compile": True}),
+    ("mcmc", {"jit_compile": True, "haar_full_mass": 2}),
+    ("mcmc", {"jit_compile": True, "num_quant_bins": 2}),
+], ids=str)
+def test_hetero_regional_smoke(duration, forecast, options, algo):
+    num_regions = 6
+    coupling = torch.eye(num_regions).clamp(min=0.1)
+    population = torch.tensor([2., 3., 4., 10., 100., 1000.])
+    recovery_time = 7.0
+
+    # Generate data.
+    model = HeterogeneousRegionalSIRModel(population, coupling, recovery_time,
+                                          data=[None] * duration)
+    assert model.full_mass == [("R0", "R_drift", "rho0", "rho_drift")]
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5})["obs"]
+        assert data.shape == (duration, num_regions)
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = HeterogeneousRegionalSIRModel(population, coupling, recovery_time, data)
+    num_samples = 5
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
     # Predict and forecast.
     samples = model.predict(forecast=forecast)

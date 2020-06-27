@@ -176,6 +176,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+ImproperUniform
+---------------
+.. autoclass:: pyro.distributions.improper_uniform.ImproperUniform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 IndependentHMM
 --------------
 .. autoclass:: pyro.distributions.IndependentHMM
@@ -462,6 +469,13 @@ ConditionalRadial
     :undoc-members:
     :show-inheritance:
 
+ConditionalSpline
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalSpline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransformModule
 --------------------------
 .. autoclass:: pyro.distributions.ConditionalTransformModule
@@ -592,6 +606,10 @@ conditional_planar
 conditional_radial
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_radial
+
+conditional_spline
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_spline
 
 elu
 ---

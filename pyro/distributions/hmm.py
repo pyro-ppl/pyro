@@ -10,7 +10,8 @@ from pyro.distributions.util import broadcast_shape
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
                                      matrix_and_mvn_to_gamma_gaussian)
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
-from pyro.ops.tensor_utils import cholesky, cholesky_solve, safe_log
+from pyro.ops.special import safe_log
+from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
 
 @torch.jit.script

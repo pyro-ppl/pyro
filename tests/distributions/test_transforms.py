@@ -95,15 +95,18 @@ class TransformTests(TestCase):
             assert lower_sum == float(0.0)
 
     def _test_inverse(self, shape, transform):
+        # Test g^{-1}(g(x)) = x
+        # NOTE: Calling _call and _inverse directly bypasses caching
         base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
-
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
-
-        # Cache is empty, hence must be calculating inverse afresh
+        J_1 = transform.log_abs_det_jacobian(x_true, y)
         x_calculated = transform._inverse(y)
-
+        J_2 = transform.log_abs_det_jacobian(x_true, y)
         assert (x_true - x_calculated).abs().max().item() < self.delta
+
+        # Test that Jacobian after inverse op is same as after forward
+        assert (J_1 - J_2).abs().max().item() < self.delta
 
     def _test_shape(self, base_shape, transform):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
@@ -191,6 +194,9 @@ class TransformTests(TestCase):
 
     def test_conditional_radial(self):
         self._test_conditional(T.conditional_radial, inverse=False)
+
+    def test_conditional_spline(self):
+        self._test_conditional(T.conditional_spline)
 
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented

@@ -217,8 +217,8 @@ class AffineAutoregressive(TransformModule):
             mean, logit_scale = self.arn(torch.stack(x, dim=-1))
             inverse_scale = 1 + torch.exp(-logit_scale[..., idx] - self.sigmoid_bias)
             x[idx] = inverse_scale * y[..., idx] + (1 - inverse_scale) * mean[..., idx]
-            self._cached_log_scale = inverse_scale
 
+        self._cached_log_scale = self.logsigmoid(logit_scale + self.sigmoid_bias)
         x = torch.stack(x, dim=-1)
         return x
 

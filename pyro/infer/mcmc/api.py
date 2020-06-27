@@ -22,11 +22,12 @@ import torch
 import torch.multiprocessing as mp
 
 import pyro
-from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.nuts import NUTS
-from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
 import pyro.poutine as poutine
+from pyro.infer.mcmc.hmc import HMC
+from pyro.infer.mcmc.logger import DIAGNOSTIC_MSG, ProgressBar, TqdmHandler, initialize_logger
+from pyro.infer.mcmc.nuts import NUTS
+from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
+from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
 
@@ -289,9 +290,10 @@ class MCMC:
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
-    :param bool disable_validation: Disables distribution validation check. This is
-        disabled by default, since divergent transitions will lead to exceptions.
-        Switch to `True` for debugging purposes.
+    :param bool disable_validation: Disables distribution validation check.
+        Defaults to ``True``, disabling validation, since divergent transitions
+        will lead to exceptions. Switch to ``False`` to enable validation, or
+        to ``None`` to preserve existing global values.
     :param dict transforms: dictionary that specifies a transform for a sample site
         with constrained support to unconstrained space.
     """
@@ -373,7 +375,8 @@ class MCMC:
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
-        with pyro.validation_enabled(not self.disable_validation):
+        with optional(pyro.validation_enabled(not self.disable_validation),
+                      self.disable_validation is not None):
             for x, chain_id in self.sampler.run(*args, **kwargs):
                 if num_samples[chain_id] == 0:
                     num_samples[chain_id] += 1
@@ -405,8 +408,12 @@ class MCMC:
         # If transforms is not explicitly provided, infer automatically using
         # model args, kwargs.
         if self.transforms is None:
+            # Try to initialize kernel.transforms using kernel.setup().
+            if getattr(self.kernel, "transforms", None) is None:
+                warmup_steps = 0
+                self.kernel.setup(warmup_steps, *args, **kwargs)
             # Use `kernel.transforms` when available
-            if hasattr(self.kernel, 'transforms') and self.kernel.transforms is not None:
+            if getattr(self.kernel, "transforms", None) is not None:
                 self.transforms = self.kernel.transforms
             # Else, get transforms from model (e.g. in multiprocessing).
             elif self.kernel.model:

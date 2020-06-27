@@ -92,7 +92,7 @@ setup(
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
             'nbval',
-            'pytest>=4.1',
+            'pytest>=5.0',
             'pytest-cov',
             'scipy>=1.1',
         ],
@@ -106,7 +106,7 @@ setup(
             'nbval',
             'ninja',
             'pypandoc',
-            'pytest>=4.1',
+            'pytest>=5.0',
             'pytest-xdist',
             'scipy>=1.1',
             'sphinx',

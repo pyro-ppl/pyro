@@ -16,6 +16,7 @@ Welcome to Pyro Examples and Tutorials!
    svi_part_ii
    svi_part_iii
    tensor_shapes
+   mle_map
 
 .. toctree::
    :maxdepth: 2
@@ -80,6 +81,7 @@ Welcome to Pyro Examples and Tutorials!
    timeseries
    smcfilter
    sir_hmc
+   toy_mixture_model
 
 Indices and tables
 ==================

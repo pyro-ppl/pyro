@@ -14,7 +14,7 @@ import urllib
 
 import torch
 
-from pyro.contrib.examples.util import get_data_directory
+from pyro.contrib.examples.util import get_data_directory, _mkdir_p
 
 DATA = get_data_directory(__file__)
 
@@ -32,14 +32,6 @@ SOURCE_FILES = [
     "date-hour-soo-dest-2019.csv.gz",
 ]
 CACHE_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/bart_full.pkl.bz2"
-
-
-def _mkdir_p(dirname):
-    if not os.path.exists(dirname):
-        try:
-            os.makedirs(dirname)
-        except FileExistsError:
-            pass
 
 
 def _load_hourly_od(basename):
