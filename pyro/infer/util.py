@@ -113,7 +113,7 @@ def get_dependent_plate_dims(sites):
     all_plates = set().union(*plate_sets)
     common_plates = all_plates.intersection(*plate_sets)
     sum_plates = all_plates - common_plates
-    sum_dims = list(sorted(f.dim for f in sum_plates))
+    sum_dims = list(sorted(f.dim for f in sum_plates if f.dim is not None))
     return sum_dims
 
 
