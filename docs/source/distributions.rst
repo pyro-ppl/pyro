@@ -618,10 +618,6 @@ conditional_spline
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_spline
 
-conditional_spline_coupling
----------------------------
-.. autofunction:: pyro.distributions.transforms.conditional_spline_coupling
-
 elu
 ---
 .. autofunction:: pyro.distributions.transforms.elu
