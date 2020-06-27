@@ -20,6 +20,13 @@ def site_is_subsample(site):
     return site["type"] == "sample" and type(site["fn"]).__name__ == "_Subsample"
 
 
+def site_is_factor(site):
+    """
+    Determines whether a trace site originated from a factor statement.
+    """
+    return site["type"] == "sample" and type(site["fn"]).__name__ == "Unit"
+
+
 def prune_subsample_sites(trace):
     """
     Copies and removes all subsample sites from a trace.

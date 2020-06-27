@@ -9,7 +9,7 @@ from torch.distributions.transforms import SigmoidTransform
 
 import pyro.distributions as dist
 from pyro.contrib.epidemiology import beta_binomial_dist, binomial_dist, infection_dist
-from pyro.contrib.epidemiology.distributions import set_relaxed_distributions
+from pyro.contrib.epidemiology.distributions import _RELAX_MIN_VARIANCE, set_relaxed_distributions
 from tests.common import assert_close
 
 
@@ -199,7 +199,7 @@ def test_relaxed_binomial():
         d2 = binomial_dist(total_count, probs)
     assert isinstance(d2, dist.Normal)
     assert_close(d2.mean, d1.mean)
-    assert_close(d2.variance, d1.variance.clamp(min=0.25))
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))
 
 
 @pytest.mark.parametrize("overdispersion", [0.05, 0.1, 0.2, 0.5, 1.0])
@@ -214,7 +214,7 @@ def test_relaxed_overdispersed_binomial(overdispersion):
         d2 = binomial_dist(total_count, probs, overdispersion=overdispersion)
     assert isinstance(d2, dist.Normal)
     assert_close(d2.mean, d1.mean)
-    assert_close(d2.variance, d1.variance.clamp(min=0.25))
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))
 
 
 def test_relaxed_beta_binomial():
@@ -229,7 +229,7 @@ def test_relaxed_beta_binomial():
         d2 = beta_binomial_dist(concentration1, concentration0, total_count)
     assert isinstance(d2, dist.Normal)
     assert_close(d2.mean, d1.mean)
-    assert_close(d2.variance, d1.variance.clamp(min=0.25))
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))
 
 
 @pytest.mark.parametrize("overdispersion", [0.05, 0.1, 0.2, 0.5, 1.0])
@@ -247,4 +247,4 @@ def test_relaxed_overdispersed_beta_binomial(overdispersion):
                                 overdispersion=overdispersion)
     assert isinstance(d2, dist.Normal)
     assert_close(d2.mean, d1.mean)
-    assert_close(d2.variance, d1.variance.clamp(min=0.25))
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))
