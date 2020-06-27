@@ -9,6 +9,7 @@ from torch.distributions.transforms import SigmoidTransform
 
 import pyro.distributions as dist
 from pyro.contrib.epidemiology import beta_binomial_dist, binomial_dist, infection_dist
+from pyro.contrib.epidemiology.distributions import _RELAX_MIN_VARIANCE, set_relaxed_distributions
 from tests.common import assert_close
 
 
@@ -185,3 +186,65 @@ def test_overdispersed_beta_binomial(probs, total_count, overdispersion):
     cdf2 = d2.log_prob(k).exp().cumsum(-1)
     crps = (cdf1 - cdf2).pow(2).mean()
     assert crps < 0.01
+
+
+def test_relaxed_binomial():
+    total_count = torch.arange(1, 33)
+    probs = torch.linspace(0.1, 0.9, 16).unsqueeze(-1)
+
+    d1 = binomial_dist(total_count, probs)
+    assert isinstance(d1, dist.ExtendedBinomial)
+
+    with set_relaxed_distributions():
+        d2 = binomial_dist(total_count, probs)
+    assert isinstance(d2, dist.Normal)
+    assert_close(d2.mean, d1.mean)
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))
+
+
+@pytest.mark.parametrize("overdispersion", [0.05, 0.1, 0.2, 0.5, 1.0])
+def test_relaxed_overdispersed_binomial(overdispersion):
+    total_count = torch.arange(1, 33)
+    probs = torch.linspace(0.1, 0.9, 16).unsqueeze(-1)
+
+    d1 = binomial_dist(total_count, probs, overdispersion=overdispersion)
+    assert isinstance(d1, dist.ExtendedBetaBinomial)
+
+    with set_relaxed_distributions():
+        d2 = binomial_dist(total_count, probs, overdispersion=overdispersion)
+    assert isinstance(d2, dist.Normal)
+    assert_close(d2.mean, d1.mean)
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))
+
+
+def test_relaxed_beta_binomial():
+    total_count = torch.arange(1, 17)
+    concentration1 = torch.logspace(-1, 2, 8).unsqueeze(-1)
+    concentration0 = concentration1.unsqueeze(-1)
+
+    d1 = beta_binomial_dist(concentration1, concentration0, total_count)
+    assert isinstance(d1, dist.ExtendedBetaBinomial)
+
+    with set_relaxed_distributions():
+        d2 = beta_binomial_dist(concentration1, concentration0, total_count)
+    assert isinstance(d2, dist.Normal)
+    assert_close(d2.mean, d1.mean)
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))
+
+
+@pytest.mark.parametrize("overdispersion", [0.05, 0.1, 0.2, 0.5, 1.0])
+def test_relaxed_overdispersed_beta_binomial(overdispersion):
+    total_count = torch.arange(1, 17)
+    concentration1 = torch.logspace(-1, 2, 8).unsqueeze(-1)
+    concentration0 = concentration1.unsqueeze(-1)
+
+    d1 = beta_binomial_dist(concentration1, concentration0, total_count,
+                            overdispersion=overdispersion)
+    assert isinstance(d1, dist.ExtendedBetaBinomial)
+
+    with set_relaxed_distributions():
+        d2 = beta_binomial_dist(concentration1, concentration0, total_count,
+                                overdispersion=overdispersion)
+    assert isinstance(d2, dist.Normal)
+    assert_close(d2.mean, d1.mean)
+    assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))

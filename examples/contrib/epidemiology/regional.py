@@ -7,7 +7,7 @@ import logging
 import torch
 
 import pyro
-from pyro.contrib.epidemiology import RegionalSIRModel
+from pyro.contrib.epidemiology.models import RegionalSIRModel
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -42,7 +42,7 @@ def generate_data(args):
                      .format(args.min_observations))
 
 
-def infer(args, model):
+def infer_mcmc(args, model):
     energies = []
 
     def hook_fn(kernel, *unused):
@@ -51,15 +51,16 @@ def infer(args, model):
         if args.verbose:
             logging.info("potential = {:0.6g}".format(e))
 
-    mcmc = model.fit(heuristic_num_particles=args.num_particles,
-                     heuristic_ess_threshold=args.ess_threshold,
-                     warmup_steps=args.warmup_steps,
-                     num_samples=args.num_samples,
-                     max_tree_depth=args.max_tree_depth,
-                     num_quant_bins=args.num_bins,
-                     haar=args.haar,
-                     haar_full_mass=args.haar_full_mass,
-                     hook_fn=hook_fn)
+    mcmc = model.fit_mcmc(heuristic_num_particles=args.smc_particles,
+                          heuristic_ess_threshold=args.ess_threshold,
+                          warmup_steps=args.warmup_steps,
+                          num_samples=args.num_samples,
+                          max_tree_depth=args.max_tree_depth,
+                          num_quant_bins=args.num_bins,
+                          haar=args.haar,
+                          haar_full_mass=args.haar_full_mass,
+                          jit_compile=args.jit,
+                          hook_fn=hook_fn)
 
     mcmc.summary()
     if args.plot:
@@ -71,7 +72,24 @@ def infer(args, model):
         plt.title("MCMC energy trace")
         plt.tight_layout()
 
-    return model.samples
+
+def infer_svi(args, model):
+    losses = model.fit_svi(heuristic_num_particles=args.smc_particles,
+                           heuristic_ess_threshold=args.ess_threshold,
+                           num_samples=args.num_samples,
+                           num_steps=args.svi_steps,
+                           num_particles=args.svi_particles,
+                           haar=args.haar,
+                           jit=args.jit)
+
+    if args.plot:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(6, 3))
+        plt.plot(losses)
+        plt.xlabel("SVI step")
+        plt.ylabel("loss")
+        plt.title("SVI Convergence")
+        plt.tight_layout()
 
 
 def predict(args, model, truth):
@@ -118,6 +136,7 @@ def main(args):
 
     # Run inference.
     model = Model(args, obs)
+    infer = {"mcmc": infer_mcmc, "svi": infer_svi}[args.infer]
     infer(args, model)
 
     # Predict latent time series.
@@ -137,22 +156,31 @@ if __name__ == "__main__":
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
+    parser.add_argument("--infer", default="mcmc")
+    parser.add_argument("--mcmc", action="store_const", const="mcmc", dest="infer")
+    parser.add_argument("--svi", action="store_const", const="svi", dest="infer")
     parser.add_argument("--haar", action="store_true")
     parser.add_argument("-hfm", "--haar-full-mass", default=0, type=int)
     parser.add_argument("-n", "--num-samples", default=200, type=int)
-    parser.add_argument("-np", "--num-particles", default=1024, type=int)
+    parser.add_argument("-np", "--smc-particles", default=1024, type=int)
+    parser.add_argument("-ss", "--svi-steps", default=5000, type=int)
+    parser.add_argument("-sp", "--svi-particles", default=32, type=int)
     parser.add_argument("-ess", "--ess-threshold", default=0.5, type=float)
-    parser.add_argument("-w", "--warmup-steps", default=100, type=int)
+    parser.add_argument("-w", "--warmup-steps", type=int)
     parser.add_argument("-t", "--max-tree-depth", default=5, type=int)
-    parser.add_argument("-nb", "--num-bins", default=4, type=int)
+    parser.add_argument("-nb", "--num-bins", default=1, type=int)
     parser.add_argument("--double", action="store_true", default=True)
     parser.add_argument("--single", action="store_false", dest="double")
     parser.add_argument("--rng-seed", default=0, type=int)
     parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--jit", action="store_true", default=True)
+    parser.add_argument("--nojit", action="store_false", dest="jit")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
 
+    if args.warmup_steps is None:
+        args.warmup_steps = args.num_samples
     if args.double:
         if args.cuda:
             torch.set_default_tensor_type(torch.cuda.DoubleTensor)

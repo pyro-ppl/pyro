@@ -6,7 +6,7 @@ import urllib
 
 import pandas as pd
 
-from pyro.contrib.examples.util import get_data_directory
+from pyro.contrib.examples.util import get_data_directory, _mkdir_p
 
 DATA = get_data_directory(__file__)
 
@@ -18,6 +18,7 @@ def load_snp500():
     """
     Loads pandas dataframe of S&P 500 daily values from 1927-12-30 thru 2020-01-10.
     """
+    _mkdir_p(DATA)
     filename = os.path.join(DATA, "snp500.csv.bz2")
     if not os.path.exists(filename):
         urllib.request.urlretrieve(CACHE_URL, filename)
