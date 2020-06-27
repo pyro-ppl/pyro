@@ -68,3 +68,11 @@ def get_data_directory(filepath=None):
         return os.path.expanduser('~/.data')
     return os.path.abspath(os.path.join(os.path.dirname(filepath),
                                         '.data'))
+
+
+def _mkdir_p(dirname):
+    if not os.path.exists(dirname):
+        try:
+            os.makedirs(dirname)
+        except FileExistsError:
+            pass

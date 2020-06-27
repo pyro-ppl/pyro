@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 import logging
 import operator
 import re
@@ -9,6 +10,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from contextlib import ExitStack
 from functools import reduce
+from timeit import default_timer
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -18,13 +20,16 @@ import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import HaarTransform
-from pyro.infer import MCMC, NUTS, SMCFilter, infer_discrete
-from pyro.infer.autoguide import init_to_generated, init_to_value
+from pyro.infer import MCMC, NUTS, SVI, JitTrace_ELBO, SMCFilter, Trace_ELBO, infer_discrete
+from pyro.infer.autoguide import (AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoNormal, init_to_generated,
+                                  init_to_value)
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
-from pyro.infer.util import is_validation_enabled, site_is_subsample
-from pyro.util import optional, warn_if_nan
+from pyro.infer.util import is_validation_enabled
+from pyro.optim import ClippedAdam
+from pyro.poutine.util import site_is_factor, site_is_subsample
+from pyro.util import warn_if_nan
 
 from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
@@ -59,7 +64,7 @@ class CompartmentalModel(ABC):
 
         # Run inference to fit the model to data.
         model = MyModel(...)
-        model.fit(num_samples=100)
+        model.fit_svi(num_samples=100)  # or .fit_mcmc(...)
         R0 = model.samples["R0"]  # An example parameter.
         print("R0 = {:0.3g} \u00B1 {:0.3g}".format(R0.mean(), R0.std()))
 
@@ -77,6 +82,22 @@ class CompartmentalModel(ABC):
         samples2 = model.predict(forecast=30)
         effect = samples2["my_result"].mean() - samples1["my_result"].mean()
         print("average effect = {:0.3g}".format(effect))
+
+    An example workflow is to use cheaper approximate inference while finding
+    good model structure and priors, then move to more accurate but more
+    expensive inference once the model is plausible.
+
+    1.  Start with ``.fit_svi(guide_rank=1, num_steps=2000)`` for cheap
+        inference while you search for a good model.
+    2.  Additionally infer long-range correlations by moving to a low-rank
+        multivariate normal guide via ``.fit_svi(guide_rank=None,
+        num_steps=5000)``.
+    3.  Optionally additionally infer non-Gaussian posterior by moving to the
+        more expensive (but still approximate via moment matching)
+        ``.fit_mcmc(num_quant_bins=1, num_samples=10000, num_chains=2)``.
+    4.  Optionally improve fit around small counts by moving the the more
+        expensive enumeration-based algorithm ``.fit_mcmc(num_quant_bins=4,
+        num_samples=10000, num_chains=2)`` (GPU recommended).
 
     :ivar dict samples: Dictionary of posterior samples.
     :param list compartments: A list of strings of compartment names.
@@ -215,7 +236,7 @@ class CompartmentalModel(ABC):
         interpretations, including batched and vectorized interpretations.
         During :meth:`generate` this is called to generate a single sample.
         During :meth:`heuristic` this is called to generate a batch of samples
-        for SMC.  During :meth:`fit` this is called both in vectorized form
+        for SMC.  During :meth:`fit_mcmc` this is called both in vectorized form
         (vectorizing over time) and in sequential form (for a single time
         step); both forms enumerate over discrete latent variables.  During
         :meth:`predict` this is called to forecast a batch of samples,
@@ -289,21 +310,152 @@ class CompartmentalModel(ABC):
                               for name, site in trace.nodes.items()
                               if site["type"] == "sample")
 
-        self._concat_series(samples)
+        self._concat_series(samples, trace)
         return samples
 
+    def fit_svi(self, *,
+                num_samples=100,
+                num_steps=2000,
+                num_particles=32,
+                learning_rate=0.1,
+                learning_rate_decay=0.01,
+                betas=(0.8, 0.99),
+                haar=True,
+                init_scale=0.01,
+                guide_rank=0,
+                jit=False,
+                log_every=200,
+                **options):
+        """
+        Runs stochastic variational inference to generate posterior samples.
+
+        This runs :class:`~pyro.infer.svi.SVI`, setting the ``.samples``
+        attribute on completion.
+
+        This approximate inference method is useful for quickly iterating on
+        probabilistic models.
+
+        :param int num_samples: Number of posterior samples to draw from the
+            trained guide. Defaults to 100.
+        :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
+        :param int num_particles: Number of :class:`~pyro.infer.svi.SVI`
+            particles per step.
+        :param int learning_rate: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param int learning_rate_decay: Learning rate for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer. Note this
+            is decay over the entire schedule, not per-step decay.
+        :param tuple betas: Momentum parameters for the
+            :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
+        :param bool haar: Whether to use a Haar wavelet reparameterizer.
+        :param int guide_rank: Rank of the auto normal guide. If zero (default)
+            use an :class:`~pyro.infer.autoguide.AutoNormal` guide. If a
+            positive integer or None, use an
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+            If the string "full", use an
+            :class:`~pyro.infer.autoguide.AutoMultivariateNormal` guide. These
+            latter two require more ``num_steps`` to fit.
+        :param float init_scale: Initial scale of the
+            :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+        :param bool jit: Whether to use a jit compiled ELBO.
+        :param int log_every: How often to log svi losses.
+        :param int heuristic_num_particles: Passed to :meth:`heuristic` as
+            ``num_particles``. Defaults to 1024.
+        :returns: Time series of SVI losses (useful to diagnose convergence).
+        :rtype: list
+        """
+        # Save configuration for .predict().
+        self.relaxed = True
+        self.num_quant_bins = 1
+
+        # Setup Haar wavelet transform.
+        if haar:
+            time_dim = -2 if self.is_regional else -1
+            dims = {"auxiliary": time_dim}
+            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
+            for name, (fn, is_regional) in self._non_compartmental.items():
+                dims[name] = time_dim - fn.event_dim
+                supports[name] = fn.support
+            haar = _HaarSplitReparam(0, self.duration, dims, supports)
+
+        # Heuristically initialize to feasible latents.
+        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
+                             for k in list(options)
+                             if k.startswith("heuristic_")}
+        assert not options, "unrecognized options: {}".format(", ".join(options))
+        init_strategy = self._heuristic(haar, **heuristic_options)
+
+        # Configure variational inference.
+        logger.info("Running inference...")
+        model = self._relaxed_model
+        if haar:
+            model = haar.reparam(model)
+        if guide_rank == 0:
+            guide = AutoNormal(model, init_loc_fn=init_strategy, init_scale=init_scale)
+        elif guide_rank == "full":
+            guide = AutoMultivariateNormal(model, init_loc_fn=init_strategy,
+                                           init_scale=init_scale)
+        elif guide_rank is None or isinstance(guide_rank, int):
+            guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
+                                                  init_scale=init_scale, rank=guide_rank)
+        else:
+            raise ValueError("Invalid guide_rank: {}".format(guide_rank))
+        Elbo = JitTrace_ELBO if jit else Trace_ELBO
+        elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
+                    num_particles=num_particles, vectorize_particles=True,
+                    ignore_jit_warnings=True)
+        optim = ClippedAdam({"lr": learning_rate, "betas": betas,
+                             "lrd": learning_rate_decay ** (1 / num_steps)})
+        svi = SVI(model, guide, optim, elbo)
+
+        # Run inference.
+        start_time = default_timer()
+        losses = []
+        for step in range(1 + num_steps):
+            loss = svi.step() / self.duration
+            if step % log_every == 0:
+                logger.info("step {} loss = {:0.4g}".format(step, loss))
+            losses.append(loss)
+        elapsed = default_timer() - start_time
+        logger.info("SVI took {:0.1f} seconds, {:0.1f} step/sec"
+                    .format(elapsed, (1 + num_steps) / elapsed))
+
+        # Draw posterior samples.
+        with torch.no_grad():
+            particle_plate = pyro.plate("particles", num_samples,
+                                        dim=-1 - self.max_plate_nesting)
+            guide_trace = poutine.trace(particle_plate(guide)).get_trace()
+            model_trace = poutine.trace(
+                poutine.replay(particle_plate(model), guide_trace)).get_trace()
+            self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
+                            if site["type"] == "sample"
+                            if not site["is_observed"]
+                            if not site_is_subsample(site)}
+            if haar:
+                haar.aux_to_user(self.samples)
+        assert all(v.size(0) == num_samples for v in self.samples.values()), \
+            {k: tuple(v.shape) for k, v in self.samples.items()}
+
+        return losses
+
     @set_approx_log_prob_tol(0.1)
-    def fit(self, **options):
+    def fit_mcmc(self, **options):
         r"""
-        Runs inference to generate posterior samples.
+        Runs NUTS inference to generate posterior samples.
 
         This uses the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel to run
         :class:`~pyro.infer.mcmc.api.MCMC`, setting the ``.samples``
         attribute on completion.
 
+        This uses an asymptotically exact enumeration-based model when
+        ``num_quant_bins > 1``, and a cheaper moment-matched approximate model
+        when ``num_quant_bins == 1``.
+
         :param \*\*options: Options passed to
             :class:`~pyro.infer.mcmc.api.MCMC`. The remaining options are
             pulled out and have special meaning.
+        :param int num_samples: Number of posterior samples to draw via mcmc.
+            Defaults to 100.
         :param int max_tree_depth: (Default 5). Max tree depth of the
             :class:`~pyro.infer.mcmc.nuts.NUTS` kernel.
         :param full_mass: Specification of mass matrix of the
@@ -328,68 +480,62 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
+        num_samples = options.setdefault("num_samples", 100)
+        num_chains = options.setdefault("num_chains", 1)
         self.num_quant_bins = options.pop("num_quant_bins", 1)
         assert isinstance(self.num_quant_bins, int)
         assert self.num_quant_bins >= 1
         self.relaxed = self.num_quant_bins == 1
+
+        # Setup Haar wavelet transform.
         haar = options.pop("haar", False)
-        assert isinstance(haar, bool)
         haar_full_mass = options.pop("haar_full_mass", 0)
-        assert isinstance(haar_full_mass, int)
-        assert haar_full_mass >= 0
+        full_mass = options.pop("full_mass", self.full_mass)
+        assert isinstance(haar, bool)
+        assert isinstance(haar_full_mass, int) and haar_full_mass >= 0
+        assert isinstance(full_mass, (bool, list))
         haar_full_mass = min(haar_full_mass, self.duration)
-        haar = haar or (haar_full_mass > 0)
+        if haar_full_mass:
+            haar = True
+        if full_mass is True:
+            haar_full_mass = 0  # No need to split.
+        elif haar_full_mass >= self.duration:
+            full_mass = True  # Effectively full mass.
+            haar_full_mass = 0
+        if haar:
+            time_dim = -2 if self.is_regional else -1
+            dims = {"auxiliary": time_dim}
+            supports = {"auxiliary": constraints.interval(-0.5, self.population + 0.5)}
+            for name, (fn, is_regional) in self._non_compartmental.items():
+                dims[name] = time_dim - fn.event_dim
+                supports[name] = fn.support
+            haar = _HaarSplitReparam(haar_full_mass, self.duration, dims, supports)
+        if haar_full_mass:
+            assert full_mass and isinstance(full_mass, list)
+            full_mass = full_mass[:]
+            full_mass[0] += tuple(name + "_haar_split_0" for name in sorted(dims))
 
         # Heuristically initialize to feasible latents.
         heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
                              for k in list(options)
                              if k.startswith("heuristic_")}
-
-        def heuristic():
-            with poutine.block():
-                init_values = self.heuristic(**heuristic_options)
-            assert isinstance(init_values, dict)
-            assert "auxiliary" in init_values, \
-                ".heuristic() did not define auxiliary value"
-            if haar:
-                # Also initialize Haar transformed coordinates.
-                x = init_values["auxiliary"]
-                x = biject_to(constraints.interval(-0.5, self.population + 0.5)).inv(x)
-                x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True)(x)
-                init_values["auxiliary_haar"] = x
-            if haar_full_mass:
-                # Also split into low- and high-frequency parts.
-                x0, x1 = init_values["auxiliary_haar"].split(
-                    [haar_full_mass, self.duration - haar_full_mass],
-                    dim=-2 if self.is_regional else -1)
-                init_values["auxiliary_haar_split_0"] = x0
-                init_values["auxiliary_haar_split_1"] = x1
-            logger.info("Heuristic init: {}".format(", ".join(
-                "{}={:0.3g}".format(k, v.item())
-                for k, v in init_values.items()
-                if v.numel() == 1)))
-            return init_to_value(values=init_values)
+        init_strategy = init_to_generated(
+            generate=functools.partial(self._heuristic, haar, **heuristic_options))
 
         # Configure a kernel.
         logger.info("Running inference...")
-        max_tree_depth = options.pop("max_tree_depth", 5)
-        full_mass = options.pop("full_mass", self.full_mass)
         model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
-            rep = HaarReparam(dim=-2 if self.is_regional else -1, flip=True)
-            model = poutine.reparam(model, {"auxiliary": rep})
-        if haar_full_mass:
-            assert full_mass and isinstance(full_mass, list)
-            full_mass = full_mass[:]
-            full_mass[0] = full_mass[0] + ("auxiliary_haar_split_0",)
-            rep = SplitReparam([haar_full_mass, self.duration - haar_full_mass],
-                               dim=-2 if self.is_regional else -1)
-            model = poutine.reparam(model, {"auxiliary_haar": rep})
+            model = haar.reparam(model)
         kernel = NUTS(model,
                       full_mass=full_mass,
-                      init_strategy=init_to_generated(generate=heuristic),
+                      init_strategy=init_strategy,
                       max_plate_nesting=self.max_plate_nesting,
-                      max_tree_depth=max_tree_depth)
+                      jit_compile=options.pop("jit_compile", False),
+                      jit_options=options.pop("jit_options", None),
+                      ignore_jit_warnings=options.pop("ignore_jit_warnings", True),
+                      target_accept_prob=options.pop("target_accept_prob", 0.8),
+                      max_tree_depth=options.pop("max_tree_depth", 5))
         if options.pop("arrowhead_mass", False):
             kernel.mass_matrix_adapter = ArrowheadMassMatrix()
 
@@ -398,24 +544,17 @@ class CompartmentalModel(ABC):
         mcmc = MCMC(kernel, **options)
         mcmc.run()
         self.samples = mcmc.get_samples()
-        if haar_full_mass:
-            # Transform back from SplitReparam coordinates.
-            self.samples["auxiliary_haar"] = torch.cat([
-                self.samples.pop("auxiliary_haar_split_0"),
-                self.samples.pop("auxiliary_haar_split_1"),
-            ], dim=-2 if self.is_regional else -1)
         if haar:
-            # Transform back from Haar coordinates.
-            x = self.samples.pop("auxiliary_haar")
-            x = HaarTransform(dim=-2 if self.is_regional else -1, flip=True).inv(x)
-            x = biject_to(constraints.interval(-0.5, self.population + 0.5))(x)
-            self.samples["auxiliary"] = x
+            haar.aux_to_user(self.samples)
 
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
         model = self._relaxed_model if self.relaxed else self._quantized_model
         self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
+        assert all(v.size(0) == num_samples * num_chains for v in self.samples.values()), \
+            {k: tuple(v.shape) for k, v in self.samples.items()}
+
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
@@ -425,17 +564,18 @@ class CompartmentalModel(ABC):
         """
         Predict latent variables and optionally forecast forward.
 
-        This may be run only after :meth:`fit` and draws the same
-        ``num_samples`` as passed to :meth:`fit`.
+        This may be run only after :meth:`fit_mcmc` and draws the same
+        ``num_samples`` as passed to :meth:`fit_mcmc`.
 
         :param int forecast: The number of time steps to forecast forward.
         :returns: A dictionary mapping sample site name (or compartment name)
             to a tensor whose first dimension corresponds to sample batching.
         :rtype: dict
         """
-        _require_double_precision()
+        if self.num_quant_bins > 1:
+            _require_double_precision()
         if not self.samples:
-            raise RuntimeError("Missing samples, try running .fit() first")
+            raise RuntimeError("Missing samples, try running .fit_mcmc() first")
 
         samples = self.samples
         num_samples = len(next(iter(samples.values())))
@@ -454,9 +594,13 @@ class CompartmentalModel(ABC):
         if not self.relaxed:
             model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
-        samples = OrderedDict((name, site["value"])
+        samples = OrderedDict((name, site["value"].expand(site["fn"].shape()))
                               for name, site in trace.nodes.items()
-                              if site["type"] == "sample")
+                              if site["type"] == "sample"
+                              if not site_is_subsample(site)
+                              if not site_is_factor(site))
+        assert all(v.size(0) == num_samples for v in samples.values()), \
+            {k: tuple(v.shape) for k, v in samples.items()}
 
         # Optionally forecast with the forward _generative_model. This samples
         # time steps [duration:duration+forecast].
@@ -468,9 +612,13 @@ class CompartmentalModel(ABC):
             trace = poutine.trace(model).get_trace(forecast)
             samples = OrderedDict((name, site["value"])
                                   for name, site in trace.nodes.items()
-                                  if site["type"] == "sample")
+                                  if site["type"] == "sample"
+                                  if not site_is_subsample(site)
+                                  if not site_is_factor(site))
 
-        self._concat_series(samples, forecast, vectorized=True)
+        self._concat_series(samples, trace, forecast)
+        assert all(v.size(0) == num_samples for v in samples.values()), \
+            {k: tuple(v.shape) for k, v in samples.items()}
         return samples
 
     @torch.no_grad()
@@ -522,12 +670,27 @@ class CompartmentalModel(ABC):
 
     # Internal helpers ########################################
 
-    def _concat_series(self, samples, forecast=0, vectorized=False):
+    def _heuristic(self, haar, **options):
+        with poutine.block():
+            init_values = self.heuristic(**options)
+        assert isinstance(init_values, dict)
+        assert "auxiliary" in init_values, \
+            ".heuristic() did not define auxiliary value"
+        if haar:
+            haar.user_to_aux(init_values)
+        logger.info("Heuristic init: {}".format(", ".join(
+            "{}={:0.3g}".format(k, v.item())
+            for k, v in sorted(init_values.items())
+            if v.numel() == 1)))
+        return init_to_value(values=init_values)
+
+    def _concat_series(self, samples, trace, forecast=0):
         """
         Concatenate sequential time series into tensors, in-place.
 
         :param dict samples: A dictionary of samples.
         """
+        time_dim = -2 if self.is_regional else -1
         for name in set(self.compartments).union(self.series):
             pattern = name + "_[0-9]+"
             series = []
@@ -538,8 +701,9 @@ class CompartmentalModel(ABC):
                 continue
             assert len(series) == self.duration + forecast
             series = torch.broadcast_tensors(*map(torch.as_tensor, series))
-            if vectorized and name != "obs":  # TODO Generalize.
-                samples[name] = torch.cat(series, dim=1)
+            dim = time_dim - trace.nodes[name + "_0"]["fn"].event_dim
+            if series[0].dim() >= -dim:
+                samples[name] = torch.cat(series, dim=dim)
             else:
                 samples[name] = torch.stack(series)
 
@@ -566,7 +730,7 @@ class CompartmentalModel(ABC):
         # Extract latent variables that are not compartmental flows.
         result = OrderedDict()
         for name, site in tr.trace.iter_stochastic_nodes():
-            if name in flows:
+            if name in flows or site_is_subsample(site):
                 continue
             assert name.endswith("_0"), name
             name = name[:-2]
@@ -576,6 +740,41 @@ class CompartmentalModel(ABC):
             is_regional = any(f.name == "region" for f in site["cond_indep_stack"])
             result[name] = site["fn"], is_regional
         return result
+
+    def _sample_auxiliary(self):
+        """
+        Sample both compartmental and non-compartmental auxiliary variables.
+        """
+        C = len(self.compartments)
+        T = self.duration
+        R_shape = getattr(self.population, "shape", ())  # Region shape.
+
+        # Sample the compartmental continuous reparameterizing variable.
+        shape = (C, T) + R_shape
+        auxiliary = pyro.sample("auxiliary",
+                                dist.Uniform(-0.5, self.population + 0.5)
+                                    .mask(False).expand(shape).to_event())
+        extra_dims = auxiliary.dim() - len(shape)
+
+        # Sample any non-compartmental time series in batch.
+        non_compartmental = OrderedDict()
+        for name, (fn, is_regional) in self._non_compartmental.items():
+            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
+            shape = (T,)
+            if self.is_regional:
+                shape += R_shape if is_regional else (1,)
+            # Manually expand, avoiding plates to enable HaarReparam and SplitReparam.
+            non_compartmental[name] = pyro.sample(name, fn.expand(shape).to_event())
+
+        # Move event dims to time_plate and region_plate dims.
+        if extra_dims:  # If inside particle_plate.
+            shape = auxiliary.shape[:1] + auxiliary.shape[extra_dims:]
+            auxiliary = auxiliary.reshape(shape)
+            for name, value in non_compartmental.items():
+                shape = value.shape[:1] + value.shape[extra_dims:]
+                non_compartmental[name] = value.reshape(shape)
+
+        return auxiliary, non_compartmental
 
     def _transition_bwd(self, params, prev, curr, t):
         """
@@ -624,33 +823,21 @@ class CompartmentalModel(ABC):
         """
         Sequential model used to sample latents in the interval [0:duration].
         This is compatible with both quantized and relaxed inference.
+        This method is called only inside particle_plate.
         """
         C = len(self.compartments)
         T = self.duration
         R_shape = getattr(self.population, "shape", ())  # Region shape.
+        num_samples = len(next(iter(self.samples.values())))
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        num_samples = auxiliary.size(0)
-        if self.is_regional:
-            auxiliary = auxiliary.squeeze(1)
-        assert auxiliary.shape == (num_samples, 1, C, T) + R_shape
-        aux = [aux.unbind(2) for aux in auxiliary.unbind(2)]
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        non_compartmental = OrderedDict()
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                non_compartmental[name] = pyro.sample(name, fn)
+        # Reshape to accommodate the time_plate below.
+        assert auxiliary.shape == (num_samples, C, T) + R_shape, \
+            (auxiliary.shape, (num_samples, C, T) + R_shape)
+        aux = [aux.unbind(2) for aux in auxiliary.unsqueeze(1).unbind(2)]
 
         # Sequentially transition.
         curr = self.initialize(params)
@@ -680,35 +867,23 @@ class CompartmentalModel(ABC):
     def _quantized_model(self):
         """
         Quantized vectorized model used for parallel-scan enumerated inference.
+        This method is called only outside particle_plate.
         """
         C = len(self.compartments)
         T = self.duration
         Q = self.num_quant_bins
         R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
-
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        assert auxiliary.shape == shape, "particle plates are not supported"
+        auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Manually enumerate.
         curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
                                         num_quant_bins=self.num_quant_bins)
-        curr = OrderedDict(zip(self.compartments, curr))
-        logp = OrderedDict(zip(self.compartments, logp))
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                curr[name] = pyro.sample(name, fn)
+        curr = OrderedDict(zip(self.compartments, curr.unbind(0)))
+        logp = OrderedDict(zip(self.compartments, logp.unbind(0)))
+        curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
         init = self.initialize(params)
@@ -776,33 +951,26 @@ class CompartmentalModel(ABC):
     def _relaxed_model(self):
         """
         Relaxed vectorized model used for continuous inference.
+        This method may be called either inside or outside particle_plate.
         """
-        C = len(self.compartments)
         T = self.duration
-        R_shape = getattr(self.population, "shape", ())  # Region shape.
 
-        # Sample global parameters.
+        # Sample global parameters and auxiliary variables.
         params = self.global_model()
+        auxiliary, non_compartmental = self._sample_auxiliary()
+        particle_dims = auxiliary.dim() - (3 if self.is_regional else 2)
+        assert particle_dims in (0, 1)
 
-        # Sample the compartmental continuous reparameterizing variable.
-        shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
-        assert auxiliary.shape == shape, "particle plates are not supported"
-        curr = dict(zip(self.compartments, auxiliary))
-
-        # Sample any non-compartmental time series in batch.
-        # TODO Consider using pyro.contrib.forecast.util.reshape_batch to
-        # support DiscreteCosineReparam and HaarReparam along the time dim.
-        for name, (fn, is_regional) in self._non_compartmental.items():
-            fn = dist.ImproperUniform(fn.support, fn.batch_shape, fn.event_shape)
-            with self.time_plate, optional(self.region_plate, is_regional):
-                curr[name] = pyro.sample(name, fn)
+        # Split tensors into current state.
+        curr = dict(zip(self.compartments, auxiliary.unbind(particle_dims)))
+        curr.update(non_compartmental)
 
         # Truncate final value from the right then pad initial value onto the left.
-        prev = {name: cat2(value, curr[name][:-1], dim=-curr[name].dim())
-                for name, value in self.initialize(params).items()}
+        prev = {}
+        for name, value in self.initialize(params).items():
+            dim = particle_dims - curr[name].dim()
+            t = (slice(None),) * particle_dims + (slice(0, -1),)
+            prev[name] = cat2(value, curr[name][t], dim=dim)
 
         # Enable approximate inference.
         for name in self.approximate:
@@ -868,3 +1036,77 @@ class _SMCGuide(_SMCModel):
     def step(self, state):
         with poutine.block(hide_types=["observe"]):
             super().step(state.copy())
+
+
+class _HaarSplitReparam:
+    """
+    Wrapper around ``HaarReparam`` and ``SplitReparam`` to additionally convert
+    sample dicts between user-facing and auxiliary coordinates.
+    """
+    def __init__(self, split, duration, dims, supports):
+        assert 0 <= split < duration
+        self.split = split
+        self.duration = duration
+        self.dims = dims
+        self.supports = supports
+
+    def __bool__(self):
+        return True
+
+    def reparam(self, model):
+        """
+        Wrap a model with ``poutine.reparam``.
+        """
+        # Transform to Haar coordinates.
+        config = {}
+        for name, dim in self.dims.items():
+            config[name] = HaarReparam(dim=dim, flip=True)
+        model = poutine.reparam(model, config)
+
+        if self.split:
+            # Split into low- and high-frequency parts.
+            splits = [self.split, self.duration - self.split]
+            config = {}
+            for name, dim in self.dims.items():
+                config[name + "_haar"] = SplitReparam(splits, dim=dim)
+            model = poutine.reparam(model, config)
+
+        return model
+
+    def user_to_aux(self, samples):
+        """
+        Convert from user-facing samples to auxiliary samples, in-place.
+        """
+        # Transform to Haar coordinates.
+        for name, dim in self.dims.items():
+            x = samples.pop(name)
+            x = biject_to(self.supports[name]).inv(x)
+            x = HaarTransform(dim=dim, flip=True)(x)
+            samples[name + "_haar"] = x
+
+        if self.split:
+            # Split into low- and high-frequency parts.
+            splits = [self.split, self.duration - self.split]
+            for name, dim in self.dims.items():
+                x0, x1 = samples.pop(name + "_haar").split(splits, dim=dim)
+                samples[name + "_haar_split_0"] = x0
+                samples[name + "_haar_split_1"] = x1
+
+    def aux_to_user(self, samples):
+        """
+        Convert from auxiliary samples to user-facing samples, in-place.
+        """
+        if self.split:
+            # Transform back from SplitReparam coordinates.
+            for name, dim in self.dims.items():
+                samples[name + "_haar"] = torch.cat([
+                    samples.pop(name + "_haar_split_0"),
+                    samples.pop(name + "_haar_split_1"),
+                ], dim=dim)
+
+        # Transform back from Haar coordinates.
+        for name, dim in self.dims.items():
+            x = samples.pop(name + "_haar")
+            x = HaarTransform(dim=dim, flip=True).inv(x)
+            x = biject_to(self.supports[name])(x)
+            samples[name] = x
