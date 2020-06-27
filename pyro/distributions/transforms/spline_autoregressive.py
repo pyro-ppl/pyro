@@ -112,7 +112,7 @@ class ConditionalSplineAutoregressive(ConditionalTransformModule):
         cond_nn = partial(self.nn, context=context)
         cond_nn.permutation = cond_nn.func.permutation
         cond_nn.get_permutation = cond_nn.func.get_permutation
-        return AffineAutoregressive(cond_nn, **self.kwargs)
+        return SplineAutoregressive(cond_nn, **self.kwargs)
 
 
 def spline_autoregressive(input_dim, hidden_dims=None, count_bins=8, bound=3.0):
@@ -150,7 +150,7 @@ def spline_autoregressive(input_dim, hidden_dims=None, count_bins=8, bound=3.0):
     return SplineAutoregressive(input_dim, arn, count_bins=count_bins, bound=bound, order='linear')
 
 
-def conditional_spline_autoregressive(input_dim, context_dim, hidden_dims=None, **kwargs):
+def conditional_spline_autoregressive(input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0):
     """
     A helper function to create an
     :class:`~pyro.distributions.transforms.ConditionalSplineAutoregressive` object
@@ -180,7 +180,8 @@ def conditional_spline_autoregressive(input_dim, context_dim, hidden_dims=None, 
     """
     if hidden_dims is None:
         hidden_dims = [10 * input_dim]
-    permutation = torch.arange(input_dim, device='cpu').to(torch.Tensor().device)
-    nn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims, permutation=permutation)
+    
+    param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
+    arn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims, param_dims=param_dims)
     return ConditionalSplineAutoregressive(nn, **kwargs)
     
