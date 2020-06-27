@@ -32,9 +32,7 @@ from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.radial import ConditionalRadial, Radial, conditional_radial, radial
-from pyro.distributions.transforms.spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
-                                                                 conditional_spline_autoregressive,
-                                                                 spline_autoregressive)
+from pyro.distributions.transforms.spline_autoregressive import SplineAutoregressive, spline_autoregressive
 from pyro.distributions.transforms.spline import ConditionalSpline, Spline, conditional_spline, spline
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 
@@ -81,7 +79,6 @@ __all__ = [
     'ConditionalPlanar',
     'ConditionalRadial',
     'ConditionalSpline',
-    'ConditionalSplineAutoregressive',
     'CorrLCholeskyTransform',
     'DiscreteCosineTransform',
     'ELUTransform',
@@ -110,7 +107,6 @@ __all__ = [
     'conditional_planar',
     'conditional_radial',
     'conditional_spline',
-    'conditional_spline_autoregressive',
     'elu',
     'generalized_channel_permute',
     'householder',
