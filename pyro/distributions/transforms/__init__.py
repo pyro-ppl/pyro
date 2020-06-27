@@ -32,7 +32,9 @@ from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.radial import ConditionalRadial, Radial, conditional_radial, radial
-from pyro.distributions.transforms.spline_autoregressive import ConditionalSplineAutoregressive, SplineAutoregressive, conditional_spline_autoregressive, spline_autoregressive
+from pyro.distributions.transforms.spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
+                                                                 conditional_spline_autoregressive,
+                                                                 spline_autoregressive)
 from pyro.distributions.transforms.spline import ConditionalSpline, Spline, conditional_spline, spline
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 

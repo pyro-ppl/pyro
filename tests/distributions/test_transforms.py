@@ -268,10 +268,3 @@ class TransformTests(TestCase):
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
-
-if __name__ == "__main__":
-    #torch.set_default_tensor_type(torch.DoubleTensor)
-    tt = TransformTests()
-    tt.setUp()
-    tt.test_spline_autoregressive()
-    #tt.test_conditional_spline()

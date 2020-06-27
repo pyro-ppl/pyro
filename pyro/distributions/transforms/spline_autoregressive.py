@@ -1,24 +1,68 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import partial
-
 import torch
-import torch.nn as nn
 from torch.distributions import constraints
 
-from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.transforms.spline import ConditionalSpline
-from pyro.distributions.transforms.utils import clamp_preserve_gradients
 from pyro.distributions.util import copy_docs_from
-from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
+from pyro.nn import AutoRegressiveNN
 
 
 @copy_docs_from(TransformModule)
 class SplineAutoregressive(TransformModule):
     r"""
-    TODO
+    An implementation of the autoregressive layer with rational spline bijections of
+    linear and quadratic order (Durkan et al., 2019; Dolatabadi et al., 2020).
+    Rational splines are functions that are comprised of segments that are the ratio
+    of two polynomials (see :class:`~pyro.distributions.transforms.Spline`).
+
+    The autoregressive layer uses the transformation,
+
+        :math:`y_d = g_{\theta_d}(x_d)\ \ \ d=1,2,\ldots,D`
+
+    where :math:`\mathbf{x}=(x_1,x_2,\ldots,x_D)` are the inputs,
+    :math:`\mathbf{y}=(y_1,y_2,\ldots,y_D)` are the outputs, :math:`g_{\theta_d}` is
+    an elementwise rational monotonic spline with parameters :math:`\theta_d`, and
+    :math:`\theta=(\theta_1,\theta_2,\ldots,\theta_D)` is the output of an
+    autoregressive NN inputting :math:`\mathbf{x}`.
+
+    Example usage:
+
+    >>> from pyro.nn import AutoRegressiveNN
+    >>> input_dim = 10
+    >>> count_bins = 8
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> hidden_dims = [input_dim * 10, input_dim * 10]
+    >>> param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
+    >>> hypernet = AutoRegressiveNN(input_dim, hidden_dims, param_dims=param_dims)
+    >>> transform = SplineAutoregressive(input_dim, hypernet, count_bins=count_bins)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
+    >>> flow_dist.sample()  # doctest: +SKIP
+
+    :param input_dim: Dimension of the input vector. Despite operating element-wise,
+        this is required so we know how many parameters to store.
+    :type input_dim: int
+    :param autoregressive_nn: an autoregressive neural network whose forward call
+        returns tuple of the spline parameters
+    :type autoregressive_nn: callable
+    :param count_bins: The number of segments comprising the spline.
+    :type count_bins: int
+    :param bound: The quantity :math:`K` determining the bounding box,
+        :math:`[-K,K]\times[-K,K]`, of the spline.
+    :type bound: float
+    :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
+    :type order: string
+
+    References:
+
+    Conor Durkan, Artur Bekasov, Iain Murray, George Papamakarios. Neural
+    Spline Flows. NeurIPS 2019.
+
+    Hadi M. Dolatabadi, Sarah Erfani, Christopher Leckie. Invertible Generative
+    Modeling using Linear Rational Splines. AISTATS 2020.
 
     """
 

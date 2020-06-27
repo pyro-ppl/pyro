@@ -450,7 +450,7 @@ class ConditionalSpline(ConditionalTransformModule):
             raise ValueError(
                 "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
                     self.order))
-        
+
         # AutoRegressiveNN and DenseNN return different shapes...
         if w.shape[-1] == self.input_dim:
             w = w.transpose(-1, -2)
