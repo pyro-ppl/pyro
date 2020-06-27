@@ -459,8 +459,8 @@ class ConditionalSpline(ConditionalTransformModule):
 
         else:
             w = w.reshape(w.shape[:-1] + (self.input_dim, self.count_bins))
-            h = w.reshape(h.shape[:-1] + (self.input_dim, self.count_bins))
-            d = w.reshape(d.shape[:-1] + (self.input_dim, self.count_bins - 1))
+            h = h.reshape(h.shape[:-1] + (self.input_dim, self.count_bins))
+            d = d.reshape(d.shape[:-1] + (self.input_dim, self.count_bins - 1))
 
         w = F.softmax(w, dim=-1)
         h = F.softmax(h, dim=-1)
