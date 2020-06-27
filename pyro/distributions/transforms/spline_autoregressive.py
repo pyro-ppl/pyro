@@ -86,35 +86,6 @@ class SplineAutoregressive(TransformModule):
         return self._cache_log_detJ.sum(-1)
 
 
-@copy_docs_from(ConditionalTransformModule)
-class ConditionalSplineAutoregressive(ConditionalTransformModule):
-    r"""
-    TODO
-
-    """
-
-    domain = constraints.real
-    codomain = constraints.real
-    bijective = True
-    event_dim = 1
-
-    def __init__(self, autoregressive_nn, **kwargs):
-        super().__init__()
-        self.nn = autoregressive_nn
-        self.kwargs = kwargs
-
-    def condition(self, context):
-        """
-        Conditions on a context variable, returning a non-conditional transform of
-        of type :class:`~pyro.distributions.transforms.AffineAutoregressive`.
-        """
-
-        cond_nn = partial(self.nn, context=context)
-        cond_nn.permutation = cond_nn.func.permutation
-        cond_nn.get_permutation = cond_nn.func.get_permutation
-        return SplineAutoregressive(cond_nn, **self.kwargs)
-
-
 def spline_autoregressive(input_dim, hidden_dims=None, count_bins=8, bound=3.0):
     """
     A helper function to create an
@@ -127,18 +98,11 @@ def spline_autoregressive(input_dim, hidden_dims=None, count_bins=8, bound=3.0):
     :param hidden_dims: The desired hidden dimensions of the autoregressive network.
         Defaults to using [3*input_dim + 1]
     :type hidden_dims: list[int]
-    :param log_scale_min_clip: The minimum value for clipping the log(scale) from
-        the autoregressive NN
-    :type log_scale_min_clip: float
-    :param log_scale_max_clip: The maximum value for clipping the log(scale) from
-        the autoregressive NN
-    :type log_scale_max_clip: float
-    :param sigmoid_bias: A term to add the logit of the input when using the stable
-        tranform.
-    :type sigmoid_bias: float
-    :param stable: When true, uses the alternative "stable" version of the transform
-        (see above).
-    :type stable: bool
+    :param count_bins: The number of segments comprising the spline.
+    :type count_bins: int
+    :param bound: The quantity :math:`K` determining the bounding box,
+        :math:`[-K,K]\times[-K,K]`, of the spline.
+    :type bound: float
 
     """
 
@@ -148,40 +112,3 @@ def spline_autoregressive(input_dim, hidden_dims=None, count_bins=8, bound=3.0):
     param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
     arn = AutoRegressiveNN(input_dim, hidden_dims, param_dims=param_dims)
     return SplineAutoregressive(input_dim, arn, count_bins=count_bins, bound=bound, order='linear')
-
-
-def conditional_spline_autoregressive(input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0):
-    """
-    A helper function to create an
-    :class:`~pyro.distributions.transforms.ConditionalSplineAutoregressive` object
-    that takes care of constructing a dense network with the correct input/output
-    dimensions.
-
-    :param input_dim: Dimension of input variable
-    :type input_dim: int
-    :param context_dim: Dimension of context variable
-    :type context_dim: int
-    :param hidden_dims: The desired hidden dimensions of the dense network. Defaults
-        to using [10*input_dim]
-    :type hidden_dims: list[int]
-    :param log_scale_min_clip: The minimum value for clipping the log(scale) from
-        the autoregressive NN
-    :type log_scale_min_clip: float
-    :param log_scale_max_clip: The maximum value for clipping the log(scale) from
-        the autoregressive NN
-    :type log_scale_max_clip: float
-    :param sigmoid_bias: A term to add the logit of the input when using the stable
-        tranform.
-    :type sigmoid_bias: float
-    :param stable: When true, uses the alternative "stable" version of the transform
-        (see above).
-    :type stable: bool
-
-    """
-    if hidden_dims is None:
-        hidden_dims = [10 * input_dim]
-    
-    param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
-    arn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims, param_dims=param_dims)
-    return ConditionalSplineAutoregressive(nn, **kwargs)
-    
