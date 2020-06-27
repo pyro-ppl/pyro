@@ -745,3 +745,33 @@ def test_reparam_stable():
         loss = svi.step()
         if step % 20 == 0:
             logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+def test_sequential_plating_sum():
+    """Example from https://github.com/pyro-ppl/pyro/issues/2361"""
+
+    def model(data):
+        x = pyro.sample('x', dist.Bernoulli(torch.tensor(0.5)))
+        for i in pyro.plate('data_plate', len(data)):
+            pyro.sample('data_{:d}'.format(i),
+                        dist.Normal(x, scale=torch.tensor(0.1)),
+                        obs=data[i])
+
+    def guide(data):
+        p = pyro.param('p', torch.tensor(0.5))
+        pyro.sample('x', pyro.distributions.Bernoulli(p))
+
+    data = torch.cat([torch.randn([5]), 1. + torch.randn([5])])
+    adam = optim.Adam({"lr": 0.01})
+    loss_fn = RenyiELBO(alpha=0, num_particles=30, vectorize_particles=True)
+    svi = SVI(model, guide, adam, loss_fn)
+
+    for step in range(1001):
+        loss = svi.step(data)
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+    expected_p = torch.tensor(0.5)
+    actual_p = pyro.param("p").detach()
+    assert_close(actual_p, expected_p, atol=0.05)
