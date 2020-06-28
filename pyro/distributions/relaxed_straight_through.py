@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-
-from pyro.distributions.torch import RelaxedOneHotCategorical, RelaxedBernoulli
-from pyro.distributions.util import copy_docs_from
 from torch.distributions.utils import clamp_probs
+
+from pyro.distributions.torch import RelaxedBernoulli, RelaxedOneHotCategorical
+from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(RelaxedOneHotCategorical)
