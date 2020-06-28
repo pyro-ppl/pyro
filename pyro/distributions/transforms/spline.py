@@ -255,7 +255,7 @@ def _monotonic_rational_spline(inputs,
     # Apply the identity function outside the bounding box
     outputs[outside_interval_mask] = inputs[outside_interval_mask]
     logabsdet[outside_interval_mask] = 0.0
-    #logabsdet = logabsdet.masked_fill(outside_interval_mask, 0.0)
+    # logabsdet = logabsdet.masked_fill(outside_interval_mask, 0.0)
 
     return outputs, logabsdet
 
