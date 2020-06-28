@@ -137,7 +137,7 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
 
     # Get the index of the bin that each input is in
     # bin_idx ~ (batch_dim, input_dim, 1)
-    bin_idx = _searchsorted(cumheights + eps if inverse else cumwidths + eps, inputs)[..., None]
+    bin_idx = _searchsorted(cumheights + eps if inverse else cumwidths + eps, inputs).unsqueeze(-1)
 
     # Select the value for the relevant bin for the variables used in the main calculation
     input_widths = _select_bins(widths, bin_idx)
@@ -204,6 +204,8 @@ def _monotonic_rational_spline(inputs, widths, heights, derivatives, lambdas,
     # Apply the identity function outside the bounding box
     outputs[outside_interval_mask] = inputs[outside_interval_mask]
     logabsdet[outside_interval_mask] = 0.0
+    #logabsdet = logabsdet.masked_fill(outside_interval_mask, 0.0)
+
     return outputs, logabsdet
 
 
