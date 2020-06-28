@@ -114,14 +114,19 @@ class TransformTests(TestCase):
         assert sample.shape == base_shape
 
     def _test_autodiff(self, input_dim, transform, inverse=False):
-        # If inverse=True, then use the inverse transform to perform density estimation
+        """
+        This method essentially tests whether autodiff will not throw any errors
+        when you're doing maximum-likelihood learning with the transform. Many
+        transforms have only one direction with an explicit inverse, hence why we
+        pass in the inverse flag.
+        """
+        temp_transform = transform
         if inverse:
             transform = transform.inv
 
         base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
         flow_dist = dist.TransformedDistribution(base_dist, [transform])
-        optimizer = torch.optim.Adam(transform.parameters())
-        #x = flow_dist.rsample() #torch.rand(1, input_dim)
+        optimizer = torch.optim.Adam(temp_transform.parameters())
         x = torch.rand(1, input_dim)
         for _ in range(3):
             optimizer.zero_grad()
@@ -149,12 +154,19 @@ class TransformTests(TestCase):
             if autodiff:
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
+                # If the function doesn't have an explicit inverse, then use the forward op for autodiff
                 self._test_autodiff(reduce(operator.mul, event_shape, 1), transform, inverse=not inverse)
 
     def _test_conditional(self, conditional_transform_factory, context_dim=3, event_dim=1, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
             z = torch.rand(1, context_dim)
-            return conditional_transform_factory(input_dim, context_dim).condition(z)
+            cond_transform = conditional_transform_factory(input_dim, context_dim)
+            transform = cond_transform.condition(z)
+
+            # A bit of a hack since conditioned transforms don't expose .parameters()
+            transform.parameters = lambda: cond_transform.parameters()
+
+            return transform
         self._test(transform_factory, event_dim=event_dim, **kwargs)
 
     def test_affine_autoregressive(self):
@@ -222,19 +234,17 @@ class TransformTests(TestCase):
 
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
-        self._test(lambda input_dim: T.DiscreteCosineTransform())
-        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=0.5))
-        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=1.0))
-        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=2.0))
+        for smooth in [0.0, 0.5, 1.0, 2.0]:
+            self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=smooth), autodiff=False)
 
     def test_haar_transform(self):
         # NOTE: Need following since helper function unimplemented
-        self._test(lambda input_dim: T.HaarTransform(flip=True))
-        self._test(lambda input_dim: T.HaarTransform(flip=False))
+        for flip in [True, False]:
+            self._test(lambda input_dim: T.HaarTransform(flip=flip), autodiff=False)
 
     def test_elu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
-        self._test(lambda input_dim: T.elu())
+        self._test(lambda input_dim: T.elu(), autodiff=False)
 
     def test_generalized_channel_permute(self):
         for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 3, 64, 64)]:
@@ -253,7 +263,7 @@ class TransformTests(TestCase):
 
     def test_leaky_relu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
-        self._test(lambda input_dim: T.leaky_relu())
+        self._test(lambda input_dim: T.leaky_relu(), autodiff=False)
 
     def test_lower_cholesky_affine(self):
         # NOTE: Need following since helper function unimplemented
@@ -263,7 +273,7 @@ class TransformTests(TestCase):
             scale_tril = scale_tril.tril(0)
             return T.LowerCholeskyAffine(loc, scale_tril)
 
-        self._test(transform_factory)
+        self._test(transform_factory, autodiff=False)
 
     def test_neural_autoregressive(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
@@ -271,7 +281,7 @@ class TransformTests(TestCase):
 
     def test_permute(self):
         for dim in [-1, -2]:
-            self._test(partial(T.permute, dim=dim), event_dim=-dim)
+            self._test(partial(T.permute, dim=dim), event_dim=-dim, autodiff=False)
 
     def test_planar(self):
         self._test(T.planar, inverse=False)
