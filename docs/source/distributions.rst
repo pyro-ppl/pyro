@@ -532,6 +532,13 @@ Spline
     :undoc-members:
     :show-inheritance:
 
+SplineAutoregressive
+--------------------
+.. autoclass:: pyro.distributions.transforms.SplineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SplineCoupling
 --------------
 .. autoclass:: pyro.distributions.transforms.SplineCoupling
@@ -657,6 +664,10 @@ radial
 spline
 ------
 .. autofunction:: pyro.distributions.transforms.spline
+
+spline_autoregressive
+---------------------
+.. autofunction:: pyro.distributions.transforms.spline_autoregressive
 
 spline_coupling
 ---------------

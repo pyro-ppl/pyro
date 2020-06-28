@@ -485,7 +485,13 @@ class ConditionalSpline(ConditionalTransformModule):
         # Rational linear splines have additional lambda parameters
         if self.order == "linear":
             w, h, d, l = self.nn(context)
-            l = torch.sigmoid(l.reshape(l.shape[:-1] + (self.input_dim, self.count_bins)))
+            # AutoRegressiveNN and DenseNN return different shapes...
+            if w.shape[-1] == self.input_dim:
+                l = l.transpose(-1, -2)
+            else:
+                l = l.reshape(l.shape[:-1] + (self.input_dim, self.count_bins))
+
+            l = torch.sigmoid(l)
         elif self.order == "quadratic":
             w, h, d = self.nn(context)
             l = None
@@ -494,9 +500,20 @@ class ConditionalSpline(ConditionalTransformModule):
                 "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
                     self.order))
 
-        w = F.softmax(w.reshape(w.shape[:-1] + (self.input_dim, self.count_bins)), dim=-1)
-        h = F.softmax(h.reshape(h.shape[:-1] + (self.input_dim, self.count_bins)), dim=-1)
-        d = F.softplus(d.reshape(d.shape[:-1] + (self.input_dim, self.count_bins - 1)))
+        # AutoRegressiveNN and DenseNN return different shapes...
+        if w.shape[-1] == self.input_dim:
+            w = w.transpose(-1, -2)
+            h = h.transpose(-1, -2)
+            d = d.transpose(-1, -2)
+
+        else:
+            w = w.reshape(w.shape[:-1] + (self.input_dim, self.count_bins))
+            h = h.reshape(h.shape[:-1] + (self.input_dim, self.count_bins))
+            d = d.reshape(d.shape[:-1] + (self.input_dim, self.count_bins - 1))
+
+        w = F.softmax(w, dim=-1)
+        h = F.softmax(h, dim=-1)
+        d = F.softplus(d)
         return ConditionedSpline(w, h, d, l, bound=self.bound, order=self.order)
 
 

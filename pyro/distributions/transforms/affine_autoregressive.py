@@ -62,7 +62,7 @@ class AffineAutoregressive(TransformModule):
 
     :param autoregressive_nn: an autoregressive neural network whose forward call
         returns a real-valued mean and logit-scale as a tuple
-    :type autoregressive_nn: nn.Module
+    :type autoregressive_nn: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from
         the autoregressive NN
     :type log_scale_min_clip: float
