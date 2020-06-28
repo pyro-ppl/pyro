@@ -97,7 +97,7 @@ CPU_EXAMPLES = [
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy',
-    'toy_mixture_model.py  --num-steps=1',
+    'toy_mixture_model_discrete_enumeration.py  --num-steps=1',
     xfail_param('sparse_regression.py --num-steps=2 --num-data=50 --num-dimensions 20',
                 reason='https://github.com/pyro-ppl/pyro/issues/2082'),
     'vae/ss_vae_M2.py --num-epochs=1',

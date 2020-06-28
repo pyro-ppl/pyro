@@ -3,6 +3,7 @@
 
 from torch.distributions import constraints
 from torch.distributions.transforms import PowerTransform
+
 from pyro.distributions.torch import Gamma, TransformedDistribution
 
 

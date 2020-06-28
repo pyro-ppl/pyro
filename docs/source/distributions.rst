@@ -539,6 +539,13 @@ SplineAutoregressive
     :undoc-members:
     :show-inheritance:
 
+SplineCoupling
+--------------
+.. autoclass:: pyro.distributions.transforms.SplineCoupling
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Sylvester
 ---------
 .. autoclass:: pyro.distributions.transforms.Sylvester
@@ -661,6 +668,10 @@ spline
 spline_autoregressive
 ---------------------
 .. autofunction:: pyro.distributions.transforms.spline_autoregressive
+
+spline_coupling
+---------------
+.. autofunction:: pyro.distributions.transforms.spline_coupling
 
 sylvester
 ---------
