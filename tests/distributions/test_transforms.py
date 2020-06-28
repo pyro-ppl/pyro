@@ -113,7 +113,24 @@ class TransformTests(TestCase):
         sample = dist.TransformedDistribution(base_dist, [transform]).sample()
         assert sample.shape == base_shape
 
-    def _test(self, transform_factory, shape=True, jacobian=True, inverse=True, event_dim=1):
+    def _test_autodiff(self, input_dim, transform, inverse=False):
+        # If inverse=True, then use the inverse transform to perform density estimation
+        if inverse:
+            transform = transform.inv
+
+        base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+        flow_dist = dist.TransformedDistribution(base_dist, [transform])
+        optimizer = torch.optim.Adam(transform.parameters())
+        #x = flow_dist.rsample() #torch.rand(1, input_dim)
+        x = torch.rand(1, input_dim)
+        for _ in range(3):
+            optimizer.zero_grad()
+            loss = -flow_dist.log_prob(x.detach()).mean()
+            loss.backward()
+            optimizer.step()
+
+
+    def _test(self, transform_factory, shape=True, jacobian=True, inverse=True, autodiff=True, event_dim=1):
         for event_shape in [(2,), (5,)]:
             if event_dim > 1:
                 event_shape = tuple([event_shape[0] + i for i in range(event_dim)])
@@ -129,6 +146,10 @@ class TransformTests(TestCase):
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
                 self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
+            if autodiff:
+                if event_dim > 1:
+                    transform = Flatten(transform, event_shape)
+                self._test_autodiff(reduce(operator.mul, event_shape, 1), transform, inverse=not inverse)
 
     def _test_conditional(self, conditional_transform_factory, context_dim=3, event_dim=1, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
