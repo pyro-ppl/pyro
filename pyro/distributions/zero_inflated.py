@@ -5,7 +5,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all, lazy_property
 
-from pyro.distributions import TorchDistribution, Poisson, NegativeBinomial
+from pyro.distributions import NegativeBinomial, Poisson, TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
 

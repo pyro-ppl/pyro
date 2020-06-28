@@ -81,7 +81,7 @@ Welcome to Pyro Examples and Tutorials!
    timeseries
    smcfilter
    sir_hmc
-   toy_mixture_model
+   toy_mixture_model_discrete_enumeration
 
 Indices and tables
 ==================
