@@ -298,5 +298,8 @@ class TransformTests(TestCase):
     def test_spline_coupling(self):
         self._test(T.spline_coupling)
 
+    def test_spline_autoregressive(self):
+        self._test(T.spline_autoregressive)
+
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
