@@ -40,6 +40,9 @@ class Flatten(dist.TransformModule):
     def log_abs_det_jacobian(self, x, y):
         return self.transform.log_abs_det_jacobian(self._unflatten(x), self._unflatten(y))
 
+    def parameters(self):
+        return self.transform.parameters()
+
 
 class TransformTests(TestCase):
     def setUp(self):
@@ -151,8 +154,6 @@ class TransformTests(TestCase):
                     transform = Flatten(transform, event_shape)
                 self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
             if autodiff:
-                if event_dim > 1:
-                    transform = Flatten(transform, event_shape)
                 # If the function doesn't have an explicit inverse, then use the forward op for autodiff
                 self._test_autodiff(reduce(operator.mul, event_shape, 1), transform, inverse=not inverse)
 
@@ -303,3 +304,10 @@ class TransformTests(TestCase):
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
+
+
+if __name__ == "__main__":
+    torch.set_default_tensor_type(torch.DoubleTensor)
+    tt = TransformTests()
+    tt.setUp()
+    tt.test_affine_coupling()

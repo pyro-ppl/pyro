@@ -205,7 +205,7 @@ class ConditionalPlanar(ConditionalTransformModule):
     def condition(self, context):
         def params():
             return self.nn(context)
-        
+
         t = ConditionedPlanar()
         t._params = params
         return t
