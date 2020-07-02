@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -21,12 +22,10 @@ class ConditionedPlanar(Transform):
     bijective = True
     event_dim = 1
 
-    def __init__(self):
+    def __init__(self, params):
         super().__init__(cache_size=1)
+        self._params = params
         self._cached_logDetJ = None
-
-    def _params(self):
-        raise NotImplementedError()
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self, u, w):
@@ -42,7 +41,7 @@ class ConditionedPlanar(Transform):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
         the base distribution (or the output of a previous transform)
         """
-        bias, u, w = self._params()
+        bias, u, w = self._params() if callable(self._params) else self._params
 
         # x ~ (batch_size, dim_size, 1)
         # w ~ (batch_size, 1, dim_size)
@@ -127,22 +126,23 @@ class Planar(ConditionedPlanar, TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super().__init__()
+        super().__init__(self._params)
 
         self.bias = nn.Parameter(torch.Tensor(1,))
         self.u = nn.Parameter(torch.Tensor(input_dim,))
         self.w = nn.Parameter(torch.Tensor(input_dim,))
+
         self.input_dim = input_dim
         self.reset_parameters()
+
+    def _params(self):
+        return self.bias, self.u, self.w
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.u.size(0))
         self.w.data.uniform_(-stdv, stdv)
         self.u.data.uniform_(-stdv, stdv)
         self.bias.data.zero_()
-
-    def _params(self):
-        return self.bias, self.u, self.w
 
 
 @copy_docs_from(ConditionalTransformModule)
@@ -202,13 +202,12 @@ class ConditionalPlanar(ConditionalTransformModule):
         super().__init__()
         self.nn = nn
 
-    def condition(self, context):
-        def params():
-            return self.nn(context)
+    def _params(self, context):
+        return self.nn(context)
 
-        t = ConditionedPlanar()
-        t._params = params
-        return t
+    def condition(self, context):
+        params = partial(self._params, context)
+        return ConditionedPlanar(params)
 
 
 def planar(input_dim):

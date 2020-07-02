@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -21,12 +22,10 @@ class ConditionedRadial(Transform):
     bijective = True
     event_dim = 1
 
-    def __init__(self):
+    def __init__(self, params):
         super().__init__(cache_size=1)
+        self._params = params
         self._cached_logDetJ = None
-
-    def _params(self):
-        raise NotImplementedError()
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self, u, w):
@@ -43,7 +42,7 @@ class ConditionedRadial(Transform):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
         of a previous transform)
         """
-        x0, alpha_prime, beta_prime = self._params()
+        x0, alpha_prime, beta_prime = self._params() if callable(self._params) else self._params
 
         # Ensure invertibility using approach in appendix A.2
         alpha = F.softplus(alpha_prime)
@@ -131,7 +130,7 @@ class Radial(ConditionedRadial, TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super().__init__()
+        super().__init__(self._params)
 
         self.x0 = nn.Parameter(torch.Tensor(input_dim,))
         self.alpha_prime = nn.Parameter(torch.Tensor(1,))
@@ -200,12 +199,12 @@ class ConditionalRadial(ConditionalTransformModule):
         super().__init__()
         self.nn = nn
 
+    def _params(self, context):
+        return self.nn(context)
+
     def condition(self, context):
-        def params():
-            return self.nn(context)
-        t = ConditionedRadial()
-        t._params = params
-        return t
+        params = partial(self._params, context)
+        return ConditionedRadial(params)
 
 
 def radial(input_dim):

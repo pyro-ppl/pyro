@@ -3,6 +3,7 @@
 
 import math
 import warnings
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -12,8 +13,6 @@ from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
-
-from functools import partial
 
 
 class ConditionedHouseholder(Transform):
