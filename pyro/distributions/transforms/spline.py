@@ -269,15 +269,15 @@ class ConditionedSpline(Transform):
     bijective = True
     event_dim = 0
 
-    def __init__(self, widths=None, heights=None, derivatives=None, lambdas=None, bound=3.0, order='linear'):
+    def __init__(self, bound=3.0, order='linear'):
         super().__init__(cache_size=1)
 
         self.order = order
         self.bound = bound
-        self.widths = widths
-        self.heights = heights
-        self.derivatives = derivatives
-        self.lambdas = lambdas
+        self._cache_log_detJ = None
+
+    def _params(self):
+        raise NotImplementedError()
 
     def _call(self, x):
         y, log_detJ = self.spline_op(x)
@@ -309,14 +309,8 @@ class ConditionedSpline(Transform):
         return self._cache_log_detJ
 
     def spline_op(self, x, **kwargs):
-        y, log_detJ = _monotonic_rational_spline(
-            x,
-            self.widths,
-            self.heights,
-            self.derivatives,
-            self.lambdas,
-            bound=self.bound,
-            **kwargs)
+        w, h, d, l = self._params()
+        y, log_detJ = _monotonic_rational_spline(x, w, h, d, l, bound=self.bound, **kwargs)
         return y, log_detJ
 
 
@@ -390,18 +384,21 @@ class Spline(ConditionedSpline, TransformModule):
         # Rational linear splines have additional lambda parameters
         if self.order == "linear":
             self.unnormalized_lambdas = nn.Parameter(torch.rand(self.input_dim, self.count_bins))
-            self.lambdas = torch.sigmoid(self.unnormalized_lambdas)
-        elif self.order == "quadratic":
-            self.lambdas = None
-        else:
+        elif self.order != "quadratic":
             raise ValueError(
                 "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
                     self.order))
 
-        self.widths = F.softmax(self.unnormalized_widths, dim=-1)
-        self.heights = F.softmax(self.unnormalized_heights, dim=-1)
-        self.derivatives = F.softplus(self.unnormalized_derivatives)
-        self._cache_log_detJ = None
+    def _params(self):
+        # widths, unnormalized_widths ~ (input_dim, num_bins)
+        w = F.softmax(self.unnormalized_widths, dim=-1)
+        h = F.softmax(self.unnormalized_heights, dim=-1)
+        d = F.softplus(self.unnormalized_derivatives)
+        if self.order == 'linear':
+            l = torch.sigmoid(self.unnormalized_lambdas)
+        else:
+            l = None
+        return w, h, d, l
 
 
 @copy_docs_from(ConditionalTransformModule)
@@ -482,22 +479,27 @@ class ConditionalSpline(ConditionalTransformModule):
         self.order = order
 
     def condition(self, context):
-        # Rational linear splines have additional lambda parameters
-        if self.order == "linear":
-            w, h, d, l = self.nn(context)
-            l = torch.sigmoid(l.reshape(l.shape[:-1] + (self.input_dim, self.count_bins)))
-        elif self.order == "quadratic":
-            w, h, d = self.nn(context)
-            l = None
-        else:
-            raise ValueError(
-                "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
-                    self.order))
+        def params():
+            # Rational linear splines have additional lambda parameters
+            if self.order == "linear":
+                w, h, d, l = self.nn(context)
+                l = torch.sigmoid(l.reshape(l.shape[:-1] + (self.input_dim, self.count_bins)))
+            elif self.order == "quadratic":
+                w, h, d = self.nn(context)
+                l = None
+            else:
+                raise ValueError(
+                    "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
+                        self.order))
 
-        w = F.softmax(w.reshape(w.shape[:-1] + (self.input_dim, self.count_bins)), dim=-1)
-        h = F.softmax(h.reshape(h.shape[:-1] + (self.input_dim, self.count_bins)), dim=-1)
-        d = F.softplus(d.reshape(d.shape[:-1] + (self.input_dim, self.count_bins - 1)))
-        return ConditionedSpline(w, h, d, l, bound=self.bound, order=self.order)
+            w = F.softmax(w.reshape(w.shape[:-1] + (self.input_dim, self.count_bins)), dim=-1)
+            h = F.softmax(h.reshape(h.shape[:-1] + (self.input_dim, self.count_bins)), dim=-1)
+            d = F.softplus(d.reshape(d.shape[:-1] + (self.input_dim, self.count_bins - 1)))
+            return w, h, d, l
+
+        t = ConditionedSpline(bound=self.bound, order=self.order)
+        t._params = params
+        return t
 
 
 def spline(input_dim, **kwargs):

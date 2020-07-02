@@ -134,7 +134,6 @@ class TransformTests(TestCase):
             loss.backward()
             optimizer.step()
 
-
     def _test(self, transform_factory, shape=True, jacobian=True, inverse=True, autodiff=True, event_dim=1):
         for event_shape in [(2,), (5,)]:
             if event_dim > 1:
