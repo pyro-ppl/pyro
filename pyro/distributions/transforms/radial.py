@@ -21,12 +21,12 @@ class ConditionedRadial(Transform):
     bijective = True
     event_dim = 1
 
-    def __init__(self, x0=None, alpha_prime=None, beta_prime=None):
+    def __init__(self):
         super().__init__(cache_size=1)
-        self.x0 = x0
-        self.alpha_prime = alpha_prime
-        self.beta_prime = beta_prime
         self._cached_logDetJ = None
+
+    def _params(self):
+        raise NotImplementedError()
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self, u, w):
@@ -43,18 +43,20 @@ class ConditionedRadial(Transform):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
         of a previous transform)
         """
+        x0, alpha_prime, beta_prime = self._params()
+
         # Ensure invertibility using approach in appendix A.2
-        alpha = F.softplus(self.alpha_prime)
-        beta = -alpha + F.softplus(self.beta_prime)
+        alpha = F.softplus(alpha_prime)
+        beta = -alpha + F.softplus(beta_prime)
 
         # Compute y and logDet using Equation 14.
-        diff = x - self.x0
+        diff = x - x0
         r = diff.norm(dim=-1, keepdim=True)
         h = (alpha + r).reciprocal()
         h_prime = - (h ** 2)
         beta_h = beta * h
 
-        self._cached_logDetJ = ((self.x0.size(-1) - 1) * torch.log1p(beta_h) +
+        self._cached_logDetJ = ((x0.size(-1) - 1) * torch.log1p(beta_h) +
                                 torch.log1p(beta_h + beta * h_prime * r)).sum(-1)
         return x + beta_h * diff
 
@@ -137,6 +139,9 @@ class Radial(ConditionedRadial, TransformModule):
         self.input_dim = input_dim
         self.reset_parameters()
 
+    def _params(self):
+        return self.x0, self.alpha_prime, self.beta_prime
+
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.x0.size(0))
         self.alpha_prime.data.uniform_(-stdv, stdv)
@@ -196,8 +201,11 @@ class ConditionalRadial(ConditionalTransformModule):
         self.nn = nn
 
     def condition(self, context):
-        x0, alpha_prime, beta_prime = self.nn(context)
-        return ConditionedRadial(x0, alpha_prime, beta_prime)
+        def params():
+            return self.nn(context)
+        t = ConditionedRadial()
+        t._params = params
+        return t
 
 
 def radial(input_dim):

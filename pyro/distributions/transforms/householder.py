@@ -21,14 +21,17 @@ class ConditionedHouseholder(Transform):
     event_dim = 1
     volume_preserving = True
 
-    def __init__(self, u_unnormed=None):
+    def __init__(self):
         super().__init__(cache_size=1)
-        self.u_unnormed = u_unnormed
+
+    def _params(self):
+        raise NotImplementedError()
 
     # Construct normalized vectors for Householder transform
     def u(self):
-        norm = torch.norm(self.u_unnormed, p=2, dim=-1, keepdim=True)
-        return torch.div(self.u_unnormed, norm)
+        u_unnormed = self._params()
+        norm = torch.norm(u_unnormed, p=2, dim=-1, keepdim=True)
+        return torch.div(u_unnormed, norm)
 
     def _call(self, x):
         """
@@ -142,6 +145,9 @@ over-parametrization!".format(count_transforms, input_dim))
         stdv = 1. / math.sqrt(self.u_unnormed.size(-1))
         self.u_unnormed.data.uniform_(-stdv, stdv)
 
+    def _params(self):
+        return self.u_unnormed
+
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalHouseholder(ConditionalTransformModule):
@@ -218,14 +224,18 @@ over-parametrization!".format(count_transforms, input_dim))
         self.count_transforms = count_transforms
 
     def condition(self, context):
-        # u_unnormed ~ (count_transforms, input_dim)
-        # Hence, input_dim must divide
-        u_unnormed = self.nn(context)
-        if self.count_transforms == 1:
-            u_unnormed = u_unnormed.unsqueeze(-2)
-        else:
-            u_unnormed = torch.stack(u_unnormed, dim=-2)
-        return ConditionedHouseholder(u_unnormed)
+        def params():
+            # u_unnormed ~ (count_transforms, input_dim)
+            # Hence, input_dim must divide
+            u_unnormed = self.nn(context)
+            if self.count_transforms == 1:
+                u_unnormed = u_unnormed.unsqueeze(-2)
+            else:
+                u_unnormed = torch.stack(u_unnormed, dim=-2)
+            return u_unnormed
+        t = ConditionedHouseholder()
+        t._params = params
+        return t
 
 
 def householder(input_dim, count_transforms=None):

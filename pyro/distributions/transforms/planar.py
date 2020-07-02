@@ -21,12 +21,12 @@ class ConditionedPlanar(Transform):
     bijective = True
     event_dim = 1
 
-    def __init__(self, bias=None, u=None, w=None):
+    def __init__(self):
         super().__init__(cache_size=1)
-        self.bias = bias
-        self.u = u
-        self.w = w
         self._cached_logDetJ = None
+
+    def _params(self):
+        raise NotImplementedError()
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self, u, w):
@@ -42,15 +42,16 @@ class ConditionedPlanar(Transform):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
         the base distribution (or the output of a previous transform)
         """
+        bias, u, w = self._params()
 
         # x ~ (batch_size, dim_size, 1)
         # w ~ (batch_size, 1, dim_size)
         # bias ~ (batch_size, 1)
-        act = torch.tanh(torch.matmul(self.w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + self.bias)
-        u_hat = self.u_hat(self.u, self.w)
+        act = torch.tanh(torch.matmul(w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + bias)
+        u_hat = self.u_hat(u, w)
         y = x + u_hat * act
 
-        psi_z = (1. - act.pow(2)) * self.w
+        psi_z = (1. - act.pow(2)) * w
         self._cached_logDetJ = torch.log(
             torch.abs(1 + torch.matmul(psi_z.unsqueeze(-2), u_hat.unsqueeze(-1)).squeeze(-1).squeeze(-1)))
 
@@ -140,6 +141,9 @@ class Planar(ConditionedPlanar, TransformModule):
         self.u.data.uniform_(-stdv, stdv)
         self.bias.data.zero_()
 
+    def _params(self):
+        return self.bias, self.u, self.w
+
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalPlanar(ConditionalTransformModule):
@@ -199,8 +203,12 @@ class ConditionalPlanar(ConditionalTransformModule):
         self.nn = nn
 
     def condition(self, context):
-        bias, u, w = self.nn(context)
-        return ConditionedPlanar(bias, u, w)
+        def params():
+            return self.nn(context)
+        
+        t = ConditionedPlanar()
+        t._params = params
+        return t
 
 
 def planar(input_dim):
