@@ -50,7 +50,7 @@ test-examples: lint FORCE
 
 test-tutorials: lint FORCE
 	grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
-		| CI=1 xargs pytest -vx --nbval-lax --current-env -W ignore::FutureWarning
+		| CI=1 xargs pytest -vx --nbval-lax --current-env
 
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
