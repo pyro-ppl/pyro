@@ -18,12 +18,20 @@ class ConditionedMatrixExponential(Transform):
     bijective = True
     event_dim = 1
 
-    def __init__(self, weights=None, iterations=8, spectral_norm=0.5):
+    def __init__(self, weights=None, iterations=8, normalization='none', bound=None):
         super().__init__(cache_size=1)
         assert iterations > 0
         self.weights = weights
         self.iterations = iterations
-        self.spectral_norm = spectral_norm
+        self.normalization = normalization
+        self.bound = bound
+
+        # Currently, weight and spectral normalization are unimplemented. This doesn't effect the validity of the
+        # bijection, although applying these norms should improve the numerical conditioning of the approximation.
+        if normalization == 'weight' or normalization == 'spectral':
+            raise NotImplementedError('Normalization is currently not implemented.')
+        elif normalization != 'none':
+            raise ValueError('Unknown normalization method: {}'.format(normalization))
 
     def _exp(self, x, M):
         """
@@ -58,9 +66,7 @@ class ConditionedMatrixExponential(Transform):
         the base distribution (or the output of a previous transform)
         """
 
-        # TODO: Apply spectral norm
         M = self.weights
-
         return self._exp(x, M)
 
     def _inverse(self, y):
@@ -70,19 +76,15 @@ class ConditionedMatrixExponential(Transform):
         Inverts y => x.
         """
 
-        # TODO: Apply spectral norm
         M = self.weights
-
         return self._exp(y, -M)
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log Jacobian
+        Calculates the element-wise determinant of the log Jacobian
         """
 
-        # TODO: Apply spectral norm
         M = self.weights
-
         return self._trace(M)
 
 
@@ -118,16 +120,27 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
     :param iterations: the number of terms to use in the truncated power series that
         approximates matrix exponentiation.
     :type iterations: int
-    :param spectral_norm: a lower bound in :math:`l_2`-norm to enforce on the weight
-        matrix for numerical stability. A lower value for this results in fewer
-        required terms of the truncated power series to closely approximate the
-        exact value of the matrix exponential.
-    :type iterations: float
+    :param normalization: One of `['none', 'weight', 'spectral']` normalization that
+        selects what type of normalization to apply to the weight matrix. `weight`
+        corresponds to weight normalization (Salimans and Kingma, 2016) and
+        `spectral` to spectral normalization (Miyato et al, 2018).
+    :type normalization: string
+    :param bound: a bound on either the weight or spectral norm, when either of
+        those two types of regularization are chosen by the `normalization`
+        argument. A lower value for this results in fewer required terms of the
+        truncated power series to closely approximate the exact value of the matrix
+        exponential.
+    :type bound: float
 
     References:
 
     [1] Emiel Hoogeboom, Victor Garcia Satorras, Jakub M. Tomczak, Max Welling. The
-    Convolution Exponential and Generalized Sylvester Flows. [arXiv:2006.01910]
+        Convolution Exponential and Generalized Sylvester Flows. [arXiv:2006.01910]
+    [2] Tim Salimans, Diederik P. Kingma. Weight Normalization: A Simple
+        Reparameterization to Accelerate Training of Deep Neural Networks.
+        [arXiv:1602.07868]
+    [3] Takeru Miyato, Toshiki Kataoka, Masanori Koyama, Yuichi Yoshida. Spectral
+        Normalization for Generative Adversarial Networks. ICLR 2018.
 
     """
 
@@ -136,8 +149,8 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
     bijective = True
     event_dim = 1
 
-    def __init__(self, input_dim, iterations=8, spectral_norm=0.5):
-        super().__init__(iterations=iterations, spectral_norm=spectral_norm)
+    def __init__(self, input_dim, iterations=8, normalization='none', bound=None):
+        super().__init__(iterations=iterations, normalization=normalization, bound=bound)
 
         self.weights = nn.Parameter(torch.Tensor(input_dim, input_dim))
         self.reset_parameters()
