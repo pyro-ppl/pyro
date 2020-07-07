@@ -89,31 +89,45 @@ class ConditionedMatrixExponential(Transform):
 @copy_docs_from(ConditionedMatrixExponential)
 class MatrixExponential(ConditionedMatrixExponential, TransformModule):
     r"""
-    A 'planar' bijective transform with equation,
+    A dense matrix exponential bijective transform (Hoogeboom et al., 2020) with
+    equation,
 
-        :math:`\mathbf{y} = \mathbf{x} + \mathbf{u}\tanh(\mathbf{w}^T\mathbf{z}+b)`
+        :math:`\mathbf{y} = \exp(M)\mathbf{x}`
 
     where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
-    and the learnable parameters are :math:`b\in\mathbb{R}`,
-    :math:`\mathbf{u}\in\mathbb{R}^D`, :math:`\mathbf{w}\in\mathbb{R}^D` for
-    input dimension :math:`D`. For this to be an invertible transformation, the
-    condition :math:`\mathbf{w}^T\mathbf{u}>-1` is enforced.
+    :math:`\exp(\cdot)` represents the matrix exponential, and the learnable
+    parameters are :math:`M\in\mathbb{R}^D\times\mathbb{R}^D` for input dimension
+    :math:`D`. In general, :math:`M` is not required to be invertible.
+
+    Due to the favourable mathematical properties of the matrix exponential, the
+    transform has an exact inverse and a log-determinate-Jacobian that scales in
+    time-complexity as :math:`O(D)`. Both the forward and reverse operations are
+    approximated with a truncated power series. For numerical stability, the
+    spectral norm of :math:`M` is restricted.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> transform = Planar(10)
+    >>> transform = MatrixExponential(10)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
 
     :param input_dim: the dimension of the input (and output) variable.
     :type input_dim: int
+    :param iterations: the number of terms to use in the truncated power series that
+        approximates matrix exponentiation.
+    :type iterations: int
+    :param spectral_norm: a lower bound in :math:`l_2`-norm to enforce on the weight
+        matrix for numerical stability. A lower value for this results in fewer
+        required terms of the truncated power series to closely approximate the
+        exact value of the matrix exponential.
+    :type iterations: float
 
     References:
 
-    [1] Danilo Jimenez Rezende, Shakir Mohamed. Variational Inference with
-    Normalizing Flows. [arXiv:1505.05770]
+    [1] Emiel Hoogeboom, Victor Garcia Satorras, Jakub M. Tomczak, Max Welling. The
+    Convolution Exponential and Generalized Sylvester Flows. [arXiv:2006.01910]
 
     """
 
@@ -122,8 +136,8 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
     bijective = True
     event_dim = 1
 
-    def __init__(self, input_dim):
-        super().__init__()
+    def __init__(self, input_dim, iterations=8, spectral_norm=0.5):
+        super().__init__(iterations=iterations, spectral_norm=spectral_norm)
 
         self.weights = nn.Parameter(torch.Tensor(input_dim, input_dim))
         self.reset_parameters()
