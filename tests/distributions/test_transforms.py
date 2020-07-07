@@ -244,6 +244,9 @@ class TransformTests(TestCase):
 
         self._test(transform_factory)
 
+    def test_matrix_exponential(self):
+        self._test(T.matrix_exponential, inverse=True, jacobian=True)
+
     def test_neural_autoregressive(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             self._test(partial(T.neural_autoregressive, activation=activation), inverse=False)

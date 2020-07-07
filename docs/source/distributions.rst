@@ -497,6 +497,13 @@ Householder
     :undoc-members:
     :show-inheritance:
 
+MatrixExponential
+-----------------
+.. autoclass:: pyro.distributions.transforms.MatrixExponential
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 NeuralAutoregressive
 --------------------
 .. autoclass:: pyro.distributions.transforms.NeuralAutoregressive
@@ -640,6 +647,10 @@ householder
 leaky_relu
 ----------
 .. autofunction:: pyro.distributions.transforms.leaky_relu
+
+matrix_exponential
+------------------
+.. autofunction:: pyro.distributions.transforms.matrix_exponential
 
 neural_autoregressive
 ---------------------

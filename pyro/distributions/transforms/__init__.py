@@ -25,6 +25,7 @@ from pyro.distributions.transforms.haar import HaarTransform
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
                                                        householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
+from pyro.distributions.transforms.matrix_exponential import MatrixExponential, matrix_exponential
 from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
                                                                  conditional_neural_autoregressive,
                                                                  neural_autoregressive)
@@ -32,8 +33,8 @@ from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.radial import ConditionalRadial, Radial, conditional_radial, radial
-from pyro.distributions.transforms.spline_autoregressive import SplineAutoregressive, spline_autoregressive
 from pyro.distributions.transforms.spline import ConditionalSpline, Spline, conditional_spline, spline
+from pyro.distributions.transforms.spline_autoregressive import SplineAutoregressive, spline_autoregressive
 from pyro.distributions.transforms.spline_coupling import SplineCoupling, spline_coupling
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
 
@@ -88,6 +89,7 @@ __all__ = [
     'Householder',
     'LeakyReLUTransform',
     'LowerCholeskyAffine',
+    'MatrixExponential',
     'NeuralAutoregressive',
     'Permute',
     'Planar',
@@ -113,6 +115,7 @@ __all__ = [
     'generalized_channel_permute',
     'householder',
     'leaky_relu',
+    'matrix_exponential',
     'neural_autoregressive',
     'permute',
     'planar',
