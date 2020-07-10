@@ -5,16 +5,18 @@ Epidemiology
 .. warning:: Code in ``pyro.contrib.epidemiology`` is under development.
     This code makes no guarantee about maintaining backwards compatibility.
 
-``pyro.contrib.epidemiology`` is a framework for experimenting with a
-restricted class of stochastic discrete-time discrete-count compartmental
-models. This framework implements **inference** (both Stochastic Variational
-Inference and Hamiltonian Monte Carlo), **prediction** of latent variables, and
+``pyro.contrib.epidemiology`` provides a modeling language for a class of
+stochastic discrete-time discrete-count compartmental models. This module
+implements black-box **inference** (both Stochastic Variational Inference and
+Hamiltonian Monte Carlo), **prediction** of latent variables, and
 **forecasting** of future trajectories.
 
-For example usage see the `SIR tuorial <http://pyro.ai/examples/contrib/epidemiology/sir.html>`_ .
+For example usage see the following tutorials:
 
-For explanation of the underlying inference machinery in this framework, see the
-`low-level SIR with HMC tutorial <http://pyro.ai/examples/sir_hmc.html>`_ .
+- `Introduction <http://pyro.ai/examples/epi_intro.html>`_
+- `Univariate models <http://pyro.ai/examples/epi_sir.html>`_
+- `Regional models <http://pyro.ai/examples/epi_regional.html>`_
+- `Inference via auxiliary variable HMC <http://pyro.ai/examples/sir_hmc.html>`_
 
 Base Compartmental Model
 ------------------------
