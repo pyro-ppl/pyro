@@ -39,3 +39,5 @@ Distributions
     :show-inheritance:
     :member-order: bysource
     :special-members: __call__
+
+.. autofunction:: pyro.distributions.coalescent.bio_phylo_to_times

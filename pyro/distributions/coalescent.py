@@ -302,6 +302,52 @@ class CoalescentRateLikelihood:
         return const + linear + log
 
 
+def bio_phylo_to_times(tree, *, get_time=None):
+    """
+    Extracts coalescent summary statistics from a phylogeny.
+
+    :param Bio.Phylo.BaseTree.Clade tree: A phylogenetic tree.
+    :param callable get_time: Optional function to extract the time point of
+        each sub-:class:`Bio.Phylo.BaseTree.Clade`. If absent, times will be
+        computed by cumulative `.branch_length`.
+    :returns: A pair of :class:`~torch.Tensor` s ``(leaf_times, coal_times)``
+        where ``leaf_times`` are times of sampling events (leaf nodes in the
+        phylogenetic tree) and ``coal_times`` are times of coalescences (leaf
+        nodes in the phylogenetic binary tree).
+    :rtype: tuple
+    """
+    if get_time is None:
+        # Compute time as cumulative branch length.
+        def get_branch_length(clade):
+            branch_length = clade.branch_length
+            return 1.0 if branch_length is None else branch_length
+        times = {tree.root: get_branch_length(tree.root)}
+
+    leaf_times = []
+    coal_times = []
+    for clade in tree.find_clades():
+        if get_time is None:
+            time = times[clade]
+            for child in clade:
+                times[child] = time + get_branch_length(child)
+        else:
+            time = get_time(clade)
+
+        num_children = len(clade)
+        if num_children == 0:
+            leaf_times.append(time)
+        else:
+            # Pyro expects binary coalescent events, so we split n-ary events
+            # into n-1 separate binary events.
+            for _ in range(num_children - 1):
+                coal_times.append(time)
+    assert len(leaf_times) == 1 + len(coal_times)
+
+    leaf_times = torch.tensor(leaf_times)
+    coal_times = torch.tensor(coal_times)
+    return leaf_times, coal_times
+
+
 def _gather(tensor, dim, index):
     """
     Like :func:`torch.gather` but broadcasts.
