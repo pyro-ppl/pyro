@@ -87,7 +87,7 @@ class CompartmentalModel(ABC):
     good model structure and priors, then move to more accurate but more
     expensive inference once the model is plausible.
 
-    1.  Start with ``.fit_svi(guide_rank=1, num_steps=2000)`` for cheap
+    1.  Start with ``.fit_svi(guide_rank=0, num_steps=2000)`` for cheap
         inference while you search for a good model.
     2.  Additionally infer long-range correlations by moving to a low-rank
         multivariate normal guide via ``.fit_svi(guide_rank=None,

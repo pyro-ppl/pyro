@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -21,11 +22,9 @@ class ConditionedPlanar(Transform):
     bijective = True
     event_dim = 1
 
-    def __init__(self, bias=None, u=None, w=None):
+    def __init__(self, params):
         super().__init__(cache_size=1)
-        self.bias = bias
-        self.u = u
-        self.w = w
+        self._params = params
         self._cached_logDetJ = None
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
@@ -42,15 +41,16 @@ class ConditionedPlanar(Transform):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
         the base distribution (or the output of a previous transform)
         """
+        bias, u, w = self._params() if callable(self._params) else self._params
 
         # x ~ (batch_size, dim_size, 1)
         # w ~ (batch_size, 1, dim_size)
         # bias ~ (batch_size, 1)
-        act = torch.tanh(torch.matmul(self.w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + self.bias)
-        u_hat = self.u_hat(self.u, self.w)
+        act = torch.tanh(torch.matmul(w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + bias)
+        u_hat = self.u_hat(u, w)
         y = x + u_hat * act
 
-        psi_z = (1. - act.pow(2)) * self.w
+        psi_z = (1. - act.pow(2)) * w
         self._cached_logDetJ = torch.log(
             torch.abs(1 + torch.matmul(psi_z.unsqueeze(-2), u_hat.unsqueeze(-1)).squeeze(-1).squeeze(-1)))
 
@@ -126,13 +126,17 @@ class Planar(ConditionedPlanar, TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super().__init__()
+        super().__init__(self._params)
 
         self.bias = nn.Parameter(torch.Tensor(1,))
         self.u = nn.Parameter(torch.Tensor(input_dim,))
         self.w = nn.Parameter(torch.Tensor(input_dim,))
+
         self.input_dim = input_dim
         self.reset_parameters()
+
+    def _params(self):
+        return self.bias, self.u, self.w
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.u.size(0))
@@ -198,9 +202,12 @@ class ConditionalPlanar(ConditionalTransformModule):
         super().__init__()
         self.nn = nn
 
+    def _params(self, context):
+        return self.nn(context)
+
     def condition(self, context):
-        bias, u, w = self.nn(context)
-        return ConditionedPlanar(bias, u, w)
+        params = partial(self._params, context)
+        return ConditionedPlanar(params)
 
 
 def planar(input_dim):
