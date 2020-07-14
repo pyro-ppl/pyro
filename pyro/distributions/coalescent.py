@@ -304,11 +304,12 @@ class CoalescentRateLikelihood:
 
 def bio_phylo_to_times(tree, *, get_time=None):
     """
-    Extracts coalescent summary statistics from a phylogeny.
+    Extracts coalescent summary statistics from a phylogeny, suitable for use
+    with :class:`~pyro.distributions.CoalescentRateLikelihood`.
 
     :param Bio.Phylo.BaseTree.Clade tree: A phylogenetic tree.
     :param callable get_time: Optional function to extract the time point of
-        each sub-:class:`Bio.Phylo.BaseTree.Clade`. If absent, times will be
+        each sub-:class:`~Bio.Phylo.BaseTree.Clade`. If absent, times will be
         computed by cumulative `.branch_length`.
     :returns: A pair of :class:`~torch.Tensor` s ``(leaf_times, coal_times)``
         where ``leaf_times`` are times of sampling events (leaf nodes in the
