@@ -211,8 +211,6 @@ def test_bio_phylo_to_times(tree):
     signs = signs[index]
     lineages = signs.flip([0]).cumsum(0).flip([0])
     assert (lineages >= 0).all()
-    print(leaf_times)
-    print(coal_times)
 
 
 def test_bio_phylo_to_times_custom(tree):
@@ -231,6 +229,3 @@ def test_bio_phylo_to_times_custom(tree):
     signs = signs[index]
     lineages = signs.flip([0]).cumsum(0).flip([0])
     assert (lineages >= 0).all()
-
-    print(leaf_times)
-    print(coal_times)
