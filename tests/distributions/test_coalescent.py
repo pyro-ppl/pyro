@@ -150,7 +150,7 @@ def test_likelihood_sequential(num_leaves, num_steps, batch_shape, clamped):
     assert_close(actual, expected)
 
 
-TREE_NWK = """
+TREE_NEXUS = """
 #NEXUS
 Begin Trees;
  Tree tree1=((EPI_ISL_408009:0.00000[&date=2020.08],
@@ -194,10 +194,10 @@ End;
 @pytest.fixture
 def tree():
     Phylo = pytest.importorskip("Bio.Phylo")
-    tree_file = io.StringIO(TREE_NWK)
-    for tree in Phylo.parse(tree_file, "newick"):
-        if len(tree.root) > 1:
-            return tree
+    tree_file = io.StringIO(TREE_NEXUS)
+    trees = list(Phylo.parse(tree_file, "nexus"))
+    assert len(trees) == 1
+    return trees[0]
 
 
 def test_bio_phylo_to_times(tree):
