@@ -150,6 +150,113 @@ class SimpleSEIRModel(CompartmentalModel):
                     obs=self.data[t] if t_is_observed else None)
 
 
+class SimpleSEIRDModel(CompartmentalModel):
+    """
+    Susceptible-Exposed-Infected-Recovered-Dead model.
+
+    To customize this model we recommend forking and editing this class.
+
+    This is a stochastic discrete-time discrete-state model with four
+    compartments: "S" for susceptible, "E" for exposed, "I" for infected, "D"
+    for deceased individuals, and "R" for recovered individuals (the recovered
+    individuals are implicit: ``R = population - S - E - I - D``) with
+    transitions ``S -> E -> I -> R`` and ``I -> D``.
+
+    Because the transitions are not simple linear succession, this model
+    implements a custom :meth:`compute_flows()` method.
+
+    :param int population: Total ``population = S + E + I + R + D``.
+    :param float incubation_time: Mean incubation time (duration in state
+        ``E``). Must be greater than 1.
+    :param float recovery_time: Mean recovery time (duration in state
+        ``I``). Must be greater than 1.
+    :param float mortality_rate: Portion of infections resulting in death.
+        Must be in the open interval ``(0, 1)``.
+    :param iterable data: Time series of new observed infections. Each time
+        step is Binomial distributed between 0 and the number of ``S -> E``
+        transitions. This allows false negative but no false positives.
+    """
+
+    def __init__(self, population, incubation_time, recovery_time,
+                 mortality_rate, data):
+        compartments = ("S", "E", "I", "D")  # R is implicit.
+        duration = len(data)
+        super().__init__(compartments, duration, population)
+
+        assert isinstance(incubation_time, float)
+        assert incubation_time > 1
+        self.incubation_time = incubation_time
+
+        assert isinstance(recovery_time, float)
+        assert recovery_time > 1
+        self.recovery_time = recovery_time
+
+        assert isinstance(mortality_rate, float)
+        assert 0 < mortality_rate < 1
+        self.mortality_rate = mortality_rate
+
+        self.data = data
+
+    def global_model(self):
+        tau_e = self.incubation_time
+        tau_i = self.recovery_time
+        mu = self.mortality_rate
+        R0 = pyro.sample("R0", dist.LogNormal(0., 1.))
+        rho = pyro.sample("rho", dist.Beta(10, 10))
+        return R0, tau_e, tau_i, mu, rho
+
+    def initialize(self, params):
+        # Start with a single infection.
+        return {"S": self.population - 1, "E": 0, "I": 1, "D": 0}
+
+    def transition(self, params, state, t):
+        R0, tau_e, tau_i, mu, rho = params
+
+        # Sample flows between compartments.
+        S2E = pyro.sample("S2E_{}".format(t),
+                          infection_dist(individual_rate=R0 / tau_i,
+                                         num_susceptible=state["S"],
+                                         num_infectious=state["I"],
+                                         population=self.population))
+        E2I = pyro.sample("E2I_{}".format(t),
+                          binomial_dist(state["E"], 1 / tau_e))
+        # Of the 1/tau_i expected recoveries-or-deaths, a portion mu die and
+        # the remaining recover. Alternatively we could model this with a
+        # Multinomial distribution I2_ and extract the two components I2D and
+        # I2R, however the Multinomial distribution does not currently
+        # implement overdispersion or moment matching.
+        I2D = pyro.sample("I2D_{}".format(t),
+                          binomial_dist(state["I"], mu / tau_i))
+        I2R = pyro.sample("I2R_{}".format(t),
+                          binomial_dist(state["I"] - I2D, 1 / tau_i))
+
+        # Update compartments with flows.
+        state["S"] = state["S"] - S2E
+        state["E"] = state["E"] + S2E - E2I
+        state["I"] = state["I"] + E2I - I2R - I2D
+        state["D"] = state["D"] + I2D
+
+        # Condition on observations.
+        t_is_observed = isinstance(t, slice) or t < self.duration
+        pyro.sample("obs_{}".format(t),
+                    binomial_dist(S2E, rho),
+                    obs=self.data[t] if t_is_observed else None)
+
+    def compute_flows(self, prev, curr, t):
+        S2E = prev["S"] - curr["S"]  # S can only go to E.
+        I2D = curr["D"] - prev["D"]  # D can only have come from I.
+        # We deduce the remaining flows by conservation of mass:
+        #   curr - prev = inflows - outflows
+        E2I = prev["E"] - curr["E"] + S2E
+        I2R = prev["I"] - curr["I"] + E2I - I2D
+        return {
+            "S2E_{}".format(t): S2E,
+            "E2I_{}".format(t): E2I,
+            "I2D_{}".format(t): I2D,
+            "I2R_{}".format(t): I2R,
+        }
+
+
 class OverdispersedSIRModel(CompartmentalModel):
     """
     Generalizes :class:`SimpleSIRModel` with overdispersed distributions.

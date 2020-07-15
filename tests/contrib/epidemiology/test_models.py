@@ -10,8 +10,8 @@ import torch
 import pyro.distributions as dist
 from pyro.contrib.epidemiology.models import (HeterogeneousRegionalSIRModel, HeterogeneousSIRModel,
                                               OverdispersedSEIRModel, OverdispersedSIRModel, RegionalSIRModel,
-                                              SimpleSEIRModel, SimpleSIRModel, SparseSIRModel, SuperspreadingSEIRModel,
-                                              SuperspreadingSIRModel, UnknownStartSIRModel)
+                                              SimpleSEIRDModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel,
+                                              SuperspreadingSEIRModel, SuperspreadingSIRModel, UnknownStartSIRModel)
 from tests.common import xfail_param
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,46 @@ def test_simple_seir_smoke(duration, forecast, options, algo):
     assert samples["S"].shape == (num_samples, duration + forecast)
     assert samples["E"].shape == (num_samples, duration + forecast)
     assert samples["I"].shape == (num_samples, duration + forecast)
+
+
+@pytest.mark.parametrize("duration", [3, 7])
+@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("mcmc", {}),
+    ("mcmc", {"haar_full_mass": 2}),
+], ids=str)
+def test_simple_seird_smoke(duration, forecast, options, algo):
+    population = 100
+    incubation_time = 2.0
+    recovery_time = 7.0
+    mortality_rate = 0.1
+
+    # Generate data.
+    model = SimpleSEIRDModel(population, incubation_time, recovery_time,
+                             mortality_rate, [None] * duration)
+    assert model.full_mass == [("R0", "rho")]
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = SimpleSEIRDModel(population, incubation_time, recovery_time,
+                             mortality_rate, data)
+    num_samples = 5
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast)
+    assert samples["E"].shape == (num_samples, duration + forecast)
+    assert samples["I"].shape == (num_samples, duration + forecast)
+    assert samples["D"].shape == (num_samples, duration + forecast)
 
 
 @pytest.mark.parametrize("duration", [3])
