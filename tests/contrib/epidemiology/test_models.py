@@ -27,17 +27,18 @@ logger = logging.getLogger(__name__)
     ("svi", {"guide_rank": 2}),
     ("svi", {"guide_rank": "full"}),
     ("mcmc", {}),
-    ("mcmc", {"haar": True}),
+    ("mcmc", {"haar": False}),
+    ("mcmc", {"haar_full_mass": 0}),
     ("mcmc", {"haar_full_mass": 2}),
     ("mcmc", {"num_quant_bins": 2}),
     ("mcmc", {"num_quant_bins": 4}),
     ("mcmc", {"num_quant_bins": 8}),
     ("mcmc", {"num_quant_bins": 12}),
     ("mcmc", {"num_quant_bins": 16}),
-    ("mcmc", {"num_quant_bins": 2, "haar": True}),
+    ("mcmc", {"num_quant_bins": 2, "haar": False}),
     ("mcmc", {"arrowhead_mass": True}),
     ("mcmc", {"jit_compile": True}),
-    ("mcmc", {"jit_compile": True, "haar_full_mass": 2}),
+    ("mcmc", {"jit_compile": True, "haar_full_mass": 0}),
     ("mcmc", {"jit_compile": True, "num_quant_bins": 2}),
     ("mcmc", {"num_chains": 2, "mp_context": "spawn"}),
     ("mcmc", {"num_chains": 2, "mp_context": "spawn", "num_quant_bins": 2}),
@@ -77,8 +78,8 @@ def test_simple_sir_smoke(duration, forecast, options, algo):
     ("svi", {}),
     ("svi", {"haar": False}),
     ("mcmc", {}),
-    ("mcmc", {"haar": True}),
-    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"haar": False}),
+    ("mcmc", {"haar_full_mass": 0}),
     ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
 def test_simple_seir_smoke(duration, forecast, options, algo):
@@ -116,7 +117,7 @@ def test_simple_seir_smoke(duration, forecast, options, algo):
 @pytest.mark.parametrize("algo,options", [
     ("svi", {}),
     ("mcmc", {}),
-    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"haar_full_mass": 0}),
 ], ids=str)
 def test_simple_seird_smoke(duration, forecast, options, algo):
     population = 100
@@ -155,8 +156,8 @@ def test_simple_seird_smoke(duration, forecast, options, algo):
 @pytest.mark.parametrize("forecast", [7])
 @pytest.mark.parametrize("options", [
     {},
+    {"haar": False},
     {"num_quant_bins": 2},
-    {"haar_full_mass": 2},
 ], ids=str)
 def test_overdispersed_sir_smoke(duration, forecast, options):
     population = 100
@@ -186,7 +187,7 @@ def test_overdispersed_sir_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [7])
 @pytest.mark.parametrize("options", [
     {},
-    {"haar_full_mass": 2},
+    {"haar": False},
     {"num_quant_bins": 2},
 ], ids=str)
 def test_overdispersed_seir_smoke(duration, forecast, options):
@@ -221,8 +222,8 @@ def test_overdispersed_seir_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"haar": True},
-    {"haar_full_mass": 2},
+    {"haar": False},
+    {"haar_full_mass": 0},
     {"num_quant_bins": 2},
 ], ids=str)
 def test_superspreading_sir_smoke(duration, forecast, options):
@@ -253,8 +254,8 @@ def test_superspreading_sir_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"haar": True},
-    {"haar_full_mass": 2},
+    {"haar": False},
+    {"haar_full_mass": 0},
     {"num_quant_bins": 2},
 ], ids=str)
 def test_superspreading_seir_smoke(duration, forecast, options):
@@ -335,7 +336,7 @@ def test_coalescent_likelihood_smoke(duration, forecast, options, algo):
     ("svi", {}),
     ("svi", {"haar": False}),
     ("mcmc", {}),
-    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"haar": False}),
     ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
 def test_heterogeneous_sir_smoke(duration, forecast, options, algo):
@@ -368,8 +369,8 @@ def test_heterogeneous_sir_smoke(duration, forecast, options, algo):
 @pytest.mark.parametrize("options", [
     xfail_param({}, reason="Delta is incompatible with relaxed inference"),
     {"num_quant_bins": 2},
-    {"num_quant_bins": 2, "haar": True},
-    {"num_quant_bins": 2, "haar_full_mass": 3},
+    {"num_quant_bins": 2, "haar": False},
+    {"num_quant_bins": 2, "haar_full_mass": 0},
     {"num_quant_bins": 4},
 ], ids=str)
 def test_sparse_smoke(duration, forecast, options):
@@ -411,8 +412,8 @@ def test_sparse_smoke(duration, forecast, options):
 @pytest.mark.parametrize("forecast", [0, 7])
 @pytest.mark.parametrize("options", [
     {},
-    {"haar": True},
-    {"haar_full_mass": 4},
+    {"haar": False},
+    {"haar_full_mass": 0},
     {"num_quant_bins": 2},
 ], ids=str)
 def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
@@ -459,8 +460,8 @@ def test_unknown_start_smoke(duration, pre_obs_window, forecast, options):
     ("svi", {}),
     ("svi", {"haar": False}),
     ("mcmc", {}),
-    ("mcmc", {"haar": True}),
-    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"haar": False}),
+    ("mcmc", {"haar_full_mass": 0}),
     ("mcmc", {"num_quant_bins": 2}),
 ], ids=str)
 def test_regional_smoke(duration, forecast, options, algo):
@@ -500,11 +501,11 @@ def test_regional_smoke(duration, forecast, options, algo):
     ("svi", {}),
     ("svi", {"haar": False}),
     ("mcmc", {}),
-    ("mcmc", {"haar": True}),
-    ("mcmc", {"haar_full_mass": 2}),
+    ("mcmc", {"haar": False}),
+    ("mcmc", {"haar_full_mass": 0}),
     ("mcmc", {"num_quant_bins": 2}),
     ("mcmc", {"jit_compile": True}),
-    ("mcmc", {"jit_compile": True, "haar_full_mass": 2}),
+    ("mcmc", {"jit_compile": True, "haar": False}),
     ("mcmc", {"jit_compile": True, "num_quant_bins": 2}),
 ], ids=str)
 def test_hetero_regional_smoke(duration, forecast, options, algo):
