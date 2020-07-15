@@ -48,6 +48,7 @@ def test_vectorized_function(duration):
 
         # See pyro_reduce() below.
         x = pyro.sample("x_init", dist.Normal(0, 1))
+        # Similar to functools.reduce or jax.scan.
         pyro.reduce(transition, range(len(data)), x)
 
     data = torch.randn(duration)
@@ -73,7 +74,7 @@ def test_vectorized_iterator(duration):
 
 _VECTORIZED = False
 
-
+# This should match the interface of either functools.reduce or jax.scan.
 def pyro_reduce(transition, time, init):
     """
     This assumes ``init`` is a dict mapping unindexed sample site name (i.e.
@@ -84,7 +85,7 @@ def pyro_reduce(transition, time, init):
         return functools.reduce(transition, time, init)
 
     # Trace the first step and assume model structure is fixed.
-    # In pyro.contrib.epideiology we do this once at the start of inference.
+    # In pyro.contrib.epidemiology we do this once at the start of inference.
     # Maybe we could memoize to avoid duplicated execution?
     with poutine.block(), poutine.trace() as tr:
         t = 0
@@ -104,10 +105,15 @@ def pyro_reduce(transition, time, init):
                 name_0 = "{}_{}".format(name, 0)
                 name_t = "{}_{}".format(name, t)
                 site_0 = tr.nodes[name_0]
-                curr[name] = pyro.sample(name_t, site_0["fn"])
-                prev[name] = torch.cat([site_0["value"].unsqueeze(0), curr[name]])
+                # Assume the sample site is driven by an enclosing poutine.condition().
+                curr[name] = pyro.sample(name_t, site_0["fn"].mask(False))
+                prev[name] = torch.cat([site_0["value"].unsqueeze(0),
+                                        curr[name][:-1]])
+                # TODO in case we're enumerating, we need to move prev,curr enum
+                # dimensions to not overlap; then we can use sequential_sum_product().
 
         # Execute vectorized transition.
-        transition(prev, t)
+        transition(prev, t)  # should return curr, but record sites in a trace
 
+    # return final time step, to match functools.reduce interface.
     return {k: v[-1] for k, v in curr.items()}
