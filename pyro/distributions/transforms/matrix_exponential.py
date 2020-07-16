@@ -13,8 +13,8 @@ from pyro.distributions.util import copy_docs_from
 
 @copy_docs_from(Transform)
 class ConditionedMatrixExponential(Transform):
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
@@ -48,7 +48,7 @@ class ConditionedMatrixExponential(Transform):
 
     def _trace(self, M):
         """
-        Calculate the trace of a matrix and is able to do broadcasting over batch
+        Calculates the trace of a matrix and is able to do broadcasting over batch
         dimensions, unlike `torch.trace`.
 
         Broadcasting is necessary for the conditional version of the transform,

@@ -43,7 +43,7 @@ class CorrLCholeskyTransform(Transform):
     Section 10.12.
 
     """
-    domain = constraints.real
+    domain = constraints.real_vector
     codomain = corr_cholesky_constraint
     bijective = True
     sign = +1

@@ -17,8 +17,8 @@ from pyro.nn import DenseNN
 
 @copy_docs_from(Transform)
 class ConditionedRadial(Transform):
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
@@ -124,8 +124,8 @@ class Radial(ConditionedRadial, TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
@@ -190,8 +190,8 @@ class ConditionalRadial(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
