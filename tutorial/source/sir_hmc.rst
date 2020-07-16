@@ -1,5 +1,5 @@
-Compartmental Epidemiological Models
-====================================
+Epidemiological inference via HMC
+=================================
 
 This tutorial is in the form of a script (see below).
 

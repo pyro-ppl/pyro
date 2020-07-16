@@ -87,7 +87,7 @@ class CompartmentalModel(ABC):
     good model structure and priors, then move to more accurate but more
     expensive inference once the model is plausible.
 
-    1.  Start with ``.fit_svi(guide_rank=1, num_steps=2000)`` for cheap
+    1.  Start with ``.fit_svi(guide_rank=0, num_steps=2000)`` for cheap
         inference while you search for a good model.
     2.  Additionally infer long-range correlations by moving to a low-rank
         multivariate normal guide via ``.fit_svi(guide_rank=None,
@@ -469,9 +469,10 @@ class CompartmentalModel(ABC):
             Note that computational cost is exponential in `num_quant_bins`.
             Defaults to 1 for relaxed inference.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
+            Defaults to True.
         :param int haar_full_mass: Number of low frequency Haar components to
-            include in the full mass matrix. If nonzero this implies
-            ``haar=True``.
+            include in the full mass matrix. If ``haar=False`` then this is
+            ignored. Defaults to 10.
         :param int heuristic_num_particles: Passed to :meth:`heuristic` as
             ``num_particles``. Defaults to 1024.
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
@@ -489,14 +490,14 @@ class CompartmentalModel(ABC):
 
         # Setup Haar wavelet transform.
         haar = options.pop("haar", False)
-        haar_full_mass = options.pop("haar_full_mass", 0)
+        haar_full_mass = options.pop("haar_full_mass", 10)
         full_mass = options.pop("full_mass", self.full_mass)
         assert isinstance(haar, bool)
         assert isinstance(haar_full_mass, int) and haar_full_mass >= 0
         assert isinstance(full_mass, (bool, list))
         haar_full_mass = min(haar_full_mass, self.duration)
-        if haar_full_mass:
-            haar = True
+        if not haar:
+            haar_full_mass = 0
         if full_mass is True:
             haar_full_mass = 0  # No need to split.
         elif haar_full_mass >= self.duration:
