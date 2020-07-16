@@ -29,7 +29,9 @@ def sqrt(x):
     # ref: https://en.wikipedia.org/wiki/Schur_complement#Background
     Dsqrt = x.bottom_diag.sqrt()
 
-    for i in range(6):
+    # On cholesky error, retry with smaller tail part B.
+    num_attempts = 6
+    for i in range(num_attempts):
         B_Dsqrt = B / Dsqrt.unsqueeze(-2)  # shape: head_size x N
         schur_complement = A - B_Dsqrt.matmul(B_Dsqrt.t())  # complexity: head_size^2 x N
         # we will decompose schur_complement to U @ U.T (so that the sqrt matrix
@@ -39,10 +41,10 @@ def sqrt(x):
             top_left = torch.flip(torch.cholesky(torch.flip(schur_complement, (-2, -1))), (-2, -1))
             break
         except RuntimeError:
-            B = B * 2 ** (-i - 1)
+            B = B / 2
             continue
         raise RuntimeError("Singular schur complement in computing Cholesky of the input"
-                           " arrayhead matrix")
+                           " arrowhead matrix")
 
     top_right = B_Dsqrt
     top = torch.cat([top_left, top_right], -1)
