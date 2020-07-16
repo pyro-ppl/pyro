@@ -43,7 +43,7 @@ class Permute(Transform):
 
     """
 
-    codomain = constraints.real
+    codomain = constraints.real_vector
     bijective = True
     volume_preserving = True
 

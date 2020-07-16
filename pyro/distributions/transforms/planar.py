@@ -17,8 +17,8 @@ from pyro.nn import DenseNN
 
 @copy_docs_from(Transform)
 class ConditionedPlanar(Transform):
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
@@ -120,8 +120,8 @@ class Planar(ConditionedPlanar, TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
@@ -193,8 +193,8 @@ class ConditionalPlanar(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 

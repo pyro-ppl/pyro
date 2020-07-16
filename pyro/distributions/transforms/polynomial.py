@@ -67,8 +67,8 @@ class Polynomial(TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
     autoregressive = True
