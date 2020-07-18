@@ -64,9 +64,9 @@ EXTRAS_REQUIRE = [
     'visdom>=0.1.4',
     # 'biopython>=1.54',  # requires Python 3.6
     'pandas',
+    'scikit-learn',
     'seaborn',
     'wget',
-    'scikit-learn'
 ]
 
 setup(
