@@ -66,6 +66,7 @@ EXTRAS_REQUIRE = [
     'pandas',
     'seaborn',
     'wget',
+    'scikit-learn'
 ]
 
 setup(
