@@ -143,7 +143,7 @@ def _monotonic_rational_spline(inputs,
 
     # Get the index of the bin that each input is in
     # bin_idx ~ (batch_dim, input_dim, 1)
-    bin_idx = _searchsorted(cumheights + eps if inverse else cumwidths + eps, inputs)[..., None]
+    bin_idx = _searchsorted(cumheights + eps if inverse else cumwidths + eps, inputs).unsqueeze(-1)
 
     # Select the value for the relevant bin for the variables used in the main calculation
     input_widths = _select_bins(widths, bin_idx)
