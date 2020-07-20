@@ -573,7 +573,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
