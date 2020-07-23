@@ -192,7 +192,7 @@ class ConditionalMatrixExponential(ConditionalTransformModule):
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
     >>> param_dims = [input_dim*input_dim]
     >>> hypernet = DenseNN(context_dim, [50, 50], param_dims)
-    >>> transform = ConditionalMatrixExponential(hypernet)
+    >>> transform = ConditionalMatrixExponential(input_dim, hypernet)
     >>> z = torch.rand(batch_size, context_dim)
     >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
     ... [transform]).condition(z)
