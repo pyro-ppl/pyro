@@ -155,17 +155,21 @@ class ConditionalSplineAutoregressive(ConditionalTransformModule):
 
     Example usage:
 
-    >>> from pyro.nn import AutoRegressiveNN
+    >>> from pyro.nn import ConditionalAutoRegressiveNN
     >>> input_dim = 10
-    >>> count_bins = 8
+    >>> context_dim = 5
+    >>> batch_size = 3
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
     >>> hidden_dims = [input_dim * 10, input_dim * 10]
     >>> param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
-    >>> hypernet = AutoRegressiveNN(input_dim, hidden_dims, param_dims=param_dims)
-    >>> transform = SplineAutoregressive(input_dim, hypernet, count_bins=count_bins)
+    >>> hypernet = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims,
+    ... param_dims=param_dims)
+    >>> transform = ConditionalSplineAutoregressive(input_dim, hypernet)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
-    >>> flow_dist.sample()  # doctest: +SKIP
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
+    ... [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size]))  # doctest: +SKIP
 
     :param input_dim: Dimension of the input vector. Despite operating element-wise,
         this is required so we know how many parameters to store.
@@ -232,6 +236,8 @@ def spline_autoregressive(input_dim, hidden_dims=None, count_bins=8, bound=3.0, 
     :param bound: The quantity :math:`K` determining the bounding box,
         :math:`[-K,K]\times[-K,K]`, of the spline.
     :type bound: float
+    :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
+    :type order: string
 
     """
 
@@ -256,14 +262,15 @@ def conditional_spline_autoregressive(input_dim, context_dim, hidden_dims=None, 
     :param context_dim: Dimension of context variable
     :type context_dim: int
     :param hidden_dims: The desired hidden dimensions of the autoregressive network.
-        Defaults to using [3*input_dim + 1]
+        Defaults to using [input_dim * 10, input_dim * 10]
     :type hidden_dims: list[int]
-    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU',
-        'sigmoid', or 'tanh'.
-    :type activation: string
-    :param width: The width of the "multilayer perceptron" in the transform (see
-        paper). Defaults to 16
-    :type width: int
+    :param count_bins: The number of segments comprising the spline.
+    :type count_bins: int
+    :param bound: The quantity :math:`K` determining the bounding box,
+        :math:`[-K,K]\times[-K,K]`, of the spline.
+    :type bound: float
+    :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
+    :type order: string
 
     """
 

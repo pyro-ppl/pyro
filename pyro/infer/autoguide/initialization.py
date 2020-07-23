@@ -22,6 +22,7 @@ from pyro.util import torch_isnan
 
 # TODO: move this file out of `autoguide` in a minor release
 
+
 def _is_multivariate(d):
     while isinstance(d, (Independent, MaskedDistribution)):
         d = d.base_dist
@@ -172,6 +173,7 @@ class InitMessenger(Messenger):
 
     :param callable init_fn: An initialization function.
     """
+
     def __init__(self, init_fn):
         self.init_fn = init_fn
         super().__init__()
