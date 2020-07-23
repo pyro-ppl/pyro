@@ -18,12 +18,12 @@ from functools import partial
 
 import numpy as np
 import torch
-import visdom
 
 import pyro
 import pyro.contrib.examples.multi_mnist as multi_mnist
 import pyro.optim as optim
 import pyro.poutine as poutine
+import visdom
 from air import AIR, latents_to_tensor
 from pyro.contrib.examples.util import get_data_directory
 from pyro.infer import SVI, JitTraceGraph_ELBO, TraceGraph_ELBO

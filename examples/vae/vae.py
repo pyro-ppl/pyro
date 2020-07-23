@@ -6,10 +6,10 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import visdom
 
 import pyro
 import pyro.distributions as dist
+import visdom
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 from utils.mnist_cached import MNISTCached as MNIST

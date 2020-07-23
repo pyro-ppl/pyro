@@ -7,15 +7,14 @@ Combining models of RSA pragmatics and CCG-based compositional semantics.
 Taken from: http://dippl.org/examples/zSemanticPragmaticMashup.html
 """
 
-import torch
-
 import argparse
 import collections
 
+import torch
+
 import pyro
 import pyro.distributions as dist
-
-from search_inference import HashingMarginal, BestFirstSearch, memoize
+from search_inference import BestFirstSearch, HashingMarginal, memoize
 
 torch.set_default_dtype(torch.float64)
 

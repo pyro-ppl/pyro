@@ -6,8 +6,8 @@ from collections import defaultdict
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions.util import sum_leftmost
 from pyro import poutine
+from pyro.distributions.util import sum_leftmost
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 

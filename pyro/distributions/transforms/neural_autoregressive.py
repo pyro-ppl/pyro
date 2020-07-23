@@ -206,7 +206,7 @@ class ConditionalNeuralAutoregressive(ConditionalTransformModule):
 
 
 def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', width=16):
-    """
+    r"""
     A helper function to create a
     :class:`~pyro.distributions.transforms.NeuralAutoregressive` object that takes
     care of constructing an autoregressive network with the correct input/output
@@ -233,7 +233,7 @@ def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', wid
 
 
 def conditional_neural_autoregressive(input_dim, context_dim, hidden_dims=None, activation='sigmoid', width=16):
-    """
+    r"""
     A helper function to create a
     :class:`~pyro.distributions.transforms.ConditionalNeuralAutoregressive` object
     that takes care of constructing an autoregressive network with the correct

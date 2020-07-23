@@ -4,17 +4,10 @@
 from typing import Union
 
 from torch import Tensor
+
 from pyro.distributions import TransformedDistribution
-from pyro.distributions.transforms import (
-    Transform,
-    AffineTransform,
-    AbsTransform,
-    PowerTransform,
-    ExpTransform,
-    TanhTransform,
-    SoftmaxTransform,
-    SigmoidTransform
-)
+from pyro.distributions.transforms import (AbsTransform, AffineTransform, ExpTransform, PowerTransform,
+                                           SigmoidTransform, SoftmaxTransform, TanhTransform, Transform)
 
 
 class RVMagicOps:

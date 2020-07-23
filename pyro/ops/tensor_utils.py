@@ -5,7 +5,6 @@ import math
 
 import torch
 
-
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
 
 

@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import operator
+from functools import partial, reduce
 from unittest import TestCase
 
 import pytest
@@ -8,9 +10,6 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
-
-from functools import partial, reduce
-import operator
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -231,6 +230,9 @@ class TransformTests(TestCase):
     def test_conditional_spline(self):
         for order in ['linear', 'quadratic']:
             self._test_conditional(partial(T.conditional_spline, order=order))
+
+    def test_conditional_spline_autoregressive(self):
+        self._test_conditional(T.conditional_spline_autoregressive)
 
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented

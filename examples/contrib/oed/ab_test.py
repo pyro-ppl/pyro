@@ -3,20 +3,18 @@
 
 import argparse
 from functools import partial
+
+import numpy as np
 import torch
 from torch.distributions import constraints
-import numpy as np
 
 import pyro
-from pyro import optim
-from pyro.infer import TraceEnum_ELBO
-from pyro.contrib.oed.eig import vi_eig
 import pyro.contrib.gp as gp
-from pyro.contrib.oed.glmm import (
-    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
-)
-
 from gp_bayes_opt import GPBayesOptimizer
+from pyro import optim
+from pyro.contrib.oed.eig import vi_eig
+from pyro.contrib.oed.glmm import analytic_posterior_cov, group_assignment_matrix, zero_mean_unit_obs_sd_lm
+from pyro.infer import TraceEnum_ELBO
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how

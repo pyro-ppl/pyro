@@ -476,6 +476,13 @@ ConditionalSpline
     :undoc-members:
     :show-inheritance:
 
+ConditionalSplineAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalSplineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransformModule
 --------------------------
 .. autoclass:: pyro.distributions.ConditionalTransformModule
@@ -631,6 +638,10 @@ conditional_radial
 conditional_spline
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_spline
+
+conditional_spline_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_spline_autoregressive
 
 elu
 ---

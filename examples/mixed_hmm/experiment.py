@@ -2,18 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-import os
-import json
-import uuid
 import functools
+import json
+import os
+import uuid
 
 import torch
 
 import pyro
 import pyro.poutine as poutine
+from model import guide_generic, model_generic
 from pyro.infer import TraceEnum_ELBO
-
-from model import model_generic, guide_generic
 from seal_data import prepare_seal
 
 

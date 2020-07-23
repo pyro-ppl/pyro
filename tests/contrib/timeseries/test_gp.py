@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+
+import pytest
 import torch
 
-from tests.common import assert_equal
 import pyro
-from pyro.contrib.timeseries import (IndependentMaternGP, LinearlyCoupledMaternGP, GenericLGSSM,
-                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP)
+from pyro.contrib.timeseries import (
+    DependentMaternGP, GenericLGSSM, GenericLGSSMWithGPNoiseModel, IndependentMaternGP, LinearlyCoupledMaternGP)
 from pyro.ops.tensor_utils import block_diag_embed
-import pytest
+from tests.common import assert_equal
 
 
 @pytest.mark.parametrize('model,obs_dim,nu_statedim', [('ssmgp', 3, 1.5), ('ssmgp', 2, 2.5),

@@ -1,16 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import argparse
+from os.path import exists
+from urllib.request import urlopen
+
 import numpy as np
 import torch
 
 import pyro
 from pyro.contrib.timeseries import IndependentMaternGP, LinearlyCoupledMaternGP
-
-import argparse
-from os.path import exists
-from urllib.request import urlopen
-
 
 pyro.enable_validation(__debug__)
 

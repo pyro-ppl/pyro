@@ -11,8 +11,8 @@ import argparse
 
 import torch
 
-from pyro.generic import distributions as dist
 # We use the pyro.generic interface to support dynamic choice of backend.
+from pyro.generic import distributions as dist
 from pyro.generic import infer, ops, optim, pyro, pyro_backend
 
 
