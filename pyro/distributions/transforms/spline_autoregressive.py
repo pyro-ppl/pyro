@@ -253,7 +253,7 @@ def conditional_spline_autoregressive(input_dim, context_dim, hidden_dims=None, 
                                       order='linear'):
     r"""
     A helper function to create a
-    :class:`~pyro.distributions.transforms.ConditionalNeuralAutoregressive` object
+    :class:`~pyro.distributions.transforms.ConditionalSplineAutoregressive` object
     that takes care of constructing an autoregressive network with the correct
     input/output dimensions.
 
