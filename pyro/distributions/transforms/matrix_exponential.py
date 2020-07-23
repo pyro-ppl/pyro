@@ -108,7 +108,7 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
     transform has an exact inverse and a log-determinate-Jacobian that scales in
     time-complexity as :math:`O(D)`. Both the forward and reverse operations are
     approximated with a truncated power series. For numerical stability, the
-    spectral norm of :math:`M` is restricted.
+    norm of :math:`M` can be restricted with the `normalization` keyword argument.
 
     Example usage:
 
@@ -165,6 +165,68 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
 
 @copy_docs_from(ConditionalTransformModule)
 class ConditionalMatrixExponential(ConditionalTransformModule):
+    r"""
+    A dense matrix exponential bijective transform (Hoogeboom et al., 2020) that
+    conditions on an additional context variable with equation,
+
+        :math:`\mathbf{y} = \exp(M)\mathbf{x}`
+
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
+    :math:`\exp(\cdot)` represents the matrix exponential, and
+    :math:`M\in\mathbb{R}^D\times\mathbb{R}^D` is the output of a neural network
+    conditioning on context variable :math:`\mathbf{z}` for input dimension
+    :math:`D`. In general, :math:`M` is not required to be invertible.
+
+    Due to the favourable mathematical properties of the matrix exponential, the
+    transform has an exact inverse and a log-determinate-Jacobian that scales in
+    time-complexity as :math:`O(D)`. Both the forward and reverse operations are
+    approximated with a truncated power series. For numerical stability, the
+    norm of :math:`M` can be restricted with the `normalization` keyword argument.
+
+    Example usage:
+
+    >>> from pyro.nn.dense_nn import DenseNN
+    >>> input_dim = 10
+    >>> context_dim = 5
+    >>> batch_size = 3
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> param_dims = [input_dim*input_dim]
+    >>> hypernet = DenseNN(context_dim, [50, 50], param_dims)
+    >>> transform = ConditionalMatrixExponential(hypernet)
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
+    ... [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
+
+    :param input_dim: the dimension of the input (and output) variable.
+    :type input_dim: int
+    :param iterations: the number of terms to use in the truncated power series that
+        approximates matrix exponentiation.
+    :type iterations: int
+    :param normalization: One of `['none', 'weight', 'spectral']` normalization that
+        selects what type of normalization to apply to the weight matrix. `weight`
+        corresponds to weight normalization (Salimans and Kingma, 2016) and
+        `spectral` to spectral normalization (Miyato et al, 2018).
+    :type normalization: string
+    :param bound: a bound on either the weight or spectral norm, when either of
+        those two types of regularization are chosen by the `normalization`
+        argument. A lower value for this results in fewer required terms of the
+        truncated power series to closely approximate the exact value of the matrix
+        exponential.
+    :type bound: float
+
+    References:
+
+    [1] Emiel Hoogeboom, Victor Garcia Satorras, Jakub M. Tomczak, Max Welling. The
+        Convolution Exponential and Generalized Sylvester Flows. [arXiv:2006.01910]
+    [2] Tim Salimans, Diederik P. Kingma. Weight Normalization: A Simple
+        Reparameterization to Accelerate Training of Deep Neural Networks.
+        [arXiv:1602.07868]
+    [3] Takeru Miyato, Toshiki Kataoka, Masanori Koyama, Yuichi Yoshida. Spectral
+        Normalization for Generative Adversarial Networks. ICLR 2018.
+
+    """
+
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
