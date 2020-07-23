@@ -157,6 +157,7 @@ class ConditionalSplineAutoregressive(ConditionalTransformModule):
 
     >>> from pyro.nn import ConditionalAutoRegressiveNN
     >>> input_dim = 10
+    >>> count_bins = 8
     >>> context_dim = 5
     >>> batch_size = 3
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
@@ -164,7 +165,8 @@ class ConditionalSplineAutoregressive(ConditionalTransformModule):
     >>> param_dims = [count_bins, count_bins, count_bins - 1, count_bins]
     >>> hypernet = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims,
     ... param_dims=param_dims)
-    >>> transform = ConditionalSplineAutoregressive(input_dim, hypernet)
+    >>> transform = ConditionalSplineAutoregressive(input_dim, hypernet,
+    ... count_bins=count_bins)
     >>> pyro.module("my_transform", transform)  # doctest: +SKIP
     >>> z = torch.rand(batch_size, context_dim)
     >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
