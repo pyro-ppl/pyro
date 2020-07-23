@@ -174,7 +174,7 @@ class ConditionalMatrixExponential(ConditionalTransformModule):
     where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs,
     :math:`\exp(\cdot)` represents the matrix exponential, and
     :math:`M\in\mathbb{R}^D\times\mathbb{R}^D` is the output of a neural network
-    conditioning on context variable :math:`\mathbf{z}` for input dimension
+    conditioning on a context variable :math:`\mathbf{z}` for input dimension
     :math:`D`. In general, :math:`M` is not required to be invertible.
 
     Due to the favourable mathematical properties of the matrix exponential, the
