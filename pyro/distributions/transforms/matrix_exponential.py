@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
 from torch.distributions import Transform, constraints
 
+from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
+from pyro.nn import DenseNN
 
 
 @copy_docs_from(Transform)
@@ -66,7 +69,7 @@ class ConditionedMatrixExponential(Transform):
         the base distribution (or the output of a previous transform)
         """
 
-        M = self.weights
+        M = self.weights() if callable(self.weights) else self.weights
         return self._exp(x, M)
 
     def _inverse(self, y):
@@ -76,7 +79,7 @@ class ConditionedMatrixExponential(Transform):
         Inverts y => x.
         """
 
-        M = self.weights
+        M = self.weights() if callable(self.weights) else self.weights
         return self._exp(y, -M)
 
     def log_abs_det_jacobian(self, x, y):
@@ -84,7 +87,7 @@ class ConditionedMatrixExponential(Transform):
         Calculates the element-wise determinant of the log Jacobian
         """
 
-        M = self.weights
+        M = self.weights() if callable(self.weights) else self.weights
         return self._trace(M)
 
 
@@ -160,7 +163,36 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
         self.weights.data.uniform_(-stdv, stdv)
 
 
-def matrix_exponential(input_dim):
+@copy_docs_from(ConditionalTransformModule)
+class ConditionalMatrixExponential(ConditionalTransformModule):
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
+    bijective = True
+    event_dim = 1
+
+    def __init__(self, input_dim, nn, iterations=8, normalization='none', bound=None):
+        super().__init__()
+        self.input_dim = input_dim
+        self.nn = nn
+        self.iterations = iterations
+        self.normalization = normalization
+        self.bound = bound
+
+    def _params(self, context):
+        return self.nn(context)
+
+    def condition(self, context):
+        # This hack could be fixed by having a conditioning network that outputs a more general shape
+        cond_nn = partial(self.nn, context)
+
+        def weights():
+            w = cond_nn()
+            return w.view(w.shape[:-1] + (self.input_dim, self.input_dim))
+        return ConditionedMatrixExponential(weights, iterations=self.iterations, normalization=self.normalization,
+                                            bound=self.bound)
+
+
+def matrix_exponential(input_dim, iterations=8, normalization='none', bound=None):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.MatrixExponential` object for consistency
@@ -168,7 +200,58 @@ def matrix_exponential(input_dim):
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
+    :param iterations: the number of terms to use in the truncated power series that
+        approximates matrix exponentiation.
+    :type iterations: int
+    :param normalization: One of `['none', 'weight', 'spectral']` normalization that
+        selects what type of normalization to apply to the weight matrix. `weight`
+        corresponds to weight normalization (Salimans and Kingma, 2016) and
+        `spectral` to spectral normalization (Miyato et al, 2018).
+    :type normalization: string
+    :param bound: a bound on either the weight or spectral norm, when either of
+        those two types of regularization are chosen by the `normalization`
+        argument. A lower value for this results in fewer required terms of the
+        truncated power series to closely approximate the exact value of the matrix
+        exponential.
+    :type bound: float
 
     """
 
-    return MatrixExponential(input_dim)
+    return MatrixExponential(input_dim, iterations=iterations, normalization=normalization, bound=bound)
+
+
+def conditional_matrix_exponential(input_dim, context_dim, hidden_dims=None, iterations=8, normalization='none',
+                                   bound=None):
+    """
+    A helper function to create a
+    :class:`~pyro.distributions.transforms.ConditionalMatrixExponential` object for
+    consistency with other helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param context_dim: Dimension of context variable
+    :type context_dim: int
+    :param hidden_dims: The desired hidden dimensions of the dense network. Defaults
+        to using [input_dim * 10, input_dim * 10]
+    :type hidden_dims: list[int]
+    :param iterations: the number of terms to use in the truncated power series that
+        approximates matrix exponentiation.
+    :type iterations: int
+    :param normalization: One of `['none', 'weight', 'spectral']` normalization that
+        selects what type of normalization to apply to the weight matrix. `weight`
+        corresponds to weight normalization (Salimans and Kingma, 2016) and
+        `spectral` to spectral normalization (Miyato et al, 2018).
+    :type normalization: string
+    :param bound: a bound on either the weight or spectral norm, when either of
+        those two types of regularization are chosen by the `normalization`
+        argument. A lower value for this results in fewer required terms of the
+        truncated power series to closely approximate the exact value of the matrix
+        exponential.
+    :type bound: float
+
+    """
+
+    if hidden_dims is None:
+        hidden_dims = [input_dim * 10, input_dim * 10]
+    nn = DenseNN(context_dim, hidden_dims, param_dims=[input_dim * input_dim])
+    return ConditionalMatrixExponential(input_dim, nn, iterations=iterations, normalization=normalization, bound=bound)
