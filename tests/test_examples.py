@@ -7,8 +7,9 @@ import sys
 from subprocess import check_call
 
 import pytest
+import torch
 
-from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param
+from tests.common import EXAMPLES_DIR, requires_cuda, requires_horovod, xfail_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -97,6 +98,7 @@ CPU_EXAMPLES = [
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy',
+    'svi_horovod.py --num-epochs=2 --size=400 --no-horovod',
     'toy_mixture_model_discrete_enumeration.py  --num-steps=1',
     xfail_param('sparse_regression.py --num-steps=2 --num-data=50 --num-dimensions 20',
                 reason='https://github.com/pyro-ppl/pyro/issues/2082'),
@@ -143,6 +145,7 @@ CUDA_EXAMPLES = [
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -m=1 --enum --cuda',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential --cuda',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 --cuda',
+    'svi_horovod.py --num-epochs=2 --size=400 --cuda --no-horovod',
     'vae/vae.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
@@ -195,6 +198,12 @@ JIT_EXAMPLES = [
     'vae/vae_comparison.py --num-epochs=1 --jit',
 ]
 
+HOROVOD_EXAMPLES = [
+    'svi_horovod.py --num-epochs=2 --size=400',
+    pytest.param('svi_horovod.py --num-epochs=2 --size=400 --cuda',
+                 marks=[requires_cuda]),
+]
+
 
 def test_coverage():
     cpu_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in CPU_EXAMPLES)
@@ -243,3 +252,17 @@ def test_jit(example):
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
     check_call([sys.executable, filename] + args)
+
+
+@requires_horovod
+@pytest.mark.parametrize('np', [1, 2])
+@pytest.mark.parametrize('example', HOROVOD_EXAMPLES)
+def test_horovod(np, example):
+    if 'cuda' in example and np > torch.cuda.device_count():
+        pytest.skip()
+    horovodrun = 'horovodrun -np {} --mpi-args=--oversubscribe'.format(np)
+    logger.info('Running:\n{} python examples/{}'.format(horovodrun, example))
+    example = example.split()
+    filename, args = example[0], example[1:]
+    filename = os.path.join(EXAMPLES_DIR, filename)
+    check_call(horovodrun.split() + [sys.executable, filename] + args)

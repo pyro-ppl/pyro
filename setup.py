@@ -115,6 +115,7 @@ setup(
             'sphinx_rtd_theme',
             'yapf',
         ],
+        'horovod': ['horovod[pytorch]>=0.19'],
     },
     python_requires='>=3.5',
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',

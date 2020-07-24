@@ -60,6 +60,13 @@ def TemporaryDirectory():
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
                                    reason="cuda is not available")
 
+try:
+    import horovod
+except ImportError:
+    horovod = None
+requires_horovod = pytest.mark.skipif(horovod is None,
+                                      reason="horovod is not available")
+
 
 def get_cpu_type(t):
     assert t.__module__ == 'torch.cuda'

@@ -85,6 +85,7 @@ Welcome to Pyro Examples and Tutorials!
    epi_regional
    sir_hmc
    toy_mixture_model_discrete_enumeration
+   svi_horovod
 
 Indices and tables
 ==================
