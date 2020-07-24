@@ -48,15 +48,12 @@ class PyroOptim:
 
     def __call__(self, params,  *args, **kwargs):
         """
-        :param params: a list of parameter values
-        :type params: an iterable of :class:`torch.Tensor` s
+        :param params: a list of parameters
+        :type params: an iterable of strings
 
         Do an optimization step for each param in params. If a given param has never been seen before,
         initialize an optimizer for it.
         """
-        # Sort by name to ensure deterministic processing order.
-        params = sorted(params, key=pyro.get_param_store().param_name)
-
         for p in params:
             # if we have not seen this param before, we instantiate an optim object to deal with it
             if p not in self.optim_objs:
