@@ -114,17 +114,31 @@ def main(args):
             sampler.set_epoch(epoch)
 
         for step, (covariates_batch, data_batch) in enumerate(dataloader):
-            print("pre svi.step")
             loss = svi.step(covariates_batch, data_batch)
-            print("post svi.step")
-            if step % 100 == 0:
-                print("epoch {} step {} loss = {:0.4g}".format(epoch, step, loss))
+
+            if args.horovod:
+                # Optionally average loss metric across workers.
+                # You can do this with arbitrary torch.Tensors.
+                loss = torch.tensor(loss)
+                loss = hvd.allreduce(loss, "loss")
+                loss = loss.item()
+
+                # Print only on the rank=0 worker.
+                if step % 100 == 0 and hvd.rank() == 0:
+                    print("epoch {} step {} loss = {:0.4g}".format(epoch, step, loss))
+            else:
+                if step % 100 == 0:
+                    print("epoch {} step {} loss = {:0.4g}".format(epoch, step, loss))
 
     if args.horovod:
-        # Shutdown before saving.
+        # After we're done with the distributed parts of the program,
+        # we can shutdown all but the rank=0 worker.
         hvd.shutdown()
+        if hvd.rank() != 0:
+            return
 
     if args.outfile:
+        print("saving to {}".format(args.outfile))
         torch.save({"model": model, "guide": guide}, args.outfile)
 
 
