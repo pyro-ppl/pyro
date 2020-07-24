@@ -57,6 +57,13 @@ class Model(PyroModule):
 # The following is a standard training loop. To epmhasize the Horovod-specific
 # parts, we've guarded them by `if args.horovod:`.
 def main(args):
+    # Create a model, synthetic data, and a guide.
+    pyro.set_rng_seed(args.seed)
+    model = Model(args.size)
+    covariates = torch.randn(args.size)
+    data = model(covariates)
+    guide = AutoNormal(model)
+
     if args.horovod:
         # Initialize Horovod and set PyTorch globals.
         import horovod.torch as hvd
@@ -64,15 +71,9 @@ def main(args):
         torch.set_num_threads(1)
         if args.cuda:
             torch.cuda.set_device(hvd.local_rank())
-    pyro.set_rng_seed(args.seed)
     if args.cuda:
         torch.set_default_tensor_type("torch.cuda.FloatTensor")
-
-    # Create a model, synthetic data, and a guide.
-    model = Model(args.size)
-    covariates = torch.randn(args.size)
-    data = model(covariates)
-    guide = AutoNormal(model)
+    device = torch.tensor(0).device
 
     if args.horovod:
         # Initialize parameters and broadcast to all workers.
@@ -114,7 +115,7 @@ def main(args):
             sampler.set_epoch(epoch)
 
         for step, (covariates_batch, data_batch) in enumerate(dataloader):
-            loss = svi.step(covariates_batch, data_batch)
+            loss = svi.step(covariates_batch.to(device), data_batch.to(device))
 
             if args.horovod:
                 # Optionally average loss metric across workers.
