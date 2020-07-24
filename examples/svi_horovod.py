@@ -9,7 +9,7 @@
 # gradients at each step of training. Horovod is not intended for model
 # parallelism. We focus on integration between Horovod and Pyro. For further
 # details on distributed computing with Horovod, see
-# https://horovod.readthedocs.io/en/stable
+#   https://horovod.readthedocs.io/en/stable
 #
 # This assumes you have installed horovod, e.g. via
 #   pip install pyro[horovod]
@@ -18,6 +18,11 @@
 # On my mac laptop I was able to install horovod with
 #   CFLAGS=-mmacosx-version-min=10.15 HOROVOD_WITH_PYTORCH=1 \
 #   pip install --no-cache-dir 'horovod[pytorch]'
+#
+# Finally, you'll need to run this script via horovodrun, e.g.
+#   horovodrun -np 2 python svi_horovod.py
+# For details on running Horovod see
+#   https://github.com/horovod/horovod/blob/master/docs/running.rst
 
 import argparse
 
@@ -52,6 +57,16 @@ class Model(PyroModule):
 # The following is a standard training loop. The distributed parts are gated
 # by if args.horovod, and can safely be removed.
 def main(args):
+    pyro.set_rng_seed(args.seed)
+    if args.cuda:
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+
+    # Create a model, synthetic data, and a guide.
+    model = Model(args.size)
+    covariates = torch.randn(args.size)
+    data = model(covariates)
+    guide = AutoNormal(model)
+
     if args.horovod:
         # Initialize Horovod and set PyTorch globals.
         import horovod.torch as hvd
@@ -59,15 +74,7 @@ def main(args):
         torch.set_num_threads(1)
         if args.cuda:
             torch.cuda.set_device(hvd.local_rank())
-
-    # Initialize random seed after initializing Horovod.
-    pyro.set_rng_seed(args.seed)
-
-    # Create a model, synthetic data, and a guide.
-    model = Model(args.size)
-    covariates = torch.randn(args.size)
-    data = model(covariates)
-    guide = AutoNormal(model)
+        pyro.set_rng_seed(args.seed)
 
     if args.horovod:
         # Initialize parameters and broadcast to all workers.
@@ -134,8 +141,4 @@ if __name__ == "__main__":
     parser.add_argument("--no-horovod", action="store_false", dest="horovod")
     parser.add_argument("--seed", default=20200723, type=int)
     args = parser.parse_args()
-
-    if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
-
     main(args)
