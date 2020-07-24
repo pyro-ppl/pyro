@@ -26,12 +26,12 @@ class HorovodOptimizer(PyroOptim):
         :func:`horovod.torch.DistributedOptimizer`.
     """
     def __init__(self, pyro_optim, **horovod_kwargs):
-        param_store = pyro.get_param_store()
+        param_name = pyro.get_param_store().param_name
 
         def optim_constructor(params, **pt_kwargs):
             import horovod.torch as hvd
             pt_optim = pyro_optim.pt_optim_constructor(params, **pt_kwargs)
-            named_parameters = [(param_store.param_name(p), p) for p in params]
+            named_parameters = [(param_name(p), p) for p in params]
             hvd_optim = hvd.DistributedOptimizer(
                 pt_optim,
                 named_parameters=named_parameters,

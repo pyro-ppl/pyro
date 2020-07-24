@@ -54,9 +54,16 @@ class Model(PyroModule):
                                obs=data)
 
 
-# The following is a standard training loop. The distributed parts are gated
-# by if args.horovod, and can safely be removed.
+# The following is a standard training loop. To epmhasize the Horovod-specific
+# parts, we've guarded them by `if args.horovod:`.
 def main(args):
+    if args.horovod:
+        # Initialize Horovod and set PyTorch globals.
+        import horovod.torch as hvd
+        hvd.init()
+        torch.set_num_threads(1)
+        if args.cuda:
+            torch.cuda.set_device(hvd.local_rank())
     pyro.set_rng_seed(args.seed)
     if args.cuda:
         torch.set_default_tensor_type("torch.cuda.FloatTensor")
@@ -66,15 +73,6 @@ def main(args):
     covariates = torch.randn(args.size)
     data = model(covariates)
     guide = AutoNormal(model)
-
-    if args.horovod:
-        # Initialize Horovod and set PyTorch globals.
-        import horovod.torch as hvd
-        hvd.init()
-        torch.set_num_threads(1)
-        if args.cuda:
-            torch.cuda.set_device(hvd.local_rank())
-        pyro.set_rng_seed(args.seed)
 
     if args.horovod:
         # Initialize parameters and broadcast to all workers.
@@ -116,7 +114,9 @@ def main(args):
             sampler.set_epoch(epoch)
 
         for step, (covariates_batch, data_batch) in enumerate(dataloader):
+            print("pre svi.step")
             loss = svi.step(covariates_batch, data_batch)
+            print("post svi.step")
             if step % 100 == 0:
                 print("epoch {} step {} loss = {:0.4g}".format(epoch, step, loss))
 
@@ -131,11 +131,11 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description="Distributed training via Horovod")
-    parser.add_argument("--outfile")
-    parser.add_argument("--size", default=1000000, type=int)
-    parser.add_argument("--batch-size", default=100, type=int)
-    parser.add_argument("--num-epochs", default=10, type=int)
-    parser.add_argument("--learning-rate", default=0.01, type=float)
+    parser.add_argument("-o", "--outfile")
+    parser.add_argument("-s", "--size", default=1000000, type=int)
+    parser.add_argument("-b", "--batch-size", default=100, type=int)
+    parser.add_argument("-n", "--num-epochs", default=10, type=int)
+    parser.add_argument("-lr", "--learning-rate", default=0.01, type=float)
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--horovod", action="store_true", default=True)
     parser.add_argument("--no-horovod", action="store_false", dest="horovod")

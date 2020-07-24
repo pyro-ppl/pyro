@@ -9,6 +9,10 @@ Unlike other examples, this example must be run under horovodrun_, for example
 
     $ horovodrun -np 2 examples/svi_horovod.py
 
+The only Horovod-specific component of Pyro is the HorovodOptimizer_ class.
+
+.. _HorovodOptimizer: https://docs.pyro.ai/en/latest/optimization.html#pyro.optim.horovod.HorovodOptimizer
+
 `View svi_horovod.py on github`__
 
 .. _github: https://github.com/pyro-ppl/pyro/blob/dev/examples/svi_horovod.py
