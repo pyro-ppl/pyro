@@ -37,8 +37,8 @@ from pyro.nn import PyroModule
 from pyro.optim import Adam, HorovodOptimizer
 
 
-# We define a model as usual, with no reference to Horovod. This model is data
-# parallel and supports subsampling.
+# We define a model as usual, with no reference to Horovod.
+# This model is data parallel and supports subsampling.
 class Model(PyroModule):
     def __init__(self, size):
         super().__init__()
@@ -48,13 +48,19 @@ class Model(PyroModule):
         coeff = pyro.sample("coeff", dist.Normal(0, 1))
         bias = pyro.sample("bias", dist.Normal(0, 1))
         scale = pyro.sample("scale", dist.LogNormal(0, 1))
+
+        # Since we'll use a distributed dataloader during training, we need to
+        # manually pass minibatches of (covariates,data) that are smaller than
+        # the full self.size. In particular we cannot rely on pyro.plate to
+        # automatically subsample, since that would lead to all workers drawing
+        # identical subsamples.
         with pyro.plate("data", self.size, len(covariates)):
             loc = bias + coeff * covariates
             return pyro.sample("obs", dist.Normal(loc, scale),
                                obs=data)
 
 
-# The following is a standard training loop. To epmhasize the Horovod-specific
+# The following is a standard training loop. To emphasize the Horovod-specific
 # parts, we've guarded them by `if args.horovod:`.
 def main(args):
     # Create a model, synthetic data, and a guide.

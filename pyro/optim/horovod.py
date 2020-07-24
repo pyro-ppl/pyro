@@ -16,7 +16,7 @@ class HorovodOptimizer(PyroOptim):
 
     .. note::
 
-        This requires :mod:`horovod.torch` is installed, e.g. via
+        This requires :mod:`horovod.torch` to be installed, e.g. via
         ``pip install pyro[horovod]``. For details see
         https://horovod.readthedocs.io/en/stable/install.html
 
