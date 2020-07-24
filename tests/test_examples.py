@@ -8,7 +8,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param
+from tests.common import EXAMPLES_DIR, requires_cuda, requires_horovod, xfail_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -97,6 +97,8 @@ CPU_EXAMPLES = [
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy',
+    'svi_horovod.py --num-steps=2 --no-horovod',
+    pytest.param('svi_horovod.py --num-steps=2', marks=[requires_horovod]),
     'toy_mixture_model_discrete_enumeration.py  --num-steps=1',
     xfail_param('sparse_regression.py --num-steps=2 --num-data=50 --num-dimensions 20',
                 reason='https://github.com/pyro-ppl/pyro/issues/2082'),
