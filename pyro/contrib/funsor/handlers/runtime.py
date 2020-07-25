@@ -38,8 +38,10 @@ class DimType(Enum):
     VISIBLE = 2
 
 
-DimRequest = namedtuple('DimRequest', ['dim', 'dim_type'], defaults=(None, DimType.LOCAL))
-NameRequest = namedtuple('NameRequest', ['name', 'dim_type'], defaults=(None, DimType.LOCAL))
+DimRequest = namedtuple('DimRequest', ['dim', 'dim_type'])
+DimRequest.__new__.__defaults__ = (None, DimType.LOCAL)
+NameRequest = namedtuple('NameRequest', ['name', 'dim_type'])
+NameRequest.__new__.__defaults__ = (None, DimType.LOCAL)
 
 
 class DimStack:
@@ -79,17 +81,32 @@ class DimStack:
     def global_frame(self):
         return self._stack[0]
 
+    @property
+    def current_env(self):
+        """
+        Collect all frames necessary to compute the full name <--> dim mapping
+        and interpret Funsor inputs or batch shapes at any point in a computation.
+        """
+        return (self.global_frame, self.current_frame) + self.current_frame.iter_parents + self.current_frame.parents
+
     def _gendim(self, name_request, dim_request):
+        """
+        Given proposed values for a fresh (name, dim) pair, computes a new, possibly
+        identical (name, dim) pair consistent with the current name <--> dim mapping.
+        This function is pure and does not update the name <--> dim mapping itself.
+
+        The implementation here is only one of several possibilities, and was chosen
+        to match the behavior of Pyro's old enumeration machinery as closely as possible.
+        """
         assert isinstance(name_request, NameRequest) and isinstance(dim_request, DimRequest)
         dim_type = dim_request.dim_type
 
         if name_request.name is None:
-            fresh_name = f"_pyro_dim_{-dim_request.dim}"
+            fresh_name = "_pyro_dim_{}".format(-dim_request.dim)
         else:
             fresh_name = name_request.name
 
-        conflict_frames = (self.current_frame, self.global_frame) + \
-            self.current_frame.parents + self.current_frame.iter_parents
+        conflict_frames = self.current_env
         if dim_request.dim is None:
             fresh_dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
             fresh_dim = -1 if fresh_dim is None else fresh_dim
@@ -101,22 +118,24 @@ class DimStack:
         if fresh_dim < self.MAX_DIM or \
                 any(fresh_dim in p.dim_to_name for p in conflict_frames) or \
                 (dim_type == DimType.VISIBLE and fresh_dim <= self._first_available_dim):
-            raise ValueError(f"Ran out of free dims during allocation for {fresh_name}")
+            raise ValueError("Ran out of free dims during allocation for {}".format(fresh_name))
 
         return fresh_name, fresh_dim
 
     def request(self, name, dim):
+        """
+        Given proposed, possibly empty values of a (name, dim) pair, this function
+        attempts to fill in the values according to the current name <--> dim mapping
+        and updates the global DimStack's state to reflect the result.
+        """
         assert isinstance(name, NameRequest) ^ isinstance(dim, DimRequest)
         if isinstance(dim, DimRequest):
             dim, dim_type = dim.dim, dim.dim_type
         elif isinstance(name, NameRequest):
             name, dim_type = name.name, name.dim_type
 
-        read_frames = (self.global_frame,) if dim_type != DimType.LOCAL else \
-            (self.current_frame,) + self.current_frame.parents + self.current_frame.iter_parents + (self.global_frame,)
-
         # read dimension
-        for frame in read_frames:
+        for frame in self.current_env:
             name, dim, found = frame.read(name, dim)
             if found:
                 break
@@ -141,6 +160,7 @@ class DimStack:
                 continue
             dim_to_name[dim] = self.request(NameRequest(None, dim_type), dim)[0]
         return dim_to_name
+
 
 
 _DIM_STACK = DimStack()  # only one global instance
