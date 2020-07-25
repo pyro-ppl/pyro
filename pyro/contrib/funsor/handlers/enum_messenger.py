@@ -68,7 +68,7 @@ def _enum_strategy_mixture(msg):
     # TODO should the ancestor_indices be pyro.sampled?
     ancestor_indices = {
         # TODO make this comprehension less gross
-        name: _get_delta_point(funsor.distributions.CategoricalLogits(
+        name: _get_delta_point(funsor.torch.distributions.CategoricalLogits(
             # sample different ancestors for each plate slice
             logits=funsor.Tensor(
                 # TODO avoid use of torch.zeros here in favor of funsor.ops.new_zeros
