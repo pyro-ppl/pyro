@@ -448,6 +448,13 @@ ConditionalHouseholder
     :undoc-members:
     :show-inheritance:
 
+ConditionalMatrixExponential
+----------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalMatrixExponential
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalNeuralAutoregressive
 -------------------------------
 .. autoclass:: pyro.distributions.transforms.ConditionalNeuralAutoregressive
@@ -615,6 +622,10 @@ conditional_generalized_channel_permute
 conditional_householder
 -----------------------
 .. autofunction:: pyro.distributions.transforms.conditional_householder
+
+conditional_matrix_exponential
+------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_matrix_exponential
 
 conditional_neural_autoregressive
 ---------------------------------

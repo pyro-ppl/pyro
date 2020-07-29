@@ -98,9 +98,6 @@ class Radial(ConditionedRadial, TransformModule):
     :math:`h(\alpha,r)=1/(\alpha+r)`. For this to be an invertible transformation,
     the condition :math:`\beta>-\alpha` is enforced.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
-    a way to create richer variational approximations.
-
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
@@ -164,16 +161,20 @@ class ConditionalRadial(ConditionalTransformModule):
     For this to be an invertible transformation, the condition :math:`\beta>-\alpha`
     is enforced.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
-    a way to create richer variational approximations.
-
     Example usage:
 
-    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> transform = Radial(10)
-    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
-    >>> flow_dist.sample()  # doctest: +SKIP
+    >>> from pyro.nn.dense_nn import DenseNN
+    >>> input_dim = 10
+    >>> context_dim = 5
+    >>> batch_size = 3
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> param_dims = [input_dim, 1, 1]
+    >>> hypernet = DenseNN(context_dim, [50, 50], param_dims)
+    >>> transform = ConditionalRadial(hypernet)
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
+    ... [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
     The inverse of this transform does not possess an analytical solution and is
     left unimplemented. However, the inverse is cached when the forward operation is

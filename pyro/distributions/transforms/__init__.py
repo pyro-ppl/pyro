@@ -25,7 +25,8 @@ from pyro.distributions.transforms.haar import HaarTransform
 from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
                                                        householder)
 from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
-from pyro.distributions.transforms.matrix_exponential import MatrixExponential, matrix_exponential
+from pyro.distributions.transforms.matrix_exponential import (ConditionalMatrixExponential, MatrixExponential,
+                                                              conditional_matrix_exponential, matrix_exponential)
 from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
                                                                  conditional_neural_autoregressive,
                                                                  neural_autoregressive)
@@ -77,6 +78,7 @@ __all__ = [
     'ConditionalAffineCoupling',
     'ConditionalGeneralizedChannelPermute',
     'ConditionalHouseholder',
+    'ConditionalMatrixExponential',
     'ConditionalNeuralAutoregressive',
     'ConditionalPlanar',
     'ConditionalRadial',
@@ -107,6 +109,7 @@ __all__ = [
     'conditional_affine_coupling',
     'conditional_generalized_channel_permute',
     'conditional_householder',
+    'conditional_matrix_exponential',
     'conditional_neural_autoregressive',
     'conditional_planar',
     'conditional_radial',

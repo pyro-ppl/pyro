@@ -219,6 +219,9 @@ class TransformTests(TestCase):
         self._test_conditional(T.conditional_householder)
         self._test_conditional(partial(T.conditional_householder, count_transforms=2))
 
+    def test_conditional_matrix_exponential(self):
+        self._test_conditional(T.conditional_matrix_exponential)
+
     def test_conditional_neural_autoregressive(self):
         self._test_conditional(T.conditional_neural_autoregressive, inverse=False)
 
