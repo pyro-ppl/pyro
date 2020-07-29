@@ -235,6 +235,9 @@ class TransformTests(TestCase):
         for order in ['linear', 'quadratic']:
             self._test_conditional(partial(T.conditional_spline, order=order))
 
+    def test_conditional_spline_autoregressive(self):
+        self._test_conditional(T.conditional_spline_autoregressive)
+
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
         for smooth in [0.0, 0.5, 1.0, 2.0]:
