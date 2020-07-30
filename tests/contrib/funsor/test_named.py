@@ -4,6 +4,7 @@
 from collections import OrderedDict
 import logging
 
+import pytest
 import torch
 
 import funsor
@@ -82,6 +83,18 @@ def test_staggered():
                 assert v2.shape == (2,)
                 print('a', v2.shape)
                 print('a', fv2.inputs)
+
+    with pyro_backend("contrib.funsor"), NamedMessenger():
+        testing()
+
+
+@pytest.mark.xfail(reason="Inconsistent input specifications not yet supported")
+def test_fresh_inputs_to_funsor():
+
+    def testing():
+        x = pyro.to_funsor(torch.tensor([0., 1.]), funsor.reals(), dim_to_name={-1: "x"})
+        px = pyro.to_funsor(torch.ones(2, 3), funsor.reals(), dim_to_name={-2: "x", -1: "y"})
+        assert px.inputs["x"].dtype == 2 and px.inputs["y"].dtype == 3
 
     with pyro_backend("contrib.funsor"), NamedMessenger():
         testing()
