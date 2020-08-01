@@ -25,26 +25,39 @@ from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
 funsor.set_backend("torch")
 
 
-def _get_support_value(funsor_dist, name, expand=False):
-    assert isinstance(funsor_dist, funsor.terms.Funsor)
+@functools.singledispatch
+def _get_support_value(funsor_dist, name, **kwargs):
+    raise ValueError("Could not extract point from {} at name {}".format(funsor_dist, name))
+
+
+@_get_support_value.register(funsor.cnf.Contraction)
+def _get_support_value_contraction(funsor_dist, name, **kwargs):
+    delta_terms = [v for v in funsor_dist.terms
+                   if isinstance(v, funsor.delta.Delta) and name in v.fresh]
+    assert len(delta_terms) == 1
+    return _get_support_value(delta_terms[0], name, **kwargs)
+
+
+@_get_support_value.register(funsor.delta.Delta)
+def _get_support_value_delta(funsor_dist, name):
+    assert name in funsor_dist.fresh
+    return OrderedDict(funsor_dist.terms)[name][0]
+
+
+@_get_support_value.register(funsor.Tensor)
+def _get_support_value_tensor(funsor_dist, name):
     assert name in funsor_dist.inputs
-    if isinstance(funsor_dist, funsor.cnf.Contraction):
-        delta_terms = [v for v in funsor_dist.terms
-                       if isinstance(v, funsor.delta.Delta) and name in v.fresh]
-        assert len(delta_terms) == 1
-        return _get_support_value(delta_terms[0], name)
-    elif isinstance(funsor_dist, funsor.delta.Delta):
-        return OrderedDict(funsor_dist.terms)[name][0]
-    elif isinstance(funsor_dist, funsor.Tensor):
-        return funsor.Tensor(
-            funsor.ops.new_arange(funsor_dist.data, funsor_dist.inputs[name].size),
-            OrderedDict([(name, funsor_dist.inputs[name])]),
-            funsor_dist.inputs[name].size
-        )
-    elif isinstance(funsor_dist, funsor.distribution.Distribution) and name == funsor_dist.value.name:
-        return funsor_dist.enumerate_support(expand=expand)
-    else:
-        raise ValueError("Could not extract point from {} at name {}".format(funsor_dist, name))
+    return funsor.Tensor(
+        funsor.ops.new_arange(funsor_dist.data, funsor_dist.inputs[name].size),
+        OrderedDict([(name, funsor_dist.inputs[name])]),
+        funsor_dist.inputs[name].size
+    )
+
+
+@_get_support_value.register(funsor.distribution.Distribution)
+def _get_support_value_distribution(funsor_dist, name, expand=False):
+    assert name == funsor_dist.value.name
+    return funsor_dist.enumerate_support(expand=expand)
 
 
 def _enum_strategy_diagonal(dist, msg):
