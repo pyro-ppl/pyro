@@ -109,7 +109,7 @@ def _enum_strategy_full(dist, msg):
     return sampled_dist
 
 
-def _enum_strategy_enum(dist, msg):
+def _enum_strategy_exact(dist, msg):
     if isinstance(dist, funsor.Tensor):
         dist = dist - dist.reduce(funsor.ops.logaddexp, msg['name'])
     return dist
@@ -118,7 +118,7 @@ def _enum_strategy_enum(dist, msg):
 def enumerate_site(dist, msg):
     # TODO come up with a better dispatch system for enumeration strategies
     if msg["infer"].get("num_samples", None) is None:
-        return _enum_strategy_enum(dist, msg)
+        return _enum_strategy_exact(dist, msg)
     elif msg["infer"]["num_samples"] > 1 and \
             (msg["infer"].get("expand", False) or msg["infer"].get("tmc") == "full"):
         return _enum_strategy_full(dist, msg)
@@ -144,7 +144,7 @@ class EnumMessenger(BaseEnumMessenger):
 
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
-        msg["funsor"]["value"] = _get_support_value(msg["funsor"]["log_measure"], msg["name"])
+        msg["funsor"]["value"] = _get_support_value(msg["funsor"]["log_measure"], msg["name"], expand=expand)
         msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
 
