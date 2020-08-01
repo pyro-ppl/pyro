@@ -75,32 +75,33 @@ class SubsampleMessenger(IndepMessenger):
         super()._pyro_param(msg)
         msg["scale"] = msg["scale"] * self._scale
 
+    def _subsample_site_value(self, value, event_dim=None):
+        if self.dim is not None and event_dim is not None and self.subsample_size < self._full_size:
+            event_shape = value.shape[len(value.shape) - event_dim:]
+            funsor_value = to_funsor(value, output=funsor.reals(*event_shape))
+            if self.name in funsor_value.inputs:
+                return to_data(funsor_value(**{self.name: self._indices}))
+        return value
+
     def _pyro_post_param(self, msg):
         event_dim = msg["kwargs"].get("event_dim")
-        if self.dim is not None and event_dim is not None and self.subsample_size < self._full_size:
-            event_shape = msg["value"].shape[len(msg["value"].shape) - event_dim:]
-            funsor_value = to_funsor(msg["value"], output=funsor.reals(*event_shape))
-            if self.name in funsor_value.inputs:
-                new_value = to_data(funsor_value(**{self.name: self._indices}))
-                if hasattr(msg["value"], "_pyro_unconstrained_param"):
-                    param = msg["value"]._pyro_unconstrained_param
-                else:
-                    param = msg["value"].unconstrained()
+        new_value = self._subsample_site_value(msg["value"], event_dim)
+        if new_value is not msg["value"]:
+            if hasattr(msg["value"], "_pyro_unconstrained_param"):
+                param = msg["value"]._pyro_unconstrained_param
+            else:
+                param = msg["value"].unconstrained()
 
-                if not hasattr(param, "_pyro_subsample"):
-                    param._pyro_subsample = {}  # TODO is this going to persist correctly?
+            if not hasattr(param, "_pyro_subsample"):
+                param._pyro_subsample = {}  # TODO is this going to persist correctly?
 
-                param._pyro_subsample[self.dim - event_dim] = self.indices
-                new_value._pyro_unconstrained_param = param
-                msg["value"] = new_value
+            param._pyro_subsample[self.dim - event_dim] = self.indices
+            new_value._pyro_unconstrained_param = param
+            msg["value"] = new_value
 
     def _pyro_post_subsample(self, msg):
         event_dim = msg["kwargs"].get("event_dim")
-        if self.dim is not None and event_dim is not None and self.subsample_size < self._full_size:
-            event_shape = msg["value"].shape[len(msg["value"].shape) - event_dim:]
-            funsor_value = to_funsor(msg["value"], output=funsor.reals(*event_shape))
-            if self.name in funsor_value.inputs:
-                msg["value"] = to_data(funsor_value(**{self.name: self._indices}))
+        msg["value"] = self._subsample_site_value(msg["value"], event_dim)
 
 
 class SequentialPlateMessenger(MarkovMessenger):
