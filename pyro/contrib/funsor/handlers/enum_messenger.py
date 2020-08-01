@@ -18,7 +18,7 @@ from pyro.poutine.escape_messenger import EscapeMessenger
 from pyro.poutine.subsample_messenger import _Subsample
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import BaseEnumMessenger
+from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
 from pyro.contrib.funsor.handlers.replay_messenger import ReplayMessenger
 from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
 
@@ -129,7 +129,7 @@ def enumerate_site(dist, msg):
     raise ValueError("{} not valid enum strategy".format(msg))
 
 
-class EnumMessenger(BaseEnumMessenger):
+class EnumMessenger(NamedMessenger):
     """
     This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
     for each discrete sample site.

@@ -40,7 +40,7 @@ def test_iteration():
             print('a', v2.shape)  # shapes should stay the same
             print('a', fv2.inputs)
 
-    with pyro_backend("contrib.funsor"), NamedMessenger():
+    with pyro_backend("contrib.funsor"), NamedMessenger(first_available_dim=-1):
         testing()
 
 
@@ -69,7 +69,7 @@ def test_nesting():
 
                         assert v4.shape == (2, 1)
 
-    with pyro_backend("contrib.funsor"), NamedMessenger():
+    with pyro_backend("contrib.funsor"), NamedMessenger(first_available_dim=-1):
         testing()
 
 
@@ -84,7 +84,7 @@ def test_staggered():
                 print('a', v2.shape)
                 print('a', fv2.inputs)
 
-    with pyro_backend("contrib.funsor"), NamedMessenger():
+    with pyro_backend("contrib.funsor"), NamedMessenger(first_available_dim=-1):
         testing()
 
 

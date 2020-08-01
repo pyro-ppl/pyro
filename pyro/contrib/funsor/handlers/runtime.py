@@ -76,10 +76,11 @@ class DimStack:
         )
         self.current_frame = self.global_frame
         self.iter_frame = None
-        self._first_available_dim = -1
+        self._first_available_dim = self.DEFAULT_FIRST_DIM
         self.outermost = None
 
     MAX_DIM = -25
+    DEFAULT_FIRST_DIM = -5
 
     def set_first_available_dim(self, dim):
         assert dim is None or (self.MAX_DIM < dim < 0)
