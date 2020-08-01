@@ -107,7 +107,6 @@ class LocalNamedMessenger(NamedMessenger):
         self.keep = keep
         self._iterable = None
         self._saved_frames = []
-        self._iter_parent = None
         super().__init__()
 
     def __call__(self, fn):
