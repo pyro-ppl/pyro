@@ -122,6 +122,7 @@ class LocalNamedMessenger(NamedMessenger):
             for value in self._iterable:
                 stack.enter_context(self)
                 yield value
+        _DIM_STACK.iter_frame = _DIM_STACK.iter_frame.iter_parent
 
     def __enter__(self):
         if self.keep and self._saved_frames:
