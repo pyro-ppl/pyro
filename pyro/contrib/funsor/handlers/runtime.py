@@ -99,7 +99,7 @@ class DimStack:
         popped_frame.parent, popped_frame.iter_parent = None, None
         return popped_frame
 
-    def write_frames(self, dim_type):
+    def get_current_write_frames(self, dim_type):
         if dim_type == DimType.LOCAL:
             return [self.current_frame] + \
                 (list(self.current_frame.parents) if self.current_frame.keep else [])
@@ -148,7 +148,7 @@ class DimStack:
 
         return fresh_name, fresh_dim
 
-    def request(self, name, dim):
+    def _request(self, name, dim):
         """
         Given proposed, possibly empty values of a (name, dim) pair, this function
         attempts to fill in the values according to the current name <--> dim mapping
@@ -170,18 +170,24 @@ class DimStack:
         if not found:
             name, dim = self._gendim(NameRequest(name, dim_type), DimRequest(dim, dim_type))
             # store the fresh dimension
-            for frame in self.write_frames(dim_type):
+            for frame in self.get_current_write_frames(dim_type):
                 frame.write(name, dim)
 
         return name, dim
 
+    def allocate_dim_to_name(self, dim_to_name_request):
+        return OrderedDict((dim, self._request(name_request, dim)[0])
+                           for dim, name_request in dim_to_name_request.items())
+
+    def allocate_name_to_dim(self, name_to_dim_request):
+        return OrderedDict((name, self._request(name, dim_request)[1])
+                           for name, dim_request in name_to_dim_request.items())
+
     def names_from_batch_shape(self, batch_shape, dim_type=DimType.LOCAL):
-        dim_to_name = OrderedDict()
-        for dim in range(-len(batch_shape), 0):
-            if batch_shape[dim] == 1:
-                continue
-            dim_to_name[dim] = self.request(NameRequest(None, dim_type), dim)[0]
-        return dim_to_name
+        return self.allocate_dim_to_name(OrderedDict(
+            (dim, NameRequest(None, dim_type))
+            for dim in range(-len(batch_shape), 0) if batch_shape[dim] > 1
+        ))
 
 
 _DIM_STACK = DimStack()  # only one global instance

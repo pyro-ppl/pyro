@@ -57,10 +57,13 @@ class NamedMessenger(DimStackCleanupMessenger):
             raise NotImplementedError("partially specified name_to_dim not supported")
 
         # interpret all names/dims as requests since we only run this function once
+        name_to_dim_request = name_to_dim.copy()
         for name in batch_names:
             dim = name_to_dim.get(name, None)
-            name_to_dim[name] = _DIM_STACK.request(
-                name, dim if isinstance(dim, DimRequest) else DimRequest(dim, dim_type))[1]
+            name_to_dim_request[name] = dim if isinstance(dim, DimRequest) else DimRequest(dim, dim_type)
+
+        # request and update name_to_dim in-place
+        name_to_dim.update(_DIM_STACK.allocate_name_to_dim(name_to_dim_request))
 
         msg["stop"] = True  # only need to run this once per to_data call
 
@@ -90,10 +93,13 @@ class NamedMessenger(DimStackCleanupMessenger):
             raise NotImplementedError("partially specified dim_to_name not supported")
 
         # interpret all names/dims as requests since we only run this function once
+        dim_to_name_request = dim_to_name.copy()
         for dim in batch_dims:
             name = dim_to_name.get(dim, None)
-            dim_to_name[dim] = _DIM_STACK.request(
-                name if isinstance(name, NameRequest) else NameRequest(name, dim_type), dim)[0]
+            dim_to_name_request[dim] = name if isinstance(name, NameRequest) else NameRequest(name, dim_type)
+
+        # request and update dim_to_name in-place
+        dim_to_name.update(_DIM_STACK.allocate_dim_to_name(dim_to_name_request))
 
         msg["stop"] = True  # only need to run this once per to_funsor call
 
