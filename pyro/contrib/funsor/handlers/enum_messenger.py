@@ -25,24 +25,29 @@ from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
 funsor.set_backend("torch")
 
 
-def _get_delta_point(funsor_dist, name):
+def _get_support_value(funsor_dist, name, expand=False):
     assert isinstance(funsor_dist, funsor.terms.Funsor)
     assert name in funsor_dist.inputs
-    if isinstance(funsor_dist, funsor.delta.Delta):
-        return OrderedDict(funsor_dist.terms)[name][0]
-    elif isinstance(funsor_dist, funsor.cnf.Contraction):
+    if isinstance(funsor_dist, funsor.cnf.Contraction):
         delta_terms = [v for v in funsor_dist.terms
                        if isinstance(v, funsor.delta.Delta) and name in v.fresh]
         assert len(delta_terms) == 1
-        return _get_delta_point(delta_terms[0], name)
+        return _get_support_value(delta_terms[0], name)
+    elif isinstance(funsor_dist, funsor.delta.Delta):
+        return OrderedDict(funsor_dist.terms)[name][0]
     elif isinstance(funsor_dist, funsor.Tensor):
-        return funsor_dist
+        return funsor.Tensor(
+            funsor.ops.new_arange(funsor_dist.data, funsor_dist.inputs[name].size),
+            OrderedDict([(name, funsor_dist.inputs[name])]),
+            funsor_dist.inputs[name].size
+        )
+    elif isinstance(funsor_dist, funsor.distribution.Distribution) and name == funsor_dist.value.name:
+        return funsor_dist.enumerate_support(expand=expand)
     else:
         raise ValueError("Could not extract point from {} at name {}".format(funsor_dist, name))
 
 
-def _enum_strategy_diagonal(msg):
-    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+def _enum_strategy_diagonal(dist, msg):
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
     sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg["infer"]["num_samples"])})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
@@ -54,11 +59,10 @@ def _enum_strategy_diagonal(msg):
         msg['name'], sample_inputs if not ancestor_indices else None)
     if ancestor_indices:  # XXX is there a better way to account for this in funsor?
         sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
-    return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
+    return sampled_dist
 
 
-def _enum_strategy_mixture(msg):
-    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+def _enum_strategy_mixture(dist, msg):
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
     sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg['infer']['num_samples'])})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
@@ -68,7 +72,7 @@ def _enum_strategy_mixture(msg):
     # TODO should the ancestor_indices be pyro.sampled?
     ancestor_indices = {
         # TODO make this comprehension less gross
-        name: _get_delta_point(funsor.torch.distributions.CategoricalLogits(
+        name: _get_support_value(funsor.torch.distributions.CategoricalLogits(
             # sample different ancestors for each plate slice
             logits=funsor.Tensor(
                 # TODO avoid use of torch.zeros here in favor of funsor.ops.new_zeros
@@ -82,43 +86,33 @@ def _enum_strategy_mixture(msg):
         msg['name'], sample_inputs if not ancestor_indices else None)
     if ancestor_indices:  # XXX is there a better way to account for this in funsor?
         sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
-    return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
+    return sampled_dist
 
 
-def _enum_strategy_full(msg):
-    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+def _enum_strategy_full(dist, msg):
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
     sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg["infer"]["num_samples"])})
     sampled_dist = dist.sample(msg['name'], sample_inputs)
-    return sampled_dist, _get_delta_point(sampled_dist, msg['name'])
+    return sampled_dist
 
 
-def _enum_strategy_enum(msg):
-    dist = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
-    raw_value = msg["fn"].enumerate_support(expand=msg["infer"].get("expand", False))
-    size = raw_value.numel()
-    funsor_value = funsor.Tensor(
-        raw_value.squeeze(),
-        OrderedDict([(msg["name"], funsor.bint(size))]),
-        dist.inputs[msg["name"]].dtype
-    )
+def _enum_strategy_enum(dist, msg):
     if isinstance(dist, funsor.Tensor):
-        # ensure dist is normalized
         dist = dist - dist.reduce(funsor.ops.logaddexp, msg['name'])
-    return dist, funsor_value
+    return dist
 
 
-def enumerate_site(msg):
+def enumerate_site(dist, msg):
     # TODO come up with a better dispatch system for enumeration strategies
     if msg["infer"].get("num_samples", None) is None:
-        return _enum_strategy_enum(msg)
+        return _enum_strategy_enum(dist, msg)
     elif msg["infer"]["num_samples"] > 1 and \
             (msg["infer"].get("expand", False) or msg["infer"].get("tmc") == "full"):
-        return _enum_strategy_full(msg)
+        return _enum_strategy_full(dist, msg)
     elif msg["infer"]["num_samples"] > 1 and msg["infer"].get("tmc", "diagonal") == "diagonal":
-        return _enum_strategy_diagonal(msg)
+        return _enum_strategy_diagonal(dist, msg)
     elif msg["infer"]["num_samples"] > 1 and msg["infer"]["tmc"] == "mixture":
-        return _enum_strategy_mixture(msg)
+        return _enum_strategy_mixture(dist, msg)
     raise ValueError("{} not valid enum strategy".format(msg))
 
 
@@ -134,7 +128,10 @@ class EnumMessenger(BaseEnumMessenger):
 
         if "funsor" not in msg:
             msg["funsor"] = {}
-        msg["funsor"]["log_measure"], msg["funsor"]["value"] = enumerate_site(msg)
+
+        unsampled_log_measure = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+        msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
+        msg["funsor"]["value"] = _get_support_value(msg["funsor"]["log_measure"], msg["name"])
         msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
 
