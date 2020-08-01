@@ -93,6 +93,7 @@ def test_fresh_inputs_to_funsor():
 
     def testing():
         x = pyro.to_funsor(torch.tensor([0., 1.]), funsor.reals(), dim_to_name={-1: "x"})
+        assert set(x.inputs) == {"x"}
         px = pyro.to_funsor(torch.ones(2, 3), funsor.reals(), dim_to_name={-2: "x", -1: "y"})
         assert px.inputs["x"].dtype == 2 and px.inputs["y"].dtype == 3
 

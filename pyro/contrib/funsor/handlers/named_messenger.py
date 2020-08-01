@@ -107,7 +107,7 @@ class LocalNamedMessenger(NamedMessenger):
         self.keep = keep
         self._iterable = None
         self._saved_frames = []
-        self._iter_parents = ()
+        self._iter_parent = None
         super().__init__()
 
     def __call__(self, fn):
@@ -116,17 +116,9 @@ class LocalNamedMessenger(NamedMessenger):
             return self
         return super().__call__(fn)
 
-    def _get_iter_parents(self, frame):
-        iter_parents = [frame]
-        frontier = (frame,)
-        while frontier:
-            frontier = sum([p.iter_parents for p in frontier], ())
-            iter_parents += frontier
-        return tuple(iter_parents)
-
     def __iter__(self):
         assert self._iterable is not None
-        self._iter_parents = self._get_iter_parents(_DIM_STACK.current_frame)
+        _DIM_STACK.iter_frame = _DIM_STACK.current_frame
         with ExitStack() as stack:
             for value in self._iterable:
                 stack.enter_context(self)
@@ -134,30 +126,19 @@ class LocalNamedMessenger(NamedMessenger):
 
     def __enter__(self):
         if self.keep and self._saved_frames:
-            saved_frame = self._saved_frames.pop()
-            name_to_dim, dim_to_name = saved_frame.name_to_dim, saved_frame.dim_to_name
+            frame = self._saved_frames.pop()
         else:
-            name_to_dim, dim_to_name = OrderedDict(), OrderedDict()
-
-        frame = StackFrame(
-            name_to_dim=name_to_dim, dim_to_name=dim_to_name,
-            parents=tuple(reversed(_DIM_STACK._stack[len(_DIM_STACK._stack) - self.history:])),
-            iter_parents=tuple(self._iter_parents),
-            keep=self.keep
-        )
+            frame = StackFrame(
+                name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
+                history=self.history, keep=self.keep,
+            )
 
         _DIM_STACK.push(frame)
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self.keep:
-            # don't keep around references to other frames
-            old_frame = _DIM_STACK.pop()
-            saved_frame = StackFrame(
-                name_to_dim=old_frame.name_to_dim, dim_to_name=old_frame.dim_to_name,
-                parents=(), iter_parents=(), keep=self.keep
-            )
-            self._saved_frames.append(saved_frame)
+            self._saved_frames.append(_DIM_STACK.pop())
         else:
             _DIM_STACK.pop()
         return super().__exit__(*args, **kwargs)

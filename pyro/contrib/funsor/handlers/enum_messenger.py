@@ -39,13 +39,13 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
 
 
 @_get_support_value.register(funsor.delta.Delta)
-def _get_support_value_delta(funsor_dist, name):
+def _get_support_value_delta(funsor_dist, name, **kwargs):
     assert name in funsor_dist.fresh
     return OrderedDict(funsor_dist.terms)[name][0]
 
 
 @_get_support_value.register(funsor.Tensor)
-def _get_support_value_tensor(funsor_dist, name):
+def _get_support_value_tensor(funsor_dist, name, **kwargs):
     assert name in funsor_dist.inputs
     return funsor.Tensor(
         funsor.ops.new_arange(funsor_dist.data, funsor_dist.inputs[name].size),
@@ -144,7 +144,8 @@ class EnumMessenger(BaseEnumMessenger):
 
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
-        msg["funsor"]["value"] = _get_support_value(msg["funsor"]["log_measure"], msg["name"], expand=expand)
+        msg["funsor"]["value"] = _get_support_value(
+            msg["funsor"]["log_measure"], msg["name"], expand=msg["infer"].get("expand", False))
         msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
 

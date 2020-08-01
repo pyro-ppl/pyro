@@ -5,14 +5,15 @@ from collections import OrderedDict, namedtuple
 from enum import Enum
 
 
-# name_to_dim : dict, dim_to_name : dict, parents : tuple, iter_parents : tuple
-class StackFrame(namedtuple('StackFrame', [
-            'name_to_dim',
-            'dim_to_name',
-            'parents',
-            'iter_parents',
-            'keep',
-        ])):
+class StackFrame(object):
+
+    def __init__(self, name_to_dim, dim_to_name, history, keep):
+        self.name_to_dim = name_to_dim
+        self.dim_to_name = dim_to_name
+        self.history = history
+        self.keep = keep
+        self.parent = None
+        self.iter_parent = None
 
     def read(self, name, dim):
         found_name = self.dim_to_name.get(dim, name)
@@ -29,6 +30,23 @@ class StackFrame(namedtuple('StackFrame', [
         self.dim_to_name.pop(dim, None)
         self.name_to_dim.pop(name, None)
         return name, dim
+
+    @property
+    def parents(self):
+        parent = self
+        for h in range(self.history):
+            parent = parent.parent
+            if parent is not None:
+                yield parent
+            else:
+                break
+
+    @property
+    def iter_parents(self):
+        iter_parent = self
+        while iter_parent.iter_parent is not None:
+            iter_parent = iter_parent.iter_parent
+            yield iter_parent
 
 
 class DimType(Enum):
@@ -52,10 +70,12 @@ class DimStack:
     _param_dims and _value_dims in EnumMessenger, and dim_to_symbol in msg['infer']
     """
     def __init__(self):
-        self._stack = [StackFrame(
+        self.global_frame = StackFrame(
             name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
-            parents=(), iter_parents=(), keep=False,
-        )]
+            history=0, keep=False,
+        )
+        self.current_frame = self.global_frame
+        self.iter_frame = None
         self._first_available_dim = -1
         self.outermost = None
 
@@ -67,19 +87,23 @@ class DimStack:
         return old_dim
 
     def push(self, frame):
-        self._stack.append(frame)
+        frame.parent, frame.iter_parent = self.current_frame, self.iter_frame
+        self.current_frame = frame
 
     def pop(self):
-        assert len(self._stack) > 1, "cannot pop the global frame"
-        return self._stack.pop()
+        assert self.current_frame.parent is not None, "cannot pop the global frame"
+        popped_frame = self.current_frame
+        self.current_frame = popped_frame.parent
+        # don't keep around references to other frames
+        popped_frame.parent, popped_frame.iter_parent = None, None
+        return popped_frame
 
-    @property
-    def current_frame(self):
-        return self._stack[-1]
-
-    @property
-    def global_frame(self):
-        return self._stack[0]
+    def write_frames(self, dim_type):
+        if dim_type == DimType.LOCAL:
+            return [self.current_frame] + \
+                (list(self.current_frame.parents) if self.current_frame.keep else [])
+        else:
+            return [self.global_frame]
 
     @property
     def current_env(self):
@@ -87,7 +111,8 @@ class DimStack:
         Collect all frames necessary to compute the full name <--> dim mapping
         and interpret Funsor inputs or batch shapes at any point in a computation.
         """
-        return (self.global_frame, self.current_frame) + self.current_frame.iter_parents + self.current_frame.parents
+        return [self.global_frame] + [self.current_frame] + \
+            list(self.current_frame.parents) + list(self.current_frame.iter_parents)
 
     def _gendim(self, name_request, dim_request):
         """
@@ -143,12 +168,8 @@ class DimStack:
         # generate fresh name or dimension
         if not found:
             name, dim = self._gendim(NameRequest(name, dim_type), DimRequest(dim, dim_type))
-
-            write_frames = (self.global_frame,) if dim_type != DimType.LOCAL else \
-                (self.current_frame,) + (self.current_frame.parents if self.current_frame.keep else ())
-
             # store the fresh dimension
-            for frame in write_frames:
+            for frame in self.write_frames(dim_type):
                 frame.write(name, dim)
 
         return name, dim
@@ -160,7 +181,6 @@ class DimStack:
                 continue
             dim_to_name[dim] = self.request(NameRequest(None, dim_type), dim)[0]
         return dim_to_name
-
 
 
 _DIM_STACK = DimStack()  # only one global instance
