@@ -51,11 +51,6 @@ class NamedMessenger(DimStackCleanupMessenger):
 
         batch_names = tuple(funsor_value.inputs.keys())
 
-        # TODO implement this
-        # check that name_to_dim is either completely specified or completely empty
-        if len(name_to_dim) > 0 and frozenset(batch_names) != frozenset(name_to_dim):
-            raise NotImplementedError("partially specified name_to_dim not supported")
-
         # interpret all names/dims as requests since we only run this function once
         name_to_dim_request = name_to_dim.copy()
         for name in batch_names:
@@ -86,11 +81,6 @@ class NamedMessenger(DimStackCleanupMessenger):
             batch_shape = full_shape[:len(full_shape) - event_dim]
 
         batch_dims = tuple(dim for dim in range(-len(batch_shape), 0) if batch_shape[dim] > 1)
-
-        # TODO implement this
-        # check that dim_to_name is either completely specified or completely empty
-        if len(dim_to_name) > 0 and frozenset(batch_dims) != frozenset(dim_to_name):
-            raise NotImplementedError("partially specified dim_to_name not supported")
 
         # interpret all names/dims as requests since we only run this function once
         dim_to_name_request = dim_to_name.copy()

@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import OrderedDict, namedtuple
+from collections import Counter, OrderedDict, namedtuple
 from enum import Enum
 
 
@@ -148,40 +148,89 @@ class DimStack:
 
         return fresh_name, fresh_dim
 
-    def _request(self, name, dim):
-        """
-        Given proposed, possibly empty values of a (name, dim) pair, this function
-        attempts to fill in the values according to the current name <--> dim mapping
-        and updates the global DimStack's state to reflect the result.
-        """
-        assert isinstance(name, NameRequest) ^ isinstance(dim, DimRequest)
-        if isinstance(dim, DimRequest):
-            dim, dim_type = dim.dim, dim.dim_type
-        elif isinstance(name, NameRequest):
-            name, dim_type = name.name, name.dim_type
-
-        # read dimension
-        for frame in self.current_env:
-            name, dim, found = frame.read(name, dim)
-            if found:
-                break
-
-        # generate fresh name or dimension
-        if not found:
-            name, dim = self._gendim(NameRequest(name, dim_type), DimRequest(dim, dim_type))
-            # store the fresh dimension
-            for frame in self.get_current_write_frames(dim_type):
-                frame.write(name, dim)
-
-        return name, dim
-
     def allocate_dim_to_name(self, dim_to_name_request):
-        return OrderedDict((dim, self._request(name_request, dim)[0])
-                           for dim, name_request in dim_to_name_request.items())
+
+        # step 1: fill in non-fresh
+        for dim, name_request in dim_to_name_request.items():
+            name = name_request.name
+            for frame in self.current_env:
+                found = (name is None and dim in frame.dim_to_name) or \
+                    (name is not None and name in frame.name_to_dim)
+                if not found:
+                    continue
+                elif name is None and dim in frame.dim_to_name:
+                    dim_to_name_request[dim] = frame.dim_to_name[dim]
+                    break
+                elif name is not None and frame.name_to_dim[name] == dim:
+                    dim_to_name_request[dim] = name
+                    break
+                elif name is not None and frame.name_to_dim[name] != dim:
+                    dim_to_name_request[dim] = name
+                    break
+                else:
+                    raise ValueError("should not be here!")
+
+        # step 2: split into fresh and non-fresh
+        dim_to_fresh_name_request = OrderedDict(
+            (dim, dim_to_name_request.pop(dim)) for dim, name_request in tuple(dim_to_name_request.items())
+            if isinstance(name_request, NameRequest)  # and name_request.name is None
+        )
+
+        # step 3: check for conflicts in non-fresh
+        if max(Counter(dim_to_name_request.values()).values(), default=0) > 1:
+            raise ValueError("{} is not a valid dim_to_name".format(dim_to_name_request))
+
+        # step 4: if no conflicts in non-fresh, allocate fresh dims for all fresh
+        for dim, name_request in dim_to_fresh_name_request.items():
+            name, fresh_dim = self._gendim(name_request, DimRequest(None, name_request.dim_type))
+            for frame in self.get_current_write_frames(name_request.dim_type):
+                frame.write(name, fresh_dim)
+            dim_to_name_request[dim] = name
+
+        assert all(isinstance(name, str) for name in dim_to_name_request.values())
+        return dim_to_name_request
 
     def allocate_name_to_dim(self, name_to_dim_request):
-        return OrderedDict((name, self._request(name, dim_request)[1])
-                           for name, dim_request in name_to_dim_request.items())
+
+        # step 1: fill in non-fresh
+        for name, dim_request in name_to_dim_request.items():
+            dim = dim_request.dim
+            for frame in self.current_env:
+                found = (dim is None and name in frame.name_to_dim) or \
+                    (dim is not None and dim in frame.dim_to_name)
+                if not found:
+                    continue
+                elif dim is None and name in frame.name_to_dim:
+                    name_to_dim_request[name] = frame.name_to_dim[name]
+                    break
+                elif dim is not None and frame.dim_to_name[dim] == name:
+                    name_to_dim_request[name] = dim
+                    break
+                elif dim is not None and frame.dim_to_name[dim] != name:
+                    name_to_dim_request[name] = dim
+                    break
+                else:
+                    raise ValueError("should not be here!")
+
+        # step 2: split into fresh and non-fresh
+        name_to_fresh_dim_request = OrderedDict(
+            (name, name_to_dim_request.pop(name)) for name, dim_request in tuple(name_to_dim_request.items())
+            if isinstance(dim_request, DimRequest)  # and dim_request.dim is None
+        )
+
+        # step 3: check for conflicts in non-fresh
+        if max(Counter(name_to_dim_request.values()).values(), default=0) > 1:
+            raise ValueError("{} is not a valid name_to_dim".format(name_to_dim_request))
+
+        # step 4: if no conflicts in non-fresh, allocate fresh dims for all fresh
+        for name, dim_request in name_to_fresh_dim_request.items():
+            fresh_name, dim = self._gendim(NameRequest(name, dim_request.dim_type), dim_request)
+            for frame in self.get_current_write_frames(dim_request.dim_type):
+                frame.write(fresh_name, dim)
+            name_to_dim_request[name] = dim
+
+        assert all(isinstance(dim, int) for dim in name_to_dim_request.values())
+        return name_to_dim_request
 
     def names_from_batch_shape(self, batch_shape, dim_type=DimType.LOCAL):
         return self.allocate_dim_to_name(OrderedDict(

@@ -4,7 +4,6 @@
 from collections import OrderedDict
 import logging
 
-import pytest
 import torch
 
 import funsor
@@ -88,7 +87,6 @@ def test_staggered():
         testing()
 
 
-@pytest.mark.xfail(reason="Inconsistent input specifications not yet supported")
 def test_fresh_inputs_to_funsor():
 
     def testing():
@@ -98,4 +96,41 @@ def test_fresh_inputs_to_funsor():
         assert px.inputs["x"].dtype == 2 and px.inputs["y"].dtype == 3
 
     with pyro_backend("contrib.funsor"), NamedMessenger():
+        testing()
+
+
+def test_iteration_fresh():
+
+    def testing():
+        for i in pyro.markov(range(5)):
+            fv1 = pyro.to_funsor(torch.zeros(2), reals(), dim_to_name={-1: str(i)})
+            fv2 = pyro.to_funsor(torch.ones(2), reals(), dim_to_name={-1: "a"})
+            v1 = pyro.to_data(fv1)
+            v2 = pyro.to_data(fv2)
+            print(i, v1.shape)  # shapes should alternate
+            if i % 2 == 0:
+                assert v1.shape == (2,)
+            else:
+                assert v1.shape == (2, 1, 1)
+            assert v2.shape == (2, 1)
+            print(i, fv1.inputs)
+            print('a', v2.shape)  # shapes should stay the same
+            print('a', fv2.inputs)
+
+    with pyro_backend("contrib.funsor"), NamedMessenger(first_available_dim=-1):
+        testing()
+
+
+def test_staggered_fresh():
+
+    def testing():
+        for i in pyro.markov(range(12)):
+            if i % 4 == 0:
+                fv2 = pyro.to_funsor(torch.zeros(2), reals(), dim_to_name={-1: 'a'})
+                v2 = pyro.to_data(fv2)
+                assert v2.shape == (2,)
+                print('a', v2.shape)
+                print('a', fv2.inputs)
+
+    with pyro_backend("contrib.funsor"), NamedMessenger(first_available_dim=-1):
         testing()
