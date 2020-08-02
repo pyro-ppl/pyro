@@ -1,121 +1,21 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import absolute_import, division, print_function
-
-import math
 from functools import partial
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import constraints
-from torch.distributions.transforms import SigmoidTransform, Transform
+from torch.distributions.transforms import SigmoidTransform, TanhTransform
 
 from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions.transforms.basic import ELUTransform, LeakyReLUTransform
 from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
 
 eps = 1e-8
-
-
-class ELUTransform(Transform):
-    r"""
-    Bijective transform via the mapping :math:`y = \text{ELU}(x)`.
-    """
-    domain = constraints.real
-    codomain = constraints.positive
-    bijective = True
-    sign = +1
-
-    def __eq__(self, other):
-        return isinstance(other, ELUTransform)
-
-    def _call(self, x):
-        return F.elu(x)
-
-    def _inverse(self, y):
-        return torch.max(y, torch.zeros_like(y)) + torch.min(torch.log1p(y + eps), torch.zeros_like(y))
-
-    def log_abs_det_jacobian(self, x, y):
-        return -F.relu(-x)
-
-
-def elu():
-    """
-    A helper function to create an
-    :class:`~pyro.distributions.transform.ELUTransform` object for consistency with
-    other helpers.
-    """
-    return ELUTransform()
-
-
-class LeakyReLUTransform(Transform):
-    r"""
-    Bijective transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
-    """
-    domain = constraints.real
-    codomain = constraints.positive
-    bijective = True
-    sign = +1
-
-    def __eq__(self, other):
-        return isinstance(other, LeakyReLUTransform)
-
-    def _call(self, x):
-        return F.leaky_relu(x)
-
-    def _inverse(self, y):
-        return F.leaky_relu(y, negative_slope=100.0)
-
-    def log_abs_det_jacobian(self, x, y):
-        return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(0.01))
-
-
-def leaky_relu():
-    """
-    A helper function to create a
-    :class:`~pyro.distributions.transforms.LeakyReLUTransform` object for
-    consistency with other helpers.
-    """
-    return LeakyReLUTransform()
-
-
-class TanhTransform(Transform):
-    r"""
-    Bijective transform via the mapping :math:`y = \text{tanh}(x)`.
-    """
-    domain = constraints.real
-    codomain = constraints.interval(-1., 1.)
-    bijective = True
-    sign = +1
-
-    @staticmethod
-    def atanh(x):
-        return 0.5 * (x.log1p() - (-x).log1p())
-
-    def __eq__(self, other):
-        return isinstance(other, TanhTransform)
-
-    def _call(self, x):
-        return torch.tanh(x)
-
-    def _inverse(self, y):
-        eps = torch.finfo(y.dtype).eps
-        return self.atanh(y.clamp(min=-1. + eps, max=1. - eps))
-
-    def log_abs_det_jacobian(self, x, y):
-        return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
-
-
-def tanh():
-    """
-    A helper function to create a
-    :class:`~pyro.distributions.transforms.TanhTransform` object for consistency
-    with other helpers.
-    """
-    return TanhTransform()
 
 
 @copy_docs_from(TransformModule)
@@ -158,10 +58,11 @@ class NeuralAutoregressive(TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
+    eps = 1e-8
     autoregressive = True
 
     def __init__(self, autoregressive_nn, hidden_units=16, activation='sigmoid'):
@@ -228,7 +129,7 @@ class NeuralAutoregressive(TransformModule):
         T = self.T
 
         log_dydD = self._cached_log_df_inv_dx
-        log_dDdx = torch.logsumexp(torch.log(A + eps) + self.logsoftmax(W_pre) +
+        log_dDdx = torch.logsumexp(torch.log(A + self.eps) + self.logsoftmax(W_pre) +
                                    T.log_abs_det_jacobian(C, T_C), dim=-2)
         log_det = log_dydD + log_dDdx
         return log_det.sum(-1)
@@ -281,8 +182,8 @@ class ConditionalNeuralAutoregressive(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 

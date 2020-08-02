@@ -28,6 +28,13 @@ Pyro Optimizers
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.optim.horovod
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
+
 PyTorch Optimizers
 ------------------
 

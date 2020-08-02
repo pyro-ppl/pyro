@@ -26,7 +26,7 @@ make format            # runs isort
 make test              # linting and unit tests
 ```
 
-If you've modified core pyro code, examples, or tutorials, you can run more comprehensive tests locally
+If you've modified core pyro code, examples, or tutorials, you can run more comprehensive tests locally (after first adding any new files to the appropriate `tests/` script)
 ```sh
 make test-examples     # test examples/
 make integration-test  # longer-running tests (may take hours)

@@ -54,6 +54,9 @@ class ConstantConditionalTransform(ConditionalTransform):
     def condition(self, context):
         return self.transform
 
+    def clear_cache(self):
+        self.transform.clear_cache()
+
 
 class ConditionalTransformedDistribution(ConditionalDistribution):
     def __init__(self, base_dist, transforms):
@@ -66,3 +69,6 @@ class ConditionalTransformedDistribution(ConditionalDistribution):
         base_dist = self.base_dist.condition(context)
         transforms = [t.condition(context) for t in self.transforms]
         return TransformedDistribution(base_dist, transforms)
+
+    def clear_cache(self):
+        pass

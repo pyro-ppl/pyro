@@ -5,12 +5,16 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all, lazy_property
 
-from pyro.distributions import TorchDistribution, Poisson, NegativeBinomial
+from pyro.distributions import NegativeBinomial, Poisson, TorchDistribution
+from pyro.distributions.util import broadcast_shape
 
 
 class ZeroInflatedDistribution(TorchDistribution):
     """
-    Base class for a Zero Inflated distribution.
+    Generic Zero Inflated distribution.
+
+    This can be used directly or can be used as a base class as e.g. for
+    :class:`ZeroInflatedPoisson` and :class:`ZeroInflatedNegativeBinomial`.
 
     :param torch.Tensor gate: probability of extra zeros given via a Bernoulli distribution.
     :param TorchDistribution base_dist: the base distribution.
@@ -18,12 +22,20 @@ class ZeroInflatedDistribution(TorchDistribution):
     arg_constraints = {"gate": constraints.unit_interval}
 
     def __init__(self, gate, base_dist, validate_args=None):
-        self.gate = gate
-        self.base_dist = base_dist
-        batch_shape = self.gate.shape
+        if base_dist.event_shape:
+            raise ValueError("ZeroInflatedDistribution expected empty "
+                             "base_dist.event_shape but got {}"
+                             .format(base_dist.event_shape))
+        batch_shape = broadcast_shape(gate.shape, base_dist.batch_shape)
+        self.gate = gate.expand(batch_shape)
+        self.base_dist = base_dist.expand(batch_shape)
         event_shape = torch.Size()
 
         super().__init__(batch_shape, event_shape, validate_args)
+
+    @property
+    def support(self):
+        return self.base_dist.support
 
     def log_prob(self, value):
         if self._validate_args:

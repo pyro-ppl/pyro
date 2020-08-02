@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -16,16 +17,14 @@ from pyro.nn import DenseNN
 
 @copy_docs_from(Transform)
 class ConditionedRadial(Transform):
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
-    def __init__(self, x0=None, alpha_prime=None, beta_prime=None):
+    def __init__(self, params):
         super().__init__(cache_size=1)
-        self.x0 = x0
-        self.alpha_prime = alpha_prime
-        self.beta_prime = beta_prime
+        self._params = params
         self._cached_logDetJ = None
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
@@ -43,18 +42,20 @@ class ConditionedRadial(Transform):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
         of a previous transform)
         """
+        x0, alpha_prime, beta_prime = self._params() if callable(self._params) else self._params
+
         # Ensure invertibility using approach in appendix A.2
-        alpha = F.softplus(self.alpha_prime)
-        beta = -alpha + F.softplus(self.beta_prime)
+        alpha = F.softplus(alpha_prime)
+        beta = -alpha + F.softplus(beta_prime)
 
         # Compute y and logDet using Equation 14.
-        diff = x - self.x0
+        diff = x - x0
         r = diff.norm(dim=-1, keepdim=True)
         h = (alpha + r).reciprocal()
         h_prime = - (h ** 2)
         beta_h = beta * h
 
-        self._cached_logDetJ = ((self.x0.size(-1) - 1) * torch.log1p(beta_h) +
+        self._cached_logDetJ = ((x0.size(-1) - 1) * torch.log1p(beta_h) +
                                 torch.log1p(beta_h + beta * h_prime * r)).sum(-1)
         return x + beta_h * diff
 
@@ -97,9 +98,6 @@ class Radial(ConditionedRadial, TransformModule):
     :math:`h(\alpha,r)=1/(\alpha+r)`. For this to be an invertible transformation,
     the condition :math:`\beta>-\alpha` is enforced.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
-    a way to create richer variational approximations.
-
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
@@ -123,19 +121,22 @@ class Radial(ConditionedRadial, TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
     def __init__(self, input_dim):
-        super().__init__()
+        super().__init__(self._params)
 
         self.x0 = nn.Parameter(torch.Tensor(input_dim,))
         self.alpha_prime = nn.Parameter(torch.Tensor(1,))
         self.beta_prime = nn.Parameter(torch.Tensor(1,))
         self.input_dim = input_dim
         self.reset_parameters()
+
+    def _params(self):
+        return self.x0, self.alpha_prime, self.beta_prime
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.x0.size(0))
@@ -160,16 +161,20 @@ class ConditionalRadial(ConditionalTransformModule):
     For this to be an invertible transformation, the condition :math:`\beta>-\alpha`
     is enforced.
 
-    Together with :class:`~pyro.distributions.TransformedDistribution` this provides
-    a way to create richer variational approximations.
-
     Example usage:
 
-    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> transform = Radial(10)
-    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
-    >>> flow_dist.sample()  # doctest: +SKIP
+    >>> from pyro.nn.dense_nn import DenseNN
+    >>> input_dim = 10
+    >>> context_dim = 5
+    >>> batch_size = 3
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> param_dims = [input_dim, 1, 1]
+    >>> hypernet = DenseNN(context_dim, [50, 50], param_dims)
+    >>> transform = ConditionalRadial(hypernet)
+    >>> z = torch.rand(batch_size, context_dim)
+    >>> flow_dist = dist.ConditionalTransformedDistribution(base_dist,
+    ... [transform]).condition(z)
+    >>> flow_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
     The inverse of this transform does not possess an analytical solution and is
     left unimplemented. However, the inverse is cached when the forward operation is
@@ -186,8 +191,8 @@ class ConditionalRadial(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
@@ -195,9 +200,12 @@ class ConditionalRadial(ConditionalTransformModule):
         super().__init__()
         self.nn = nn
 
+    def _params(self, context):
+        return self.nn(context)
+
     def condition(self, context):
-        x0, alpha_prime, beta_prime = self.nn(context)
-        return ConditionedRadial(x0, alpha_prime, beta_prime)
+        params = partial(self._params, context)
+        return ConditionedRadial(params)
 
 
 def radial(input_dim):

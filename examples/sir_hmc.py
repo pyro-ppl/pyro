@@ -26,7 +26,8 @@ import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.infer import MCMC, NUTS, config_enumerate, infer_discrete
 from pyro.infer.autoguide import init_to_value
-from pyro.ops.tensor_utils import convolve, safe_log
+from pyro.ops.special import safe_log
+from pyro.ops.tensor_utils import convolve
 from pyro.util import warn_if_nan
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -572,7 +573,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)

@@ -62,7 +62,7 @@ class AffineAutoregressive(TransformModule):
 
     :param autoregressive_nn: an autoregressive neural network whose forward call
         returns a real-valued mean and logit-scale as a tuple
-    :type autoregressive_nn: nn.Module
+    :type autoregressive_nn: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from
         the autoregressive NN
     :type log_scale_min_clip: float
@@ -90,8 +90,8 @@ class AffineAutoregressive(TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
     sign = +1
@@ -217,8 +217,8 @@ class AffineAutoregressive(TransformModule):
             mean, logit_scale = self.arn(torch.stack(x, dim=-1))
             inverse_scale = 1 + torch.exp(-logit_scale[..., idx] - self.sigmoid_bias)
             x[idx] = inverse_scale * y[..., idx] + (1 - inverse_scale) * mean[..., idx]
-            self._cached_log_scale = inverse_scale
 
+        self._cached_log_scale = self.logsigmoid(logit_scale + self.sigmoid_bias)
         x = torch.stack(x, dim=-1)
         return x
 
@@ -308,8 +308,8 @@ class ConditionalAffineAutoregressive(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 

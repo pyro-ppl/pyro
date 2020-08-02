@@ -463,7 +463,7 @@ def test_ubersum_jit(equation, plates):
     ('ab,bcdi,deij->eij', 'ij'),
 ])
 def test_ubersum_total(equation, plates):
-    inputs, outputs, operands, sizes = make_example(equation, fill=1, sizes=(2,))
+    inputs, outputs, operands, sizes = make_example(equation, fill=1., sizes=(2,))
     output = outputs[0]
 
     expected = naive_ubersum(equation, *operands, plates=plates)[0]

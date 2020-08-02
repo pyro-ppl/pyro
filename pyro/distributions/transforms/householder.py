@@ -3,6 +3,7 @@
 
 import math
 import warnings
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -15,8 +16,8 @@ from pyro.nn import DenseNN
 
 
 class ConditionedHouseholder(Transform):
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
     volume_preserving = True
@@ -27,8 +28,9 @@ class ConditionedHouseholder(Transform):
 
     # Construct normalized vectors for Householder transform
     def u(self):
-        norm = torch.norm(self.u_unnormed, p=2, dim=-1, keepdim=True)
-        return torch.div(self.u_unnormed, norm)
+        u_unnormed = self.u_unnormed() if callable(self.u_unnormed) else self.u_unnormed
+        norm = torch.norm(u_unnormed, p=2, dim=-1, keepdim=True)
+        return torch.div(u_unnormed, norm)
 
     def _call(self, x):
         """
@@ -119,8 +121,8 @@ class Householder(ConditionedHouseholder, TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
     volume_preserving = True
@@ -200,8 +202,8 @@ class ConditionalHouseholder(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
     event_dim = 1
 
@@ -217,7 +219,7 @@ class ConditionalHouseholder(ConditionalTransformModule):
 over-parametrization!".format(count_transforms, input_dim))
         self.count_transforms = count_transforms
 
-    def condition(self, context):
+    def _u_unnormed(self, context):
         # u_unnormed ~ (count_transforms, input_dim)
         # Hence, input_dim must divide
         u_unnormed = self.nn(context)
@@ -225,6 +227,10 @@ over-parametrization!".format(count_transforms, input_dim))
             u_unnormed = u_unnormed.unsqueeze(-2)
         else:
             u_unnormed = torch.stack(u_unnormed, dim=-2)
+        return u_unnormed
+
+    def condition(self, context):
+        u_unnormed = partial(self._u_unnormed, context)
         return ConditionedHouseholder(u_unnormed)
 
 

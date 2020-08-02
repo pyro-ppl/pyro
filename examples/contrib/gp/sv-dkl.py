@@ -90,7 +90,7 @@ def test(args, test_loader, gpmodule):
         f_loc, f_var = gpmodule(data)
         # use its likelihood to give prediction class
         pred = gpmodule.likelihood(f_loc, f_var)
-        # compare prediction and target to count accuaracy
+        # compare prediction and target to count accuracy
         correct += pred.eq(target).long().cpu().sum().item()
 
     print("\nTest set: Accuracy: {}/{} ({:.2f}%)\n"
@@ -165,7 +165,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
     parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')

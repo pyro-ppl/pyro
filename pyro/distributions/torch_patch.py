@@ -45,6 +45,20 @@ def _Transform__getstate__(self):
     return attrs
 
 
+# TODO move upstream
+@patch_dependency('torch.distributions.transforms.Transform.clear_cache')
+def _Transform_clear_cache(self):
+    if self._cache_size == 1:
+        self._cached_x_y = None, None
+
+
+# TODO move upstream
+@patch_dependency('torch.distributions.TransformedDistribution.clear_cache')
+def _TransformedDistribution_clear_cache(self):
+    for t in self.transforms:
+        t.clear_cache()
+
+
 # Fixes a shape error in Multinomial.support with inhomogeneous .total_count
 @patch_dependency('torch.distributions.Multinomial.support')
 @torch.distributions.constraints.dependent_property
@@ -53,6 +67,12 @@ def _Multinomial_support(self):
     if isinstance(total_count, torch.Tensor):
         total_count = total_count.unsqueeze(-1)
     return torch.distributions.constraints.integer_interval(0, total_count)
+
+
+# This adds a __call__ method to satisfy sphinx.
+@patch_dependency('torch.distributions.utils.lazy_property.__call__')
+def _lazy_property__call__(self):
+    raise NotImplementedError
 
 
 __all__ = []

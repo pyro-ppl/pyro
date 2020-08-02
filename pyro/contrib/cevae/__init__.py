@@ -342,9 +342,9 @@ class Guide(PyroModule):
     Inference model for causal effect estimation with latent confounder ``z``
     and binary treatment ``t``::
 
-        t ~ p(t|x)      # treatment
-        y ~ p(y|t,x)    # outcome
-        z ~ p(t|y,t,x)  # latent confounder, an embedding
+        t ~ q(t|x)      # treatment
+        y ~ q(y|t,x)    # outcome
+        z ~ q(z|y,t,x)  # latent confounder, an embedding
 
     Each of these distributions is defined by a neural network.  The ``y`` and
     ``z`` distributions are defined by disjoint pairs of neural networks

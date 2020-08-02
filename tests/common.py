@@ -29,6 +29,7 @@ EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
 
 
 def xfail_param(*args, **kwargs):
+    kwargs.setdefault("reason", "unknown")
     return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
 
 
@@ -58,6 +59,13 @@ def TemporaryDirectory():
 
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
                                    reason="cuda is not available")
+
+try:
+    import horovod
+except ImportError:
+    horovod = None
+requires_horovod = pytest.mark.skipif(horovod is None,
+                                      reason="horovod is not available")
 
 
 def get_cpu_type(t):

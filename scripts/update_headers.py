@@ -7,7 +7,7 @@ import os
 import sys
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-blacklist = ["/build/", "/dist/"]
+blacklist = ["/build/", "/dist/", "/pyro/_version.py"]
 file_types = [
     ("*.py", "# {}"),
     ("*.cpp", "// {}"),

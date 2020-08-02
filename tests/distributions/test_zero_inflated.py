@@ -4,14 +4,24 @@
 import pytest
 import torch
 
-from pyro.distributions import (
-    ZeroInflatedPoisson,
-    Poisson,
-    ZeroInflatedNegativeBinomial,
-    NegativeBinomial,
-    Delta,
-)
+from pyro.distributions import (Delta, NegativeBinomial, Normal, Poisson, ZeroInflatedDistribution,
+                                ZeroInflatedNegativeBinomial, ZeroInflatedPoisson)
+from pyro.distributions.util import broadcast_shape
 from tests.common import assert_close
+
+
+@pytest.mark.parametrize("gate_shape", [(), (2,), (3, 1), (3, 2)])
+@pytest.mark.parametrize("base_shape", [(), (2,), (3, 1), (3, 2)])
+def test_zid_shape(gate_shape, base_shape):
+    gate = torch.rand(gate_shape)
+    base_dist = Normal(torch.randn(base_shape), torch.randn(base_shape).exp())
+
+    d = ZeroInflatedDistribution(gate, base_dist)
+    assert d.batch_shape == broadcast_shape(gate_shape, base_shape)
+    assert d.support == base_dist.support
+
+    d2 = d.expand([4, 3, 2])
+    assert d2.batch_shape == (4, 3, 2)
 
 
 @pytest.mark.parametrize("rate", [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
