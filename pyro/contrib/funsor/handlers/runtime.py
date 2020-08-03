@@ -127,11 +127,9 @@ class DimStack:
         to match the behavior of Pyro's old enumeration machinery as closely as possible.
         """
         if isinstance(key, int):
-            if value_request.value is None:
-                fresh_value = "_pyro_dim_{}".format(-key)
-            else:
-                fresh_value = value_request.value
-            return key, fresh_value
+            dim, name = key, value_request.value
+            fresh_name = "_pyro_dim_{}".format(-key) if name is None else name
+            return dim, fresh_name
 
         elif isinstance(key, str):
             name, dim, dim_type = key, value_request.value, value_request.dim_type
@@ -148,7 +146,7 @@ class DimStack:
                     (dim_type == DimType.VISIBLE and fresh_dim <= self._first_available_dim):
                 raise ValueError("Ran out of free dims during allocation for {}".format(name))
 
-            return key, fresh_dim
+            return name, fresh_dim
         raise ValueError("{} and {} not a valid name-dim pair".format(key, value_request))
 
     def allocate(self, key_to_value_request):
