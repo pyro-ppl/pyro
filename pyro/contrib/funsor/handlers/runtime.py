@@ -137,7 +137,7 @@ class DimStack:
                 fresh_dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
                 fresh_dim = -1 if fresh_dim is None else fresh_dim
             else:
-                fresh_dim = value_request.value
+                fresh_dim = dim
 
             while any(fresh_dim in p for p in self.current_env):
                 fresh_dim -= 1
