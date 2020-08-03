@@ -153,36 +153,25 @@ class DimStack:
 
     def allocate(self, key_to_value_request):
 
-        # step 1: fill in non-fresh
-        for key, value_request in key_to_value_request.items():
+        # step 1: split into fresh and non-fresh
+        key_to_value = OrderedDict()
+        for key, value_request in tuple(key_to_value_request.items()):
             value = value_request.value
             for frame in self.current_env:
-                found = (value is None and key in frame) or (value is not None and value in frame)
-                if not found:
-                    continue
-                elif value is None and key in frame:
-                    key_to_value_request[key] = frame[key]
+                if value is None and key in frame:
+                    key_to_value[key] = frame[key]
+                    del key_to_value_request[key]
                     break
-                elif value is not None and frame[value] == key:
-                    key_to_value_request[key] = value
+                elif value is not None and value in frame:
+                    key_to_value[key] = value
+                    del key_to_value_request[key]
                     break
-                elif value is not None and frame[value] != key:
-                    key_to_value_request[key] = value
-                    break
-                else:
-                    raise ValueError("should not be here!")
 
-        # step 2: split into fresh (key_to_value_request) and nonfresh (key_to_value)
-        key_to_value = OrderedDict(
-            (key, key_to_value_request.pop(key)) for key, value_request in tuple(key_to_value_request.items())
-            if not isinstance(value_request, DimRequest)
-        )
-
-        # step 3: check for conflicts in non-fresh
+        # step 2: check for conflicts in non-fresh
         if max(Counter(key_to_value.values()).values(), default=0) > 1:
             raise ValueError("{} is not a valid shape request".format(key_to_value))
 
-        # step 4: if no conflicts in non-fresh, allocate fresh values for all fresh
+        # step 3: if no conflicts in non-fresh, allocate fresh values for all fresh
         for key, value_request in key_to_value_request.items():
             key, fresh_value = self._genvalue(key, value_request)
             value, fresh_key = self._genvalue(fresh_value, DimRequest(key, value_request.dim_type))
