@@ -8,14 +8,14 @@ import funsor
 import pyro.distributions
 import pyro.poutine.runtime
 import pyro.primitives
-from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, NameRequest
+from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType
 
 
 @pyro.poutine.runtime.effectful(type="to_funsor")
 def to_funsor(x, output=None, dim_to_name=None, dim_type=DimType.LOCAL):
     if pyro.poutine.runtime.am_i_wrapped() and not dim_to_name:
         dim_to_name = _DIM_STACK.global_frame.dim_to_name.copy()
-    assert not dim_to_name or not any(isinstance(name, NameRequest) for name in dim_to_name.values())
+    assert not dim_to_name or not any(isinstance(name, DimRequest) for name in dim_to_name.values())
     return funsor.to_funsor(x, output=output, dim_to_name=dim_to_name)
 
 

@@ -6,7 +6,7 @@ from contextlib import ExitStack
 
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 
-from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, NameRequest, StackFrame
+from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, StackFrame
 
 
 class DimStackCleanupMessenger(ReentrantMessenger):
@@ -24,7 +24,7 @@ class DimStackCleanupMessenger(ReentrantMessenger):
             if _DIM_STACK.outermost is None:
                 _DIM_STACK.outermost = self
                 for name, dim in self._saved_dims:
-                    _DIM_STACK.global_frame.write(name, dim)
+                    _DIM_STACK[name] = dim
                 self._saved_dims = ()
         return super().__enter__()
 
@@ -36,7 +36,7 @@ class DimStackCleanupMessenger(ReentrantMessenger):
                 _DIM_STACK.outermost = None
                 _DIM_STACK.set_first_available_dim(_DIM_STACK.DEFAULT_FIRST_DIM)
                 for name, dim in reversed(tuple(_DIM_STACK.global_frame.name_to_dim.items())):
-                    self._saved_dims += (_DIM_STACK.global_frame.free(name, dim),)
+                    self._saved_dims += (name, _DIM_STACK.global_frame.pop(name),)
         return super().__exit__(*args, **kwargs)
 
 
@@ -58,7 +58,8 @@ class NamedMessenger(DimStackCleanupMessenger):
             name_to_dim_request[name] = dim if isinstance(dim, DimRequest) else DimRequest(dim, dim_type)
 
         # request and update name_to_dim in-place
-        name_to_dim.update(_DIM_STACK.allocate_name_to_dim(name_to_dim_request))
+        # name_to_dim.update(_DIM_STACK.allocate_name_to_dim(name_to_dim_request))
+        name_to_dim.update(_DIM_STACK.allocate(name_to_dim_request))
 
         msg["stop"] = True  # only need to run this once per to_data call
 
@@ -86,10 +87,10 @@ class NamedMessenger(DimStackCleanupMessenger):
         dim_to_name_request = dim_to_name.copy()
         for dim in batch_dims:
             name = dim_to_name.get(dim, None)
-            dim_to_name_request[dim] = name if isinstance(name, NameRequest) else NameRequest(name, dim_type)
+            dim_to_name_request[dim] = name if isinstance(name, DimRequest) else DimRequest(name, dim_type)
 
         # request and update dim_to_name in-place
-        dim_to_name.update(_DIM_STACK.allocate_dim_to_name(dim_to_name_request))
+        dim_to_name.update(_DIM_STACK.allocate(dim_to_name_request))
 
         msg["stop"] = True  # only need to run this once per to_funsor call
 
@@ -157,22 +158,22 @@ class GlobalNamedMessenger(NamedMessenger):
     def __enter__(self):
         if self._ref_count == 0:
             for name, dim in self._saved_globals:
-                _DIM_STACK.global_frame.write(name, dim)
+                _DIM_STACK.global_frame[name] = dim
             self._saved_globals = ()
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self._ref_count == 1:
             for name, dim in self._saved_globals:
-                _DIM_STACK.global_frame.free(name, dim)
+                _DIM_STACK.global_frame.pop(name)
         return super().__exit__(*args, **kwargs)
 
     def _pyro_post_to_funsor(self, msg):
         if msg["kwargs"]["dim_type"] in (DimType.GLOBAL, DimType.VISIBLE):
             for name in msg["value"].inputs:
-                self._saved_globals += ((name, _DIM_STACK.global_frame.name_to_dim[name]),)
+                self._saved_globals += ((name, _DIM_STACK.global_frame[name]),)
 
     def _pyro_post_to_data(self, msg):
         if msg["kwargs"]["dim_type"] in (DimType.GLOBAL, DimType.VISIBLE):
             for name in msg["args"][0].inputs:
-                self._saved_globals += ((name, _DIM_STACK.global_frame.name_to_dim[name]),)
+                self._saved_globals += ((name, _DIM_STACK.global_frame[name]),)
