@@ -133,11 +133,7 @@ class DimStack:
 
         elif isinstance(key, str):
             name, dim, dim_type = key, value_request.value, value_request.dim_type
-            if dim is None:
-                fresh_dim = self._first_available_dim if dim_type != DimType.VISIBLE else -1
-                fresh_dim = -1 if fresh_dim is None else fresh_dim
-            else:
-                fresh_dim = dim
+            fresh_dim = (self._first_available_dim if dim_type != DimType.VISIBLE else -1) if dim is None else dim
 
             while any(fresh_dim in p for p in self.current_env):
                 fresh_dim -= 1
