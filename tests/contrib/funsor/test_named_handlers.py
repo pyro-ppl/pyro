@@ -25,7 +25,7 @@ def test_iteration():
 
     def testing():
         for i in pyro.markov(range(5)):
-            v1 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(f"{i}", bint(2))]), 'real'))
+            v1 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(i), bint(2))]), 'real'))
             v2 = pyro.to_data(Tensor(torch.zeros(2), OrderedDict([('a', bint(2))]), 'real'))
             fv1 = pyro.to_funsor(v1, reals())
             fv2 = pyro.to_funsor(v2, reals())
@@ -48,22 +48,22 @@ def test_nesting():
     def testing():
 
         with pyro.markov():
-            v1 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(f"{1}", bint(2))]), 'real'))
+            v1 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(1), bint(2))]), 'real'))
             print(1, v1.shape)  # shapes should alternate
             assert v1.shape == (2,)
 
             with pyro.markov():
-                v2 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(f"{2}", bint(2))]), 'real'))
+                v2 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(2), bint(2))]), 'real'))
                 print(2, v2.shape)  # shapes should alternate
                 assert v2.shape == (2, 1)
 
                 with pyro.markov():
-                    v3 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(f"{3}", bint(2))]), 'real'))
+                    v3 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(3), bint(2))]), 'real'))
                     print(3, v3.shape)  # shapes should alternate
                     assert v3.shape == (2,)
 
                     with pyro.markov():
-                        v4 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(f"{4}", bint(2))]), 'real'))
+                        v4 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(4), bint(2))]), 'real'))
                         print(4, v4.shape)  # shapes should alternate
 
                         assert v4.shape == (2, 1)
