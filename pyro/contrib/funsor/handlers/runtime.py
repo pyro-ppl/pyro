@@ -10,7 +10,7 @@ class StackFrame(object):
     Consistent bidirectional mapping between integer positional dimensions and names.
     Can be queried like a dictionary (value = frame[key], frame[key] = value).
     """
-    def __init__(self, name_to_dim, dim_to_name, history, keep):
+    def __init__(self, name_to_dim, dim_to_name, history=1, keep=False):
         self.name_to_dim = name_to_dim
         self.dim_to_name = dim_to_name
         self.history = history
@@ -27,16 +27,16 @@ class StackFrame(object):
         assert isinstance(key, (int, str))
         return self.dim_to_name[key] if isinstance(key, int) else self.name_to_dim[key]
 
+    def __delitem__(self, key):
+        assert isinstance(key, (int, str))
+        k2v, v2k = (self.dim_to_name, self.name_to_dim) if isinstance(key, int) else \
+            (self.name_to_dim, self.dim_to_name)
+        del v2k[k2v[key]]
+        del k2v[key]
+
     def __contains__(self, key):
         assert isinstance(key, (int, str))
         return key in (self.dim_to_name if isinstance(key, int) else self.name_to_dim)
-
-    def pop(self, key):
-        k2v, v2k = (self.dim_to_name, self.name_to_dim) if isinstance(key, int) else \
-            (self.name_to_dim, self.dim_to_name)
-        value = k2v.pop(key)
-        key = v2k.pop(value)
-        return value
 
     @property
     def parents(self):
@@ -92,6 +92,15 @@ class DimStack:
         old_dim, self._first_available_dim = self._first_available_dim, dim
         return old_dim
 
+    def push_global(self, frame):
+        frame.parent = self.global_frame
+        self.global_frame = frame
+
+    def pop_global(self):
+        frame, self.global_frame = self.global_frame, self.global_frame.parent
+        frame.parent = None
+        return frame
+
     def push(self, frame):
         frame.parent, frame.iter_parent = self.current_frame, self.iter_frame
         self.current_frame = frame
@@ -114,7 +123,7 @@ class DimStack:
         Collect all frames necessary to compute the full name <--> dim mapping
         and interpret Funsor inputs or batch shapes at any point in a computation.
         """
-        return [self.global_frame] + [self.current_frame] + \
+        return list(self.global_frame.parents) + [self.global_frame] + [self.current_frame] + \
             list(self.current_frame.parents) + list(self.current_frame.iter_parents)
 
     def _genvalue(self, key, value_request):

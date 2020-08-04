@@ -14,7 +14,7 @@ class DimStackCleanupMessenger(ReentrantMessenger):
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
-        self._saved_dims = ()
+        self._saved_dims = set()
         return super().__init__()
 
     def __enter__(self):
@@ -23,9 +23,9 @@ class DimStackCleanupMessenger(ReentrantMessenger):
                 self._prev_first_dim = _DIM_STACK.set_first_available_dim(self.first_available_dim)
             if _DIM_STACK.outermost is None:
                 _DIM_STACK.outermost = self
-                for name, dim in self._saved_dims:
-                    _DIM_STACK[name] = dim
-                self._saved_dims = ()
+            for name, dim in self._saved_dims:
+                _DIM_STACK.global_frame[name] = dim
+            self._saved_dims = set()
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
@@ -35,8 +35,9 @@ class DimStackCleanupMessenger(ReentrantMessenger):
             if _DIM_STACK.outermost is self:
                 _DIM_STACK.outermost = None
                 _DIM_STACK.set_first_available_dim(_DIM_STACK.DEFAULT_FIRST_DIM)
-                for name, dim in reversed(tuple(_DIM_STACK.global_frame.name_to_dim.items())):
-                    self._saved_dims += (name, _DIM_STACK.global_frame.pop(name),)
+                self._saved_dims |= set(_DIM_STACK.global_frame.name_to_dim.items())
+            for name, dim in self._saved_dims:
+                del _DIM_STACK.global_frame[name]
         return super().__exit__(*args, **kwargs)
 
 
@@ -95,6 +96,23 @@ class NamedMessenger(DimStackCleanupMessenger):
         msg["stop"] = True  # only need to run this once per to_funsor call
 
 
+class GlobalNamedMessenger(NamedMessenger):
+
+    def __init__(self, first_available_dim=None):
+        self._saved_frames = []
+        super().__init__(first_available_dim=first_available_dim)
+
+    def __enter__(self):
+        frame = self._saved_frames.pop() if self._saved_frames else StackFrame(
+            name_to_dim=OrderedDict(), dim_to_name=OrderedDict(), history=1000)
+        _DIM_STACK.push_global(frame)
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        self._saved_frames.append(_DIM_STACK.pop_global())
+        super().__exit__(*args)
+
+
 class MarkovMessenger(NamedMessenger):
     """
     Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
@@ -147,33 +165,3 @@ class MarkovMessenger(NamedMessenger):
         else:
             _DIM_STACK.pop()
         return super().__exit__(*args, **kwargs)
-
-
-class GlobalNamedMessenger(NamedMessenger):
-
-    def __init__(self):
-        self._saved_globals = ()
-        super().__init__()
-
-    def __enter__(self):
-        if self._ref_count == 0:
-            for name, dim in self._saved_globals:
-                _DIM_STACK.global_frame[name] = dim
-            self._saved_globals = ()
-        return super().__enter__()
-
-    def __exit__(self, *args, **kwargs):
-        if self._ref_count == 1:
-            for name, dim in self._saved_globals:
-                _DIM_STACK.global_frame.pop(name)
-        return super().__exit__(*args, **kwargs)
-
-    def _pyro_post_to_funsor(self, msg):
-        if msg["kwargs"]["dim_type"] in (DimType.GLOBAL, DimType.VISIBLE):
-            for name in msg["value"].inputs:
-                self._saved_globals += ((name, _DIM_STACK.global_frame[name]),)
-
-    def _pyro_post_to_data(self, msg):
-        if msg["kwargs"]["dim_type"] in (DimType.GLOBAL, DimType.VISIBLE):
-            for name in msg["args"][0].inputs:
-                self._saved_globals += ((name, _DIM_STACK.global_frame[name]),)
