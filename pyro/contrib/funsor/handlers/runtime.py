@@ -109,7 +109,7 @@ class DimStack:
             self._local_stack[-self.local_frame.history-1:]
 
     @property
-    def current_env(self):
+    def current_read_env(self):
         """
         Collect all frames necessary to compute the full name <--> dim mapping
         and interpret Funsor inputs or batch shapes at any point in a computation.
@@ -134,7 +134,7 @@ class DimStack:
             name, dim, dim_type = key, value_request.value, value_request.dim_type
             fresh_dim = (self._first_available_dim if dim_type != DimType.VISIBLE else -1) if dim is None else dim
 
-            while any(fresh_dim in p for p in self.current_env):
+            while any(fresh_dim in p for p in self.current_read_env):
                 fresh_dim -= 1
 
             if fresh_dim < self.MAX_DIM or \
@@ -150,7 +150,7 @@ class DimStack:
         key_to_value = OrderedDict()
         for key, value_request in tuple(key_to_value_request.items()):
             value = value_request.value
-            for frame in self.current_env:
+            for frame in self.current_read_env:
                 if value is None and key in frame:
                     key_to_value[key] = frame[key]
                     del key_to_value_request[key]
@@ -169,7 +169,7 @@ class DimStack:
             key, fresh_value = self._genvalue(key, value_request)
             # if this key is already active but inconsistent with the fresh value,
             # generate a fresh value for future conversions via _genvalue in reverse
-            if any(key in frame for frame in self.current_env):
+            if any(key in frame for frame in self.current_read_env):
                 _, fresh_key = self._genvalue(fresh_value, DimRequest(key, value_request.dim_type))
             else:
                 fresh_key = key

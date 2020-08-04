@@ -158,7 +158,7 @@ class GlobalNamedMessenger(NamedMessenger):
 
     def __enter__(self):
         frame = self._saved_frames.pop() if self._saved_frames else StackFrame(
-            name_to_dim=OrderedDict(), dim_to_name=OrderedDict(), history=1000, keep=False)
+            name_to_dim=OrderedDict(), dim_to_name=OrderedDict())
         _DIM_STACK.push_global(frame)
         return super().__enter__()
 
