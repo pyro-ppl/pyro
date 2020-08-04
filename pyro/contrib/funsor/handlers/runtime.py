@@ -168,7 +168,7 @@ class DimStack:
         for key, value_request in key_to_value_request.items():
             key, fresh_value = self._genvalue(key, value_request)
             # if this key is already active but inconsistent with the fresh value,
-            # generate a fresh value for future conversions via _genvalue in reverse
+            # generate a fresh_key for future conversions via _genvalue in reverse
             if any(key in frame for frame in self.current_read_env):
                 _, fresh_key = self._genvalue(fresh_value, DimRequest(key, value_request.dim_type))
             else:
