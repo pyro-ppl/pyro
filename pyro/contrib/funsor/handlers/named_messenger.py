@@ -123,12 +123,12 @@ class MarkovMessenger(NamedMessenger):
 
     def __iter__(self):
         assert self._iterable is not None
-        _DIM_STACK.iter_frame = _DIM_STACK.current_frame
+        _DIM_STACK.push_iter(_DIM_STACK.local_frame)
         with ExitStack() as stack:
             for value in self._iterable:
                 stack.enter_context(self)
                 yield value
-        _DIM_STACK.iter_frame = _DIM_STACK.iter_frame.iter_parent
+        _DIM_STACK.pop_iter()
 
     def __enter__(self):
         if self.keep and self._saved_frames:
@@ -139,14 +139,14 @@ class MarkovMessenger(NamedMessenger):
                 history=self.history, keep=self.keep,
             )
 
-        _DIM_STACK.push(frame)
+        _DIM_STACK.push_local(frame)
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self.keep:
-            self._saved_frames.append(_DIM_STACK.pop())
+            self._saved_frames.append(_DIM_STACK.pop_local())
         else:
-            _DIM_STACK.pop()
+            _DIM_STACK.pop_local()
         return super().__exit__(*args, **kwargs)
 
 

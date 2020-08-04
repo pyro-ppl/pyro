@@ -15,8 +15,6 @@ class StackFrame(object):
         self.dim_to_name = dim_to_name
         self.history = history
         self.keep = keep
-        self.parent = None
-        self.iter_parent = None
 
     def __setitem__(self, key, value):
         assert isinstance(key, (int, str)) and isinstance(value, (int, str)) and type(key) != type(value)
@@ -38,23 +36,6 @@ class StackFrame(object):
         assert isinstance(key, (int, str))
         return key in (self.dim_to_name if isinstance(key, int) else self.name_to_dim)
 
-    @property
-    def parents(self):
-        parent = self
-        for h in range(self.history):
-            parent = parent.parent
-            if parent is not None:
-                yield parent
-            else:
-                break
-
-    @property
-    def iter_parents(self):
-        iter_parent = self
-        while iter_parent.iter_parent is not None:
-            iter_parent = iter_parent.iter_parent
-            yield iter_parent
-
 
 class DimType(Enum):
     """Enumerates the possible types of dimensions to allocate"""
@@ -75,14 +56,15 @@ class DimStack:
     _param_dims and _value_dims in EnumMessenger, and dim_to_symbol in msg['infer']
     """
     def __init__(self):
-        self.global_frame = StackFrame(
+        global_frame = StackFrame(
             name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
             history=0, keep=False,
         )
-        self.current_frame = self.global_frame
-        self.iter_frame = None
         self._first_available_dim = self.DEFAULT_FIRST_DIM
         self.outermost = None
+        self._local_stack = [global_frame]
+        self._iter_stack = [global_frame]
+        self._global_stack = [global_frame]
 
     MAX_DIM = -25
     DEFAULT_FIRST_DIM = -5
@@ -93,29 +75,38 @@ class DimStack:
         return old_dim
 
     def push_global(self, frame):
-        frame.parent = self.global_frame
-        self.global_frame = frame
+        self._global_stack.append(frame)
 
     def pop_global(self):
-        frame, self.global_frame = self.global_frame, self.global_frame.parent
-        frame.parent = None
-        return frame
+        assert self._global_stack, "cannot pop the global frame"
+        return self._global_stack.pop()
 
-    def push(self, frame):
-        frame.parent, frame.iter_parent = self.current_frame, self.iter_frame
-        self.current_frame = frame
+    def push_iter(self, frame):
+        self._iter_stack.append(frame)
 
-    def pop(self):
-        assert self.current_frame.parent is not None, "cannot pop the global frame"
-        popped_frame = self.current_frame
-        self.current_frame = popped_frame.parent
-        # don't keep around references to other frames
-        popped_frame.parent, popped_frame.iter_parent = None, None
-        return popped_frame
+    def pop_iter(self):
+        assert self._iter_stack, "cannot pop the global frame"
+        return self._iter_stack.pop()
+
+    def push_local(self, frame):
+        self._local_stack.append(frame)
+
+    def pop_local(self):
+        assert self._local_stack, "cannot pop the global frame"
+        return self._local_stack.pop()
+
+    @property
+    def global_frame(self):
+        return self._global_stack[-1]
+
+    @property
+    def local_frame(self):
+        return self._local_stack[-1]
 
     @property
     def current_write_env(self):
-        return [self.current_frame] + (list(self.current_frame.parents) if self.current_frame.keep else [])
+        return self._local_stack[-1:] if not self.local_frame.keep else \
+            self._local_stack[-self.local_frame.history-1:]
 
     @property
     def current_env(self):
@@ -123,8 +114,7 @@ class DimStack:
         Collect all frames necessary to compute the full name <--> dim mapping
         and interpret Funsor inputs or batch shapes at any point in a computation.
         """
-        return list(self.global_frame.parents) + [self.global_frame] + [self.current_frame] + \
-            list(self.current_frame.parents) + list(self.current_frame.iter_parents)
+        return self._global_stack + self._local_stack[-self.local_frame.history-1:] + self._iter_stack
 
     def _genvalue(self, key, value_request):
         """

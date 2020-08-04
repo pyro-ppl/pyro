@@ -64,7 +64,7 @@ def assert_ok(model, guide=None, max_plate_nesting=None, **kwargs):
                 tr_funsor = handlers.trace(handlers.replay(model, trace=guide_tr_funsor)).get_trace(**kwargs)
 
         # make sure all dimensions were cleaned up
-        assert _DIM_STACK.current_frame is _DIM_STACK.global_frame
+        assert _DIM_STACK.local_frame is _DIM_STACK.global_frame
         assert not _DIM_STACK.global_frame.name_to_dim and not _DIM_STACK.global_frame.dim_to_name
         assert _DIM_STACK.outermost is None
 
