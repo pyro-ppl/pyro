@@ -161,16 +161,22 @@ class DimStack:
                     del key_to_value_request[key]
                     break
 
-        # step 2: check for conflicts in non-fresh
+        # step 2: check that the non-fresh input mapping from keys to values is 1-1
         if max(Counter(key_to_value.values()).values(), default=0) > 1:
             raise ValueError("{} is not a valid shape request".format(key_to_value))
 
-        # step 3: if no conflicts in non-fresh, allocate fresh values for all fresh
+        # step 3: allocate fresh values for all fresh
         for key, value_request in key_to_value_request.items():
             key, fresh_value = self._genvalue(key, value_request)
-            value, fresh_key = self._genvalue(fresh_value, DimRequest(key, value_request.dim_type))
-            for frame in [self.global_frame] if value_request.dim_type != DimType.LOCAL else self.current_write_env:
+            # if this key is already active but inconsistent with the fresh value,
+            # generate a fresh value for future conversions via _genvalue in reverse
+            if any(key in frame for frame in self.current_env):
+                _, fresh_key = self._genvalue(fresh_value, DimRequest(key, value_request.dim_type))
+            else:
+                fresh_key = key
+            for frame in ([self.global_frame] if value_request.dim_type != DimType.LOCAL else self.current_write_env):
                 frame[fresh_key] = fresh_value
+            # use the user-provided key rather than fresh_key for satisfying this request only
             key_to_value[key] = fresh_value
 
         assert not any(isinstance(value, DimRequest) for value in key_to_value.values())
