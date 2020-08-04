@@ -101,7 +101,6 @@ setup(
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
             'flake8',
-            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@master',  # TODO update to release branch
             'isort',
             'nbformat',
             'nbsphinx>=0.3.2',
@@ -117,6 +116,9 @@ setup(
             'yapf',
         ],
         'horovod': ['horovod[pytorch]>=0.19'],
+        'funsor': [
+            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@master',  # TODO update to release branch
+        ],
     },
     python_requires='>=3.5',
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',

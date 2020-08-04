@@ -27,6 +27,7 @@ install:
     - pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
     - pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - pip install .[test]
+    - pip install git+https://github.com/pyro-ppl/funsor.git@master#egg=funsor[torch]
     - pip install coveralls
     - pip freeze
 
@@ -80,9 +81,8 @@ jobs:
           python: 3.5
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
         - name: funsor
-          python: 3.6
+          python: 3.5
           script:
-              - pip install git+https://github.com/pyro-ppl/funsor.git@master#egg=funsor[torch]
               - pytest -vs --cov=pyro --cov-config .coveragerc --stage funsor --durations 10
 
 after_success:
