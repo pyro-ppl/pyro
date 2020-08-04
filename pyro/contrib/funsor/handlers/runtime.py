@@ -60,11 +60,11 @@ class DimStack:
             name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
             history=0, keep=False,
         )
-        self._first_available_dim = self.DEFAULT_FIRST_DIM
-        self.outermost = None
         self._local_stack = [global_frame]
         self._iter_stack = [global_frame]
         self._global_stack = [global_frame]
+        self._first_available_dim = self.DEFAULT_FIRST_DIM
+        self.outermost = None
 
     MAX_DIM = -25
     DEFAULT_FIRST_DIM = -5
