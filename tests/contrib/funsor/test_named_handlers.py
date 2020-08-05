@@ -6,17 +6,18 @@ import logging
 
 import torch
 
-import funsor
-from funsor.domains import bint, reals
-from funsor.tensor import Tensor
-
 import pyro.contrib.funsor
 from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
 
 from pyroapi import pyro, pyro_backend
 
-
-funsor.set_backend("torch")
+try:
+    import funsor
+    from funsor.domains import bint, reals
+    from funsor.tensor import Tensor
+    funsor.set_backend("torch")
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 
