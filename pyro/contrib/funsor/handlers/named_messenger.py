@@ -9,8 +9,16 @@ from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, StackFrame
 
 
-class DimStackCleanupMessenger(ReentrantMessenger):
+class NamedMessenger(ReentrantMessenger):
+    """
+    Base effect handler class for the :func:~`pyro.contrib.funsor.to_funsor`
+    and :func:~`pyro.contrib.funsor.to_data` primitives.
+    Any effect handlers that invoke these primitives internally or wrap
+    code that does should inherit from ``NamedMessenger``.
 
+    This design ensures that the global name-dim mapping is reset upon handler exit
+    rather than potentially persisting until the entire program terminates.
+    """
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
@@ -39,9 +47,6 @@ class DimStackCleanupMessenger(ReentrantMessenger):
             for name, dim in self._saved_dims:
                 del _DIM_STACK.global_frame[name]
         return super().__exit__(*args, **kwargs)
-
-
-class NamedMessenger(DimStackCleanupMessenger):
 
     @staticmethod  # only depends on the global _DIM_STACK state, not self
     def _pyro_to_data(msg):

@@ -24,7 +24,7 @@ __all__ = [
 
 
 try:
-    import funsor as funsor_
+    import funsor as funsor_  # noqa: F401
     from pyro.contrib import funsor
     __all__ += ["funsor"]
 except ImportError:
