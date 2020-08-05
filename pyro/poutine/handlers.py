@@ -109,6 +109,7 @@ def _make_handler(msngr_cls):
         msngr = msngr_cls(*args, **kwargs)
         return functools.update_wrapper(msngr(fn), fn, updated=()) if fn is not None else msngr
 
+    # handler names from messenger names: strip Messenger suffix, convert CamelCase to snake_case
     handler_name = _re2.sub(
         r'\1_\2', _re1.sub(r'\1_\2', msngr_cls.__name__.split("Messenger")[0])).lower()
     handler.__doc__ = """Convenient wrapper of :class:`~pyro.poutine.{}.{}` \n\n""".format(
