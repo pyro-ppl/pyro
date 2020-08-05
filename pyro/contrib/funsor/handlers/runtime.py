@@ -5,12 +5,16 @@ from collections import Counter, OrderedDict, namedtuple
 from enum import Enum
 
 
-class StackFrame(object):
+class StackFrame:
     """
     Consistent bidirectional mapping between integer positional dimensions and names.
     Can be queried like a dictionary (value = frame[key], frame[key] = value).
     """
     def __init__(self, name_to_dim, dim_to_name, history=1, keep=False):
+        assert isinstance(name_to_dim, OrderedDict) and \
+            all(isinstance(name, str) and isinstance(dim, int) for name, dim in name_to_dim.items())
+        assert isinstance(dim_to_name, OrderedDict) and \
+            all(isinstance(name, str) and isinstance(dim, int) for dim, name in dim_to_name.items())
         self.name_to_dim = name_to_dim
         self.dim_to_name = dim_to_name
         self.history = history
