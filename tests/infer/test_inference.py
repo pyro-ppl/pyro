@@ -771,3 +771,40 @@ def test_sequential_plating_sum():
         loss = svi.step(data)
         if step % 20 == 0:
             logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+def test_non_nested_plating_sum():
+    """Example from https://github.com/pyro-ppl/pyro/issues/2361"""
+
+    # Generative model: data = x @ weights + eps
+    def model(data, weights):
+        loc = torch.tensor(1.0)
+        scale = torch.tensor(0.1)
+
+        # Sample latents (shares no dimensions with data)
+        with pyro.plate('x_plate', weights.shape[0]):
+            x = pyro.sample('x', pyro.distributions.Normal(loc, scale))
+
+        # Combine with weights and sample
+        with pyro.plate('data_plate_1', data.shape[-1]):
+            with pyro.plate('data_plate_2', data.shape[-2]):
+                pyro.sample('data', pyro.distributions.Normal(x @ weights, scale), obs=data)
+
+    def guide(data, weights):
+        loc = pyro.param('x_loc', torch.tensor(0.5))
+        scale = torch.tensor(0.1)
+
+        with pyro.plate('x_plate', weights.shape[0]):
+            pyro.sample('x', pyro.distributions.Normal(loc, scale))
+
+    data = torch.randn([5, 3])
+    weights = torch.randn([2, 3])
+    adam = optim.Adam({"lr": 0.01})
+    loss_fn = RenyiELBO(num_particles=30, vectorize_particles=True)
+    svi = SVI(model, guide, adam, loss_fn)
+
+    for step in range(1):
+        loss = svi.step(data, weights)
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}".format(step, loss))
