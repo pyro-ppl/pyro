@@ -11,7 +11,7 @@ import pyro.contrib.funsor  # noqa: F401
 
 
 # TODO get this working again...
-pytestmark = pytest.mark.skip()
+pytestmark = pytest.mark.xfail()
 
 
 @pytest.fixture(params=["contrib.funsor"])
