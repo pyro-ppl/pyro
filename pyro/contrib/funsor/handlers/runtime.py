@@ -132,7 +132,10 @@ class DimStack:
 
         elif isinstance(key, str):
             name, dim, dim_type = key, value_request.value, value_request.dim_type
-            fresh_dim = (self._first_available_dim if dim_type != DimType.VISIBLE else -1) if dim is None else dim
+            if dim_type == DimType.VISIBLE:
+                fresh_dim = -1 if dim is None else dim
+            else:
+                fresh_dim = self._first_available_dim  # discard input...
 
             while any(fresh_dim in p for p in self.current_read_env):
                 fresh_dim -= 1
@@ -169,7 +172,7 @@ class DimStack:
             key, fresh_value = self._genvalue(key, value_request)
             # if this key is already active but inconsistent with the fresh value,
             # generate a fresh_key for future conversions via _genvalue in reverse
-            if any(key in frame for frame in self.current_read_env):
+            if value_request.dim_type != DimType.VISIBLE or any(key in frame for frame in self.current_read_env):
                 _, fresh_key = self._genvalue(fresh_value, DimRequest(key, value_request.dim_type))
             else:
                 fresh_key = key
