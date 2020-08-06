@@ -153,3 +153,20 @@ class MarkovMessenger(NamedMessenger):
         else:
             _DIM_STACK.pop_local()
         return super().__exit__(*args, **kwargs)
+
+
+class GlobalNamedMessenger(NamedMessenger):
+
+    def __init__(self, first_available_dim=None):
+        self._saved_frames = []
+        super().__init__(first_available_dim=first_available_dim)
+
+    def __enter__(self):
+        frame = self._saved_frames.pop() if self._saved_frames else StackFrame(
+            name_to_dim=OrderedDict(), dim_to_name=OrderedDict())
+        _DIM_STACK.push_global(frame)
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        self._saved_frames.append(_DIM_STACK.pop_global())
+        return super().__exit__(*args)
