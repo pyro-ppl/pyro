@@ -4,6 +4,7 @@
 from collections import OrderedDict
 import logging
 
+import pytest
 import torch
 
 import pyro.contrib.funsor
@@ -17,7 +18,7 @@ try:
     from funsor.tensor import Tensor
     funsor.set_backend("torch")
 except ImportError:
-    pass
+    pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
 logger = logging.getLogger(__name__)
 
