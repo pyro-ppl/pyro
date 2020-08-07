@@ -116,6 +116,10 @@ setup(
             'yapf',
         ],
         'horovod': ['horovod[pytorch]>=0.19'],
+        'funsor': [
+            # TODO update to release branch (currently using a recent commit on master)
+            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@c7390318cd6c3f77798aee01638aff08e9582c96',
+        ],
     },
     python_requires='>=3.5',
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
