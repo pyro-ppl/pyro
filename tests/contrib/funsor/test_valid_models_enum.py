@@ -112,10 +112,10 @@ def _check_traces(tr_pyro, tr_funsor):
                 pyro_packed_shape = pyro_node['packed']['log_prob'].shape
                 funsor_packed_shape = funsor_node['log_prob'].squeeze().shape
                 if pyro_packed_shape != funsor_packed_shape:
-                    err_str = f"==> (dep mismatch) {name}"
+                    err_str = "==> (dep mismatch) {}".format(name)
                 else:
                     err_str = name
-                print(err_str, f"Pyro: {pyro_packed_shape} vs Funsor: {funsor_packed_shape}")
+                print(err_str, "Pyro: {} vs Funsor: {}".format(pyro_packed_shape, funsor_packed_shape))
             raise
 
     if _NAMED_TEST_STRENGTH >= 2:
@@ -139,10 +139,10 @@ def _check_traces(tr_pyro, tr_funsor):
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
                 funsor_names = frozenset(funsor_node['funsor']['log_prob'].inputs)
                 if pyro_names != funsor_names:
-                    err_str = f"==> (packed mismatch) {name}"
+                    err_str = "==> (packed mismatch) {}".format(name)
                 else:
                     err_str = name
-                print(err_str, f"Pyro: {sorted(tuple(pyro_names))} vs Funsor: {sorted(tuple(funsor_names))}")
+                print(err_str, "Pyro: {} vs Funsor: {}".format(sorted(tuple(pyro_names)), sorted(tuple(funsor_names))))
             raise
 
     if _NAMED_TEST_STRENGTH >= 3:
@@ -162,10 +162,10 @@ def _check_traces(tr_pyro, tr_funsor):
                 pyro_shape = pyro_node['log_prob'].shape
                 funsor_shape = funsor_node['log_prob'].shape
                 if pyro_shape != funsor_shape:
-                    err_str = f"==> (unpacked mismatch) {name}"
+                    err_str = "==> (unpacked mismatch) {}".format(name)
                 else:
                     err_str = name
-                print(err_str, f"Pyro: {pyro_shape} vs Funsor: {funsor_shape}")
+                print(err_str, "Pyro: {} vs Funsor: {}".format(pyro_shape, funsor_shape))
             raise
 
 
