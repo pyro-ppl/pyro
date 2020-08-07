@@ -7,15 +7,14 @@ import logging
 import pytest
 import torch
 
-import pyro.contrib.funsor
-from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
-
 from pyroapi import pyro, pyro_backend
 
 try:
     import funsor
     from funsor.domains import bint, reals
     from funsor.tensor import Tensor
+    import pyro.contrib.funsor
+    from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
     funsor.set_backend("torch")
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")

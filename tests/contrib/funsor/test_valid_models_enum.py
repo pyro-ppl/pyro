@@ -10,21 +10,19 @@ from queue import LifoQueue
 import pytest
 import torch
 
-import pyro
 from pyro.infer.enum import iter_discrete_escape, iter_discrete_extend
 from pyro.ops.indexing import Vindex
 from pyro.poutine import Trace
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_traceenum_requirements
 
-import pyro.contrib.funsor
-from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
-
 from pyroapi import distributions as dist
 from pyroapi import infer, handlers, pyro, pyro_backend
 
 try:
     import funsor
+    import pyro.contrib.funsor
+    from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
     funsor.set_backend("torch")
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
