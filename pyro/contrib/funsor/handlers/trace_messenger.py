@@ -6,7 +6,7 @@ import funsor
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
-from pyro.contrib.funsor.handlers.primitives import _EmptyDist, to_data, to_funsor
+from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
 
 
@@ -23,19 +23,8 @@ class TraceMessenger(OrigTraceMessenger):
         super().__init__(graph_type=graph_type, param_only=param_only)
         self.pack_online = True if pack_online is None else pack_online
 
-    def _pyro_sample(self, msg):
-        if msg["done"] or not isinstance(msg["fn"], _EmptyDist) or msg["name"] not in self.trace.nodes or \
-                "value" not in self.trace.nodes[msg["name"]].get("funsor", {}):
-            return
-
-        # reinterpret dimension names in the current context
-        assert msg["name"] in self.trace.nodes
-        msg["value"] = to_data(self.trace.nodes[msg["name"]]["funsor"]["value"])
-        msg["done"] = True
-        msg["stop"] = True
-
     def _pyro_post_sample(self, msg):
-        if msg["name"] in self.trace and isinstance(msg["fn"], _EmptyDist):
+        if msg["name"] in self.trace:
             return
         if "funsor" not in msg:
             msg["funsor"] = {}
