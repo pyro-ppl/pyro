@@ -6,7 +6,7 @@ import funsor
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.trace_messenger import TraceMessenger as OrigTraceMessenger
 
-from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
+from pyro.contrib.funsor.handlers.primitives import to_funsor
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
 
 
