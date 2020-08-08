@@ -7,8 +7,7 @@ import logging
 import pytest
 import torch
 
-from pyroapi import pyro, pyro_backend
-
+# put all funsor-related imports here, so test collection works without funsor
 try:
     import funsor
     from funsor.domains import bint, reals
@@ -16,8 +15,10 @@ try:
     import pyro.contrib.funsor
     from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
     funsor.set_backend("torch")
+    from pyroapi import pyro, pyro_backend
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
+
 
 logger = logging.getLogger(__name__)
 
