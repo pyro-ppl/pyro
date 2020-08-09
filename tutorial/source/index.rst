@@ -29,6 +29,7 @@ Welcome to Pyro Examples and Tutorials!
    effect_handlers
    modules
    normalizing_flows_i
+   contrib_funsor_intro_ii
 
 .. toctree::
    :maxdepth: 2
