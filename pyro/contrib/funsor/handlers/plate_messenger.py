@@ -11,7 +11,7 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import DimType, GlobalNamedMessenger, MarkovMessenger
+from pyro.contrib.funsor.handlers.named_messenger import DimType, GlobalNamedMessenger
 
 funsor.set_backend("torch")
 
@@ -104,20 +104,6 @@ class SubsampleMessenger(IndepMessenger):
         msg["value"] = self._subsample_site_value(msg["value"], event_dim)
 
 
-class SequentialPlateMessenger(MarkovMessenger):
-    def __init__(self, name=None, size=None, dim=None):
-        self.name, self.size, self.dim, self.counter = name, size, dim, 0
-        super().__init__(history=0, keep=True)
-
-    def _pyro_sample(self, msg):
-        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
-        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
-
-    def _pyro_param(self, msg):
-        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
-        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
-
-
 class PlateMessenger(SubsampleMessenger):
     """
     Combines new IndepMessenger implementation with existing BroadcastMessenger.
@@ -126,9 +112,3 @@ class PlateMessenger(SubsampleMessenger):
     def _pyro_sample(self, msg):
         super()._pyro_sample(msg)
         BroadcastMessenger._pyro_sample(msg)
-
-    def __iter__(self):
-        c = SequentialPlateMessenger(self.name, self.size, self.dim)
-        for i in c(range(self.size)):
-            c.counter += 1
-            yield i
