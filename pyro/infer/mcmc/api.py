@@ -26,7 +26,7 @@ import pyro.poutine as poutine
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.logger import DIAGNOSTIC_MSG, ProgressBar, TqdmHandler, initialize_logger
 from pyro.infer.mcmc.nuts import NUTS
-from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
+from pyro.infer.mcmc.util import diagnostics, print_summary
 from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
