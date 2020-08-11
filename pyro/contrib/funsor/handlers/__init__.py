@@ -10,6 +10,7 @@ from pyro.poutine import (  # noqa: F401
 
 from .enum_messenger import EnumMessenger, queue  # noqa: F401
 from .named_messenger import MarkovMessenger, NamedMessenger
+from .plate_messenger import PlateMessenger
 from .replay_messenger import ReplayMessenger
 from .trace_messenger import TraceMessenger
 
@@ -18,6 +19,7 @@ _msngrs = [
     EnumMessenger,
     MarkovMessenger,
     NamedMessenger,
+    PlateMessenger,
     ReplayMessenger,
     TraceMessenger,
 ]
