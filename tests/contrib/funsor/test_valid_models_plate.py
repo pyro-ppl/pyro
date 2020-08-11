@@ -62,7 +62,7 @@ def test_plate_dim_allocation_ok(plate_dims):
     assert_ok(model, max_plate_nesting=4)
 
 
-@pytest.mark.parametrize("tmc_strategy", [None, xfail_param("diagonal", reason="diagonal strategy not implemented yet")])
+@pytest.mark.parametrize("tmc_strategy", [None, xfail_param("diagonal", reason="strategy not implemented yet")])
 @pytest.mark.parametrize("subsampling", [False, True])
 @pytest.mark.parametrize("reuse_plate", [False, True])
 def test_enum_recycling_plate(subsampling, reuse_plate, tmc_strategy):
