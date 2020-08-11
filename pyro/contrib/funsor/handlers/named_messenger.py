@@ -153,3 +153,28 @@ class MarkovMessenger(NamedMessenger):
         else:
             _DIM_STACK.pop_local()
         return super().__exit__(*args, **kwargs)
+
+
+class GlobalNamedMessenger(NamedMessenger):
+    """
+    Base class for any new effect handlers that use the
+    :func:~`pyro.contrib.funsor.to_funsor` and :func:~`pyro.contrib.funsor.to_data` primitives
+    to allocate `DimType.GLOBAL` or `DimType.VISIBLE` dimensions.
+
+    Serves as a manual "scope" for dimensions that should not be recycled by :class:~`MarkovMessenger`:
+    global dimensions will be considered active until the innermost ``GlobalNamedMessenger``
+    under which they were initially allocated exits.
+    """
+    def __init__(self, first_available_dim=None):
+        self._saved_frames = []
+        super().__init__(first_available_dim=first_available_dim)
+
+    def __enter__(self):
+        frame = self._saved_frames.pop() if self._saved_frames else StackFrame(
+            name_to_dim=OrderedDict(), dim_to_name=OrderedDict())
+        _DIM_STACK.push_global(frame)
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        self._saved_frames.append(_DIM_STACK.pop_global())
+        return super().__exit__(*args)
