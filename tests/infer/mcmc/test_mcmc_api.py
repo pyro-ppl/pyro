@@ -230,3 +230,17 @@ def test_sequential_consistent(monkeypatch):
 
     assert_close(samples1["y"][0], samples2["y"][1])
     assert_close(samples1["y"][1], samples2["y"][0])
+
+
+def test_model_with_potential_fn():
+    init_params = {"z": torch.tensor(0.)}
+
+    def potential_fn(params):
+        return params["z"]
+
+    mcmc = MCMC(
+        kernel=HMC(potential_fn=potential_fn),
+        num_samples=10,
+        warmup_steps=10,
+        initial_params=init_params)
+    mcmc.run()
