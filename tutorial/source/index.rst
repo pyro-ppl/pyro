@@ -30,6 +30,7 @@ Welcome to Pyro Examples and Tutorials!
    modules
    normalizing_flows_i
    contrib_funsor_intro_i
+   contrib_funsor_intro_ii
 
 .. toctree::
    :maxdepth: 2
