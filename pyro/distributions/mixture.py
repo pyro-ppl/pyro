@@ -48,12 +48,12 @@ class MaskedMixture(TorchDistribution):
         with pyro.plate("data", len(data)):
             pyro.sample("obs", MaskedMixture(mask, dist1, dist2), obs=data)
 
-    :param torch.Tensor mask: A byte tensor toggling between ``component0``
+    :param torch.Tensor mask: A boolean tensor toggling between ``component0``
         and ``component1``.
     :param pyro.distributions.TorchDistribution component0: a distribution
-        for batch elements ``mask == 0``.
+        for batch elements ``mask == False``.
     :param pyro.distributions.TorchDistribution component1: a distribution
-        for batch elements ``mask == 1``.
+        for batch elements ``mask == True``.
     """
     arg_constraints = {}  # nothing can be constrained
 
