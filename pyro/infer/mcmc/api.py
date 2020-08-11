@@ -409,7 +409,7 @@ class MCMC:
         # model args, kwargs.
         if self.transforms is None:
             # Use `kernel.transforms` when available
-            if getattr(self.kernel, 'transforms', None) is not None:
+            if getattr(self.kernel, "transforms", None) is not None:
                 self.transforms = self.kernel.transforms
             # Else, get transforms from model (e.g. in multiprocessing).
             elif self.kernel.model:
