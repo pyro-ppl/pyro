@@ -125,10 +125,7 @@ def _check_traces(tr_pyro, tr_funsor):
                 funsor_node = tr_funsor.nodes[name]
                 pyro_names = frozenset(symbol_to_name[d] for d in pyro_node['packed']['log_prob']._pyro_dims)
                 funsor_names = frozenset(funsor_node['funsor']['log_prob'].inputs)
-                try:
-                    assert pyro_names == funsor_names
-                except AssertionError:
-                    assert pyro_names == frozenset(name.replace('__PARTICLES', '') for name in funsor_names)
+                assert pyro_names == frozenset(name.replace('__PARTICLES', '') for name in funsor_names)
         except AssertionError:
             for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node['type'] != 'sample':
