@@ -408,19 +408,14 @@ class MCMC:
         # If transforms is not explicitly provided, infer automatically using
         # model args, kwargs.
         if self.transforms is None:
-            # Try to initialize kernel.transforms using kernel.setup().
-            if getattr(self.kernel, "transforms", None) is None:
-                warmup_steps = 0
-                self.kernel.setup(warmup_steps, *args, **kwargs)
             # Use `kernel.transforms` when available
-            if getattr(self.kernel, "transforms", None) is not None:
+            if getattr(self.kernel, 'transforms', None) is not None:
                 self.transforms = self.kernel.transforms
             # Else, get transforms from model (e.g. in multiprocessing).
             elif self.kernel.model:
-                _, _, self.transforms, _ = initialize_model(self.kernel.model,
-                                                            model_args=args,
-                                                            model_kwargs=kwargs,
-                                                            initial_params={})
+                warmup_steps = 0
+                self.kernel.setup(warmup_steps, *args, **kwargs)
+                self.transforms = self.kernel.transforms
             # Assign default value
             else:
                 self.transforms = {}
