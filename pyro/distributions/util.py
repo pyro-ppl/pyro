@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import copy
+import ctypes
 import functools
 import numbers
 import weakref
@@ -56,6 +58,7 @@ def copy_docs_from(source_class, full_text=False):
     return decorator
 
 
+# TODO replace with weakref.WeakMethod?
 def weakmethod(fn):
     """
     Decorator to enforce weak binding of a method, so as to avoid reference
@@ -90,6 +93,33 @@ def weakmethod(fn):
             raise AttributeError("cannot overwrite weakmethod {}".format(fn.__name__))
 
     return weak_binder
+
+
+# This helper intervenes in copy.deepcopy's use of a memo dict to
+# use .detatch() to copy tensors.
+class _DetachMemo(dict):
+    def get(self, key, default=None):
+        result = super().get(key, default)
+
+        if result is default:
+            # Assume key is the id of another object, and look up that object.
+            old = ctypes.cast(key, ctypes.py_object).value
+            if isinstance(old, torch.Tensor):
+                self[key] = result = old.detach()
+
+        return result
+
+
+def detach(obj):
+    """
+    Create a deep copy of an object, detaching all :class:`torch.Tensor` s in
+    the object. No tensor data is actually copied.
+
+    :param obj: Any python object.
+    :returns: A deep copy of ``obj`` with all :class:`torch.Tensor` s detached.
+    """
+    memo = _DetachMemo()
+    return copy.deepcopy(obj, memo)
 
 
 def is_identically_zero(x):

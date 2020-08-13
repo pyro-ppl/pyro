@@ -8,10 +8,10 @@ import torch
 
 import pyro
 import pyro.ops.jit
-from pyro.distributions.util import is_identically_zero
+from pyro.distributions.util import detach, is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.enum import get_importance_trace
-from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_plate_stacks,
+from pyro.infer.util import (MultiFrameTensor, get_plate_stacks,
                              is_validation_enabled, torch_backward, torch_item)
 from pyro.util import check_if_enumerated, warn_if_nan
 
@@ -61,7 +61,7 @@ def _construct_baseline(node, guide_site, downstream_cost):
         baseline += avg_downstream_cost_old
     if use_nn_baseline:
         # block nn_baseline_input gradients except in baseline loss
-        baseline += nn_baseline(detach_iterable(nn_baseline_input))
+        baseline += nn_baseline(detach(nn_baseline_input))
     elif use_baseline_value:
         # it's on the user to make sure baseline_value tape only points to baseline params
         baseline += baseline_value
