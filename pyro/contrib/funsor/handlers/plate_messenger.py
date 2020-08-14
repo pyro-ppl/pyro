@@ -136,12 +136,9 @@ class _SequentialPlateMessenger(Messenger):
         self.counter = 0
         super().__init__()
 
-    def __enter__(self):
-        self.counter = 0
-        return super().__enter__()
-
     def __iter__(self):
         with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]), self:
+            self.counter = 0
             for i in self.indices:
                 self.counter += 1
                 yield i if isinstance(i, Number) else i.item()
