@@ -121,7 +121,7 @@ class PlateMessenger(SubsampleMessenger):
         BroadcastMessenger._pyro_sample(msg)
 
     def __iter__(self):
-        return iter(_SequentialPlateMessenger(self.name, self.size, self._indices, self._scale))
+        return iter(_SequentialPlateMessenger(self.name, self.size, self._indices.data.squeeze(), self._scale))
 
 
 class _SequentialPlateMessenger(Messenger):
@@ -132,23 +132,23 @@ class _SequentialPlateMessenger(Messenger):
         self.name = name
         self.size = size
         self.indices = indices
-        self.scale = scale
-        self.counter = 0
+        self._scale = scale
+        self._counter = 0
         super().__init__()
 
     def __iter__(self):
         with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]), self:
-            self.counter = 0
+            self._counter = 0
             for i in self.indices:
-                self.counter += 1
+                self._counter += 1
                 yield i if isinstance(i, Number) else i.item()
 
     def _pyro_sample(self, msg):
-        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
+        frame = CondIndepStackFrame(self.name, None, self.size, self._counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         msg["scale"] = msg["scale"] * self._scale
 
     def _pyro_param(self, msg):
-        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
+        frame = CondIndepStackFrame(self.name, None, self.size, self._counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         msg["scale"] = msg["scale"] * self._scale
