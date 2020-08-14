@@ -180,3 +180,24 @@ def test_detach_transformed(shape):
     assert not d2.base_dist.scale.requires_grad
     assert not d2.transforms[0].loc.requires_grad
     assert not d2.transforms[0].scale.requires_grad
+
+
+@pytest.mark.parametrize("shape", [None, (), (4,), (3, 2)], ids=str)
+def test_detach_jit(shape):
+    loc = torch.tensor(0., requires_grad=True)
+    scale = torch.tensor(1., requires_grad=True)
+    data = torch.randn(5, 1, 1)
+
+    def fn(loc, scale, data):
+        d = dist.Normal(loc, scale, validate_args=False)
+        if shape is not None:
+            d = d.expand(shape)
+        return detach(d).log_prob(data)
+
+    jit_fn = torch.jit.trace(fn, (loc, scale, data))
+
+    expected = fn(loc, scale, data)
+    actual = jit_fn(loc, scale, data)
+    assert not expected.requires_grad
+    assert not actual.requires_grad
+    assert_equal(actual, expected)
