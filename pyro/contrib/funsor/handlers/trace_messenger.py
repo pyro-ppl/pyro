@@ -19,7 +19,7 @@ class TraceMessenger(OrigTraceMessenger):
     Each sample site is annotated with a "dim_to_name" dictionary,
     which can be passed directly to funsor.to_funsor.
     """
-    def __init__(self, graph_type=None, param_only=None, pack_online=None):
+    def __init__(self, graph_type=None, param_only=None, pack_online=True):
         super().__init__(graph_type=graph_type, param_only=param_only)
         self.pack_online = True if pack_online is None else pack_online
 
