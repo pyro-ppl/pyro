@@ -15,7 +15,7 @@ from pyro.ops.indexing import Vindex
 
 from pyroapi import handlers, infer, pyro, pyro_backend
 from pyroapi import distributions as dist
-from tests.common import assert_equal  # , xfail_param
+from tests.common import assert_equal, xfail_param
 
 
 funsor.set_backend("torch")
@@ -1046,14 +1046,12 @@ def test_elbo_enumerate_plates_6(scale):
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
         a = pyro.sample("a", dist.Categorical(probs_a))
-        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]  # noqa: F841
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         for i in b_axis:
-            b_i = pyro.sample("b_{}".format(i))
             for j in c_axis:
-                c_j = pyro.sample("c_{}".format(j))
                 pyro.sample("d_{}_{}".format(i, j),
-                            dist.Categorical(Vindex(probs_d)[b_i, c_j]),
+                            dist.Categorical(Vindex(probs_d)[b[i], c[j]]),
                             obs=data[i, j])
 
     @infer.config_enumerate
@@ -1088,12 +1086,11 @@ def test_elbo_enumerate_plates_6(scale):
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         with b_axis:
             for j in c_axis:
-                c_j = pyro.sample("c_{}".format(j))
                 pyro.sample("d_{}".format(j),
-                            dist.Categorical(Vindex(probs_d)[b, c_j]),
+                            dist.Categorical(Vindex(probs_d)[b, c[j]]),
                             obs=data[:, j])
 
     @infer.config_enumerate
@@ -1178,15 +1175,13 @@ def test_elbo_enumerate_plates_7(scale):
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
         a = pyro.sample("a", dist.Categorical(probs_a))
-        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]  # noqa: F841
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         for i in b_axis:
-            b_i = pyro.sample("b_{}".format(i))
             for j in c_axis:
-                c_j = pyro.sample("c_{}".format(j))
-                pyro.sample("d_{}_{}".format(i, j), dist.Categorical(probs_d[b_i]),
+                pyro.sample("d_{}_{}".format(i, j), dist.Categorical(probs_d[b[i]]),
                             obs=data[i, j])
-                pyro.sample("e_{}_{}".format(i, j), dist.Categorical(probs_e[c_j]),
+                pyro.sample("e_{}_{}".format(i, j), dist.Categorical(probs_e[c[j]]),
                             obs=data[i, j])
 
     @infer.config_enumerate
@@ -1224,13 +1219,12 @@ def test_elbo_enumerate_plates_7(scale):
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
-        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]  # noqa: F841
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         with b_axis:
             for j in c_axis:
-                c_j = pyro.sample("c_{}".format(j))
                 pyro.sample("d_{}".format(j), dist.Categorical(probs_d[b]),
                             obs=data[:, j])
-                pyro.sample("e_{}".format(j), dist.Categorical(probs_e[c_j]),
+                pyro.sample("e_{}".format(j), dist.Categorical(probs_e[c[j]]),
                             obs=data[:, j])
 
     @infer.config_enumerate
@@ -1271,13 +1265,10 @@ def test_elbo_enumerate_plates_7(scale):
 
 @pytest.mark.parametrize('guide_scale', [1])
 @pytest.mark.parametrize('model_scale', [1])
-@pytest.mark.parametrize('outer_vectorized,inner_vectorized,xfail',
-                         [(False, True, False)],
-                         # (True, False, xfail_param(True, reason="validation not yet implemented")),
-                         # (True, True, xfail_param(True, reason="validation not yet implemented"))],
-                         ids=['iplate-plate'])  # , 'plate-iplate', 'plate-plate'])
+@pytest.mark.parametrize('outer_vectorized', [False, xfail_param(True, reason="validation not yet implemented")])
+@pytest.mark.parametrize('inner_vectorized', [False, True])
 @pyro_backend("contrib.funsor")
-def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized, xfail):
+def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized):  #, xfail):
     #        Guide   Model
     #                  a
     #      +-----------|--------+
@@ -1375,19 +1366,18 @@ def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, out
 
     elbo = infer.TraceEnum_ELBO(max_plate_nesting=0)
     expected_loss = elbo.differentiable_loss(model_iplate_iplate, guide_iplate)
-    with ExitStack() as stack:
-        if xfail:
-            stack.enter_context(pytest.raises(
-                ValueError,
-                match="Expected model enumeration to be no more global than guide"))
-        if inner_vectorized:
-            if outer_vectorized:
-                elbo = infer.TraceEnum_ELBO(max_plate_nesting=2)
-                actual_loss = elbo.differentiable_loss(model_plate_plate, guide_plate)
-            else:
-                elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
-                actual_loss = elbo.differentiable_loss(model_iplate_plate, guide_iplate)
+    if inner_vectorized:
+        if outer_vectorized:
+            elbo = infer.TraceEnum_ELBO(max_plate_nesting=2)
+            actual_loss = elbo.differentiable_loss(model_plate_plate, guide_plate)
         else:
             elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
+            actual_loss = elbo.differentiable_loss(model_iplate_plate, guide_iplate)
+    else:
+        if outer_vectorized:
+            elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
             actual_loss = elbo.differentiable_loss(model_plate_iplate, guide_plate)
-        _check_loss_and_grads(expected_loss, actual_loss)
+        else:
+            elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
+            actual_loss = elbo.differentiable_loss(model_iplate_iplate, guide_iplate)
+    _check_loss_and_grads(expected_loss, actual_loss)
