@@ -1,7 +1,6 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from contextlib import ExitStack
 import logging
 
 import pytest
@@ -1268,7 +1267,7 @@ def test_elbo_enumerate_plates_7(scale):
 @pytest.mark.parametrize('outer_vectorized', [False, xfail_param(True, reason="validation not yet implemented")])
 @pytest.mark.parametrize('inner_vectorized', [False, True])
 @pyro_backend("contrib.funsor")
-def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized):  #, xfail):
+def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized):
     #        Guide   Model
     #                  a
     #      +-----------|--------+
