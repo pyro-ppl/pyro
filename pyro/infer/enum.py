@@ -164,9 +164,9 @@ def config_enumerate(guide=None, default="parallel", expand=False, num_samples=N
         if default == "sequential":
             raise ValueError('Local sampling does not support "sequential" sampling; '
                              'use "parallel" sampling instead.')
-    if tmc is not None:
-        if tmc not in ("mixture", "diagonal"):
-            raise ValueError("{} not a valid TMC strategy".format(tmc))
+    if tmc == "full" and num_samples is not None and num_samples > 1:
+        # tmc strategies validated elsewhere (within enum handler)
+        expand = True
 
     # Support usage as a decorator:
     if guide is None:
