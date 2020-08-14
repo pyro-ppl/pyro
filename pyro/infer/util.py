@@ -76,13 +76,6 @@ def torch_sum(tensor, dims):
     return tensor.sum(dims) if dims else tensor
 
 
-def detach_iterable(iterable):
-    if torch.is_tensor(iterable):
-        return iterable.detach()
-    else:
-        return [var.detach() for var in iterable]
-
-
 def zero_grads(tensors):
     """
     Sets gradients of list of Tensors to zero in place
