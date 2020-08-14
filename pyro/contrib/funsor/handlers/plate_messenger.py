@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections import OrderedDict
+from numbers import Number
 
 import funsor
 
 from pyro.distributions.util import copy_docs_from
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+from pyro.poutine.messenger import Messenger
 from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
+from pyro.util import ignore_jit_warnings
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.named_messenger import DimType, GlobalNamedMessenger
@@ -116,3 +119,36 @@ class PlateMessenger(SubsampleMessenger):
     def _pyro_sample(self, msg):
         super()._pyro_sample(msg)
         BroadcastMessenger._pyro_sample(msg)
+
+    def __iter__(self):
+        return iter(_SequentialPlateMessenger(self.name, self.size, self._indices, self._scale))
+
+
+class _SequentialPlateMessenger(Messenger):
+    """
+    Implementation of sequential plate. Should not be used directly.
+    """
+    def __init__(self, name, size, indices, scale):
+        self.name = name
+        self.size = size
+        self.indices = indices
+        self.scale = scale
+        self.counter = 0
+        super().__init__()
+
+    def __iter__(self):
+        with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]), self:
+            self.counter = 0
+            for i in self.indices:
+                self.counter += 1
+                yield i if isinstance(i, Number) else i.item()
+
+    def _pyro_sample(self, msg):
+        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+        msg["scale"] = msg["scale"] * self._scale
+
+    def _pyro_param(self, msg):
+        frame = CondIndepStackFrame(self.name, None, self.size, self.counter)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+        msg["scale"] = msg["scale"] * self._scale
