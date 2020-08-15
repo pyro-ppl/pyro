@@ -13,9 +13,9 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
-                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate)
+                        TraceEnum_ELBO, TraceGraph_ELBO, TraceIWAE_ELBO, TraceMeanField_ELBO, config_enumerate)
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
+from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ def DiffTrace_ELBO(*args, **kwargs):
     (TraceMeanField_ELBO, False),
     (TraceEnum_ELBO, False),
     (TraceEnum_ELBO, True),
+    (TraceIWAE_ELBO, False),
 ])
 def test_subsample_gradient(Elbo, reparameterized, has_rsample, subsample, local_samples, scale):
     pyro.clear_param_store()
@@ -43,6 +44,8 @@ def test_subsample_gradient(Elbo, reparameterized, has_rsample, subsample, local
     subsample_size = 1 if subsample else len(data)
     precision = 0.06 * scale
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+    if Elbo is TraceIWAE_ELBO and not (reparameterized and has_rsample):
+        pytest.skip("not implemented")
 
     def model(subsample):
         with pyro.plate("data", len(data), subsample_size, subsample) as ind:
@@ -89,6 +92,41 @@ def test_subsample_gradient(Elbo, reparameterized, has_rsample, subsample, local
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))
     assert_equal(actual_grads, expected_grads, prec=precision)
+
+
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceIWAE_ELBO,
+])
+def test_zero_gradient(Elbo):
+    data = torch.tensor([0.0, 2.0, 2.0])
+
+    def model(data):
+        z = pyro.sample("z", dist.Normal(0, 1))
+        with pyro.plate("data", len(data)):
+            pyro.sample("x", dist.Normal(z, 1), obs=data)
+
+    # This guide should be the true posterior.
+    def guide(data):
+        loc = pyro.param("loc", lambda: torch.tensor(1.0))
+        scale = pyro.param("scale", lambda: torch.tensor(0.5))
+        pyro.sample("z", dist.Normal(loc, scale))
+
+    elbo = Elbo(max_plate_nesting=1,
+                num_particles=10000,
+                vectorize_particles=True,
+                strict_enumeration_warning=False)
+
+    loss = elbo.differentiable_loss(model, guide, data)
+    logger.info('loss = {}'.format(loss.item()))
+    assert_close(loss.item(), 5.44996, atol=0.001)
+
+    params = dict(pyro.get_param_store().named_parameters())
+    grads = torch.autograd.grad(loss, params.values())
+    for name, grad in zip(params, grads):
+        logger.info('grad {} = {}'.format(name, grad))
+        assert_close(grad, torch.zeros_like(grad), atol=0.01)
 
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
