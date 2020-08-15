@@ -15,7 +15,7 @@ from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.util import initialize_model
 from pyro.util import optional
-from tests.common import assert_close
+from tests.common import assert_close, str_erase_pointers
 
 
 def beta_bernoulli():
@@ -116,7 +116,7 @@ def test_init_to_value():
     init_to_value(values={"x": torch.tensor(3.)}),
     init_to_generated(
         generate=lambda: init_to_value(values={"x": torch.rand(())})),
-], ids=str)
+], ids=str_erase_pointers)
 def test_init_strategy_smoke(init_strategy):
     def model():
         pyro.sample("x", dist.LogNormal(0, 1))
