@@ -118,7 +118,7 @@ setup(
         'horovod': ['horovod[pytorch]>=0.19'],
         'funsor': [
             # TODO update to release branch (currently using a recent commit on master)
-            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@c7390318cd6c3f77798aee01638aff08e9582c96',
+            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@c944c2339868e33b00339fd6027027d03240c4af',
         ],
     },
     python_requires='>=3.5',
