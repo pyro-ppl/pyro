@@ -21,8 +21,6 @@ try:
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
-torch.set_default_dtype(torch.float32)
-
 logger = logging.getLogger(__name__)
 
 
