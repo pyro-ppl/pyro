@@ -8,17 +8,18 @@ import torch
 from torch.autograd import grad
 from torch.distributions import constraints
 
-import funsor
-import pyro.contrib.funsor
 from pyro.ops.indexing import Vindex
-
-from pyroapi import handlers, infer, pyro, pyro_backend
-from pyroapi import distributions as dist
 from tests.common import assert_equal, xfail_param
 
-
-funsor.set_backend("torch")
-torch.set_default_dtype(torch.float32)
+# put all funsor-related imports here, so test collection works without funsor
+try:
+    import funsor
+    import pyro.contrib.funsor
+    from pyroapi import distributions as dist
+    from pyroapi import infer, pyro, pyro_backend
+    funsor.set_backend("torch")
+except ImportError:
+    pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
 logger = logging.getLogger(__name__)
 
