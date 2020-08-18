@@ -1,12 +1,13 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
+
 import funsor
 
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import ELBO
 from pyro.infer import TraceEnum_ELBO as OrigTraceEnum_ELBO
-from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data, to_funsor
@@ -51,7 +52,7 @@ class TraceEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
 
         # get batched, enumerated, to_funsor-ed traces from the guide and model
-        with plate(size=self.num_particles) if self.num_particles > 1 else Messenger(), \
+        with plate(size=self.num_particles) if self.num_particles > 1 else contextlib.nullcontext(), \
                 enum(first_available_dim=(-self.max_plate_nesting-1) if self.max_plate_nesting else None):
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
@@ -69,16 +70,15 @@ class TraceEnum_ELBO(ELBO):
                     contracted_factors.append(f)
                 else:
                     uncontracted_factors.append(f)
-            model_terms["log_factors"] = funsor.sum_product.partial_sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, model_terms["log_measures"] + contracted_factors,
+            # incorporate the effects of subsampling and handlers.scale through a common scale factor
+            contracted_costs = [model_terms["scale"] * f for f in funsor.sum_product.partial_sum_product(
+                funsor.ops.logaddexp, funsor.ops.add,
+                model_terms["log_measures"] + contracted_factors,
                 plates=model_terms["plate_vars"], eliminate=model_terms["measure_vars"]
-            )
+            )]
 
-            # correctly incorporate the effects of subsampling and handlers.scale,
-            # and collect the individual elbo cost terms (logp, -logq)
-            costs = [model_terms["scale"] * f for f in model_terms["log_factors"]]
-            costs += uncontracted_factors
-            costs += [-f for f in guide_terms["log_factors"]]
+            costs = contracted_costs + uncontracted_factors  # model costs: logp
+            costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
 
             # finally, integrate out guide variables in the elbo and all plates
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
