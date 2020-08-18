@@ -117,6 +117,7 @@ setup(
         ],
         'horovod': ['horovod[pytorch]>=0.19'],
         'funsor': [
+            'contextlib2>=0.6.0',
             # TODO update to release branch (currently using a recent commit on master)
             'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@c944c2339868e33b00339fd6027027d03240c4af',
         ],

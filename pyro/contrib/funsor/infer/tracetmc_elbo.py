@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import contextlib
+import contextlib2
 
 import funsor
 
@@ -22,7 +22,7 @@ class TraceTMC_ELBO(ELBO):
         raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with plate(size=self.num_particles) if self.num_particles > 1 else contextlib.nullcontext(), \
+        with plate(size=self.num_particles) if self.num_particles > 1 else contextlib2.nullcontext(), \
                 enum(first_available_dim=(-self.max_plate_nesting-1) if self.max_plate_nesting else None):
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
