@@ -6,11 +6,12 @@ import contextlib
 import funsor
 
 from pyro.distributions.util import copy_docs_from
-from pyro.infer import ELBO
 from pyro.infer import TraceEnum_ELBO as OrigTraceEnum_ELBO
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
+
+from .elbo import ELBO
 
 
 def terms_from_trace(tr):
@@ -44,9 +45,6 @@ def terms_from_trace(tr):
 
 @copy_docs_from(OrigTraceEnum_ELBO)
 class TraceEnum_ELBO(ELBO):
-
-    def _get_trace(self, *args, **kwargs):
-        raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
 

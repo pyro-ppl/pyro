@@ -11,7 +11,7 @@ try:
     import pyro.contrib.funsor  # noqa: F401
 
     # TODO get this working again...
-    pytestmark = pytest.mark.xfail()
+    # pytestmark = pytest.mark.xfail()
 except ImportError:
     pytestmark = pytest.mark.skip()
 
