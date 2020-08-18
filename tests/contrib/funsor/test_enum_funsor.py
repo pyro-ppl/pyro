@@ -16,7 +16,7 @@ try:
     import funsor
     import pyro.contrib.funsor
     from pyroapi import distributions as dist
-    from pyroapi import infer, pyro, pyro_backend
+    from pyroapi import handlers, infer, pyro, pyro_backend
     funsor.set_backend("torch")
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")

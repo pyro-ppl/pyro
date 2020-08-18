@@ -14,17 +14,26 @@ from pyro.contrib.funsor.handlers import enum, replay, trace
 funsor.set_backend("torch")
 
 
-def expectation(log_probs, costs, sum_vars, prod_vars):
-    result = to_funsor(0, output=funsor.reals())
-    for cost in costs:
-        log_prob = funsor.sum_product.sum_product(
-            funsor.ops.logaddexp, funsor.ops.add, log_probs,
-            plates=prod_vars, eliminate=(prod_vars | sum_vars) - frozenset(cost.inputs)
-        )
-        term = funsor.Integrate(log_prob, cost, sum_vars & frozenset(cost.inputs))
-        term = term.reduce(funsor.ops.add, prod_vars & frozenset(cost.inputs))
-        result += term
-    return result
+def terms_from_trace(tr):
+    """Helper function to extract elbo components from execution traces."""
+    terms = {"log_factors": [], "log_measures": [], "scale": to_funsor(1.),
+             "plate_vars": frozenset(), "measure_vars": frozenset()}
+    for name, node in prune_subsample_sites(tr).nodes.items():
+        if node["type"] != "sample":
+            continue
+        terms["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
+        # if a site is enumerated in the model, measure but no log_prob
+        if node['is_observed'] or not node["infer"].get("skipped", False):
+            terms["log_factors"].append(node["funsor"]["log_prob"])
+        if node["funsor"].get("log_measure", None) is not None:
+            terms["log_measures"].append(node["funsor"]["log_measure"])
+            terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
+        # account for the effects of subsampling
+        if node["funsor"]["scale"] is not to_funsor(1.):
+            assert terms["scale"] is to_funsor(1.) or terms["scale"] is node["funsor"]["scale"], \
+                "only a single subsampling scale is allowed"
+            terms["scale"] = node["funsor"]["scale"]
+    return terms
 
 
 @copy_docs_from(OrigTraceEnum_ELBO)
@@ -34,49 +43,50 @@ class TraceEnum_ELBO(ELBO):
         raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with enum(first_available_dim=-self.max_plate_nesting-1):
+
+        # get enumerated, to_funsor-ed traces from the guide and model
+        with enum():
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
 
-        terms = {
-            "model": {"log_factors": [], "log_measures": [], "plate_vars": frozenset(), "measure_vars": frozenset()},
-            "guide": {"log_factors": [], "log_measures": [], "plate_vars": frozenset(), "measure_vars": frozenset()},
-        }
-        for role, tr in zip(("model", "guide"), map(prune_subsample_sites, (model_tr, guide_tr))):
-            for name, node in tr.nodes.items():
-                if node["type"] != "sample":
-                    continue
-                # if a site is enumerated in the model, measure but no log_prob
-                if name in guide_tr.nodes or node['is_observed']:
-                    terms[role]["log_factors"].append(
-                        node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
-                if node["funsor"].get("log_measure", None) is not None:
-                    terms[role]["log_measures"].append(node["funsor"]["log_measure"])
-                    terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_measure"].inputs)
-                terms[role]["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-                terms[role]["measure_vars"] |= frozenset(node["funsor"]["log_prob"].inputs)
+        # extract from traces all metadata that we will need to compute the elbo
+        guide_terms = terms_from_trace(guide_tr)
+        model_terms = terms_from_trace(model_tr)
 
+        # build up a lazy expression for the elbo
         with funsor.interpreter.interpretation(funsor.terms.lazy):
-            # contract out auxiliary variables in the model
-            model_aux_vars = terms["model"]["measure_vars"] - terms["model"]["plate_vars"] - \
-                (terms["guide"]["measure_vars"] | terms["guide"]["plate_vars"])
-            if model_aux_vars:
-                contracted_terms = [t for t in terms["model"]["log_factors"] if model_aux_vars.intersection(t.inputs)]
-                uncontracted_terms = [t for t in terms["model"]["log_factors"]
-                                      if not model_aux_vars.intersection(t.inputs)]
-                terms["model"]["log_factors"] = uncontracted_terms + funsor.sum_product.partial_sum_product(
-                    funsor.ops.logaddexp, funsor.ops.add, terms["model"]["log_measures"] + contracted_terms,
-                    plates=terms["model"]["plate_vars"], eliminate=model_aux_vars
+
+            # identify and contract out auxiliary variables in the model with partial_sum_product
+            contracted_factors, uncontracted_factors = [], []
+            for f in model_terms["log_factors"]:
+                if model_terms["measure_vars"].intersection(f.inputs):
+                    contracted_factors.append(f)
+                else:
+                    uncontracted_factors.append(f)
+            model_terms["log_factors"] = funsor.sum_product.partial_sum_product(
+                funsor.ops.logaddexp, funsor.ops.add, model_terms["log_measures"] + contracted_factors,
+                plates=model_terms["plate_vars"], eliminate=model_terms["measure_vars"]
+            )
+            model_terms["log_factors"] += uncontracted_factors
+
+            # correctly incorporate the effects of subsampling and handlers.scale
+            costs = [model_terms["scale"] * f for f in model_terms["log_factors"]] + \
+                [guide_terms["scale"] * -f for f in guide_terms["log_factors"]]
+
+            # finally, integrate out guide variables in the elbo and all plates
+            plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
+            elbo = to_funsor(0, output=funsor.reals())
+            for cost in costs:
+                log_prob = funsor.sum_product.sum_product(
+                    funsor.ops.logaddexp, funsor.ops.add,
+                    guide_terms["log_measures"],
+                    plates=plate_vars,
+                    eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs)
                 )
+                elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
+                elbo_term = elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
+                elbo += elbo_term
 
-            # compute remaining plates and sum_dims
-            plate_vars = (terms["model"]["plate_vars"] | terms["guide"]["plate_vars"]) - model_aux_vars
-            sum_vars = (terms["model"]["measure_vars"] | terms["guide"]["measure_vars"]) - model_aux_vars - plate_vars
-
-            # integrate out guide variables
-            elbo = expectation(terms["guide"]["log_measures"],
-                               terms["model"]["log_factors"] + terms["guide"]["log_factors"],
-                               sum_vars, plate_vars)
-
+        # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.memoize.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
