@@ -6,10 +6,11 @@ import funsor
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import ELBO
 from pyro.infer import TraceEnum_ELBO as OrigTraceEnum_ELBO
+from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data, to_funsor
-from pyro.contrib.funsor.handlers import enum, replay, trace
+from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 
 funsor.set_backend("torch")
 
@@ -23,13 +24,15 @@ def terms_from_trace(tr):
     for name, node in prune_subsample_sites(tr).nodes.items():
         if node["type"] != "sample":
             continue
+        # grab plate dimensions from the cond_indep_stack
         terms["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-        # if a site is enumerated in the model, measure but no log_prob
+        # grab the log-density, found at all sites except those that are not replayed
         if node['is_observed'] or not node["infer"].get("skipped", False):
             terms["log_factors"].append(node["funsor"]["log_prob"])
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
+            # sum variables: the fresh non-plate variables at a site
             terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
         if node["funsor"]["scale"] is not to_funsor(1.):
@@ -47,8 +50,8 @@ class TraceEnum_ELBO(ELBO):
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
 
-        # get enumerated, to_funsor-ed traces from the guide and model
-        with enum():
+        # get batched, enumerated, to_funsor-ed traces from the guide and model
+        with plate(size=self.num_particles) if self.num_particles > 1 else Messenger(), enum():
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
 
