@@ -14,7 +14,7 @@ from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsample
 from pyro.util import ignore_jit_warnings
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import DimType, GlobalNamedMessenger
+from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger
 
 funsor.set_backend("torch")
 
@@ -27,7 +27,9 @@ class IndepMessenger(GlobalNamedMessenger):
         assert size > 1
         assert dim is None or dim < 0
         super().__init__()
-        self.name = name
+        # without a name or dim, treat as a "vectorize" effect and allocate a non-visible dim
+        self.dim_type = DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
+        self.name = name if name is not None else funsor.interpreter.gensym("PLATE")
         self.size = size
         self.dim = dim
         if not hasattr(self, "_full_size"):
@@ -42,8 +44,8 @@ class IndepMessenger(GlobalNamedMessenger):
 
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
-        name_to_dim = OrderedDict([(self.name, self.dim)])
-        indices = to_data(self._indices, name_to_dim=name_to_dim, dim_type=DimType.VISIBLE)
+        name_to_dim = OrderedDict([(self.name, DimRequest(self.dim, self.dim_type))])
+        indices = to_data(self._indices, name_to_dim=name_to_dim)
         # extract the dimension allocated by to_data to match plate's current behavior
         self.dim, self.indices = -indices.dim(), indices.squeeze()
         return self

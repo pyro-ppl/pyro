@@ -1,17 +1,18 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
+
 import funsor
 
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import ELBO
 from pyro.infer import TraceTMC_ELBO as OrigTraceTMC_ELBO
-from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data
-from pyro.contrib.funsor.handlers import enum, replay, trace
+from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 
-funsor.set_backend("torch")
+from .traceenum_elbo import terms_from_trace
 
 
 @copy_docs_from(OrigTraceTMC_ELBO)
@@ -21,28 +22,25 @@ class TraceTMC_ELBO(ELBO):
         raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with enum(first_available_dim=-self.max_plate_nesting-1):
+        with plate(size=self.num_particles) if self.num_particles > 1 else contextlib.ExitStack(), \
+                enum(first_available_dim=(-self.max_plate_nesting-1) if self.max_plate_nesting else None):
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
 
-        log_factors, log_measures, measure_vars, plate_vars = [], [], frozenset(), frozenset()
-        for role, tr in zip(("model", "guide"), map(prune_subsample_sites, (model_tr, guide_tr))):
-            for name, node in tr.nodes.items():
-                if node["type"] != "sample":
-                    continue
-                # if a site is enumerated in the model, measure but no log_prob
-                if name in guide_tr.nodes or node['is_observed']:
-                    log_factors.append(
-                        node["funsor"]["log_prob"] if role == "model" else -node["funsor"]["log_prob"])
-                if node["funsor"].get("log_measure", None) is not None:
-                    log_measures.append(node["funsor"]["log_measure"])
-                    measure_vars |= frozenset(node["funsor"]["log_measure"].inputs)
-                plate_vars |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-                measure_vars |= frozenset(node["funsor"]["log_prob"].inputs)
+        model_terms = terms_from_trace(model_tr)
+        guide_terms = terms_from_trace(guide_tr)
+
+        log_measures = guide_terms["log_measures"] + model_terms["log_measures"]
+        log_factors = model_terms["log_factors"] + [-f for f in guide_terms["log_factors"]]
+        plate_vars = model_terms["plate_vars"] | guide_terms["plate_vars"]
+        measure_vars = model_terms["measure_vars"] | guide_terms["measure_vars"]
 
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             elbo = funsor.sum_product.sum_product(
-                funsor.ops.logaddexp, funsor.ops.add, log_measures + log_factors,
-                eliminate=measure_vars | plate_vars, plates=plate_vars
+                funsor.ops.logaddexp, funsor.ops.add,
+                log_measures + log_factors,
+                eliminate=measure_vars | plate_vars,
+                plates=plate_vars
             )
+
         return -to_data(funsor.optimizer.apply_optimizer(elbo))
