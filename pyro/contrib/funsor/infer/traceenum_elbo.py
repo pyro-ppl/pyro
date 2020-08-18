@@ -8,7 +8,6 @@ import funsor
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import ELBO
 from pyro.infer import TraceEnum_ELBO as OrigTraceEnum_ELBO
-from pyro.poutine.util import prune_subsample_sites
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
@@ -20,15 +19,15 @@ def terms_from_trace(tr):
     # of free variables as either product (plate) variables or sum (measure) variables
     terms = {"log_factors": [], "log_measures": [], "scale": to_funsor(1.),
              "plate_vars": frozenset(), "measure_vars": frozenset()}
-    for name, node in prune_subsample_sites(tr).nodes.items():
-        if node["type"] != "sample":
+    for name, node in tr.nodes.items():
+        if node["type"] != "sample" or type(node["fn"]).__name__ == "_Subsample":
             continue
         # grab plate dimensions from the cond_indep_stack
         terms["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
-            # sum variables: the fresh non-plate variables at a site
+            # sum (measure) variables: the fresh non-plate variables at a site
             terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
         if node.get("replay_active", False) and set(node["funsor"]["log_prob"].inputs) & terms["measure_vars"] and \
@@ -84,15 +83,16 @@ class TraceEnum_ELBO(ELBO):
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
             elbo = to_funsor(0, output=funsor.reals())
             for cost in costs:
+                # compute the marginal logq in the guide corresponding to this cost term
                 log_prob = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp, funsor.ops.add,
                     guide_terms["log_measures"],
                     plates=plate_vars,
                     eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs)
                 )
+                # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
                 elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
-                elbo_term = elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
-                elbo += elbo_term
+                elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.memoize.memoize():
