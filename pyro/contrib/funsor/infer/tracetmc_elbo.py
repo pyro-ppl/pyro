@@ -11,8 +11,6 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.contrib.funsor import to_data
 from pyro.contrib.funsor.handlers import enum, replay, trace
 
-funsor.set_backend("torch")
-
 
 @copy_docs_from(OrigTraceTMC_ELBO)
 class TraceTMC_ELBO(ELBO):

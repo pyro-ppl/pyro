@@ -12,8 +12,6 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 
-funsor.set_backend("torch")
-
 
 def terms_from_trace(tr):
     """Helper function to extract elbo components from execution traces."""
