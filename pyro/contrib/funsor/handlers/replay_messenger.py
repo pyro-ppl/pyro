@@ -13,6 +13,7 @@ class ReplayMessenger(OrigReplayMessenger):
     """
     def _pyro_sample(self, msg):
         name = msg["name"]
+        msg["replay_active"] = True
         if self.trace is not None and name in self.trace:
             guide_msg = self.trace.nodes[name]
             if msg["is_observed"]:
@@ -27,6 +28,6 @@ class ReplayMessenger(OrigReplayMessenger):
                 msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
             msg["done"] = True
-            msg["infer"]["skipped"] = False
+            msg["replay_skipped"] = False
         else:
-            msg["infer"]["skipped"] = True
+            msg["replay_skipped"] = True

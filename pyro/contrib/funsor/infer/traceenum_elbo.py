@@ -25,7 +25,7 @@ def terms_from_trace(tr):
         # grab plate dimensions from the cond_indep_stack
         terms["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
         # grab the log-density, found at all sites except those that are not replayed
-        if node['is_observed'] or not node["infer"].get("skipped", False):
+        if node["is_observed"] or not node.get("replay_skipped", False):
             terms["log_factors"].append(node["funsor"]["log_prob"])
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
@@ -33,10 +33,15 @@ def terms_from_trace(tr):
             # sum variables: the fresh non-plate variables at a site
             terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
-        if node["funsor"]["scale"] is not to_funsor(1.):
-            assert terms["scale"] is to_funsor(1.) or terms["scale"] is node["funsor"]["scale"], \
-                "only a single subsampling scale is allowed"
+        # cases for scale:
+        # 1. model site that depends on enumerated variable: common scale
+        # 2. model site that does not depend on enumerated variable: default
+        # 3. all guide sites: default
+        if node.get("replay_active", False) and set(node["funsor"]["log_prob"].inputs) - terms["plate_vars"] - {name}:
+            # model site that depends on enumerated variable: common scale...
             terms["scale"] = node["funsor"]["scale"]
+        else:  # default scale behavior
+            node["funsor"]["log_prob"] *= node["funsor"]["scale"]
     return terms
 
 
@@ -60,7 +65,6 @@ class TraceEnum_ELBO(ELBO):
 
         # build up a lazy expression for the elbo
         with funsor.interpreter.interpretation(funsor.terms.lazy):
-
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
@@ -72,13 +76,12 @@ class TraceEnum_ELBO(ELBO):
                 funsor.ops.logaddexp, funsor.ops.add, model_terms["log_measures"] + contracted_factors,
                 plates=model_terms["plate_vars"], eliminate=model_terms["measure_vars"]
             )
-            model_terms["log_factors"] += uncontracted_factors
 
             # correctly incorporate the effects of subsampling and handlers.scale,
             # and collect the individual elbo cost terms (logp, -logq)
-            scale = guide_terms["scale"] if guide_terms["scale"] is not to_funsor(1.) else model_terms["scale"]
-            costs = [scale * f for f in model_terms["log_factors"]] + \
-                [scale * -f for f in guide_terms["log_factors"]]
+            costs = [model_terms["scale"] * f for f in model_terms["log_factors"]]
+            costs += uncontracted_factors
+            costs += [-f for f in guide_terms["log_factors"]]
 
             # finally, integrate out guide variables in the elbo and all plates
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
