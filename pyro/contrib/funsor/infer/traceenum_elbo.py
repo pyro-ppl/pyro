@@ -16,6 +16,8 @@ funsor.set_backend("torch")
 
 def terms_from_trace(tr):
     """Helper function to extract elbo components from execution traces."""
+    # data structure containing densities, measures, scales, and identification
+    # of free variables as either product (plate) variables or sum (measure) variables
     terms = {"log_factors": [], "log_measures": [], "scale": to_funsor(1.),
              "plate_vars": frozenset(), "measure_vars": frozenset()}
     for name, node in prune_subsample_sites(tr).nodes.items():
@@ -25,10 +27,11 @@ def terms_from_trace(tr):
         # if a site is enumerated in the model, measure but no log_prob
         if node['is_observed'] or not node["infer"].get("skipped", False):
             terms["log_factors"].append(node["funsor"]["log_prob"])
+        # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
             terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
-        # account for the effects of subsampling
+        # grab the scale, assuming a common subsampling scale
         if node["funsor"]["scale"] is not to_funsor(1.):
             assert terms["scale"] is to_funsor(1.) or terms["scale"] is node["funsor"]["scale"], \
                 "only a single subsampling scale is allowed"
@@ -69,7 +72,8 @@ class TraceEnum_ELBO(ELBO):
             )
             model_terms["log_factors"] += uncontracted_factors
 
-            # correctly incorporate the effects of subsampling and handlers.scale
+            # correctly incorporate the effects of subsampling and handlers.scale,
+            # and collect the individual elbo cost terms (logp, -logq)
             costs = [model_terms["scale"] * f for f in model_terms["log_factors"]] + \
                 [guide_terms["scale"] * -f for f in guide_terms["log_factors"]]
 
