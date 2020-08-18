@@ -24,24 +24,21 @@ def terms_from_trace(tr):
             continue
         # grab plate dimensions from the cond_indep_stack
         terms["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
-        # grab the log-density, found at all sites except those that are not replayed
-        if node["is_observed"] or not node.get("replay_skipped", False):
-            terms["log_factors"].append(node["funsor"]["log_prob"])
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
             # sum variables: the fresh non-plate variables at a site
             terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
-        # cases for scale:
-        # 1. model site that depends on enumerated variable: common scale
-        # 2. model site that does not depend on enumerated variable: default
-        # 3. all guide sites: default
-        if node.get("replay_active", False) and set(node["funsor"]["log_prob"].inputs) - terms["plate_vars"] - {name}:
-            # model site that depends on enumerated variable: common scale...
+        if node.get("replay_active", False) and set(node["funsor"]["log_prob"].inputs) & terms["measure_vars"] and \
+                float(to_data(node["funsor"]["scale"])) != 1.:
+            # model site that depends on enumerated variable: common scale
             terms["scale"] = node["funsor"]["scale"]
-        else:  # default scale behavior
-            node["funsor"]["log_prob"] *= node["funsor"]["scale"]
+        else:  # otherwise: default scale behavior
+            node["funsor"]["log_prob"] = node["funsor"]["log_prob"] * node["funsor"]["scale"]
+        # grab the log-density, found at all sites except those that are not replayed
+        if node["is_observed"] or not node.get("replay_skipped", False):
+            terms["log_factors"].append(node["funsor"]["log_prob"])
     return terms
 
 
