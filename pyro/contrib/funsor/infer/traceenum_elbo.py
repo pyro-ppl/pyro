@@ -49,7 +49,8 @@ class TraceEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
 
         # get batched, enumerated, to_funsor-ed traces from the guide and model
-        with plate(size=self.num_particles) if self.num_particles > 1 else Messenger(), enum():
+        with plate(size=self.num_particles) if self.num_particles > 1 else Messenger(), \
+                enum(first_available_dim=(-self.max_plate_nesting-1) if self.max_plate_nesting else None):
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
 
@@ -75,8 +76,9 @@ class TraceEnum_ELBO(ELBO):
 
             # correctly incorporate the effects of subsampling and handlers.scale,
             # and collect the individual elbo cost terms (logp, -logq)
-            costs = [model_terms["scale"] * f for f in model_terms["log_factors"]] + \
-                [guide_terms["scale"] * -f for f in guide_terms["log_factors"]]
+            scale = guide_terms["scale"] if guide_terms["scale"] is not to_funsor(1.) else model_terms["scale"]
+            costs = [scale * f for f in model_terms["log_factors"]] + \
+                [scale * -f for f in guide_terms["log_factors"]]
 
             # finally, integrate out guide variables in the elbo and all plates
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]

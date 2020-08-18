@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import os
 
 import pytest
 import torch
@@ -23,11 +24,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_PYRO_BACKEND = os.environ.get("TEST_ENUM_PYRO_BACKEND", "contrib.funsor")
+
 
 def _check_loss_and_grads(expected_loss, actual_loss):
     assert_equal(actual_loss, expected_loss,
                  msg='Expected:\n{}\nActual:\n{}'.format(expected_loss.detach().cpu().numpy(),
                                                          actual_loss.detach().cpu().numpy()))
+
+    if "TEST_ENUM_PYRO_BACKEND" in os.environ:  # only log if we manually set a backend
+        logging.debug('Expected:\n{}\nActual:\n{}'.format(expected_loss.detach().cpu().numpy(),
+                                                          actual_loss.detach().cpu().numpy()))
 
     names = pyro.get_param_store().keys()
     params = [pyro.param(name).unconstrained() for name in names]
@@ -44,7 +51,7 @@ def _check_loss_and_grads(expected_loss, actual_loss):
 
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_plate_plate(outer_dim, inner_dim):
     pyro.get_param_store().clear()
     q = pyro.param("q", torch.tensor([0.75, 0.25], requires_grad=True))
@@ -90,7 +97,7 @@ def test_elbo_plate_plate(outer_dim, inner_dim):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_1(scale):
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
@@ -135,7 +142,7 @@ def test_elbo_enumerate_1(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_2(scale):
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
@@ -182,7 +189,7 @@ def test_elbo_enumerate_2(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_3(scale):
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
@@ -231,7 +238,7 @@ def test_elbo_enumerate_3(scale):
 @pytest.mark.parametrize('num_samples,num_masked',
                          [(2, 2), (3, 2)],
                          ids=["batch", "masked"])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_1(num_samples, num_masked, scale):
     #              +---------+
     #  x ----> y ----> z     |
@@ -294,7 +301,7 @@ def test_elbo_enumerate_plate_1(num_samples, num_masked, scale):
 @pytest.mark.parametrize('num_samples,num_masked',
                          [(2, 2), (3, 2)],
                          ids=["batch", "masked"])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_2(num_samples, num_masked, scale):
     #      +-----------------+
     #  x ----> y ----> z     |
@@ -357,7 +364,7 @@ def test_elbo_enumerate_plate_2(num_samples, num_masked, scale):
 @pytest.mark.parametrize('num_samples,num_masked',
                          [(2, 2), (3, 2)],
                          ids=["batch", "masked"])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_3(num_samples, num_masked, scale):
     #  +-----------------------+
     #  | x ----> y ----> z     |
@@ -434,7 +441,7 @@ def test_elbo_enumerate_plate_3(num_samples, num_masked, scale):
 @pytest.mark.parametrize('scale', [1, 10])
 @pytest.mark.parametrize('outer_obs,inner_obs',
                          [(False, True), (True, False), (True, True)])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_4(outer_obs, inner_obs, scale):
     #    a ---> outer_obs
     #      \
@@ -497,7 +504,7 @@ def test_elbo_enumerate_plate_4(outer_obs, inner_obs, scale):
 
 
 @pytest.mark.xfail(reason="Not supported in regular Pyro")
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_5():
     #        Guide   Model
     #                  a
@@ -565,7 +572,7 @@ def test_elbo_enumerate_plate_5():
 
 
 @pytest.mark.parametrize('enumerate1', ['parallel', 'sequential'])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_6(enumerate1):
     #     Guide           Model
     #           +-------+
@@ -625,7 +632,7 @@ def test_elbo_enumerate_plate_6(enumerate1):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_7(scale):
     #  Guide    Model
     #    a -----> b
@@ -717,7 +724,7 @@ def test_elbo_enumerate_plate_7(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_1(scale):
     #  +-----------------+
     #  | a ----> b   M=2 |
@@ -781,7 +788,7 @@ def test_elbo_enumerate_plates_1(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_2(scale):
     #  +---------+       +---------+
     #  |     b <---- a ----> c     |
@@ -839,7 +846,7 @@ def test_elbo_enumerate_plates_2(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_3(scale):
     #      +--------------------+
     #      |  +----------+      |
@@ -891,7 +898,7 @@ def test_elbo_enumerate_plates_3(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_4(scale):
     #      +--------------------+
     #      |       +----------+ |
@@ -947,7 +954,7 @@ def test_elbo_enumerate_plates_4(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_5(scale):
     #     a
     #     | \
@@ -1008,7 +1015,7 @@ def test_elbo_enumerate_plates_5(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_6(scale):
     #         +----------+
     #         |      M=2 |
@@ -1132,7 +1139,7 @@ def test_elbo_enumerate_plates_6(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_7(scale):
     #         +-------------+
     #         |         N=2 |
@@ -1267,7 +1274,7 @@ def test_elbo_enumerate_plates_7(scale):
 @pytest.mark.parametrize('model_scale', [1])
 @pytest.mark.parametrize('outer_vectorized', [False, xfail_param(True, reason="validation not yet implemented")])
 @pytest.mark.parametrize('inner_vectorized', [False, True])
-@pyro_backend("contrib.funsor")
+@pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized):
     #        Guide   Model
     #                  a
