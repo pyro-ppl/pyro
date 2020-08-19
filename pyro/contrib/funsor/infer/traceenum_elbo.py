@@ -10,8 +10,7 @@ from pyro.infer import TraceEnum_ELBO as OrigTraceEnum_ELBO
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
-
-from .elbo import ELBO
+from pyro.contrib.funsor.infer.elbo import ELBO, make_jit_elbo
 
 
 def terms_from_trace(tr):
@@ -95,3 +94,6 @@ class TraceEnum_ELBO(ELBO):
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.memoize.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
+
+
+JitTraceEnum_ELBO = make_jit_elbo(TraceEnum_ELBO)

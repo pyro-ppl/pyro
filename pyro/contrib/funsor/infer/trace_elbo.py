@@ -11,7 +11,7 @@ from pyro.infer import Trace_ELBO as OrigTrace_ELBO
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import plate, replay, trace
 
-from .elbo import ELBO
+from .elbo import ELBO, make_jit_elbo
 from .traceenum_elbo import terms_from_trace
 
 
@@ -35,3 +35,6 @@ class Trace_ELBO(ELBO):
         elbo = elbo.reduce(funsor.ops.add, plate_vars)
 
         return -to_data(elbo)
+
+
+JitTrace_ELBO = make_jit_elbo(Trace_ELBO)
