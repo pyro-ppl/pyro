@@ -5,6 +5,7 @@ import weakref
 
 import pyro.ops.jit
 from pyro.infer import ELBO as OrigELBO
+from pyro.util import ignore_jit_warnings
 
 
 class ELBO(OrigELBO):
@@ -39,7 +40,9 @@ def make_jit_elbo(elbo_cls):
                 kwargs.pop('_model_id')
                 kwargs.pop('_guide_id')
                 self = weakself()
-                return super(type(self), self).differentiable_loss(model, guide, *args, **kwargs)
+
+                with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]):
+                    return super(type(self), self).differentiable_loss(model, guide, *args, **kwargs)
 
             self._differentiable_loss = differentiable_loss
 
