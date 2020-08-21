@@ -82,7 +82,7 @@ class SubsampleMessenger(IndepMessenger):
 
     def _subsample_site_value(self, value, event_dim=None):
         if self.dim is not None and event_dim is not None and self.subsample_size < self._full_size:
-            event_shape = tuple(map(int, value.shape[len(value.shape) - event_dim:]))
+            event_shape = value.shape[len(value.shape) - event_dim:]
             funsor_value = to_funsor(value, output=funsor.Reals[event_shape])
             if self.name in funsor_value.inputs:
                 return to_data(funsor_value(**{self.name: self._indices}))
