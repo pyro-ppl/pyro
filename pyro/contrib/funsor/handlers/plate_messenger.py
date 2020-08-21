@@ -39,7 +39,7 @@ class IndepMessenger(GlobalNamedMessenger):
         assert len(indices) == size
 
         self._indices = funsor.Tensor(
-            indices, OrderedDict([(self.name, funsor.bint(self.size))]), self._full_size
+            indices, OrderedDict([(self.name, funsor.Bint[self.size])]), self._full_size
         )
 
     def __enter__(self):
@@ -82,8 +82,8 @@ class SubsampleMessenger(IndepMessenger):
 
     def _subsample_site_value(self, value, event_dim=None):
         if self.dim is not None and event_dim is not None and self.subsample_size < self._full_size:
-            event_shape = value.shape[len(value.shape) - event_dim:]
-            funsor_value = to_funsor(value, output=funsor.reals(*event_shape))
+            event_shape = tuple(map(int, value.shape[len(value.shape) - event_dim:]))
+            funsor_value = to_funsor(value, output=funsor.Reals[event_shape])
             if self.name in funsor_value.inputs:
                 return to_data(funsor_value(**{self.name: self._indices}))
         return value
