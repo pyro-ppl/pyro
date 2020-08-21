@@ -33,17 +33,17 @@ class TraceMessenger(OrigTraceMessenger):
         if self.pack_online:
             if "fn" not in msg["funsor"]:
                 fn_masked = msg["fn"].mask(msg["mask"]) if msg["mask"] is not None else msg["fn"]
-                msg["funsor"]["fn"] = to_funsor(fn_masked, funsor.reals())(value=msg["name"])
+                msg["funsor"]["fn"] = to_funsor(fn_masked, funsor.Real)(value=msg["name"])
             if "value" not in msg["funsor"]:
-                # value_output = funsor.reals(*getattr(msg["fn"], "event_shape", ()))
+                # value_output = funsor.Reals[getattr(msg["fn"], "event_shape", ())]
                 msg["funsor"]["value"] = to_funsor(msg["value"], msg["funsor"]["fn"].inputs[msg["name"]])
             if "log_prob" not in msg["funsor"]:
                 fn_masked = msg["fn"].mask(msg["mask"]) if msg["mask"] is not None else msg["fn"]
-                msg["funsor"]["log_prob"] = to_funsor(fn_masked.log_prob(msg["value"]), output=funsor.reals())
+                msg["funsor"]["log_prob"] = to_funsor(fn_masked.log_prob(msg["value"]), output=funsor.Real)
                 # TODO support this pattern which uses funsor directly - blocked by casting issues
                 # msg["funsor"]["log_prob"] = msg["funsor"]["fn"](**{msg["name"]: msg["funsor"]["value"]})
             if msg["scale"] is not None and "scale" not in msg["funsor"]:
-                msg["funsor"]["scale"] = to_funsor(msg["scale"], output=funsor.reals())
+                msg["funsor"]["scale"] = to_funsor(msg["scale"], output=funsor.Real)
         else:
             # this logic has the same side effect on the _DIM_STACK as the above,
             # but does not perform any tensor or funsor operations.

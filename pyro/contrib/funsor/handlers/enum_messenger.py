@@ -62,7 +62,7 @@ def _get_support_value_distribution(funsor_dist, name, expand=False):
 
 def _enum_strategy_diagonal(dist, msg):
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
-    sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg["infer"]["num_samples"])})
+    sample_inputs = OrderedDict({sample_dim_name: funsor.Bint[msg["infer"]["num_samples"]]})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
                                and k != msg['name'] and k not in plate_names)
@@ -77,7 +77,7 @@ def _enum_strategy_diagonal(dist, msg):
 
 def _enum_strategy_mixture(dist, msg):
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
-    sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg['infer']['num_samples'])})
+    sample_inputs = OrderedDict({sample_dim_name: funsor.Bint[msg['infer']['num_samples']]})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
                                and k != msg['name'] and k not in plate_names)
@@ -104,7 +104,7 @@ def _enum_strategy_mixture(dist, msg):
 
 def _enum_strategy_full(dist, msg):
     sample_dim_name = "{}__PARTICLES".format(msg['name'])
-    sample_inputs = OrderedDict({sample_dim_name: funsor.bint(msg["infer"]["num_samples"])})
+    sample_inputs = OrderedDict({sample_dim_name: funsor.Bint[msg["infer"]["num_samples"]]})
     sampled_dist = dist.sample(msg['name'], sample_inputs)
     return sampled_dist
 
@@ -142,7 +142,7 @@ class EnumMessenger(NamedMessenger):
         if "funsor" not in msg:
             msg["funsor"] = {}
 
-        unsampled_log_measure = to_funsor(msg["fn"], output=funsor.reals())(value=msg['name'])
+        unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(value=msg['name'])
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
         msg["funsor"]["value"] = _get_support_value(
             msg["funsor"]["log_measure"], msg["name"], expand=msg["infer"].get("expand", False))

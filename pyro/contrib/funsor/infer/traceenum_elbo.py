@@ -78,7 +78,7 @@ class TraceEnum_ELBO(ELBO):
 
             # finally, integrate out guide variables in the elbo and all plates
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
-            elbo = to_funsor(0, output=funsor.reals())
+            elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 # compute the marginal logq in the guide corresponding to this cost term
                 log_prob = funsor.sum_product.sum_product(
