@@ -515,6 +515,8 @@ def print_summary(samples, prob=0.9, group_by_chain=True):
         Otherwise, the corresponding shape will be `num_samples x sample_shape`
         (i.e. without chain dimension).
     """
+    if len(samples) == 0:
+        return
     summary_dict = summary(samples, prob, group_by_chain)
 
     row_names = {k: k + '[' + ','.join(map(lambda x: str(x - 1), v.shape[2:])) + ']'
