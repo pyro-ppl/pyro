@@ -60,27 +60,34 @@ def _get_support_value_distribution(funsor_dist, name, expand=False):
     return funsor_dist.enumerate_support(expand=expand)
 
 
+def _enum_strategy_default(dist, msg):
+    sample_inputs = OrderedDict((f.name, funsor.Bint[f.size]) for f in msg["cond_indep_stack"]
+                                if f.vectorized and f.name not in dist.inputs)
+    sampled_dist = dist.sample(msg["name"], sample_inputs)
+    return sampled_dist
+
+
 def _enum_strategy_diagonal(dist, msg):
-    sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    sample_dim_name = "{}__PARTICLES".format(msg["name"])
     sample_inputs = OrderedDict({sample_dim_name: funsor.Bint[msg["infer"]["num_samples"]]})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
-                               and k != msg['name'] and k not in plate_names)
+                               and k != msg["name"] and k not in plate_names)
     # TODO should the ancestor_indices be pyro.observed?
     ancestor_indices = {name: sample_dim_name for name in ancestor_names}
     sampled_dist = dist(**ancestor_indices).sample(
-        msg['name'], sample_inputs if not ancestor_indices else None)
+        msg["name"], sample_inputs if not ancestor_indices else None)
     if ancestor_indices:  # XXX is there a better way to account for this in funsor?
         sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
     return sampled_dist
 
 
 def _enum_strategy_mixture(dist, msg):
-    sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    sample_dim_name = "{}__PARTICLES".format(msg["name"])
     sample_inputs = OrderedDict({sample_dim_name: funsor.Bint[msg['infer']['num_samples']]})
     plate_names = frozenset(f.name for f in msg["cond_indep_stack"] if f.vectorized)
     ancestor_names = frozenset(k for k, v in dist.inputs.items() if v.dtype != 'real'
-                               and k != msg['name'] and k not in plate_names)
+                               and k != msg["name"] and k not in plate_names)
     plate_inputs = OrderedDict((k, dist.inputs[k]) for k in plate_names)
     # TODO should the ancestor_indices be pyro.sampled?
     ancestor_indices = {
@@ -96,28 +103,30 @@ def _enum_strategy_mixture(dist, msg):
         for name in ancestor_names
     }
     sampled_dist = dist(**ancestor_indices).sample(
-        msg['name'], sample_inputs if not ancestor_indices else None)
+        msg["name"], sample_inputs if not ancestor_indices else None)
     if ancestor_indices:  # XXX is there a better way to account for this in funsor?
         sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
     return sampled_dist
 
 
 def _enum_strategy_full(dist, msg):
-    sample_dim_name = "{}__PARTICLES".format(msg['name'])
+    sample_dim_name = "{}__PARTICLES".format(msg["name"])
     sample_inputs = OrderedDict({sample_dim_name: funsor.Bint[msg["infer"]["num_samples"]]})
-    sampled_dist = dist.sample(msg['name'], sample_inputs)
+    sampled_dist = dist.sample(msg["name"], sample_inputs)
     return sampled_dist
 
 
 def _enum_strategy_exact(dist, msg):
     if isinstance(dist, funsor.Tensor):
-        dist = dist - dist.reduce(funsor.ops.logaddexp, msg['name'])
+        dist = dist - dist.reduce(funsor.ops.logaddexp, msg["name"])
     return dist
 
 
 def enumerate_site(dist, msg):
     # TODO come up with a better dispatch system for enumeration strategies
-    if msg["infer"].get("num_samples", None) is None:
+    if msg["infer"]["enumerate"] == "flat":
+        return _enum_strategy_default(dist, msg)
+    elif msg["infer"].get("num_samples", None) is None:
         return _enum_strategy_exact(dist, msg)
     elif msg["infer"]["num_samples"] > 1 and \
             (msg["infer"].get("expand", False) or msg["infer"].get("tmc") == "full"):
@@ -135,14 +144,15 @@ class EnumMessenger(NamedMessenger):
     for each discrete sample site.
     """
     def _pyro_sample(self, msg):
-        if msg["done"] or msg["is_observed"] or msg["infer"].get("enumerate") != "parallel" \
-                or isinstance(msg["fn"], _Subsample):
+        if msg["done"] or msg["is_observed"] or \
+                msg["infer"].get("enumerate") not in {"flat", "parallel"} or \
+                isinstance(msg["fn"], _Subsample):
             return
 
         if "funsor" not in msg:
             msg["funsor"] = {}
 
-        unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(value=msg['name'])
+        unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(value=msg["name"])
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
         msg["funsor"]["value"] = _get_support_value(
             msg["funsor"]["log_measure"], msg["name"], expand=msg["infer"].get("expand", False))

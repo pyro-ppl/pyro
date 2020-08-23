@@ -28,7 +28,7 @@ def terms_from_trace(tr):
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
             # sum (measure) variables: the fresh non-plate variables at a site
-            terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
+            terms["measure_vars"] |= (frozenset(node["funsor"]["value"].inputs) | {name}) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
         if node.get("replay_active", False) and set(node["funsor"]["log_prob"].inputs) & terms["measure_vars"] and \
                 float(to_data(node["funsor"]["scale"])) != 1.:

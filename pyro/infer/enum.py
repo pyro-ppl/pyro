@@ -152,7 +152,7 @@ def config_enumerate(guide=None, default="parallel", expand=False, num_samples=N
     :return: an annotated guide
     :rtype: callable
     """
-    if default not in ["sequential", "parallel", None]:
+    if default not in ["sequential", "parallel", "flat", None]:
         raise ValueError("Invalid default value. Expected 'sequential', 'parallel', or None, but got {}".format(
             repr(default)))
     if expand not in [True, False]:

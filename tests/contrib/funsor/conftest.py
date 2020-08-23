@@ -11,3 +11,5 @@ def pytest_collection_modifyitems(items):
                 item.add_marker(pytest.mark.stage("funsor"))
             if "init" not in item.keywords:
                 item.add_marker(pytest.mark.init(rng_seed=123))
+            if "test_pyroapi" in item.nodeid and "test_mean_field_ok" in item.nodeid:
+                item.add_marker(pytest.mark.xfail(reason="not implemented"))
