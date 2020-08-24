@@ -226,7 +226,6 @@ models = {name[len('model_'):]: model
           if name.startswith('model_')}
 
 
-@pyro_backend(os.environ.get("PYRO_BACKEND", "pyro"))
 def main(args):
     pyro.set_rng_seed(0)
     pyro.clear_param_store()
@@ -310,4 +309,5 @@ if __name__ == '__main__':
                              "even with very large numbers of non-reparametrized variables.")
     parser.add_argument("--tmc-num-samples", default=10, type=int)
     args = parser.parse_args()
-    main(args)
+    with pyro_backend(os.environ.get("PYRO_BACKEND", "pyro")):
+        main(args)
