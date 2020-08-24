@@ -292,7 +292,7 @@ def main(args):
 
     # evaluate final trained model
     elbo_eval = infer.TraceEnum_ELBO(max_plate_nesting=1, num_particles=2000, vectorize_particles=True)
-    svi_eval = infer.SVI(model, guide, optim, elbo_eval)
+    svi_eval = infer.SVI(model, guide, optimizer, elbo_eval)
     print("Final loss: %.4f" % svi_eval.evaluate_loss(capture_history, sex))
 
 
