@@ -62,7 +62,7 @@ class IndepMessenger(GlobalNamedMessenger):
 @copy_docs_from(OrigSubsampleMessenger)
 class SubsampleMessenger(IndepMessenger):
 
-    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
+    def __init__(self, name=None, size=None, subsample_size=None, subsample=None, dim=None,
                  use_cuda=None, device=None):
         size, subsample_size, indices = OrigSubsampleMessenger._subsample(
             name, size, subsample_size, subsample, use_cuda, device)

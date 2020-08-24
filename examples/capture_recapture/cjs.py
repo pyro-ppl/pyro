@@ -36,12 +36,14 @@ import os
 import numpy as np
 import torch
 
-import pyro
-import pyro.distributions as dist
-import pyro.poutine as poutine
-from pyro.infer.autoguide import AutoDiagonalNormal
-from pyro.infer import SVI, TraceEnum_ELBO, TraceTMC_ELBO
-from pyro.optim import Adam
+import funsor
+import pyro.contrib.funsor
+from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
+
+from pyroapi import distributions as dist
+from pyroapi import pyro, pyro_backend, handlers, infer, ops, optim
+
+funsor.set_backend("torch")
 
 
 """
@@ -63,7 +65,7 @@ def model_1(capture_history, sex):
         # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).bool()
         for t in pyro.markov(range(T)):
-            with poutine.mask(mask=first_capture_mask):
+            with handlers.mask(mask=first_capture_mask):
                 mu_z_t = first_capture_mask.float() * phi * z + (1 - first_capture_mask.float())
                 # we use parallel enumeration to exactly sum out
                 # the discrete states z_t.
@@ -94,7 +96,7 @@ def model_2(capture_history, sex):
         # phi_t is shared across all N individuals
         phi_t = pyro.sample("phi_{}".format(t), dist.Uniform(0.0, 1.0)) if t > 0 \
                 else 1.0
-        with animals_plate, poutine.mask(mask=first_capture_mask):
+        with animals_plate, handlers.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -132,7 +134,7 @@ def model_3(capture_history, sex):
                                   dist.Normal(phi_logit_mean, phi_sigma)) if t > 0 \
                       else torch.tensor(0.0)
         phi_t = torch.sigmoid(phi_logit_t)
-        with animals_plate, poutine.mask(mask=first_capture_mask):
+        with animals_plate, handlers.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -166,7 +168,7 @@ def model_4(capture_history, sex):
         # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).bool()
         for t in pyro.markov(range(T)):
-            with poutine.mask(mask=first_capture_mask):
+            with handlers.mask(mask=first_capture_mask):
                 mu_z_t = first_capture_mask.float() * phi * z + (1 - first_capture_mask.float())
                 # we use parallel enumeration to exactly sum out
                 # the discrete states z_t.
@@ -207,7 +209,7 @@ def model_5(capture_history, sex):
         phi_gamma_t = pyro.sample("phi_gamma_{}".format(t), dist.Normal(0.0, 10.0)) if t > 0 \
                       else 0.0
         phi_t = torch.sigmoid(phi_beta + phi_gamma_t)
-        with animals_plate, poutine.mask(mask=first_capture_mask):
+        with animals_plate, handlers.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -224,6 +226,7 @@ models = {name[len('model_'):]: model
           if name.startswith('model_')}
 
 
+@pyro_backend(os.environ.get("PYRO_BACKEND", "pyro"))
 def main(args):
     pyro.set_rng_seed(0)
     pyro.clear_param_store()
@@ -254,7 +257,7 @@ def main(args):
 
     model = models[args.model]
 
-    # we use poutine.block to only expose the continuous latent variables
+    # we use handlers.block to only expose the continuous latent variables
     # in the models to AutoDiagonalNormal (all of which begin with 'phi'
     # or 'rho')
     def expose_fn(msg):
@@ -262,20 +265,20 @@ def main(args):
 
     # we use a mean field diagonal normal variational distributions (i.e. guide)
     # for the continuous latent variables.
-    guide = AutoDiagonalNormal(poutine.block(model, expose_fn=expose_fn))
+    guide = AutoDelta(handlers.block(model, expose_fn=expose_fn))
 
     # since we enumerate the discrete random variables,
-    # we need to use TraceEnum_ELBO or TraceTMC_ELBO.
-    optim = Adam({'lr': args.learning_rate})
+    # we need to use infer.TraceEnum_ELBO or infer.TraceTMC_ELBO.
+    optimizer = optim.Adam({'lr': args.learning_rate})
     if args.tmc:
-        elbo = TraceTMC_ELBO(max_plate_nesting=1)
-        tmc_model = poutine.infer_config(
+        elbo = infer.TraceTMC_ELBO(max_plate_nesting=1)
+        tmc_model = handlers.infer_config(
             model,
             lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
-        svi = SVI(tmc_model, guide, optim, elbo)
+        svi = infer.SVI(tmc_model, guide, optimizer, elbo)
     else:
-        elbo = TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
-        svi = SVI(model, guide, optim, elbo)
+        elbo = infer.TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
+        svi = infer.SVI(model, guide, optimizer, elbo)
 
     losses = []
 
@@ -288,8 +291,8 @@ def main(args):
             print("[iteration %03d] loss: %.3f" % (step, np.mean(losses[-20:])))
 
     # evaluate final trained model
-    elbo_eval = TraceEnum_ELBO(max_plate_nesting=1, num_particles=2000, vectorize_particles=True)
-    svi_eval = SVI(model, guide, optim, elbo_eval)
+    elbo_eval = infer.TraceEnum_ELBO(max_plate_nesting=1, num_particles=2000, vectorize_particles=True)
+    svi_eval = infer.SVI(model, guide, optim, elbo_eval)
     print("Final loss: %.4f" % svi_eval.evaluate_loss(capture_history, sex))
 
 
