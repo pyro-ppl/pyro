@@ -273,7 +273,7 @@ def main(args):
         elbo = infer.TraceTMC_ELBO(max_plate_nesting=1)
         tmc_model = handlers.infer_config(
             model,
-            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
+            lambda msg: {"num_samples": args.tmc_num_samples, "tmc": "diagonal", "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
         svi = infer.SVI(tmc_model, guide, optimizer, elbo)
     else:
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
