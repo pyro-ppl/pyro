@@ -6,11 +6,11 @@ import contextlib
 import funsor
 
 from pyro.distributions.util import copy_docs_from
-from pyro.infer import ELBO
-from pyro.infer import TraceEnum_ELBO as OrigTraceEnum_ELBO
+from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
+from pyro.contrib.funsor.infer.elbo import ELBO, Jit_ELBO
 
 
 def terms_from_trace(tr):
@@ -28,7 +28,7 @@ def terms_from_trace(tr):
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
             # sum (measure) variables: the fresh non-plate variables at a site
-            terms["measure_vars"] |= frozenset(node["funsor"]["value"].inputs) | frozenset([name]) - terms["plate_vars"]
+            terms["measure_vars"] |= (frozenset(node["funsor"]["value"].inputs) | {name}) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
         if node.get("replay_active", False) and set(node["funsor"]["log_prob"].inputs) & terms["measure_vars"] and \
                 float(to_data(node["funsor"]["scale"])) != 1.:
@@ -42,11 +42,8 @@ def terms_from_trace(tr):
     return terms
 
 
-@copy_docs_from(OrigTraceEnum_ELBO)
+@copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceEnum_ELBO(ELBO):
-
-    def _get_trace(self, *args, **kwargs):
-        raise ValueError("shouldn't be here")
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
 
@@ -97,3 +94,7 @@ class TraceEnum_ELBO(ELBO):
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.memoize.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
+
+
+class JitTraceEnum_ELBO(Jit_ELBO, TraceEnum_ELBO):
+    pass
