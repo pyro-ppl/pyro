@@ -36,14 +36,15 @@ import os
 import numpy as np
 import torch
 
-import funsor
-import pyro.contrib.funsor
-from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
+from pyro.infer.autoguide import AutoDiagonalNormal
+
+try:
+    import pyro.contrib.funsor
+except ImportError:
+    pass
 
 from pyroapi import distributions as dist
-from pyroapi import pyro, pyro_backend, handlers, infer, ops, optim
-
-funsor.set_backend("torch")
+from pyroapi import handlers, infer, optim, pyro, pyro_backend
 
 
 """
@@ -264,7 +265,7 @@ def main(args):
 
     # we use a mean field diagonal normal variational distributions (i.e. guide)
     # for the continuous latent variables.
-    guide = AutoDelta(handlers.block(model, expose_fn=expose_fn))
+    guide = AutoDiagonalNormal(handlers.block(model, expose_fn=expose_fn))
 
     # since we enumerate the discrete random variables,
     # we need to use infer.TraceEnum_ELBO or infer.TraceTMC_ELBO.
@@ -308,6 +309,15 @@ if __name__ == '__main__':
                              "except to see that TMC makes Monte Carlo gradient estimation feasible "
                              "even with very large numbers of non-reparametrized variables.")
     parser.add_argument("--tmc-num-samples", default=10, type=int)
+    parser.add_argument("--funsor", action="store_true")
     args = parser.parse_args()
-    with pyro_backend(os.environ.get("PYRO_BACKEND", "pyro")):
+
+    if args.funsor:
+        import funsor
+        funsor.set_backend("torch")
+        PYRO_BACKEND = "contrib.funsor"
+    else:
+        PYRO_BACKEND = "pyro"
+
+    with pyro_backend(PYRO_BACKEND):
         main(args)
