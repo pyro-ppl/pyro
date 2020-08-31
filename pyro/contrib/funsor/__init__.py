@@ -4,7 +4,8 @@
 import pyroapi
 
 from pyro.primitives import (  # noqa: F401
-    clear_param_store, deterministic, factor, get_param_store, module, param, random_module, sample, subsample,
+    clear_param_store, deterministic, enable_validation, factor, get_param_store,
+    module, param, random_module, sample, set_rng_seed, subsample,
 )
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor  # noqa: F401
