@@ -6,16 +6,16 @@ import contextlib
 import funsor
 
 from pyro.distributions.util import copy_docs_from
-from pyro.infer import TraceTMC_ELBO as OrigTraceTMC_ELBO
+from pyro.infer import TraceTMC_ELBO as _OrigTraceTMC_ELBO
 
 from pyro.contrib.funsor import to_data
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 
-from pyro.contrib.funsor.infer.elbo import ELBO, make_jit_elbo
+from pyro.contrib.funsor.infer.elbo import ELBO, Jit_ELBO
 from pyro.contrib.funsor.infer.traceenum_elbo import terms_from_trace
 
 
-@copy_docs_from(OrigTraceTMC_ELBO)
+@copy_docs_from(_OrigTraceTMC_ELBO)
 class TraceTMC_ELBO(ELBO):
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
@@ -43,4 +43,5 @@ class TraceTMC_ELBO(ELBO):
         return -to_data(funsor.optimizer.apply_optimizer(elbo))
 
 
-JitTraceTMC_ELBO = make_jit_elbo(TraceTMC_ELBO)
+class JitTraceTMC_ELBO(Jit_ELBO, TraceTMC_ELBO):
+    pass

@@ -68,7 +68,7 @@ class SubsampleMessenger(IndepMessenger):
             name, size, subsample_size, subsample, use_cuda, device)
         self.subsample_size = subsample_size
         self._full_size = size
-        self._scale = size // subsample_size
+        self._scale = float(size) / subsample_size
         # initialize other things last
         super().__init__(name, subsample_size, dim, indices)
 
