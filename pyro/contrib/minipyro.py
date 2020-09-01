@@ -177,14 +177,18 @@ def apply_stack(msg):
     return msg
 
 
-def start_stack_call_or_apply(type, name, fn, obs, *args, **kwargs):
+# sample is an effectful version of Distribution.sample(...)
+# When any effect handlers are active, it constructs an initial message and calls apply_stack.
+def sample(name, fn, *args, **kwargs):
+    obs = kwargs.pop('obs', None)
+
     # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
         return fn(*args, **kwargs)
 
     # Otherwise, we initialize a message...
     initial_msg = {
-        "type": type,
+        "type": "sample",
         "name": name,
         "fn": fn,
         "args": args,
@@ -195,13 +199,6 @@ def start_stack_call_or_apply(type, name, fn, obs, *args, **kwargs):
     # ...and use apply_stack to send it to the Messengers
     msg = apply_stack(initial_msg)
     return msg["value"]
-
-
-# sample is an effectful version of Distribution.sample(...)
-# When any effect handlers are active, it constructs an initial message and calls apply_stack.
-def sample(name, fn, *args, **kwargs):
-    obs = kwargs.pop('obs', None)
-    return start_stack_call_or_apply("sample", name, fn, obs, *args, **kwargs)
 
 
 # param is an effectful version of PARAM_STORE.setdefault that also handles constraints.
@@ -228,7 +225,21 @@ def param(name, init_value=None, constraint=torch.distributions.constraints.real
         return constrained_value
 
     # if there are no active Messengers, we just draw a sample and return it as expected:
-    return start_stack_call_or_apply("param", name, fn, None, init_value, constraint)
+    if not PYRO_STACK:
+        return fn(init_value, constraint)
+
+    # Otherwise, we initialize a message...
+    initial_msg = {
+        "type": "param",
+        "name": name,
+        "fn": fn,
+        "args": (init_value, constraint),
+        "value": None,
+    }
+
+    # ...and use apply_stack to send it to the Messengers
+    msg = apply_stack(initial_msg)
+    return msg["value"]
 
 
 # boilerplate to match the syntax of actual pyro.plate:
@@ -264,14 +275,14 @@ class Adam:
 
 
 # This is a unified interface for stochastic variational inference in Pyro.
-# The actual construction of the loss is taken care of by `loss_factory`.
+# The actual construction of the loss is taken care of by `loss`.
 # See http://docs.pyro.ai/en/stable/inference_algos.html
 class SVI:
-    def __init__(self, model, guide, optim, loss_factory):
+    def __init__(self, model, guide, optim, loss):
         self.model = model
         self.guide = guide
         self.optim = optim
-        self.loss_factory = loss_factory
+        self.loss = loss
 
     # This method handles running the model and guide, constructing the loss
     # function, and taking a gradient step.
@@ -282,7 +293,7 @@ class SVI:
         with trace() as param_capture:
             # We use block here to allow tracing to record parameters only.
             with block(hide_fn=lambda msg: msg["type"] == "sample"):
-                loss = self.loss_factory(self.model, self.guide, *args, **kwargs)
+                loss = self.loss(self.model, self.guide, *args, **kwargs)
         # Differentiate the loss.
         loss.backward()
         # Grab all the parameters from the trace.
@@ -313,19 +324,22 @@ def elbo(model, guide, *args, **kwargs):
     # terms, this means our loss is constructed as an expectation w.r.t. the joint
     # distribution defined by the guide.
     model_trace = trace(replay(model, guide_trace)).get_trace(*args, **kwargs)
-    # Return (-elbo) since by convention we do gradient descent on a loss and
-    # the ELBO is a lower bound that needs to be maximized. Given this,
-    # loop over all the sample sites in the model and add the corresponding
-    # - log p(z) term to the ELBO. Same thing for guide but adding + log p(z)
-    return elbo_terms(guide_trace) - elbo_terms(model_trace)
-
-
-def elbo_terms(trace):
+    # We will accumulate the various terms of the ELBO in `elbo`.
     elbo = 0.
-    for site in trace.values():
+    # Loop over all the sample sites in the model and add the corresponding
+    # log p(z) term to the ELBO. Note that this will also include any observed
+    # data, i.e. sample sites with the keyword `obs=...`.
+    for site in model_trace.values():
         if site["type"] == "sample":
             elbo = elbo + site["fn"].log_prob(site["value"]).sum()
-    return elbo
+    # Loop over all the sample sites in the guide and add the corresponding
+    # -log q(z) term to the ELBO.
+    for site in guide_trace.values():
+        if site["type"] == "sample":
+            elbo = elbo - site["fn"].log_prob(site["value"]).sum()
+    # Return (-elbo) since by convention we do gradient descent on a loss and
+    # the ELBO is a lower bound that needs to be maximized.
+    return -elbo
 
 
 # This is a wrapper for compatibility with full Pyro.
