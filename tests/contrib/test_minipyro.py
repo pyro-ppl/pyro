@@ -115,7 +115,8 @@ def test_nonempty_model_empty_guide_ok(backend, jit):
     with pyro_backend(backend):
         Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
         elbo = Elbo(ignore_jit_warnings=True)
-        assert_ok(model, guide, elbo, 2, data)
+        steps = 2
+        assert_ok(model, guide, elbo, steps, data)
 
 
 @pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
@@ -204,7 +205,8 @@ def test_constraints(backend, jit):
     with pyro_backend(backend):
         Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
         elbo = Elbo(ignore_jit_warnings=True)
-        assert_ok(constrained_model, guide_constrained_model, elbo, 2, data)
+        steps = 2
+        assert_ok(constrained_model, guide_constrained_model, elbo, steps, data)
 
 
 @pytest.mark.parametrize("backend", ["pyro", "minipyro"])
@@ -221,7 +223,7 @@ def test_elbo_jit(backend):
     """
     pyro.set_rng_seed(0)
     data = torch.tensor(0.5)
-    elbo_test_case(backend, True, 0.4780, data, 15)
+    elbo_test_case(backend, jit=True, expected_elbo=0.4780, data=data, steps=15)
 
 
 @pytest.mark.parametrize(["backend", "jit"], [("pyro", True), ("pyro", False), ("minipyro", False)])
