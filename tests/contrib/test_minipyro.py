@@ -237,12 +237,12 @@ def test_elbo_equivalence(backend, jit):
     elbo_test_case(backend, jit, expected_elbo=0.4780, data=data)
 
 
-def elbo_test_case(backend, jit, expected_elbo, data, iterations=None):
+def elbo_test_case(backend, jit, expected_elbo, data, steps=None):
     with pyro_backend(backend):
         Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
         elbo = Elbo(ignore_jit_warnings=True)
-        if iterations:
-            assert_ok(constrained_model, guide_constrained_model, elbo, iterations, data)
+        if steps:
+            assert_ok(constrained_model, guide_constrained_model, elbo, steps, data)
         if backend == "pyro":
             # TODO: this is a difference between the two implementations
             elbo = elbo.loss
