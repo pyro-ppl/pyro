@@ -64,7 +64,8 @@ class LKJCorrCholesky(TorchDistribution):
         super().__init__(torch.Size(), torch.Size((d, d)), validate_args=validate_args)
 
     def sample(self, sample_shape=torch.Size()):
-        y = self._gen.sample(sample_shape=self.batch_shape + sample_shape).detach()
+        with torch.no_grad():
+            y = self._gen.sample(sample_shape=sample_shape + self.batch_shape)
         z = y.mul(2).add(-1.0)
         return _vector_to_l_cholesky(z)
 
