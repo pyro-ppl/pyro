@@ -270,6 +270,7 @@ class CoalescentRateLikelihood:
         self._const.scatter_add_(-1, coal_index, phylogeny.coal_binomial.log())
         self._log = new_zeros(batch_shape + (duration,))
         self._log.scatter_add_(-1, coal_index, new_ones(coal_index.shape))
+        super().__init__()
 
     def __call__(self, rate_grid, t=slice(None)):
         """
@@ -388,6 +389,8 @@ def _interpolate_scatter_add_(dst, x, src):
 
 
 def _weak_memoize(fn):
+    # This cache is like a WeakKeyDictionary but works with multuple keys e.g.
+    # cache[id(leaf_times), id(coal_times)].
     cache = {}
 
     @functools.wraps(fn)
@@ -408,6 +411,7 @@ _Phylogeny = namedtuple("_Phylogeny", (
 ))
 
 
+# We memoize to reduce overhead of CoalescentTimesConstraint.check().
 @_weak_memoize
 @torch.no_grad()
 def _make_phylogeny(leaf_times, coal_times):
