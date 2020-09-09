@@ -10,7 +10,7 @@ from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, Gam
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
-from pyro.distributions.distribution import Distribution
+from pyro.distributions.distribution import Distribution, interpretation
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.extended import ExtendedBetaBinomial, ExtendedBinomial
 from pyro.distributions.folded import FoldedDistribution
@@ -89,6 +89,7 @@ __all__ = [
     "ZeroInflatedDistribution",
     "constraints",
     "enable_validation",
+    "interpretation",
     "is_validation_enabled",
     "kl",
     "transforms",

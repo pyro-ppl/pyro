@@ -2,11 +2,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABCMeta, abstractmethod
+from contextlib import contextmanager
 
 from pyro.distributions.score_parts import ScoreParts
 
 
-class Distribution(object, metaclass=ABCMeta):
+class DistributionMeta(ABCMeta):
+    _interpretation = None
+
+    def __call__(cls, *args, **kwargs):
+        if _interpretation is not None:
+            result = _interpretation(cls, args, kwargs)
+            if result is not None:
+                return result
+        return super().__call__(*args, **kwargs)
+
+
+class Distribution(metaclass=DistributionMeta):
     """
     Base class for parameterized probability distributions.
 

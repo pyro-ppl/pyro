@@ -2172,3 +2172,22 @@ def test_reparam_stable():
         pyro.sample("z_exponential", dist.Delta(torch.tensor(1.)))
 
     assert_ok(model, guide, Trace_ELBO())
+
+
+def test_collapse_beta_bernoulli():
+    pytest.importorskip("funsor").set_backend("torch")
+    ops = pytest.importorskip("funsor.ops")
+    data = torch.tensor(0.)
+
+    def model():
+        c = pyro.sample("c", dist.Gamma(1, 1))
+        with poutine.collapse():
+            probs = pyro.sample("probs", dist.Beta(c, 2))
+            pyro.sample(dist.Bernoulli(probs), obs=data)
+
+    def guide():
+        a = pyro.param("a", torch.tensor(1.), constraint=constraints.positive)
+        b = pyro.param("b", torch.tensor(1.), constraint=constraints.positive)
+        pyro.sample("c", dist.Gamma(a, b))
+
+    assert_ok(model, guide, Trace_ELBO())
