@@ -7,15 +7,20 @@ from contextlib import contextmanager
 from pyro.distributions.score_parts import ScoreParts
 
 
-class DistributionMeta(ABCMeta):
-    _interpretation = None
+# TODO Remove import guard once funsor is a required dependency.
+try:
+    from funsor.distribution import CoerceToFunsor
+except ImportError:
+    DistributionMeta = ABCMeta
+else:
+    class DistributionMeta(ABCMeta):
+        _coerce_to_funsor = CoerceToFunsor("torch")
 
-    def __call__(cls, *args, **kwargs):
-        if _interpretation is not None:
-            result = _interpretation(cls, args, kwargs)
+        def __call__(cls, *args, **kwargs):
+            result = _coerce_to_funsor(cls, args, kwargs)
             if result is not None:
                 return result
-        return super().__call__(*args, **kwargs)
+            return super().__call__(*args, **kwargs)
 
 
 class Distribution(metaclass=DistributionMeta):

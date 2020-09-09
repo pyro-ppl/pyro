@@ -6,11 +6,8 @@ from .runtime import _PYRO_STACK
 try:
     import funsor
     from funsor.terms import Funsor
-    from funsor.distribution import CoerceToFunsor
 except ImportError:
-    _interpreter = None
-else:
-    _interpreter = CoerceToFunsor("torch")
+    pass
 
 
 class CollapseMessenger(TraceMessenger):
@@ -29,15 +26,9 @@ class CollapseMessenger(TraceMessenger):
     def __enter__(self):
         self.preserved_plates = frozenset(h.name for h in _PYRO_STACK
                                           if isinstance(h, pyro.plate))
-
-        meta = type(dist.Distribution)
-        self._old_interpretation = meta._interpretation
-        meta._interpretation = _interpreter
         return super().__enter__()
 
     def __exit__(self, *args):
-        meta = type(dist.Distribution)
-        meta._interpretation = self._old_interpretation
         super().__exit__(*args)
 
         # Convert delayed statements to pyro.factor()
