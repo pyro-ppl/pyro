@@ -39,7 +39,7 @@ class CollapseMessenger(TraceMessenger):
     def _pyro_post_sample(self, msg):
         if site_is_subsample(msg):
             return
-        super()._process_message(msg)
+        super()._pyro_post_sample(msg)
 
     def __enter__(self):
         self.preserved_plates = frozenset(h.name for h in _PYRO_STACK
@@ -50,23 +50,23 @@ class CollapseMessenger(TraceMessenger):
         super().__exit__(*args)
 
         # Convert delayed statements to pyro.factor()
-        log_prob_terms = []
         reduced_vars = []
+        log_prob_terms = []
         plates = frozenset()
         for name, site in self.trace.nodes.items():
             if not site["is_observed"]:
                 reduced_vars.append(name)
-            log_prob = funsor.to_funsor(site["fn"])(value=site["value"])
+            log_prob_terms.append(funsor.to_funsor(site["fn"])(value=site["value"]))
             plates |= frozenset(f.name for f in site["cond_indep_stack"]
                                 if f.vectorized)
-        if log_prob_terms:
-            reduced_plates = plates - self.preserved_plates
-            log_prob = funsor.sum_product.sum_product(
-                funsor.ops.logaddexp,
-                funsor.ops.add,
-                log_prob_terms,
-                eliminate=frozenset(reduced_vars) | reduced_plates,
-                plates=plates,
-            )
-            name = reduced_vars[0]
-            pyro.factor(name, log_prob)
+        assert log_prob_terms, "nothing to collapse"
+        reduced_plates = plates - self.preserved_plates
+        log_prob = funsor.sum_product.sum_product(
+            funsor.ops.logaddexp,
+            funsor.ops.add,
+            log_prob_terms,
+            eliminate=frozenset(reduced_vars) | reduced_plates,
+            plates=plates,
+        )
+        name = reduced_vars[0]
+        pyro.factor(name, log_prob.data)
