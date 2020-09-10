@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABCMeta, abstractmethod
-from contextlib import contextmanager
 
 from pyro.distributions.score_parts import ScoreParts
 
@@ -13,9 +12,9 @@ try:
 except ImportError:
     DistributionMeta = ABCMeta
 else:
-    class DistributionMeta(ABCMeta):
-        _coerce_to_funsor = CoerceToFunsor("torch")
+    _coerce_to_funsor = CoerceToFunsor("torch")
 
+    class DistributionMeta(ABCMeta):
         def __call__(cls, *args, **kwargs):
             result = _coerce_to_funsor(cls, args, kwargs)
             if result is not None:

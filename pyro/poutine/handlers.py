@@ -82,6 +82,7 @@ from .uncondition_messenger import UnconditionMessenger
 _msngrs = [
     BlockMessenger,
     BroadcastMessenger,
+    CollapseMessenger,
     ConditionMessenger,
     DoMessenger,
     EnumMessenger,

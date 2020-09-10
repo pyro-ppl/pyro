@@ -1,6 +1,11 @@
-import pyro.distributions as dist
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
+import pyro
+from pyro.poutine.util import site_is_subsample
 
 from .runtime import _PYRO_STACK
+from .trace_messenger import TraceMessenger
 
 # TODO Remove import guard once funsor is a required dependency.
 try:
@@ -11,17 +16,30 @@ except ImportError:
 
 
 class CollapseMessenger(TraceMessenger):
+    def __init__(self, *args, **kwargs):
+        import funsor
+        funsor.set_backend("torch")
+        super().__init__(*args, **kwargs)
 
     def _process_message(self, msg):
+        if site_is_subsample(msg):
+            return
         super()._process_message(msg)
+
+        # Block sample statements.
         if msg["type"] == "sample":
-            if isinstance(msg["fn"], Funsor) or isinstance(msg["value"], Funsor):
+            if isinstance(msg["fn"], Funsor) or isinstance(msg["value"], (str, Funsor)):
                 msg["stop"] = True
 
     def _pyro_sample(self, msg):
-        if msg["value"] is not None:
-            msg["value"] = funsor.Variable(msg["name"], msg["fn"].value_domain)
+        if msg["value"] is None:
+            msg["value"] = msg["name"]
         msg["done"] = True
+
+    def _pyro_post_sample(self, msg):
+        if site_is_subsample(msg):
+            return
+        super()._process_message(msg)
 
     def __enter__(self):
         self.preserved_plates = frozenset(h.name for h in _PYRO_STACK
@@ -32,11 +50,13 @@ class CollapseMessenger(TraceMessenger):
         super().__exit__(*args)
 
         # Convert delayed statements to pyro.factor()
-        log_prob_terms, reduced_vars = [], []
-        for name, site in self.trace.items():
+        log_prob_terms = []
+        reduced_vars = []
+        plates = frozenset()
+        for name, site in self.trace.nodes.items():
             if not site["is_observed"]:
                 reduced_vars.append(name)
-            log_prob = to_funsor(site["fn"])(value=site["value"])
+            log_prob = funsor.to_funsor(site["fn"])(value=site["value"])
             plates |= frozenset(f.name for f in site["cond_indep_stack"]
                                 if f.vectorized)
         if log_prob_terms:
