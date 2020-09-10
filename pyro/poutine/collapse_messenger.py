@@ -56,7 +56,12 @@ class CollapseMessenger(TraceMessenger):
         for name, site in self.trace.nodes.items():
             if not site["is_observed"]:
                 reduced_vars.append(name)
-            log_prob_terms.append(funsor.to_funsor(site["fn"])(value=site["value"]))
+            dim_to_name = {f.dim: f.name for f in site["cond_indep_stack"]}
+            fn = funsor.to_funsor(site["fn"], funsor.Real, dim_to_name)
+            value = site["value"]
+            if not isinstance(value, str):
+                value = funsor.to_funsor(site["value"], fn.inputs["value"], dim_to_name)
+            log_prob_terms.append(fn(value=value))
             plates |= frozenset(f.name for f in site["cond_indep_stack"]
                                 if f.vectorized)
         assert log_prob_terms, "nothing to collapse"
