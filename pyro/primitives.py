@@ -160,13 +160,13 @@ def subsample(data, event_dim):
     either the ``subsample`` or ``subsample_size`` kwarg. For example the
     following are equivalent::
 
-        # Version 1. using pyro.subsample()
+        # Version 1. using indexing
         def model(data):
             with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()) as ind:
                 data = data[ind]
                 # ...
 
-        # Version 2. using indexing
+        # Version 2. using pyro.subsample()
         def model(data):
             with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()):
                 data = pyro.subsample(data, event_dim=0)
