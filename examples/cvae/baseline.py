@@ -29,6 +29,7 @@ class BaselineNet(nn.Module):
 class MaskedBCELoss(nn.Module):
     def __init__(self, masked_with=-1):
         super().__init__()
+        self.reduction = reduction
         self.masked_with = masked_with
 
     def forward(self, input, target):
