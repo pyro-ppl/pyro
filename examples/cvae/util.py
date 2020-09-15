@@ -105,7 +105,7 @@ def generate_table(device, num_quadrant_inputs, pre_trained_baseline,
     )
 
     # Load sample data
-    criterion = MaskedBCELoss(reduction='sum')
+    criterion = MaskedBCELoss()
     loss_fn = Trace_ELBO(num_particles=num_particles).differentiable_loss
 
     baseline_cll = 0.0

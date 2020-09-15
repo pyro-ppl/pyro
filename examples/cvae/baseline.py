@@ -45,7 +45,7 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
     baseline_net = BaselineNet(500, 500)
     baseline_net.to(device)
     optimizer = torch.optim.Adam(baseline_net.parameters(), lr=learning_rate)
-    criterion = MaskedBCELoss(reduction='sum')
+    criterion = MaskedBCELoss()
     best_loss = np.inf
     early_stop_count = 0
 
