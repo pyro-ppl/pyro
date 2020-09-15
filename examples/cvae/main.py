@@ -16,8 +16,10 @@ def main(args):
     results = []
     columns = []
 
-    for num_quadrant_inputs in args.num_quadrant_inputs:  # [1, 2, 3]
+    for num_quadrant_inputs in args.num_quadrant_inputs:
+        # adds an s in case of plural quadrants
         maybes = 's' if num_quadrant_inputs > 1 else ''
+
         print('Training with {} quadrant{} as input...'
               .format(num_quadrant_inputs, maybes))
 
