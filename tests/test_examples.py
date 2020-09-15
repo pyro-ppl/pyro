@@ -108,6 +108,7 @@ CPU_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential',
     'vae/vae.py --num-epochs=1',
     'vae/vae_comparison.py --num-epochs=1',
+    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1'
 ]
 
 CUDA_EXAMPLES = [
@@ -151,6 +152,7 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
+    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1 --cuda'
 ]
 
 

@@ -41,7 +41,7 @@ class MaskedBCELoss(nn.Module):
         elif self.reduction == 'mean':
             return loss.sum() / (target != -1).sum()
         else:
-            raise ValueError(f"{self.reduction} is not a valid value")
+            raise ValueError("{} is not a valid value".format(self.reduction))
 
 
 def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
@@ -68,7 +68,7 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
 
             # Iterate over data.
             bar = tqdm(dataloaders[phase],
-                       desc=f'NN Epoch {epoch} {phase}'.ljust(20))
+                       desc='NN Epoch {} {}'.format(epoch, phase).ljust(20))
             for i, batch in enumerate(bar):
                 inputs = batch['input'].to(device)
                 outputs = batch['output'].to(device)
@@ -91,7 +91,7 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
                 running_loss += loss.item()
                 num_preds += 1
                 if i % 10 == 0:
-                    bar.set_postfix(loss=f'{running_loss / num_preds:.2f}',
+                    bar.set_postfix(loss='{:.2f}'.format(running_loss / num_preds),
                                     early_stop_count=early_stop_count)
 
             epoch_loss = running_loss / dataset_sizes[phase]
