@@ -8,11 +8,11 @@ from pyro.distributions.score_parts import ScoreParts
 
 # TODO Remove import guard once funsor is a required dependency.
 try:
-    from funsor.distribution import CoerceToFunsor
+    from funsor.distribution import CoerceDistributionToFunsor
 except ImportError:
     DistributionMeta = ABCMeta
 else:
-    _coerce_to_funsor = CoerceToFunsor("torch")
+    _coerce_to_funsor = CoerceDistributionToFunsor("torch")
 
     class DistributionMeta(ABCMeta):
         def __call__(cls, *args, **kwargs):
