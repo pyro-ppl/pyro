@@ -16,6 +16,12 @@ except ImportError:
 
 
 class CollapseMessenger(TraceMessenger):
+    """
+    EXPERIMENTAL Collapses all sites in the context by lazily sampling and
+    attempting to use conjugacy relations. If no conjugacy is known this will
+    fail. Code using the results of sample sites must be written to accept
+    Funsors rather than Tensors. This requires ``funsor`` to be installed.
+    """
     def __init__(self, *args, **kwargs):
         import funsor
         funsor.set_backend("torch")
