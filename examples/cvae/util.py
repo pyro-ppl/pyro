@@ -15,6 +15,7 @@ from mnist import get_data
 
 
 def imshow(inp, image_path=None):
+    # plot images
     inp = inp.cpu().numpy().transpose((1, 2, 0))
     space = np.ones((inp.shape[0], 50, inp.shape[2]))
     inp = np.concatenate([space, inp], axis=1)
