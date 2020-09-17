@@ -113,22 +113,6 @@ class CVAE(nn.Module):
 
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
-    def save(self, model_path):
-        torch.save({
-            'prior': self.prior_net.state_dict(),
-            'generation': self.generation_net.state_dict(),
-            'recognition': self.recognition_net.state_dict()
-        }, model_path)
-
-    def load(self, model_path, map_location=None):
-        net_weights = torch.load(model_path, map_location=map_location)
-        self.prior_net.load_state_dict(net_weights['prior'])
-        self.generation_net.load_state_dict(net_weights['generation'])
-        self.recognition_net.load_state_dict(net_weights['recognition'])
-        self.prior_net.eval()
-        self.generation_net.eval()
-        self.recognition_net.eval()
-
 
 def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
           early_stop_patience, model_path, pre_trained_baseline_net):
@@ -175,7 +159,7 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
             if phase == 'val':
                 if epoch_loss < best_loss:
                     best_loss = epoch_loss
-                    cvae_net.save(model_path)
+                    torch.save(cvae_net.state_dict(), model_path)
                     early_stop_count = 0
                 else:
                     early_stop_count += 1
@@ -184,5 +168,6 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
             break
 
     # Save model weights
-    cvae_net.load(model_path)
+    cvae_net.load_state_dict(torch.load(model_path))
+    cvae_net.eval()
     return cvae_net
