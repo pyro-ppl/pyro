@@ -2175,6 +2175,7 @@ def test_reparam_stable():
 
 
 @pytest.mark.xfail(reason="missing Beta-Bernoulli pattern in Funsor")
+@pytest.mark.stage("funsor")
 def test_collapse_beta_bernoulli():
     pytest.importorskip("funsor")
     data = torch.tensor(0.)
@@ -2193,6 +2194,7 @@ def test_collapse_beta_bernoulli():
     assert_ok(model, guide, Trace_ELBO())
 
 
+@pytest.mark.stage("funsor")
 def test_collapse_beta_binomial():
     pytest.importorskip("funsor")
     data = torch.tensor(5.)
@@ -2212,6 +2214,7 @@ def test_collapse_beta_binomial():
 
 
 @pytest.mark.xfail(reason="missing pattern in Funsor")
+@pytest.mark.stage("funsor")
 def test_collapse_beta_binomial_plate():
     pytest.importorskip("funsor")
     data = torch.tensor([0., 1., 5., 5.])
