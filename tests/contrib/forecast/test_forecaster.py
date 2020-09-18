@@ -142,7 +142,7 @@ def test_trace_smoke(Model, batch_shape, t_obs, obs_dim, cov_dim):
     covariates = torch.randn(batch_shape + (t_obs, cov_dim))
     forecaster = Forecaster(model, data, covariates, num_steps=2, log_every=1)
     hmc_forecaster = HMCForecaster(model, data, covariates, max_tree_depth=1,
-                               num_warmup=1, num_samples=1, jit_compile=False)
+                                   num_warmup=1, num_samples=1, jit_compile=False)
 
     # This is the desired syntax for recording posterior latent samples.
     num_samples = 5
@@ -158,11 +158,14 @@ def test_trace_smoke(Model, batch_shape, t_obs, obs_dim, cov_dim):
             with pyro.plate("particles", num_samples, dim=dim):
                 forecaster.guide(data, covariates)
         with poutine.trace() as expected:
-            with pyro.plate("particles", num_samples, dim=dim):
-                return model(data, covariates)
+            with poutine.replay(trace=tr.trace):
+                with pyro.plate("particles", num_samples, dim=dim):
+                    model(data, covariates)
     for actual, engine in zip([svi, hmc], ["svi", "hmc"]):
         for name, site in expected.trace.nodes.items():
-            expected_fn = site["fn"].event_shape
+            expected_fn = site["fn"]
+            if type(expected_fn).__name__ == "_Subsample":
+                continue
             actual_fn = actual.trace.nodes[name]["fn"]
             assert name in actual.trace.nodes, engine
             assert actual_fn.event_shape == expected_fn.event_shape, engine
