@@ -182,8 +182,8 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
     Example usage::
 
         guide = AutoGuideList(my_model)
-        guide.add(AutoDiagonalNormal(poutine.block(model, hide=["assignment"])))
-        guide.add(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
+        guide.append(AutoDiagonalNormal(poutine.block(model, hide=["assignment"])))
+        guide.append(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
         svi = SVI(model, guide, optim, Trace_ELBO())
 
     :param callable model: a Pyro model
