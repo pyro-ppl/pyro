@@ -18,7 +18,7 @@ from pyro.nn.module import PyroModule
 from pyro.optim import DCTAdam
 
 from .util import (MarkDCTParamMessenger, PrefixConditionMessenger, PrefixReplayMessenger, PrefixWarmStartMessenger,
-                   reshape_batch)
+                   reshape_batch, time_reparam_dct, time_reparam_haar)
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +225,9 @@ class Forecaster(nn.Module):
         over all ``num_steps``, not the per-step decay factor.
     :param float clip_norm: Norm used for gradient clipping during
         optimization. Defaults to 10.0.
+    :param bool time_reparam: If not None, reparameterize all time-dependent
+        variables via the Haar wavelet transform (if "haar") or the discrete
+        cosine transform (if "dct").
     :param bool dct_gradients: Whether to discrete cosine transform gradients
         in :class:`~pyro.optim.optim.DCTAdam`. Defaults to False.
     :param bool subsample_aware: whether to update gradient statistics only
@@ -252,6 +255,7 @@ class Forecaster(nn.Module):
                  betas=(0.9, 0.99),
                  learning_rate_decay=0.1,
                  clip_norm=10.0,
+                 time_reparam=None,
                  dct_gradients=False,
                  subsample_aware=False,
                  num_steps=1001,
@@ -262,8 +266,14 @@ class Forecaster(nn.Module):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
+        if time_reparam == "haar":
+            model = poutine.reparam(model, time_reparam_haar)
+        elif time_reparam == "dct":
+            model = poutine.reparam(model, time_reparam_dct)
+        elif time_reparam is not None:
+            raise ValueError("unknown time_reparam: {}".format(time_reparam))
         if guide is None:
-            guide = AutoNormal(self.model, init_loc_fn=init_loc_fn, init_scale=init_scale,
+            guide = AutoNormal(model, init_loc_fn=init_loc_fn, init_scale=init_scale,
                                create_plates=create_plates)
         self.guide = guide
 

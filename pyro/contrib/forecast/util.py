@@ -7,9 +7,32 @@ import torch
 from torch.distributions import transform_to, transforms
 
 import pyro.distributions as dist
+from pyro.infer.reparam import HaarReparam, DiscreteCosineReparam
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 from pyro.primitives import get_param_store
+
+
+def time_reparam_dct(msg):
+    """
+    EXPERIMENTAL Configures ``poutine.reparam()`` to use a ``HaarReparam`` for
+    all sites inside the ``time`` plate.
+    """
+    for frame in msg["cond_indep_stack"]:
+        if frame.name == "time":
+            dim = frame.dim - msg["fn"].event_dim
+            return HaarReparam(dim=dim)
+
+
+def time_reparam_haar(msg):
+    """
+    EXPERIMENTAL Configures ``poutine.reparam()`` to use a ``DiscreteCosineReparam`` for
+    all sites inside the ``time`` plate.
+    """
+    for frame in msg["cond_indep_stack"]:
+        if frame.name == "time":
+            dim = frame.dim - msg["fn"].event_dim
+            return DiscreteCosineReparam(dim=dim)
 
 
 class MarkDCTParamMessenger(Messenger):
@@ -333,9 +356,9 @@ def _(d, batch_shape):
         assert type(transform) in UNIVARIATE_TRANSFORMS, \
             "Currently, reshape_batch only supports AbsTransform, " + \
             "ExpTransform, SigmoidTransform transform"
-        current_shape = d.observation_dist.shape()
+        old_shape = d.observation_dist.shape()
         new_shape = obs_dist.shape()
-        transforms.append(reshape_transform_batch(transform, current_shape, new_shape))
+        transforms.append(reshape_transform_batch(transform, old_shape, new_shape))
     new.transforms = transforms
     super(dist.LinearHMM, new).__init__(d.duration, batch_shape, d.event_shape,
                                         validate_args=d._validate_args)
@@ -352,7 +375,7 @@ UNIVARIATE_TRANSFORMS = {
 
 
 @singledispatch
-def reshape_transform_batch(t, current_batch_shape, new_batch_shape):
+def reshape_transform_batch(t, old_shape, new_shape):
     """
     EXPERIMENTAL Given a transform ``t``, reshape to different batch shape
     of same number of elements.
@@ -362,16 +385,16 @@ def reshape_transform_batch(t, current_batch_shape, new_batch_shape):
 
     :param t: A transform.
     :type t: ~torch.distributions.transforms.Transform
-    :param tuple current_batch_shape: The current batch shape.
-    :param tuple new_batch_shape: A new batch shape.
+    :param tuple old_shape: The current shape of ``t``.
+    :param tuple new_shape: A new shape.
     :returns: A transform with the same type but given new batch shape.
     :rtype: ~torch.distributions.transforms.Transform
     """
     raise NotImplementedError("reshape_transform_batch() does not suport {}".format(type(t)))
 
 
-def _reshape_batch_univariate_transform(t, current_batch_shape, new_batch_shape):
-    params = {name: getattr(t, name).expand(current_batch_shape).reshape(new_batch_shape)
+def _reshape_batch_univariate_transform(t, old_shape, new_shape):
+    params = {name: getattr(t, name).expand(old_shape).reshape(new_shape)
               for name in UNIVARIATE_TRANSFORMS[type(t)]}
     params["cache_size"] = t._cache_size
     return type(t)(**params)
@@ -379,3 +402,13 @@ def _reshape_batch_univariate_transform(t, current_batch_shape, new_batch_shape)
 
 for _type in UNIVARIATE_TRANSFORMS:
     reshape_transform_batch.register(_type)(_reshape_batch_univariate_transform)
+
+
+@reshape_transform_batch.register(dist.transforms.HaarTransform)
+@reshape_transform_batch.register(dist.transforms.DiscreteCosineTransform)
+def _(t, old_shape, new_shape):
+    assert len(old_shape) >= -t.dim
+    assert len(new_shape) >= -t.dim
+    if old_shape[t.dim:] != new_shape[t.dim:]:
+        raise NotImplementedError
+    return t
