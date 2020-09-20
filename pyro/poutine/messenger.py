@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from contextlib import contextmanager
 from functools import partial
 
 from .runtime import _PYRO_STACK
@@ -133,15 +134,15 @@ class Messenger:
         Process the message by calling appropriate method of itself based
         on message type. The message is updated in place.
         """
-        method_name = "_pyro_{}".format(msg["type"])
-        if hasattr(self, method_name):
-            return getattr(self, method_name)(msg)
+        method = getattr(self, "_pyro_{}".format(msg["type"]), None)
+        if method is not None:
+            return method(msg)
         return None
 
     def _postprocess_message(self, msg):
-        method_name = "_pyro_post_{}".format(msg["type"])
-        if hasattr(self, method_name):
-            return getattr(self, method_name)(msg)
+        method = getattr(self, "_pyro_post_{}".format(msg["type"]), None)
+        if method is not None:
+            return method(msg)
         return None
 
     @classmethod
@@ -200,3 +201,27 @@ class Messenger:
             pass
 
         return fn
+
+
+@contextmanager
+def mute_messengers(predicate):
+    """
+    Context manager to temporarily remove matching messengers from the _PYRO_STACK.
+    Note this does not call the ``.__exit__()`` and ``.__enter__()`` methods.
+
+    This is useful to selectively block enclosing handlers.
+
+    :param callable predicate: A predicate mapping messenger instance to boolean.
+        This mutes all messengers ``m`` for which ``bool(predicate(m)) is True``.
+    :yields: A list of matched messengers that are muted.
+    """
+    muted = {}
+    try:
+        for i, messenger in enumerate(_PYRO_STACK):
+            if predicate(messenger):
+                muted[i] = messenger
+                _PYRO_STACK[i] = Messenger()  # trivial messenger
+        yield list(muted.values())
+    finally:
+        for i, messenger in muted.items():
+            _PYRO_STACK[i] = messenger

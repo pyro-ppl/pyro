@@ -859,6 +859,69 @@ def test_plate_wrong_size_error():
     assert_error(model, guide, TraceGraph_ELBO(), match='Shape mismatch inside plate')
 
 
+def test_unplate_name_ok():
+
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        assert a.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with pyro.unplate("plate"):
+                c = pyro.sample("c", dist.Normal(0, 1))
+                assert c.shape == ()
+
+    def guide():
+        c = pyro.sample("c", dist.Normal(0, 1))
+        assert c.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with pyro.unplate("plate"):
+                a = pyro.sample("a", dist.Normal(0, 1))
+                assert a.shape == ()
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+def test_unplate_dim_ok():
+
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        assert a.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with pyro.unplate(dim=-1):
+                c = pyro.sample("c", dist.Normal(0, 1))
+                assert c.shape == ()
+
+    def guide():
+        c = pyro.sample("c", dist.Normal(0, 1))
+        assert c.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with pyro.unplate(dim=-1):
+                a = pyro.sample("a", dist.Normal(0, 1))
+                assert a.shape == ()
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+def test_unplate_missing_error():
+
+    def model():
+        with pyro.unplate("plate"):
+            pyro.sample("a", dist.Normal(0, 1))
+
+    def guide():
+        pyro.sample("a", dist.Normal(0, 1))
+
+    assert_error(model, guide, Trace_ELBO(),
+                 match="unplate matched 0 messengers")
+
+
 @pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_enum_discrete_misuse_warning(Elbo, enumerate_):
