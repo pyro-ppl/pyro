@@ -20,7 +20,7 @@ from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
-from pyro.poutine.plate_messenger import unplate
+from pyro.poutine.plate_messenger import block_plate
 from tests.common import assert_close
 
 logger = logging.getLogger(__name__)
@@ -860,7 +860,7 @@ def test_plate_wrong_size_error():
     assert_error(model, guide, TraceGraph_ELBO(), match='Shape mismatch inside plate')
 
 
-def test_unplate_name_ok():
+def test_block_plate_name_ok():
 
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
@@ -868,7 +868,7 @@ def test_unplate_name_ok():
         with pyro.plate("plate", 2):
             b = pyro.sample("b", dist.Normal(0, 1))
             assert b.shape == (2,)
-            with unplate("plate"):
+            with block_plate("plate"):
                 c = pyro.sample("c", dist.Normal(0, 1))
                 assert c.shape == ()
 
@@ -878,14 +878,14 @@ def test_unplate_name_ok():
         with pyro.plate("plate", 2):
             b = pyro.sample("b", dist.Normal(0, 1))
             assert b.shape == (2,)
-            with unplate("plate"):
+            with block_plate("plate"):
                 a = pyro.sample("a", dist.Normal(0, 1))
                 assert a.shape == ()
 
     assert_ok(model, guide, Trace_ELBO())
 
 
-def test_unplate_dim_ok():
+def test_block_plate_dim_ok():
 
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
@@ -893,7 +893,7 @@ def test_unplate_dim_ok():
         with pyro.plate("plate", 2):
             b = pyro.sample("b", dist.Normal(0, 1))
             assert b.shape == (2,)
-            with unplate(dim=-1):
+            with block_plate(dim=-1):
                 c = pyro.sample("c", dist.Normal(0, 1))
                 assert c.shape == ()
 
@@ -903,24 +903,24 @@ def test_unplate_dim_ok():
         with pyro.plate("plate", 2):
             b = pyro.sample("b", dist.Normal(0, 1))
             assert b.shape == (2,)
-            with unplate(dim=-1):
+            with block_plate(dim=-1):
                 a = pyro.sample("a", dist.Normal(0, 1))
                 assert a.shape == ()
 
     assert_ok(model, guide, Trace_ELBO())
 
 
-def test_unplate_missing_error():
+def test_block_plate_missing_error():
 
     def model():
-        with unplate("plate"):
+        with block_plate("plate"):
             pyro.sample("a", dist.Normal(0, 1))
 
     def guide():
         pyro.sample("a", dist.Normal(0, 1))
 
     assert_error(model, guide, Trace_ELBO(),
-                 match="unplate matched 0 messengers")
+                 match="block_plate matched 0 messengers")
 
 
 @pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])

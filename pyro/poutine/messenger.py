@@ -204,7 +204,7 @@ class Messenger:
 
 
 @contextmanager
-def mute_messengers(predicate):
+def block_messengers(predicate):
     """
     Context manager to temporarily remove matching messengers from the _PYRO_STACK.
     Note this does not call the ``.__exit__()`` and ``.__enter__()`` methods.
@@ -213,15 +213,15 @@ def mute_messengers(predicate):
 
     :param callable predicate: A predicate mapping messenger instance to boolean.
         This mutes all messengers ``m`` for which ``bool(predicate(m)) is True``.
-    :yields: A list of matched messengers that are muted.
+    :yields: A list of matched messengers that are blocked.
     """
-    muted = {}
+    blocked = {}
     try:
         for i, messenger in enumerate(_PYRO_STACK):
             if predicate(messenger):
-                muted[i] = messenger
+                blocked[i] = messenger
                 _PYRO_STACK[i] = Messenger()  # trivial messenger
-        yield list(muted.values())
+        yield list(blocked.values())
     finally:
-        for i, messenger in muted.items():
+        for i, messenger in blocked.items():
             _PYRO_STACK[i] = messenger

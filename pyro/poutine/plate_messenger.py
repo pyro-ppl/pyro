@@ -4,7 +4,7 @@
 from contextlib import contextmanager
 
 from .broadcast_messenger import BroadcastMessenger
-from .messenger import mute_messengers
+from .messenger import block_messengers
 from .subsample_messenger import SubsampleMessenger
 
 
@@ -25,9 +25,9 @@ class PlateMessenger(SubsampleMessenger):
 
 
 @contextmanager
-def unplate(name=None, dim=None):
+def block_plate(name=None, dim=None):
     """
-    EXPERIMENTAL Context manager to temporarily exit a single enclosing plate.
+    Context manager to temporarily block a single enclosing plate.
 
     This is useful for sampling auxiliary variables or lazily sampling global
     variables that are needed in a plated context. For example the following
@@ -38,7 +38,7 @@ def unplate(name=None, dim=None):
         def model_1(data):
             loc = pyro.sample("loc", dist.Normal(0, 1))
             with pyro.plate("data", len(data)):
-                with unplate("data"):
+                with block_plate("data"):
                     scale = pyro.sample("scale", dist.LogNormal(0, 1))
                 pyro.sample("x", dist.Normal(loc, scale))
 
@@ -68,7 +68,7 @@ def unplate(name=None, dim=None):
         if dim is not None:
             return messenger.dim == dim
 
-    with mute_messengers(predicate) as matches:
+    with block_messengers(predicate) as matches:
         if len(matches) != 1:
-            raise ValueError("unplate matched {} messengers".format(len(matches)))
+            raise ValueError("block_plate matched {} messengers".format(len(matches)))
         yield
