@@ -18,6 +18,8 @@ def time_reparam_dct(msg):
     EXPERIMENTAL Configures ``poutine.reparam()`` to use a ``HaarReparam`` for
     all sites inside the ``time`` plate.
     """
+    if msg["is_observed"]:
+        return
     for frame in msg["cond_indep_stack"]:
         if frame.name == "time":
             dim = frame.dim - msg["fn"].event_dim
@@ -29,6 +31,8 @@ def time_reparam_haar(msg):
     EXPERIMENTAL Configures ``poutine.reparam()`` to use a ``DiscreteCosineReparam`` for
     all sites inside the ``time`` plate.
     """
+    if msg["is_observed"]:
+        return
     for frame in msg["cond_indep_stack"]:
         if frame.name == "time":
             dim = frame.dim - msg["fn"].event_dim
