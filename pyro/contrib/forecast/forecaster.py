@@ -296,7 +296,7 @@ class Forecaster(nn.Module):
                                  "lrd": learning_rate_decay ** (1 / num_steps),
                                  "clip_norm": clip_norm,
                                  "subsample_aware": subsample_aware})
-            svi = SVI(self.model, self.guide, optim, elbo)
+            svi = SVI(model, guide, optim, elbo)
             for step in range(num_steps):
                 loss = svi.step(data, covariates) / data.numel()
                 if log_every and step % log_every == 0:

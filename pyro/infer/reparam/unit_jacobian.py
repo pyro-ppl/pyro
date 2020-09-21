@@ -8,6 +8,7 @@ from torch.distributions.transforms import ComposeTransform
 
 import pyro
 import pyro.distributions as dist
+from pyro.poutine.plate_messenger import block_plate
 
 from .reparam import Reparam
 
@@ -44,14 +45,14 @@ class UnitJacobianReparam(Reparam):
                     "Cannot transform along batch dimension; "
                     "try converting a batch dimension to an event dimension")
 
-                # Reshape and mute plates using unplate.
+                # Reshape and mute plates using block_plate.
                 from pyro.contrib.forecast.util import reshape_batch, reshape_transform_batch
                 old_shape = fn.batch_shape
                 new_shape = old_shape[:-shift] + (1,) * shift + old_shape[-shift:]
                 fn = reshape_batch(fn, new_shape).to_event(shift)
                 transform = reshape_transform_batch(transform, old_shape, new_shape)
                 for dim in range(-shift, 0):
-                    stack.enter_context(pyro.unplate(dim=dim))
+                    stack.enter_context(block_plate(dim=dim))
 
             # Draw noise from the base distribution.
             transform = ComposeTransform([_with_cache(biject_to(fn.support).inv),
@@ -62,7 +63,7 @@ class UnitJacobianReparam(Reparam):
         # Differentiably transform.
         x = transform.inv(x_trans)  # should be free due to transform cache
         if shift:
-            x = x.reshape(x.shape[:-event_dim - 2 * shift] + x.shape[:-event_dim - shift])
+            x = x.reshape(x.shape[:-2 * shift - event_dim] + x.shape[-shift - event_dim:])
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(x, event_dim=event_dim)

@@ -21,7 +21,7 @@ def time_reparam_dct(msg):
     for frame in msg["cond_indep_stack"]:
         if frame.name == "time":
             dim = frame.dim - msg["fn"].event_dim
-            return HaarReparam(dim=dim)
+            return HaarReparam(dim=dim, experimental_allow_batch=True)
 
 
 def time_reparam_haar(msg):
@@ -32,7 +32,7 @@ def time_reparam_haar(msg):
     for frame in msg["cond_indep_stack"]:
         if frame.name == "time":
             dim = frame.dim - msg["fn"].event_dim
-            return DiscreteCosineReparam(dim=dim)
+            return DiscreteCosineReparam(dim=dim, experimental_allow_batch=True)
 
 
 class MarkDCTParamMessenger(Messenger):
@@ -407,8 +407,9 @@ for _type in UNIVARIATE_TRANSFORMS:
 @reshape_transform_batch.register(dist.transforms.HaarTransform)
 @reshape_transform_batch.register(dist.transforms.DiscreteCosineTransform)
 def _(t, old_shape, new_shape):
-    assert len(old_shape) >= -t.dim
-    assert len(new_shape) >= -t.dim
-    if old_shape[t.dim:] != new_shape[t.dim:]:
+    dim = t.event_dim
+    assert len(old_shape) >= dim
+    assert len(new_shape) >= dim
+    if old_shape[-dim:] != new_shape[-dim:]:
         raise NotImplementedError
     return t

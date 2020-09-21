@@ -109,8 +109,8 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("time_reparam, dct_gradients", [
     (None, False),
-    (None, "haar"),
-    (None, "dct"),
+    ("haar", False),
+    ("dct", False),
     (None, True),
 ])
 @pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
