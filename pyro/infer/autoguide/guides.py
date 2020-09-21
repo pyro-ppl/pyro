@@ -144,7 +144,9 @@ class AutoGuide(PyroModule):
                 self.plates = {p.name: p for p in plates}
             for name, frame in sorted(self._prototype_frames.items()):
                 if name not in self.plates:
-                    self.plates[name] = pyro.plate(name, frame.size, dim=frame.dim)
+                    full_size = getattr(frame, "full_size", frame.size)
+                    self.plates[name] = pyro.plate(name, full_size, dim=frame.dim,
+                                                   subsample_size=frame.size)
         else:
             assert self.create_plates is None, "Cannot pass create_plates() to non-master guide"
             self.plates = self.master().plates
