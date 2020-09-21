@@ -3,6 +3,7 @@
 
 import logging
 from abc import ABCMeta, abstractmethod
+from contextlib import ExitStack
 
 import torch
 import torch.nn as nn
@@ -322,7 +323,7 @@ class Forecaster(nn.Module):
         return super().__call__(data, covariates, num_samples, batch_size)
 
     def forward(self, data, covariates, num_samples, batch_size=None):
-        assert data.size(-2) < covariates.size(-2)
+        assert data.size(-2) <= covariates.size(-2)
         assert isinstance(num_samples, int) and num_samples > 0
         if batch_size is not None:
             batches = []
@@ -336,13 +337,16 @@ class Forecaster(nn.Module):
         dim = -1 - self.max_plate_nesting
 
         with torch.no_grad():
-            with poutine.trace() as tr:
+            with poutine.block(), poutine.trace() as tr:
                 with pyro.plate("particles", num_samples, dim=dim):
                     self.guide(data, covariates)
-            with PrefixReplayMessenger(tr.trace):
-                with PrefixConditionMessenger(self.model._prefix_condition_data):
-                    with pyro.plate("particles", num_samples, dim=dim):
-                        return self.model(data, covariates)
+            with ExitStack() as stack:
+                if data.size(-2) < covariates.size(-2):
+                    stack.enter_context(PrefixReplayMessenger(tr.trace))
+                    stack.enter_context(
+                        PrefixConditionMessenger(self.model._prefix_condition_data))
+                with pyro.plate("particles", num_samples, dim=dim):
+                    return self.model(data, covariates)
 
 
 class HMCForecaster(nn.Module):
@@ -430,7 +434,7 @@ class HMCForecaster(nn.Module):
         return super().__call__(data, covariates, num_samples, batch_size)
 
     def forward(self, data, covariates, num_samples, batch_size=None):
-        assert data.size(-2) < covariates.size(-2)
+        assert data.size(-2) <= covariates.size(-2)
         assert isinstance(num_samples, int) and num_samples > 0
         if batch_size is not None:
             batches = []
@@ -451,7 +455,10 @@ class HMCForecaster(nn.Module):
                 node['value'] = sample.reshape(
                     (num_samples,) + (1,) * (node['value'].dim() - sample.dim()) + sample.shape[1:])
 
-            with PrefixReplayMessenger(self._trace):
-                with PrefixConditionMessenger(self.model._prefix_condition_data):
-                    with pyro.plate("particles", num_samples, dim=dim):
-                        return self.model(data, covariates)
+            with ExitStack() as stack:
+                if data.size(-2) < covariates.size(-2):
+                    stack.enter_context(PrefixReplayMessenger(self._trace))
+                    stack.enter_context(
+                        PrefixConditionMessenger(self.model._prefix_condition_data))
+                with pyro.plate("particles", num_samples, dim=dim):
+                    return self.model(data, covariates)
