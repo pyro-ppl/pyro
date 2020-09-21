@@ -394,3 +394,21 @@ def test_reparam_stable(kernel, kwargs):
 
     mcmc_kernel = kernel(model, max_plate_nesting=0, **kwargs)
     assert_ok(mcmc_kernel)
+
+
+# Regression test for https://github.com/pyro-ppl/pyro/issues/2627
+@pytest.mark.parametrize("Kernel", [HMC, NUTS])
+def test_potential_fn_initial_params(Kernel):
+    target = torch.distributions.Normal(loc=torch.tensor([10., 0.]),
+                                        scale=torch.tensor([1., 1.]))
+
+    def potential_fn(z):
+        z = z['points']
+        return -target.log_prob(z).sum(1)[None]
+
+    initial_params = {'points': torch.tensor([[0., 0.]])}
+    kernel = Kernel(potential_fn=potential_fn)
+    mcmc = MCMC(kernel=kernel, warmup_steps=20, initial_params=initial_params, num_samples=10)
+
+    mcmc.run()
+    mcmc.get_samples()['points']
