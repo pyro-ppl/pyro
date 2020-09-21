@@ -4,7 +4,7 @@
 import copy
 import warnings
 from collections import OrderedDict
-from contextlib import contextmanager, ExitStack
+from contextlib import ExitStack, contextmanager
 from inspect import isclass
 
 import pyro.distributions as dist
