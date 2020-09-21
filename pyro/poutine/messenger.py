@@ -206,8 +206,9 @@ class Messenger:
 @contextmanager
 def block_messengers(predicate):
     """
-    Context manager to temporarily remove matching messengers from the _PYRO_STACK.
-    Note this does not call the ``.__exit__()`` and ``.__enter__()`` methods.
+    EXPERIMENTAL Context manager to temporarily remove matching messengers from
+    the _PYRO_STACK. Note this does not call the ``.__exit__()`` and
+    ``.__enter__()`` methods.
 
     This is useful to selectively block enclosing handlers.
 

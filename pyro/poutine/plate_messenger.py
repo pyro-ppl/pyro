@@ -27,7 +27,7 @@ class PlateMessenger(SubsampleMessenger):
 @contextmanager
 def block_plate(name=None, dim=None):
     """
-    Context manager to temporarily block a single enclosing plate.
+    EXPERIMENTAL Context manager to temporarily block a single enclosing plate.
 
     This is useful for sampling auxiliary variables or lazily sampling global
     variables that are needed in a plated context. For example the following
