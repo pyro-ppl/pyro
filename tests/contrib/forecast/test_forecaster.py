@@ -127,8 +127,6 @@ def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, time_rep
     else:
         if dct_gradients is True:
             pytest.skip("Duplicated test.")
-        if time_reparam is not None:
-            pytest.skip("Not implemented")
         forecaster = HMCForecaster(model, data, covariates[..., :t_obs, :], max_tree_depth=1,
                                    num_warmup=1, num_samples=1,
                                    jit_compile=False)
