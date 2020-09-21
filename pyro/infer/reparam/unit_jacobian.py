@@ -50,7 +50,9 @@ class UnitJacobianReparam(Reparam):
                 old_shape = fn.batch_shape
                 new_shape = old_shape[:-shift] + (1,) * shift + old_shape[-shift:]
                 fn = reshape_batch(fn, new_shape).to_event(shift)
-                transform = reshape_transform_batch(transform, old_shape, new_shape)
+                transform = reshape_transform_batch(transform,
+                                                    old_shape + fn.event_shape,
+                                                    new_shape + fn.event_shape)
                 for dim in range(-shift, 0):
                     stack.enter_context(block_plate(dim=dim))
 
