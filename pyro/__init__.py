@@ -6,7 +6,7 @@ from pyro.logger import log
 from pyro.poutine import condition, do, markov
 from pyro.primitives import (clear_param_store, deterministic, enable_validation, factor, get_param_store, iarange,
                              irange, module, param, plate, plate_stack, random_module, sample, subsample,
-                             unplate, validation_enabled)
+                             validation_enabled)
 from pyro.util import set_rng_seed
 
 version_prefix = '1.4.0'
@@ -40,6 +40,5 @@ __all__ = [
     "sample",
     "set_rng_seed",
     "subsample",
-    "unplate",
     "validation_enabled",
 ]
