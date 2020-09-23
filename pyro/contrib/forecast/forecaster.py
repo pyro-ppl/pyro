@@ -18,7 +18,7 @@ from pyro.nn.module import PyroModule
 from pyro.optim import DCTAdam
 
 from .util import (MarkDCTParamMessenger, PrefixConditionMessenger, PrefixReplayMessenger, PrefixWarmStartMessenger,
-                   reshape_batch)
+                   reshape_batch, time_reparam_dct, time_reparam_haar)
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +225,9 @@ class Forecaster(nn.Module):
         over all ``num_steps``, not the per-step decay factor.
     :param float clip_norm: Norm used for gradient clipping during
         optimization. Defaults to 10.0.
+    :param str time_reparam: If not None (default), reparameterize all
+        time-dependent variables via the Haar wavelet transform (if "haar") or
+        the discrete cosine transform (if "dct").
     :param bool dct_gradients: Whether to discrete cosine transform gradients
         in :class:`~pyro.optim.optim.DCTAdam`. Defaults to False.
     :param bool subsample_aware: whether to update gradient statistics only
@@ -252,6 +255,7 @@ class Forecaster(nn.Module):
                  betas=(0.9, 0.99),
                  learning_rate_decay=0.1,
                  clip_norm=10.0,
+                 time_reparam=None,
                  dct_gradients=False,
                  subsample_aware=False,
                  num_steps=1001,
@@ -262,8 +266,14 @@ class Forecaster(nn.Module):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
         self.model = model
+        if time_reparam == "haar":
+            model = poutine.reparam(model, time_reparam_haar)
+        elif time_reparam == "dct":
+            model = poutine.reparam(model, time_reparam_dct)
+        elif time_reparam is not None:
+            raise ValueError("unknown time_reparam: {}".format(time_reparam))
         if guide is None:
-            guide = AutoNormal(self.model, init_loc_fn=init_loc_fn, init_scale=init_scale,
+            guide = AutoNormal(model, init_loc_fn=init_loc_fn, init_scale=init_scale,
                                create_plates=create_plates)
         self.guide = guide
 
@@ -286,7 +296,7 @@ class Forecaster(nn.Module):
                                  "lrd": learning_rate_decay ** (1 / num_steps),
                                  "clip_norm": clip_norm,
                                  "subsample_aware": subsample_aware})
-            svi = SVI(self.model, self.guide, optim, elbo)
+            svi = SVI(model, guide, optim, elbo)
             for step in range(num_steps):
                 loss = svi.step(data, covariates) / data.numel()
                 if log_every and step % log_every == 0:
@@ -365,12 +375,14 @@ class HMCForecaster(nn.Module):
         For models not using covariates, pass a shaped empty tensor
         ``torch.empty(duration, 0)``.
     :type covariates: ~torch.Tensor
-
     :param int num_warmup: number of MCMC warmup steps.
     :param int num_samples: number of MCMC samples.
     :param int num_chains: number of parallel MCMC chains.
     :param bool dense_mass: a flag to control whether the mass matrix is dense
         or diagonal. Defaults to False.
+    :param str time_reparam: If not None (default), reparameterize all
+        time-dependent variables via the Haar wavelet transform (if "haar") or
+        the discrete cosine transform (if "dct").
     :param bool jit_compile: whether to use the PyTorch JIT to trace the log
         density computation, and use this optimized executable trace in the
         integrator. Defaults to False.
@@ -379,10 +391,16 @@ class HMCForecaster(nn.Module):
         Defaults to 10.
     """
     def __init__(self, model, data, covariates=None, *,
-                 num_warmup=1000, num_samples=1000, num_chains=1,
+                 num_warmup=1000, num_samples=1000, num_chains=1, time_reparam=None,
                  dense_mass=False, jit_compile=False, max_tree_depth=10):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
+        if time_reparam == "haar":
+            model = poutine.reparam(model, time_reparam_haar)
+        elif time_reparam == "dct":
+            model = poutine.reparam(model, time_reparam_dct)
+        elif time_reparam is not None:
+            raise ValueError("unknown time_reparam: {}".format(time_reparam))
         self.model = model
         max_plate_nesting = _guess_max_plate_nesting(model, (data, covariates), {})
         self.max_plate_nesting = max(max_plate_nesting, 1)  # force a time plate
