@@ -697,6 +697,37 @@ def test_predictive(auto_class):
     assert len(samples) == len(samples_deser)
 
 
+@pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal])
+def test_subsample_model(auto_class):
+
+    def model(x, y=None, batch_size=None):
+        loc = pyro.param("loc", lambda: torch.tensor(0.))
+        scale = pyro.param("scale", lambda: torch.tensor(1.),
+                           constraint=constraints.positive)
+        with pyro.plate("batch", len(x), subsample_size=batch_size):
+            batch_x = pyro.subsample(x, event_dim=0)
+            batch_y = pyro.subsample(y, event_dim=0) if y is not None else None
+            mean = loc + scale * batch_x
+            sigma = pyro.sample("sigma", dist.LogNormal(0., 1.))
+            return pyro.sample("obs", dist.Normal(mean, sigma), obs=batch_y)
+
+    guide = auto_class(model)
+
+    full_size = 50
+    batch_size = 20
+    pyro.set_rng_seed(123456789)
+    x = torch.randn(full_size)
+    with torch.no_grad():
+        y = model(x)
+    assert y.shape == x.shape
+
+    pyro.get_param_store().clear()
+    pyro.set_rng_seed(123456789)
+    svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
+    for step in range(5):
+        svi.step(x, y, batch_size=batch_size)
+
+
 @pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
 @pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal, AutoGuideList])
 def test_subsample_guide(auto_class, init_fn):
