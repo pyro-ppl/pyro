@@ -5,21 +5,16 @@ from abc import ABCMeta, abstractmethod
 
 from pyro.distributions.score_parts import ScoreParts
 
+COERCIONS = []
 
-# TODO Remove import guard once funsor is a required dependency.
-try:
-    from funsor.distribution import CoerceDistributionToFunsor
-except ImportError:
-    DistributionMeta = ABCMeta
-else:
-    _coerce_to_funsor = CoerceDistributionToFunsor("torch")
 
-    class DistributionMeta(ABCMeta):
-        def __call__(cls, *args, **kwargs):
-            result = _coerce_to_funsor(cls, args, kwargs)
+class DistributionMeta(ABCMeta):
+    def __call__(cls, *args, **kwargs):
+        for coerce_ in COERCIONS:
+            result = coerce_(cls, args, kwargs)
             if result is not None:
                 return result
-            return super().__call__(*args, **kwargs)
+        return super().__call__(*args, **kwargs)
 
 
 class Distribution(metaclass=DistributionMeta):
