@@ -1,3 +1,13 @@
+"""
+We use a semi-supervised deep generative model of RNAseq data to propagate labels
+from a small set of labeled cells to a larger set of unlabeled cells.
+
+References:
+[1] "Harmonization and Annotation of Single-cell Transcriptomics data with Deep Generative Models,"
+    Chenling Xu, Romain Lopez, Edouard Mehlman, Jeffrey Regier, Michael I. Jordan, Nir Yosef.
+[2] https://github.com/YosefLab/scvi-tutorials/blob/50dd3269abfe0c375ec47114f2c20725a016736f/seed_labeling.ipynb
+"""
+
 import argparse
 
 import numpy as np
@@ -10,7 +20,7 @@ from torch.nn.functional import softplus, softmax
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.optim import Adam, ClippedAdam
+from pyro.optim import ClippedAdam
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 
 from data import get_data_loader
@@ -192,7 +202,7 @@ def main(args):
     # clear param store
     pyro.clear_param_store()
 
-    scanvi = SCANVI(num_genes=2467, num_labels=4, scale_factor = 1.0 / (args.batch_size * 2467))
+    scanvi = SCANVI(num_genes=2467, num_labels=4, scale_factor=1.0 / (args.batch_size * 2467))
     if args.cuda:
         scanvi.cuda()
 

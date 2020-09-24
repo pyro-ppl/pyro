@@ -1,3 +1,8 @@
+"""
+The data preprocessing code in this script is adapted from:
+https://github.com/YosefLab/scvi-tutorials/blob/50dd3269abfe0c375ec47114f2c20725a016736f/seed_labeling.ipynb
+"""
+
 import math
 import numpy as np
 from scipy import sparse
