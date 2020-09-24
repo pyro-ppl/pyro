@@ -88,7 +88,7 @@ class Z2LEncoder(nn.Module):
         h1, h2 = split_in_half(self.fc(x))
         z2_loc, z2_scale = h1[..., :-1], softplus(h2[..., :-1])
         l_loc, l_scale = h1[..., -1:], softplus(h2[..., -1:])
-        l_loc = l_loc.clamp(max=12.0)
+        l_loc = l_loc.clamp(max=10.0)
         l_scale = l_scale.clamp(max=3.0)
         return z2_loc, z2_scale, l_loc, l_scale
 
@@ -155,6 +155,7 @@ class SCANVI(nn.Module):
                                     z2_dim=self.latent_dim, hidden_dims=[50])
 
     def model(self, x, y=None):
+        # register various nn.Modules with Pyro
         pyro.module("scanvi", self)
 
         theta = pyro.param("inverse_dispersion", x.new_ones(self.num_genes),
@@ -171,9 +172,10 @@ class SCANVI(nn.Module):
             l = pyro.sample("l", dist.LogNormal(self.l_loc, l_scale).to_event(1))
 
             gate, mu = self.x_decoder(z2)
-            theta_mu_l = theta * mu * l
-            x_dist = dist.ZeroInflatedNegativeBinomial(gate=gate, total_count=1.0 / theta,
-                                                       probs=theta_mu_l / (1.0 + theta_mu_l))
+            eps = 1.0e-6
+            nb_logits = (theta + eps).log() - (l * mu + eps).log()
+            x_dist = dist.ZeroInflatedNegativeBinomial(gate=gate, total_count=theta,
+                                                       logits=nb_logits)
             x = pyro.sample("x", x_dist.to_event(1), obs=x)
 
     def guide(self, x, y=None):
@@ -201,6 +203,10 @@ class SCANVI(nn.Module):
 def main(args):
     # clear param store
     pyro.clear_param_store()
+    # fix random number seed
+    pyro.util.set_rng_seed(args.seed)
+    # enable optional validation warnings
+    pyro.enable_validation(True)
 
     scanvi = SCANVI(num_genes=2467, num_labels=4, scale_factor=1.0 / (args.batch_size * 2467))
     if args.cuda:
@@ -211,7 +217,7 @@ def main(args):
     # setup an optimizer
     # we decay the learning rate over the course of learning
     lrd = 0.1 ** (1.0 / (len(dataloader) * args.num_epochs))
-    optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 0.2, "lrd": lrd})
+    optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 0.1, "lrd": lrd})
 
     # tell Pyro to enumerate out y when y is unobserved
     guide = config_enumerate(scanvi.guide, "parallel", expand=True)
@@ -234,9 +240,10 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
     parser.add_argument('-n', '--num-epochs', default=200, type=int, help='number of training epochs')
     parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.005, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=0.002, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
 
