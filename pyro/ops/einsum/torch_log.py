@@ -34,7 +34,7 @@ def einsum(equation, *operands):
             if dim not in output:
                 shift = shift.max(i, keepdim=True)[0]
         # avoid nan due to -inf - -inf
-        shift.clamp_(min=torch.finfo(shift.dtype).min)
+        shift = shift.clamp(min=torch.finfo(shift.dtype).min)
         exp_operands.append((operand - shift).exp())
 
         # permute shift to match output
