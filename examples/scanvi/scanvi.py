@@ -27,12 +27,11 @@ from data import get_data_loader
 
 
 # helper for making fully-connected neural networks
-def make_fc(dims, use_batchnorm=True):
+def make_fc(dims):
     layers = []
     for in_dim, out_dim in zip(dims, dims[1:]):
         layers.append(nn.Linear(in_dim, out_dim))
-        if use_batchnorm:
-            layers.append(nn.BatchNorm1d(out_dim, momentum=0.01, eps=0.001))
+        layers.append(nn.BatchNorm1d(out_dim, momentum=0.01, eps=0.001))
         layers.append(nn.ReLU())
     return nn.Sequential(*layers[:-1])  # exclude final ReLU non-linearity
 
@@ -54,11 +53,14 @@ class Z2Decoder(nn.Module):
     def __init__(self, z1_dim, y_dim, z2_dim, hidden_dims):
         super().__init__()
         dims = [z1_dim + y_dim] + hidden_dims + [2 * z2_dim]
-        self.fc = make_fc(dims, use_batchnorm=False)
+        self.fc = make_fc(dims)
 
     def forward(self, z1, y):
         z1_y = torch.cat([z1, y], dim=-1)
-        loc, scale = split_in_half(self.fc(z1_y))
+        _z1_y = z1_y.reshape(-1, z1_y.size(-1))
+        hidden = self.fc(_z1_y)
+        hidden = hidden.reshape(z1_y.shape[:-1] + hidden.shape[-1:])
+        loc, scale = split_in_half(hidden)
         scale = softplus(scale)
         return loc, scale
 
@@ -98,13 +100,16 @@ class Z1Encoder(nn.Module):
     def __init__(self, num_labels, z1_dim, z2_dim, hidden_dims):
         super().__init__()
         dims = [num_labels + z2_dim] + hidden_dims + [2 * z1_dim]
-        self.fc = make_fc(dims, use_batchnorm=False)
+        self.fc = make_fc(dims)
 
     def forward(self, z2, y):
         # this is necessary since Pyro expands y during enumeration
         z2_y = broadcast_inputs([z2, y])
         z2_y = torch.cat(z2_y, dim=-1)
-        loc, scale = split_in_half(self.fc(z2_y))
+        _z2_y = z2_y.reshape(-1, z2_y.size(-1))
+        hidden = self.fc(_z2_y)
+        hidden = hidden.reshape(z2_y.shape[:-1] + hidden.shape[-1:])
+        loc, scale = split_in_half(hidden)
         scale = softplus(scale)
         return loc, scale
 
