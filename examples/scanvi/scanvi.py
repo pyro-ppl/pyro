@@ -1,26 +1,30 @@
 import argparse
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
-from torch.nn.functional import softplus
+from torch.nn.functional import softplus, softmax
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.optim import Adam
+from pyro.optim import Adam, ClippedAdam
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 
 from data import get_data_loader
 
 
 # helper for making fully-connected neural networks
-def make_fc(dims):
+def make_fc(dims, use_batchnorm=True):
     layers = []
     for in_dim, out_dim in zip(dims, dims[1:]):
         layers.append(nn.Linear(in_dim, out_dim))
+        if use_batchnorm:
+            layers.append(nn.BatchNorm1d(out_dim, momentum=0.01, eps=0.001))
         layers.append(nn.ReLU())
-    return nn.Sequential(*layers[:-1])
+    return nn.Sequential(*layers[:-1])  # exclude final ReLU non-linearity
 
 
 # splits a tensor in half along the final dimension
@@ -40,7 +44,7 @@ class Z2Decoder(nn.Module):
     def __init__(self, z1_dim, y_dim, z2_dim, hidden_dims):
         super().__init__()
         dims = [z1_dim + y_dim] + hidden_dims + [2 * z2_dim]
-        self.fc = make_fc(dims)
+        self.fc = make_fc(dims, use_batchnorm=False)
 
     def forward(self, z1, y):
         z1_y = torch.cat([z1, y], dim=-1)
@@ -59,7 +63,7 @@ class XDecoder(nn.Module):
     def forward(self, z2):
         gate, mu = split_in_half(self.fc(z2))
         gate = gate.sigmoid()
-        mu = softplus(mu)
+        mu = softmax(mu, dim=-1)
         return gate, mu
 
 
@@ -74,6 +78,8 @@ class Z2LEncoder(nn.Module):
         h1, h2 = split_in_half(self.fc(x))
         z2_loc, z2_scale = h1[..., :-1], softplus(h2[..., :-1])
         l_loc, l_scale = h1[..., -1:], softplus(h2[..., -1:])
+        l_loc = l_loc.clamp(max=12.0)
+        l_scale = l_scale.clamp(max=3.0)
         return z2_loc, z2_scale, l_loc, l_scale
 
 
@@ -82,7 +88,7 @@ class Z1Encoder(nn.Module):
     def __init__(self, num_labels, z1_dim, z2_dim, hidden_dims):
         super().__init__()
         dims = [num_labels + z2_dim] + hidden_dims + [2 * z1_dim]
-        self.fc = make_fc(dims)
+        self.fc = make_fc(dims, use_batchnorm=False)
 
     def forward(self, z2, y):
         # this is necessary since Pyro expands y during enumeration
@@ -107,14 +113,14 @@ class Classifier(nn.Module):
 
 # encompasses the scANVI model and guide as a PyTorch nn.Module
 class SCANVI(nn.Module):
-    def __init__(self, num_genes, num_labels, l_loc=0.0, l_scale=1.0, alpha=0.1):
+    def __init__(self, num_genes, num_labels, l_loc=5.0, l_scale=5.0, alpha=0.1, scale_factor=1.0):
         assert isinstance(num_labels, int) and num_labels > 1
         self.num_labels = num_labels
 
         assert isinstance(num_genes, int)
         self.num_genes = num_genes
 
-        self.latent_dim = 10
+        self.latent_dim = 5
 
         assert isinstance(l_loc, float)
         self.l_loc = l_loc
@@ -125,15 +131,18 @@ class SCANVI(nn.Module):
         assert isinstance(alpha, float) and alpha > 0
         self.alpha = alpha
 
+        assert isinstance(scale_factor, float) and scale_factor > 0
+        self.scale_factor = scale_factor
+
         super().__init__()
 
         self.z2_decoder = Z2Decoder(z1_dim=self.latent_dim, y_dim=self.num_labels,
-                                    z2_dim=self.latent_dim, hidden_dims=[100, 100])
-        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[100, 100], z2_dim=self.latent_dim)
-        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[100, 100])
-        self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[100, 100], num_labels=num_labels)
+                                    z2_dim=self.latent_dim, hidden_dims=[50])
+        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[50], z2_dim=self.latent_dim)
+        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[50])
+        self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[50], num_labels=num_labels)
         self.z1_encoder = Z1Encoder(num_labels=num_labels, z1_dim=self.latent_dim,
-                                    z2_dim=self.latent_dim, hidden_dims=[100, 100])
+                                    z2_dim=self.latent_dim, hidden_dims=[50])
 
     def model(self, x, y=None):
         pyro.module("scanvi", self)
@@ -141,7 +150,7 @@ class SCANVI(nn.Module):
         theta = pyro.param("inverse_dispersion", x.new_ones(self.num_genes),
                            constraint=constraints.positive)
 
-        with pyro.plate("batch", len(x)):
+        with pyro.plate("batch", len(x)), pyro.poutine.scale(scale=self.scale_factor):
             z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
             y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)))
 
@@ -159,7 +168,7 @@ class SCANVI(nn.Module):
 
     def guide(self, x, y=None):
         pyro.module("scanvi", self)
-        with pyro.plate("batch", len(x)):
+        with pyro.plate("batch", len(x)), pyro.poutine.scale(scale=self.scale_factor):
             z2_loc, z2_scale, l_loc, l_scale = self.z2l_encoder(x)
             pyro.sample("l", dist.LogNormal(l_loc, l_scale).to_event(1))
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
@@ -171,8 +180,9 @@ class SCANVI(nn.Module):
                 y = pyro.sample("y", y_dist)
             else:
                 # x is labeled so add a classification loss term
-                classification_loss = y_dist.log_prob(y)
-                pyro.factor("classification_loss", -self.alpha * classification_loss)
+                # classification_loss = y_dist.log_prob(y)
+                # pyro.factor("classification_loss", -self.alpha * classification_loss)
+                pass
 
             z1_loc, z1_scale = self.z1_encoder(z2, y)
             pyro.sample("z1", dist.Normal(z1_loc, z1_scale).to_event(1))
@@ -182,26 +192,41 @@ def main(args):
     # clear param store
     pyro.clear_param_store()
 
-    scanvi = SCANVI(num_genes=2467, num_labels=4)
+    scanvi = SCANVI(num_genes=2467, num_labels=4, scale_factor = 1.0 / (args.batch_size * 2467))
     if args.cuda:
         scanvi.cuda()
 
-    dataloader = get_data_loader(batch_size=100, cuda=args.cuda)
+    dataloader = get_data_loader(batch_size=args.batch_size, cuda=args.cuda)
 
-    optim = Adam({"lr": args.learning_rate})
-    guide = config_enumerate(scanvi.guide, expand=True)
+    # setup an optimizer
+    # we decay the learning rate over the course of learning
+    lrd = 0.1 ** (1.0 / (len(dataloader) * args.num_epochs))
+    optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 0.2, "lrd": lrd})
+
+    # tell Pyro to enumerate out y when y is unobserved
+    guide = config_enumerate(scanvi.guide, "parallel", expand=True)
+
+    # setup a variational objective for gradient-based learning
     svi = SVI(scanvi.model, guide, optim, TraceEnum_ELBO())
 
-    for x, y in dataloader:
-        svi.step(x, y)
+    # training loop
+    for epoch in range(args.num_epochs):
+        losses = []
+
+        for x, y in dataloader:
+            loss = svi.step(x, y)
+            losses.append(loss)
+
+        print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')
-    parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
+    parser.add_argument('-n', '--num-epochs', default=200, type=int, help='number of training epochs')
+    parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
+    parser.add_argument('-lr', '--learning-rate', default=0.005, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
 
