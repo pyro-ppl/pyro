@@ -134,15 +134,21 @@ def get_data_loader(batch_size=100, cuda=False):
     seed_labels[cd4_mem_mask] = 2    # "CD4 Memory T cell"
     seed_labels[cd4_reg_mask] = 3    # "CD4 Regulatory T cell"
 
+    # filter out non-variable genes
+    adata_filter = adata.copy()
+    sc.pp.normalize_per_cell(adata_filter, counts_per_cell_after=1e4)
+    sc.pp.log1p(adata_filter)
+    sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=0.5)
+    highly_variable_genes = adata_filter.var["highly_variable"]
+
+    adata = adata[:, highly_variable_genes]
+    adata.raw = adata
+
     Y = torch.from_numpy(seed_labels).long()
     X = torch.from_numpy(sparse.csr_matrix.todense(adata.X)).float()
 
     if cuda:
         X, Y = X.cuda(), Y.cuda()
-
-    # subsample to a subset of high frequency genes using an arbitrary cutoff
-    high_freq_genes = X.sum(0) > 2000
-    X = X[:, high_freq_genes]
 
     # subsample and remove ~90% of the unlabeled cells
     labeled = torch.where(Y != -1)[0]

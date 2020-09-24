@@ -192,9 +192,8 @@ class SCANVI(nn.Module):
                 y = pyro.sample("y", y_dist)
             else:
                 # x is labeled so add a classification loss term
-                # classification_loss = y_dist.log_prob(y)
-                # pyro.factor("classification_loss", -self.alpha * classification_loss)
-                pass
+                classification_loss = y_dist.log_prob(y)
+                pyro.factor("classification_loss", -self.alpha * classification_loss)
 
             z1_loc, z1_scale = self.z1_encoder(z2, y)
             pyro.sample("z1", dist.Normal(z1_loc, z1_scale).to_event(1))
@@ -208,7 +207,9 @@ def main(args):
     # enable optional validation warnings
     pyro.enable_validation(True)
 
-    scanvi = SCANVI(num_genes=2467, num_labels=4, scale_factor=1.0 / (args.batch_size * 2467))
+    num_genes = 1292
+
+    scanvi = SCANVI(num_genes=num_genes, num_labels=4, scale_factor=1.0 / (args.batch_size * num_genes))
     if args.cuda:
         scanvi.cuda()
 
