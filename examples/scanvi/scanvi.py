@@ -19,6 +19,7 @@ from torch.nn.functional import softplus, softmax
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape
 from pyro.optim import Adam
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
@@ -103,7 +104,7 @@ class Z1Encoder(nn.Module):
         self.fc = make_fc(dims)
 
     def forward(self, z2, y):
-        # this is necessary since Pyro expands y during enumeration
+        # this broadcasting is necessary since Pyro expands y during enumeration (but not z2)
         z2_y = broadcast_inputs([z2, y])
         z2_y = torch.cat(z2_y, dim=-1)
         _z2_y = z2_y.reshape(-1, z2_y.size(-1))
@@ -169,7 +170,9 @@ class SCANVI(nn.Module):
         theta = pyro.param("inverse_dispersion", x.new_ones(self.num_genes),
                            constraint=constraints.positive)
 
-        with pyro.plate("batch", len(x)), pyro.poutine.scale(scale=self.scale_factor):
+        # we scale all sample statements by scale_factor so that the ELBO is normalized
+        # wrt the number of datapoints and genes
+        with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
             y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)))
 
@@ -187,7 +190,7 @@ class SCANVI(nn.Module):
 
     def guide(self, x, y=None):
         pyro.module("scanvi", self)
-        with pyro.plate("batch", len(x)), pyro.poutine.scale(scale=self.scale_factor):
+        with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z2_loc, z2_scale, l_loc, l_scale = self.z2l_encoder(x)
             pyro.sample("l", dist.LogNormal(l_loc, l_scale).to_event(1))
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
