@@ -75,6 +75,8 @@ class XDecoder(nn.Module):
     def forward(self, z2):
         gate, mu = split_in_half(self.fc(z2))
         gate = gate.sigmoid()
+        eps = 1.0e-6
+        gate = eps + (1.0 - 2.0 * eps) * gate
         mu = softmax(mu, dim=-1)
         return gate, mu
 
@@ -151,10 +153,11 @@ class SCANVI(nn.Module):
 
         super().__init__()
 
+        # setup the various neural networks used in the model and guide
         self.z2_decoder = Z2Decoder(z1_dim=self.latent_dim, y_dim=self.num_labels,
                                     z2_dim=self.latent_dim, hidden_dims=[50])
-        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[50], z2_dim=self.latent_dim)
-        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[50])
+        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[100], z2_dim=self.latent_dim)
+        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[100])
         self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[50], num_labels=num_labels)
         self.z1_encoder = Z1Encoder(num_labels=num_labels, z1_dim=self.latent_dim,
                                     z2_dim=self.latent_dim, hidden_dims=[50])
@@ -223,7 +226,7 @@ def main(args):
     # setup an optimizer
     # we decay the learning rate over the course of learning
     lrd = 0.1 ** (1.0 / (len(dataloader) * args.num_epochs))
-    optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 0.1, "lrd": lrd})
+    optim = ClippedAdam({"lr": args.learning_rate, "lrd": lrd})
 
     # tell Pyro to enumerate out y when y is unobserved
     guide = config_enumerate(scanvi.guide, "parallel", expand=True)
@@ -239,6 +242,11 @@ def main(args):
             loss = svi.step(x, y)
             losses.append(loss)
 
+            #for name, param in pyro.get_param_store().named_parameters():
+            #    bad = torch.isnan(param).sum().item() + torch.isinf(param).sum().item()
+            #    if bad > 0:
+            #        print(name, param.shape, bad)
+
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
 
@@ -247,9 +255,9 @@ if __name__ == "__main__":
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=200, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=100, type=int, help='number of training epochs')
     parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.002, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=0.01, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
 
