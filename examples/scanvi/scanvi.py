@@ -71,12 +71,12 @@ class XDecoder(nn.Module):
         super().__init__()
         dims = [z2_dim] + hidden_dims + [2 * num_genes]
         self.fc = make_fc(dims)
+        self.epsilon = 1.0e-6
 
     def forward(self, z2):
         gate, mu = split_in_half(self.fc(z2))
         gate = gate.sigmoid()
-        eps = 1.0e-6
-        gate = eps + (1.0 - 2.0 * eps) * gate
+        gate = self.epsilon + (1.0 - 2.0 * self.epsilon) * gate
         mu = softmax(mu, dim=-1)
         return gate, mu
 
@@ -162,6 +162,8 @@ class SCANVI(nn.Module):
         self.z1_encoder = Z1Encoder(num_labels=num_labels, z1_dim=self.latent_dim,
                                     z2_dim=self.latent_dim, hidden_dims=[50])
 
+        self.epsilon = 1.0e-6
+
     def model(self, x, y=None):
         # register various nn.Modules with Pyro
         pyro.module("scanvi", self)
@@ -180,11 +182,10 @@ class SCANVI(nn.Module):
             l = pyro.sample("l", dist.LogNormal(self.l_loc, l_scale).to_event(1))
 
             gate, mu = self.x_decoder(z2)
-            eps = 1.0e-6
-            nb_logits = (theta + eps).log() - (l * mu + eps).log()
+            nb_logits = (theta + self.epsilon).log() - (l * mu + self.epsilon).log()
             x_dist = dist.ZeroInflatedNegativeBinomial(gate=gate, total_count=theta,
                                                        logits=nb_logits)
-            x = pyro.sample("x", x_dist.to_event(1), obs=x)
+            pyro.sample("x", x_dist.to_event(1), obs=x)
 
     def guide(self, x, y=None):
         pyro.module("scanvi", self)
@@ -241,11 +242,6 @@ def main(args):
         for x, y in dataloader:
             loss = svi.step(x, y)
             losses.append(loss)
-
-            #for name, param in pyro.get_param_store().named_parameters():
-            #    bad = torch.isnan(param).sum().item() + torch.isinf(param).sum().item()
-            #    if bad > 0:
-            #        print(name, param.shape, bad)
 
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
