@@ -20,7 +20,7 @@ from torch.nn.functional import softplus, softmax
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.optim import ClippedAdam
+from pyro.optim import Adam
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 
 from data import get_data_loader
@@ -31,7 +31,7 @@ def make_fc(dims):
     layers = []
     for in_dim, out_dim in zip(dims, dims[1:]):
         layers.append(nn.Linear(in_dim, out_dim))
-        layers.append(nn.BatchNorm1d(out_dim, momentum=0.01, eps=0.001))
+        layers.append(nn.BatchNorm1d(out_dim))
         layers.append(nn.ReLU())
     return nn.Sequential(*layers[:-1])  # exclude final ReLU non-linearity
 
@@ -92,8 +92,6 @@ class Z2LEncoder(nn.Module):
         h1, h2 = split_in_half(self.fc(x))
         z2_loc, z2_scale = h1[..., :-1], softplus(h2[..., :-1])
         l_loc, l_scale = h1[..., -1:], softplus(h2[..., -1:])
-        l_loc = l_loc.clamp(max=10.0)
-        l_scale = l_scale.clamp(max=3.0)
         return z2_loc, z2_scale, l_loc, l_scale
 
 
@@ -130,14 +128,14 @@ class Classifier(nn.Module):
 
 # encompasses the scANVI model and guide as a PyTorch nn.Module
 class SCANVI(nn.Module):
-    def __init__(self, num_genes, num_labels, l_loc=5.0, l_scale=5.0, alpha=0.1, scale_factor=1.0):
+    def __init__(self, num_genes, num_labels, l_loc=7.0, l_scale=3.0, alpha=0.1, scale_factor=1.0):
         assert isinstance(num_labels, int) and num_labels > 1
         self.num_labels = num_labels
 
         assert isinstance(num_genes, int)
         self.num_genes = num_genes
 
-        self.latent_dim = 5
+        self.latent_dim = 10
 
         assert isinstance(l_loc, float)
         self.l_loc = l_loc
@@ -225,9 +223,7 @@ def main(args):
     dataloader = get_data_loader(batch_size=args.batch_size, cuda=args.cuda)
 
     # setup an optimizer
-    # we decay the learning rate over the course of learning
-    lrd = 0.1 ** (1.0 / (len(dataloader) * args.num_epochs))
-    optim = ClippedAdam({"lr": args.learning_rate, "lrd": lrd})
+    optim = Adam({"lr": args.learning_rate})
 
     # tell Pyro to enumerate out y when y is unobserved
     guide = config_enumerate(scanvi.guide, "parallel", expand=True)
@@ -251,9 +247,9 @@ if __name__ == "__main__":
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=100, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=50, type=int, help='number of training epochs')
     parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.01, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=0.03, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
 
