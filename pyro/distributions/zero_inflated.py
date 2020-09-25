@@ -17,23 +17,23 @@ class ZeroInflatedDistribution(TorchDistribution):
     :class:`ZeroInflatedPoisson` and :class:`ZeroInflatedNegativeBinomial`.
 
     :param torch.Tensor gate: probability of extra zeros given via a Bernoulli distribution.
-    :param torch.Tensor logits: logits of extra zeros given via a Bernoulli distribution.
+    :param torch.Tensor gate_logits: logits of extra zeros given via a Bernoulli distribution.
     :param TorchDistribution base_dist: the base distribution.
     """
     arg_constraints = {"gate": constraints.unit_interval,
-                       "logits": constraints.real}
+                       "gate_logits": constraints.real}
 
-    def __init__(self, base_dist, gate=None, logits=None, validate_args=None):
-        if (gate is None) == (logits is None):
-            raise ValueError("Either `gate` or `logits` must be specified, but not both.")
+    def __init__(self, base_dist, gate=None, *, gate_logits=None, validate_args=None):
+        if (gate is None) == (gate_logits is None):
+            raise ValueError("Either `gate` or `gate_logits` must be specified, but not both.")
         if base_dist.event_shape:
             raise ValueError("ZeroInflatedDistribution expected empty "
                              "base_dist.event_shape but got {}"
                              .format(base_dist.event_shape))
 
-        if logits is not None:
-            epsilon = 1.0e-6
-            gate = epsilon + (1.0 - 2.0 * epsilon) * logits.sigmoid()
+        if gate_logits is not None:
+            epsilon = 1.0e-7
+            gate = epsilon + (1.0 - 2.0 * epsilon) * gate_logits.sigmoid()
 
         batch_shape = broadcast_shape(gate.shape, base_dist.batch_shape)
         self.gate = gate.expand(batch_shape)
@@ -74,7 +74,7 @@ class ZeroInflatedDistribution(TorchDistribution):
         ) - (self.mean) ** 2
 
     @lazy_property
-    def logits(self):
+    def gate_logits(self):
         return probs_to_logits(self.gate)
 
     def expand(self, batch_shape, _instance=None):
@@ -92,20 +92,20 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
     A Zero Inflated Poisson distribution.
 
     :param torch.Tensor gate: probability of extra zeros.
-    :param torch.Tensor logits: probability of extra zeros.
+    :param torch.Tensor gate_logits: logits of extra zeros.
     :param torch.Tensor rate: rate of poisson distribution.
     """
     arg_constraints = {"gate": constraints.unit_interval,
                        "rate": constraints.positive,
-                       "logits": constraints.real}
+                       "gate_logits": constraints.real}
     support = constraints.nonnegative_integer
 
-    def __init__(self, rate, gate=None, logits=None, validate_args=None):
+    def __init__(self, rate, *, gate=None, gate_logits=None, validate_args=None):
         base_dist = Poisson(rate=rate, validate_args=False)
         base_dist._validate_args = validate_args
 
         super().__init__(
-            base_dist, gate=gate, logits=logits, validate_args=validate_args
+            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
         )
 
     @property
@@ -141,7 +141,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
         base_dist._validate_args = validate_args
 
         super().__init__(
-            base_dist, gate=gate, logits=gate_logits, validate_args=validate_args
+            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
         )
 
     @property
