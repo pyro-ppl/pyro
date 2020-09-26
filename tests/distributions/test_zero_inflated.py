@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import pytest
 import torch
 
@@ -27,23 +29,29 @@ def test_zid_shape(gate_shape, base_shape):
 @pytest.mark.parametrize("rate", [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 def test_zip_0_gate(rate):
     # if gate is 0 ZIP is Poisson
-    zip_ = ZeroInflatedPoisson(torch.tensor(rate), gate=torch.zeros(1))
+    zip1 = ZeroInflatedPoisson(torch.tensor(rate), gate=torch.zeros(1))
+    zip2 = ZeroInflatedPoisson(torch.tensor(rate), gate_logits=torch.tensor(-math.inf))
     pois = Poisson(torch.tensor(rate))
     s = pois.sample((20,))
-    zip_prob = zip_.log_prob(s)
+    zip1_prob = zip1.log_prob(s)
+    zip2_prob = zip2.log_prob(s)
     pois_prob = pois.log_prob(s)
-    assert_close(zip_prob, pois_prob)
+    assert_close(zip1_prob, pois_prob)
+    assert_close(zip2_prob, pois_prob)
 
 
 @pytest.mark.parametrize("rate", [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 def test_zip_1_gate(rate):
     # if gate is 1 ZIP is Delta(0)
-    zip_ = ZeroInflatedPoisson(torch.tensor(rate), gate=torch.ones(1))
+    zip1 = ZeroInflatedPoisson(torch.tensor(rate), gate=torch.ones(1))
+    zip2 = ZeroInflatedPoisson(torch.tensor(rate), gate_logits=torch.tensor(-math.inf))
     delta = Delta(torch.zeros(1))
     s = torch.tensor([0.0, 1.0])
-    zip_prob = zip_.log_prob(s)
+    zip1_prob = zip1.log_prob(s)
+    zip2_prob = zip2.log_prob(s)
     delta_prob = delta.log_prob(s)
-    assert_close(zip_prob, delta_prob)
+    assert_close(zip1_prob, delta_prob)
+    assert_close(zip2_prob, delta_prob)
 
 
 @pytest.mark.parametrize("gate", [0.0, 0.25, 0.5, 0.75, 1.0])
