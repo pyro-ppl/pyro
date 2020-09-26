@@ -239,8 +239,11 @@ def main(args):
     # enable optional validation warnings
     pyro.enable_validation(True)
 
-    dataloader, num_genes, l_mean, l_scale, anndata = get_data(batch_size=args.batch_size, cuda=args.cuda)
+    # load and pre-process data
+    dataloader, num_genes, l_mean, l_scale, anndata = get_data(dataset=args.dataset, batch_size=args.batch_size,
+                                                               cuda=args.cuda)
 
+    # instantiate instance of model/guide and various neural networks
     scanvi = SCANVI(num_genes=num_genes, num_labels=4, l_loc=l_mean, l_scale=l_scale,
                     scale_factor=1.0 / (args.batch_size * num_genes))
 
@@ -267,53 +270,53 @@ def main(args):
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
     # now that we're done training we'll inspect the latent representations we've learned
+    if args.plot and args.dataset == 'pbmc':
+        # compute latent representation (z2_loc) for each cell in the dataset
+        latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
 
-    # compute latent representation (z2_loc) for each cell in the dataset
-    latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
+        # compute inferred cell type probabilities for each cell
+        y_logits = scanvi.classifier(latent_rep)
+        y_probs = softmax(y_logits, dim=-1).data.cpu().numpy()
 
-    # compute inferred cell type probabilities for each cell
-    y_logits = scanvi.classifier(latent_rep)
-    y_probs = softmax(y_logits, dim=-1).data.cpu().numpy()
+        # use scanpy to compute 2-dimensional UMAP coordinates using our
+        # learned 10-dimensional latent representation z2
+        anndata.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
+        sc.pp.neighbors(anndata, use_rep="X_scANVI")
+        sc.tl.umap(anndata)
+        umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
 
-    # use scanpy to compute 2-dimensional UMAP coordinates using our
-    # learned 10-dimensional latent representation z2
-    anndata.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
-    sc.pp.neighbors(anndata, use_rep="X_scANVI")
-    sc.tl.umap(anndata)
-    umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
+        # make plots. all plots are scatterplots depicting the two-dimensional UMAP embedding.
 
-    # make plots. all plots are scatterplots depicting the two-dimensional UMAP embedding.
+        # the topmost plot depicts the 200 hand-curated seed labels in our dataset
+        fig, axes = plt.subplots(3, 2)
+        seed_marker_sizes = anndata.obs['seed_marker_sizes']
+        axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.7)
+        axes[0, 0].set_title('Hand-Curated Seed Labels')
+        patch1 = Patch(color='lightcoral', label='CD8-Naive')
+        patch2 = Patch(color='limegreen', label='CD4-Naive')
+        patch3 = Patch(color='deepskyblue', label='CD4-Memory')
+        patch4 = Patch(color='mediumorchid', label='CD4-Regulatory')
+        axes[0, 1].legend(loc='center left', handles=[patch1, patch2, patch3, patch4])
+        axes[0, 1].get_xaxis().set_visible(False)
+        axes[0, 1].get_yaxis().set_visible(False)
+        axes[0, 1].set_frame_on(False)
 
-    # the topmost plot depicts the 200 hand-curated seed labels in our dataset
-    fig, axes = plt.subplots(3, 2)
-    seed_marker_sizes = anndata.obs['seed_marker_sizes']
-    axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.7)
-    axes[0, 0].set_title('Hand-Curated Seed Labels')
-    patch1 = Patch(color='lightcoral', label='CD8-Naive')
-    patch2 = Patch(color='limegreen', label='CD4-Naive')
-    patch3 = Patch(color='deepskyblue', label='CD4-Memory')
-    patch4 = Patch(color='mediumorchid', label='CD4-Regulatory')
-    axes[0, 1].legend(loc='center left', handles=[patch1, patch2, patch3, patch4])
-    axes[0, 1].get_xaxis().set_visible(False)
-    axes[0, 1].get_yaxis().set_visible(False)
-    axes[0, 1].set_frame_on(False)
+        # the remaining plots depict the inferred cell type probability for each of the four cell types
+        s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 0], marker='.', alpha=0.7)
+        axes[1, 0].set_title('Inferred CD8-Naive probability')
+        fig.colorbar(s10, ax=axes[1, 0])
+        s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 1], marker='.', alpha=0.7)
+        axes[1, 1].set_title('Inferred CD4-Naive probability')
+        fig.colorbar(s11, ax=axes[1, 1])
+        s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 2], marker='.', alpha=0.7)
+        axes[2, 0].set_title('Inferred CD4-Memory probability')
+        fig.colorbar(s20, ax=axes[2, 0])
+        s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 3], marker='.', alpha=0.7)
+        axes[2, 1].set_title('Inferred CD4-Regulatory probability')
+        fig.colorbar(s21, ax=axes[2, 1])
 
-    # the remaining plots depict the inferred cell type probability for each of the four cell types
-    s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 0], marker='.', alpha=0.7)
-    axes[1, 0].set_title('Inferred CD8-Naive probability')
-    fig.colorbar(s10, ax=axes[1, 0])
-    s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 1], marker='.', alpha=0.7)
-    axes[1, 1].set_title('Inferred CD4-Naive probability')
-    fig.colorbar(s11, ax=axes[1, 1])
-    s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 2], marker='.', alpha=0.7)
-    axes[2, 0].set_title('Inferred CD4-Memory probability')
-    fig.colorbar(s20, ax=axes[2, 0])
-    s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 3], marker='.', alpha=0.7)
-    axes[2, 1].set_title('Inferred CD4-Regulatory probability')
-    fig.colorbar(s21, ax=axes[2, 1])
-
-    fig.tight_layout()
-    plt.savefig('scanvi.pdf')
+        fig.tight_layout()
+        plt.savefig('scanvi.pdf')
 
 
 if __name__ == "__main__":
@@ -322,9 +325,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
     parser.add_argument('-n', '--num-epochs', default=11, type=int, help='number of training epochs')
+    parser.add_argument('-d', '--dataset', default='pbmc', type=str,
+                        help='which dataset to use', choices=['pbmc', 'mock'])
     parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
     parser.add_argument('-lr', '--learning-rate', default=0.03, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
+    parser.add_argument('--plot', action='store_true', default=False, help='whether to make a plot')
     args = parser.parse_args()
 
     main(args)

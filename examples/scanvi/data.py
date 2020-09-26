@@ -100,10 +100,26 @@ def _get_cell_mask(normalized_adata, gene_set):
     return mask.astype(bool)
 
 
-def get_data(batch_size=100, cuda=False):
+def get_data(dataset="pbmc", batch_size=100, cuda=False):
     """
     Does the necessary preprocessing and returns a BatchDataLoader for the PBMC dataset.
     """
+    assert dataset in ['pbmc', 'mock']
+
+    # create mock dataset for CI
+    if dataset == 'mock':
+        num_genes = 17
+        num_data = 200
+        X = torch.distributions.Poisson(rate=10.0).sample(sample_shape=(num_data, num_genes))
+        Y = torch.zeros(num_data, dtype=torch.long)
+        Y[50:100] = 1
+        Y[100:] = -1
+
+        if cuda:
+            X, Y = X.cuda(), Y.cuda()
+
+        return BatchDataLoader(X, Y, batch_size), num_genes, 2.0, 1.0, None
+
     adata = scvi.data.purified_pbmc_dataset(subset_datasets=["regulatory_t", "naive_t",
                                                              "memory_t", "naive_cytotoxic"])
 
