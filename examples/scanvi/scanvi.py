@@ -27,7 +27,7 @@ from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 import scanpy as sc
 
 import matplotlib.pyplot as plt
-import matplotlib
+from matplotlib.patches import Patch
 
 from data import get_data
 
@@ -249,41 +249,47 @@ def main(args):
 
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
+    # now that we're done training we'll inspect the latent representations we've learned
+
+    # compute latent representation for each cell in the dataset
     latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
 
+    # compute inferred cell type probabilities for each cell
     logits = scanvi.classifier(latent_rep)
     probs = softmax(logits, dim=-1).data.cpu().numpy()
-    inferred_cell_types = logits.max(-1)[1].data.cpu().numpy()
 
-    anndata.obs["C_scANVI"] = inferred_cell_types
-    anndata.obs["CD8_naive"] = probs[:, 0]
-    anndata.obs["CD4_naive"] = probs[:, 1]
-    anndata.obs["CD4_memory"] = probs[:, 2]
-    anndata.obs["CD4_regulatory"] = probs[:, 3]
+    # use scanpy to compute 2-dimensional UMAP coordinates using our i
+    # learned 10-dimensional latent representation z2
     anndata.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
-
     sc.pp.neighbors(anndata, use_rep="X_scANVI")
     sc.tl.umap(anndata)
-    #sc.pl.umap(anndata, return_fig=True,
-    #           color=['C_scANVI', 'CD8_naive', 'CD4_naive', 'CD4_memory', 'CD4_memory']).savefig("out.pdf")
-
     umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
 
+    # make plots
     fig, axes = plt.subplots(3, 2)
     seed_marker_sizes = anndata.obs['seed_marker_sizes']
-    axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.9)
-    axes[0, 0].set_title('Seed Labels')
-    s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=anndata.obs["CD8_naive"], marker='.', alpha=0.9)
-    fig.delaxes(axes[0, 1])
+    axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.7)
+    axes[0, 0].set_title('Hand-Curated Seed Labels')
+    patch1 = Patch(color='lightcoral', label='CD8-Naive')
+    patch2 = Patch(color='limegreen', label='CD4-Naive')
+    patch3 = Patch(color='deepskyblue', label='CD4-Memory')
+    patch4 = Patch(color='mediumorchid', label='CD4-Regulatory')
+    axes[0, 1].legend(loc='center left', handles=[patch1, patch2, patch3, patch4])
+    axes[0, 1].get_xaxis().set_visible(False)
+    axes[0, 1].get_yaxis().set_visible(False)
+    axes[0, 1].set_frame_on(False)
+
+    # plot the inferred cell type probability for each of the four cell types
+    s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=probs[:, 0], marker='.', alpha=0.7)
     axes[1, 0].set_title('Inferred CD8-Naive probability')
     fig.colorbar(s10, ax=axes[1, 0])
-    s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=anndata.obs["CD4_naive"], marker='.', alpha=0.9)
+    s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=probs[:, 1], marker='.', alpha=0.7)
     axes[1, 1].set_title('Inferred CD4-Naive probability')
     fig.colorbar(s11, ax=axes[1, 1])
-    s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=anndata.obs["CD4_memory"], marker='.', alpha=0.9)
+    s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=probs[:, 2], marker='.', alpha=0.7)
     axes[2, 0].set_title('Inferred CD4-Memory probability')
     fig.colorbar(s20, ax=axes[2, 0])
-    s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=anndata.obs["CD4_regulatory"], marker='.', alpha=0.9)
+    s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=probs[:, 3], marker='.', alpha=0.7)
     axes[2, 1].set_title('Inferred CD4-Regulatory probability')
     fig.colorbar(s21, ax=axes[2, 1])
 

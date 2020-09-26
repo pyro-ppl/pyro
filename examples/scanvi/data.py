@@ -135,7 +135,7 @@ def get_data(batch_size=100, cuda=False):
     seed_labels[cd4_reg_mask] = 3    # "CD4 Regulatory T cell"
 
     seed_colors = ['lightgray'] * seed_labels.shape[0]
-    seed_sizes = [0.5] * seed_labels.shape[0]
+    seed_sizes = [0.05] * seed_labels.shape[0]
     for i in range(len(seed_colors)):
         if seed_labels[i] == 0:
             seed_colors[i] = 'lightcoral'
@@ -146,7 +146,7 @@ def get_data(batch_size=100, cuda=False):
         elif seed_labels[i] == 3:
             seed_colors[i] = 'mediumorchid'
         if seed_labels[i] != -1:
-            seed_sizes[i] = 20
+            seed_sizes[i] = 25
 
     adata.obs['seed_labels'] = seed_labels
     adata.obs['seed_colors'] = seed_colors
@@ -168,11 +168,10 @@ def get_data(batch_size=100, cuda=False):
     if cuda:
         X, Y = X.cuda(), Y.cuda()
 
-    # subsample and remove ~90% of the unlabeled cells
+    # subsample and remove ~50% of the unlabeled cells
     labeled = torch.where(Y != -1)[0]
     unlabeled = torch.where(Y == -1)[0]
     unlabeled = unlabeled[torch.randperm(unlabeled.size(0))[:19800]]
-    #unlabeled = unlabeled[torch.randperm(unlabeled.size(0))[:4800]]
     idx = torch.cat([labeled, unlabeled])
 
     num_genes = X.size(-1)
