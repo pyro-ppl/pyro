@@ -288,7 +288,8 @@ def main(args):
         sc.tl.umap(anndata)
         umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
 
-        # make plots. all plots are scatterplots depicting the two-dimensional UMAP embedding.
+        # construct plots; all plots are scatterplots depicting the two-dimensional UMAP embedding
+        # and only differ in how points are colored
 
         # the topmost plot depicts the 200 hand-curated seed labels in our dataset
         fig, axes = plt.subplots(3, 2)
@@ -327,7 +328,7 @@ if __name__ == "__main__":
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=11, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=40, type=int, help='number of training epochs')
     parser.add_argument('-d', '--dataset', default='pbmc', type=str,
                         help='which dataset to use', choices=['pbmc', 'mock'])
     parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')

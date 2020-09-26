@@ -147,12 +147,14 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     cd4_naive_mask = _get_cell_mask(normalized, cd4_naive_geneset)
     cd4_mem_mask = _get_cell_mask(normalized, cd4_mem_geneset)
 
+    # these will be our seed labels
     seed_labels = -np.ones(cd4_mem_mask.shape[0])
     seed_labels[cd8_naive_mask] = 0  # "CD8 Naive T cell"
     seed_labels[cd4_naive_mask] = 1  # "CD4 Naive T cell"
     seed_labels[cd4_mem_mask] = 2    # "CD4 Memory T cell"
     seed_labels[cd4_reg_mask] = 3    # "CD4 Regulatory T cell"
 
+    # this metadata will be used for plotting
     seed_colors = ['lightgray'] * seed_labels.shape[0]
     seed_sizes = [0.05] * seed_labels.shape[0]
     for i in range(len(seed_colors)):
@@ -181,6 +183,8 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     Y = torch.from_numpy(seed_labels).long()
     X = torch.from_numpy(sparse.csr_matrix.todense(adata.X)).float()
 
+    # the prior mean and scale for the log count latent variable `l`
+    # is set using the empirical mean and variance of the observed log counts
     log_counts = X.sum(-1).log()
     l_mean, l_scale = log_counts.mean().item(), log_counts.std().item()
 
