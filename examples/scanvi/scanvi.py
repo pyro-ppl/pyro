@@ -1,3 +1,6 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 We use a semi-supervised deep generative model of transcriptomics data to propagate labels
 from a small set of labeled cells to a larger set of unlabeled cells. In particular we

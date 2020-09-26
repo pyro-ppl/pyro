@@ -64,7 +64,9 @@ EXTRAS_REQUIRE = [
     'visdom>=0.1.4',
     # 'biopython>=1.54',  # requires Python 3.6
     'pandas',
+    'scanpy>=1.6',
     'scikit-learn',
+    'scvi>=0.7',
     'seaborn',
     'wget',
 ]
