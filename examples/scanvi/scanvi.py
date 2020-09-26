@@ -24,7 +24,12 @@ from pyro.distributions.util import broadcast_shape
 from pyro.optim import Adam
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 
-from data import get_data_loader
+import scanpy as sc
+
+import matplotlib.pyplot as plt
+import matplotlib
+
+from data import get_data
 
 
 # helper for making fully-connected neural networks
@@ -217,13 +222,13 @@ def main(args):
     # enable optional validation warnings
     pyro.enable_validation(True)
 
-    num_genes = 1292
+    dataloader, num_genes, l_mean, l_scale, anndata = get_data(batch_size=args.batch_size, cuda=args.cuda)
 
-    scanvi = SCANVI(num_genes=num_genes, num_labels=4, scale_factor=1.0 / (args.batch_size * num_genes))
+    scanvi = SCANVI(num_genes=num_genes, num_labels=4, l_loc=l_mean, l_scale=l_scale,
+                    scale_factor=1.0 / (args.batch_size * num_genes))
+
     if args.cuda:
         scanvi.cuda()
-
-    dataloader = get_data_loader(batch_size=args.batch_size, cuda=args.cuda)
 
     # setup an optimizer
     optim = Adam({"lr": args.learning_rate})
@@ -244,13 +249,54 @@ def main(args):
 
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
+    latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
+
+    logits = scanvi.classifier(latent_rep)
+    probs = softmax(logits, dim=-1).data.cpu().numpy()
+    inferred_cell_types = logits.max(-1)[1].data.cpu().numpy()
+
+    anndata.obs["C_scANVI"] = inferred_cell_types
+    anndata.obs["CD8_naive"] = probs[:, 0]
+    anndata.obs["CD4_naive"] = probs[:, 1]
+    anndata.obs["CD4_memory"] = probs[:, 2]
+    anndata.obs["CD4_regulatory"] = probs[:, 3]
+    anndata.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
+
+    sc.pp.neighbors(anndata, use_rep="X_scANVI")
+    sc.tl.umap(anndata)
+    #sc.pl.umap(anndata, return_fig=True,
+    #           color=['C_scANVI', 'CD8_naive', 'CD4_naive', 'CD4_memory', 'CD4_memory']).savefig("out.pdf")
+
+    umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
+
+    fig, axes = plt.subplots(3, 2)
+    seed_marker_sizes = anndata.obs['seed_marker_sizes']
+    axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.9)
+    axes[0, 0].set_title('Seed Labels')
+    s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=anndata.obs["CD8_naive"], marker='.', alpha=0.9)
+    fig.delaxes(axes[0, 1])
+    axes[1, 0].set_title('Inferred CD8-Naive probability')
+    fig.colorbar(s10, ax=axes[1, 0])
+    s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=anndata.obs["CD4_naive"], marker='.', alpha=0.9)
+    axes[1, 1].set_title('Inferred CD4-Naive probability')
+    fig.colorbar(s11, ax=axes[1, 1])
+    s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=anndata.obs["CD4_memory"], marker='.', alpha=0.9)
+    axes[2, 0].set_title('Inferred CD4-Memory probability')
+    fig.colorbar(s20, ax=axes[2, 0])
+    s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=anndata.obs["CD4_regulatory"], marker='.', alpha=0.9)
+    axes[2, 1].set_title('Inferred CD4-Regulatory probability')
+    fig.colorbar(s21, ax=axes[2, 1])
+
+    fig.tight_layout()
+    plt.savefig('out.pdf')
+
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=50, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=11, type=int, help='number of training epochs')
     parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
     parser.add_argument('-lr', '--learning-rate', default=0.03, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')

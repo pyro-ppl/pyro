@@ -100,7 +100,7 @@ def _get_cell_mask(normalized_adata, gene_set):
     return mask.astype(bool)
 
 
-def get_data_loader(batch_size=100, cuda=False):
+def get_data(batch_size=100, cuda=False):
     """
     Does the necessary preprocessing and returns a BatchDataLoader for the PBMC dataset.
     """
@@ -134,6 +134,24 @@ def get_data_loader(batch_size=100, cuda=False):
     seed_labels[cd4_mem_mask] = 2    # "CD4 Memory T cell"
     seed_labels[cd4_reg_mask] = 3    # "CD4 Regulatory T cell"
 
+    seed_colors = ['lightgray'] * seed_labels.shape[0]
+    seed_sizes = [0.5] * seed_labels.shape[0]
+    for i in range(len(seed_colors)):
+        if seed_labels[i] == 0:
+            seed_colors[i] = 'lightcoral'
+        elif seed_labels[i] == 1:
+            seed_colors[i] = 'limegreen'
+        elif seed_labels[i] == 2:
+            seed_colors[i] = 'deepskyblue'
+        elif seed_labels[i] == 3:
+            seed_colors[i] = 'mediumorchid'
+        if seed_labels[i] != -1:
+            seed_sizes[i] = 20
+
+    adata.obs['seed_labels'] = seed_labels
+    adata.obs['seed_colors'] = seed_colors
+    adata.obs['seed_marker_sizes'] = seed_sizes
+
     # filter out non-variable genes
     adata_filter = adata.copy()
     sc.pp.normalize_per_cell(adata_filter, counts_per_cell_after=1e4)
@@ -141,11 +159,11 @@ def get_data_loader(batch_size=100, cuda=False):
     sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=0.5)
     highly_variable_genes = adata_filter.var["highly_variable"]
 
-    adata = adata[:, highly_variable_genes]
-    adata.raw = adata
-
     Y = torch.from_numpy(seed_labels).long()
     X = torch.from_numpy(sparse.csr_matrix.todense(adata.X)).float()
+
+    log_counts = X.sum(-1).log()
+    l_mean, l_scale = log_counts.mean().item(), log_counts.std().item()
 
     if cuda:
         X, Y = X.cuda(), Y.cuda()
@@ -153,7 +171,13 @@ def get_data_loader(batch_size=100, cuda=False):
     # subsample and remove ~90% of the unlabeled cells
     labeled = torch.where(Y != -1)[0]
     unlabeled = torch.where(Y == -1)[0]
-    unlabeled = unlabeled[torch.randperm(unlabeled.size(0))[:4800]]
+    unlabeled = unlabeled[torch.randperm(unlabeled.size(0))[:19800]]
+    #unlabeled = unlabeled[torch.randperm(unlabeled.size(0))[:4800]]
     idx = torch.cat([labeled, unlabeled])
 
-    return BatchDataLoader(X[idx], Y[idx], batch_size)
+    num_genes = X.size(-1)
+
+    adata = adata[idx.data.cpu().numpy(), highly_variable_genes]
+    adata.raw = adata
+
+    return BatchDataLoader(X[idx], Y[idx], batch_size), num_genes, l_mean, l_scale, adata
