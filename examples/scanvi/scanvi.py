@@ -1,6 +1,7 @@
 """
-We use a semi-supervised deep generative model of RNAseq data to propagate labels
-from a small set of labeled cells to a larger set of unlabeled cells.
+We use a semi-supervised deep generative model of transcriptomics data to propagate labels
+from a small set of labeled cells to a larger set of unlabeled cells. In particular we
+reproduce Figure 6 in reference [1].
 
 References:
 [1] "Harmonization and Annotation of Single-cell Transcriptomics data with Deep Generative Models,"
@@ -63,10 +64,13 @@ class Z2Decoder(nn.Module):
 
     def forward(self, z1, y):
         z1_y = torch.cat([z1, y], dim=-1)
+        # we reshape the input to be two-dimensional so that nn.BatchNorm1d behaves correctly
         _z1_y = z1_y.reshape(-1, z1_y.size(-1))
         hidden = self.fc(_z1_y)
+        # if the input was three-dimensional we now restore the original shape
         hidden = hidden.reshape(z1_y.shape[:-1] + hidden.shape[-1:])
         loc, scale = split_in_half(hidden)
+        # here and elsewhere softplus ensures that scale is positive
         scale = softplus(scale)
         return loc, scale
 
@@ -112,8 +116,10 @@ class Z1Encoder(nn.Module):
         # this broadcasting is necessary since Pyro expands y during enumeration (but not z2)
         z2_y = broadcast_inputs([z2, y])
         z2_y = torch.cat(z2_y, dim=-1)
+        # we reshape the input to be two-dimensional so that nn.BatchNorm1d behaves correctly
         _z2_y = z2_y.reshape(-1, z2_y.size(-1))
         hidden = self.fc(_z2_y)
+        # if the input was three-dimensional we now restore the original shape
         hidden = hidden.reshape(z2_y.shape[:-1] + hidden.shape[-1:])
         loc, scale = split_in_half(hidden)
         scale = softplus(scale)
@@ -134,21 +140,24 @@ class Classifier(nn.Module):
 
 # encompasses the scANVI model and guide as a PyTorch nn.Module
 class SCANVI(nn.Module):
-    def __init__(self, num_genes, num_labels, l_loc=7.0, l_scale=3.0, alpha=0.1, scale_factor=1.0):
-        assert isinstance(num_labels, int) and num_labels > 1
-        self.num_labels = num_labels
-
+    def __init__(self, num_genes, num_labels, l_loc, l_scale, latent_dim=10, alpha=0.1, scale_factor=1.0):
         assert isinstance(num_genes, int)
         self.num_genes = num_genes
 
-        self.latent_dim = 10
+        assert isinstance(num_labels, int) and num_labels > 1
+        self.num_labels = num_labels
 
+        # this will be the dimension of both z1 and z2
+        assert isinstance(latent_dim, int) and latent_dim > 0
+        self.latent_dim = latent_dim
+
+        # the next two hyperparameters determine the prior over the log_count latent variable `l`
         assert isinstance(l_loc, float)
         self.l_loc = l_loc
-
         assert isinstance(l_scale, float) and l_scale > 0
         self.l_scale = l_scale
 
+        # this hyperparameter controls the strength of the auxiliary classification loss
         assert isinstance(alpha, float) and alpha > 0
         self.alpha = alpha
 
@@ -172,6 +181,7 @@ class SCANVI(nn.Module):
         # register various nn.Modules with Pyro
         pyro.module("scanvi", self)
 
+        # this gene-level parameter modulates the variance of the observation distribution
         theta = pyro.param("inverse_dispersion", x.new_ones(self.num_genes),
                            constraint=constraints.positive)
 
@@ -187,12 +197,16 @@ class SCANVI(nn.Module):
             l_scale = self.l_scale * x.new_ones(1)
             l = pyro.sample("l", dist.LogNormal(self.l_loc, l_scale).to_event(1))
 
+            # note that by construction mu is normalized (i.e. mu.sum(-1) == 1) and the
+            # total scale of counts for each cell is determined by `l`
             gate, mu = self.x_decoder(z2)
             nb_logits = (theta + self.epsilon).log() - (l * mu + self.epsilon).log()
             x_dist = dist.ZeroInflatedNegativeBinomial(gate=gate, total_count=theta,
                                                        logits=nb_logits)
+            # observe the datapoint x using the observation distribution x_dist
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
+    # the guide specifies the variational distribution
     def guide(self, x, y=None):
         pyro.module("scanvi", self)
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
@@ -207,7 +221,10 @@ class SCANVI(nn.Module):
                 y = pyro.sample("y", y_dist)
             else:
                 # x is labeled so add a classification loss term
+                # (this way q(y|z2) learns from both labeled and unlabeled data)
                 classification_loss = y_dist.log_prob(y)
+                # note that the negative sign appears because we're adding this term in the guide
+                # and the guide log_prob appears in the ELBO as -log q
                 pyro.factor("classification_loss", -self.alpha * classification_loss)
 
             z1_loc, z1_scale = self.z1_encoder(z2, y)
@@ -251,21 +268,23 @@ def main(args):
 
     # now that we're done training we'll inspect the latent representations we've learned
 
-    # compute latent representation for each cell in the dataset
+    # compute latent representation (z2_loc) for each cell in the dataset
     latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
 
     # compute inferred cell type probabilities for each cell
-    logits = scanvi.classifier(latent_rep)
-    probs = softmax(logits, dim=-1).data.cpu().numpy()
+    y_logits = scanvi.classifier(latent_rep)
+    y_probs = softmax(y_logits, dim=-1).data.cpu().numpy()
 
-    # use scanpy to compute 2-dimensional UMAP coordinates using our i
+    # use scanpy to compute 2-dimensional UMAP coordinates using our
     # learned 10-dimensional latent representation z2
     anndata.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
     sc.pp.neighbors(anndata, use_rep="X_scANVI")
     sc.tl.umap(anndata)
     umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
 
-    # make plots
+    # make plots. all plots are scatterplots depicting the two-dimensional UMAP embedding.
+
+    # the topmost plot depicts the 200 hand-curated seed labels in our dataset
     fig, axes = plt.subplots(3, 2)
     seed_marker_sizes = anndata.obs['seed_marker_sizes']
     axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.7)
@@ -279,22 +298,22 @@ def main(args):
     axes[0, 1].get_yaxis().set_visible(False)
     axes[0, 1].set_frame_on(False)
 
-    # plot the inferred cell type probability for each of the four cell types
-    s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=probs[:, 0], marker='.', alpha=0.7)
+    # the remaining plots depict the inferred cell type probability for each of the four cell types
+    s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 0], marker='.', alpha=0.7)
     axes[1, 0].set_title('Inferred CD8-Naive probability')
     fig.colorbar(s10, ax=axes[1, 0])
-    s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=probs[:, 1], marker='.', alpha=0.7)
+    s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 1], marker='.', alpha=0.7)
     axes[1, 1].set_title('Inferred CD4-Naive probability')
     fig.colorbar(s11, ax=axes[1, 1])
-    s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=probs[:, 2], marker='.', alpha=0.7)
+    s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 2], marker='.', alpha=0.7)
     axes[2, 0].set_title('Inferred CD4-Memory probability')
     fig.colorbar(s20, ax=axes[2, 0])
-    s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=probs[:, 3], marker='.', alpha=0.7)
+    s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 3], marker='.', alpha=0.7)
     axes[2, 1].set_title('Inferred CD4-Regulatory probability')
     fig.colorbar(s21, ax=axes[2, 1])
 
     fig.tight_layout()
-    plt.savefig('out.pdf')
+    plt.savefig('scanvi.pdf')
 
 
 if __name__ == "__main__":
