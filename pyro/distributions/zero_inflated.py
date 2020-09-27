@@ -57,10 +57,10 @@ class ZeroInflatedDistribution(TorchDistribution):
             log_prob = torch.where(value == 0, (gate + log_prob.exp()).log(), log_prob)
         else:
             gate_logits, value = broadcast_all(self.gate_logits, value)
+            log_prob_minus_log_gate = -gate_logits + self.base_dist.log_prob(value)
             log_gate = -softplus(-gate_logits)
-            log_one_minus_gate = log_gate - gate_logits
-            log_prob = log_one_minus_gate + self.base_dist.log_prob(value)
-            zero_log_prob = softplus(log_prob - log_gate) + log_gate
+            log_prob = log_prob_minus_log_gate + log_gate
+            zero_log_prob = softplus(log_prob_minus_log_gate) + log_gate
             log_prob = torch.where(value == 0, zero_log_prob, log_prob)
         return log_prob
 
