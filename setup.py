@@ -66,7 +66,7 @@ EXTRAS_REQUIRE = [
     'pandas',
     'scanpy>=1.4',
     'scikit-learn',
-    'scvi>=0.7',
+    'scvi>=0.6',
     'seaborn',
     'wget',
 ]
