@@ -107,7 +107,7 @@ def parametrized_guide(predictor, data, args, batch_size=None):
         counts = (torch.zeros(args.num_words, ind.size(0))
                        .scatter_add(0, data, torch.ones(data.shape)))
         doc_topics = predictor(counts.transpose(0, 1))
-        pyro.sample("doc_topics", dist.Delta(doc_topics, event_dim=1))
+        pyro.deterministic("doc_topics", doc_topics, event_dim=1)
 
 
 def main(args):

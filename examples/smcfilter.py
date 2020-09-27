@@ -33,7 +33,7 @@ class SimpleHarmonicModel:
 
     def init(self, state, initial):
         self.t = 0
-        state["z"] = pyro.sample("z_init", dist.Delta(initial, event_dim=1))
+        state["z"] = pyro.deterministic("z_init", initial, event_dim=1)
 
     def step(self, state, y=None):
         self.t += 1
@@ -53,7 +53,7 @@ class SimpleHarmonicModel_Guide:
 
     def init(self, state, initial):
         self.t = 0
-        pyro.sample("z_init", dist.Delta(initial, event_dim=1))
+        pyro.deterministic("z_init", initial, event_dim=1)
 
     def step(self, state, y=None):
         self.t += 1
