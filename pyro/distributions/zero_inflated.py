@@ -4,6 +4,7 @@
 import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all, lazy_property, probs_to_logits, logits_to_probs
+from torch.nn.functional import softplus
 
 from pyro.distributions import NegativeBinomial, Poisson, TorchDistribution
 from pyro.distributions.util import broadcast_shape
@@ -56,11 +57,10 @@ class ZeroInflatedDistribution(TorchDistribution):
             log_prob = torch.where(value == 0, (gate + log_prob.exp()).log(), log_prob)
         else:
             gate_logits, value = broadcast_all(self.gate_logits, value)
-            log_gate = -(-gate_logits).exp().log1p()
+            log_gate = -softplus(-gate_logits)
             log_one_minus_gate = log_gate - gate_logits
             log_prob = log_one_minus_gate + self.base_dist.log_prob(value)
-            zero_log_prob = (log_prob - log_gate).exp().log1p() + log_gate
-            # zero_log_prob = (self.gate + log_prob.exp()).log()
+            zero_log_prob = softplus(log_prob - log_gate) + log_gate
             log_prob = torch.where(value == 0, zero_log_prob, log_prob)
         return log_prob
 
