@@ -85,11 +85,12 @@ class XDecoder(nn.Module):
         super().__init__()
         dims = [z2_dim] + hidden_dims + [2 * num_genes]
         self.fc = make_fc(dims)
+        self.epsilon = 1.0e-6
 
     def forward(self, z2):
         gate, mu = split_in_half(self.fc(z2))
-        #gate = gate.sigmoid()
-        #gate = self.epsilon + (1.0 - 2.0 * self.epsilon) * gate
+        gate = gate.sigmoid()
+        gate = self.epsilon + (1.0 - 2.0 * self.epsilon) * gate
         mu = softmax(mu, dim=-1)
         return gate, mu
 
@@ -202,9 +203,9 @@ class SCANVI(nn.Module):
 
             # note that by construction mu is normalized (i.e. mu.sum(-1) == 1) and the
             # total scale of counts for each cell is determined by `l`
-            gate_logits, mu = self.x_decoder(z2)
+            gate, mu = self.x_decoder(z2)
             nb_logits = (theta + self.epsilon).log() - (l * mu + self.epsilon).log()
-            x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
+            x_dist = dist.ZeroInflatedNegativeBinomial(gate=gate, total_count=theta,
                                                        logits=nb_logits)
             # observe the datapoint x using the observation distribution x_dist
             pyro.sample("x", x_dist.to_event(1), obs=x)
