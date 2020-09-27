@@ -4,6 +4,7 @@
 """
 We use a semi-supervised deep generative model of transcriptomics data to propagate labels
 from a small set of labeled cells to a larger set of unlabeled cells. In particular we
+use a dataset of peripheral blood mononuclear cells (PBMC) from 10x Genomics and
 reproduce Figure 6 in reference [1].
 
 References:

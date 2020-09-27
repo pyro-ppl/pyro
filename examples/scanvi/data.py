@@ -1,5 +1,6 @@
 # Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2020, YosefLab.
+# SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
 
 """
 The data preprocessing code in this script is adapted from:
