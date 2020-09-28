@@ -8,7 +8,7 @@ import re
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from functools import reduce
 from timeit import default_timer
 
@@ -42,6 +42,20 @@ def _require_double_precision():
         warnings.warn("CompartmentalModel is unstable for dtypes less than torch.float64; "
                       "try torch.set_default_dtype(torch.float64)",
                       RuntimeWarning)
+
+
+@contextmanager
+def _disallow_latent_variables(section_name):
+    if not is_validation_enabled():
+        yield
+        return
+
+    with poutine.trace() as tr:
+        yield
+    for name, site in tr.trace.nodes.items():
+        if site["type"] == "sample" and not site["is_observed"]:
+            raise NotImplementedError("{} contained latent variable {}"
+                                      .format(section_name, name))
 
 
 class CompartmentalModel(ABC):
@@ -252,6 +266,20 @@ class CompartmentalModel(ABC):
         :type t: int or slice
         """
         raise NotImplementedError
+
+    def finalize(self, params, state):
+        """
+        Optional method for likelihoods that depend on the entire time series.
+
+        .. warning:: This currently does not support latent variables.
+
+        :param params: The global params returned by :meth:`global_model`.
+        :param dict state: A dictionary mapping compartment name to tensor of
+            entire time series. For quantized models, this uses the approximate
+            point estimates, so users must request any needed time series via
+            ``super().__init__(approximate=...)``.
+        """
+        pass
 
     def compute_flows(self, prev, curr, t):
         """
@@ -660,6 +688,7 @@ class CompartmentalModel(ABC):
                 continue
 
         # Select the most probable hypothesis.
+        # Note this ignores the .finalize() likelihood.
         i = int(smc.state._log_weights.max(0).indices)
         init = {key: value[i, 0] for key, value in smc.state.items()}
 
@@ -825,6 +854,7 @@ class CompartmentalModel(ABC):
         Sequential model used to sample latents in the interval [0:duration].
         This is compatible with both quantized and relaxed inference.
         This method is called only inside particle_plate.
+        This method is used only for prediction.
         """
         C = len(self.compartments)
         T = self.duration
@@ -946,6 +976,11 @@ class CompartmentalModel(ABC):
         warn_if_nan(logp)
         pyro.factor("transition", logp)
 
+        # Apply final likelihood.
+        state = {name: curr[name + "_approx"] for name in self.approximate}
+        with _disallow_latent_variables(".finalize()"):
+            self.finalize(params, state)
+
         self._clear_plates()
 
     @set_relaxed_distributions()
@@ -982,6 +1017,10 @@ class CompartmentalModel(ABC):
         with self.time_plate:
             t = slice(0, T, 1)  # Used to slice data tensors.
             self._transition_bwd(params, prev, curr, t)
+
+        # Apply final likelihood.
+        with _disallow_latent_variables(".finalize()"):
+            self.finalize(params, curr)
 
         self._clear_plates()
 
