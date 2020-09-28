@@ -355,6 +355,8 @@ class Forecaster(nn.Module):
                     stack.enter_context(PrefixReplayMessenger(tr.trace))
                     stack.enter_context(
                         PrefixConditionMessenger(self.model._prefix_condition_data))
+                else:
+                    stack.enter_context(poutine.replay(trace=tr.trace))
                 with pyro.plate("particles", num_samples, dim=dim):
                     return self.model(data, covariates)
 
