@@ -271,13 +271,22 @@ class CompartmentalModel(ABC):
         """
         Optional method for likelihoods that depend on the entire time series.
 
+        This should be used only for non-factorizable likelihoods that couple
+        states across time. Factorizable likelihoods should instead be added to
+        the :meth:`transition` method, thereby enabling their use in
+        :meth:`heuristic` initialization. Since this method is called only
+        after the last time step, it is not used in :meth:`heuristic`
+        initialization.
+
         .. warning:: This currently does not support latent variables.
 
         :param params: The global params returned by :meth:`global_model`.
         :param dict state: A dictionary mapping compartment name to tensor of
-            entire time series. For quantized models, this uses the approximate
-            point estimates, so users must request any needed time series via
-            ``super().__init__(approximate=...)``.
+            entire time series. For quantized inference, this uses the
+            approximate point estimates, so users must request any needed time
+            series in :meth:`__init__`, e.g. by calling
+            ``super().__init__(..., approximate=("I", "E"))`` if likelihood
+            depends on the ``I`` and ``E`` time series.
         """
         pass
 
