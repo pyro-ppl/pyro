@@ -499,7 +499,6 @@ def test_regional_smoke(duration, forecast, options, algo):
 class RegionalSIRModelWithFinalize(RegionalSIRModel):
     def finalize(self, params, state):
         I = state["I"]
-        print(f"DEBUG I.shape = {tuple(I.shape)}")
         I_mean = I.mean(dim=[-1, -2], keepdim=True).expand_as(I)
         with self.region_plate, self.time_plate:
             pyro.sample("likelihood", dist.Normal(I_mean, 1.),
