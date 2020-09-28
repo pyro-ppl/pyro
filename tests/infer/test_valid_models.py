@@ -20,6 +20,7 @@ from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
+from pyro.poutine.plate_messenger import block_plate
 from tests.common import assert_close
 
 logger = logging.getLogger(__name__)
@@ -857,6 +858,69 @@ def test_plate_wrong_size_error():
             pyro.sample("x", dist.Bernoulli(p).expand_by([1 + len(ind)]))
 
     assert_error(model, guide, TraceGraph_ELBO(), match='Shape mismatch inside plate')
+
+
+def test_block_plate_name_ok():
+
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        assert a.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with block_plate("plate"):
+                c = pyro.sample("c", dist.Normal(0, 1))
+                assert c.shape == ()
+
+    def guide():
+        c = pyro.sample("c", dist.Normal(0, 1))
+        assert c.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with block_plate("plate"):
+                a = pyro.sample("a", dist.Normal(0, 1))
+                assert a.shape == ()
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+def test_block_plate_dim_ok():
+
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        assert a.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with block_plate(dim=-1):
+                c = pyro.sample("c", dist.Normal(0, 1))
+                assert c.shape == ()
+
+    def guide():
+        c = pyro.sample("c", dist.Normal(0, 1))
+        assert c.shape == ()
+        with pyro.plate("plate", 2):
+            b = pyro.sample("b", dist.Normal(0, 1))
+            assert b.shape == (2,)
+            with block_plate(dim=-1):
+                a = pyro.sample("a", dist.Normal(0, 1))
+                assert a.shape == ()
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+def test_block_plate_missing_error():
+
+    def model():
+        with block_plate("plate"):
+            pyro.sample("a", dist.Normal(0, 1))
+
+    def guide():
+        pyro.sample("a", dist.Normal(0, 1))
+
+    assert_error(model, guide, Trace_ELBO(),
+                 match="block_plate matched 0 messengers")
 
 
 @pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
@@ -2170,5 +2234,66 @@ def test_reparam_stable():
         pyro.sample("skew", dist.Delta(torch.tensor(0.)))
         pyro.sample("z_uniform", dist.Delta(torch.tensor(0.1)))
         pyro.sample("z_exponential", dist.Delta(torch.tensor(1.)))
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.xfail(reason="missing Beta-Bernoulli pattern in Funsor")
+@pytest.mark.stage("funsor")
+def test_collapse_beta_bernoulli():
+    pytest.importorskip("funsor")
+    data = torch.tensor(0.)
+
+    def model():
+        c = pyro.sample("c", dist.Gamma(1, 1))
+        with poutine.collapse():
+            probs = pyro.sample("probs", dist.Beta(c, 2))
+            pyro.sample("obs", dist.Bernoulli(probs), obs=data)
+
+    def guide():
+        a = pyro.param("a", torch.tensor(1.), constraint=constraints.positive)
+        b = pyro.param("b", torch.tensor(1.), constraint=constraints.positive)
+        pyro.sample("c", dist.Gamma(a, b))
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.stage("funsor")
+def test_collapse_beta_binomial():
+    pytest.importorskip("funsor")
+    data = torch.tensor(5.)
+
+    def model():
+        c = pyro.sample("c", dist.Gamma(1, 1))
+        with poutine.collapse():
+            probs = pyro.sample("probs", dist.Beta(c, 2))
+            pyro.sample("obs", dist.Binomial(10, probs), obs=data)
+
+    def guide():
+        a = pyro.param("a", torch.tensor(1.), constraint=constraints.positive)
+        b = pyro.param("b", torch.tensor(1.), constraint=constraints.positive)
+        pyro.sample("c", dist.Gamma(a, b))
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.xfail(reason="missing pattern in Funsor")
+@pytest.mark.stage("funsor")
+def test_collapse_beta_binomial_plate():
+    pytest.importorskip("funsor")
+    data = torch.tensor([0., 1., 5., 5.])
+
+    def model():
+        c = pyro.sample("c", dist.Gamma(1, 1))
+        with poutine.collapse():
+            probs = pyro.sample("probs", dist.Beta(c, 2))
+            with pyro.plate("plate", len(data)):
+                pyro.sample("obs", dist.Binomial(10, probs),
+                            obs=data)
+
+    def guide():
+        a = pyro.param("a", torch.tensor(1.), constraint=constraints.positive)
+        b = pyro.param("b", torch.tensor(1.), constraint=constraints.positive)
+        pyro.sample("c", dist.Gamma(a, b))
 
     assert_ok(model, guide, Trace_ELBO())

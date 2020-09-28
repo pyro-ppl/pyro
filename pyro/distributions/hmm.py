@@ -39,8 +39,8 @@ def _logmatmulexp(x, y):
     Numerically stable version of ``(x.log() @ y.log()).exp()``.
     """
     finfo = torch.finfo(x.dtype)  # avoid nan due to -inf - -inf
-    x_shift = x.max(-1, keepdim=True).values.clamp(min=finfo.min)
-    y_shift = y.max(-2, keepdim=True).values.clamp(min=finfo.min)
+    x_shift = x.detach().max(-1, keepdim=True).values.clamp_(min=finfo.min)
+    y_shift = y.detach().max(-2, keepdim=True).values.clamp_(min=finfo.min)
     xy = safe_log(torch.matmul((x - x_shift).exp(), (y - y_shift).exp()))
     return xy + x_shift + y_shift
 

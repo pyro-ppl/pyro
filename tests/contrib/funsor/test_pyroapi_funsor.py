@@ -8,10 +8,9 @@ from pyroapi.tests import *  # noqa F401
 
 try:
     # triggers backend registration
+    import funsor
     import pyro.contrib.funsor  # noqa: F401
-
-    # TODO get this working again...
-    pytestmark = pytest.mark.xfail()
+    funsor.set_backend("torch")
 except ImportError:
     pytestmark = pytest.mark.skip()
 

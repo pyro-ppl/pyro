@@ -109,3 +109,17 @@ def test_log_prob_d2(eta):
     tst = test_dist.log_prob(x)
 
     assert_tensors_equal(lp, tst, prec=1e-6)
+
+
+def test_sample_batch():
+    # Regression test for https://github.com/pyro-ppl/pyro/issues/2615
+    dist = LKJCorrCholesky(d=3, eta=torch.ones(())).expand([12])
+    # batch shape and event shape are as you'd expect
+    assert dist.batch_shape == torch.Size([12])
+    assert dist.event_shape == torch.Size([3, 3])
+    # samples have correct shape when sample_shape=()
+    assert dist.shape(()) == torch.Size([12, 3, 3])
+    assert dist.sample().shape == torch.Size([12, 3, 3])
+    # samples had the wrong shape when sample_shape is non-unit
+    assert dist.shape((4,)) == torch.Size([4, 12, 3, 3])
+    assert dist.sample((4,)).shape == torch.Size([4, 12, 3, 3])

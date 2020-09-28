@@ -113,7 +113,7 @@ class SpanningTree(TorchDistribution):
         # See https://en.wikipedia.org/wiki/Kirchhoff%27s_theorem
         V = self.num_vertices
         grid = make_complete_graph(V)
-        shift = self.edge_logits.max()
+        shift = self.edge_logits.detach().max()
         edge_probs = (self.edge_logits - shift).exp()
         adjacency = torch.zeros(V, V, dtype=edge_probs.dtype)
         adjacency[grid[0], grid[1]] = edge_probs

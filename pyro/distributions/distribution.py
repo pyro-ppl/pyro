@@ -5,8 +5,19 @@ from abc import ABCMeta, abstractmethod
 
 from pyro.distributions.score_parts import ScoreParts
 
+COERCIONS = []
 
-class Distribution(object, metaclass=ABCMeta):
+
+class DistributionMeta(ABCMeta):
+    def __call__(cls, *args, **kwargs):
+        for coerce_ in COERCIONS:
+            result = coerce_(cls, args, kwargs)
+            if result is not None:
+                return result
+        return super().__call__(*args, **kwargs)
+
+
+class Distribution(metaclass=DistributionMeta):
     """
     Base class for parameterized probability distributions.
 
