@@ -273,7 +273,7 @@ def main(args):
             loss = svi.step(x, y)
             losses.append(loss)
 
-        print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
+        print("[Epoch %04d]  Loss: %.5f" % (epoch, np.mean(losses)))
 
     # put neural networks in eval mode (needed for batchnorm)
     scanvi.eval()
