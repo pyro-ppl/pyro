@@ -267,9 +267,9 @@ class CompartmentalModel(ABC):
         """
         raise NotImplementedError
 
-    def finalize(self, params, state):
+    def finalize(self, params, prev, curr):
         """
-        Optional method for likelihoods that depend on the entire time series.
+        Optional method for likelihoods that depend on entire time series.
 
         This should be used only for non-factorizable likelihoods that couple
         states across time. Factorizable likelihoods should instead be added to
@@ -281,12 +281,14 @@ class CompartmentalModel(ABC):
         .. warning:: This currently does not support latent variables.
 
         :param params: The global params returned by :meth:`global_model`.
-        :param dict state: A dictionary mapping compartment name to tensor of
-            entire time series. For quantized inference, this uses the
-            approximate point estimates, so users must request any needed time
-            series in :meth:`__init__`, e.g. by calling
-            ``super().__init__(..., approximate=("I", "E"))`` if likelihood
-            depends on the ``I`` and ``E`` time series.
+        :param dict prev:
+        :param dict curr: Dictionaries mapping compartment name to tensor of
+            entire time series. These two parameters are offset by 1 step,
+            thereby making it easy to compute time series of fluxes. For
+            quantized inference, this uses the approximate point estimates, so
+            users must request any needed time series in :meth:`__init__`, e.g.
+            by calling ``super().__init__(..., approximate=("I", "E"))`` if
+            likelihood depends on the ``I`` and ``E`` time series.
         """
         pass
 
@@ -986,9 +988,10 @@ class CompartmentalModel(ABC):
         pyro.factor("transition", logp)
 
         # Apply final likelihood.
-        state = {name: curr[name + "_approx"] for name in self.approximate}
+        prev = {name: prev[name + "_approx"] for name in self.approximate}
+        curr = {name: curr[name + "_approx"] for name in self.approximate}
         with _disallow_latent_variables(".finalize()"):
-            self.finalize(params, state)
+            self.finalize(params, prev, curr)
 
         self._clear_plates()
 
@@ -1029,7 +1032,7 @@ class CompartmentalModel(ABC):
 
         # Apply final likelihood.
         with _disallow_latent_variables(".finalize()"):
-            self.finalize(params, curr)
+            self.finalize(params, prev, curr)
 
         self._clear_plates()
 
