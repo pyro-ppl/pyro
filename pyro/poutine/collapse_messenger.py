@@ -3,6 +3,7 @@
 
 import pyro
 from pyro.poutine.util import site_is_subsample
+from pyro.distributions.distribution import COERCIONS
 
 from .runtime import _PYRO_STACK
 from .trace_messenger import TraceMessenger
@@ -22,9 +23,14 @@ class CollapseMessenger(TraceMessenger):
     fail. Code using the results of sample sites must be written to accept
     Funsors rather than Tensors. This requires ``funsor`` to be installed.
     """
+    _coerce = None
+
     def __init__(self, *args, **kwargs):
-        import funsor
-        funsor.set_backend("torch")
+        if CollapseMessenger._coerce is None:
+            import funsor
+            from funsor.distribution import CoerceDistributionToFunsor
+            funsor.set_backend("torch")
+            CollapseMessenger._coerce = CoerceDistributionToFunsor("torch")
         super().__init__(*args, **kwargs)
 
     def _process_message(self, msg):
@@ -50,9 +56,12 @@ class CollapseMessenger(TraceMessenger):
     def __enter__(self):
         self.preserved_plates = frozenset(h.name for h in _PYRO_STACK
                                           if isinstance(h, pyro.plate))
+        COERCIONS.append(self._coerce)
         return super().__enter__()
 
     def __exit__(self, *args):
+        _coerce = COERCIONS.pop()
+        assert _coerce is self._coerce
         super().__exit__(*args)
 
         # Convert delayed statements to pyro.factor()
