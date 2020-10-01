@@ -11,7 +11,6 @@ import math
 import numpy as np
 from scipy import sparse
 
-import scanpy as sc
 import torch
 import torch.nn as nn
 import scvi
@@ -124,6 +123,7 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
 
         return BatchDataLoader(X, Y, batch_size), num_genes, 2.0, 1.0, None
 
+    import scanpy as sc
     adata = scvi.data.purified_pbmc_dataset(subset_datasets=["regulatory_t", "naive_t",
                                                              "memory_t", "naive_cytotoxic"])
 

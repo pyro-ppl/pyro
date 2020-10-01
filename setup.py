@@ -64,7 +64,7 @@ EXTRAS_REQUIRE = [
     'visdom>=0.1.4',
     # 'biopython>=1.54',  # requires Python 3.6
     'pandas',
-    'scanpy>=1.4',
+    # 'scanpy>=1.4',  # Requires HDF5
     'scikit-learn',
     'scvi>=0.6',
     'seaborn',

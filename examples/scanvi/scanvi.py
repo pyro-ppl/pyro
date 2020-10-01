@@ -33,8 +33,6 @@ from pyro.distributions.util import broadcast_shape
 from pyro.optim import Adam
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 
-import scanpy as sc
-
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
@@ -277,6 +275,7 @@ def main(args):
 
     # now that we're done training we'll inspect the latent representations we've learned
     if args.plot and args.dataset == 'pbmc':
+        import scanpy as sc
         # compute latent representation (z2_loc) for each cell in the dataset
         latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
 
