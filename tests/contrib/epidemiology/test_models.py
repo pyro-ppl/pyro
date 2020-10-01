@@ -7,6 +7,7 @@ import math
 import pytest
 import torch
 
+import pyro
 import pyro.distributions as dist
 from pyro.contrib.epidemiology.models import (HeterogeneousRegionalSIRModel, HeterogeneousSIRModel,
                                               OverdispersedSEIRModel, OverdispersedSIRModel, RegionalSIRModel,
@@ -483,6 +484,56 @@ def test_regional_smoke(duration, forecast, options, algo):
 
     # Infer.
     model = RegionalSIRModel(population, coupling, recovery_time, data)
+    num_samples = 5
+    if algo == "mcmc":
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
+    else:
+        model.fit_svi(num_steps=2, num_samples=num_samples, **options)
+
+    # Predict and forecast.
+    samples = model.predict(forecast=forecast)
+    assert samples["S"].shape == (num_samples, duration + forecast, num_regions)
+    assert samples["I"].shape == (num_samples, duration + forecast, num_regions)
+
+
+class RegionalSIRModelWithFinalize(RegionalSIRModel):
+    def finalize(self, params, state):
+        I = state["I"]
+        I_mean = I.mean(dim=[-1, -2], keepdim=True).expand_as(I)
+        with self.region_plate, self.time_plate:
+            pyro.sample("likelihood", dist.Normal(I_mean, 1.),
+                        obs=I)
+
+
+@pytest.mark.parametrize("duration", [3, 7])
+@pytest.mark.parametrize("forecast", [0, 7])
+@pytest.mark.parametrize("algo,options", [
+    ("svi", {}),
+    ("svi", {"haar": False}),
+    ("mcmc", {}),
+    ("mcmc", {"haar": False}),
+    ("mcmc", {"haar_full_mass": 0}),
+    ("mcmc", {"num_quant_bins": 2}),
+], ids=str)
+def test_regional_finalize_smoke(duration, forecast, options, algo):
+    num_regions = 6
+    coupling = torch.eye(num_regions).clamp(min=0.1)
+    population = torch.tensor([2., 3., 4., 10., 100., 1000.])
+    recovery_time = 7.0
+
+    # Generate data.
+    model = RegionalSIRModelWithFinalize(population, coupling, recovery_time,
+                                         data=[None] * duration)
+    assert model.full_mass == [("R0", "rho_c1", "rho_c0", "rho")]
+    for attempt in range(100):
+        data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
+        assert data.shape == (duration, num_regions)
+        if data.sum():
+            break
+    assert data.sum() > 0, "failed to generate positive data"
+
+    # Infer.
+    model = RegionalSIRModelWithFinalize(population, coupling, recovery_time, data)
     num_samples = 5
     if algo == "mcmc":
         model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
