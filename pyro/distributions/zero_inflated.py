@@ -3,7 +3,7 @@
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all, lazy_property, probs_to_logits, logits_to_probs
+from torch.distributions.utils import broadcast_all, lazy_property, logits_to_probs, probs_to_logits
 from torch.nn.functional import softplus
 
 from pyro.distributions import NegativeBinomial, Poisson, TorchDistribution
@@ -17,14 +17,14 @@ class ZeroInflatedDistribution(TorchDistribution):
     This can be used directly or can be used as a base class as e.g. for
     :class:`ZeroInflatedPoisson` and :class:`ZeroInflatedNegativeBinomial`.
 
+    :param TorchDistribution base_dist: the base distribution.
     :param torch.Tensor gate: probability of extra zeros given via a Bernoulli distribution.
     :param torch.Tensor gate_logits: logits of extra zeros given via a Bernoulli distribution.
-    :param TorchDistribution base_dist: the base distribution.
     """
     arg_constraints = {"gate": constraints.unit_interval,
                        "gate_logits": constraints.real}
 
-    def __init__(self, base_dist, gate=None, *, gate_logits=None, validate_args=None):
+    def __init__(self, base_dist, *, gate=None, gate_logits=None, validate_args=None):
         if (gate is None) == (gate_logits is None):
             raise ValueError("Either `gate` or `gate_logits` must be specified, but not both.")
         if gate is not None:
@@ -46,6 +46,14 @@ class ZeroInflatedDistribution(TorchDistribution):
     @property
     def support(self):
         return self.base_dist.support
+
+    @lazy_property
+    def gate(self):
+        return logits_to_probs(self.gate_logits)
+
+    @lazy_property
+    def gate_logits(self):
+        return probs_to_logits(self.gate)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -82,14 +90,6 @@ class ZeroInflatedDistribution(TorchDistribution):
             self.base_dist.mean ** 2 + self.base_dist.variance
         ) - (self.mean) ** 2
 
-    @lazy_property
-    def gate(self):
-        return logits_to_probs(self.gate_logits)
-
-    @lazy_property
-    def gate_logits(self):
-        return probs_to_logits(self.gate)
-
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(type(self), _instance)
         batch_shape = torch.Size(batch_shape)
@@ -105,12 +105,12 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
     """
     A Zero Inflated Poisson distribution.
 
+    :param torch.Tensor rate: rate of poisson distribution.
     :param torch.Tensor gate: probability of extra zeros.
     :param torch.Tensor gate_logits: logits of extra zeros.
-    :param torch.Tensor rate: rate of poisson distribution.
     """
-    arg_constraints = {"gate": constraints.unit_interval,
-                       "rate": constraints.positive,
+    arg_constraints = {"rate": constraints.positive,
+                       "gate": constraints.unit_interval,
                        "gate_logits": constraints.real}
     support = constraints.nonnegative_integer
 
@@ -131,21 +131,21 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
     """
     A Zero Inflated Negative Binomial distribution.
 
-    :param torch.Tensor gate: probability of extra zeros.
-    :param torch.Tensor gate_logits: logits of extra zeros.
     :param total_count: non-negative number of negative Bernoulli trials.
     :type total_count: float or torch.Tensor
     :param torch.Tensor probs: Event probabilities of success in the half open interval [0, 1).
     :param torch.Tensor logits: Event log-odds for probabilities of success.
+    :param torch.Tensor gate: probability of extra zeros.
+    :param torch.Tensor gate_logits: logits of extra zeros.
     """
-    arg_constraints = {"gate": constraints.unit_interval,
-                       "total_count": constraints.greater_than_eq(0),
+    arg_constraints = {"total_count": constraints.greater_than_eq(0),
                        "probs": constraints.half_open_interval(0., 1.),
                        "logits": constraints.real,
+                       "gate": constraints.unit_interval,
                        "gate_logits": constraints.real}
     support = constraints.nonnegative_integer
 
-    def __init__(self, total_count, gate=None, gate_logits=None, probs=None, logits=None, validate_args=None):
+    def __init__(self, total_count, *, probs=None, logits=None, gate=None, gate_logits=None, validate_args=None):
         base_dist = NegativeBinomial(
             total_count=total_count,
             probs=probs,
