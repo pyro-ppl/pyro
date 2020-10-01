@@ -23,8 +23,8 @@ _RINGS = {0: MapRing, 1: SampleRing}
 def _make_ring(temperature, cache, dim_to_size):
     try:
         return _RINGS[temperature](cache=cache, dim_to_size=dim_to_size)
-    except KeyError:
-        raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
+    except KeyError as e:
+        raise ValueError("temperature must be 0 (map) or 1 (sample) for now") from e
 
 
 class SamplePosteriorMessenger(ReplayMessenger):
