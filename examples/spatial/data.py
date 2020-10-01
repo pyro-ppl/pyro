@@ -20,42 +20,35 @@ class BatchDataLoader(object):
         self.X_ref = X_ref
         self.Y_ref = Y_ref
         self.X_ss = X_ss
-        self.Y_ss = Y_ss
+        self.R_ss = R_ss
         self.batch_size = batch_size
         self.num_classes = num_classes
 
-        self.unlabeled = torch.where(data_y == missing_label)[0]
-        self.num_unlabeled = self.unlabeled.size(0)
-        self.num_unlabeled_batches = math.ceil(self.num_unlabeled / self.batch_size)
+        self.num_ref_data = self.X_ref.size(0)
+        self.num_ss_data = self.X_ss.size(0)
 
-        self.labeled = torch.where(data_y != missing_label)[0]
-        self.num_labeled = self.labeled.size(0)
-        self.num_labeled_batches = math.ceil(self.num_labeled / self.batch_size)
-
-        assert self.data_x.size(0) == self.data_y.size(0)
-        assert len(self) > 0
-
-    @property
-    def size(self):
-        return self.data_x.size(0)
+        self.num_ref_batches = math.floor(self.num_ref_data / self.batch_size)
+        self.num_ss_batches = math.floor(self.num_ss_data / self.batch_size)
 
     def __len__(self):
-        return self.num_unlabeled_batches + self.num_labeled_batches
+        return self.num_ref_batches + self.num_ss_batches
 
     def _sample_batch_indices(self):
         batch_order = torch.randperm(len(self)).tolist()
-        unlabeled_idx = self.unlabeled[torch.randperm(self.num_unlabeled)]
-        labeled_idx = self.labeled[torch.randperm(self.num_labeled)]
+        ref_idx = torch.randperm(self.num_ref_data)
+        ss_idx = torch.randperm(self.num_ss_data)
 
         slices = []
 
-        for i in range(self.num_unlabeled_batches):
-            _slice = unlabeled_idx[i * self.batch_size: (i + 1) * self.batch_size]
-            slices.append((_slice, False))
+        for i in range(self.num_ref_batches):
+            _slice = ref_idx[i * self.batch_size: (i + 1) * self.batch_size]
+            if _slice.size(0) == self.batch_size:
+                slices.append((_slice, 'ref'))
 
-        for i in range(self.num_labeled_batches):
-            _slice = labeled_idx[i * self.batch_size: (i + 1) * self.batch_size]
-            slices.append((_slice, True))
+        for i in range(self.num_ss_batches):
+            _slice = ss_idx[i * self.batch_size: (i + 1) * self.batch_size]
+            if _slice.size(0) == self.batch_size:
+                slices.append((_slice, 'ss'))
 
         return slices, batch_order
 
@@ -64,13 +57,11 @@ class BatchDataLoader(object):
 
         for i in range(len(batch_order)):
             _slice = slices[batch_order[i]]
-            if _slice[1]:
-                # labeled
-                yield self.data_x[_slice[0]], \
-                      nn.functional.one_hot(self.data_y[_slice[0]], num_classes=self.num_classes)
-            else:
-                # unlabeled
-                yield self.data_x[_slice[0]], None
+            if _slice[1] == 'ref':
+                yield self.X_ref[_slice[0]], \
+                      nn.functional.one_hot(self.Y_ref[_slice[0]], num_classes=self.num_classes), "ref"
+            elif _slice[1] == 'ss':
+                yield self.X_ss[_slice[0]], self.R_ss[_slice[0]], "ss"
 
 
 def get_data(batch_size=100, data_dir="/home/mjankowi/spatial/"):
