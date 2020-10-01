@@ -275,6 +275,9 @@ def main(args):
 
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
+    # put neural networks in eval mode (needed for batchnorm)
+    scanvi.eval()
+
     # now that we're done training we'll inspect the latent representations we've learned
     if args.plot and args.dataset == 'pbmc':
         import scanpy as sc
