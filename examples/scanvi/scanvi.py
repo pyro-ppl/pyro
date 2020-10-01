@@ -5,7 +5,11 @@
 We use a semi-supervised deep generative model of transcriptomics data to propagate labels
 from a small set of labeled cells to a larger set of unlabeled cells. In particular we
 use a dataset of peripheral blood mononuclear cells (PBMC) from 10x Genomics and
-reproduce Figure 6 in reference [1].
+(approximately) reproduce Figure 6 in reference [1].
+
+Note that for simplicity we do not reproduce every aspect of the scANVI pipeline. For
+example, we do not use dropout in our neural network encoders/decoders, nor do we include
+batch annotations in our model.
 
 References:
 [1] "Harmonization and Annotation of Single-cell Transcriptomics data with Deep Generative Models,"
@@ -85,14 +89,11 @@ class XDecoder(nn.Module):
         super().__init__()
         dims = [z2_dim] + hidden_dims + [2 * num_genes]
         self.fc = make_fc(dims)
-        self.epsilon = 1.0e-6
 
     def forward(self, z2):
-        gate, mu = split_in_half(self.fc(z2))
-        gate = gate.sigmoid()
-        gate = self.epsilon + (1.0 - 2.0 * self.epsilon) * gate
+        gate_logits, mu = split_in_half(self.fc(z2))
         mu = softmax(mu, dim=-1)
-        return gate, mu
+        return gate_logits, mu
 
 
 # used in parameterizing q(z2 | x) and q(l | x)
@@ -203,9 +204,10 @@ class SCANVI(nn.Module):
 
             # note that by construction mu is normalized (i.e. mu.sum(-1) == 1) and the
             # total scale of counts for each cell is determined by `l`
-            gate, mu = self.x_decoder(z2)
+            gate_logits, mu = self.x_decoder(z2)
+            # TODO revisit this parameterization when https://github.com/pytorch/pytorch/issues/42449 is resolved
             nb_logits = (theta + self.epsilon).log() - (l * mu + self.epsilon).log()
-            x_dist = dist.ZeroInflatedNegativeBinomial(gate=gate, total_count=theta,
+            x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
                                                        logits=nb_logits)
             # observe the datapoint x using the observation distribution x_dist
             pyro.sample("x", x_dist.to_event(1), obs=x)
