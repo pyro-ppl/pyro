@@ -268,6 +268,8 @@ def main(args):
         losses = []
 
         for x, y in dataloader:
+            if y is not None:
+                y = y.type_as(x)
             loss = svi.step(x, y)
             losses.append(loss)
 
