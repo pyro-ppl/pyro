@@ -22,8 +22,10 @@ Pyro is a flexible, scalable deep probabilistic programming library built on PyT
 - **Minimal**: Pyro is agile and maintainable. It is implemented with a small core of powerful, composable abstractions.
 - **Flexible**: Pyro aims for automation when you want it, control when you need it. This is accomplished through high-level abstractions to express generative and inference models, while allowing experts easy-access to customize inference.
 
-Pyro is developed and maintained by [Uber AI Labs](http://uber.ai) and community contributors.
-For more information, check out our [blog post](http://eng.uber.com/pyro).
+Pyro was originally developed at (the now defunct) Uber AI Labs and is actively maintained by community contributors.
+For more information about the high level motivation for Pyro, check out our [launch blog post](http://eng.uber.com/pyro).
+For additional blog posts, check out work on [experimental design](https://eng.uber.com/oed-pyro-release/) and
+[time-to-event modeling](https://eng.uber.com/modeling-censored-time-to-event-data-using-pyro/) in Pyro.
 
 ## Installing
 
@@ -31,7 +33,7 @@ For more information, check out our [blog post](http://eng.uber.com/pyro).
 
 **Install using pip:**
 
-Pyro supports Python 3.4+.
+Pyro supports Python 3.5+.
 
 ```sh
 pip install pyro-ppl
