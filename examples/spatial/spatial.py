@@ -64,11 +64,12 @@ class Z2Decoder(nn.Module):
 class XDecoder(nn.Module):
     def __init__(self, num_genes, z2_dim, hidden_dims):
         super().__init__()
-        dims = [z2_dim] + hidden_dims + [num_genes]
+        dims = [z2_dim + 1] + hidden_dims + [num_genes]
         self.fc = make_fc(dims)
 
-    def forward(self, z2):
-        mu = softmax(self.fc(z2), dim=-1)
+    def forward(self, z2, s):
+        z2_s = torch.cat([z2, s], dim=-1)
+        mu = softmax(self.fc(z2_s), dim=-1)
         return mu
 
 
@@ -140,7 +141,7 @@ class Spatial(nn.Module):
     def model(self, l_mean, l_scale, x, s, y=None):
         pyro.module("spatial", self)
 
-        theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(self.num_genes),
+        theta = pyro.param("inverse_dispersion_%d" % s[0, 0].item(), 10.0 * x.new_ones(self.num_genes),
                            constraint=constraints.positive)
 
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
@@ -148,29 +149,22 @@ class Spatial(nn.Module):
             y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)))
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
-            #print("MODEL z2_loc", z2_loc.mean().item(), z2_loc.median().item())
-            #print("MODEL z2_scale", z2_scale.mean().item(), z2_scale.median().item(), z2_scale.min().item(), z2_scale.max().item())
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
 
             l_scale = l_scale * x.new_ones(1)
             l = pyro.sample("l", dist.LogNormal(l_mean, l_scale).to_event(1))
 
-            mu = self.x_decoder(z2)
+            mu = self.x_decoder(z2, s)
             # TODO revisit this parameterization when https://github.com/pytorch/pytorch/issues/42449 is resolved
             nb_logits = (l * mu + self.epsilon).log() - (theta + self.epsilon).log()
-            #print("theta", theta.mean().item(), "nb_logits", nb_logits.mean().item())
             x_dist = dist.NegativeBinomial(total_count=theta, logits=nb_logits)
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
     def guide(self, l_mean, l_scale, x, s, y=None):
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z2_loc, z2_scale, l_loc, l_scale = self.z2l_encoder(x, s)
-            #print("z2_loc", z2_loc.mean().item(), "z2_scale",z2_scale.mean().item())
             pyro.sample("l", dist.LogNormal(l_loc + l_mean, l_scale).to_event(1))
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
-            #print("GUIDE z2_loc", z2_loc.mean().item(), z2_loc.median().item())
-            #print("GUIDE z2_scale", z2_scale.mean().item(), z2_scale.median().item(), z2_scale.min().item(), z2_scale.max().item())
-            #print("GUIDE z2", z2.mean().item(), z2.median().item(), z2.min().item(), z2.max().item())
 
             y_logits = self.classifier(z2)
             y_dist = dist.OneHotCategorical(logits=y_logits)
@@ -210,6 +204,13 @@ def main(args):
                 loss = svi.step(l_mean, l_scale, x, x.new_zeros(x.size(0), 1), None)
             losses.append(loss)
 
+        if epoch % 5 == 0:
+            theta0 = pyro.param("inverse_dispersion_0").data.cpu().mean()
+            theta1 = pyro.param("inverse_dispersion_r").data.cpu().mean()
+            print("theta0: %.3f %.3f %.3f   theta1: %.3f %.3f %.3f" % (
+                  theta0.mean().item, theta0.min().item, theta0.max().item,
+                  theta1.mean().item, theta1.min().item, theta1.max().item))
+
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
 
 
@@ -217,9 +218,9 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=200, type=int, help='number of training epochs')
-    parser.add_argument('-bs', '--batch-size', default=1024, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.01, type=float, help='learning rate')
+    parser.add_argument('-n', '--num-epochs', default=500, type=int, help='number of training epochs')
+    parser.add_argument('-bs', '--batch-size', default=256, type=int, help='mini-batch size')
+    parser.add_argument('-lr', '--learning-rate', default=0.03, type=float, help='learning rate')
     args = parser.parse_args()
 
     main(args)
