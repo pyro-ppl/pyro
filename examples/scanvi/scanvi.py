@@ -9,7 +9,7 @@ use a dataset of peripheral blood mononuclear cells (PBMC) from 10x Genomics and
 
 Note that for simplicity we do not reproduce every aspect of the scANVI pipeline. For
 example, we do not use dropout in our neural network encoders/decoders, nor do we include
-batch annotations in our model.
+batch/dataset annotations in our model.
 
 References:
 [1] "Harmonization and Annotation of Single-cell Transcriptomics data with Deep Generative Models,"
@@ -39,29 +39,29 @@ from matplotlib.patches import Patch
 from data import get_data
 
 
-# helper for making fully-connected neural networks
+# Helper for making fully-connected neural networks
 def make_fc(dims):
     layers = []
     for in_dim, out_dim in zip(dims, dims[1:]):
         layers.append(nn.Linear(in_dim, out_dim))
         layers.append(nn.BatchNorm1d(out_dim))
         layers.append(nn.ReLU())
-    return nn.Sequential(*layers[:-1])  # exclude final ReLU non-linearity
+    return nn.Sequential(*layers[:-1])  # Exclude final ReLU non-linearity
 
 
-# splits a tensor in half along the final dimension
+# Splits a tensor in half along the final dimension
 def split_in_half(t):
     return t.reshape(t.shape[:-1] + (2, -1)).unbind(-2)
 
 
-# helper for broadcasting inputs to neural net
+# Helper for broadcasting inputs to neural net
 def broadcast_inputs(input_args):
     shape = broadcast_shape(*[s.shape[:-1] for s in input_args]) + (-1,)
     input_args = [s.expand(shape) for s in input_args]
     return input_args
 
 
-# used in parameterizing p(z2 | z1, y)
+# Used in parameterizing p(z2 | z1, y)
 class Z2Decoder(nn.Module):
     def __init__(self, z1_dim, y_dim, z2_dim, hidden_dims):
         super().__init__()
@@ -70,18 +70,19 @@ class Z2Decoder(nn.Module):
 
     def forward(self, z1, y):
         z1_y = torch.cat([z1, y], dim=-1)
-        # we reshape the input to be two-dimensional so that nn.BatchNorm1d behaves correctly
+        # We reshape the input to be two-dimensional so that nn.BatchNorm1d behaves correctly
         _z1_y = z1_y.reshape(-1, z1_y.size(-1))
         hidden = self.fc(_z1_y)
-        # if the input was three-dimensional we now restore the original shape
+        # If the input was three-dimensional we now restore the original shape
         hidden = hidden.reshape(z1_y.shape[:-1] + hidden.shape[-1:])
         loc, scale = split_in_half(hidden)
-        # here and elsewhere softplus ensures that scale is positive
+        # Here and elsewhere softplus ensures that scale is positive. Note that we generally
+        # expect softplus to be more numerically stable than exp.
         scale = softplus(scale)
         return loc, scale
 
 
-# used in parameterizing p(x | z2)
+# Used in parameterizing p(x | z2)
 class XDecoder(nn.Module):
     def __init__(self, num_genes, z2_dim, hidden_dims):
         super().__init__()
@@ -94,7 +95,7 @@ class XDecoder(nn.Module):
         return gate_logits, mu
 
 
-# used in parameterizing q(z2 | x) and q(l | x)
+# Used in parameterizing q(z2 | x) and q(l | x)
 class Z2LEncoder(nn.Module):
     def __init__(self, num_genes, z2_dim, hidden_dims):
         super().__init__()
@@ -108,7 +109,7 @@ class Z2LEncoder(nn.Module):
         return z2_loc, z2_scale, l_loc, l_scale
 
 
-# used in parameterizing q(z1 | z2, y)
+# Used in parameterizing q(z1 | z2, y)
 class Z1Encoder(nn.Module):
     def __init__(self, num_labels, z1_dim, z2_dim, hidden_dims):
         super().__init__()
@@ -116,20 +117,20 @@ class Z1Encoder(nn.Module):
         self.fc = make_fc(dims)
 
     def forward(self, z2, y):
-        # this broadcasting is necessary since Pyro expands y during enumeration (but not z2)
+        # This broadcasting is necessary since Pyro expands y during enumeration (but not z2)
         z2_y = broadcast_inputs([z2, y])
         z2_y = torch.cat(z2_y, dim=-1)
-        # we reshape the input to be two-dimensional so that nn.BatchNorm1d behaves correctly
+        # We reshape the input to be two-dimensional so that nn.BatchNorm1d behaves correctly
         _z2_y = z2_y.reshape(-1, z2_y.size(-1))
         hidden = self.fc(_z2_y)
-        # if the input was three-dimensional we now restore the original shape
+        # If the input was three-dimensional we now restore the original shape
         hidden = hidden.reshape(z2_y.shape[:-1] + hidden.shape[-1:])
         loc, scale = split_in_half(hidden)
         scale = softplus(scale)
         return loc, scale
 
 
-# used in parameterizing q(y | z2)
+# Used in parameterizing q(y | z2)
 class Classifier(nn.Module):
     def __init__(self, z2_dim, hidden_dims, num_labels):
         super().__init__()
@@ -141,7 +142,7 @@ class Classifier(nn.Module):
         return logits
 
 
-# encompasses the scANVI model and guide as a PyTorch nn.Module
+# Encompasses the scANVI model and guide as a PyTorch nn.Module
 class SCANVI(nn.Module):
     def __init__(self, num_genes, num_labels, l_loc, l_scale, latent_dim=10, alpha=0.1, scale_factor=1.0):
         assert isinstance(num_genes, int)
@@ -150,17 +151,17 @@ class SCANVI(nn.Module):
         assert isinstance(num_labels, int) and num_labels > 1
         self.num_labels = num_labels
 
-        # this will be the dimension of both z1 and z2
+        # This is the dimension of both z1 and z2
         assert isinstance(latent_dim, int) and latent_dim > 0
         self.latent_dim = latent_dim
 
-        # the next two hyperparameters determine the prior over the log_count latent variable `l`
+        # The next two hyperparameters determine the prior over the log_count latent variable `l`
         assert isinstance(l_loc, float)
         self.l_loc = l_loc
         assert isinstance(l_scale, float) and l_scale > 0
         self.l_scale = l_scale
 
-        # this hyperparameter controls the strength of the auxiliary classification loss
+        # This hyperparameter controls the strength of the auxiliary classification loss
         assert isinstance(alpha, float) and alpha > 0
         self.alpha = alpha
 
@@ -169,7 +170,7 @@ class SCANVI(nn.Module):
 
         super().__init__()
 
-        # setup the various neural networks used in the model and guide
+        # Setup the various neural networks used in the model and guide
         self.z2_decoder = Z2Decoder(z1_dim=self.latent_dim, y_dim=self.num_labels,
                                     z2_dim=self.latent_dim, hidden_dims=[50])
         self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[100], z2_dim=self.latent_dim)
@@ -181,14 +182,14 @@ class SCANVI(nn.Module):
         self.epsilon = 1.0e-6
 
     def model(self, x, y=None):
-        # register various nn.Modules with Pyro
+        # Register various nn.Modules with Pyro
         pyro.module("scanvi", self)
 
-        # this gene-level parameter modulates the variance of the observation distribution
+        # This gene-level parameter modulates the variance of the observation distribution
         theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(self.num_genes),
                            constraint=constraints.positive)
 
-        # we scale all sample statements by scale_factor so that the ELBO is normalized
+        # We scale all sample statements by scale_factor so that the ELBO is normalized
         # wrt the number of datapoints and genes
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
@@ -200,17 +201,19 @@ class SCANVI(nn.Module):
             l_scale = self.l_scale * x.new_ones(1)
             l = pyro.sample("l", dist.LogNormal(self.l_loc, l_scale).to_event(1))
 
-            # note that by construction mu is normalized (i.e. mu.sum(-1) == 1) and the
+            # Note that by construction mu is normalized (i.e. mu.sum(-1) == 1) and the
             # total scale of counts for each cell is determined by `l`
             gate_logits, mu = self.x_decoder(z2)
-            # TODO revisit this parameterization when https://github.com/pytorch/pytorch/issues/42449 is resolved
+            # TODO revisit this parametrization if torch.NegativeBinomial changes
+            # from failure to success parametrization;
+            # see https://github.com/pytorch/pytorch/issues/42449
             nb_logits = (l * mu + self.epsilon).log() - (theta + self.epsilon).log()
             x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
                                                        logits=nb_logits)
-            # observe the datapoint x using the observation distribution x_dist
+            # Observe the datapoint x using the observation distribution x_dist
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
-    # the guide specifies the variational distribution
+    # The guide specifies the variational distribution
     def guide(self, x, y=None):
         pyro.module("scanvi", self)
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
@@ -227,7 +230,7 @@ class SCANVI(nn.Module):
                 # x is labeled so add a classification loss term
                 # (this way q(y|z2) learns from both labeled and unlabeled data)
                 classification_loss = y_dist.log_prob(y)
-                # note that the negative sign appears because we're adding this term in the guide
+                # Note that the negative sign appears because we're adding this term in the guide
                 # and the guide log_prob appears in the ELBO as -log q
                 pyro.factor("classification_loss", -self.alpha * classification_loss)
 
@@ -236,34 +239,34 @@ class SCANVI(nn.Module):
 
 
 def main(args):
-    # clear param store
-    pyro.clear_param_store()
-    # fix random number seed
+    # Fix random number seed
     pyro.util.set_rng_seed(args.seed)
-    # enable optional validation warnings
+    # Enable optional validation warnings
     pyro.enable_validation(True)
 
-    # load and pre-process data
+    # Load and pre-process data
     dataloader, num_genes, l_mean, l_scale, anndata = get_data(dataset=args.dataset, batch_size=args.batch_size,
                                                                cuda=args.cuda)
 
-    # instantiate instance of model/guide and various neural networks
+    # Instantiate instance of model/guide and various neural networks
     scanvi = SCANVI(num_genes=num_genes, num_labels=4, l_loc=l_mean, l_scale=l_scale,
                     scale_factor=1.0 / (args.batch_size * num_genes))
 
     if args.cuda:
         scanvi.cuda()
 
-    # setup an optimizer
+    # Setup an optimizer
     optim = Adam({"lr": args.learning_rate})
 
-    # tell Pyro to enumerate out y when y is unobserved
+    # Tell Pyro to enumerate out y when y is unobserved
     guide = config_enumerate(scanvi.guide, "parallel", expand=True)
 
-    # setup a variational objective for gradient-based learning
+    # Setup a variational objective for gradient-based learning.
+    # Note we use TraceEnum_ELBO in order to leverarge Pyro's machinery
+    # for automatic enumeration of the discrete latent variable y.
     svi = SVI(scanvi.model, guide, optim, TraceEnum_ELBO())
 
-    # training loop
+    # Training loop
     for epoch in range(args.num_epochs):
         losses = []
 
@@ -275,30 +278,30 @@ def main(args):
 
         print("[Epoch %04d]  Loss: %.5f" % (epoch, np.mean(losses)))
 
-    # put neural networks in eval mode (needed for batchnorm)
+    # Put neural networks in eval mode (needed for batchnorm)
     scanvi.eval()
 
-    # now that we're done training we'll inspect the latent representations we've learned
+    # Now that we're done training we'll inspect the latent representations we've learned
     if args.plot and args.dataset == 'pbmc':
         import scanpy as sc
-        # compute latent representation (z2_loc) for each cell in the dataset
+        # Compute latent representation (z2_loc) for each cell in the dataset
         latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
 
-        # compute inferred cell type probabilities for each cell
+        # Compute inferred cell type probabilities for each cell
         y_logits = scanvi.classifier(latent_rep)
         y_probs = softmax(y_logits, dim=-1).data.cpu().numpy()
 
-        # use scanpy to compute 2-dimensional UMAP coordinates using our
+        # Use scanpy to compute 2-dimensional UMAP coordinates using our
         # learned 10-dimensional latent representation z2
         anndata.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
         sc.pp.neighbors(anndata, use_rep="X_scANVI")
         sc.tl.umap(anndata)
         umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
 
-        # construct plots; all plots are scatterplots depicting the two-dimensional UMAP embedding
+        # Construct plots; all plots are scatterplots depicting the two-dimensional UMAP embedding
         # and only differ in how points are colored
 
-        # the topmost plot depicts the 200 hand-curated seed labels in our dataset
+        # The topmost plot depicts the 200 hand-curated seed labels in our dataset
         fig, axes = plt.subplots(3, 2)
         seed_marker_sizes = anndata.obs['seed_marker_sizes']
         axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.7)
@@ -312,7 +315,7 @@ def main(args):
         axes[0, 1].get_yaxis().set_visible(False)
         axes[0, 1].set_frame_on(False)
 
-        # the remaining plots depict the inferred cell type probability for each of the four cell types
+        # The remaining plots depict the inferred cell type probability for each of the four cell types
         s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 0], marker='.', alpha=0.7)
         axes[1, 0].set_title('Inferred CD8-Naive probability')
         fig.colorbar(s10, ax=axes[1, 0])
@@ -332,8 +335,8 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
-    # parse command line arguments
-    parser = argparse.ArgumentParser(description="parse args")
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="single-cell ANnotation using Variational Inference")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
     parser.add_argument('-n', '--num-epochs', default=40, type=int, help='number of training epochs')
     parser.add_argument('-d', '--dataset', default='pbmc', type=str,
