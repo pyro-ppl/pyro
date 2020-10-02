@@ -185,7 +185,7 @@ class SCANVI(nn.Module):
         pyro.module("scanvi", self)
 
         # this gene-level parameter modulates the variance of the observation distribution
-        theta = pyro.param("inverse_dispersion", x.new_ones(self.num_genes),
+        theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(self.num_genes),
                            constraint=constraints.positive)
 
         # we scale all sample statements by scale_factor so that the ELBO is normalized
@@ -204,7 +204,7 @@ class SCANVI(nn.Module):
             # total scale of counts for each cell is determined by `l`
             gate_logits, mu = self.x_decoder(z2)
             # TODO revisit this parameterization when https://github.com/pytorch/pytorch/issues/42449 is resolved
-            nb_logits = (theta + self.epsilon).log() - (l * mu + self.epsilon).log()
+            nb_logits = (l * mu + self.epsilon).log() - (theta + self.epsilon).log()
             x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
                                                        logits=nb_logits)
             # observe the datapoint x using the observation distribution x_dist
