@@ -204,7 +204,7 @@ class SCANVI(nn.Module):
             # Note that by construction mu is normalized (i.e. mu.sum(-1) == 1) and the
             # total scale of counts for each cell is determined by `l`
             gate_logits, mu = self.x_decoder(z2)
-            # TODO revisit this parameterization if torch.NegativeBinomial changes
+            # TODO revisit this parameterization if torch.distributions.NegativeBinomial changes
             # from failure to success parametrization;
             # see https://github.com/pytorch/pytorch/issues/42449
             nb_logits = (l * mu + self.epsilon).log() - (theta + self.epsilon).log()
