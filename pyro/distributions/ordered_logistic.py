@@ -18,6 +18,13 @@ class OrderedLogistic(Categorical):
     These cumulative log-odds are then transformed into a discrete cumulative
     probability distribution, that is finally differenced to return the probability
     mass matrix ``p`` that specifies the categorical distribution.
+
+    :param Tensor predictors: A tensor of predictor variables of arbitrary
+        shape. The output shape of non-batched samples from this distribution will
+        be the same shape as ``predictors``.
+    :param Tensor cutpoints: A tensor of cutpoints that are used to determine the
+        cumulative probability of each entry in ``predictors`` belonging to a
+        given category. Must be 1-dimensional and monotonically increasing.
     """
 
     support = constraints.nonnegative_integer
