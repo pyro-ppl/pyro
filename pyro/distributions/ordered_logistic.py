@@ -29,21 +29,22 @@ class OrderedLogistic(Categorical):
 
     def __init__(self, predictors, cutpoints):
         assert cutpoints.ndim == 1, "cutpoints must be 1d vector"
-        assert predictors.ndim == 1, "predictors must be 1d vector"
+        assert predictors.ndim >= 1, "predictors must have at least 1 dimension"
         assert len(cutpoints) > 0
-        assert len(predictors) > 0
+        assert predictors.shape[-1] > 0
         if len(cutpoints) > 1:
             err_msg = "cutpoints must be monotonically increasing"
             assert (cutpoints[1:] > cutpoints[:-1]).all().item(), err_msg
         self.predictors = predictors
         self.cutpoints = cutpoints
-        # (batch size, number of categories):
-        N, K = (len(predictors), len(cutpoints) + 1)
+        p_shape = predictors.shape + (len(cutpoints) + 1,)
+        cutpoints = cutpoints.reshape(predictors.ndim * (1,) + (-1,))
+        predictors = predictors.reshape(predictors.shape + (1,))
         # calculate cumulative probability for each sample
-        q = torch.sigmoid(cutpoints.reshape(1, -1) - predictors.reshape(-1, 1))
+        q = torch.sigmoid(cutpoints - predictors)
         # turn cumulative probabilities into probability mass of categories
-        p = torch.zeros((N, K))
-        p[:, 0] = q[:, 0]
-        p[:, 1:-1] = (q - torch.roll(q, 1, dims=1))[:, 1:]
-        p[:, -1] = 1 - q[:, -1]
+        p = torch.zeros(p_shape)
+        p[..., 0] = q[..., 0]
+        p[..., 1:-1] = (q - torch.roll(q, 1, dims=-1))[..., 1:]
+        p[..., -1] = 1 - q[..., -1]
         super(OrderedLogistic, self).__init__(p)
