@@ -2,6 +2,7 @@
 
 import math
 from os.path import exists
+import pickle
 
 import numpy as np
 from scipy import sparse
@@ -85,13 +86,16 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
         R_ss = torch.randn(num_cells, 2).cuda()
         return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size)
 
+    ref = 'scRef_MIDDLE_LAYER_Subsampled4000.RDS'
+    #ref = 'scRefSubsampled4000_filtered.RDS'
+
     if exists(data_dir + "slideseq_MOp_cropped.common_genes.h5ad") and \
-       exists(data_dir + "scRefSubsampled4000_filtered.RDS.common_genes.h5ad"):
+       exists(data_dir + ref + '.common_genes.h5ad'):
         adata_ss = scvi.data.read_h5ad(data_dir + "slideseq_MOp_cropped.common_genes.h5ad")
-        adata_ref = scvi.data.read_h5ad(data_dir + "scRefSubsampled4000_filtered.RDS.common_genes.h5ad")
+        adata_ref = scvi.data.read_h5ad(data_dir + ref + '.common_genes.h5ad')
     else:
         adata_ss = scvi.data.read_h5ad(data_dir + "slideseq_MOp_cropped.h5ad")
-        adata_ref = scvi.data.read_h5ad(data_dir + "scRefSubsampled4000_filtered.RDS.h5ad")
+        adata_ref = scvi.data.read_h5ad(data_dir + ref + '.h5ad')
 
         # reduce to common gene set
         common_genes = list(set(adata_ref.var.index.values).intersection(set(adata_ss.var.index.values)))
@@ -102,13 +106,13 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
         adata_ref.raw = adata_ref
 
         adata_ss.write(data_dir + "slideseq_MOp_cropped.common_genes.h5ad", compression='gzip')
-        adata_ref.write(data_dir + "scRefSubsampled4000_filtered.RDS.common_genes.h5ad", compression='gzip')
+        adata_ref.write(data_dir + ref + '.common_genes.h5ad', compression='gzip')
 
     # filter out non-variable genes using reference data
     adata_filter = adata_ref.copy()
     sc.pp.normalize_per_cell(adata_filter, counts_per_cell_after=1e4)
     sc.pp.log1p(adata_filter)
-    sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=0.1)
+    sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=1.0)
     highly_variable_genes = adata_filter.var["highly_variable"]
     print("highly_variable_genes",np.sum(highly_variable_genes))
 
@@ -120,9 +124,17 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
     R_ss = np.stack([adata_ss.obs.x.values, adata_ss.obs.y.values], axis=-1)
     R_ss = torch.from_numpy(R_ss).float().cuda()
 
-    good_ss_cells = (X_ss.sum(-1) > 50)
+    good_ss_cells = (X_ss.sum(-1) >= 50)
     X_ss, R_ss = X_ss[good_ss_cells], R_ss[good_ss_cells]
+
+    retained_ss_cells = adata_ss.obs.index[good_ss_cells.data.cpu().numpy()].tolist()
+    f = open('retained_ss_cells.pkl', 'wb')
+    pickle.dump(retained_ss_cells, f)
+    f.close()
+
+    num_classes = np.unique(adata_ref.obs["liger_ident_coarse"].values).shape[0]
+    print("num_classes", num_classes)
 
     #return X_ref, Y_ref, X_ss, R_ss
 
-    return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size)
+    return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size, num_classes=num_classes)

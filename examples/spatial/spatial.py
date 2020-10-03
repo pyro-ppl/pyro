@@ -90,9 +90,9 @@ class Z2LEncoder(nn.Module):
 
 # used in parameterizing q(z1 | z2, y)
 class Z1Encoder(nn.Module):
-    def __init__(self, num_labels, z1_dim, z2_dim, hidden_dims):
+    def __init__(self, num_classes, z1_dim, z2_dim, hidden_dims):
         super().__init__()
-        dims = [num_labels + z2_dim] + hidden_dims + [2 * z1_dim]
+        dims = [num_classes + z2_dim] + hidden_dims + [2 * z1_dim]
         self.fc = make_fc(dims)
 
     def forward(self, z2, y):
@@ -108,9 +108,9 @@ class Z1Encoder(nn.Module):
 
 # used in parameterizing q(y | z2)
 class Classifier(nn.Module):
-    def __init__(self, z2_dim, hidden_dims, num_labels):
+    def __init__(self, z2_dim, hidden_dims, num_classes):
         super().__init__()
-        dims = [z2_dim] + hidden_dims + [num_labels]
+        dims = [z2_dim] + hidden_dims + [num_classes]
         self.fc = make_fc(dims)
 
     def forward(self, x):
@@ -119,34 +119,38 @@ class Classifier(nn.Module):
 
 
 class Spatial(nn.Module):
-    def __init__(self, num_genes, num_labels, latent_dim=5, alpha=0.1, scale_factor=1.0):
+    def __init__(self, num_genes, num_classes, latent_dim=10, alpha=0.01, scale_factor=1.0):
         self.num_genes = num_genes
-        self.num_labels = num_labels
+        self.num_classes = num_classes
         self.latent_dim = latent_dim
         self.alpha = alpha
         self.scale_factor = scale_factor
 
         super().__init__()
 
-        self.z2_decoder = Z2Decoder(z1_dim=self.latent_dim, y_dim=self.num_labels,
-                                    z2_dim=self.latent_dim, hidden_dims=[50])
-        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[100], z2_dim=self.latent_dim)
-        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[100])
-        self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[50], num_labels=num_labels)
-        self.z1_encoder = Z1Encoder(num_labels=num_labels, z1_dim=self.latent_dim,
-                                    z2_dim=self.latent_dim, hidden_dims=[50])
+        self.z2_decoder = Z2Decoder(z1_dim=self.latent_dim, y_dim=self.num_classes,
+                                    z2_dim=self.latent_dim, hidden_dims=[100])
+        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[150], z2_dim=self.latent_dim)
+        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[150])
+        self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[100], num_classes=num_classes)
+        self.z1_encoder = Z1Encoder(num_classes=num_classes, z1_dim=self.latent_dim,
+                                    z2_dim=self.latent_dim, hidden_dims=[100])
 
         self.epsilon = 1.0e-6
+
+        pyro.param("inverse_dispersion_ref", 10.0 * torch.ones(self.num_genes).cuda(), constraint=constraints.positive)
+        pyro.param("inverse_dispersion_ss", 10.0 * torch.ones(self.num_genes).cuda(), constraint=constraints.positive)
 
     def model(self, l_mean, l_scale, x, s, y=None):
         pyro.module("spatial", self)
 
-        theta = pyro.param("inverse_dispersion_%d" % s[0, 0].item(), 10.0 * x.new_ones(self.num_genes),
+        dataset = "ss" if s[0, 0].item() == 0 else "ref"
+        theta = pyro.param("inverse_dispersion_" + dataset, 10.0 * x.new_ones(self.num_genes),
                            constraint=constraints.positive)
 
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
-            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)))
+            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_classes)))
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
@@ -187,38 +191,73 @@ def main(args):
 
     num_genes = dataloader.X_ref.size(-1)
 
-    spatial = Spatial(num_genes=num_genes, num_labels=76,
+    spatial = Spatial(num_genes=num_genes, num_classes=dataloader.num_classes,
                       scale_factor=1.0 / (args.batch_size * num_genes)).cuda()
 
-    optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 10.0})
+    adam = torch.optim.Adam(list(spatial.parameters()) + list(pyro.get_param_store()._params.values()),
+                            lr=args.learning_rate)
+    sched = torch.optim.lr_scheduler.MultiStepLR(adam, [20, 100], gamma=0.2)
+    #optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 10.0})
     guide = config_enumerate(spatial.guide, "parallel", expand=True)
-    svi = SVI(spatial.model, guide, optim, TraceEnum_ELBO())
+    #svi = SVI(spatial.model, guide, optim, TraceEnum_ELBO())
+    loss_fn = TraceEnum_ELBO().differentiable_loss
 
     for epoch in range(args.num_epochs):
         losses = []
 
         for x, yr, l_mean, l_scale, dataset in dataloader:
             if dataset == "ref":
-                loss = svi.step(l_mean, l_scale, x, x.new_ones(x.size(0), 1), yr)
+                loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_ones(x.size(0), 1), yr)
             elif dataset == "ss":
-                loss = svi.step(l_mean, l_scale, x, x.new_zeros(x.size(0), 1), None)
-            losses.append(loss)
+                loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_zeros(x.size(0), 1), None)
+            #if dataset == "ref":
+            #    loss = svi.step(l_mean, l_scale, x, x.new_ones(x.size(0), 1), yr)
+            #elif dataset == "ss":
+            #    loss = svi.step(l_mean, l_scale, x, x.new_zeros(x.size(0), 1), None)
+            loss.backward()
+            adam.step()
+            adam.zero_grad()
+            losses.append(loss.item())
+            #losses.append(loss)
+
+        sched.step()
 
         if epoch % 5 == 0:
-            theta0 = pyro.param("inverse_dispersion_0").data.cpu().mean()
-            theta1 = pyro.param("inverse_dispersion_r").data.cpu().mean()
-            print("theta0: %.3f %.3f %.3f   theta1: %.3f %.3f %.3f" % (
-                  theta0.mean().item, theta0.min().item, theta0.max().item,
-                  theta1.mean().item, theta1.min().item, theta1.max().item))
+            spatial.eval()
+
+            latent_rep = spatial.z2l_encoder(dataloader.X_ref, torch.ones(dataloader.num_ref_data, 1).cuda())[0]
+            y_hat = spatial.classifier(latent_rep).max(-1)[1]
+            accuracy = 100.0 * (y_hat == dataloader.Y_ref).sum().item() / float(y_hat.size(0))
+            print("Reference accuracy: %.4f" % accuracy)
+
+            latent_rep = spatial.z2l_encoder(dataloader.X_ss, torch.zeros(dataloader.num_ss_data, 1).cuda())[0]
+            y_hat = spatial.classifier(latent_rep).max(-1)[1]
+            print("SS label counts: ", np.bincount(y_hat.data.cpu().numpy()))
+
+            theta_ref = pyro.param("inverse_dispersion_ref").data.cpu()
+            theta_ss = pyro.param("inverse_dispersion_ss").data.cpu()
+            print("theta_ref: %.3f %.3f %.3f   theta_ss: %.3f %.3f %.3f" % (
+                  theta_ref.mean().item(), theta_ref.min().item(), theta_ref.max().item(),
+                  theta_ss.mean().item(), theta_ss.min().item(), theta_ss.max().item()))
+
+            spatial.train()
 
         print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
+
+    # Done training
+    spatial.eval()
+
+    latent_rep = spatial.z2l_encoder(dataloader.X_ss, torch.zeros(dataloader.num_ss_data, 1).cuda())[0]
+    y_logits = spatial.classifier(latent_rep)
+    y_probs = softmax(y_logits, dim=-1).data.cpu().numpy()
+    np.save("y_probs", y_probs)
 
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=500, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=200, type=int, help='number of training epochs')
     parser.add_argument('-bs', '--batch-size', default=256, type=int, help='mini-batch size')
     parser.add_argument('-lr', '--learning-rate', default=0.03, type=float, help='learning rate')
     args = parser.parse_args()
