@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import time
 
 import numpy as np
 from scipy.cluster.vq import kmeans2
@@ -62,7 +63,6 @@ class Z2Decoder(nn.Module):
         hidden = hidden.reshape(z1_y.shape[:-1] + hidden.shape[-1:])
         loc, scale = split_in_half(hidden)
         scale = softplus(scale / 20.0)
-        #scale = softplus(scale / 20.0 + 4.0)
         return loc, scale
 
 
@@ -125,15 +125,15 @@ class Classifier(nn.Module):
 
 
 class SpatialGP(gpytorch.models.ApproximateGP):
-    def __init__(self, num_inducing=64, num_classes=3, R_ss=None, name_prefix="spatial_gp"):
+    def __init__(self, num_inducing=100, num_classes=3, R_ss=None, beta=1.0, name_prefix="spatial_gp"):
         self.name_prefix = name_prefix
         self.num_classes = num_classes
+        self.beta = beta
 
         inducing_points = R_ss.clone().data.cpu().numpy()[torch.randperm(R_ss.size(0))[:num_inducing]]
         inducing_points = torch.tensor(kmeans2(R_ss.data.cpu().numpy(),
                                                inducing_points, minit='matrix')[0]).cuda()
-        inducing_points = inducing_points.expand(num_classes, num_inducing, 2)
-        # inducing_points = torch.randn(num_classes, num_inducing, 2)
+        inducing_points = inducing_points.expand(num_classes, num_inducing, 2).clone().detach()
 
         batch_shape = torch.Size([num_classes])
         variational_distribution = CholeskyVariationalDistribution(num_inducing_points=num_inducing,
@@ -154,13 +154,11 @@ class SpatialGP(gpytorch.models.ApproximateGP):
 
     def guide(self, x):
         with pyro.plate("classes_plate", self.num_classes):
-            pyro.sample(self.name_prefix + ".f(x)", self.pyro_guide(x))
+            pyro.sample(self.name_prefix + ".f(x)", self.pyro_guide(x, beta=self.beta))
 
     def model(self, x):
-        pyro.module(self.name_prefix, self)
-
         with pyro.plate("classes_plate", self.num_classes):
-            return pyro.sample(self.name_prefix + ".f(x)", self.pyro_model(x))
+            return pyro.sample(self.name_prefix + ".f(x)", self.pyro_model(x, beta=self.beta))
 
 
 
@@ -202,6 +200,7 @@ class Spatial(nn.Module):
                 y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_classes)))
             elif dataset == "ss":
                 logits = self.gp.model(r).transpose(-1, -2) if self.gp is not None else x.new_zeros(self.num_classes)
+                #print("logits", logits.mean(0).data.cpu().numpy())
                 y = pyro.sample("y", dist.OneHotCategorical(logits=logits))
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
@@ -246,7 +245,8 @@ def main(args):
 
     num_genes = dataloader.X_ref.size(-1)
 
-    spatial_gp = SpatialGP(num_classes=dataloader.num_classes, R_ss=dataloader.R_ss)
+    beta = float(args.batch_size) / float(dataloader.X_ss.size(0))
+    spatial_gp = SpatialGP(num_classes=dataloader.num_classes, R_ss=dataloader.R_ss, beta=beta)
     spatial = Spatial(num_genes, dataloader.num_classes, spatial_gp,
                       scale_factor=1.0 / (args.batch_size * num_genes)).cuda()
 
@@ -258,11 +258,12 @@ def main(args):
     #svi = SVI(spatial.model, guide, optim, TraceEnum_ELBO())
     loss_fn = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss
 
+    ts = [time.time()]
+
     for epoch in range(args.num_epochs):
         losses = []
 
         for x, yr, l_mean, l_scale, dataset in dataloader:
-            print("dataset", dataset)
             if dataset == "ref":
                 loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_ones(x.size(0), 1), y=yr)
             elif dataset == "ss":
@@ -271,12 +272,15 @@ def main(args):
             #    loss = svi.step(l_mean, l_scale, x, x.new_ones(x.size(0), 1), yr)
             #elif dataset == "ss":
             #    loss = svi.step(l_mean, l_scale, x, x.new_zeros(x.size(0), 1), None)
+            #losses.append(loss)
             loss.backward()
             adam.step()
             adam.zero_grad()
             losses.append(loss.item())
-            #losses.append(loss)
+            spatial.eval()
+            spatial.train()
 
+        ts.append(time.time())
         sched.step()
 
         if epoch % 5 == 0:
@@ -299,7 +303,8 @@ def main(args):
 
             spatial.train()
 
-        print("[Epoch %04d]  Loss: %.4f" % (epoch, np.mean(losses)))
+        dt = 0.0 if epoch == 0 else ts[-1] - ts[-2]
+        print("[Epoch %04d]  Loss: %.5f     [dt: %.3f]" % (epoch, np.mean(losses), dt))
 
     # Done training
     spatial.eval()
@@ -315,8 +320,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
     parser.add_argument('-n', '--num-epochs', default=240, type=int, help='number of training epochs')
-    parser.add_argument('-bs', '--batch-size', default=256, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.0001, type=float, help='learning rate')
+    parser.add_argument('-bs', '--batch-size', default=150, type=int, help='mini-batch size')
+    parser.add_argument('-lr', '--learning-rate', default=0.0003, type=float, help='learning rate')
     args = parser.parse_args()
 
     main(args)
