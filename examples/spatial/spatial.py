@@ -4,11 +4,17 @@
 import argparse
 
 import numpy as np
+from scipy.cluster.vq import kmeans2
 
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
 from torch.nn.functional import softplus, softmax
+
+import gpytorch
+from gpytorch.variational import VariationalStrategy, CholeskyVariationalDistribution
+from gpytorch.means import ConstantMean
+from gpytorch.kernels import ScaleKernel, MaternKernel
 
 import pyro
 import pyro.distributions as dist
@@ -27,7 +33,7 @@ def make_fc(dims):
     layers = []
     for in_dim, out_dim in zip(dims, dims[1:]):
         layers.append(nn.Linear(in_dim, out_dim))
-        layers.append(nn.BatchNorm1d(out_dim))
+        #layers.append(nn.BatchNorm1d(out_dim))
         layers.append(nn.ReLU())
     return nn.Sequential(*layers[:-1])
 
@@ -118,8 +124,48 @@ class Classifier(nn.Module):
         return logits
 
 
+class SpatialGP(gpytorch.models.ApproximateGP):
+    def __init__(self, num_inducing=64, num_classes=3, R_ss=None, name_prefix="spatial_gp"):
+        self.name_prefix = name_prefix
+        self.num_classes = num_classes
+
+        inducing_points = R_ss.clone().data.cpu().numpy()[torch.randperm(R_ss.size(0))[:num_inducing]]
+        inducing_points = torch.tensor(kmeans2(R_ss.data.cpu().numpy(),
+                                               inducing_points, minit='matrix')[0]).cuda()
+        inducing_points = inducing_points.expand(num_classes, num_inducing, 2)
+        # inducing_points = torch.randn(num_classes, num_inducing, 2)
+
+        batch_shape = torch.Size([num_classes])
+        variational_distribution = CholeskyVariationalDistribution(num_inducing_points=num_inducing,
+                                                                   batch_shape=batch_shape)
+        variational_strategy = VariationalStrategy(self, inducing_points, variational_distribution,
+                                                   learn_inducing_locations=True)
+
+        super().__init__(variational_strategy)
+
+        self.mean_module = ConstantMean(batch_shape=batch_shape)
+        self.covar_module = ScaleKernel(MaternKernel(batch_shape=batch_shape, ard_num_dims=2),
+                                                     batch_shape=batch_shape, ard_num_dims=None)
+
+    def forward(self, x):
+        mean = self.mean_module(x)
+        covar = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean, covar)
+
+    def guide(self, x):
+        with pyro.plate("classes_plate", self.num_classes):
+            pyro.sample(self.name_prefix + ".f(x)", self.pyro_guide(x))
+
+    def model(self, x):
+        pyro.module(self.name_prefix, self)
+
+        with pyro.plate("classes_plate", self.num_classes):
+            return pyro.sample(self.name_prefix + ".f(x)", self.pyro_model(x))
+
+
+
 class Spatial(nn.Module):
-    def __init__(self, num_genes, num_classes, latent_dim=10, alpha=0.01, scale_factor=1.0):
+    def __init__(self, num_genes, num_classes, spatial_gp, latent_dim=10, alpha=0.01, scale_factor=1.0):
         self.num_genes = num_genes
         self.num_classes = num_classes
         self.latent_dim = latent_dim
@@ -135,22 +181,28 @@ class Spatial(nn.Module):
         self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[100], num_classes=num_classes)
         self.z1_encoder = Z1Encoder(num_classes=num_classes, z1_dim=self.latent_dim,
                                     z2_dim=self.latent_dim, hidden_dims=[100])
+        self.gp = spatial_gp
 
         self.epsilon = 1.0e-6
 
         pyro.param("inverse_dispersion_ref", 10.0 * torch.ones(self.num_genes).cuda(), constraint=constraints.positive)
         pyro.param("inverse_dispersion_ss", 10.0 * torch.ones(self.num_genes).cuda(), constraint=constraints.positive)
 
-    def model(self, l_mean, l_scale, x, s, y=None):
+    def model(self, l_mean, l_scale, x, s, y=None, r=None):
         pyro.module("spatial", self)
 
         dataset = "ss" if s[0, 0].item() == 0 else "ref"
-        theta = pyro.param("inverse_dispersion_" + dataset, 10.0 * x.new_ones(self.num_genes),
-                           constraint=constraints.positive)
+        theta = pyro.param("inverse_dispersion_" + dataset) #, 10.0 * x.new_ones(self.num_genes),
+                           #constraint=constraints.positive)
 
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
-            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_classes)))
+
+            if dataset == "ref":
+                y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_classes)))
+            elif dataset == "ss":
+                logits = self.gp.model(r).transpose(-1, -2) if self.gp is not None else x.new_zeros(self.num_classes)
+                y = pyro.sample("y", dist.OneHotCategorical(logits=logits))
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
@@ -164,11 +216,14 @@ class Spatial(nn.Module):
             x_dist = dist.NegativeBinomial(total_count=theta, logits=nb_logits)
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
-    def guide(self, l_mean, l_scale, x, s, y=None):
+    def guide(self, l_mean, l_scale, x, s, y=None, r=None):
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z2_loc, z2_scale, l_loc, l_scale = self.z2l_encoder(x, s)
             pyro.sample("l", dist.LogNormal(l_loc + l_mean, l_scale).to_event(1))
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
+
+            if r is not None:
+                self.gp.guide(r)
 
             y_logits = self.classifier(z2)
             y_dist = dist.OneHotCategorical(logits=y_logits)
@@ -191,25 +246,27 @@ def main(args):
 
     num_genes = dataloader.X_ref.size(-1)
 
-    spatial = Spatial(num_genes=num_genes, num_classes=dataloader.num_classes,
+    spatial_gp = SpatialGP(num_classes=dataloader.num_classes, R_ss=dataloader.R_ss)
+    spatial = Spatial(num_genes, dataloader.num_classes, spatial_gp,
                       scale_factor=1.0 / (args.batch_size * num_genes)).cuda()
 
     adam = torch.optim.Adam(list(spatial.parameters()) + list(pyro.get_param_store()._params.values()),
                             lr=args.learning_rate)
-    sched = torch.optim.lr_scheduler.MultiStepLR(adam, [20, 100], gamma=0.2)
+    sched = torch.optim.lr_scheduler.MultiStepLR(adam, [120], gamma=0.1)
     #optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 10.0})
     guide = config_enumerate(spatial.guide, "parallel", expand=True)
     #svi = SVI(spatial.model, guide, optim, TraceEnum_ELBO())
-    loss_fn = TraceEnum_ELBO().differentiable_loss
+    loss_fn = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss
 
     for epoch in range(args.num_epochs):
         losses = []
 
         for x, yr, l_mean, l_scale, dataset in dataloader:
+            print("dataset", dataset)
             if dataset == "ref":
-                loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_ones(x.size(0), 1), yr)
+                loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_ones(x.size(0), 1), y=yr)
             elif dataset == "ss":
-                loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_zeros(x.size(0), 1), None)
+                loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_zeros(x.size(0), 1), r=yr)
             #if dataset == "ref":
             #    loss = svi.step(l_mean, l_scale, x, x.new_ones(x.size(0), 1), yr)
             #elif dataset == "ss":
@@ -257,9 +314,9 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=200, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=240, type=int, help='number of training epochs')
     parser.add_argument('-bs', '--batch-size', default=256, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.03, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=0.0001, type=float, help='learning rate')
     args = parser.parse_args()
 
     main(args)

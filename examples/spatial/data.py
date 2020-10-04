@@ -84,7 +84,7 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
         X_ss = torch.distributions.Poisson(rate=10.0).sample(sample_shape=(num_cells, num_genes)).cuda()
         Y_ref = torch.zeros(num_cells).long().cuda()
         R_ss = torch.randn(num_cells, 2).cuda()
-        return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size)
+        return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size, num_classes=3)
 
     ref = 'scRef_MIDDLE_LAYER_Subsampled4000.RDS'
     #ref = 'scRefSubsampled4000_filtered.RDS'
@@ -112,7 +112,7 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
     adata_filter = adata_ref.copy()
     sc.pp.normalize_per_cell(adata_filter, counts_per_cell_after=1e4)
     sc.pp.log1p(adata_filter)
-    sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=1.0)
+    sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=0.5)
     highly_variable_genes = adata_filter.var["highly_variable"]
     print("highly_variable_genes",np.sum(highly_variable_genes))
 
