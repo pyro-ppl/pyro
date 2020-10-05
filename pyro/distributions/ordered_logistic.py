@@ -27,14 +27,12 @@ class OrderedLogistic(Categorical):
         given category. Must be 1-dimensional and monotonically increasing.
     """
 
-    support = constraints.nonnegative_integer
     arg_constraints = {
         "predictors": constraints.real,
         "cutpoints": constraints.real_vector,
     }
-    has_rsample = False
 
-    def __init__(self, predictors, cutpoints):
+    def __init__(self, predictors, cutpoints, validate_args=None):
         assert cutpoints.ndim == 1, "cutpoints must be 1d vector"
         assert predictors.ndim >= 1, "predictors must have at least 1 dimension"
         assert len(cutpoints) > 0
@@ -54,4 +52,4 @@ class OrderedLogistic(Categorical):
         p[..., 0] = q[..., 0]
         p[..., 1:-1] = (q - torch.roll(q, 1, dims=-1))[..., 1:]
         p[..., -1] = 1 - q[..., -1]
-        super(OrderedLogistic, self).__init__(p)
+        super(OrderedLogistic, self).__init__(p, validate_args=validate_args)
