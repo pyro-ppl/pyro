@@ -709,3 +709,8 @@ spline_coupling
 sylvester
 ---------
 .. autofunction:: pyro.distributions.transforms.sylvester
+
+
+Constraints
+~~~~~~~~~~~
+.. automodule:: pyro.distributions.constraints

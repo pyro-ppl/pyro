@@ -64,4 +64,25 @@ __all__ = [
 ]
 
 __all__.extend(torch_constraints)
+__all__ = sorted(set(__all__))
 del torch_constraints
+
+
+# Create sphinx documentation.
+__doc__ = """
+    Pyro's constraints library extends
+    :mod:`torch.distributions.constraints`.
+"""
+__doc__ += "\n".join([
+    """
+    {}
+    ----------------------------------------------------------------
+    {}
+    """.format(
+        _name,
+        "alias of :class:`torch.distributions.constraints.{}`".format(_name)
+        if globals()[_name].__module__.startswith("torch") else
+        ".. autoclass:: {}".format(_name)
+    )
+    for _name in sorted(__all__)
+])
