@@ -1,5 +1,5 @@
 import torch
-from torch.distributions import constraints
+from pyro.distributions import constraints
 from pyro.distributions.torch import Categorical
 
 
@@ -29,17 +29,10 @@ class OrderedLogistic(Categorical):
 
     arg_constraints = {
         "predictors": constraints.real,
-        "cutpoints": constraints.real_vector,
+        "cutpoints": constraints.ordered_vector,
     }
 
     def __init__(self, predictors, cutpoints, validate_args=None):
-        assert cutpoints.ndim == 1, "cutpoints must be 1d vector"
-        assert predictors.ndim >= 1, "predictors must have at least 1 dimension"
-        assert len(cutpoints) > 0
-        assert predictors.shape[-1] > 0
-        if len(cutpoints) > 1:
-            err_msg = "cutpoints must be monotonically increasing"
-            assert (cutpoints[1:] > cutpoints[:-1]).all().item(), err_msg
         self.predictors = predictors
         self.cutpoints = cutpoints
         p_shape = predictors.shape + (len(cutpoints) + 1,)
