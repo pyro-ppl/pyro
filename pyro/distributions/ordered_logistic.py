@@ -24,7 +24,9 @@ class OrderedLogistic(Categorical):
         be the same shape as ``predictors``.
     :param Tensor cutpoints: A tensor of cutpoints that are used to determine the
         cumulative probability of each entry in ``predictors`` belonging to a
-        given category. Must be 1-dimensional and monotonically increasing.
+        given category. The first `cutpoints.ndim-1` dimensions must be
+        broadcastable to ``predictors``, and the -1 dimension is monotonically
+        increasing.
     """
 
     arg_constraints = {
@@ -35,11 +37,10 @@ class OrderedLogistic(Categorical):
     def __init__(self, predictors, cutpoints, validate_args=None):
         self.predictors = predictors
         self.cutpoints = cutpoints
-        p_shape = predictors.shape + (len(cutpoints) + 1,)
-        cutpoints = cutpoints.reshape(predictors.ndim * (1,) + (-1,))
-        predictors = predictors.reshape(predictors.shape + (1,))
-        # calculate cumulative probability for each sample
-        q = torch.sigmoid(cutpoints - predictors)
+        # get shape for input to Categorical dist
+        p_shape = predictors.shape + (cutpoints.shape[-1] + 1,)
+        # calculate cumulative probability for each predictor
+        q = torch.sigmoid(cutpoints - predictors.view(predictors.shape + (1,)))
         # turn cumulative probabilities into probability mass of categories
         p = torch.zeros(p_shape)
         p[..., 0] = q[..., 0]

@@ -10,21 +10,33 @@ from pyro.distributions import OrderedLogistic
 def test_sample(n_cutpoints, pred_shape):
     predictors = torch.randn(pred_shape)
     cutpoints = torch.sort(torch.randn(n_cutpoints)).values
-    dist = OrderedLogistic(predictors, cutpoints)
+    dist = OrderedLogistic(predictors, cutpoints, validate_args=True)
     sample = dist.sample([100])
     assert sample.shape[1:] == pred_shape
     assert sample.min().item() >= 0
     assert sample.max().item() <= n_cutpoints
 
 
-def test_assertions():
-    good_predictors = torch.randn(5)
-    good_cutpoints = torch.sort(torch.randn(5)).values
-    for pred, cp in [
-        (good_predictors, tt([])),
-        (good_predictors, tt([[1, 2], [3, 4]])),
-        (good_predictors, tt([1, 2, 3, 4, 0])),
-        (tt([]), good_cutpoints),
-    ]:
-        with pytest.raises(AssertionError):
-            OrderedLogistic(pred, cp)
+def test_constraints():
+    predictors = torch.randn(5)
+    for cp in (
+        tt([1, 2, 3, 4, 0]),
+        tt([1, 2, 4, 3, 5]),
+        tt([1, 2, 3, 4, 4]),
+    ):
+        with pytest.raises(ValueError):
+            OrderedLogistic(predictors, cp)
+
+
+def test_broadcast():
+    predictors = torch.randn(2, 3, 4)
+    for cp in (
+        torch.arange(5),
+        torch.arange(5).view(1, -1),
+        torch.stack(4*[torch.arange(5)]),
+        torch.sort(torch.randn(3, 4, 5), dim=-1).values,
+        torch.sort(torch.randn(predictors.shape + (100,)), dim=-1).values,
+    ):
+        dist = OrderedLogistic(predictors, cp, validate_args=True)
+        assert dist.batch_shape == predictors.shape
+        assert dist.sample().shape == predictors.shape
