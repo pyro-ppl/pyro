@@ -6,7 +6,7 @@ from torch.distributions import constraints
 
 from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import broadcast_shape
+from pyro.distributions.util import broadcast_shape, torch_jit_script_if_tracing
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
                                      matrix_and_mvn_to_gamma_gaussian)
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
@@ -14,7 +14,7 @@ from pyro.ops.special import safe_log
 from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
 
-@torch.jit.script
+@torch_jit_script_if_tracing
 def _linear_integrate(init, trans, shift):
     """
     Integrate the inhomogeneous linear shifterence equation::
@@ -47,7 +47,7 @@ def _logmatmulexp(x, y):
 
 # TODO re-enable jitting once _SafeLog is supported by the jit.
 # See https://discuss.pytorch.org/t/does-torch-jit-script-support-custom-operators/65759/4
-# @torch.jit.script
+# @torch_jit_script_if_tracing
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::
