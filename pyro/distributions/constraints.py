@@ -63,7 +63,7 @@ class _OrderedVector(Constraint):
 
     def check(self, value):
         if value.ndim == 0:
-            return torch.tensor(False)
+            return torch.tensor(False, device=value.device)
         elif value.shape[-1] == 1:
             return torch.ones_like(value[..., 0], dtype=bool)
         else:
