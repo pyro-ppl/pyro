@@ -37,11 +37,10 @@ class OrderedLogistic(Categorical):
     def __init__(self, predictor, cutpoints, validate_args=None):
         self.predictor = predictor
         self.cutpoints = cutpoints
-        # get shape for input to Categorical dist
-        p_shape = predictor.shape + (cutpoints.shape[-1] + 1,)
         # calculate cumulative probability for each predictor
         q = torch.sigmoid(cutpoints - predictor.view(predictor.shape + (1,)))
         # turn cumulative probabilities into probability mass of categories
+        p_shape = q.shape[:-1] + (q.shape[-1] + 1,)
         p = torch.zeros(p_shape, dtype=q.dtype, device=q.device)
         p[..., 0] = q[..., 0]
         p[..., 1:-1] = (q - torch.roll(q, 1, dims=-1))[..., 1:]

@@ -30,6 +30,7 @@ def test_constraints():
 
 def test_broadcast():
     predictor = torch.randn(2, 3, 4)
+    # test scenario where `cutpoints.ndim <= predictor.ndim + 1`
     for cp in (
         torch.arange(5),
         torch.arange(5).view(1, -1),
@@ -40,3 +41,10 @@ def test_broadcast():
         dist = OrderedLogistic(predictor, cp, validate_args=True)
         assert dist.batch_shape == predictor.shape
         assert dist.sample().shape == predictor.shape
+
+    # test scenario where `cutpoints.ndim > predictor.ndim + 1`
+    # interpretation is broadcasting batches of cutpoints
+    cp = torch.sort(torch.randn(10, 2, 3, 4, 5), dim=-1).values
+    dist = OrderedLogistic(predictor, cp, validate_args=True)
+    assert dist.batch_shape == (10,) + predictor.shape
+    assert dist.sample().shape == (10,) + predictor.shape
