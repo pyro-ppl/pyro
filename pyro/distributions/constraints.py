@@ -65,9 +65,9 @@ class _OrderedVector(Constraint):
         if value.ndim == 0:
             return torch.tensor(False)
         elif value.shape[-1] == 1:
-            return torch.ones_like(value[...,0], dtype=bool)
+            return torch.ones_like(value[..., 0], dtype=bool)
         else:
-            return torch.all(value[...,1:] > value[...,:-1], dim=-1)
+            return torch.all(value[..., 1:] > value[..., :-1], dim=-1)
 
 
 corr_cholesky_constraint = _CorrCholesky()
