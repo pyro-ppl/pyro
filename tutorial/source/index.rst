@@ -44,6 +44,7 @@ Welcome to Pyro Examples and Tutorials!
    ss-vae
    stable
    cvae
+   prodlda
 
 .. toctree::
    :maxdepth: 2
