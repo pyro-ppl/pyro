@@ -38,19 +38,19 @@ class OrderedLogistic(Categorical):
         self.predictor = predictor
         self.cutpoints = cutpoints
         # calculate cumulative probability for each predictor
-        q = torch.sigmoid(cutpoints - predictor.view(predictor.shape + (1,)))
+        q = torch.sigmoid(cutpoints - predictor.unsqueeze(-1))
         # turn cumulative probabilities into probability mass of categories
         p_shape = q.shape[:-1] + (q.shape[-1] + 1,)
         p = torch.zeros(p_shape, dtype=q.dtype, device=q.device)
         p[..., 0] = q[..., 0]
-        p[..., 1:-1] = (q - torch.roll(q, 1, dims=-1))[..., 1:]
+        p[..., 1:-1] = q[..., 1:] - q[..., :-1]
         p[..., -1] = 1 - q[..., -1]
         super(OrderedLogistic, self).__init__(p, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         batch_shape = torch.Size(batch_shape)
         new = self._get_checked_instance(OrderedLogistic, _instance)
-        predictor = self.predictor.expand(batch_shape)
-        cutpoints = self.cutpoints.expand(batch_shape + (self.cutpoints.shape[-1],))
-        new.__init__(predictor, cutpoints)
+        new.predictor = self.predictor.expand(batch_shape)
+        new.cutpoints = self.cutpoints.expand(batch_shape + (self.cutpoints.shape[-1],))
+        super(OrderedLogistic, self).expand(batch_shape, new)
         return new
