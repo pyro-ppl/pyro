@@ -60,3 +60,18 @@ def test_expand():
     assert dist.event_shape == torch.Size(())
     sample = dist.sample([100])
     assert torch.all(sample <= 6).item()
+
+
+def test_autograd():
+    predictor = torch.randn(5, requires_grad=True)
+    cutpoints = torch.sort(torch.randn(3)).values
+    cutpoints.requires_grad = True
+    data = torch.tensor([0, 1, 2, 3, 0], dtype=float)
+
+    dist = OrderedLogistic(predictor, cutpoints, validate_args=True)
+    dist.log_prob(data).sum().backward()
+
+    assert predictor.grad is not None
+    assert torch.all(predictor.grad != 0).item()
+    assert cutpoints.grad is not None
+    assert torch.all(cutpoints.grad != 0).item()
