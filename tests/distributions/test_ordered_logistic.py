@@ -48,3 +48,15 @@ def test_broadcast():
     dist = OrderedLogistic(predictor, cp, validate_args=True)
     assert dist.batch_shape == (10,) + predictor.shape
     assert dist.sample().shape == (10,) + predictor.shape
+
+
+def test_expand():
+    predictor = torch.randn(4, 5)
+    cutpoints = torch.sort(torch.randn(5, 6)).values
+    dist = OrderedLogistic(predictor, cutpoints, validate_args=True)
+    new_batch_shape = (2, 3, 4, 5)
+    dist = dist.expand(new_batch_shape)
+    assert dist.batch_shape == torch.Size(new_batch_shape)
+    assert dist.event_shape == torch.Size(())
+    sample = dist.sample([100])
+    assert torch.all(sample <= 6).item()

@@ -46,3 +46,11 @@ class OrderedLogistic(Categorical):
         p[..., 1:-1] = (q - torch.roll(q, 1, dims=-1))[..., 1:]
         p[..., -1] = 1 - q[..., -1]
         super(OrderedLogistic, self).__init__(p, validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        batch_shape = torch.Size(batch_shape)
+        new = self._get_checked_instance(OrderedLogistic, _instance)
+        predictor = self.predictor.expand(batch_shape)
+        cutpoints = self.cutpoints.expand(batch_shape + (self.cutpoints.shape[-1],))
+        new.__init__(predictor, cutpoints)
+        return new
