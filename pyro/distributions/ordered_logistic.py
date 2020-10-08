@@ -52,5 +52,4 @@ class OrderedLogistic(Categorical):
         new = self._get_checked_instance(OrderedLogistic, _instance)
         new.predictor = self.predictor.expand(batch_shape)
         new.cutpoints = self.cutpoints.expand(batch_shape + (self.cutpoints.shape[-1],))
-        super(OrderedLogistic, self).expand(batch_shape, new)
-        return new
+        return super(OrderedLogistic, self).expand(batch_shape, new)
