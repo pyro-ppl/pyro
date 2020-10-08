@@ -2300,8 +2300,8 @@ def test_collapse_beta_binomial_plate():
 
 
 def test_ordered_logistic_plate():
-    N = 5 # num data points/batch size
-    K = 4 # num categories
+    N = 5  # num data points/batch size
+    K = 4  # num categories
     data = (K*torch.rand(N)).long().float()
 
     def model():
@@ -2312,7 +2312,6 @@ def test_ordered_logistic_plate():
         with pyro.plate("obs_plate", N):
             pyro.sample("obs", dist.OrderedLogistic(predictor, cutpoints), obs=data)
 
-    
     def guide():
         # parameters
         pred_mu = pyro.param("pred_mu", torch.zeros(N))
@@ -2322,5 +2321,5 @@ def test_ordered_logistic_plate():
         # sample
         pyro.sample("predictor", dist.Normal(pred_mu, pred_std).to_event(1))
         pyro.sample("cutpoints", dist.Normal(cp_mu, cp_std).to_event(1))
-        
+
     assert_ok(model, guide, Trace_ELBO())
