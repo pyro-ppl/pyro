@@ -17,7 +17,11 @@ try:
     from funsor.delta import Delta
     from funsor.terms import Funsor, Variable
 except ImportError:
-    pass
+    # Create fake types for singledispatch.
+    Contraction = type("Contraction", (), {})
+    Delta = type("Delta", (), {})
+    Funsor = type("Funsor", (), {})
+    Variable = type("Variable", (), {})
 
 
 @singledispatch
