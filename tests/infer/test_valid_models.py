@@ -2297,3 +2297,24 @@ def test_collapse_beta_binomial_plate():
         pyro.sample("c", dist.Gamma(a, b))
 
     assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.stage("funsor")
+def test_collapse_barrier():
+    pytest.importorskip("funsor")
+    data = torch.tensor([0., 1., 5., 5.])
+
+    def model():
+        with poutine.collapse():
+            z = pyro.sample("z_init", dist.Normal(0, 1))
+            for t, x in enumerate(data):
+                z = pyro.sample("z_{}".format(t), dist.Normal(z, 1))
+                pyro.sample("x_t{}".format(t), dist.Normal(z, 1), obs=x)
+                z = pyro.barrier(z)
+                z = torch.sigmoid(z)
+        return z
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, Trace_ELBO())
