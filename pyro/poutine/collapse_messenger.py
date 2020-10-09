@@ -128,7 +128,6 @@ class CollapseMessenger(TraceMessenger):
         self._block = False
 
         # Sample
-        assert sampled_vars, "DEBUG"
         if sampled_vars:
             samples = log_joint.sample(sampled_vars)
             deltas = _extract_deltas(samples)
