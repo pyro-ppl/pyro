@@ -30,12 +30,14 @@ from matplotlib.patches import Patch
 from data import get_data
 
 
-def make_fc(dims):
+def make_fc(dims, dropout=0.0):
     layers = []
     for in_dim, out_dim in zip(dims, dims[1:]):
         layers.append(nn.Linear(in_dim, out_dim))
         #layers.append(nn.BatchNorm1d(out_dim))
         layers.append(nn.ReLU())
+        #if dropout > 0.0:
+        #    layers.append(nn.Dropout(p=dropout))
     return nn.Sequential(*layers[:-1])
 
 
@@ -84,9 +86,10 @@ class Z2LEncoder(nn.Module):
     def __init__(self, num_genes, z2_dim, hidden_dims):
         super().__init__()
         dims = [1 + num_genes] + hidden_dims + [2 * z2_dim + 2]
-        self.fc = make_fc(dims)
+        self.fc = make_fc(dims, dropout=0.1)
 
     def forward(self, x, s):
+        x = torch.log(1.0 + x)
         x_s = torch.cat([x, s], dim=-1)
         h1, h2 = split_in_half(self.fc(x_s))
         z2_loc, z2_scale = h1[..., :-1], softplus(h2[..., :-1] / 20.0 - 2.0)
@@ -99,7 +102,7 @@ class Z1Encoder(nn.Module):
     def __init__(self, num_classes, z1_dim, z2_dim, hidden_dims):
         super().__init__()
         dims = [num_classes + z2_dim] + hidden_dims + [2 * z1_dim]
-        self.fc = make_fc(dims)
+        self.fc = make_fc(dims, dropout=0.1)
 
     def forward(self, z2, y):
         z2_y = broadcast_inputs([z2, y])
@@ -119,13 +122,15 @@ class Classifier(nn.Module):
         dims = [z2_dim] + hidden_dims + [num_classes]
         self.fc = make_fc(dims)
 
-    def forward(self, x):
-        logits = self.fc(x)
+    def forward(self, z2):
+        logits = self.fc(z2)
         return logits
 
 
 class SpatialGP(gpytorch.models.ApproximateGP):
     def __init__(self, num_inducing=100, num_classes=3, R_ss=None, beta=1.0, name_prefix="spatial_gp"):
+        print("Initialized SpatialGP with num_inducing=%d, num_classes=%d, beta=%.3f" % (num_inducing,
+               num_classes, beta))
         self.name_prefix = name_prefix
         self.num_classes = num_classes
         self.beta = beta
@@ -152,9 +157,13 @@ class SpatialGP(gpytorch.models.ApproximateGP):
         covar = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean, covar)
 
+    @torch.no_grad()
+    def qf(self, x):
+        return pyro.sample(self.name_prefix + ".f(x)", self.pyro_guide(x)).t()
+
     def guide(self, x):
         with pyro.plate("classes_plate", self.num_classes):
-            pyro.sample(self.name_prefix + ".f(x)", self.pyro_guide(x, beta=self.beta))
+            return pyro.sample(self.name_prefix + ".f(x)", self.pyro_guide(x, beta=self.beta))
 
     def model(self, x):
         with pyro.plate("classes_plate", self.num_classes):
@@ -170,6 +179,8 @@ class Spatial(nn.Module):
         self.alpha = alpha
         self.scale_factor = scale_factor
 
+        print("Initialized Spatial with num_genes=%d, num_classes=%d, latent_dim=%d" % (num_genes,
+               num_classes, latent_dim))
         super().__init__()
 
         self.z2_decoder = Z2Decoder(z1_dim=self.latent_dim, y_dim=self.num_classes,
@@ -198,10 +209,11 @@ class Spatial(nn.Module):
 
             if dataset == "ref":
                 y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_classes)))
-            elif dataset == "ss":
+            elif dataset == "ss" and r is not None:
                 logits = self.gp.model(r).transpose(-1, -2) if self.gp is not None else x.new_zeros(self.num_classes)
-                #print("logits", logits.mean(0).data.cpu().numpy())
                 y = pyro.sample("y", dist.OneHotCategorical(logits=logits))
+            elif dataset == "ss" and r is None:
+                y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_classes)))
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
@@ -228,12 +240,20 @@ class Spatial(nn.Module):
             y_dist = dist.OneHotCategorical(logits=y_logits)
             if y is None:
                 y = pyro.sample("y", y_dist)
-            else:
-                classification_loss = y_dist.log_prob(y)
-                pyro.factor("classification_loss", -self.alpha * classification_loss)
+            #else:
+            #    classification_loss = y_dist.log_prob(y)
+            #    pyro.factor("classification_loss", -self.alpha * classification_loss)
 
             z1_loc, z1_scale = self.z1_encoder(z2, y)
             pyro.sample("z1", dist.Normal(z1_loc, z1_scale).to_event(1))
+
+    def classifier_loss(self, x, s, y):
+        z2_loc, z2_scale = self.z2l_encoder(x, s)[:2]
+        z2 = torch.distributions.Normal(z2_loc, z2_scale).rsample()
+        y_logits = self.classifier(z2)
+        y_dist = dist.OneHotCategorical(logits=y_logits)
+        return -y_dist.log_prob(y).mean()
+
 
 
 def main(args):
@@ -246,11 +266,13 @@ def main(args):
     num_genes = dataloader.X_ref.size(-1)
 
     beta = float(args.batch_size) / float(dataloader.X_ss.size(0))
-    spatial_gp = SpatialGP(num_classes=dataloader.num_classes, R_ss=dataloader.R_ss, beta=beta)
+    spatial_gp = None # SpatialGP(num_classes=dataloader.num_classes, R_ss=dataloader.R_ss, beta=beta)
     spatial = Spatial(num_genes, dataloader.num_classes, spatial_gp,
                       scale_factor=1.0 / (args.batch_size * num_genes)).cuda()
 
     adam = torch.optim.Adam(list(spatial.parameters()) + list(pyro.get_param_store()._params.values()),
+                            lr=args.learning_rate)
+    adam2 = torch.optim.Adam(spatial.classifier.parameters(),
                             lr=args.learning_rate)
     sched = torch.optim.lr_scheduler.MultiStepLR(adam, [120], gamma=0.1)
     #optim = ClippedAdam({"lr": args.learning_rate, "clip_norm": 10.0})
@@ -267,12 +289,9 @@ def main(args):
             if dataset == "ref":
                 loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_ones(x.size(0), 1), y=yr)
             elif dataset == "ss":
+                if epoch < 500:
+                    yr = None
                 loss = loss_fn(spatial.model, guide, l_mean, l_scale, x, x.new_zeros(x.size(0), 1), r=yr)
-            #if dataset == "ref":
-            #    loss = svi.step(l_mean, l_scale, x, x.new_ones(x.size(0), 1), yr)
-            #elif dataset == "ss":
-            #    loss = svi.step(l_mean, l_scale, x, x.new_zeros(x.size(0), 1), None)
-            #losses.append(loss)
             loss.backward()
             adam.step()
             adam.zero_grad()
@@ -287,7 +306,13 @@ def main(args):
             spatial.eval()
 
             latent_rep = spatial.z2l_encoder(dataloader.X_ref, torch.ones(dataloader.num_ref_data, 1).cuda())[0]
-            y_hat = spatial.classifier(latent_rep).max(-1)[1]
+            logits = spatial.classifier(latent_rep)
+            y_hat = logits.max(-1)[1]
+            probs = torch.softmax(logits, dim=-1).max(-1)[0]
+            probs90 = (probs > 0.90).float().mean().item()
+            probs80 = (probs > 0.80).float().mean().item()
+            probs50 = (probs > 0.50).float().mean().item()
+            print("Reference probs90 probs80 probs50: %.4f %.4f %.4f" % (probs90, probs80, probs50))
             accuracy = 100.0 * (y_hat == dataloader.Y_ref).sum().item() / float(y_hat.size(0))
             print("Reference accuracy: %.4f" % accuracy)
 
@@ -301,10 +326,27 @@ def main(args):
                   theta_ref.mean().item(), theta_ref.min().item(), theta_ref.max().item(),
                   theta_ss.mean().item(), theta_ss.min().item(), theta_ss.max().item()))
 
-            spatial.train()
+            if 0:
+                log1 = spatial.gp.qf(dataloader.R_ss[0:2500])
+                log2 = spatial.gp.qf(dataloader.R_ss[2500:5000])
+                log3 = spatial.gp.qf(dataloader.R_ss[5000:7500])
+                logits = torch.cat([log1, log2, log3])
+                probs = torch.softmax(logits, dim=-1).mean(0)
+                print("probs", probs.data.cpu().numpy())
+
+        closses = []
+
+        for it in range(5):
+            for x, y, _, _, _ in dataloader.labeled_data():
+                loss = spatial.classifier_loss(x, x.new_ones(x.size(0), 1), y)
+                loss.backward()
+                adam2.step()
+                adam2.zero_grad()
+                if it == 4:
+                    closses.append(loss.item())
 
         dt = 0.0 if epoch == 0 else ts[-1] - ts[-2]
-        print("[Epoch %04d]  Loss: %.5f     [dt: %.3f]" % (epoch, np.mean(losses), dt))
+        print("[Epoch %04d]  Loss: %.5f   ClassLoss: %.5f    [dt: %.3f]" % (epoch, np.mean(losses), np.mean(closses), dt))
 
     # Done training
     spatial.eval()
@@ -320,8 +362,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
     parser.add_argument('-n', '--num-epochs', default=240, type=int, help='number of training epochs')
-    parser.add_argument('-bs', '--batch-size', default=150, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.0003, type=float, help='learning rate')
+    parser.add_argument('-bs', '--batch-size', default=256, type=int, help='mini-batch size')
+    parser.add_argument('-lr', '--learning-rate', default=0.001, type=float, help='learning rate')
     args = parser.parse_args()
 
     main(args)

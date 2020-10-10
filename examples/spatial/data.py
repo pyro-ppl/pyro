@@ -5,6 +5,7 @@ from os.path import exists
 import pickle
 
 import numpy as np
+import pandas as pd
 from scipy import sparse
 from scipy.sparse import csr_matrix
 
@@ -42,10 +43,14 @@ class BatchDataLoader(object):
     def __len__(self):
         return self.num_ref_batches + self.num_ss_batches
 
-    def _sample_batch_indices(self):
-        batch_order = torch.randperm(len(self)).tolist()
-        ref_idx = torch.randperm(self.num_ref_data)
-        ss_idx = torch.randperm(self.num_ss_data)
+    def _sample_batch_indices(self, include_unlabeled=True):
+        if include_unlabeled:
+            batch_order = torch.randperm(len(self)).tolist()
+            ref_idx = torch.randperm(self.num_ref_data)
+            ss_idx = torch.randperm(self.num_ss_data)
+        else:
+            batch_order = torch.randperm(self.num_ref_batches).tolist()
+            ref_idx = torch.randperm(self.num_ref_data)
 
         slices = []
 
@@ -54,10 +59,11 @@ class BatchDataLoader(object):
             if _slice.size(0) == self.batch_size:
                 slices.append((_slice, 'ref'))
 
-        for i in range(self.num_ss_batches):
-            _slice = ss_idx[i * self.batch_size: (i + 1) * self.batch_size]
-            if _slice.size(0) == self.batch_size:
-                slices.append((_slice, 'ss'))
+        if include_unlabeled:
+            for i in range(self.num_ss_batches):
+                _slice = ss_idx[i * self.batch_size: (i + 1) * self.batch_size]
+                if _slice.size(0) == self.batch_size:
+                    slices.append((_slice, 'ss'))
 
         return slices, batch_order
 
@@ -73,6 +79,16 @@ class BatchDataLoader(object):
             elif _slice[1] == 'ss':
                 yield self.X_ss[_slice[0]], self.R_ss[_slice[0]], \
                       self.l_mean_ss, self.l_scale_ss, "ss"
+
+    def labeled_data(self):
+        slices, batch_order = self._sample_batch_indices(include_unlabeled=False)
+
+        for i in range(len(batch_order)):
+            _slice = slices[batch_order[i]]
+            assert _slice[1] == 'ref'
+            yield self.X_ref[_slice[0]], \
+                  nn.functional.one_hot(self.Y_ref[_slice[0]], num_classes=self.num_classes), \
+                  self.l_mean_ref, self.l_scale_ref, "ref"
 
 
 def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
@@ -108,29 +124,57 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
         adata_ss.write(data_dir + "slideseq_MOp_cropped.common_genes.h5ad", compression='gzip')
         adata_ref.write(data_dir + ref + '.common_genes.h5ad', compression='gzip')
 
+    #return adata_ref, adata_ss
+
     # filter out non-variable genes using reference data
-    adata_filter = adata_ref.copy()
-    sc.pp.normalize_per_cell(adata_filter, counts_per_cell_after=1e4)
-    sc.pp.log1p(adata_filter)
-    sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=0.5)
-    highly_variable_genes = adata_filter.var["highly_variable"]
-    print("highly_variable_genes",np.sum(highly_variable_genes))
+    #adata_filter = adata_ref.copy()
+    #sc.pp.normalize_per_cell(adata_filter, counts_per_cell_after=1e4)
+    #sc.pp.log1p(adata_filter)
+    #sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=0.5)
+    #highly_variable_genes = adata_filter.var["highly_variable"]
+    #print("adata_ref.obs.index",adata_ref.obs.index.shape)
+    #print("highly_variable_genes",highly_variable_genes.shape)
+    #print("highly_variable_genes",np.sum(highly_variable_genes))
+    #hvgenes = adata_ref.var.features[highly_variable_genes].tolist()
+
+    highly_variable_genes = set(pd.read_csv('middle_diffexp_genes.txt').values[:, 0].tolist())
+    highly_variable_genes = np.array([adata_ref.var.features[i] in highly_variable_genes for i in range(adata_ref.var.features.shape[0])])
+    print("highly_variable_genes.shape", highly_variable_genes.shape, np.sum(highly_variable_genes))
+
+    barcodes = pd.read_csv('MIDDLE_LAYER_filtered_barcodes.txt').values[:, 0].tolist()
+    print("len(barcodes)", len(barcodes))
+
+    print("adata_ref.X.shape before", adata_ref.X.shape)
+    adata_ref = adata_ref[:, highly_variable_genes]
+    adata_ref.raw = adata_ss
+    print("adata_ref.X.shape after", adata_ref.X.shape)
 
     # convert to dense torch tensors
-    X_ref = torch.from_numpy(sparse.csr_matrix.todense(adata_ref.X[:, highly_variable_genes])).float().cuda()
+    X_ref = torch.from_numpy(sparse.csr_matrix.todense(adata_ref.X)).float().cuda()
     Y_ref = torch.from_numpy(adata_ref.obs["liger_ident_coarse"].values).long().cuda()
 
-    X_ss = torch.from_numpy(sparse.csr_matrix.todense(adata_ss.X[:, highly_variable_genes])).float().cuda()
+    print("adata_ss.X.shape before", adata_ss.X.shape)
+    adata_ss = adata_ss[barcodes, :]
+    adata_ss = adata_ss[:, highly_variable_genes]
+    adata_ss.raw = adata_ss
+    print("adata_ss.X.shape after", adata_ss.X.shape)
+
+    X_ss = torch.from_numpy(sparse.csr_matrix.todense(adata_ss.X)).float().cuda()
     R_ss = np.stack([adata_ss.obs.x.values, adata_ss.obs.y.values], axis=-1)
     R_ss = torch.from_numpy(R_ss).float().cuda()
 
-    good_ss_cells = (X_ss.sum(-1) >= 50)
-    X_ss, R_ss = X_ss[good_ss_cells], R_ss[good_ss_cells]
+    Xr = X_ref.sum(0).topk(50)[1].data.cpu().tolist()
+    Xs = X_ss.sum(0).topk(50)[1].data.cpu().tolist()
+    common_genes = list(set(Xr).intersection(set(Xs)))
+    print("common_genes", len(common_genes), common_genes)
 
-    retained_ss_cells = adata_ss.obs.index[good_ss_cells.data.cpu().numpy()].tolist()
-    f = open('retained_ss_cells.pkl', 'wb')
-    pickle.dump(retained_ss_cells, f)
-    f.close()
+    #good_ss_cells = (X_ss.sum(-1) >= 50)
+    #X_ss, R_ss = X_ss[good_ss_cells], R_ss[good_ss_cells]
+
+    #retained_ss_cells = adata_ss.obs.index[good_ss_cells.data.cpu().numpy()].tolist()
+    #f = open('retained_ss_cells.pkl', 'wb')
+    #pickle.dump(retained_ss_cells, f)
+    #f.close()
 
     num_classes = np.unique(adata_ref.obs["liger_ident_coarse"].values).shape[0]
     print("num_classes", num_classes)
