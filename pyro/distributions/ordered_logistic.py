@@ -35,16 +35,18 @@ class OrderedLogistic(Categorical):
     }
 
     def __init__(self, predictor, cutpoints, validate_args=None):
-        self.predictor = predictor
-        self.cutpoints = cutpoints
         # calculate cumulative probability for each predictor
         q = torch.sigmoid(cutpoints - predictor.unsqueeze(-1))
+        # expand parameters to match batch shape
+        self.predictor = predictor.expand(q.shape[:-1])
+        self.cutpoints = cutpoints.expand(q.shape)
         # turn cumulative probabilities into probability mass of categories
         p_shape = q.shape[:-1] + (q.shape[-1] + 1,)
         p = torch.zeros(p_shape, dtype=q.dtype, device=q.device)
         p[..., 0] = q[..., 0]
         p[..., 1:-1] = q[..., 1:] - q[..., :-1]
         p[..., -1] = 1 - q[..., -1]
+        # pass probability mass to Categorical constructor
         super(OrderedLogistic, self).__init__(p, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
