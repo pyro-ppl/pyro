@@ -253,6 +253,13 @@ OMTMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+OrderedLogistic
+-------------------------------
+.. autoclass:: pyro.distributions.OrderedLogistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RelaxedBernoulliStraightThrough
 -------------------------------
 .. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough

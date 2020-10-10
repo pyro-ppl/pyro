@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
 from torch.distributions.constraints import *  # noqa F403
 from torch.distributions.constraints import Constraint
 from torch.distributions.constraints import __all__ as torch_constraints
@@ -54,13 +55,30 @@ class _CorrCholesky(Constraint):
         return lower_cholesky.check(value) & unit_norm_row
 
 
+class _OrderedVector(Constraint):
+    """
+    Constrains to a real-valued tensor where the elements are monotonically
+    increasing along the `event_shape` dimension.
+    """
+
+    def check(self, value):
+        if value.ndim == 0:
+            return torch.tensor(False, device=value.device)
+        elif value.shape[-1] == 1:
+            return torch.ones_like(value[..., 0], dtype=bool)
+        else:
+            return torch.all(value[..., 1:] > value[..., :-1], dim=-1)
+
+
 corr_cholesky_constraint = _CorrCholesky()
 integer = _Integer()
+ordered_vector = _OrderedVector()
 
 __all__ = [
     'IndependentConstraint',
     'corr_cholesky_constraint',
     'integer',
+    'ordered_vector',
 ]
 
 __all__.extend(torch_constraints)
