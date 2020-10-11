@@ -30,6 +30,7 @@ from pyro.distributions.transforms.matrix_exponential import (ConditionalMatrixE
 from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
                                                                  conditional_neural_autoregressive,
                                                                  neural_autoregressive)
+from pyro.distributions.transforms.ordered import OrderedTransform, ordered
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
@@ -96,6 +97,7 @@ __all__ = [
     'LowerCholeskyAffine',
     'MatrixExponential',
     'NeuralAutoregressive',
+    'OrderedTransform',
     'Permute',
     'Planar',
     'Polynomial',
@@ -124,6 +126,7 @@ __all__ = [
     'leaky_relu',
     'matrix_exponential',
     'neural_autoregressive',
+    'ordered',
     'permute',
     'planar',
     'polynomial',
