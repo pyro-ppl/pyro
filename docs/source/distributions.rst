@@ -382,6 +382,13 @@ LowerCholeskyAffine
     :undoc-members:
     :show-inheritance:
 
+OrderedTransform
+----------------
+.. autoclass:: pyro.distributions.transforms.OrderedTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
@@ -684,6 +691,10 @@ matrix_exponential
 neural_autoregressive
 ---------------------
 .. autofunction:: pyro.distributions.transforms.neural_autoregressive
+
+ordered
+-------
+.. autofunction:: pyro.distributions.transforms.ordered
 
 permute
 -------
