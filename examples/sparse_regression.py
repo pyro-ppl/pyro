@@ -139,7 +139,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
         return active_dims.data.numpy(), []
 
     # prep for computation of posterior statistics for quadratic weights
-    left_dims, right_dims = torch.ones(M, M).triu(1).nonzero().t()
+    left_dims, right_dims = torch.ones(M, M).triu(1).nonzero(as_tuple=False).t()
     left_dims, right_dims = active_dims[left_dims], active_dims[right_dims]
 
     probe = torch.zeros(left_dims.size(0), 4, P, dtype=X.dtype, device=X.device)
@@ -166,7 +166,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
     std = ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1)).sum(-2).clamp(min=0.0).sqrt()
 
     active_quad_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)) & (mu.abs() > 1.0e-4).bool()
-    active_quad_dims = active_quad_dims.nonzero()
+    active_quad_dims = active_quad_dims.nonzero(as_tuple=False)
 
     active_quadratic_dims = np.stack([left_dims[active_quad_dims].data.numpy().flatten(),
                                       right_dims[active_quad_dims].data.numpy().flatten()], axis=1)
