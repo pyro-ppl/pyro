@@ -51,12 +51,12 @@ def count_accuracy(X, true_counts, air, batch_size):
         inferred_counts_m = count_vec_to_mat(inferred_counts, 3)
         counts += torch.mm(true_counts_m.t(), inferred_counts_m)
         error_ind = 1 - (true_counts_batch == inferred_counts)
-        error_ix = error_ind.nonzero().squeeze()
+        error_ix = error_ind.nonzero(as_tuple=False).squeeze()
         error_latents.append(latents_to_tensor((z_where, z_pres)).index_select(0, error_ix))
         error_indicators.append(error_ind)
 
     acc = counts.diag().sum().float() / X.size(0)
-    error_indices = torch.cat(error_indicators).nonzero().squeeze()
+    error_indices = torch.cat(error_indicators).nonzero(as_tuple=False).squeeze()
     if X.is_cuda:
         error_indices = error_indices.cuda()
     return acc, counts, torch.cat(error_latents), error_indices

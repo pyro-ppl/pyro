@@ -128,7 +128,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
 
     # select active dimensions (those that are non-zero with sufficient statistical significance)
     active_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)).bool()
-    active_dims = active_dims.nonzero().squeeze(-1)
+    active_dims = active_dims.nonzero(as_tuple=False).squeeze(-1)
 
     print("Identified the following active dimensions:", active_dims.data.numpy().flatten())
     print("Mean estimate for active singleton weights:\n", mu[active_dims].data.numpy())
