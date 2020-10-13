@@ -110,6 +110,21 @@ CPU_EXAMPLES = [
     'vae/vae.py --num-epochs=1',
     'vae/vae_comparison.py --num-epochs=1',
     'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1'
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2  -rp',
 ]
 
 CUDA_EXAMPLES = [
