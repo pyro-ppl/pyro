@@ -36,6 +36,7 @@ Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
 Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
 import argparse
+import functools
 import logging
 import sys
 
@@ -44,14 +45,18 @@ import torch.nn as nn
 from torch.distributions import constraints
 
 import dmm.polyphonic_data_loader as poly
-import pyro
-import pyro.distributions as dist
-from pyro import poutine
 from pyro.infer.autoguide import AutoDelta
-from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.ops.indexing import Vindex
-from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
+
+try:
+    import pyro.contrib.funsor
+except ImportError:
+    pass
+
+from pyroapi import distributions as dist
+from pyroapi import handlers, infer, optim, pyro, pyro_backend
+
 
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.DEBUG)
 
@@ -83,7 +88,7 @@ log.addHandler(debug_handler)
 def model_0(sequences, lengths, args, batch_size=None, include_prior=True):
     assert not torch._C._get_tracing_state()
     num_sequences, max_length, data_dim = sequences.shape
-    with poutine.mask(mask=include_prior):
+    with handlers.mask(mask=include_prior):
         # Our prior on transition probabilities will be:
         # stay in the same state with 90% probability; uniformly jump to another
         # state with 10% probability.
@@ -170,7 +175,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-    with poutine.mask(mask=include_prior):
+    with handlers.mask(mask=include_prior):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .to_event(1))
@@ -192,7 +197,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
         # structure ends up being faster since each program structure would
         # need to trigger a new jit compile stage.
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
-            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+            with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
                 with tones_plate:
@@ -248,7 +253,7 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-    with poutine.mask(mask=include_prior):
+    with handlers.mask(mask=include_prior):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .to_event(1))
@@ -261,7 +266,7 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
         lengths = lengths[batch]
         x, y = 0, 0
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
-            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+            with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
                 # Note the broadcasting tricks here: to index probs_y on tensors x and y,
@@ -293,7 +298,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
-    with poutine.mask(mask=include_prior):
+    with handlers.mask(mask=include_prior):
         probs_w = pyro.sample("probs_w",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
                                   .to_event(1))
@@ -309,7 +314,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
         lengths = lengths[batch]
         w, x = 0, 0
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
-            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+            with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
                                 infer={"enumerate": "parallel"})
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
@@ -339,7 +344,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
-    with poutine.mask(mask=include_prior):
+    with handlers.mask(mask=include_prior):
         probs_w = pyro.sample("probs_w",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
                                   .to_event(1))
@@ -359,7 +364,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         # thus ensuring that the x sample sites have correct distribution shape.
         w = x = torch.tensor(0, dtype=torch.long)
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
-            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+            with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
                                 infer={"enumerate": "parallel"})
                 x = pyro.sample("x_{}".format(t),
@@ -419,7 +424,7 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
         tones_generator = TonesGenerator(args, data_dim)
     pyro.module("tones_generator", tones_generator)
 
-    with poutine.mask(mask=include_prior):
+    with handlers.mask(mask=include_prior):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .to_event(1))
@@ -428,7 +433,7 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
         x = 0
         y = torch.zeros(data_dim)
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
-            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+            with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
                 # Note that since each tone depends on all tones at a previous time step
@@ -488,7 +493,7 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
         # we need to pass the argument `history=2' to `pyro.markov()`
         # since our model is now 2-markov
         for t in pyro.markov(range(lengths.max()), history=2):
-            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+            with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 probs_x_t = Vindex(probs_x)[x_prev, x_curr]
                 x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs_x_t),
                                                      infer={"enumerate": "parallel"})
@@ -514,7 +519,7 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
         tones_generator = TonesGenerator(args, data_dim)
     pyro.module("tones_generator", tones_generator)
 
-    with poutine.mask(mask=include_prior):
+    with handlers.mask(mask=include_prior):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .to_event(1))
@@ -569,42 +574,48 @@ def main(args):
     # out the hidden state x. This is accomplished via an automatic guide that
     # learns point estimates of all of our conditional probability tables,
     # named probs_*.
-    guide = AutoDelta(poutine.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_")))
+    guide = AutoDelta(handlers.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_")))
 
     # To help debug our tensor shapes, let's print the shape of each site's
     # distribution, value, and log_prob tensor. Note this information is
     # automatically printed on most errors inside SVI.
     if args.print_shapes:
         first_available_dim = -2 if model is model_0 else -3
-        guide_trace = poutine.trace(guide).get_trace(
+        guide_trace = handlers.trace(guide).get_trace(
             sequences, lengths, args=args, batch_size=args.batch_size)
-        model_trace = poutine.trace(
-            poutine.replay(poutine.enum(model, first_available_dim), guide_trace)).get_trace(
+        model_trace = handlers.trace(
+            handlers.replay(handlers.enum(model, first_available_dim), guide_trace)).get_trace(
             sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info(model_trace.format_shapes())
 
+    # Appease the PyTorch JIT
+    model_name = model.__name__
+    model = functools.partial(model, args=args)
+    guide = functools.partial(guide, args=args)
+
     # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
     # All of our models have two plates: "data" and "tones".
-    optim = Adam({'lr': args.learning_rate})
+    optimizer = optim.Adam({'lr': args.learning_rate})
     if args.tmc:
-        if args.jit:
+        if args.jit and not args.funsor:
             raise NotImplementedError("jit support not yet added for TraceTMC_ELBO")
-        elbo = TraceTMC_ELBO(max_plate_nesting=1 if model is model_0 else 2)
-        tmc_model = poutine.infer_config(
+        Elbo = infer.JitTraceTMC_ELBO if args.jit else infer.TraceTMC_ELBO
+        elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2)
+        tmc_model = handlers.infer_config(
             model,
             lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
-        svi = SVI(tmc_model, guide, optim, elbo)
+        svi = infer.SVI(tmc_model, guide, optimizer, elbo)
     else:
-        Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
+        Elbo = infer.JitTraceEnum_ELBO if args.jit else infer.TraceEnum_ELBO
         elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
                     strict_enumeration_warning=(model is not model_7),
                     jit_options={"time_compilation": args.time_compilation})
-        svi = SVI(model, guide, optim, elbo)
+        svi = infer.SVI(model, guide, optimizer, elbo)
 
     # We'll train on small minibatches.
     logging.info('Step\tLoss')
     for step in range(args.num_steps):
-        loss = svi.step(sequences, lengths, args=args, batch_size=args.batch_size)
+        loss = svi.step(sequences, lengths, batch_size=args.batch_size)
         logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
 
     if args.jit and args.time_compilation:
@@ -612,7 +623,7 @@ def main(args):
 
     # We evaluate on the entire training dataset,
     # excluding the prior term so our results are comparable across models.
-    train_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    train_loss = elbo.loss(model, guide, sequences, lengths, batch_size=sequences.shape[0], include_prior=False)
     logging.info('training loss = {}'.format(train_loss / num_observations))
 
     # Finally we evaluate on the test dataset.
@@ -627,14 +638,14 @@ def main(args):
     # note that since we removed unseen notes above (to make the problem a bit easier and for
     # numerical stability) this test loss may not be directly comparable to numbers
     # reported on this dataset elsewhere.
-    test_loss = elbo.loss(model, guide, sequences, lengths, args=args, include_prior=False)
+    test_loss = elbo.loss(model, guide, sequences, lengths, batch_size=sequences.shape[0], include_prior=False)
     logging.info('test loss = {}'.format(test_loss / num_observations))
 
     # We expect models with higher capacity to perform better,
     # but eventually overfit to the training set.
     capacity = sum(value.reshape(-1).size(0)
                    for value in pyro.get_param_store().values())
-    logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
+    logging.info('{} capacity = {} parameters'.format(model_name, capacity))
 
 
 if __name__ == '__main__':
@@ -661,5 +672,15 @@ if __name__ == '__main__':
                              "except to see that TMC makes Monte Carlo gradient estimation feasible "
                              "even with very large numbers of non-reparametrized variables.")
     parser.add_argument('--tmc-num-samples', default=10, type=int)
+    parser.add_argument('--funsor', action='store_true')
     args = parser.parse_args()
-    main(args)
+
+    if args.funsor:
+        import funsor
+        funsor.set_backend("torch")
+        PYRO_BACKEND = "contrib.funsor"
+    else:
+        PYRO_BACKEND = "pyro"
+
+    with ignore_jit_warnings(), pyro_backend(PYRO_BACKEND):
+        main(args)
