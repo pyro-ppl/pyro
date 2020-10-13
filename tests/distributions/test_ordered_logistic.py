@@ -1,8 +1,13 @@
 import pytest
 import torch
 import torch.tensor as tt
+from torch.autograd.functional import jacobian
 
-from pyro.distributions import OrderedLogistic
+from pyro.distributions import OrderedLogistic, Normal
+from pyro.distributions.transforms import OrderedTransform
+
+
+# Tests for the OrderedLogistic distribution
 
 
 @pytest.mark.parametrize("n_cutpoints", [1, 5, 100])
@@ -75,3 +80,48 @@ def test_autograd():
     assert torch.all(predictor.grad != 0).item()
     assert cutpoints.grad is not None
     assert torch.all(cutpoints.grad != 0).item()
+
+
+# Tests for the OrderedTransform
+
+
+@pytest.mark.parametrize("batch_shape", [(), (1,), (5,), (5, 5), (1, 5), (5, 1)])
+@pytest.mark.parametrize("event_shape", [(1,), (5,), (100,)])
+def test_transform_bijection(batch_shape, event_shape):
+    tf = OrderedTransform()
+    assert tf.inv.inv is tf
+    shape = torch.Size(batch_shape + event_shape)
+    sample = Normal(0, 1).expand(shape).sample()
+    tf_sample = tf(sample)
+    inv_tf_sample = tf.inv(tf_sample)
+    assert torch.allclose(sample, inv_tf_sample)
+
+
+def cjald(func, X):
+    """cjald = Computes Jacobian Along Last Dimension
+    Recursively splits tensor ``X`` along its leading dimensions until we are
+    left with a vector, computes the jacobian of this vector under the
+    transformation ``func``, then stitches all the results back together using
+    ``torch.stack``.
+    """
+    assert X.ndim >= 1
+    if X.ndim == 1:
+        return jacobian(func, X)
+    else:
+        return torch.stack([cjald(func, X[i]) for i in range(X.shape[0])], dim=0)
+
+
+@pytest.mark.parametrize("batch_shape", [(), (1,), (5,), (5, 5), (1, 5), (5, 1)])
+@pytest.mark.parametrize("event_shape", [(1,), (5,), (100,)])
+def test_transform_log_abs_det(batch_shape, event_shape):
+    tf = OrderedTransform()
+    shape = torch.Size(batch_shape + event_shape)
+    x = torch.randn(shape, requires_grad=True)
+    y = tf(x)
+    log_det = tf.log_abs_det_jacobian(x, y)
+    assert log_det.shape == batch_shape
+    # The "log_abs_det_jacobian" above is more like a batch of log abs det
+    # jacobians, each computed along the last (event) dimension. I'll introduce
+    # the `cjald` function, defined above, to help compute this.
+    log_det_actual = cjald(tf, x).det().abs().log()
+    assert torch.allclose(log_det, log_det_actual)
