@@ -9,7 +9,7 @@ from subprocess import check_call
 import pytest
 import torch
 
-from tests.common import EXAMPLES_DIR, requires_cuda, requires_horovod, xfail_param
+from tests.common import EXAMPLES_DIR, requires_cuda, requires_funsor, requires_horovod, xfail_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -208,6 +208,25 @@ HOROVOD_EXAMPLES = [
                  marks=[requires_cuda]),
 ]
 
+FUNSOR_EXAMPLES = [
+    'hmm.py --num-steps=1 --truncate=10 --model=0',
+    'hmm.py --num-steps=1 --truncate=10 --model=1',
+    'hmm.py --num-steps=1 --truncate=10 --model=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=3',
+    'hmm.py --num-steps=1 --truncate=10 --model=4',
+    'hmm.py --num-steps=1 --truncate=10 --model=5',
+    'hmm.py --num-steps=1 --truncate=10 --model=6',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization',
+    'hmm.py --num-steps=1 --truncate=10 --model=0 --tmc --tmc-num-samples=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --raftery-parameterization',
+]
+
 
 def test_coverage():
     cpu_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in CPU_EXAMPLES)
@@ -270,3 +289,13 @@ def test_horovod(np, example):
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
     check_call(horovodrun.split() + [sys.executable, filename] + args)
+
+
+@requires_funsor
+@pytest.mark.parametrize('example', FUNSOR_EXAMPLES)
+def test_funsor(example):
+    logger.info('Running:\npython examples/{}'.format(example))
+    example = example.split()
+    filename, args = example[0], example[1:]
+    filename = os.path.join(EXAMPLES_DIR, filename)
+    check_call([sys.executable, filename] + args)
