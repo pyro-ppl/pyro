@@ -32,7 +32,6 @@ from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
-from util import get_logger
 
 
 class Emitter(nn.Module):
