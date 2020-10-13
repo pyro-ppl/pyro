@@ -304,7 +304,7 @@ def main(args):
                          int(N_train_data % args.mini_batch_size > 0))
 
     logging.info("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
-        (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
+                 (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
     # how often we do validation/test evaluation during training
     val_test_frequency = 50
@@ -443,7 +443,7 @@ def main(args):
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
         logging.info("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
-            (epoch, epoch_nll / N_train_time_slices, epoch_time))
+                     (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
         # do evaluation on test and validation data and report results
         if val_test_frequency > 0 and epoch > 0 and epoch % val_test_frequency == 0:
