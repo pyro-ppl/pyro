@@ -174,13 +174,6 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     adata.obs['seed_colors'] = seed_colors
     adata.obs['seed_marker_sizes'] = seed_sizes
 
-    # filter out non-variable genes
-    adata_filter = adata.copy()
-    sc.pp.normalize_per_cell(adata_filter, counts_per_cell_after=1e4)
-    sc.pp.log1p(adata_filter)
-    sc.pp.highly_variable_genes(adata_filter, min_mean=0.0125, max_mean=3.0, min_disp=0.5)
-    highly_variable_genes = adata_filter.var["highly_variable"]
-
     Y = torch.from_numpy(seed_labels).long()
     X = torch.from_numpy(sparse.csr_matrix.todense(adata.X)).float()
 
@@ -200,7 +193,7 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
 
     num_genes = X.size(-1)
 
-    adata = adata[idx.data.cpu().numpy(), highly_variable_genes]
+    adata = adata[idx.data.cpu().numpy()]
     adata.raw = adata
 
     return BatchDataLoader(X[idx], Y[idx], batch_size), num_genes, l_mean, l_scale, adata
