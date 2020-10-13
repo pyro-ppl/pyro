@@ -51,7 +51,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
-import dmm.polyphonic_data_loader as poly
+from pyro.contrib.examples import polyphonic_data_loader as poly
 from pyro.infer.autoguide import AutoDelta
 from pyro.ops.indexing import Vindex
 from pyro.util import ignore_jit_warnings
