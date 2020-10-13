@@ -36,6 +36,7 @@ Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
 Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
 import argparse
+import functools
 import logging
 import sys
 
@@ -587,6 +588,11 @@ def main(args):
             sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info(model_trace.format_shapes())
 
+    # Appease the PyTorch JIT
+    model_name = model.__name__
+    model = functools.partial(model, args=args)
+    guide = functools.partial(guide, args=args)
+
     # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
     # All of our models have two plates: "data" and "tones".
     optimizer = optim.Adam({'lr': args.learning_rate})
@@ -609,7 +615,7 @@ def main(args):
     # We'll train on small minibatches.
     logging.info('Step\tLoss')
     for step in range(args.num_steps):
-        loss = svi.step(sequences, lengths, args=args, batch_size=args.batch_size)
+        loss = svi.step(sequences, lengths, batch_size=args.batch_size)
         logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
 
     if args.jit and args.time_compilation:
@@ -617,7 +623,7 @@ def main(args):
 
     # We evaluate on the entire training dataset,
     # excluding the prior term so our results are comparable across models.
-    train_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    train_loss = elbo.loss(model, guide, sequences, lengths, batch_size=sequences.shape[0], include_prior=False)
     logging.info('training loss = {}'.format(train_loss / num_observations))
 
     # Finally we evaluate on the test dataset.
@@ -632,14 +638,14 @@ def main(args):
     # note that since we removed unseen notes above (to make the problem a bit easier and for
     # numerical stability) this test loss may not be directly comparable to numbers
     # reported on this dataset elsewhere.
-    test_loss = elbo.loss(model, guide, sequences, lengths, args=args, include_prior=False)
+    test_loss = elbo.loss(model, guide, sequences, lengths, batch_size=sequences.shape[0], include_prior=False)
     logging.info('test loss = {}'.format(test_loss / num_observations))
 
     # We expect models with higher capacity to perform better,
     # but eventually overfit to the training set.
     capacity = sum(value.reshape(-1).size(0)
                    for value in pyro.get_param_store().values())
-    logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
+    logging.info('{} capacity = {} parameters'.format(model_name, capacity))
 
 
 if __name__ == '__main__':
@@ -676,5 +682,5 @@ if __name__ == '__main__':
     else:
         PYRO_BACKEND = "pyro"
 
-    with pyro_backend(PYRO_BACKEND):
+    with ignore_jit_warnings(), pyro_backend(PYRO_BACKEND):
         main(args)
