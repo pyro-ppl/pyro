@@ -84,6 +84,7 @@ jobs:
           script:
               - pip install -e .[funsor]
               - pytest -vs --cov=pyro --cov-config .coveragerc --stage funsor --durations 10
+              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10 -k funsor
 
 after_success:
           - coveralls
