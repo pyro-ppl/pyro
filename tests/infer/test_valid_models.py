@@ -1963,6 +1963,42 @@ def test_enum_recycling_plate():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=2))
 
 
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+])
+def test_factor_in_model_ok(Elbo):
+
+    def model():
+        pyro.factor("f", torch.tensor(0.))
+
+    def guide():
+        pass
+
+    elbo = Elbo(strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)
+
+
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+])
+def test_factor_in_guide_ok(Elbo):
+
+    def model():
+        pass
+
+    def guide():
+        pyro.factor("f", torch.tensor(0.))
+
+    elbo = Elbo(strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)
+
+
 @pytest.mark.parametrize('history', [0, 1, 2, 3])
 def test_markov_history(history):
 
