@@ -36,15 +36,12 @@ import os
 import numpy as np
 import torch
 
+import pyro
+import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.infer.autoguide import AutoDiagonalNormal
-
-try:
-    import pyro.contrib.funsor
-except ImportError:
-    pass
-
-from pyroapi import distributions as dist
-from pyroapi import handlers, infer, optim, pyro, pyro_backend
+from pyro.infer import SVI, TraceEnum_ELBO, TraceTMC_ELBO
+from pyro.optim import Adam
 
 
 """
@@ -66,7 +63,7 @@ def model_1(capture_history, sex):
         # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).bool()
         for t in pyro.markov(range(T)):
-            with handlers.mask(mask=first_capture_mask):
+            with poutine.mask(mask=first_capture_mask):
                 mu_z_t = first_capture_mask.float() * phi * z + (1 - first_capture_mask.float())
                 # we use parallel enumeration to exactly sum out
                 # the discrete states z_t.
@@ -97,7 +94,7 @@ def model_2(capture_history, sex):
         # phi_t is shared across all N individuals
         phi_t = pyro.sample("phi_{}".format(t), dist.Uniform(0.0, 1.0)) if t > 0 \
                 else 1.0
-        with animals_plate, handlers.mask(mask=first_capture_mask):
+        with animals_plate, poutine.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -135,7 +132,7 @@ def model_3(capture_history, sex):
                                   dist.Normal(phi_logit_mean, phi_sigma)) if t > 0 \
                       else torch.tensor(0.0)
         phi_t = torch.sigmoid(phi_logit_t)
-        with animals_plate, handlers.mask(mask=first_capture_mask):
+        with animals_plate, poutine.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -169,7 +166,7 @@ def model_4(capture_history, sex):
         # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).bool()
         for t in pyro.markov(range(T)):
-            with handlers.mask(mask=first_capture_mask):
+            with poutine.mask(mask=first_capture_mask):
                 mu_z_t = first_capture_mask.float() * phi * z + (1 - first_capture_mask.float())
                 # we use parallel enumeration to exactly sum out
                 # the discrete states z_t.
@@ -210,7 +207,7 @@ def model_5(capture_history, sex):
         phi_gamma_t = pyro.sample("phi_gamma_{}".format(t), dist.Normal(0.0, 10.0)) if t > 0 \
                       else 0.0
         phi_t = torch.sigmoid(phi_beta + phi_gamma_t)
-        with animals_plate, handlers.mask(mask=first_capture_mask):
+        with animals_plate, poutine.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -257,7 +254,7 @@ def main(args):
 
     model = models[args.model]
 
-    # we use handlers.block to only expose the continuous latent variables
+    # we use poutine.block to only expose the continuous latent variables
     # in the models to AutoDiagonalNormal (all of which begin with 'phi'
     # or 'rho')
     def expose_fn(msg):
@@ -265,20 +262,20 @@ def main(args):
 
     # we use a mean field diagonal normal variational distributions (i.e. guide)
     # for the continuous latent variables.
-    guide = AutoDiagonalNormal(handlers.block(model, expose_fn=expose_fn))
+    guide = AutoDiagonalNormal(poutine.block(model, expose_fn=expose_fn))
 
     # since we enumerate the discrete random variables,
-    # we need to use infer.TraceEnum_ELBO or infer.TraceTMC_ELBO.
-    optimizer = optim.Adam({'lr': args.learning_rate})
+    # we need to use TraceEnum_ELBO or TraceTMC_ELBO.
+    optim = Adam({'lr': args.learning_rate})
     if args.tmc:
-        elbo = infer.TraceTMC_ELBO(max_plate_nesting=1)
-        tmc_model = handlers.infer_config(
+        elbo = TraceTMC_ELBO(max_plate_nesting=1)
+        tmc_model = poutine.infer_config(
             model,
-            lambda msg: {"num_samples": args.tmc_num_samples, "tmc": "diagonal", "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
-        svi = infer.SVI(tmc_model, guide, optimizer, elbo)
+            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
+        svi = SVI(tmc_model, guide, optim, elbo)
     else:
-        elbo = infer.TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
-        svi = infer.SVI(model, guide, optimizer, elbo)
+        elbo = TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
+        svi = SVI(model, guide, optim, elbo)
 
     losses = []
 
@@ -291,8 +288,8 @@ def main(args):
             print("[iteration %03d] loss: %.3f" % (step, np.mean(losses[-20:])))
 
     # evaluate final trained model
-    elbo_eval = infer.TraceEnum_ELBO(max_plate_nesting=1, num_particles=2000, vectorize_particles=True)
-    svi_eval = infer.SVI(model, guide, optimizer, elbo_eval)
+    elbo_eval = TraceEnum_ELBO(max_plate_nesting=1, num_particles=2000, vectorize_particles=True)
+    svi_eval = SVI(model, guide, optim, elbo_eval)
     print("Final loss: %.4f" % svi_eval.evaluate_loss(capture_history, sex))
 
 
@@ -309,15 +306,5 @@ if __name__ == '__main__':
                              "except to see that TMC makes Monte Carlo gradient estimation feasible "
                              "even with very large numbers of non-reparametrized variables.")
     parser.add_argument("--tmc-num-samples", default=10, type=int)
-    parser.add_argument("--funsor", action="store_true")
     args = parser.parse_args()
-
-    if args.funsor:
-        import funsor
-        funsor.set_backend("torch")
-        PYRO_BACKEND = "contrib.funsor"
-    else:
-        PYRO_BACKEND = "pyro"
-
-    with pyro_backend(PYRO_BACKEND):
-        main(args)
+    main(args)
