@@ -113,7 +113,7 @@ class SpanningTree(TorchDistribution):
         # See https://en.wikipedia.org/wiki/Kirchhoff%27s_theorem
         V = self.num_vertices
         grid = make_complete_graph(V)
-        shift = self.edge_logits.max()
+        shift = self.edge_logits.detach().max()
         edge_probs = (self.edge_logits - shift).exp()
         adjacency = torch.zeros(V, V, dtype=edge_probs.dtype)
         adjacency[grid[0], grid[1]] = edge_probs
@@ -385,7 +385,7 @@ def _sample_tree_approx(edge_logits):
         mask = (c1 != c2)
         valid_logits = edge_logits[mask]
         probs = (valid_logits - valid_logits.max()).exp()
-        k = mask.nonzero()[torch.multinomial(probs, 1)[0]]
+        k = mask.nonzero(as_tuple=False)[torch.multinomial(probs, 1)[0]]
         components[grid[:, k]] = 1
         edge_ids[e] = k
 

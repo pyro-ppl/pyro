@@ -122,6 +122,18 @@ def detach(obj):
     return copy.deepcopy(obj, memo)
 
 
+# Import a lazy jit.script decorator only if available.
+torch_jit_script_if_tracing = getattr(
+    torch.jit,
+    "script_if_tracing",
+    getattr(
+        torch.jit,
+        "_script_if_tracing",
+        torch.jit.script
+    ),
+)
+
+
 def is_identically_zero(x):
     """
     Check if argument is exactly the number zero. True for the number zero;

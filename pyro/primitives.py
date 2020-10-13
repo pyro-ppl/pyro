@@ -4,7 +4,7 @@
 import copy
 import warnings
 from collections import OrderedDict
-from contextlib import contextmanager, ExitStack
+from contextlib import ExitStack, contextmanager
 from inspect import isclass
 
 import pyro.distributions as dist
@@ -160,13 +160,13 @@ def subsample(data, event_dim):
     either the ``subsample`` or ``subsample_size`` kwarg. For example the
     following are equivalent::
 
-        # Version 1. using pyro.subsample()
+        # Version 1. using indexing
         def model(data):
             with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()) as ind:
                 data = data[ind]
                 # ...
 
-        # Version 2. using indexing
+        # Version 2. using pyro.subsample()
         def model(data):
             with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()):
                 data = pyro.subsample(data, event_dim=0)
@@ -414,6 +414,16 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
     return _fn
+
+
+@effectful(type="barrier")
+def barrier(data):
+    """
+    EXPERIMENTAL Ensures all values in ``data`` are ground, rather than lazy
+    funsor values. This is useful in combination with
+    :func:`pyro.poutine.collapse`.
+    """
+    return data
 
 
 def enable_validation(is_validate=True):

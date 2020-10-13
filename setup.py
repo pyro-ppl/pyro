@@ -60,13 +60,15 @@ EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'graphviz>=0.8',
     'matplotlib>=1.3',
-    'torchvision>=0.6.0',
+    'torchvision>=0.7.0',
     'visdom>=0.1.4',
-    # 'biopython>=1.54',  # requires Python 3.6
     'pandas',
     'scikit-learn',
     'seaborn',
     'wget',
+    # 'biopython>=1.54',  # Requires Python 3.6
+    # 'scanpy>=1.4',  # Requires HDF5
+    # 'scvi>=0.6',  # Requires loopy and other fragile packages
 ]
 
 setup(
@@ -87,7 +89,7 @@ setup(
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'pyro-api>=0.1.1',
-        'torch>=1.5.0',
+        'torch>=1.6.0',
         'tqdm>=4.36',
     ],
     extras_require={
@@ -118,7 +120,7 @@ setup(
         'horovod': ['horovod[pytorch]>=0.19'],
         'funsor': [
             # TODO update to release branch (currently using a recent commit on master)
-            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@6410b19b645e447da81ba4b00f5818c9ec95981f',
+            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@e3eba15e2ad7d9db5dd5622c247e0aaa7e81e7dd',
         ],
     },
     python_requires='>=3.5',
@@ -130,7 +132,6 @@ setup(
         'Intended Audience :: Science/Research',
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],

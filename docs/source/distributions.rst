@@ -253,6 +253,13 @@ OMTMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+OrderedLogistic
+-------------------------------
+.. autoclass:: pyro.distributions.OrderedLogistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RelaxedBernoulliStraightThrough
 -------------------------------
 .. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough
@@ -309,9 +316,9 @@ VonMises3D
     :undoc-members:
     :show-inheritance:
 
-ZeroInflatedPoisson
--------------------
-.. autoclass:: pyro.distributions.ZeroInflatedPoisson
+ZeroInflatedDistribution
+------------------------
+.. autoclass:: pyro.distributions.ZeroInflatedDistribution
     :members:
     :undoc-members:
     :show-inheritance:
@@ -323,9 +330,9 @@ ZeroInflatedNegativeBinomial
     :undoc-members:
     :show-inheritance:
 
-ZeroInflatedDistribution
-------------------------
-.. autoclass:: pyro.distributions.ZeroInflatedDistribution
+ZeroInflatedPoisson
+-------------------
+.. autoclass:: pyro.distributions.ZeroInflatedPoisson
     :members:
     :undoc-members:
     :show-inheritance:
@@ -709,3 +716,8 @@ spline_coupling
 sylvester
 ---------
 .. autofunction:: pyro.distributions.transforms.sylvester
+
+
+Constraints
+~~~~~~~~~~~
+.. automodule:: pyro.distributions.constraints

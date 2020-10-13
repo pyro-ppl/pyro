@@ -144,7 +144,9 @@ class AutoGuide(PyroModule):
                 self.plates = {p.name: p for p in plates}
             for name, frame in sorted(self._prototype_frames.items()):
                 if name not in self.plates:
-                    self.plates[name] = pyro.plate(name, frame.size, dim=frame.dim)
+                    full_size = getattr(frame, "full_size", frame.size)
+                    self.plates[name] = pyro.plate(name, full_size, dim=frame.dim,
+                                                   subsample_size=frame.size)
         else:
             assert self.create_plates is None, "Cannot pass create_plates() to non-master guide"
             self.plates = self.master().plates
@@ -182,8 +184,8 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
     Example usage::
 
         guide = AutoGuideList(my_model)
-        guide.add(AutoDiagonalNormal(poutine.block(model, hide=["assignment"])))
-        guide.add(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
+        guide.append(AutoDiagonalNormal(poutine.block(model, hide=["assignment"])))
+        guide.append(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
         svi = SVI(model, guide, optim, Trace_ELBO())
 
     :param callable model: a Pyro model

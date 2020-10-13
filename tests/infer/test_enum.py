@@ -2890,7 +2890,7 @@ def test_elbo_zip(gate, rate):
         gate = pyro.param("gate")
         rate = pyro.param("rate")
         with pyro.plate("data", len(data)):
-            pyro.sample("obs", dist.ZeroInflatedPoisson(gate, rate), obs=data)
+            pyro.sample("obs", dist.ZeroInflatedPoisson(rate, gate=gate), obs=data)
 
     def composite_model(data):
         gate = pyro.param("gate")

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 import torch.optim
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -238,3 +239,43 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))
     assert_equal(actual_grads, expected_grads, prec=precision)
+
+
+@pytest.mark.stage("funsor")
+def test_collapse_beta_binomial():
+    pytest.importorskip("funsor")
+
+    total_count = 10
+    data = torch.tensor(3.)
+
+    def model1():
+        c1 = pyro.param("c1", torch.tensor(0.5), constraint=constraints.positive)
+        c0 = pyro.param("c0", torch.tensor(1.5), constraint=constraints.positive)
+        with poutine.collapse():
+            probs = pyro.sample("probs", dist.Beta(c1, c0))
+            pyro.sample("obs", dist.Binomial(total_count, probs), obs=data)
+
+    def model2():
+        c1 = pyro.param("c1", torch.tensor(0.5), constraint=constraints.positive)
+        c0 = pyro.param("c0", torch.tensor(1.5), constraint=constraints.positive)
+        pyro.sample("obs", dist.BetaBinomial(c1, c0, total_count),
+                    obs=data)
+
+    trace1 = poutine.trace(model1).get_trace()
+    trace2 = poutine.trace(model2).get_trace()
+    assert "probs" in trace1.nodes
+    assert "obs" not in trace1.nodes
+    assert "probs" not in trace2.nodes
+    assert "obs" in trace2.nodes
+
+    logp1 = trace1.log_prob_sum()
+    logp2 = trace2.log_prob_sum()
+    assert_equal(logp1.detach().item(), logp2.detach().item())
+
+    log_c1 = pyro.param("c1").unconstrained()
+    log_c0 = pyro.param("c0").unconstrained()
+    grads1 = torch.autograd.grad(logp1, [log_c1, log_c0], retain_graph=True)
+    grads2 = torch.autograd.grad(logp2, [log_c1, log_c0], retain_graph=True)
+    for g1, g2, name in zip(grads1, grads2, ["log(c1)", "log(c0)"]):
+        print(g1, g2)
+        assert_equal(g1, g2, msg=name)

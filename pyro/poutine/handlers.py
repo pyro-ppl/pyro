@@ -57,6 +57,7 @@ from pyro.poutine import util
 
 from .block_messenger import BlockMessenger
 from .broadcast_messenger import BroadcastMessenger
+from .collapse_messenger import CollapseMessenger
 from .condition_messenger import ConditionMessenger
 from .do_messenger import DoMessenger
 from .enum_messenger import EnumMessenger
@@ -81,6 +82,7 @@ from .uncondition_messenger import UnconditionMessenger
 _msngrs = [
     BlockMessenger,
     BroadcastMessenger,
+    CollapseMessenger,
     ConditionMessenger,
     DoMessenger,
     EnumMessenger,

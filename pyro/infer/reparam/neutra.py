@@ -64,10 +64,10 @@ class NeuTraReparam(Reparam):
             # Sample a shared latent.
             try:
                 self.transform = self.guide.get_transform()
-            except (NotImplementedError, TypeError):
+            except (NotImplementedError, TypeError) as e:
                 raise ValueError("NeuTraReparam only supports guides that implement "
                                  "`get_transform` method that does not depend on the "
-                                 "model's `*args, **kwargs`")
+                                 "model's `*args, **kwargs`") from e
 
             z_unconstrained = pyro.sample("{}_shared_latent".format(name),
                                           self.guide.get_base_dist().mask(False))

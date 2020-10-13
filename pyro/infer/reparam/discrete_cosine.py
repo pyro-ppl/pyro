@@ -31,6 +31,8 @@ class DiscreteCosineReparam(UnitJacobianReparam):
         noise; when -1 this transforms violet noise to white noise; etc. Any
         real number is allowed. https://en.wikipedia.org/wiki/Colors_of_noise.
     """
-    def __init__(self, dim=-1, smooth=0.):
+    def __init__(self, dim=-1, smooth=0., *,
+                 experimental_allow_batch=False):
         transform = DiscreteCosineTransform(dim=dim, smooth=smooth, cache_size=1)
-        super().__init__(transform, suffix="dct")
+        super().__init__(transform, suffix="dct",
+                         experimental_allow_batch=experimental_allow_batch)

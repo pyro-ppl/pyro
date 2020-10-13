@@ -266,6 +266,21 @@ continuous_dists = [
 ]
 
 discrete_dists = [
+    Fixture(pyro_dist=dist.OrderedLogistic,
+            examples=[
+                {'cutpoints': [0., 1., 2.],
+                 'predictor': [1.],
+                 'test_data': [1]},
+                {'cutpoints': [0., 1., 2.],
+                 'predictor': [-0.5, 0.5, 1.5, 2.5],
+                 'test_data': [0, 1, 2, 3]},
+                {'cutpoints': [0., 1.],
+                 'predictor': [[-0.5, 0.5, 1.5], [-0.5, 0.5, 1.5]],
+                 'test_data': [[0, 1, 2], [0, 1, 2]]},
+            ],
+            prec=0.05,
+            min_samples=10000,
+            is_discrete=True),
     Fixture(pyro_dist=dist.Multinomial,
             scipy_dist=sp.multinomial,
             examples=[

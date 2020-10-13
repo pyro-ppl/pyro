@@ -91,6 +91,7 @@ CPU_EXAMPLES = [
     'rsa/schelling.py --num-samples=10',
     'rsa/schelling_false.py --num-samples=10',
     'rsa/semantic_parsing.py --num-samples=10',
+    'scanvi/scanvi.py --num-epochs 1 --dataset mock',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -m=1 --enum',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 -f 2',
@@ -108,6 +109,7 @@ CPU_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential',
     'vae/vae.py --num-epochs=1',
     'vae/vae_comparison.py --num-epochs=1',
+    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1'
 ]
 
 CUDA_EXAMPLES = [
@@ -142,6 +144,7 @@ CUDA_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --cuda',
+    'scanvi/scanvi.py --num-epochs 1 --dataset mock --cuda',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -m=1 --enum --cuda',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential --cuda',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 --cuda',
@@ -151,6 +154,7 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
+    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1 --cuda'
 ]
 
 

@@ -43,6 +43,7 @@ Welcome to Pyro Examples and Tutorials!
    air
    ss-vae
    stable
+   cvae
 
 .. toctree::
    :maxdepth: 2
