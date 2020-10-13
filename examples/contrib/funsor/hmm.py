@@ -579,7 +579,7 @@ def main(args):
     else:
         Elbo = infer.JitTraceEnum_ELBO if args.jit else infer.TraceEnum_ELBO
         elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
-                    strict_enumeration_warning=(model is not model_7),
+                    strict_enumeration_warning=True,
                     jit_options={"time_compilation": args.time_compilation})
         svi = infer.SVI(model, guide, optimizer, elbo)
 
