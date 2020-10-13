@@ -209,7 +209,8 @@ HOROVOD_EXAMPLES = [
 ]
 
 FUNSOR_EXAMPLES = [
-    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --funsor',
+    xfail_param('contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --funsor',
+                reason="unreproducible recursion error on travis?"),
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --funsor',
@@ -217,7 +218,8 @@ FUNSOR_EXAMPLES = [
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization --funsor',
-    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --tmc --tmc-num-samples=2 --funsor',
+    xfail_param('contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --tmc --tmc-num-samples=2 --funsor',
+                reason="unreproducible recursion error on travis?"),
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2 --funsor',
