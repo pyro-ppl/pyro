@@ -209,22 +209,22 @@ HOROVOD_EXAMPLES = [
 ]
 
 FUNSOR_EXAMPLES = [
-    'hmm.py --num-steps=1 --truncate=10 --model=0',
-    'hmm.py --num-steps=1 --truncate=10 --model=1',
-    'hmm.py --num-steps=1 --truncate=10 --model=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=3',
-    'hmm.py --num-steps=1 --truncate=10 --model=4',
-    'hmm.py --num-steps=1 --truncate=10 --model=5',
-    'hmm.py --num-steps=1 --truncate=10 --model=6',
-    'hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization',
-    'hmm.py --num-steps=1 --truncate=10 --model=0 --tmc --tmc-num-samples=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2',
-    'hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --raftery-parameterization',
+    'hmm.py --num-steps=1 --truncate=10 --model=0 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=1 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=3 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=4 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=5 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=0 --tmc --tmc-num-samples=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --funsor',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --funsor --raftery-parameterization',
 ]
 
 
