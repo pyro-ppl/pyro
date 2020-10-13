@@ -124,7 +124,7 @@ def factor(name, log_factor):
     """
     unit_dist = dist.Unit(log_factor)
     unit_value = unit_dist.sample()
-    sample(name, unit_dist, obs=unit_value)
+    sample(name, unit_dist, obs=unit_value, infer={"is_auxiliary": True})
 
 
 def deterministic(name, value, event_dim=None):

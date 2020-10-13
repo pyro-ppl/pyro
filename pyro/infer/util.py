@@ -152,7 +152,7 @@ class MultiFrameTensor(dict):
             while value.shape and value.shape[0] == 1:
                 value = value.squeeze(0)
             total = value if total is None else total + value
-        return total
+        return 0. if total is None else total
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ",\n\t".join([
