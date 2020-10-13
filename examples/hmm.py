@@ -43,8 +43,8 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
-import dmm.polyphonic_data_loader as poly
 import pyro
+import pyro.contrib.examples.polyphonic_data_loader as poly
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.autoguide import AutoDelta
