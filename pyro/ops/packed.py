@@ -25,12 +25,12 @@ def pack(value, dim_to_symbol):
                 dims = ''.join(dim_to_symbol[dim - shift]
                                for dim, size in enumerate(shape)
                                if size > 1)
-        except KeyError:
+        except KeyError as e:
             raise ValueError('\n  '.join([
                 'Invalid tensor shape.',
                 'Allowed dims: {}'.format(', '.join(map(str, sorted(dim_to_symbol)))),
                 'Actual shape: {}'.format(tuple(value.shape)),
-                "Try adding shape assertions for your model's sample values and distribution parameters."]))
+                "Try adding shape assertions for your model's sample values and distribution parameters."])) from e
         value = value.squeeze()
         value._pyro_dims = dims
         assert value.dim() == len(value._pyro_dims)

@@ -2297,3 +2297,50 @@ def test_collapse_beta_binomial_plate():
         pyro.sample("c", dist.Gamma(a, b))
 
     assert_ok(model, guide, Trace_ELBO())
+
+
+def test_ordered_logistic_plate():
+    N = 5  # num data points/batch size
+    K = 4  # num categories
+    data = (K*torch.rand(N)).long().float()
+
+    def model():
+        predictor = pyro.sample("predictor", dist.Normal(0., 1.).expand([N]).to_event(1))
+        cutpoints = pyro.sample("cutpoints", dist.Normal(0., 1.).expand([K-1]).to_event(1))
+        # would have identifiability issues, but this isn't a real model...
+        cutpoints = torch.sort(cutpoints, dim=-1).values
+        with pyro.plate("obs_plate", N):
+            pyro.sample("obs", dist.OrderedLogistic(predictor, cutpoints), obs=data)
+
+    def guide():
+        # parameters
+        pred_mu = pyro.param("pred_mu", torch.zeros(N))
+        pred_std = pyro.param("pred_std", torch.ones(N))
+        cp_mu = pyro.param("cp_mu", torch.zeros(K-1))
+        cp_std = pyro.param("cp_std", torch.ones(K-1))
+        # sample
+        pyro.sample("predictor", dist.Normal(pred_mu, pred_std).to_event(1))
+        pyro.sample("cutpoints", dist.Normal(cp_mu, cp_std).to_event(1))
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.stage("funsor")
+def test_collapse_barrier():
+    pytest.importorskip("funsor")
+    data = torch.tensor([0., 1., 5., 5.])
+
+    def model():
+        with poutine.collapse():
+            z = pyro.sample("z_init", dist.Normal(0, 1))
+            for t, x in enumerate(data):
+                z = pyro.sample("z_{}".format(t), dist.Normal(z, 1))
+                pyro.sample("x_t{}".format(t), dist.Normal(z, 1), obs=x)
+                z = pyro.barrier(z)
+                z = torch.sigmoid(z)
+        return z
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, Trace_ELBO())

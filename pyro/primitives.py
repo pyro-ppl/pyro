@@ -416,6 +416,16 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     return _fn
 
 
+@effectful(type="barrier")
+def barrier(data):
+    """
+    EXPERIMENTAL Ensures all values in ``data`` are ground, rather than lazy
+    funsor values. This is useful in combination with
+    :func:`pyro.poutine.collapse`.
+    """
+    return data
+
+
 def enable_validation(is_validate=True):
     """
     Enable or disable validation checks in Pyro. Validation checks provide

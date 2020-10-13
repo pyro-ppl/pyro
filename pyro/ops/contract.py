@@ -348,10 +348,10 @@ def einsum(equation, *operands, **kwargs):
     modulo_total = kwargs.pop('modulo_total', False)
     try:
         Ring = BACKEND_TO_RING[backend]
-    except KeyError:
+    except KeyError as e:
         raise NotImplementedError('\n'.join(
             ['Only the following pyro backends are currently implemented:'] +
-            list(BACKEND_TO_RING)))
+            list(BACKEND_TO_RING))) from e
 
     # Parse generalized einsum equation.
     if '.' in equation:

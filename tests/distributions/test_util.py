@@ -182,6 +182,7 @@ def test_detach_transformed(shape):
     assert not d2.transforms[0].scale.requires_grad
 
 
+@pytest.mark.xfail(reason="started failing in PyTorch 1.6")
 @pytest.mark.parametrize("shape", [None, (), (4,), (3, 2)], ids=str)
 def test_detach_jit(shape):
     loc = torch.tensor(0., requires_grad=True)

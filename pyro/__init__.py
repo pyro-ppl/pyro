@@ -4,8 +4,8 @@
 import pyro.poutine as poutine
 from pyro.logger import log
 from pyro.poutine import condition, do, markov
-from pyro.primitives import (clear_param_store, deterministic, enable_validation, factor, get_param_store, iarange,
-                             irange, module, param, plate, plate_stack, random_module, sample, subsample,
+from pyro.primitives import (barrier, clear_param_store, deterministic, enable_validation, factor, get_param_store,
+                             iarange, irange, module, param, plate, plate_stack, random_module, sample, subsample,
                              validation_enabled)
 from pyro.util import set_rng_seed
 
@@ -19,6 +19,7 @@ except ImportError:
 
 __all__ = [
     "__version__",
+    "barrier",
     "clear_param_store",
     "condition",
     "deterministic",

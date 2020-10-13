@@ -54,7 +54,7 @@ class Model(ForecastingModel):
 
         # Sample global parameters.
         noise_scale = pyro.sample("noise_scale",
-                                  dist.LogNormal(torch.full((dim,), -3), 1).to_event(1))
+                                  dist.LogNormal(torch.full((dim,), -3.), 1.).to_event(1))
         assert noise_scale.shape[-1:] == (dim,)
         trans_timescale = pyro.sample("trans_timescale",
                                       dist.LogNormal(torch.zeros(dim), 1).to_event(1))

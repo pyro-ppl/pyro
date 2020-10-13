@@ -211,8 +211,8 @@ def prefix_condition(d, data):
     """
     try:
         return d.prefix_condition(data)
-    except AttributeError:
-        raise NotImplementedError("prefix_condition() does not suport {}".format(type(d)))
+    except AttributeError as e:
+        raise NotImplementedError("prefix_condition() does not suport {}".format(type(d))) from e
 
 
 @prefix_condition.register(dist.Independent)

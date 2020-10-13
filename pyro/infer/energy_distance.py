@@ -168,7 +168,7 @@ class EnergyDistance:
         squared_error = []  # E[ (X - x)^2 ]
         squared_entropy = []  # E[ (X - X')^2 ]
         prototype = next(iter(data.values()))
-        pairs = prototype.new_ones(self.num_particles, self.num_particles).tril(-1).nonzero()
+        pairs = prototype.new_ones(self.num_particles, self.num_particles).tril(-1).nonzero(as_tuple=False)
         for name, obs in data.items():
             sample = samples[name]
             scale = model_trace.nodes[name]["scale"]
