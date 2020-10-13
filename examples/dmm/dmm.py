@@ -16,6 +16,7 @@ Reference:
 """
 
 import argparse
+import logging
 import time
 from os.path import exists
 
@@ -23,8 +24,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-import polyphonic_data_loader as poly
 import pyro
+import pyro.contrib.examples.polyphonic_data_loader as poly
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
@@ -285,8 +286,11 @@ class DMM(nn.Module):
 # setup, training, and evaluation
 def main(args):
     # setup logging
-    log = get_logger(args.log)
-    log(args)
+    logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+    logging.info(args)
 
     data = poly.load_data(poly.JSB_CHORALES)
     training_seq_lengths = data['train']['sequence_lengths']
@@ -300,7 +304,7 @@ def main(args):
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 
-    log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
+    logging.info("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
         (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
     # how often we do validation/test evaluation during training
@@ -357,21 +361,21 @@ def main(args):
 
     # saves the model and optimizer states to disk
     def save_checkpoint():
-        log("saving model to %s..." % args.save_model)
+        logging.info("saving model to %s..." % args.save_model)
         torch.save(dmm.state_dict(), args.save_model)
-        log("saving optimizer states to %s..." % args.save_opt)
+        logging.info("saving optimizer states to %s..." % args.save_opt)
         adam.save(args.save_opt)
-        log("done saving model and optimizer checkpoints to disk.")
+        logging.info("done saving model and optimizer checkpoints to disk.")
 
     # loads the model and optimizer states from disk
     def load_checkpoint():
         assert exists(args.load_opt) and exists(args.load_model), \
             "--load-model and/or --load-opt misspecified"
-        log("loading model from %s..." % args.load_model)
+        logging.info("loading model from %s..." % args.load_model)
         dmm.load_state_dict(torch.load(args.load_model))
-        log("loading optimizer states from %s..." % args.load_opt)
+        logging.info("loading optimizer states from %s..." % args.load_opt)
         adam.load(args.load_opt)
-        log("done loading model and optimizer states.")
+        logging.info("done loading model and optimizer states.")
 
     # prepare a mini-batch and take a gradient step to minimize -elbo
     def process_minibatch(epoch, which_mini_batch, shuffled_indices):
@@ -439,13 +443,13 @@ def main(args):
         # report training diagnostics
         times.append(time.time())
         epoch_time = times[-1] - times[-2]
-        log("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
+        logging.info("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
             (epoch, epoch_nll / N_train_time_slices, epoch_time))
 
         # do evaluation on test and validation data and report results
         if val_test_frequency > 0 and epoch > 0 and epoch % val_test_frequency == 0:
             val_nll, test_nll = do_evaluation()
-            log("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
+            logging.info("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
 
 
 # parse command-line arguments and execute the main method
