@@ -103,6 +103,10 @@ class Z2LEncoder(nn.Module):
         self.fc = make_fc(dims)
 
     def forward(self, x):
+        # Transform the counts x to log space for increased numerical stability.
+        # Note that we only use this transform here; in particular the observation
+        # distribution in the model is a proper count distribution.
+        x = torch.log(1 + x)
         h1, h2 = split_in_half(self.fc(x))
         z2_loc, z2_scale = h1[..., :-1], softplus(h2[..., :-1])
         l_loc, l_scale = h1[..., -1:], softplus(h2[..., -1:])
@@ -264,7 +268,8 @@ def main(args):
     # Setup a variational objective for gradient-based learning.
     # Note we use TraceEnum_ELBO in order to leverage Pyro's machinery
     # for automatic enumeration of the discrete latent variable y.
-    svi = SVI(scanvi.model, guide, optim, TraceEnum_ELBO())
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
+    svi = SVI(scanvi.model, guide, optim, elbo)
 
     # Training loop
     for epoch in range(args.num_epochs):
