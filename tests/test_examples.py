@@ -169,7 +169,22 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
-    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1 --cuda'
+    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda --raftery-parameterization ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda--tmc --tmc-num-samples=2  -rp',
 ]
 
 
@@ -215,6 +230,13 @@ JIT_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --jit',
     'vae/vae.py --num-epochs=1 --jit',
     'vae/vae_comparison.py --num-epochs=1 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --raftery-parameterization ',
 ]
 
 HOROVOD_EXAMPLES = [
@@ -233,6 +255,13 @@ FUNSOR_EXAMPLES = [
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --jit --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --jit --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --jit --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --jit --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --jit --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --raftery-parameterization --funsor',
     xfail_param('contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --tmc --tmc-num-samples=2 --funsor',
                 reason="unreproducible recursion error on travis?"),
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 --funsor',
@@ -242,6 +271,13 @@ FUNSOR_EXAMPLES = [
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --funsor',
     'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --funsor -rp',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --jit --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --jit --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --jit --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --jit --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --jit --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --tmc --tmc-num-samples=2 --funsor -rp',
 ]
 
 
