@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-This example shows how to marginalize out discrete model variables in Pyro.
+This example is largely copied from ``examples/hmm.py``.
+It illustrates the use of the experimental ``pyro.contrib.funsor`` Pyro backend
+through the ``pyroapi`` package, demonstrating the utility of Funsor [0]
+as an intermediate representation for probabilistic programs
 
-This combines Stochastic Variational Inference (SVI) with a
+This example combines Stochastic Variational Inference (SVI) with a
 variable elimination algorithm, where we use enumeration to exactly
 marginalize out some variables from the ELBO computation. We might
 call the resulting algorithm collapsed SVI or collapsed SGVB (i.e
@@ -30,6 +33,10 @@ variable elimination" algorithm that Pyro uses under the hood to
 marginalize out discrete latent variables.
 
 References
+
+0. "Functional Tensors for Probabilistic Programming",
+Fritz Obermeyer, Eli Bingham, Martin Jankowiak,
+Du Phan, Jonathan P Chen. https://arxiv.org/abs/1910.10775
 
 1. "Tensor Variable Elimination for Plated Factor Graphs",
 Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
@@ -503,41 +510,6 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
                                 obs=sequences[batch, t])
 
 
-# Next we demonstrate how to parallelize the neural HMM above using Pyro's
-# DiscreteHMM distribution. This model is equivalent to model_5 above, but we
-# manually unroll loops and fuse ops, leading to a single sample statement.
-# DiscreteHMM can lead to over 10x speedup in models where it is applicable.
-def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
-    with ignore_jit_warnings():
-        num_sequences, max_length, data_dim = map(int, sequences.shape)
-        assert lengths.shape == (num_sequences,)
-        assert lengths.max() <= max_length
-
-    # Initialize a global module instance if needed.
-    global tones_generator
-    if tones_generator is None:
-        tones_generator = TonesGenerator(args, data_dim)
-    pyro.module("tones_generator", tones_generator)
-
-    with handlers.mask(mask=include_prior):
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .to_event(1))
-    with pyro.plate("sequences", num_sequences, batch_size, dim=-1) as batch:
-        lengths = lengths[batch]
-        y = sequences[batch] if args.jit else sequences[batch, :lengths.max()]
-        x = torch.arange(args.hidden_dim)
-        t = torch.arange(y.size(1))
-        init_logits = torch.full((args.hidden_dim,), -float('inf'))
-        init_logits[0] = 0
-        trans_logits = probs_x.log()
-        with ignore_jit_warnings():
-            obs_dist = dist.Bernoulli(logits=tones_generator(x, y.unsqueeze(-2))).to_event(1)
-            obs_dist = obs_dist.mask((t < lengths.unsqueeze(-1)).unsqueeze(-1))
-            hmm_dist = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
-        pyro.sample("y", hmm_dist, obs=y)
-
-
 models = {name[len('model_'):]: model
           for name, model in globals().items()
           if name.startswith('model_')}
@@ -588,8 +560,7 @@ def main(args):
             sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info(model_trace.format_shapes())
 
-    # Appease the PyTorch JIT
-    model_name = model.__name__
+    # Bind non-PyTorch parameters to make these functions jittable.
     model = functools.partial(model, args=args)
     guide = functools.partial(guide, args=args)
 
@@ -645,7 +616,7 @@ def main(args):
     # but eventually overfit to the training set.
     capacity = sum(value.reshape(-1).size(0)
                    for value in pyro.get_param_store().values())
-    logging.info('{} capacity = {} parameters'.format(model_name, capacity))
+    logging.info('model_{} capacity = {} parameters'.format(args.model, capacity))
 
 
 if __name__ == '__main__':
@@ -682,5 +653,5 @@ if __name__ == '__main__':
     else:
         PYRO_BACKEND = "pyro"
 
-    with ignore_jit_warnings(), pyro_backend(PYRO_BACKEND):
+    with pyro_backend(PYRO_BACKEND):
         main(args)
