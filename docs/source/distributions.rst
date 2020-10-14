@@ -692,10 +692,6 @@ neural_autoregressive
 ---------------------
 .. autofunction:: pyro.distributions.transforms.neural_autoregressive
 
-ordered
--------
-.. autofunction:: pyro.distributions.transforms.ordered
-
 permute
 -------
 .. autofunction:: pyro.distributions.transforms.permute
