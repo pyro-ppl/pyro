@@ -1,5 +1,5 @@
-Causal Effect VAE
-=================
+Example: Causal Effect VAE
+==========================
 
 `View cevae.py on github`__
 

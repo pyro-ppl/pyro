@@ -1,5 +1,5 @@
-Capture-Recapture Models (CJS Models)
-=====================================
+Example: Capture-Recapture Models (CJS Models)
+==============================================
 
 `View cjs.py on github`__
 

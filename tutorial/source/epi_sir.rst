@@ -1,5 +1,5 @@
-Epidemiological models: Univariate
-==================================
+Example: Epidemiological models: Univariate
+===========================================
 
 `View sir.py on github`__
 

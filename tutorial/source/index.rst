@@ -113,9 +113,9 @@ This page collects how-to guides and tutorials written by the Pyro community.
    :maxdepth: 2
    :caption: Other examples:
 
-   mcmc
    RSA-implicature
    RSA-hyperbole
+   mcmc
    csis
    smcfilter
 

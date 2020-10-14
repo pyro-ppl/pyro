@@ -1,5 +1,5 @@
-Epidemiological models: Regional
-================================
+Example: Epidemiological models: Regional
+=========================================
 
 `View regional.py on github`__
 
