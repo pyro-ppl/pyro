@@ -1,0 +1,60 @@
+{
+  "name": "pegjs",
+  "version": "0.10.0",
+  "description": "Parser generator for JavaScript",
+  "keywords": [
+    "parser generator",
+    "PEG"
+  ],
+  "homepage": "http://pegjs.org/",
+  "bugs": "https://github.com/pegjs/pegjs/issues",
+  "license": "MIT",
+  "author": "David Majda <david@majda.cz> (http://majda.cz/)",
+  "files": [
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "VERSION",
+    "bin/pegjs",
+    "examples/arithmetics.pegjs",
+    "examples/css.pegjs",
+    "examples/javascript.pegjs",
+    "examples/json.pegjs",
+    "lib/compiler/asts.js",
+    "lib/compiler/index.js",
+    "lib/compiler/js.js",
+    "lib/compiler/opcodes.js",
+    "lib/compiler/passes/generate-bytecode.js",
+    "lib/compiler/passes/generate-js.js",
+    "lib/compiler/passes/remove-proxy-rules.js",
+    "lib/compiler/passes/report-duplicate-labels.js",
+    "lib/compiler/passes/report-duplicate-rules.js",
+    "lib/compiler/passes/report-infinite-recursion.js",
+    "lib/compiler/passes/report-infinite-repetition.js",
+    "lib/compiler/passes/report-undefined-rules.js",
+    "lib/compiler/visitor.js",
+    "lib/grammar-error.js",
+    "lib/parser.js",
+    "lib/peg.js",
+    "lib/utils/arrays.js",
+    "lib/utils/classes.js",
+    "lib/utils/objects.js",
+    "package.json"
+  ],
+  "main": "lib/peg",
+  "bin": "bin/pegjs",
+  "repository": "pegjs/pegjs",
+  "scripts": {
+    "test": "make lint && make spec"
+  },
+  "devDependencies": {
+    "browserify": "13.1.0",
+    "eslint": "2.13.1",
+    "http-server": "0.9.0",
+    "jasmine-node": "1.14.5",
+    "uglify-js": "2.7.0"
+  },
+  "engines": {
+    "node": ">=0.10"
+  }
+}
