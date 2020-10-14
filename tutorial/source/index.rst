@@ -32,7 +32,7 @@ will go a long way toward making your experience smooth and avoiding nasty shape
 
 Core functionality: Deep learning, discrete variables and customizable inference
 ---------------------------------------------------------------------------------
-A basic familiarity with this introductory material is all you will need to dive right into using Pyro's two superpowers:
+A basic familiarity with this introductory material is all you will need to dive right into exploiting Pyro's two biggest strengths:
 integration with deep learning and automated exact inference for discrete latent variables.
 The former is described with numerous examples in the series :ref:`deep-generative-models`.
 All are elaborations on the basic idea of the variational autoencoder, introduced in great detail in :doc:`the first tutorial of this series <vae>`.
