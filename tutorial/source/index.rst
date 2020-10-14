@@ -105,6 +105,7 @@ List of Tutorials
    normalizing_flows_i
    dmm
    air
+   scanvi
    cevae
    sparse_gamma
 
@@ -119,6 +120,7 @@ List of Tutorials
    toy_mixture_model_discrete_enumeration
    hmm
    capture_recapture
+   mixed_hmm
    einsum
    lda
 
@@ -132,6 +134,8 @@ List of Tutorials
    custom_objectives
    boosting_bbvi
    neutra
+   sparse_regression
+   autoname_examples
 
 .. toctree::
    :maxdepth: 1
@@ -186,9 +190,12 @@ List of Tutorials
    :maxdepth: 1
    :caption: Other Inference Algorithms
 
+   baseball
    mcmc
+   lkj
    csis
    smcfilter
+   inclined_plane
    RSA-implicature
    RSA-hyperbole
 
@@ -201,6 +208,7 @@ List of Tutorials
    effect_handlers
    contrib_funsor_intro_i
    contrib_funsor_intro_ii
+   hmm_funsor
 
 Indices and tables
 ==================
