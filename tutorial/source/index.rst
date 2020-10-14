@@ -17,6 +17,9 @@ This page collects how-to guides and tutorials written by the Pyro community.
    svi_part_i
    svi_part_ii
    svi_part_iii
+   bayesian_regression
+   bayesian_regression_ii
+   mle_map
 
 .. toctree::
    :maxdepth: 2
@@ -26,16 +29,6 @@ This page collects how-to guides and tutorials written by the Pyro community.
    modules
    jit
    svi_horovod
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Bayesian data science
-
-   bayesian_regression
-   bayesian_regression_ii
-   mle_map
-   stable
-   mcmc
 
 .. toctree::
    :maxdepth: 2
@@ -81,16 +74,8 @@ This page collects how-to guides and tutorials written by the Pyro community.
    forecasting_iii
    forecasting_dlm
    forecast_simple
+   stable
    timeseries
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Bayesian phylodynamics
-
-   epi_intro
-   epi_sir
-   epi_regional
-   sir_hmc
 
 .. toctree::
    :maxdepth: 2
@@ -100,6 +85,15 @@ This page collects how-to guides and tutorials written by the Pyro community.
    gplvm
    bo
    dkl
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Bayesian epidemiological models
+
+   epi_intro
+   epi_sir
+   epi_regional
+   sir_hmc
 
 .. toctree::
    :maxdepth: 2
@@ -119,6 +113,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
    :maxdepth: 2
    :caption: Other examples:
 
+   mcmc
    RSA-implicature
    RSA-hyperbole
    csis
