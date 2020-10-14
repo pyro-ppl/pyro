@@ -1,5 +1,5 @@
-Plated Einsum
-=============
+Example: Discrete Factor Graph Inference with Plated Einsum
+===========================================================
 
 `View einsum.py on github`__
 

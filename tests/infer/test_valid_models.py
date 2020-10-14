@@ -1963,6 +1963,42 @@ def test_enum_recycling_plate():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=2))
 
 
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+])
+def test_factor_in_model_ok(Elbo):
+
+    def model():
+        pyro.factor("f", torch.tensor(0.))
+
+    def guide():
+        pass
+
+    elbo = Elbo(strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)
+
+
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+])
+def test_factor_in_guide_ok(Elbo):
+
+    def model():
+        pass
+
+    def guide():
+        pyro.factor("f", torch.tensor(0.))
+
+    elbo = Elbo(strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)
+
+
 @pytest.mark.parametrize('history', [0, 1, 2, 3])
 def test_markov_history(history):
 
@@ -2321,5 +2357,26 @@ def test_ordered_logistic_plate():
         # sample
         pyro.sample("predictor", dist.Normal(pred_mu, pred_std).to_event(1))
         pyro.sample("cutpoints", dist.Normal(cp_mu, cp_std).to_event(1))
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.stage("funsor")
+def test_collapse_barrier():
+    pytest.importorskip("funsor")
+    data = torch.tensor([0., 1., 5., 5.])
+
+    def model():
+        with poutine.collapse():
+            z = pyro.sample("z_init", dist.Normal(0, 1))
+            for t, x in enumerate(data):
+                z = pyro.sample("z_{}".format(t), dist.Normal(z, 1))
+                pyro.sample("x_t{}".format(t), dist.Normal(z, 1), obs=x)
+                z = pyro.barrier(z)
+                z = torch.sigmoid(z)
+        return z
+
+    def guide():
+        pass
 
     assert_ok(model, guide, Trace_ELBO())

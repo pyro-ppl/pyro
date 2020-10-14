@@ -124,7 +124,7 @@ def factor(name, log_factor):
     """
     unit_dist = dist.Unit(log_factor)
     unit_value = unit_dist.sample()
-    sample(name, unit_dist, obs=unit_value)
+    sample(name, unit_dist, obs=unit_value, infer={"is_auxiliary": True})
 
 
 def deterministic(name, value, event_dim=None):
@@ -414,6 +414,16 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
     return _fn
+
+
+@effectful(type="barrier")
+def barrier(data):
+    """
+    EXPERIMENTAL Ensures all values in ``data`` are ground, rather than lazy
+    funsor values. This is useful in combination with
+    :func:`pyro.poutine.collapse`.
+    """
+    return data
 
 
 def enable_validation(is_validate=True):

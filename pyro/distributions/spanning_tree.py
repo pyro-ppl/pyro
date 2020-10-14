@@ -385,7 +385,7 @@ def _sample_tree_approx(edge_logits):
         mask = (c1 != c2)
         valid_logits = edge_logits[mask]
         probs = (valid_logits - valid_logits.max()).exp()
-        k = mask.nonzero()[torch.multinomial(probs, 1)[0]]
+        k = mask.nonzero(as_tuple=False)[torch.multinomial(probs, 1)[0]]
         components[grid[:, k]] = 1
         edge_ids[e] = k
 

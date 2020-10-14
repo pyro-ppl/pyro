@@ -1,5 +1,5 @@
-Hidden Markov Model
-===================
+Example: Hidden Markov Models
+=============================
 
 `View hmm.py on github`__
 

@@ -78,6 +78,13 @@ except ImportError:
 requires_horovod = pytest.mark.skipif(horovod is None,
                                       reason="horovod is not available")
 
+try:
+    import funsor
+except ImportError:
+    funsor = None
+requires_funsor = pytest.mark.skipif(funsor is None,
+                                     reason="funsor is not available")
+
 
 def get_cpu_type(t):
     assert t.__module__ == 'torch.cuda'

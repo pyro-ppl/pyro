@@ -9,7 +9,7 @@ from subprocess import check_call
 import pytest
 import torch
 
-from tests.common import EXAMPLES_DIR, requires_cuda, requires_horovod, xfail_param
+from tests.common import EXAMPLES_DIR, requires_cuda, requires_funsor, requires_horovod, xfail_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -56,11 +56,11 @@ CPU_EXAMPLES = [
     'contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
     'contrib/timeseries/gp_models.py -m imgp --test --num-steps=2',
     'contrib/timeseries/gp_models.py -m lcmgp --test --num-steps=2',
-    'dmm/dmm.py --num-epochs=1',
-    'dmm/dmm.py --num-epochs=1 --tmcelbo --tmc-num-samples=2',
-    'dmm/dmm.py --num-epochs=1 --num-iafs=1',
-    'dmm/dmm.py --num-epochs=1 --tmc --tmc-num-samples=2',
-    'dmm/dmm.py --num-epochs=1 --tmcelbo --tmc-num-samples=2',
+    'dmm.py --num-epochs=1',
+    'dmm.py --num-epochs=1 --tmcelbo --tmc-num-samples=2',
+    'dmm.py --num-epochs=1 --num-iafs=1',
+    'dmm.py --num-epochs=1 --tmc --tmc-num-samples=2',
+    'dmm.py --num-epochs=1 --tmcelbo --tmc-num-samples=2',
     'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100',
     'eight_schools/svi.py --num-epochs=1',
     'einsum.py',
@@ -109,7 +109,22 @@ CPU_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential',
     'vae/vae.py --num-epochs=1',
     'vae/vae_comparison.py --num-epochs=1',
-    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1'
+    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2  -rp',
 ]
 
 CUDA_EXAMPLES = [
@@ -123,10 +138,10 @@ CUDA_EXAMPLES = [
     'contrib/epidemiology/regional.py --nojit -t=2 -w=2 -n=4 -r=3 -d=20 -p=1000 -f 2 --haar --cuda',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --cuda',
     'lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --cuda',
-    'dmm/dmm.py --num-epochs=1 --cuda',
-    'dmm/dmm.py --num-epochs=1 --num-iafs=1 --cuda',
-    'dmm/dmm.py --num-epochs=1 --tmc --tmc-num-samples=2 --cuda',
-    'dmm/dmm.py --num-epochs=1 --tmcelbo --tmc-num-samples=2 --cuda',
+    'dmm.py --num-epochs=1 --cuda',
+    'dmm.py --num-epochs=1 --num-iafs=1 --cuda',
+    'dmm.py --num-epochs=1 --tmc --tmc-num-samples=2 --cuda',
+    'dmm.py --num-epochs=1 --tmcelbo --tmc-num-samples=2 --cuda',
     'einsum.py --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=0 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=1 --cuda',
@@ -154,7 +169,22 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
-    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1 --cuda'
+    'cvae/main.py --num-quadrant-inputs=1 --num-epochs=1 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda --raftery-parameterization ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda--tmc --tmc-num-samples=2 ',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --cuda--tmc --tmc-num-samples=2  -rp',
 ]
 
 
@@ -174,8 +204,8 @@ JIT_EXAMPLES = [
     'contrib/epidemiology/regional.py --jit -ss=2 -n=4 -r=3 -d=20 -p=1000 -f 2 --svi',
     xfail_jit('lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --jit'),
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
-    xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),
-    xfail_jit('dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit'),
+    xfail_jit('dmm.py --num-epochs=1 --jit'),
+    xfail_jit('dmm.py --num-epochs=1 --num-iafs=1 --jit'),
     'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
     'eight_schools/svi.py --num-epochs=1 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=1 --jit',
@@ -200,12 +230,44 @@ JIT_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --jit',
     'vae/vae.py --num-epochs=1 --jit',
     'vae/vae_comparison.py --num-epochs=1 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --raftery-parameterization ',
 ]
 
 HOROVOD_EXAMPLES = [
     'svi_horovod.py --num-epochs=2 --size=400',
     pytest.param('svi_horovod.py --num-epochs=2 --size=400 --cuda',
                  marks=[requires_cuda]),
+]
+
+FUNSOR_EXAMPLES = [
+    xfail_param('contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --funsor',
+                reason="unreproducible recursion error on travis?"),
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --raftery-parameterization --funsor',
+    xfail_param('contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --tmc --tmc-num-samples=2 --funsor',
+                reason="unreproducible recursion error on travis?"),
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --tmc --tmc-num-samples=2 --funsor -rp',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --tmc --tmc-num-samples=2 --funsor',
+    'contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --tmc --tmc-num-samples=2 --funsor -rp',
 ]
 
 
@@ -270,3 +332,13 @@ def test_horovod(np, example):
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
     check_call(horovodrun.split() + [sys.executable, filename] + args)
+
+
+@requires_funsor
+@pytest.mark.parametrize('example', FUNSOR_EXAMPLES)
+def test_funsor(example):
+    logger.info('Running:\npython examples/{}'.format(example))
+    example = example.split()
+    filename, args = example[0], example[1:]
+    filename = os.path.join(EXAMPLES_DIR, filename)
+    check_call([sys.executable, filename] + args)

@@ -1,5 +1,5 @@
-Epidemiological inference via HMC
-=================================
+Example: Epidemiological inference via HMC
+==========================================
 
 This tutorial is in the form of a script (see below).
 
