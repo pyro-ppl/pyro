@@ -135,6 +135,7 @@ List of Tutorials
    boosting_bbvi
    neutra
    sparse_regression
+   autoname_examples
 
 .. toctree::
    :maxdepth: 1
