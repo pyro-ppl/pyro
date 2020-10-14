@@ -14,11 +14,13 @@ New users: getting from zero to one
 ------------------------------------
 If you're new to probabilistic programming or variational inference,
 you might want to start by reading the series :ref:`introductory-tutorials`.
+If you're new to PyTorch, you may also benefit from reading the official introduction `"Deep Learning with PyTorch." <https://pytorch.org/tutorials/beginner/deep_learning_60min_blitz.html>`_
 
 After that, you're ready to get started using Pyro! (Yes, really!)
-Look carefully through the series :ref:`practical-pyro-and-pytorch`,
-especially the :doc:`first Bayesian regression tutorial <bayesian_regression>`,
-which goes step-by-step through solving a simple Bayesian machine learning problem with Pyro,
+Follow `the instructions on the front page to install Pyro <http://pyro.ai/#install>`_
+and look carefully through the series :ref:`practical-pyro-and-pytorch`,
+especially the :doc:`first Bayesian regression tutorial <bayesian_regression>`.
+This tutorial goes step-by-step through solving a simple Bayesian machine learning problem with Pyro,
 grounding the concepts from the introductory tutorials in runnable code.
 Industry users interested in serving predictions from a trained model in C++ should also read :doc:`the PyroModule tutorial <modules>`.
 
