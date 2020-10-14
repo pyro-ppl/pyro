@@ -69,8 +69,9 @@ def test_expand():
 
 def test_autograd():
     predictor = torch.randn(5, requires_grad=True)
-    cutpoints = torch.sort(torch.randn(3)).values
-    cutpoints.requires_grad = True
+    order = OrderedTransform()
+    pre_cutpoints = torch.randn(3, requires_grad=True)
+    cutpoints = order(pre_cutpoints)
     data = torch.tensor([0, 1, 2, 3, 0], dtype=float)
 
     dist = OrderedLogistic(predictor, cutpoints, validate_args=True)
@@ -78,8 +79,8 @@ def test_autograd():
 
     assert predictor.grad is not None
     assert torch.all(predictor.grad != 0).item()
-    assert cutpoints.grad is not None
-    assert torch.all(cutpoints.grad != 0).item()
+    assert pre_cutpoints.grad is not None
+    assert torch.all(pre_cutpoints.grad != 0).item()
 
 
 # Tests for the OrderedTransform
