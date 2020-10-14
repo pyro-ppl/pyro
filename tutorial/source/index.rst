@@ -207,6 +207,7 @@ List of Tutorials
    effect_handlers
    contrib_funsor_intro_i
    contrib_funsor_intro_ii
+   hmm_funsor
 
 Indices and tables
 ==================
