@@ -15,6 +15,7 @@ class OrderedTransform(Transform):
     codomain = constraints.ordered_vector
     bijective = True
     sign = +1
+    event_dim = 1
 
     def _call(self, x):
         z = torch.cat([x[..., :1], x[..., 1:].exp()], dim=-1)
@@ -26,10 +27,3 @@ class OrderedTransform(Transform):
 
     def log_abs_det_jacobian(self, x, y):
         return torch.sum(x[..., 1:], dim=-1)
-
-
-def ordered():
-    """ A helper function to create an
-    :class: `~pyro.distributions.transform.OrderedTransform` object
-    """
-    return OrderedTransform()

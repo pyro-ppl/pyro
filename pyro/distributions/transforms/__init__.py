@@ -5,7 +5,10 @@ from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
 
-from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
+from pyro.distributions.constraints import (
+                                            IndependentConstraint,
+                                            corr_cholesky_constraint,
+                                            ordered_vector)
 from pyro.distributions.torch_transform import ComposeTransformModule
 from pyro.distributions.transforms.affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive,
                                                                  affine_autoregressive,
@@ -30,7 +33,7 @@ from pyro.distributions.transforms.matrix_exponential import (ConditionalMatrixE
 from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
                                                                  conditional_neural_autoregressive,
                                                                  neural_autoregressive)
-from pyro.distributions.transforms.ordered import OrderedTransform, ordered
+from pyro.distributions.transforms.ordered import OrderedTransform
 from pyro.distributions.transforms.permute import Permute, permute
 from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
 from pyro.distributions.transforms.polynomial import Polynomial, polynomial
@@ -53,6 +56,12 @@ transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_const
 @transform_to.register(corr_cholesky_constraint)
 def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
+
+
+@biject_to.register(ordered_vector)
+@transform_to.register(ordered_vector)
+def _transform_to_ordered_vector(constraint):
+    return OrderedTransform()
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
@@ -126,7 +135,6 @@ __all__ = [
     'leaky_relu',
     'matrix_exponential',
     'neural_autoregressive',
-    'ordered',
     'permute',
     'planar',
     'polynomial',
