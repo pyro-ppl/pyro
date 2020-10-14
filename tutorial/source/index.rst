@@ -6,89 +6,132 @@
 Welcome to Pyro Examples and Tutorials!
 ==========================================
 
+This page collects how-to guides and tutorials written by the Pyro community.
+
 .. toctree::
    :maxdepth: 2
-   :caption: Introduction:
+   :caption: Probabilistic programming and variational inference
 
    intro_part_i
    intro_part_ii
    svi_part_i
    svi_part_ii
    svi_part_iii
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Pyro and PyTorch:
+
    tensor_shapes
-   mle_map
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Advanced:
-
-   enumeration
-   custom_objectives
-   jit
-   minipyro
-   effect_handlers
    modules
-   normalizing_flows_i
-   contrib_funsor_intro_i
-   contrib_funsor_intro_ii
+   jit
+   svi_horovod
 
 .. toctree::
    :maxdepth: 2
-   :caption: Examples:
+   :caption: Bayesian data science
 
-   vae
    bayesian_regression
    bayesian_regression_ii
-   dmm
-   air
-   ss-vae
+   mle_map
    stable
-   cvae
+   mcmc
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contributed:
+   :caption: Discrete latent variables
 
+   enumeration
    gmm
-   gp
-   gplvm
-   bo
+   dirichlet_process_mixture
+   toy_mixture_model_discrete_enumeration
+   hmm
+   capture_recapture
+   einsum
+   lda
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Deep generative models
+
+   vae
+   ss-vae
+   cvae
+   normalizing_flows_i
+   dmm
+   air
+   cevae
+   sparse_gamma
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Advanced custom inference
+
    easyguide
+   custom_objectives
+   boosting_bbvi
+   neutra
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Time-series forecasting
+
    forecasting_i
    forecasting_ii
    forecasting_iii
-   tracking_1d
-   csis
-   RSA-implicature
-   RSA-hyperbole
-   ekf
-   working_memory
-   elections
-   dirichlet_process_mixture
-   boosting_bbvi
-   epi_intro
+   forecasting_dlm
+   forecast_simple
+   timeseries
 
 .. toctree::
    :maxdepth: 2
-   :caption: Code Examples:
+   :caption: Bayesian phylodynamics
 
-   capture_recapture
-   cevae
-   hmm
-   lda
-   mcmc
-   neutra
-   sparse_gamma
-   dkl
-   einsum
-   forecast_simple
-   timeseries
-   smcfilter
+   epi_intro
    epi_sir
    epi_regional
    sir_hmc
-   toy_mixture_model_discrete_enumeration
-   svi_horovod
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Gaussian Processes
+
+   gp
+   gplvm
+   bo
+   dkl
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Bayesian optimal experimental design:
+
+   working_memory
+   elections
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Probabilistic object tracking:
+
+   tracking_1d
+   ekf
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Other examples:
+
+   RSA-implicature
+   RSA-hyperbole
+   csis
+   smcfilter
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Understanding Pyro's internals
+
+   minipyro
+   effect_handlers
+   contrib_funsor_intro_i
+   contrib_funsor_intro_ii
 
 Indices and tables
 ==================
