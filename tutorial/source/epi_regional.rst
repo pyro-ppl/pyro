@@ -1,4 +1,4 @@
-Example: Epidemiological models: Regional
+Example: Regional epidemiological models
 =========================================
 
 `View regional.py on github`__

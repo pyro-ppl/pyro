@@ -1,4 +1,4 @@
-Example: Epidemiological models: Univariate
+Example: Univariate epidemiological models
 ===========================================
 
 `View sir.py on github`__

@@ -15,8 +15,8 @@ New users: getting from zero to one
 If you're new to probabilistic programming or variational inference,
 you might want to start by reading the series :ref:`introductory-tutorials`.
 
-After that, you're ready to get your hands dirty! (Yes, really!)
-Look carefully through the series :ref:`hands-on-with-pyro-and-pytorch`,
+After that, you're ready to get started using Pyro! (Yes, really!)
+Look carefully through the series :ref:`practical-pyro-and-pytorch`,
 especially the :doc:`first Bayesian regression tutorial <bayesian_regression>`,
 which goes step-by-step through solving a simple Bayesian machine learning problem with Pyro,
 grounding the concepts from the introductory tutorials in runnable code.
@@ -26,7 +26,7 @@ Most users who reach this point will also find our :doc:`guide to tensor shapes 
 Pyro makes extensive use of the behavior of `"array broadcasting" <https://numpy.org/doc/stable/user/basics.broadcasting.html>`_
 baked into PyTorch and other array libraries to parallelize models and inference algorithms,
 and while it can be difficult to understand this behavior initially, applying the intuition and rules of thumb there
-will go a long way toward making your experience smooth and reducing the prevalence of nasty shape errors.
+will go a long way toward making your experience smooth and avoiding nasty shape errors.
 
 Core functionality: Deep learning, discrete variables and customizable inference
 ---------------------------------------------------------------------------------
@@ -52,9 +52,9 @@ and should serve as a more digestable introduction to the real thing.
 
 Tools for specific problems
 -----------------------------
-Pyro is a mature piece of open-source software, not a just science project,
-and in addition to the core machinery for modelling and inference,
-it includes quite a bit of dedicated domain- or problem-specific modelling functionality.
+Pyro is a mature piece of open-source software with "batteries included."
+In addition to the core machinery for modelling and inference,
+it includes a large toolkit of dedicated domain- or problem-specific modelling functionality.
 
 One particular area of strength is time-series modelling via `pyro.contrib.forecasting <http://docs.pyro.ai/en/dev/contrib.forecast.html>`_,
 a library for scaling hierarchical, fully Bayesian models of multivariate time series to thousands or millions of series and datapoints.
@@ -82,14 +82,15 @@ List of Tutorials
 
 .. toctree::
    :maxdepth: 1
-   :caption: Hands On with Pyro and PyTorch
-   :name: hands-on-with-pyro-and-pytorch
+   :caption: Practical Pyro and PyTorch
+   :name: practical-pyro-and-pytorch
 
    bayesian_regression
    bayesian_regression_ii
    tensor_shapes
    modules
    jit
+   svi_horovod
 
 .. toctree::
    :maxdepth: 1
@@ -104,7 +105,6 @@ List of Tutorials
    air
    cevae
    sparse_gamma
-   svi_horovod
 
 .. toctree::
    :maxdepth: 1
@@ -166,7 +166,7 @@ List of Tutorials
 
 .. toctree::
    :maxdepth: 1
-   :caption: Application: Optimal Experiment Design
+   :caption: Application: Experimental Design
    :name: optimal-experiment-design
 
    working_memory
@@ -182,17 +182,17 @@ List of Tutorials
 
 .. toctree::
    :maxdepth: 1
-   :caption: Other Examples:
+   :caption: Other Inference Algorithms
 
-   RSA-implicature
-   RSA-hyperbole
    mcmc
    csis
    smcfilter
+   RSA-implicature
+   RSA-hyperbole
 
 .. toctree::
    :maxdepth: 1
-   :caption: Developers: Understanding Pyro's Internals
+   :caption: Understanding Pyro's Internals
    :name: understanding-pyros-internals
 
    minipyro
