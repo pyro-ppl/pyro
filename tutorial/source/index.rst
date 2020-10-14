@@ -120,6 +120,7 @@ List of Tutorials
    toy_mixture_model_discrete_enumeration
    hmm
    capture_recapture
+   mixed_hmm
    einsum
    lda
 
