@@ -105,6 +105,7 @@ List of Tutorials
    normalizing_flows_i
    dmm
    air
+   scanvi
    cevae
    sparse_gamma
 
@@ -132,6 +133,7 @@ List of Tutorials
    custom_objectives
    boosting_bbvi
    neutra
+   sparse_regression
 
 .. toctree::
    :maxdepth: 1
@@ -186,9 +188,12 @@ List of Tutorials
    :maxdepth: 1
    :caption: Other Inference Algorithms
 
+   baseball
    mcmc
+   lkj
    csis
    smcfilter
+   inclined_plane
    RSA-implicature
    RSA-hyperbole
 
