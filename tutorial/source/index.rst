@@ -6,11 +6,9 @@
 Welcome to Pyro Examples and Tutorials!
 ==========================================
 
-This page collects how-to guides and tutorials written by the Pyro community.
-
 .. toctree::
    :maxdepth: 2
-   :caption: Probabilistic programming and variational inference
+   :caption: Introductory Tutorials
 
    intro_part_i
    intro_part_ii
@@ -23,7 +21,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Pyro and PyTorch:
+   :caption: Understanding Pyro and PyTorch
 
    tensor_shapes
    modules
@@ -32,7 +30,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Discrete latent variables
+   :caption: Inference With Discrete Variables
 
    enumeration
    gmm
@@ -45,7 +43,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Deep generative models
+   :caption: Deep Probabilistic Programming
 
    vae
    ss-vae
@@ -58,7 +56,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Advanced custom inference
+   :caption: Advanced: Customizing Inference
 
    easyguide
    custom_objectives
@@ -67,7 +65,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Time-series forecasting
+   :caption: Application: Time Series
 
    forecasting_i
    forecasting_ii
@@ -79,7 +77,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Gaussian Processes
+   :caption: Application: Gaussian Processes
 
    gp
    gplvm
@@ -88,7 +86,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Bayesian epidemiological models
+   :caption: Application: Epidemiology
 
    epi_intro
    epi_sir
@@ -97,21 +95,21 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Bayesian optimal experimental design:
+   :caption: Application: Optimal Experiment Design
 
    working_memory
    elections
 
 .. toctree::
    :maxdepth: 2
-   :caption: Probabilistic object tracking:
+   :caption: Application: Object Tracking
 
    tracking_1d
    ekf
 
 .. toctree::
    :maxdepth: 2
-   :caption: Other examples:
+   :caption: Other Examples:
 
    RSA-implicature
    RSA-hyperbole
@@ -121,7 +119,7 @@ This page collects how-to guides and tutorials written by the Pyro community.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Understanding Pyro's internals
+   :caption: Developers: Understanding Pyro's Internals
 
    minipyro
    effect_handlers
