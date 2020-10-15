@@ -295,7 +295,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.0')
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=float)
