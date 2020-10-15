@@ -119,7 +119,7 @@ setup(
         ],
         'horovod': ['horovod[pytorch]>=0.19'],
         'funsor': [
-            # This must be a released version when Pyro is released. 
+            # This must be a released version when Pyro is released.
             'funsor[torch]==0.3.0',
         ],
     },
