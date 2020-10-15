@@ -24,6 +24,9 @@ lint: FORCE
 license: FORCE
 	python scripts/update_headers.py
 
+version: FORCE
+	python scripts/update_version.py
+
 scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
