@@ -16,18 +16,19 @@ with open(os.path.join(root, "pyro", "__init__.py")) as f:
 # Collect potential files.
 filenames = []
 for path in ["examples", "tutorial/source"]:
-    path = os.path.join(root, path)
-    for pattern in ["*.py", "*.ipynb"]:
-        filenames.extend(glob.glob(os.path.join(path, "**", "*.py")))
+    for ext in ["*.py", "*.ipynb"]:
+        filenames.extend(glob.glob(os.path.join(root, path, "**", ext),
+                                   recursive=True))
 filenames.sort()
 
 # Update version string.
-pattern = re.compile(f"assert pyro.__version__.startswith\\('[^']*'\\)")
-text = f"assert pyro.__version__.startswith('{new_version}')"
+pattern = re.compile("assert pyro.__version__.startswith\\('[^']*'\\)")
+text = f"assert pyro.__version__.startswith({new_version})"
 for filename in filenames:
     with open(filename) as f:
         old_text = f.read()
     new_text = pattern.sub(text, old_text)
     if new_text != old_text:
         print("updating {}".format(filename))
-        # TODO
+    with open(filename, "w") as f:
+        f.write(new_text)
