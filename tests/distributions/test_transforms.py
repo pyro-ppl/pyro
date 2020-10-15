@@ -288,6 +288,10 @@ class TransformTests(TestCase):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             self._test(partial(T.neural_autoregressive, activation=activation), inverse=False)
 
+    def test_ordered_transform(self):
+        # NOTE: Need following since transform takes no input parameters
+        self._test(lambda event_shape: T.OrderedTransform(), autodiff=False)
+
     def test_permute(self):
         for dim in [-1, -2]:
             self._test(partial(T.permute, dim=dim), event_dim=-dim, autodiff=False)
