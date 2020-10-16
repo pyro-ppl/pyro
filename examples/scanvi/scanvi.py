@@ -197,7 +197,8 @@ class SCANVI(nn.Module):
         # wrt the number of datapoints and genes
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
-            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)))
+            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)),
+                            obs=y)
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
