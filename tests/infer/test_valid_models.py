@@ -2274,7 +2274,47 @@ def test_reparam_stable():
     assert_ok(model, guide, Trace_ELBO())
 
 
-@pytest.mark.xfail(reason="missing Beta-Bernoulli pattern in Funsor")
+@pytest.mark.stage("funsor")
+def test_collapse_normal_normal():
+    pytest.importorskip("funsor")
+    data = torch.tensor(0.)
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with poutine.collapse():
+            y = pyro.sample("y", dist.Normal(x, 1.))
+            pyro.sample("z", dist.Normal(y, 1.), obs=data)
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        scale = pyro.param("scale", torch.tensor(1.),
+                           constraint=constraints.positive)
+        pyro.sample("x", dist.Normal(loc, scale))
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.stage("funsor")
+def test_collapse_normal_normal_plate():
+    pytest.importorskip("funsor")
+    data = torch.randn(5)
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with poutine.collapse():
+            y = pyro.sample("y", dist.Normal(x, 1.))
+            with pyro.plate("data", len(data)):
+                pyro.sample("z", dist.Normal(y, 1.), obs=data)
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        scale = pyro.param("scale", torch.tensor(1.),
+                           constraint=constraints.positive)
+        pyro.sample("x", dist.Normal(loc, scale))
+
+    assert_ok(model, guide, Trace_ELBO())
+
+
 @pytest.mark.stage("funsor")
 def test_collapse_beta_bernoulli():
     pytest.importorskip("funsor")
