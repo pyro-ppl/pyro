@@ -25,12 +25,13 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 from torch.nn.functional import softplus, softmax
+from torch.optim import Adam
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape
-from pyro.optim import Adam
+from pyro.optim import MultiStepLR
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 
 import matplotlib.pyplot as plt
@@ -148,7 +149,7 @@ class Classifier(nn.Module):
 
 # Encompasses the scANVI model and guide as a PyTorch nn.Module
 class SCANVI(nn.Module):
-    def __init__(self, num_genes, num_labels, l_loc, l_scale, latent_dim=10, alpha=0.1, scale_factor=1.0):
+    def __init__(self, num_genes, num_labels, l_loc, l_scale, latent_dim=10, alpha=0.01, scale_factor=1.0):
         assert isinstance(num_genes, int)
         self.num_genes = num_genes
 
@@ -183,7 +184,7 @@ class SCANVI(nn.Module):
         self.z1_encoder = Z1Encoder(num_labels=num_labels, z1_dim=self.latent_dim,
                                     z2_dim=self.latent_dim, hidden_dims=[50])
 
-        self.epsilon = 1.0e-6
+        self.epsilon = 5.0e-3
 
     def model(self, x, y=None):
         # Register various nn.Modules with Pyro
@@ -197,7 +198,10 @@ class SCANVI(nn.Module):
         # wrt the number of datapoints and genes
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
             z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
-            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)))
+            # Note that if y is None (i.e. y is unobserved) then y will be sampled;
+            # otherwise y will be treated as observed.
+            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)),
+                            obs=y)
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
@@ -259,8 +263,13 @@ def main(args):
     if args.cuda:
         scanvi.cuda()
 
-    # Setup an optimizer
-    optim = Adam({"lr": args.learning_rate})
+    # Setup an optimizer (Adam) and learning rate scheduler.
+    # By default we start with a moderately high learning rate (0.005)
+    # and reduce by a factor of 5 after 20 epochs.
+    scheduler = MultiStepLR({'optimizer': Adam,
+                             'optim_args': {'lr': args.learning_rate},
+                             'milestones': [20],
+                             'gamma': 0.2})
 
     # Tell Pyro to enumerate out y when y is unobserved
     guide = config_enumerate(scanvi.guide, "parallel", expand=True)
@@ -269,7 +278,7 @@ def main(args):
     # Note we use TraceEnum_ELBO in order to leverage Pyro's machinery
     # for automatic enumeration of the discrete latent variable y.
     elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
-    svi = SVI(scanvi.model, guide, optim, elbo)
+    svi = SVI(scanvi.model, guide, scheduler, elbo)
 
     # Training loop
     for epoch in range(args.num_epochs):
@@ -280,6 +289,9 @@ def main(args):
                 y = y.type_as(x)
             loss = svi.step(x, y)
             losses.append(loss)
+
+        # Tell the scheduler we've done one epoch.
+        scheduler.step()
 
         print("[Epoch %04d]  Loss: %.5f" % (epoch, np.mean(losses)))
 
@@ -343,11 +355,11 @@ if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="single-cell ANnotation using Variational Inference")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=40, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=60, type=int, help='number of training epochs')
     parser.add_argument('-d', '--dataset', default='pbmc', type=str,
                         help='which dataset to use', choices=['pbmc', 'mock'])
     parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.03, type=float, help='learning rate')
+    parser.add_argument('-lr', '--learning-rate', default=0.005, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     parser.add_argument('--plot', action='store_true', default=False, help='whether to make a plot')
     args = parser.parse_args()

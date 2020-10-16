@@ -186,6 +186,7 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
         X, Y = X.cuda(), Y.cuda()
 
     # subsample and remove ~50% of the unlabeled cells
+    torch.manual_seed(0)
     labeled = torch.where(Y != -1)[0]
     unlabeled = torch.where(Y == -1)[0]
     unlabeled = unlabeled[torch.randperm(unlabeled.size(0))[:19800]]
