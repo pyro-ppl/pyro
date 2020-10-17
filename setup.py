@@ -119,11 +119,11 @@ setup(
         ],
         'horovod': ['horovod[pytorch]>=0.19'],
         'funsor': [
-            # TODO update to release branch (currently using a recent commit on master)
-            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@97c1a439d20b893bf877b959dae3ebdf2a051d94',
+            # This must be a released version when Pyro is released.
+            'funsor[torch]==0.3.0',
         ],
     },
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='Apache 2.0',
     classifiers=[

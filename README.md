@@ -35,7 +35,7 @@ For additional blog posts, check out work on [experimental design](https://eng.u
 
 **Install using pip:**
 
-Pyro supports Python 3.5+.
+Pyro supports Python 3.6+.
 
 ```sh
 pip install pyro-ppl
