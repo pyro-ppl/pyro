@@ -382,6 +382,13 @@ LowerCholeskyAffine
     :undoc-members:
     :show-inheritance:
 
+OrderedTransform
+----------------
+.. autoclass:: pyro.distributions.transforms.OrderedTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
