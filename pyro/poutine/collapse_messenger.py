@@ -109,8 +109,13 @@ class CollapseMessenger(TraceMessenger):
     def _pyro_sample(self, msg):
         if self._block:
             return
+        dim_to_name = {f.dim: f.name for f in msg["cond_indep_stack"]}
+        msg["fn"] = funsor.to_funsor(msg["fn"], funsor.Real, dim_to_name)
+        domain = msg["fn"].inputs["value"]
         if msg["value"] is None:
-            msg["value"] = msg["name"]
+            msg["value"] = funsor.Variable(msg["name"], domain)
+        else:
+            msg["value"] = funsor.to_funsor(msg["value"], domain, dim_to_name)
         msg["done"] = True
 
     def _pyro_post_sample(self, msg):
@@ -165,12 +170,7 @@ class CollapseMessenger(TraceMessenger):
         for name, site in self.trace.nodes.items():
             if not site["is_observed"]:
                 reduced_vars.append(name)
-            dim_to_name = {f.dim: f.name for f in site["cond_indep_stack"]}
-            fn = funsor.to_funsor(site["fn"], funsor.Real, dim_to_name)
-            value = site["value"]
-            if not isinstance(value, str):
-                value = funsor.to_funsor(site["value"], fn.inputs["value"], dim_to_name)
-            log_prob_terms.append(fn(value=value))
+            log_prob_terms.append(site["fn"](value=site["value"]))
             plates |= frozenset(f.name for f in site["cond_indep_stack"]
                                 if f.vectorized)
         name = reduced_vars[0]
