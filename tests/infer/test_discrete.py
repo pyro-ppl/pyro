@@ -3,6 +3,7 @@
 
 import logging
 import math
+import warnings
 
 import pytest
 import torch
@@ -330,3 +331,29 @@ def test_prob(nderivs):
         expected_grad = grad(expected_logprob, [p])[0]
         actual_grad = grad(actual_logprob, [p])[0]
         assert_equal(expected_grad, actual_grad, prec=1e-3)
+
+
+def test_warning():
+    data = torch.randn(4)
+
+    def model():
+        x = pyro.sample("x", dist.Categorical(torch.ones(3)))
+        with pyro.plate("data", len(data)):
+            pyro.sample("obs", dist.Normal(x.float(), 1),
+                        obs=data)
+
+    model_1 = infer_discrete(model, first_available_dim=-2)
+    model_2 = infer_discrete(model, first_available_dim=-2,
+                             strict_enumeration_warning=False)
+    model_3 = infer_discrete(config_enumerate(model),
+                             first_available_dim=-2)
+
+    # model_1 should raise warnings.
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        model_1()
+    assert w, 'No warnings were raised'
+
+    # model_2 and model_3 should both be valid.
+    model_2()
+    model_3()
