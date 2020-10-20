@@ -86,7 +86,7 @@ class CollapseMessenger(TraceMessenger):
     .. warning:: This is not compatible with automatic guessing of
         ``max_plate_nesting``. If any plates appear within the collapsed
         context, you should manually declare ``max_plate_nesting`` to your
-        inference algorithm (e.g. ``Trace_ELBO(max_plate_nesting=1)``.
+        inference algorithm (e.g. ``Trace_ELBO(max_plate_nesting=1)``).
     """
     _coerce = None
 
