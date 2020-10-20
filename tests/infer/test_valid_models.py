@@ -2275,7 +2275,8 @@ def test_reparam_stable():
 
 
 @pytest.mark.stage("funsor")
-def test_collapse_normal_normal():
+@pytest.mark.parametrize("num_particles", [1, 2])
+def test_collapse_normal_normal(num_particles):
     pytest.importorskip("funsor")
     data = torch.tensor(0.)
 
@@ -2291,11 +2292,13 @@ def test_collapse_normal_normal():
                            constraint=constraints.positive)
         pyro.sample("x", dist.Normal(loc, scale))
 
-    assert_ok(model, guide, Trace_ELBO())
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True)
+    assert_ok(model, guide, elbo)
 
 
 @pytest.mark.stage("funsor")
-def test_collapse_normal_normal_plate():
+@pytest.mark.parametrize("num_particles", [1, 2])
+def test_collapse_normal_normal_plate(num_particles):
     pytest.importorskip("funsor")
     data = torch.randn(5)
 
@@ -2303,7 +2306,7 @@ def test_collapse_normal_normal_plate():
         x = pyro.sample("x", dist.Normal(0., 1.))
         with poutine.collapse():
             y = pyro.sample("y", dist.Normal(x, 1.))
-            with pyro.plate("data", len(data)):
+            with pyro.plate("data", len(data), dim=-1):
                 pyro.sample("z", dist.Normal(y, 1.), obs=data)
 
     def guide():
@@ -2312,18 +2315,21 @@ def test_collapse_normal_normal_plate():
                            constraint=constraints.positive)
         pyro.sample("x", dist.Normal(loc, scale))
 
-    assert_ok(model, guide, Trace_ELBO())
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True,
+                      max_plate_nesting=1)
+    assert_ok(model, guide, elbo)
 
 
 @pytest.mark.stage("funsor")
-def test_collapse_normal_plate_normal():
+@pytest.mark.parametrize("num_particles", [1, 2])
+def test_collapse_normal_plate_normal(num_particles):
     pytest.importorskip("funsor")
     data = torch.randn(5)
 
     def model():
         x = pyro.sample("x", dist.Normal(0., 1.))
         with poutine.collapse():
-            with pyro.plate("data", len(data)):
+            with pyro.plate("data", len(data), dim=-1):
                 y = pyro.sample("y", dist.Normal(x, 1.))
                 pyro.sample("z", dist.Normal(y, 1.), obs=data)
 
@@ -2333,11 +2339,14 @@ def test_collapse_normal_plate_normal():
                            constraint=constraints.positive)
         pyro.sample("x", dist.Normal(loc, scale))
 
-    assert_ok(model, guide, Trace_ELBO())
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True,
+                      max_plate_nesting=1)
+    assert_ok(model, guide, elbo)
 
 
 @pytest.mark.stage("funsor")
-def test_collapse_beta_bernoulli():
+@pytest.mark.parametrize("num_particles", [1, 2])
+def test_collapse_beta_bernoulli(num_particles):
     pytest.importorskip("funsor")
     data = torch.tensor(0.)
 
@@ -2352,11 +2361,13 @@ def test_collapse_beta_bernoulli():
         b = pyro.param("b", torch.tensor(1.), constraint=constraints.positive)
         pyro.sample("c", dist.Gamma(a, b))
 
-    assert_ok(model, guide, Trace_ELBO())
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True)
+    assert_ok(model, guide, elbo)
 
 
 @pytest.mark.stage("funsor")
-def test_collapse_beta_binomial():
+@pytest.mark.parametrize("num_particles", [1, 2])
+def test_collapse_beta_binomial(num_particles):
     pytest.importorskip("funsor")
     data = torch.tensor(5.)
 
@@ -2371,12 +2382,14 @@ def test_collapse_beta_binomial():
         b = pyro.param("b", torch.tensor(1.), constraint=constraints.positive)
         pyro.sample("c", dist.Gamma(a, b))
 
-    assert_ok(model, guide, Trace_ELBO())
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True)
+    assert_ok(model, guide, elbo)
 
 
 @pytest.mark.xfail(reason="missing pattern in Funsor")
 @pytest.mark.stage("funsor")
-def test_collapse_beta_binomial_plate():
+@pytest.mark.parametrize("num_particles", [1, 2])
+def test_collapse_beta_binomial_plate(num_particles):
     pytest.importorskip("funsor")
     data = torch.tensor([0., 1., 5., 5.])
 
@@ -2393,7 +2406,32 @@ def test_collapse_beta_binomial_plate():
         b = pyro.param("b", torch.tensor(1.), constraint=constraints.positive)
         pyro.sample("c", dist.Gamma(a, b))
 
-    assert_ok(model, guide, Trace_ELBO())
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True,
+                      max_plate_nesting=1)
+    assert_ok(model, guide, elbo)
+
+
+@pytest.mark.stage("funsor")
+@pytest.mark.parametrize("num_particles", [1, 2])
+def test_collapse_barrier(num_particles):
+    pytest.importorskip("funsor")
+    data = torch.tensor([0., 1., 5., 5.])
+
+    def model():
+        with poutine.collapse():
+            z = pyro.sample("z_init", dist.Normal(0, 1))
+            for t, x in enumerate(data):
+                z = pyro.sample("z_{}".format(t), dist.Normal(z, 1))
+                pyro.sample("x_t{}".format(t), dist.Normal(z, 1), obs=x)
+                z = pyro.barrier(z)
+                z = torch.sigmoid(z)
+        return z
+
+    def guide():
+        pass
+
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True)
+    assert_ok(model, guide, elbo)
 
 
 def test_ordered_logistic_plate():
@@ -2418,26 +2456,5 @@ def test_ordered_logistic_plate():
         # sample
         pyro.sample("predictor", dist.Normal(pred_mu, pred_std).to_event(1))
         pyro.sample("cutpoints", dist.Normal(cp_mu, cp_std).to_event(1))
-
-    assert_ok(model, guide, Trace_ELBO())
-
-
-@pytest.mark.stage("funsor")
-def test_collapse_barrier():
-    pytest.importorskip("funsor")
-    data = torch.tensor([0., 1., 5., 5.])
-
-    def model():
-        with poutine.collapse():
-            z = pyro.sample("z_init", dist.Normal(0, 1))
-            for t, x in enumerate(data):
-                z = pyro.sample("z_{}".format(t), dist.Normal(z, 1))
-                pyro.sample("x_t{}".format(t), dist.Normal(z, 1), obs=x)
-                z = pyro.barrier(z)
-                z = torch.sigmoid(z)
-        return z
-
-    def guide():
-        pass
 
     assert_ok(model, guide, Trace_ELBO())
