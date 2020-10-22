@@ -3076,7 +3076,6 @@ def test_compute_marginals_hmm(size):
 
 @pytest.mark.parametrize("observed", ["", "a", "b", "ab"])
 def test_marginals_2678(observed):
-    kwargs = {name: torch.tensor(1.) for name in observed}
 
     @config_enumerate
     def model(a=None, b=None):
@@ -3086,7 +3085,8 @@ def test_marginals_2678(observed):
     def guide(a=None, b=None):
         pass
 
-    elbo = pyro.infer.TraceEnum_ELBO(strict_enumeration_warning=False)
+    kwargs = {name: torch.tensor(1.) for name in observed}
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
     elbo.compute_marginals(model, guide, **kwargs)
 
 
