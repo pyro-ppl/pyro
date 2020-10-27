@@ -96,9 +96,6 @@ class MaskedLinear(nn.Linear):
         self.register_buffer('mask', mask.data)
 
     def forward(self, _input):
-        """
-        the forward method that does the masked linear computation and returns the result
-        """
         masked_weight = self.weight * self.mask
         return F.linear(_input, masked_weight, self.bias)
 
@@ -221,9 +218,6 @@ class ConditionalAutoRegressiveNN(nn.Module):
         return self.permutation
 
     def forward(self, x, context=None):
-        """
-        The forward method
-        """
         # We must be able to broadcast the size of the context over the input
         if context is None:
             context = self.context
@@ -318,7 +312,4 @@ class AutoRegressiveNN(ConditionalAutoRegressiveNN):
             nonlinearity=nonlinearity)
 
     def forward(self, x):
-        """
-        The forward method
-        """
         return self._forward(x)

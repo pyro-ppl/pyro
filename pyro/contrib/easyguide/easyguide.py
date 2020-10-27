@@ -90,6 +90,9 @@ class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
     def forward(self, *args, **kwargs):
         """
         Runs the guide. This is typically used by inference algorithms.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
         """
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)

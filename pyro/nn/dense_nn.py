@@ -65,9 +65,6 @@ class ConditionalDenseNN(torch.nn.Module):
         self.f = nonlinearity
 
     def forward(self, x, context):
-        """
-        The forward method
-        """
         # We must be able to broadcast the size of the context over the input
         context = context.expand(x.size()[:-1]+(context.size(-1),))
 
@@ -138,7 +135,4 @@ class DenseNN(ConditionalDenseNN):
         )
 
     def forward(self, x):
-        """
-        The forward method
-        """
         return self._forward(x)
