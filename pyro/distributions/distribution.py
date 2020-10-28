@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 from abc import ABCMeta, abstractmethod
 
 from pyro.distributions.score_parts import ScoreParts
@@ -15,6 +16,10 @@ class DistributionMeta(ABCMeta):
             if result is not None:
                 return result
         return super().__call__(*args, **kwargs)
+
+    @property
+    def __wrapped__(cls):
+        return functools.partial(cls.__init__, None)
 
 
 class Distribution(metaclass=DistributionMeta):
