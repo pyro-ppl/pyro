@@ -5,6 +5,7 @@ import math
 
 import torch
 
+from .fft import irfft, rfft
 
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
 
@@ -220,10 +221,10 @@ def convolve(signal, kernel, mode='full'):
     padded_size = m + n - 1
     # Round up for cheaper fft.
     fast_ftt_size = next_fast_len(padded_size)
-    f_signal = torch.rfft(torch.nn.functional.pad(signal, (0, fast_ftt_size - m)), 1, onesided=False)
-    f_kernel = torch.rfft(torch.nn.functional.pad(kernel, (0, fast_ftt_size - n)), 1, onesided=False)
+    f_signal = rfft(torch.nn.functional.pad(signal, (0, fast_ftt_size - m)), 1, onesided=False)
+    f_kernel = rfft(torch.nn.functional.pad(kernel, (0, fast_ftt_size - n)), 1, onesided=False)
     f_result = _complex_mul(f_signal, f_kernel)
-    result = torch.irfft(f_result, 1, onesided=False)
+    result = irfft(f_result, 1, onesided=False)
 
     start_idx = (padded_size - truncate) // 2
     return result[..., start_idx: start_idx + truncate]
@@ -328,7 +329,7 @@ def idct(x, dim=-1):
     half_size = N // 2 + 1
     Y = _complex_mul(coef[..., :half_size, :], X[..., :half_size, :])
     # Step 2
-    y = torch.irfft(Y, 1, onesided=True, signal_sizes=(N,))
+    y = irfft(Y, 1, onesided=True, signal_sizes=(N,))
     # Step 3
     return torch.stack([y, y.flip(-1)], axis=-1).reshape(x.shape[:-1] + (-1,))[..., :N]
 

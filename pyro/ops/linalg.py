@@ -50,7 +50,7 @@ def eig_3d(H):
     p = torch.sqrt(p2 / 6)
     B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
     r = determinant_3d(B) / 2
-    phi = (r.acos() / 3).unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3))
+    phi = (r.acos() / 3).unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3)).clone()
     phi[r < -1 + 1e-6] = math.pi / 3
     phi[r > 1 - 1e-6] = 0.
 

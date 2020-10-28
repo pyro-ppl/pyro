@@ -7,6 +7,7 @@ import numbers
 import torch
 
 from .tensor_utils import next_fast_len
+from .fft import irfft, rfft
 
 
 def _compute_chain_variance_stats(input):
@@ -109,13 +110,13 @@ def autocorrelation(input, dim=0):
     centered_signal = torch.cat([centered_signal, pad], dim=-1)
 
     # Fourier transform
-    freqvec = torch.rfft(centered_signal, signal_ndim=1, onesided=False)
+    freqvec = rfft(centered_signal, signal_ndim=1, onesided=False)
     # take square of magnitude of freqvec (or freqvec x freqvec*)
     freqvec_gram = freqvec.pow(2).sum(-1, keepdim=True)
     freqvec_gram = torch.cat([freqvec_gram, torch.zeros(freqvec_gram.shape, dtype=input.dtype,
                                                         device=input.device)], dim=-1)
     # inverse Fourier transform
-    autocorr = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
+    autocorr = irfft(freqvec_gram, signal_ndim=1, onesided=False)
 
     # truncate and normalize the result, then transpose back to original shape
     autocorr = autocorr[..., :N]
