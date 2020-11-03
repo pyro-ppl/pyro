@@ -120,7 +120,11 @@ class SpanningTree(TorchDistribution):
         adjacency[grid[1], grid[0]] = edge_probs
         laplacian = adjacency.sum(-1).diag() - adjacency
         truncated = laplacian[:-1, :-1]
-        log_det = torch.cholesky(truncated).diag().log().sum() * 2
+        try:
+            import gpytorch
+            log_det = gpytorch.lazy.NonLazyTensor(truncated).logdet()
+        except ImportError:
+            log_det = torch.cholesky(truncated).diag().log().sum() * 2
         return log_det + shift * (V - 1)
 
     def log_prob(self, edges):
