@@ -18,8 +18,8 @@ Pyro releases follow semantic versioning with the following caveats:
 Pyro is released at irregular cadence, typically about 4 times per year.
 
 Releases are managed by:
-- [Neeraj Pradhan](https://github.com/neerajprad) npradhan@uber.com
-- [Fritz Obermeyer](https://github.com/fritzo) fritzo@uber.com
+- [Fritz Obermeyer](https://github.com/fritzo)
+- [Neeraj Pradhan](https://github.com/neerajprad)
 - [JP Chen](https://github.com/jpchen)
 
 Releases and release notes are published to [github](https://github.com/pyro-ppl/pyro/releases).
