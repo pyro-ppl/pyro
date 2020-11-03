@@ -79,9 +79,8 @@ setup(
     long_description_content_type='text/markdown',
     packages=find_packages(include=['pyro', 'pyro.*']),
     package_data={"pyro.distributions": ["*.cpp"]},
+    author="Uber AI Labs",
     url='http://pyro.ai',
-    author='Uber AI Labs',
-    author_email='pyro@uber.com',
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
@@ -130,6 +129,7 @@ setup(
         'Intended Audience :: Developers',
         'Intended Audience :: Education',
         'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python :: 3.6',
