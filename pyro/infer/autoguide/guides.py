@@ -394,9 +394,9 @@ class AutoDelta(AutoGuide):
 
 
 class AutoNormal(AutoGuide):
-    """This implementation of :class:`AutoGuide` uses Normal(0, 1) distributions
-    to construct a guide over the entire latent space. The guide does not
-    depend on the model's ``*args, **kwargs``.
+    """This implementation of :class:`AutoGuide` uses a Normal distribution
+    with a diagonal covariance matrix to construct a guide over the entire
+    latent space. The guide does not depend on the model's ``*args, **kwargs``.
 
     It should be equivalent to :class: `AutoDiagonalNormal` , but with
     more convenient site names and with better support for
