@@ -187,6 +187,10 @@ class Predictive(torch.nn.Module):
         contained in `posterior_samples` are returned. This can be modified by changing the
         `return_sites` keyword argument of this :class:`Predictive` instance.
 
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__` as in
+            ``Predictive(model)(*args, **kwargs)``.
+
         :param args: model arguments.
         :param kwargs: model keyword arguments.
         """

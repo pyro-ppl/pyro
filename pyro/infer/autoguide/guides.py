@@ -229,6 +229,9 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
         """
         A composite guide with the same ``*args, **kwargs`` as the base ``model``.
 
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
+
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
         """
@@ -358,6 +361,9 @@ class AutoDelta(AutoGuide):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
+
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
         """
@@ -467,6 +473,9 @@ class AutoNormal(AutoGuide):
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
 
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
@@ -672,6 +681,9 @@ class AutoContinuous(AutoGuide):
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
 
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
@@ -1090,6 +1102,9 @@ class AutoDiscreteParallel(AutoGuide):
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
 
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
