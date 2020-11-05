@@ -229,6 +229,9 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
         """
         A composite guide with the same ``*args, **kwargs`` as the base ``model``.
 
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
+
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
         """
@@ -358,6 +361,9 @@ class AutoDelta(AutoGuide):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
+
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
         """
@@ -388,9 +394,9 @@ class AutoDelta(AutoGuide):
 
 
 class AutoNormal(AutoGuide):
-    """This implementation of :class:`AutoGuide` uses Normal(0, 1) distributions
-    to construct a guide over the entire latent space. The guide does not
-    depend on the model's ``*args, **kwargs``.
+    """This implementation of :class:`AutoGuide` uses a Normal distribution
+    with a diagonal covariance matrix to construct a guide over the entire
+    latent space. The guide does not depend on the model's ``*args, **kwargs``.
 
     It should be equivalent to :class: `AutoDiagonalNormal` , but with
     more convenient site names and with better support for
@@ -467,6 +473,9 @@ class AutoNormal(AutoGuide):
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
 
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
@@ -672,6 +681,9 @@ class AutoContinuous(AutoGuide):
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
 
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
@@ -961,7 +973,7 @@ class AutoIAFNormal(AutoNormalizingFlow):
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
-    :param int hidden_dim: number of hidden dimensions in the IAF
+    :param list[int] hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
 
@@ -1090,6 +1102,9 @@ class AutoDiscreteParallel(AutoGuide):
     def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
 
         :return: A dict mapping sample site name to sampled value.
         :rtype: dict
