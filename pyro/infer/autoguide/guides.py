@@ -973,7 +973,7 @@ class AutoIAFNormal(AutoNormalizingFlow):
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
-    :param int hidden_dim: number of hidden dimensions in the IAF
+    :param list[int] hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
 
