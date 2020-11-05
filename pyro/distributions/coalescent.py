@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import math
 import weakref
 from collections import namedtuple
 
 import torch
-from torch.distributions import constraints
-
 from pyro.distributions.util import broadcast_shape, is_validation_enabled
 from pyro.ops.special import safe_log
+from torch.distributions import biject_to, constraints
+from torch.distributions.transforms import Transform
 
 from .torch_distribution import TorchDistribution
 
@@ -30,6 +31,42 @@ class CoalescentTimesConstraint(constraints.Constraint):
         # Inputs must be ordered.
         ordered = (value[..., :-1] <= value[..., 1:]).all(dim=-1)
         return ordered & at_least_one_lineage
+
+
+class UnorderedCoalescentTimesTransform(Transform):
+    """
+    TODO maybe use softsort()? https://arxiv.org/abs/2006.16038
+    """
+    domain = constraints.real_vector
+    bijective = True
+
+    def __init__(self, leaf_times):
+        if not _is_sorted(leaf_times):
+            raise NotImplementedError("leaf_times must be sorted")
+        self.leaf_times = leaf_times
+
+    @constraints.dependent_property
+    def codomain(self):
+        return CoalescentTimesConstraint(self.leaf_times, ordered=False)
+
+    def __eq__(self, other):
+        return type(other) is type(self) and other.leaf_times is self.leaf_times
+
+    def _call(self, x):
+        raise NotImplementedError("TODO")
+
+    def _inverse(self, y):
+        raise NotImplementedError("TODO")
+
+    def log_abs_det_jacobian(self, x, y):
+        raise NotImplementedError("TODO")
+
+
+@biject_to.register(CoalescentTimesConstraint)
+def _biject_to_coalescent_times(c):
+    if c.ordered:
+        raise NotImplementedError("Try setting ordered=False")
+    return UnorderedCoalescentTimesTransform(c.leaf_times)
 
 
 class CoalescentTimes(TorchDistribution):
@@ -53,19 +90,22 @@ class CoalescentTimes(TorchDistribution):
 
     :param torch.Tensor leaf_times: Vector of times of sampling events, i.e.
         leaf nodes in the phylogeny. These can be arbitrary real numbers with
-        arbitrary order and duplicates.
+        arbitrary duplicates. These can be unordered, but some underlying
+        functions support only ordered leaf_times.
+    :param bool ordered: Whether samples are ordered or arbitrary.
     """
     arg_constraints = {"leaf_times": constraints.real}
 
-    def __init__(self, leaf_times, *, validate_args=None):
+    def __init__(self, leaf_times, *, ordered=False, validate_args=None):
         event_shape = (leaf_times.size(-1) - 1,)
         batch_shape = leaf_times.shape[:-1]
         self.leaf_times = leaf_times
+        self.ordered = ordered
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @constraints.dependent_property
     def support(self):
-        return CoalescentTimesConstraint(self.leaf_times)
+        return CoalescentTimesConstraint(self.leaf_times, self.ordered)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -82,7 +122,13 @@ class CoalescentTimes(TorchDistribution):
         # Scaling by those rates and accounting for log|jacobian|, the density
         # is that of a collection of independent Exponential intervals.
         log_abs_det_jacobian = phylogeny.coal_binomial.log().sum(-1).neg()
-        return log_prob - log_abs_det_jacobian
+        result = log_prob - log_abs_det_jacobian
+
+        # Optionally add log probability of each permutation.
+        if not self.ordered:
+            result = result - math.lgamma(1 + value.size(-1))
+
+        return result
 
     def sample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)[:-1]
@@ -236,7 +282,7 @@ class CoalescentRateLikelihood:
     def __init__(self, leaf_times, coal_times, duration, *, validate_args=None):
         assert leaf_times.size(-1) == 1 + coal_times.size(-1)
         assert isinstance(duration, int) and duration >= 2
-        if validate_args is True or validate_args is None and is_validation_enabled:
+        if validate_args is True or validate_args is None and is_validation_enabled():
             constraint = CoalescentTimesConstraint(leaf_times, ordered=False)
             if not constraint.check(coal_times).all():
                 raise ValueError("Invalid (leaf_times, coal_times)")
@@ -400,6 +446,12 @@ def _weak_memoize(fn):
         return cache[key]
 
     return memoized_fn
+
+
+@_weak_memoize
+@torch.no_grad()
+def _is_sorted(times):
+    return (times[..., :-1] <= times[..., 1:]).all()
 
 
 # This helper data structure has only timing information.
