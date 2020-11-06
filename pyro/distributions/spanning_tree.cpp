@@ -142,7 +142,7 @@ at::Tensor sample_tree_approx(at::Tensor edge_logits) {
   // the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
   auto edge_ids = torch::empty({E}, at::kLong);
   // This maps each vertex to whether it is a member of the cumulative tree.
-  auto components = torch::zeros({V}, at::kByte);
+  auto components = torch::zeros({V}, at::kBool);
 
   // Sample the first edge at random.
   auto probs = (edge_logits - edge_logits.max()).exp();
