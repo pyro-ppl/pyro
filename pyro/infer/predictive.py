@@ -253,10 +253,12 @@ def log_likelihood(
     The API parallels that of the :class:`Predictive` interface (assume `model`
     and `guide` have already been defined elsewhere):
 
-    >>> x = torch.randn(10)
-    >>> y = x + 0.05 * torch.randn(10)
-    >>> cond_model = pyro.condition(model, data={"y": y})
-    >>> ll_vals = log_likelihood(cond_model, guide=guide, num_samples)(x)
+    ```
+    x = torch.randn(10)
+    y = x + 0.05 * torch.randn(10)
+    cond_model = pyro.condition(model, data={"y": y})
+    ll_vals = log_likelihood(cond_model, guide=guide, num_samples)(x)
+    ```
     """
 
     # define the function to return the likelihood values
@@ -272,6 +274,7 @@ def log_likelihood(
         if parallel:
             log_like = dict()
             # now trace it and extract the likelihood from observed sites
+            # posterior_samples = {} if posterior_samples is None else posterior_samples
             predictive = Predictive(
                 model, posterior_samples, guide, num_samples, (), parallel)
             trace = predictive.get_vectorized_trace(*args, **kwargs)
@@ -280,13 +283,19 @@ def log_likelihood(
                 log_like[obs_name] = obs_site["fn"].log_prob(obs_val).detach().cpu()
         # iterate over samples from posterior if model can't be vectorized
         else:
+            if guide is not None:
+                _posterior_samples = _predictive(
+                    guide, {}, num_samples, model_args=args,
+                    model_kwargs=kwargs)
+            else:
+                _posterior_samples = posterior_samples
             site_shapes = {
                 name: (num_samples,) + trace.nodes[name]["value"].shape
                 for name in observed
             }
             log_like = _predictive_sequential(
-                model, {}, args, kwargs, num_samples, site_shapes,
-                collect_fn=lambda msg: msg["fn"].log_prob(msg["value"]))
+                model, _posterior_samples, args, kwargs, num_samples, site_shapes,
+                collect_fn=lambda msg: msg["fn"].log_prob(msg["value"]).detach().cpu())
 
         return log_like
     return log_like_helper
