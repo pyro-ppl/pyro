@@ -32,15 +32,19 @@ def _guess_max_plate_nesting(model, args, kwargs):
 
 
 def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
-                           num_samples, return_site_shapes, return_trace=False):
+                           num_samples, return_site_shapes, return_trace=False,
+                           collect_fn=None):
     collected = []
+    if collect_fn is None:
+        def collect_fn(msg):
+            return msg["value"]
     samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
     for i in range(num_samples):
         trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs)
         if return_trace:
             collected.append(trace)
         else:
-            collected.append({site: trace.nodes[site]['value'] for site in return_site_shapes})
+            collected.append({site: collect_fn(trace.nodes[site]) for site in return_site_shapes})
 
     if return_trace:
         return collected
@@ -229,8 +233,9 @@ def log_likelihood(
     num_samples: int = None,
     parallel: bool = True,
 ) -> Callable:
-    """Calculates the log likelihood of the data for a model with observed
-    sites, given posterior samples (or a guide that can generate them).
+    """EXPERIMENTAL utility to calculate the log likelihood of the data for a
+    model with observed sites, given posterior samples (or a guide that can
+    generate them).
 
     :param model: Model function containing pyro primitives. Must have observed
         sites conditioned on data.
@@ -244,6 +249,14 @@ def log_likelihood(
     :param parallel: Whether to use vectorization, defaults to True
     :type parallel: bool, optional
     :rtype: Callable
+
+    The API parallels that of the :class:`Predictive` interface (assume `model`
+    and `guide` have already been defined elsewhere):
+
+    >>> x = torch.randn(10)
+    >>> y = x + 0.05 * torch.randn(10)
+    >>> cond_model = pyro.condition(model, data={"y": y})
+    >>> ll_vals = log_likelihood(cond_model, guide=guide, num_samples)(x)
     """
 
     # define the function to return the likelihood values
@@ -255,36 +268,25 @@ def log_likelihood(
             for name, site in trace.nodes.items()
             if site["type"] == "sample" and site["is_observed"]
         }
-        # now trace it and extract the likelihood from observed sites
-        predictive = Predictive(
-            model, posterior_samples, guide, num_samples, (), parallel)
         # use vectorized trace
         if parallel:
             log_like = dict()
+            # now trace it and extract the likelihood from observed sites
+            predictive = Predictive(
+                model, posterior_samples, guide, num_samples, (), parallel)
             trace = predictive.get_vectorized_trace(*args, **kwargs)
             for obs_name, obs_val in observed.items():
                 obs_site = trace.nodes[obs_name]
                 log_like[obs_name] = obs_site["fn"].log_prob(obs_val).detach().cpu()
         # iterate over samples from posterior if model can't be vectorized
         else:
-            all_samples = {
-                k: v for k, v in predictive(*args, **kwargs).items()
-                if k not in observed}
-            log_like = {obs_name: [] for obs_name in observed}
-            for i in range(num_samples):
-                param_sample = {k: v[i] for k, v in all_samples.items()}
-                cond_model = pyro.condition(model, data=param_sample)
-                traced_model = poutine.trace(cond_model)
-                trace = traced_model.get_trace(*args, **kwargs)
-                for obs_name, obs_val in observed.items():
-                    obs_site = trace.nodes[obs_name]
-                    ll_sample = obs_site["fn"].log_prob(obs_val).detach().cpu()
-                    log_like[obs_name].append(ll_sample)
-            # each sample is a tensor in a list; stack all the elements into
-            # a single tensor for each site
-            log_like = {
-                obs_name: torch.stack(ll_list, dim=0)
-                for obs_name, ll_list in log_like.items()
+            site_shapes = {
+                name: (num_samples,) + trace.nodes[name]["value"].shape
+                for name in observed
             }
+            log_like = _predictive_sequential(
+                model, {}, args, kwargs, num_samples, site_shapes,
+                collect_fn=lambda msg: msg["fn"].log_prob(msg["value"]))
+
         return log_like
     return log_like_helper
