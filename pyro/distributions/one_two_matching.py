@@ -35,9 +35,17 @@ class OneTwoMatchingConstraint(constraints.Constraint):
 
 
 class OneTwoMatching(TorchDistribution):
-    """
-    Random matching from ``2 N`` sources to ``N`` destinations where each
-    source matches one destination and each destination matches two sources.
+    r"""
+    Random matching from ``2*N`` sources to ``N`` destinations where each
+    source matches exactly **one** destination and each destination matches
+    exactly **two** sources. Samples are represented as long tensors of shape
+    ``(2*N,)`` taking values in ``{0,...,N-1}`` and satisfying the above
+    one-two constraint. The log probability of a sample ``v`` is the sum of
+    edge logits, up to the log partition function ``log Z``:
+
+    .. math::
+
+        \log p(v) = \sum_s \text{logits}[s, v[s]] - \log Z
 
     The :meth:`log_partition_function` and :meth:`log_prob` methods use a Bethe
     approximation [1,2]. This currently does not implement :meth:`sample`.
@@ -72,7 +80,7 @@ class OneTwoMatching(TorchDistribution):
 
     @lazy_property
     def log_partition_function(self):
-        return log_count_two_matchings(self.logits)
+        return log_count_one_two_matchings(self.logits)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -96,7 +104,7 @@ class OneTwoMatching(TorchDistribution):
         raise NotImplementedError
 
 
-def log_count_two_matchings(logits):
+def log_count_one_two_matchings(logits):
     raise NotImplementedError("TODO")
 
 
