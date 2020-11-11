@@ -50,14 +50,17 @@ class OneTwoMatching(TorchDistribution):
         \log p(v) = \sum_s \text{logits}[s, v[s]] - \log Z
 
     The :meth:`log_partition_function` and :meth:`log_prob` methods use a Bethe
-    approximation [1,2]. This currently does not implement :meth:`sample`.
+    approximation [1,2,3]. This currently does not implement :meth:`sample`.
 
     **References:**
 
-    [1] Bert Huang, Tony Jebara (2009)
+    [1] Michael Chertkov, Lukas Kroc, Massimo Vergassola (2008)
+        "Belief propagation and beyond for particle tracking"
+        https://arxiv.org/pdf/0806.1199.pdf
+    [2] Bert Huang, Tony Jebara (2009)
         "Approximating the Permanent with Belief Propagation"
         https://arxiv.org/pdf/0908.1769.pdf
-    [2] Pascal O. Vontobel (2012)
+    [3] Pascal O. Vontobel (2012)
         "The Bethe Permanent of a Non-Negative Matrix"
         https://arxiv.org/pdf/1107.4196.pdf
 
@@ -107,7 +110,7 @@ class OneTwoMatching(TorchDistribution):
         if sample_shape:
             return torch.stack([self.sample(sample_shape[1:])
                                 for _ in range(sample_shape[0])])
-        # Consider initialzing with heuristic or MAP
+        # Consider initializing with heuristic or MAP
         # https://arxiv.org/pdf/0709.1190
         # http://proceedings.mlr.press/v15/huang11a/huang11a.pdf
         # followed by a small number of MCMC steps
