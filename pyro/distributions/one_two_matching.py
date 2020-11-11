@@ -135,9 +135,6 @@ def log_count_one_two_matchings(logits, bp_iters):
     assert num_sources == num_destins * 2
     eps = torch.finfo(logits.dtype).eps
 
-    def safe_log(x):
-        return x.clamp(min=eps).log()
-
     # Perform belief propagation, adapting [1] Lemma 29 to keep potentials h,
     # messages m, and beliefs b in log-space. Local partition functions Z and
     # their terms z are still in linear space.
@@ -151,7 +148,7 @@ def log_count_one_two_matchings(logits, bp_iters):
         shift = b.detach().max(-1, True).values
         z = (b - shift).exp()
         Z = z.sum(-1, True)
-        m_sd = f - safe_log(Z - z) - shift
+        m_sd = f - (Z - z).clamp(min=eps).log() - shift
         warn_if_nan(m_sd, "m_sd iter {}".format(i))
 
         # Update source->destin messages by marginalizing over the
@@ -161,10 +158,10 @@ def log_count_one_two_matchings(logits, bp_iters):
         shift = b.detach().max(-2).values
         z = (b - shift).exp()
         Z = z.sum(-2)
-        # Compute pairwise partition function using inclusion-exclusion.
+        # Compute the pair partition function via inclusion-exclusion.
         Z2 = (Z * Z - (z * z).sum(-2)) / 2  # "(pairs - replacement) / order"
         z2 = z * (Z - z)  # "choose this and any other source"
-        m_ds = f - safe_log(Z2 - z2) - 2 * shift
+        m_ds = f - (Z2 - z2).clamp(min=eps).log() - 2 * shift
         warn_if_nan(m_ds, "m_ds iter {}".format(i))
 
     # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
@@ -177,7 +174,7 @@ def log_count_one_two_matchings(logits, bp_iters):
     energy_d = Z2.log().sum() + 2 * shift.sum()  # destin->source pairs.
     energy_s = (f + m_ds).logsumexp(-1).sum()  # source->destin Categoricals.
     energy_ds = (m_sd + m_ds).exp().log1p().sum()  # Bernoullis for each edge.
-    return energy_ds - energy_d - energy_s
+    return energy_d + energy_s - energy_ds
 
 
 def enumerate_one_two_matchings(num_destins):
