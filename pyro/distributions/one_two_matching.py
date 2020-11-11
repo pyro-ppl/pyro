@@ -7,6 +7,8 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
+from pyro.util import warn_if_nan
+
 from .torch_distribution import TorchDistribution
 
 
@@ -18,20 +20,20 @@ class OneTwoMatchingConstraint(constraints.Constraint):
     def check(self, value):
         if value.dim() == 0:
             warnings.warn("Invalid event_shape: ()")
-            return False
+            return torch.tensor(False)
         batch_shape, event_shape = value.shape[:-1], value.shape[-1:]
         if event_shape != (self.num_sources,):
             warnings.warn("Invalid event_shape: {}".format(event_shape))
-            return False
+            return torch.tensor(False)
         if value.min() < 0 or value.max() >= self.num_destins:
             warnings.warn("Value out of bounds")
-            return False
+            return torch.tensor(False)
         counts = torch.zeros(batch_shape + (self.num_destins,))
         counts.scatter_add_(-1, value, torch.ones(value.shape))
         if (counts != 2).any():
             warnings.warn("Matching is not binary")
-            return False
-        return True
+            return torch.tensor(False)
+        return torch.tensor(True)
 
 
 class OneTwoMatching(TorchDistribution):
@@ -60,19 +62,23 @@ class OneTwoMatching(TorchDistribution):
         https://arxiv.org/pdf/1107.4196.pdf
 
     :param Tensor logits: An ``(2 * N, N)``-shaped tensor of edge logits.
+    :param int bp_iters: Optional number of belief propagation iterations. If
+        unspecified or ``None`` an expensive exact algorithm will be used.
     """
     arg_constraints = {"logits": constraints.real}
     has_enumerate_support = True
 
-    def __init__(self, logits, *, validate_args=None):
+    def __init__(self, logits, *, bp_iters=None, validate_args=None):
         if logits.dim() != 2:
             raise NotImplementedError("OneTwoMatching does not support batching")
+        assert bp_iters is None or isinstance(bp_iters, int) and bp_iters >= 0
         self.num_sources, self.num_destins = logits.shape
         assert self.num_sources == 2 * self.num_destins
         self.logits = logits
         batch_shape = ()
         event_shape = (self.num_sources,)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
+        self.bp_iters = bp_iters
 
     @constraints.dependent_property
     def support(self):
@@ -80,14 +86,19 @@ class OneTwoMatching(TorchDistribution):
 
     @lazy_property
     def log_partition_function(self):
-        return log_count_one_two_matchings(self.logits)
+        if self.bp_iters is not None:
+            return log_count_one_two_matchings(self.logits, self.bp_iters)
+        # Brute force.
+        d = self.enumerate_support()
+        s = torch.arange(d.size(-1), dtype=d.dtype, device=d.device)
+        return self.logits[s, d].sum(-1).logsumexp(-1)
 
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        i = value
-        j = torch.arange(i.size(-1), dtype=i.dtype, device=i.device)
-        return self.logits[i, j].sum(-1) - self.log_partition_function
+        d = value
+        s = torch.arange(d.size(-1), dtype=d.dtype, device=d.device)
+        return self.logits[s, d].sum(-1) - self.log_partition_function
 
     def enumerate_support(self, expand=True):
         return enumerate_one_two_matchings(self.num_destins)
@@ -104,8 +115,64 @@ class OneTwoMatching(TorchDistribution):
         raise NotImplementedError
 
 
-def log_count_one_two_matchings(logits):
-    raise NotImplementedError("TODO")
+def log_count_one_two_matchings(logits, bp_iters):
+    # This adapts [1] from 1-1 matchings to 1-2 matchings.
+    #
+    # The core difference is that the two destination assignments are sampled
+    # without replacement, thereby following a multivariate Wallenius'
+    # noncentral hypergeometric distribution [2]; this results in a change to
+    # the destin->source messages m_ds, relative to [1].
+    #
+    # [1] Pascal O. Vontobel (2012)
+    #     "The Bethe Permanent of a Non-Negative Matrix"
+    #     https://arxiv.org/pdf/1107.4196.pdf
+    # [2] https://en.wikipedia.org/wiki/Noncentral_hypergeometric_distributions
+    assert logits.dim() == 2
+    num_sources, num_destins = logits.shape
+    assert num_sources == num_destins * 2
+    finfo = torch.finfo(logits.dtype)
+
+    def safe_log(x):
+        return (x + finfo.eps).log()
+
+    # Perform belief propagation, adapting [1] Lemma 29 to keep potentials f
+    # and messages m in log-space. Beliefs b are still in linear space.
+    f = logits * 0.5
+    m_sd = m_ds = torch.zeros_like(logits)
+    for i in range(bp_iters):
+        # Update source->destin messages by marginalizing over a simple
+        # categorical distribution.
+        log_b = f + m_ds
+        shift = log_b.detach().max(-1, True).values
+        b = (log_b - shift).exp()
+        Z1 = b.sum(-1, True)
+        z1 = b
+        m_sd = f - safe_log(Z1 - z1) - shift
+        warn_if_nan(m_sd, "m_sd iter {}".format(i))
+
+        # Update source->destin messages by marginalizing over the
+        # distribution of weighted unordered pairs without replacement. We
+        # compute the local partition function Z and diagonal elements z via
+        # inclusion-exclusion.
+        log_b = f + m_sd
+        shift = log_b.detach().max(-2).values
+        b = (log_b - shift).exp()
+        Z1 = b.sum(-2)
+        Z2 = (Z1 * Z1 - (b * b).sum(-2)) / 2  # "(pairs - replacement) / order"
+        z2 = b * (Z1 - b)  # "choose this and any other source"
+        m_sd = f - safe_log(Z2 - z2) - 2 * shift
+        warn_if_nan(m_sd, "m_ds iter {}".format(i))
+
+    # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
+    # Again we compute the pair partition function via inclusion-exclusion.
+    log_b = f + m_sd
+    shift = log_b.detach().max(-2).values
+    b = (log_b - shift).exp()
+    Z = (b.sum(-2).pow(2) - b.pow(2).sum(-2)) / 2
+    energy_d = Z.log().sum() + 2 * shift.sum()  # destin->source pairs.
+    energy_s = (f + m_ds).logsumexp(-1).sum()  # source->destin Categoricals.
+    energy_ds = (m_sd + m_ds).exp().log1p().sum()  # Bernoullis for each edge.
+    return energy_ds - energy_d - energy_s
 
 
 def enumerate_one_two_matchings(num_destins):
@@ -119,7 +186,7 @@ def enumerate_one_two_matchings(num_destins):
                          num_sources,
                          dtype=torch.long)
 
-    # Iterate over pairs of sources (s0<s1) chosen by the last destination d.
+    # Iterate over pairs of sources s0<s1 matching the last destination d.
     d = num_destins - 1
     pos = 0
     for s1 in range(num_sources):
