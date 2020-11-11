@@ -11,11 +11,12 @@ import pyro.distributions as dist
 from tests.common import assert_close
 
 
-def random_phylo_logits(num_leaves):
+def random_phylo_logits(num_leaves, dtype):
     # Construct a random phylogenetic problem.
-    leaf_times = torch.randn(num_leaves)
+    leaf_times = torch.randn(num_leaves, dtype=dtype)
     coal_times = dist.CoalescentTimes(leaf_times).sample()
     times = torch.cat([leaf_times, coal_times]).requires_grad_()
+    assert times.dtype == dtype
 
     # Convert to a one-two-matching problem.
     ids = torch.arange(len(times))
@@ -23,7 +24,8 @@ def random_phylo_logits(num_leaves):
     sources = torch.cat([ids[:root], ids[root+1:]])
     destins = ids[num_leaves:]
     dt = times[sources][:, None] - times[destins]
-    logits = torch.where(dt > 0, -dt, -math.inf)
+    logits = torch.where(dt > 0, -dt, dt.new_tensor(-math.inf))
+    assert logits.dtype == dtype
 
     return logits, times
 
@@ -33,9 +35,10 @@ def _hash(value):
 
 
 @pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
-def test_enumerate(num_destins):
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+def test_enumerate(num_destins, dtype):
     num_sources = 2 * num_destins
-    logits = torch.randn(num_sources, num_destins)
+    logits = torch.randn(num_sources, num_destins, dtype=dtype)
     d = dist.OneTwoMatching(logits)
     values = d.enumerate_support()
     logging.info("destins = {}, suport size = {}".format(num_destins, len(values)))
@@ -44,33 +47,37 @@ def test_enumerate(num_destins):
 
 
 @pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
-@pytest.mark.parametrize("bp_iters", [None, 10])
-def test_log_prob_full(num_destins, bp_iters):
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
+def test_log_prob_full(num_destins, dtype, bp_iters):
     num_sources = 2 * num_destins
-    logits = torch.randn(num_sources, num_destins) * 10
+    logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
     logging.info(f"log_total = {log_total:0.3g}")
-    assert_close(log_total, 0., atol=0.5)
+    assert_close(log_total, 0., atol=1.5)
 
 
 @pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
-@pytest.mark.parametrize("bp_iters", [None, 10])
-def test_log_prob_phylo(num_leaves, bp_iters):
-    logits, times = random_phylo_logits(num_leaves)
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
+def test_log_prob_phylo(num_leaves, dtype, bp_iters):
+    logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
     logging.info(f"log_total = {log_total:0.3g}")
-    assert_close(log_total, 0., atol=0.01)
+    assert_close(log_total, 0., atol=2.0)
 
 
 @pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])
-def test_log_prob_phylo_smoke(num_leaves):
-    logits, times = random_phylo_logits(num_leaves)
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+def test_log_prob_phylo_smoke(num_leaves, dtype):
+    logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits, bp_iters=10)
     logz = d.log_partition_function
+    assert logz.dtype == dtype
     assert not torch.isnan(logz)
     dt = torch.autograd.grad(logz, [times])[0]
     assert not torch.isnan(dt).any()

@@ -449,6 +449,7 @@ def _make_phylogeny(leaf_times, coal_times):
 
 def _sample_coalescent_times(leaf_times):
     leaf_times = leaf_times.detach()
+    proto = leaf_times
     N = leaf_times.size(-1)
     batch_shape = leaf_times.shape[:-1]
 
@@ -468,7 +469,7 @@ def _sample_coalescent_times(leaf_times):
     t = leaf_times[leaf]
     active = 2
     binomial = active * (active - 1) / 2
-    for u in torch.empty(N - 1).exponential_().tolist():
+    for u in proto.new_empty(N - 1).exponential_().tolist():
         while leaf + 1 < N and u > (t - leaf_times[leaf + 1]) * binomial:
             # Move past the next leaf.
             leaf += 1
@@ -483,4 +484,4 @@ def _sample_coalescent_times(leaf_times):
         coal_times.append(t)
     coal_times.reverse()
 
-    return torch.tensor(coal_times)
+    return proto.new_tensor(coal_times)

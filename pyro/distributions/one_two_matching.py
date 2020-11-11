@@ -118,6 +118,11 @@ class OneTwoMatching(TorchDistribution):
         raise NotImplementedError
 
 
+def safe_log(x):
+    finfo = torch.finfo(x.dtype)
+    return x.clamp(min=finfo.eps).log()
+
+
 def log_count_one_two_matchings(logits, bp_iters):
     # This adapts [1] from 1-1 matchings to 1-2 matchings.
     #
@@ -135,9 +140,6 @@ def log_count_one_two_matchings(logits, bp_iters):
     num_sources, num_destins = logits.shape
     assert num_sources == num_destins * 2
     finfo = torch.finfo(logits.dtype)
-
-    def safe_log(x):
-        return x.clamp(min=finfo.eps).log()
 
     # Perform belief propagation, adapting [1] Lemma 29 to keep potentials h,
     # messages m, and beliefs b in log-space, and numerically stabilizing.
