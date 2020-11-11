@@ -129,50 +129,52 @@ def log_count_one_two_matchings(logits, bp_iters):
     # [1] Pascal O. Vontobel (2012)
     #     "The Bethe Permanent of a Non-Negative Matrix"
     #     https://arxiv.org/pdf/1107.4196.pdf
-    # [2] https://en.wikipedia.org/wiki/Noncentral_hypergeometric_distributions
+    # [2] https://en.wikipedia.org/wiki/Wallenius%27_noncentral_hypergeometric_distribution
     assert logits.dim() == 2
     num_sources, num_destins = logits.shape
     assert num_sources == num_destins * 2
-    finfo = torch.finfo(logits.dtype)
+    eps = torch.finfo(logits.dtype).eps
 
     def safe_log(x):
-        return (x + finfo.eps).log()
+        return x.clamp(min=eps).log()
 
-    # Perform belief propagation, adapting [1] Lemma 29 to keep potentials f
-    # and messages m in log-space. Beliefs b are still in linear space.
-    f = logits * 0.5
+    # Perform belief propagation, adapting [1] Lemma 29 to keep potentials h,
+    # messages m, and beliefs b in log-space. Local partition functions Z and
+    # their terms z are still in linear space.
+    f = logits * 0.5  # Split potentials half-half between source and destin.
     m_sd = m_ds = torch.zeros_like(logits)
     for i in range(bp_iters):
         # Update source->destin messages by marginalizing over a simple
         # categorical distribution.
-        log_b = f + m_ds
-        shift = log_b.detach().max(-1, True).values
-        b = (log_b - shift).exp()
-        Z1 = b.sum(-1, True)
-        z1 = b
-        m_sd = f - safe_log(Z1 - z1) - shift
+        b = f + m_ds
+        print(f"DEBUG b =\n{b}")
+        shift = b.detach().max(-1, True).values
+        z = (b - shift).exp()
+        Z = z.sum(-1, True)
+        m_sd = f - safe_log(Z - z) - shift
         warn_if_nan(m_sd, "m_sd iter {}".format(i))
 
         # Update source->destin messages by marginalizing over the
-        # distribution of weighted unordered pairs without replacement. We
-        # compute the local partition function Z and diagonal elements z via
-        # inclusion-exclusion.
-        log_b = f + m_sd
-        shift = log_b.detach().max(-2).values
-        b = (log_b - shift).exp()
-        Z1 = b.sum(-2)
-        Z2 = (Z1 * Z1 - (b * b).sum(-2)) / 2  # "(pairs - replacement) / order"
-        z2 = b * (Z1 - b)  # "choose this and any other source"
-        m_sd = f - safe_log(Z2 - z2) - 2 * shift
-        warn_if_nan(m_sd, "m_ds iter {}".format(i))
+        # distribution of weighted unordered pairs without replacement.
+        b = f + m_sd
+        print(f"DEBUG b =\n{b}")
+        shift = b.detach().max(-2).values
+        z = (b - shift).exp()
+        Z = z.sum(-2)
+        # Compute pairwise partition function using inclusion-exclusion.
+        Z2 = (Z * Z - (z * z).sum(-2)) / 2  # "(pairs - replacement) / order"
+        z2 = z * (Z - z)  # "choose this and any other source"
+        m_ds = f - safe_log(Z2 - z2) - 2 * shift
+        warn_if_nan(m_ds, "m_ds iter {}".format(i))
 
     # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
     # Again we compute the pair partition function via inclusion-exclusion.
-    log_b = f + m_sd
-    shift = log_b.detach().max(-2).values
-    b = (log_b - shift).exp()
-    Z = (b.sum(-2).pow(2) - b.pow(2).sum(-2)) / 2
-    energy_d = Z.log().sum() + 2 * shift.sum()  # destin->source pairs.
+    b = f + m_sd
+    shift = b.detach().max(-2).values
+    z = (b - shift).exp()
+    Z = z.sum(-2)
+    Z2 = (Z * Z - (z * z).sum(-2)) / 2
+    energy_d = Z2.log().sum() + 2 * shift.sum()  # destin->source pairs.
     energy_s = (f + m_ds).logsumexp(-1).sum()  # source->destin Categoricals.
     energy_ds = (m_sd + m_ds).exp().log1p().sum()  # Bernoullis for each edge.
     return energy_ds - energy_d - energy_s
