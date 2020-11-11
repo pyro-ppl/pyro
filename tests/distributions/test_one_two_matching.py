@@ -47,11 +47,12 @@ def test_enumerate(num_destins):
 @pytest.mark.parametrize("bp_iters", [None, 10])
 def test_log_prob_full(num_destins, bp_iters):
     num_sources = 2 * num_destins
-    logits = torch.randn(num_sources, num_destins)
+    logits = torch.randn(num_sources, num_destins) * 10
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
-    total = d.log_prob(values).logsumexp(0).item()
-    assert_close(total, 0., atol=0.01)
+    log_total = d.log_prob(values).logsumexp(0).item()
+    logging.info(f"log_total = {log_total:0.3g}")
+    assert_close(log_total, 0., atol=0.5)
 
 
 @pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
@@ -60,8 +61,9 @@ def test_log_prob_phylo(num_leaves, bp_iters):
     logits, times = random_phylo_logits(num_leaves)
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
-    total = d.log_prob(values).logsumexp(0).item()
-    assert_close(total, 0., atol=0.01)
+    log_total = d.log_prob(values).logsumexp(0).item()
+    logging.info(f"log_total = {log_total:0.3g}")
+    assert_close(log_total, 0., atol=0.01)
 
 
 @pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])

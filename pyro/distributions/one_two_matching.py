@@ -7,7 +7,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.util import warn_if_nan
+from pyro.util import warn_if_inf, warn_if_nan
 
 from .torch_distribution import TorchDistribution
 
@@ -74,7 +74,7 @@ class OneTwoMatching(TorchDistribution):
     def __init__(self, logits, *, bp_iters=None, validate_args=None):
         if logits.dim() != 2:
             raise NotImplementedError("OneTwoMatching does not support batching")
-        assert bp_iters is None or isinstance(bp_iters, int) and bp_iters >= 0
+        assert bp_iters is None or isinstance(bp_iters, int) and bp_iters > 0
         self.num_sources, self.num_destins = logits.shape
         assert self.num_sources == 2 * self.num_destins
         self.logits = logits
@@ -130,51 +130,53 @@ def log_count_one_two_matchings(logits, bp_iters):
     #     "The Bethe Permanent of a Non-Negative Matrix"
     #     https://arxiv.org/pdf/1107.4196.pdf
     # [2] https://en.wikipedia.org/wiki/Wallenius%27_noncentral_hypergeometric_distribution
+    assert bp_iters > 0
     assert logits.dim() == 2
     num_sources, num_destins = logits.shape
     assert num_sources == num_destins * 2
-    eps = torch.finfo(logits.dtype).eps
+    finfo = torch.finfo(logits.dtype)
+
+    def safe_log(x):
+        return x.clamp(min=finfo.eps).log()
 
     # Perform belief propagation, adapting [1] Lemma 29 to keep potentials h,
-    # messages m, and beliefs b in log-space. Local partition functions Z and
-    # their terms z are still in linear space.
+    # messages m, and beliefs b in log-space, and numerically stabilizing.
+    # Local partition functions Z and their terms z are still in linear space.
     f = logits * 0.5  # Split potentials half-half between source and destin.
     m_sd = m_ds = torch.zeros_like(logits)
     for i in range(bp_iters):
         # Update source->destin messages by marginalizing over a simple
         # categorical distribution.
         b = f + m_ds
-        print(f"DEBUG b =\n{b}")
-        shift = b.detach().max(-1, True).values
-        z = (b - shift).exp()
+        b = b - b.detach().max(-1, True).values.clamp_(max=finfo.max)
+        z = b.exp()
         Z = z.sum(-1, True)
-        m_sd = f - (Z - z).clamp(min=eps).log() - shift
+        m_sd = b - safe_log(Z - z) - m_ds
+        m_sd = m_sd.clamp(min=finfo.min, max=finfo.max)
         warn_if_nan(m_sd, "m_sd iter {}".format(i))
 
         # Update source->destin messages by marginalizing over the
         # distribution of weighted unordered pairs without replacement.
         b = f + m_sd
-        print(f"DEBUG b =\n{b}")
-        shift = b.detach().max(-2).values
-        z = (b - shift).exp()
+        shift = b.detach().max(-2).values.clamp_(max=finfo.max)
+        b = b - shift
+        z = b.exp()
         Z = z.sum(-2)
         # Compute the pair partition function via inclusion-exclusion.
         Z2 = (Z * Z - (z * z).sum(-2)) / 2  # "(pairs - replacement) / order"
         z2 = z * (Z - z)  # "choose this and any other source"
-        m_ds = f - (Z2 - z2).clamp(min=eps).log() - 2 * shift
+        m_ds = safe_log(z2) - safe_log(Z2 - z2) - m_sd
+        m_ds = m_ds.clamp(min=finfo.min, max=finfo.max)
         warn_if_nan(m_ds, "m_ds iter {}".format(i))
 
     # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
-    # Again we compute the pair partition function via inclusion-exclusion.
-    b = f + m_sd
-    shift = b.detach().max(-2).values
-    z = (b - shift).exp()
-    Z = z.sum(-2)
-    Z2 = (Z * Z - (z * z).sum(-2)) / 2
-    energy_d = Z2.log().sum() + 2 * shift.sum()  # destin->source pairs.
+    energy_d = safe_log(Z2).sum() + 2 * shift.sum()  # destin->source pairs.
     energy_s = (f + m_ds).logsumexp(-1).sum()  # source->destin Categoricals.
     energy_ds = (m_sd + m_ds).exp().log1p().sum()  # Bernoullis for each edge.
-    return energy_d + energy_s - energy_ds
+    energy = energy_ds - energy_d - energy_s
+    warn_if_nan(energy, "energy")
+    warn_if_inf(energy, "energy")
+    return -energy
 
 
 def enumerate_one_two_matchings(num_destins):
