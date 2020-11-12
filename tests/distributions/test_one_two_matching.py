@@ -10,6 +10,8 @@ import torch
 import pyro.distributions as dist
 from tests.common import assert_close
 
+BP_ITERS = 10
+
 
 def random_phylo_logits(num_leaves, dtype):
     # Construct a random phylogenetic problem.
@@ -48,41 +50,41 @@ def test_enumerate(num_destins, dtype):
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
-@pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
+@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_log_prob_full(num_destins, dtype, bp_iters):
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(f"log_total = {log_total:0.3g}")
-    logging.info(f"log_Z = {d.log_partition_function:0.3g}")
+    logging.info(f"log_total = {log_total:0.3g}, " +
+                 f"log_Z = {d.log_partition_function:0.3g}")
     assert_close(log_total, 0., atol=1.5)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
-@pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
+@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_log_prob_hard(dtype, bp_iters):
     logits = [[0., 0.], [0., 0.], [0., 0.], [0., -math.inf]]
     logits = torch.tensor(logits, dtype=dtype)
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(f"log_total = {log_total:0.3g}")
-    logging.info(f"log_Z = {d.log_partition_function:0.3g}")
+    logging.info(f"log_total = {log_total:0.3g}, " +
+                 f"log_Z = {d.log_partition_function:0.3g}")
     assert_close(log_total, 0., atol=1.5)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
-@pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
+@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_log_prob_phylo(num_leaves, dtype, bp_iters):
     logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(f"log_total = {log_total:0.3g}")
-    logging.info(f"log_Z = {d.log_partition_function:0.3g}")
+    logging.info(f"log_total = {log_total:0.3g}, " +
+                 f"log_Z = {d.log_partition_function:0.3g}")
     assert_close(log_total, 0., atol=num_leaves + logits.numel() / 10)
 
 

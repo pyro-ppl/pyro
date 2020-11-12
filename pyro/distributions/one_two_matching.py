@@ -137,7 +137,8 @@ def log_count_one_two_matchings(logits, bp_iters):
     finfo = torch.finfo(logits.dtype)
 
     def clamp(x):
-        x.data.clamp_(min=finfo.min, max=finfo.max)
+        # We clamp generously so results can be added without overflow.
+        x.data.clamp_(min=finfo.min / 4, max=finfo.max / 4)
         return x
 
     def log(x):
@@ -148,28 +149,28 @@ def log_count_one_two_matchings(logits, bp_iters):
     # representations of potentials f, messages m, and beliefs b. Local
     # marginals z and local partition functions Z are in linear space.
     f = clamp(logits / 2)  # Split potential in half between source & destin.
-    m_sd = m_ds = torch.zeros_like(logits)
+    m_ds = torch.zeros_like(f)
     for i in range(bp_iters):
         # Update source->destin messages by marginalizing over a simple
         # categorical distribution.
         b = f + m_ds
-        b = b - b.detach().max(-1, True).values.clamp_(max=finfo.max)
+        b.data -= b.data.max(-1, True).values
         z = b.exp()
         Z = z.sum(-1, True)
-        m_sd = clamp(clamp(b - log(Z - z)) - m_ds)
+        m_sd = clamp(b - log(Z - z) - m_ds)
         warn_if_nan(m_sd, "m_sd iter {}".format(i))
 
         # Update source->destin messages by marginalizing over the
         # distribution of weighted unordered pairs without replacement.
         b = f + m_sd
-        shift = b.detach().max(-2).values.clamp_(max=finfo.max)
-        b = b - shift
+        shift = b.data.max(-2).values
+        b.data -= shift
         z = b.exp()
         Z = z.sum(-2)
         # Compute the pair partition function via inclusion-exclusion.
         Z2 = (Z * Z - (z * z).sum(-2)) / 2  # "(pairs - replacement) / order"
         z2 = z * (Z - z)  # "choose this and any other source"
-        m_ds = clamp(clamp(log(z2) - log(Z2 - z2)) - m_sd)
+        m_ds = clamp(log(z2) - log(Z2 - z2) - m_sd)
         warn_if_nan(m_ds, "m_ds iter {}".format(i))
 
     # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
