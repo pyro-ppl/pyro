@@ -136,19 +136,15 @@ def model3(x, event_shape):
             while m.ndim < M:
                 m = m.unsqueeze(-(len(event_shape)+1))
             x = x.unsqueeze(0)
-            while x.ndim < M:
-                x = x.unsqueeze(-1)
-            while sigma.ndim < M:
-                sigma = sigma.unsqueeze(-1)
         else:  # if using _predictive_serial
             # broadcast all tensors to shape x.shape + event_shape
             M = len(x.shape + event_shape)
             while m.ndim < M:
                 m = m.unsqueeze(0)
-            while x.ndim < M:
-                x = x.unsqueeze(-1)
-            while sigma.ndim < M:
-                sigma = sigma.unsqueeze(-1)
+        while x.ndim < M:
+            x = x.unsqueeze(-1)
+        while sigma.ndim < M:
+            sigma = sigma.unsqueeze(-1)
         # finally add them!
         y = m * x
         return pyro.sample("y", Normal(y, sigma).to_event(len(event_shape)))
