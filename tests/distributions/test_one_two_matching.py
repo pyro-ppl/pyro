@@ -34,8 +34,8 @@ def _hash(value):
     return tuple(value.tolist())
 
 
-@pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
 def test_enumerate(num_destins, dtype):
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype)
@@ -46,8 +46,8 @@ def test_enumerate(num_destins, dtype):
     assert len(set(map(_hash, values))) == len(values), "not unique"
 
 
-@pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
 @pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
 def test_log_prob_full(num_destins, dtype, bp_iters):
     num_sources = 2 * num_destins
@@ -59,8 +59,20 @@ def test_log_prob_full(num_destins, dtype, bp_iters):
     assert_close(log_total, 0., atol=1.5)
 
 
-@pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
+def test_log_prob_hard(dtype, bp_iters):
+    logits = [[0., 0.], [0., 0.], [0., 0.], [0., -math.inf]]
+    logits = torch.tensor(logits, dtype=dtype)
+    d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
+    values = d.enumerate_support()
+    log_total = d.log_prob(values).logsumexp(0).item()
+    logging.info(f"log_total = {log_total:0.3g}")
+    assert_close(log_total, 0., atol=1.5)
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
 @pytest.mark.parametrize("bp_iters", [None, 10], ids=["exact", "bp"])
 def test_log_prob_phylo(num_leaves, dtype, bp_iters):
     logits, times = random_phylo_logits(num_leaves, dtype)
@@ -71,8 +83,8 @@ def test_log_prob_phylo(num_leaves, dtype, bp_iters):
     assert_close(log_total, 0., atol=2.0)
 
 
-@pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])
 def test_log_prob_phylo_smoke(num_leaves, dtype):
     logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits, bp_iters=10)
