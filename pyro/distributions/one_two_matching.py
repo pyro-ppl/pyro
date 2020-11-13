@@ -146,14 +146,14 @@ def log_count_one_two_matchings(logits, bp_iters):
         return x.log()
 
     # Perform belief propagation, adapting [1] Lemma 29 to use log-space
-    # representations of potentials f, messages m, and beliefs b. Local
-    # marginals z and local partition functions Z are in linear space.
-    f = clamp(logits / 2)  # Split potential in half between source & destin.
-    m_ds = torch.zeros_like(f)
+    # representations messages m and beliefs b. Local marginals z and local
+    # partition functions Z are in linear space.
+    logits = clamp(logits.clone())
+    m_ds = torch.zeros_like(logits)
     for i in range(bp_iters):
         # Update source->destin messages by marginalizing over a simple
         # categorical distribution.
-        b = f + m_ds
+        b = logits + m_ds
         b.data -= b.data.max(-1, True).values
         z = b.exp()
         Z = z.sum(-1, True)
@@ -162,10 +162,8 @@ def log_count_one_two_matchings(logits, bp_iters):
 
         # Update source->destin messages by marginalizing over the
         # distribution of weighted unordered pairs without replacement.
-        b = f + m_sd
-        shift = b.data.max(-2).values
-        b.data -= shift
-        z = b.exp()
+        shift = m_sd.data.max(-2).values
+        z = (m_sd - shift).exp()
         Z = z.sum(-2)
         z2 = z * (Z - z)  # "choose this and any other source"
         Z2 = z2.sum(-2) / 2  # "ordered pairs, modulo order"
@@ -174,7 +172,7 @@ def log_count_one_two_matchings(logits, bp_iters):
 
     # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
     energy_d = log(Z2).sum() + 2 * shift.sum()  # destin->source pairs.
-    energy_s = (f + m_ds).logsumexp(-1).sum()  # source->destin Categoricals.
+    energy_s = (logits + m_ds).logsumexp(-1).sum()  # source->destin Categoricals.
     energy_ds = (m_sd + m_ds).exp().log1p().sum()  # Bernoullis for each edge.
     energy = energy_ds - energy_d - energy_s
     warn_if_nan(energy, "energy")
