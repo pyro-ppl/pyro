@@ -49,6 +49,18 @@ def test_enumerate(num_destins, dtype):
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
+def test_sample_smoke(num_destins, sample_shape, dtype):
+    num_sources = 2 * num_destins
+    logits = torch.randn(num_sources, num_destins, dtype=dtype)
+    d = dist.OneTwoMatching(logits)
+    values = d.sample(sample_shape)
+    assert values.shape == sample_shape + (num_sources,)
+    assert d.support.check(values).all()
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_log_prob_full(num_destins, dtype, bp_iters):

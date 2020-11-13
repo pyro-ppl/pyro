@@ -9,6 +9,7 @@ from torch.distributions.utils import lazy_property
 
 from pyro.util import warn_if_inf, warn_if_nan
 
+from .torch import Categorical
 from .torch_distribution import TorchDistribution
 
 
@@ -107,6 +108,14 @@ class OneTwoMatching(TorchDistribution):
         return enumerate_one_two_matchings(self.num_destins)
 
     def sample(self, sample_shape=torch.Size()):
+        if self.bp_iters is None:
+            # Brute force.
+            d = self.enumerate_support()
+            s = torch.arange(d.size(-1), dtype=d.dtype, device=d.device)
+            logits = self.logits[s, d].sum(-1)
+            sample = Categorical(logits=logits).sample(sample_shape)
+            return d[sample]
+
         if sample_shape:
             return torch.stack([self.sample(sample_shape[1:])
                                 for _ in range(sample_shape[0])])
@@ -124,7 +133,7 @@ def log_count_one_two_matchings(logits, bp_iters):
     # The core difference is that the two destination assignments are sampled
     # without replacement, thereby following a multivariate Wallenius'
     # noncentral hypergeometric distribution [2]; this results in a change to
-    # the destin->source messages m_ds, relative to [1].
+    # the destin -> source messages m_ds, relative to [1].
     #
     # [1] Pascal O. Vontobel (2012)
     #     "The Bethe Permanent of a Non-Negative Matrix"
@@ -145,13 +154,13 @@ def log_count_one_two_matchings(logits, bp_iters):
         x.data.clamp_(min=finfo.eps, max=finfo.max)
         return x.log()
 
-    # Perform belief propagation, adapting [1] Lemma 29 to use log-space
+    # Perform loopy belief propagation, adapting [1] Lemma 29 to use log-space
     # representations messages m and beliefs b. Local marginals z and local
     # partition functions Z are in linear space.
     logits = clamp(logits.clone())
     m_ds = torch.zeros_like(logits)
     for i in range(bp_iters):
-        # Update source->destin messages by marginalizing over a simple
+        # Update source -> destin messages by marginalizing over a simple
         # categorical distribution.
         b = logits + m_ds
         b.data -= b.data.max(-1, True).values
@@ -160,7 +169,7 @@ def log_count_one_two_matchings(logits, bp_iters):
         m_sd = clamp(b - log(Z - z) - m_ds)
         warn_if_nan(m_sd, "m_sd iter {}".format(i))
 
-        # Update source->destin messages by marginalizing over the
+        # Update destin -> source messages by marginalizing over the
         # distribution of weighted unordered pairs without replacement.
         shift = m_sd.data.max(-2).values
         z = (m_sd - shift).exp()
