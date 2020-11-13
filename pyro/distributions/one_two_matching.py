@@ -127,55 +127,6 @@ class OneTwoMatching(TorchDistribution):
         raise NotImplementedError
 
 
-def log_count_one_two_matchings_v0(logits, bp_iters):
-    # This adapts [1] from 1-1 matchings to 1-2 matchings.
-    #
-    # The core difference is that the two destination assignments are sampled
-    # without replacement, thereby following a multivariate Wallenius'
-    # noncentral hypergeometric distribution [2]; this results in a change to
-    # the destin -> source messages m_ds, relative to [1].
-    #
-    # [1] Pascal O. Vontobel (2012)
-    #     "The Bethe Permanent of a Non-Negative Matrix"
-    #     https://arxiv.org/pdf/1107.4196.pdf
-    # [2] https://en.wikipedia.org/wiki/Wallenius%27_noncentral_hypergeometric_distribution
-    assert bp_iters > 0
-    assert logits.dim() == 2
-    num_sources, num_destins = logits.shape
-    assert num_sources == 2 * num_destins
-    finfo = torch.finfo(logits.dtype)
-
-    # Perform loopy belief propagation, adapting [1] Lemma 29.
-    logit_shift = logits.data.max(1, True).values
-    p = (logits - logit_shift).exp().clamp(min=finfo.eps, max=1 - finfo.eps)
-    m_ds = torch.ones_like(p)
-    for i in range(bp_iters):
-        # Update source -> destin messages by marginalizing over a simple
-        # categorical distribution.
-        z = p * m_ds
-        Z = z.sum(-1, True)
-        z_ = (Z - z).clamp(min=finfo.eps)
-        m_sd = (z / (z_ * m_ds)).clamp(min=finfo.eps, max=1 / finfo.eps)
-
-        # Update destin -> source messages by marginalizing over the
-        # distribution of weighted unordered pairs without replacement.
-        z = m_sd
-        Z = z.sum(-2)
-        z2 = z * (Z - z)  # "choose this and any other source"
-        Z2 = z2.sum(-2) / 2  # "ordered pairs, modulo order"
-        z2_ = (Z2 - z2).clamp(min=finfo.eps)
-        m_ds = (z2 / (z2_ * m_sd)).clamp(min=finfo.eps, max=1 / finfo.eps)
-
-    # # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
-    energy_d = Z2.log().sum()  # destin->source pairs.
-    energy_s = (p * m_ds).sum(-1).log().sum()  # source->destin Categoricals.
-    energy_ds = (m_sd * m_ds).log1p().sum()  # Bernoullis for each edge.
-    energy = energy_ds - energy_d - energy_s
-    warn_if_nan(energy, "energy")
-    warn_if_inf(energy, "energy")
-    return -energy
-
-
 def log_count_one_two_matchings_v1(logits, bp_iters):
     # This adapts [1] from 1-1 matchings to 1-2 matchings.
     #
@@ -193,52 +144,41 @@ def log_count_one_two_matchings_v1(logits, bp_iters):
     num_sources, num_destins = logits.shape
     assert num_sources == 2 * num_destins
     finfo = torch.finfo(logits.dtype)
+    shift = logits.data.max(1, True).values
+    p = (logits - shift).exp().clamp(min=finfo.eps)
 
-    def clamp(x):
-        # We clamp generously so results can be added without overflow.
-        x.data.clamp_(min=finfo.min / 4, max=finfo.max / 4)
-        return x
-
-    def log(x):
-        x.data.clamp_(min=finfo.eps, max=finfo.max)
-        return x.log()
-
-    # Perform loopy belief propagation, adapting [1] Lemma 29 to use log-space
-    # representations messages m and beliefs b. Local marginals z and local
-    # partition functions Z are in linear space.
-    logits = clamp(logits.clone())
-    m_ds = torch.zeros_like(logits)
+    # Perform loopy belief propagation, adapting [1] Lemma 29.
+    m_ds = torch.ones_like(p)
     for i in range(bp_iters):
         # Update source -> destin messages by marginalizing over a simple
         # categorical distribution.
-        b = logits + m_ds
-        b.data -= b.data.max(-1, True).values
-        z = b.exp()
+        z = p * m_ds
         Z = z.sum(-1, True)
-        m_sd = clamp(b - log(Z - z) - m_ds)
-        warn_if_nan(m_sd, "m_sd iter {}".format(i))
+        z_ = (Z - z).clamp(min=finfo.eps)
+        m_sd = z / (z_ * m_ds)
+        m_sd = m_sd.clamp(min=finfo.eps, max=finfo.max)
 
         # Update destin -> source messages by marginalizing over the
         # distribution of weighted unordered pairs without replacement.
-        shift = m_sd.data.max(-2).values
-        z = (m_sd - shift).exp()
+        z = m_sd
         Z = z.sum(-2)
-        z2 = z * (Z - z)  # "choose this and any other source"
+        z2 = z * (Z - z).clamp(min=finfo.eps)  # "choose this and any other source"
         Z2 = z2.sum(-2) / 2  # "ordered pairs, modulo order"
-        m_ds = clamp(log(z2) - log(Z2 - z2) - m_sd)
-        warn_if_nan(m_ds, "m_ds iter {}".format(i))
+        z2_ = (Z2 - z2).clamp(min=finfo.eps)
+        m_ds = z2 / (z2_ * m_sd)
+        m_ds = m_ds.clamp(min=finfo.eps, max=finfo.max)
 
-    # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
-    energy_d = log(Z2).sum() + 2 * shift.sum()  # destin->source pairs.
-    energy_s = (logits + m_ds).logsumexp(-1).sum()  # source->destin Categoricals.
-    energy_ds = (m_sd + m_ds).exp().log1p().sum()  # Bernoullis for each edge.
+    # # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
+    energy_d = Z2.log().sum()  # destin->source pairs.
+    energy_s = (p * m_ds).sum(-1).log().sum()  # source->destin Categoricals.
+    energy_ds = (m_sd * m_ds).log1p().sum()  # Bernoullis for each edge.
     energy = energy_ds - energy_d - energy_s
     warn_if_nan(energy, "energy")
     warn_if_inf(energy, "energy")
-    return -energy
+    return shift.sum() - energy
 
 
-def log_count_one_two_matchings_v2(logits, bp_iters, mf_iters=10, rate=0.5):
+def log_count_one_two_matchings_v2(logits, bp_iters, *, mf_iters=10, rate=0.5):
     # This adapts [1] from 1-1 matchings to 1-2 matchings.
     #
     # [1] M Chertkov, AB Yedidia (2013)
@@ -248,51 +188,40 @@ def log_count_one_two_matchings_v2(logits, bp_iters, mf_iters=10, rate=0.5):
     num_sources, num_destins = logits.shape
     assert num_sources == 2 * num_destins
     finfo = torch.finfo(logits.dtype)
-
-    def clamp(x):
-        x.data.clamp_(min=finfo.min / 4, max=finfo.max / 4)
-        return x
-
-    def log(x):
-        x.data.clamp_(min=finfo.tiny, max=finfo.max)
-        return x.log()
-
-    def log1p(x):
-        x.data.clamp_(min=finfo.eps - 1, max=finfo.max)
-        return x.log1p()
-
-    p = logits.exp().clamp(min=finfo.eps, max=1-finfo.eps)
+    shift = logits.data.max(1, True).values
+    p = (logits - shift).exp().clamp(min=finfo.eps)
 
     # Initialize via Fermi mean field, adapting [1] Eqns 33-34.
     with torch.no_grad():
-        b = p.new_full((num_sources, num_destins), 1 / num_destins)
         u = p.new_ones(num_sources, 1)
         v = p.new_ones(1, num_destins)
         for _ in range(mf_iters):
-            b_new = p / (p + u * v / 2)
-            u_new = u * b.sum(1, True)
-            v_new = v * b.sum(0)
-            b, u, v = b_new, u_new, v_new
+            b = p / (p + u * v)
+            u = u * b.sum(1, True)
+            v = v * b.sum(0) / 2
 
     # Perform Bethe loopy belief propagation, adapting [1] Eqns 29-30.
     for _ in range(bp_iters):
         bb = b * b
         u_new = (p / v).sum(1, True) / (1 - bb.sum(1, True)).clamp(min=finfo.eps)
-        v_new = (p / u).sum(0) / (1 - bb.sum(0)).clamp(min=finfo.eps)
-        b_new = p / (p + ((b.sum(0) + b.sum(-1, True)) / 2 - b).pow(2) * (u * v))
+        v_new = (p / u).sum(0) / (2 - bb.sum(0)).clamp(min=finfo.eps)
+        b_new = p / (p + (b.sum(0) / 4 + b.sum(1, True) / 2 - b).pow(2) * (u * v))
         u, v = u_new, v_new
         b = rate * b + (1 - rate) * b_new
         # Perform a Sinkhorn update.
-        b = 2 * b / b.sum(0)
+        b = b / b.sum(0)
         b = b / b.sum(1, True)
 
     # Evaluate the Bethe free energy [1] Eqn 4.
-    b_ = 1 - b
-    energy = (b * log(b / p) - b_ * log(b_)).sum()
-    return -energy
+    b = b.clamp(min=finfo.tiny)
+    b_ = (1 - b).clamp(min=finfo.tiny)
+    energy = (b * (b / p).log() - b_ * b_.log()).sum()
+    warn_if_nan(energy, "energy")
+    warn_if_inf(energy, "energy")
+    return shift.sum() - energy
 
 
-def log_count_one_two_matchings_v3(logits, bp_iters):
+def log_count_one_two_matchings_v3(logits, bp_iters, *, temperature=0.5):
     # This implements a mean field approximation via Sinkhorn iteration.
     #
     # [1] M Chertkov, AB Yedidia (2013)
@@ -305,16 +234,18 @@ def log_count_one_two_matchings_v3(logits, bp_iters):
     shift = logits.data.max(1, True).values
     p = (logits - shift).exp().clamp(min=finfo.tiny)
 
-    # Compute mean field beliefs b via Sinkhorn iteration.
+    # Approximate mean field beliefs b via Sinkhorn iteration.
     b = p / p.sum(1, True)
     for _ in range(bp_iters):
-        b = b / b.sum(0)
-        b = b / b.sum(1, True)
+        b /= b.sum(0)
+        b /= b.sum(1, True)
 
     # Evaluate the free energy [1] Eqn 9.
     b = b.clamp(min=finfo.tiny)
     b_ = (1 - b).clamp(min=finfo.tiny)
-    energy = (b * (b / p).log() - b_ * b_.log()).sum()
+    energy = (b * (b / p).log() - temperature * b_ * b_.log()).sum()
+    warn_if_nan(energy, "energy")
+    warn_if_inf(energy, "energy")
     return shift.sum() - energy
 
 
