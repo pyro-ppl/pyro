@@ -112,7 +112,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=(),
     return predictions
 
 
-def _check_predictive_inputs(posterior_samples, num_samples, guide, return_sites):
+def _validate_predictive_inputs(posterior_samples, num_samples, guide, return_sites):
     if posterior_samples is None:
         if num_samples is None:
             raise ValueError("Either posterior_samples or num_samples must be specified.")
@@ -136,6 +136,8 @@ def _check_predictive_inputs(posterior_samples, num_samples, guide, return_sites
 
     if return_sites is not None:
         assert isinstance(return_sites, (list, tuple, set))
+
+    return posterior_samples, num_samples
 
 
 class Predictive(torch.nn.Module):
@@ -166,7 +168,8 @@ class Predictive(torch.nn.Module):
     def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
                  return_sites=(), parallel=False):
         super().__init__()
-        _check_predictive_inputs(posterior_samples, num_samples, guide, return_sites)
+        posterior_samples, num_samples = _validate_predictive_inputs(
+            posterior_samples, num_samples, guide, return_sites)
 
         self.model = model
         self.posterior_samples = {} if posterior_samples is None else posterior_samples
@@ -265,7 +268,7 @@ def log_likelihood(
     ```
     """
 
-    _check_predictive_inputs(posterior_samples, num_samples, guide, return_sites=None)
+    _validate_predictive_inputs(posterior_samples, num_samples, guide, return_sites=None)
 
     # define the function to return the likelihood values
     def log_like_helper(*args, **kwargs) -> torch.Tensor:
