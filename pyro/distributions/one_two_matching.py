@@ -307,11 +307,13 @@ def log_count_one_two_matchings_v3(logits, bp_iters, fast=True):
 
     # Compute mean field beliefs b via Sinkhorn iteration.
     if fast:
+        # This version uses fewer ops and appears to be faster.
         b = p / p.sum(1, True)
         for _ in range(bp_iters):
             b = b / b.sum(0)
             b = b / b.sum(1, True)
     else:
+        # This version can in theory use less memory.
         s = p.new_ones(num_sources)
         d = p.new_ones(num_destins)
         for _ in range(bp_iters):
@@ -320,9 +322,10 @@ def log_count_one_two_matchings_v3(logits, bp_iters, fast=True):
         b = torch.einsum("s,d,sd->sd", s, d, p)
 
     # Evaluate the Fermi free energy [1] Eqn 9.
-    b = b.clamp(min=finfo.tiny)
+    p = p.reshape(-1)
+    b = b.reshape(-1).clamp(min=finfo.tiny)
     b_ = (1 - b).clamp(min=finfo.tiny)
-    energy = (b * (b / p).log() - b_ * b_.log()).sum()
+    energy = b.dot((b / p).log()) - b_.dot(b_.log())
     return shift.sum() - energy
 
 
