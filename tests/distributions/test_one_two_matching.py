@@ -10,7 +10,7 @@ import torch
 import pyro.distributions as dist
 from tests.common import assert_close
 
-BP_ITERS = 10
+BP_ITERS = 30
 
 
 def random_phylo_logits(num_leaves, dtype):
@@ -26,6 +26,7 @@ def random_phylo_logits(num_leaves, dtype):
     sources = torch.cat([ids[:root], ids[root+1:]])
     destins = ids[num_leaves:]
     dt = times[sources][:, None] - times[destins]
+    dt = dt * 10 / dt.detach().std()
     logits = torch.where(dt > 0, -dt, dt.new_tensor(-math.inf))
     assert logits.dtype == dtype
 
@@ -97,7 +98,7 @@ def test_log_prob_phylo(num_leaves, dtype, bp_iters):
     log_total = d.log_prob(values).logsumexp(0).item()
     logging.info(f"log_total = {log_total:0.3g}, " +
                  f"log_Z = {d.log_partition_function:0.3g}")
-    assert_close(log_total, 0., atol=num_leaves + logits.numel() / 10)
+    assert_close(log_total, 0., atol=num_leaves)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
