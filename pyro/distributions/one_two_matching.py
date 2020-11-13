@@ -167,9 +167,8 @@ def log_count_one_two_matchings(logits, bp_iters):
         b.data -= shift
         z = b.exp()
         Z = z.sum(-2)
-        # Compute the pair partition function via inclusion-exclusion.
-        Z2 = (Z * Z - (z * z).sum(-2)) / 2  # "(pairs - replacement) / order"
         z2 = z * (Z - z)  # "choose this and any other source"
+        Z2 = z2.sum(-2) / 2  # "ordered pairs, modulo order"
         m_ds = clamp(log(z2) - log(Z2 - z2) - m_sd)
         warn_if_nan(m_ds, "m_ds iter {}".format(i))
 
