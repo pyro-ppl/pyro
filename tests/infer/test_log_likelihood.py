@@ -98,7 +98,8 @@ def guide2(*Xs):
 @pytest.mark.parametrize("num_sites", [1, 5, 10])
 @pytest.mark.parametrize("num_post_samples", [1, 7, 15])
 @pytest.mark.parametrize("parallel", [True, False])
-def test_obs_sites(num_sites, num_post_samples, parallel):
+@pytest.mark.parametrize("use_obs_shape", [True, False])
+def test_obs_sites(num_sites, num_post_samples, parallel, use_obs_shape):
     N = 20
     x = torch.randn((num_sites, N))
     y = x + 0.1 * torch.randn((num_sites, N))
@@ -106,6 +107,7 @@ def test_obs_sites(num_sites, num_post_samples, parallel):
     Xs = [x[i] for i in range(num_sites)]
     data = {f"y_{i}": y[i] for i in range(num_sites)}
     cond_model = pyro.condition(model2, data=data)
+    obs_shapes = {f"y_{i}": (N,) for i in range(num_sites)} if use_obs_shape else None
 
     pyro.clear_param_store()
     lglik = log_likelihood(
@@ -113,6 +115,7 @@ def test_obs_sites(num_sites, num_post_samples, parallel):
         guide=guide2,
         num_samples=num_post_samples,
         parallel=parallel,
+        obs_shapes=obs_shapes,
     )(*Xs)
 
     assert len(lglik) == num_sites
