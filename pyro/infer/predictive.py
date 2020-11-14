@@ -268,7 +268,8 @@ def log_likelihood(
     ```
     """
 
-    _validate_predictive_inputs(posterior_samples, num_samples, guide, return_sites=None)
+    posterior_samples, num_samples = _validate_predictive_inputs(
+        posterior_samples, num_samples, guide, return_sites=None)
 
     # define the function to return the likelihood values
     def log_like_helper(*args, **kwargs) -> torch.Tensor:
@@ -290,7 +291,7 @@ def log_likelihood(
             trace = predictive.get_vectorized_trace(*args, **kwargs)
             for obs_name in observed.keys():
                 site = trace.nodes[obs_name]
-                log_like[obs_name] = site["fn"].log_prob(site["value"]).detach().cpu()
+                log_like[obs_name] = site["fn"].log_prob(site["value"])
             return log_like
         # iterate over samples from posterior if model can't be vectorized
         else:
@@ -307,6 +308,6 @@ def log_likelihood(
             }
             log_like = _predictive_sequential(
                 model, _posterior_samples, args, kwargs, num_samples, site_shapes,
-                collect_fn=lambda msg: msg["fn"].log_prob(msg["value"]).detach().cpu())
+                collect_fn=lambda msg: msg["fn"].log_prob(msg["value"]))
             return log_like
     return log_like_helper
