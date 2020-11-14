@@ -168,7 +168,6 @@ def guide3(x, event_shape):
 def test_event_shape(batch_shape, event_shape, num_post_samples, parallel):
     x = torch.randn(batch_shape)
     y = torch.randn(x.shape + event_shape)
-
     cond_model = pyro.condition(model3, data={"y": y})
 
     pyro.clear_param_store()
@@ -182,3 +181,36 @@ def test_event_shape(batch_shape, event_shape, num_post_samples, parallel):
     assert len(lglik) == 1
     assert "y" in lglik
     assert lglik["y"].shape == (num_post_samples,) + batch_shape
+
+
+def model4(x):
+    m = pyro.sample("m", Normal(0., 1.).expand(x.shape))
+    y = m * x
+    pyro.sample("y", Normal(y, 1.))
+
+
+def guide4(x):
+    pyro.sample("m", Normal(0., 1.).expand(x.shape))
+
+
+@pytest.mark.parametrize("batch_shape", [
+    (), (1,), (5,), (2, 3), (3, 2), (2, 3, 4), (4, 3, 2), (10, 1, 10)])
+def test_broadcasting(batch_shape):
+    x = torch.randn(batch_shape)
+    # iterate over leading batch dimensions to drop
+    for dim in range(max(x.ndim, 1)):
+        # drop leading dimensions from batch size and create observed data of
+        # that shape
+        y = torch.ones(x.shape[(x.ndim-dim):])
+        cond_model = pyro.condition(model4, data={"y": y})
+
+        lglik = log_likelihood(
+            cond_model,
+            guide=guide4,
+            num_samples=10,
+            parallel=False
+        )(x)
+
+        assert len(lglik) == 1
+        assert "y" in lglik
+        assert lglik["y"].shape == (10,) + batch_shape
