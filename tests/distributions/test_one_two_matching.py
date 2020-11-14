@@ -72,7 +72,7 @@ def test_log_prob_full(num_destins, dtype, bp_iters):
     log_total = d.log_prob(values).logsumexp(0).item()
     logging.info(f"log_total = {log_total:0.3g}, " +
                  f"log_Z = {d.log_partition_function:0.3g}")
-    assert_close(log_total, 0., atol=min(num_destins, 1.0))
+    assert_close(log_total, 0., atol=min(num_destins, 2.0))
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
@@ -98,7 +98,7 @@ def test_log_prob_phylo(num_leaves, dtype, bp_iters):
     log_total = d.log_prob(values).logsumexp(0).item()
     logging.info(f"log_total = {log_total:0.3g}, " +
                  f"log_Z = {d.log_partition_function:0.3g}")
-    assert_close(log_total, 0., atol=2.0)
+    assert_close(log_total, 0., atol=1.0)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)

@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 import warnings
 
 import torch
@@ -100,23 +101,24 @@ class OneTwoMatching(TorchDistribution):
             return self.logits[s, d].sum(-1).logsumexp(-1)
 
         # Approximate mean field beliefs b via Sinkhorn iteration.
-        # In contrast to [4] we find that Sinkhorn iteration is more robust and
-        # faster than the optimal belief propagation updates Eqns 37-38.
+        # We find that Sinkhorn iteration is more robust and faster than the
+        # optimal belief propagation updates suggested in [1-4].
         finfo = torch.finfo(self.logits.dtype)
         shift = self.logits.data.max(1, True).values
         shift.clamp_(min=finfo.min, max=finfo.max)
         p = (self.logits - shift).exp().clamp(min=finfo.tiny ** 0.5)
-        b = p / p.sum(1, True)
+        b = p.sqrt().clone()  # Heuristic.
         for _ in range(self.bp_iters):
             b /= b.sum(0)
             b /= b.sum(1, True)
 
-        # Evaluate the fractional free energy [4] Eqn 13.
-        # In agreement with [4] we find that setting gamma=-0.5 provides higher
-        # accuracy than the usual Bethe free energy with gamma=-1.
-        b = b.clamp(min=finfo.tiny)
-        b_ = (1 - b).clamp(min=finfo.tiny)
-        energy = (b * (b / p).log() - 0.5 * b_ * b_.log()).sum()
+        # Evaluate the Bethe free energy, adapting [4] Eqn 4 to one-two
+        # matchings. This approximates the entropy of the pair distribution as
+        # if replacement were allowed.
+        b = b.clamp(min=finfo.tiny ** 0.5)
+        b_ = (1 - b).clamp(min=finfo.tiny ** 0.5)
+        energy = ((b * (b / p).log() - b_ * b_.log()).sum()
+                  - self.num_destins * math.log(2))
         return shift.sum() - energy
 
     def log_prob(self, value):
