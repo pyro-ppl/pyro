@@ -107,10 +107,11 @@ class OneTwoMatching(TorchDistribution):
         shift = self.logits.data.max(1, True).values
         shift.clamp_(min=finfo.min, max=finfo.max)
         p = (self.logits - shift).exp().clamp(min=finfo.tiny ** 0.5)
-        b = p / p.sum(1, True)
+        d = 2 / p.sum(0)
         for _ in range(self.bp_iters):
-            b /= b.sum(0)
-            b /= b.sum(1, True)
+            s = 1 / (p @ d)
+            d = 2 / (s @ p)
+        b = s[:, None] * d * p
 
         # Evaluate the Bethe free energy, adapting [4] Eqn 4 to one-two
         # matchings. This approximates the entropy of the pair distribution as
