@@ -104,7 +104,8 @@ class OneTwoMatching(TorchDistribution):
         # faster than the optimal belief propagation updates Eqns 37-38.
         finfo = torch.finfo(self.logits.dtype)
         shift = self.logits.data.max(1, True).values
-        p = (self.logits - shift).exp().clamp(min=finfo.tiny)
+        shift.clamp_(min=finfo.min, max=finfo.max)
+        p = (self.logits - shift).exp().clamp(min=finfo.tiny ** 0.5)
         b = p / p.sum(1, True)
         for _ in range(self.bp_iters):
             b /= b.sum(0)
