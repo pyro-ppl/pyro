@@ -114,13 +114,19 @@ class OneTwoMatching(TorchDistribution):
         b = s[:, None] * d * p
 
         # Evaluate the Bethe free energy, adapting [4] Eqn 4 to one-two
-        # matchings. This approximates the entropy of the pair distribution as
-        # if replacement were allowed.
+        # matchings.
         b = b.clamp(min=finfo.tiny ** 0.5)
         b_ = (1 - b).clamp(min=finfo.tiny ** 0.5)
-        energy = ((b * (b / p).log() - b_ * b_.log()).sum()
-                  - self.num_destins * math.log(2))
-        return shift.sum() - energy
+        internal_energy = -(b * p.log()).sum()
+        # Let h be the entropy of matching each destin to one source.
+        z = b / 2
+        h = -(z * z.log()).sum(0)
+        # Then h2 is the entropy of the distribution mapping each destin to an
+        # unordered pair of sources, equal to the log of the binomial
+        # coefficient: perplexity * (perplexity - 1) / 2.
+        h2 = h + h.exp().sub(1).log() - math.log(2)
+        free_energy = internal_energy - h2.sum() - (b_ * b_.log()).sum()
+        return shift.sum() - free_energy
 
     def log_prob(self, value):
         if self._validate_args:
