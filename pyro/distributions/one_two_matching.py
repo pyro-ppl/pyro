@@ -7,8 +7,6 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.util import warn_if_inf, warn_if_nan
-
 from .torch import Categorical
 from .torch_distribution import TorchDistribution
 
@@ -51,7 +49,7 @@ class OneTwoMatching(TorchDistribution):
         \log p(v) = \sum_s \text{logits}[s, v[s]] - \log Z
 
     The :meth:`log_partition_function` and :meth:`log_prob` methods use a Bethe
-    approximation [1,2,3]. This currently does not implement :meth:`sample`.
+    approximation [1,2,3,4]. This currently does not implement :meth:`sample`.
 
     **References:**
 
@@ -64,6 +62,9 @@ class OneTwoMatching(TorchDistribution):
     [3] Pascal O. Vontobel (2012)
         "The Bethe Permanent of a Non-Negative Matrix"
         https://arxiv.org/pdf/1107.4196.pdf
+    [4] M Chertkov, AB Yedidia (2013)
+        "Approximating the permanent with fractional belief propagation"
+        http://www.jmlr.org/papers/volume14/chertkov13a/chertkov13a.pdf
 
     :param Tensor logits: An ``(2 * N, N)``-shaped tensor of edge logits.
     :param int bp_iters: Optional number of belief propagation iterations. If
@@ -90,12 +91,27 @@ class OneTwoMatching(TorchDistribution):
 
     @lazy_property
     def log_partition_function(self):
-        if self.bp_iters is not None:
-            return log_count_one_two_matchings(self.logits, self.bp_iters)
-        # Brute force.
-        d = self.enumerate_support()
-        s = torch.arange(d.size(-1), dtype=d.dtype, device=d.device)
-        return self.logits[s, d].sum(-1).logsumexp(-1)
+        if self.bp_iters is None:
+            # Brute force.
+            d = self.enumerate_support()
+            s = torch.arange(d.size(-1), dtype=d.dtype, device=d.device)
+            return self.logits[s, d].sum(-1).logsumexp(-1)
+
+        # Approximate mean field beliefs b via Sinkhorn iteration.
+        finfo = torch.finfo(self.logits.dtype)
+        shift = self.logits.data.max(1, True).values
+        p = (self.logits - shift).exp().clamp(min=finfo.tiny)
+        b = p / p.sum(1, True)
+        for _ in range(self.bp_iters):
+            b /= b.sum(0)
+            b /= b.sum(1, True)
+
+        # Evaluate the free energy [1] Eqn 9, but decrease temperature to 0.5,
+        # which appears to provide much higher accuracy solutions in practice.
+        b = b.clamp(min=finfo.tiny)
+        b_ = (1 - b).clamp(min=finfo.tiny)
+        energy = (b * (b / p).log() - 0.5 * b_ * b_.log()).sum()
+        return shift.sum() - energy
 
     def log_prob(self, value):
         if self._validate_args:
@@ -125,131 +141,6 @@ class OneTwoMatching(TorchDistribution):
         # followed by a small number of MCMC steps
         # http://www.cs.toronto.edu/~mvolkovs/nips2012_sampling.pdf
         raise NotImplementedError
-
-
-def log_count_one_two_matchings_v1(logits, bp_iters):
-    # This adapts [1] from 1-1 matchings to 1-2 matchings.
-    #
-    # The core difference is that the two destination assignments are sampled
-    # without replacement, thereby following a multivariate Wallenius'
-    # noncentral hypergeometric distribution [2]; this results in a change to
-    # the destin -> source messages m_ds, relative to [1].
-    #
-    # [1] Pascal O. Vontobel (2012)
-    #     "The Bethe Permanent of a Non-Negative Matrix"
-    #     https://arxiv.org/pdf/1107.4196.pdf
-    # [2] https://en.wikipedia.org/wiki/Wallenius%27_noncentral_hypergeometric_distribution
-    assert bp_iters > 0
-    assert logits.dim() == 2
-    num_sources, num_destins = logits.shape
-    assert num_sources == 2 * num_destins
-    finfo = torch.finfo(logits.dtype)
-    shift = logits.data.max(1, True).values
-    p = (logits - shift).exp().clamp(min=finfo.eps)
-
-    # Perform loopy belief propagation, adapting [1] Lemma 29.
-    m_ds = torch.ones_like(p)
-    for i in range(bp_iters):
-        # Update source -> destin messages by marginalizing over a simple
-        # categorical distribution.
-        z = p * m_ds
-        Z = z.sum(-1, True)
-        z_ = (Z - z).clamp(min=finfo.eps)
-        m_sd = z / (z_ * m_ds)
-        m_sd = m_sd.clamp(min=finfo.eps, max=finfo.max)
-
-        # Update destin -> source messages by marginalizing over the
-        # distribution of weighted unordered pairs without replacement.
-        z = m_sd
-        Z = z.sum(-2)
-        z2 = z * (Z - z).clamp(min=finfo.eps)  # "choose this and any other source"
-        Z2 = z2.sum(-2) / 2  # "ordered pairs, modulo order"
-        z2_ = (Z2 - z2).clamp(min=finfo.eps)
-        m_ds = z2 / (z2_ * m_sd)
-        m_ds = m_ds.clamp(min=finfo.eps, max=finfo.max)
-
-    # # Evaluate the pseudo-dual Bethe free energy, adapting [1] Lemma 31.
-    energy_d = Z2.log().sum()  # destin->source pairs.
-    energy_s = (p * m_ds).sum(-1).log().sum()  # source->destin Categoricals.
-    energy_ds = (m_sd * m_ds).log1p().sum()  # Bernoullis for each edge.
-    energy = energy_ds - energy_d - energy_s
-    warn_if_nan(energy, "energy")
-    warn_if_inf(energy, "energy")
-    return shift.sum() - energy
-
-
-def log_count_one_two_matchings_v2(logits, bp_iters, *, mf_iters=10, rate=0.5):
-    # This adapts [1] from 1-1 matchings to 1-2 matchings.
-    #
-    # [1] M Chertkov, AB Yedidia (2013)
-    #     "Approximating the permanent with fractional belief propagation"
-    #     http://www.jmlr.org/papers/volume14/chertkov13a/chertkov13a.pdf
-    assert logits.dim() == 2
-    num_sources, num_destins = logits.shape
-    assert num_sources == 2 * num_destins
-    finfo = torch.finfo(logits.dtype)
-    shift = logits.data.max(1, True).values
-    p = (logits - shift).exp().clamp(min=finfo.eps)
-
-    # Initialize via Fermi mean field, adapting [1] Eqns 33-34.
-    with torch.no_grad():
-        u = p.new_ones(num_sources, 1)
-        v = p.new_ones(1, num_destins)
-        for _ in range(mf_iters):
-            b = p / (p + u * v)
-            u = u * b.sum(1, True)
-            v = v * b.sum(0) / 2
-
-    # Perform Bethe loopy belief propagation, adapting [1] Eqns 29-30.
-    for _ in range(bp_iters):
-        bb = b * b
-        u_new = (p / v).sum(1, True) / (1 - bb.sum(1, True)).clamp(min=finfo.eps)
-        v_new = (p / u).sum(0) / (2 - bb.sum(0)).clamp(min=finfo.eps)
-        b_new = p / (p + (b.sum(0) / 4 + b.sum(1, True) / 2 - b).pow(2) * (u * v))
-        u, v = u_new, v_new
-        b = rate * b + (1 - rate) * b_new
-        # Perform a Sinkhorn update.
-        b = b / b.sum(0)
-        b = b / b.sum(1, True)
-
-    # Evaluate the Bethe free energy [1] Eqn 4.
-    b = b.clamp(min=finfo.tiny)
-    b_ = (1 - b).clamp(min=finfo.tiny)
-    energy = (b * (b / p).log() - b_ * b_.log()).sum()
-    warn_if_nan(energy, "energy")
-    warn_if_inf(energy, "energy")
-    return shift.sum() - energy
-
-
-def log_count_one_two_matchings_v3(logits, bp_iters, *, temperature=0.5):
-    # This implements a mean field approximation via Sinkhorn iteration.
-    #
-    # [1] M Chertkov, AB Yedidia (2013)
-    #     "Approximating the permanent with fractional belief propagation"
-    #     http://www.jmlr.org/papers/volume14/chertkov13a/chertkov13a.pdf
-    assert logits.dim() == 2
-    num_sources, num_destins = logits.shape
-    assert num_sources == 2 * num_destins
-    finfo = torch.finfo(logits.dtype)
-    shift = logits.data.max(1, True).values
-    p = (logits - shift).exp().clamp(min=finfo.tiny)
-
-    # Approximate mean field beliefs b via Sinkhorn iteration.
-    b = p / p.sum(1, True)
-    for _ in range(bp_iters):
-        b /= b.sum(0)
-        b /= b.sum(1, True)
-
-    # Evaluate the free energy [1] Eqn 9.
-    b = b.clamp(min=finfo.tiny)
-    b_ = (1 - b).clamp(min=finfo.tiny)
-    energy = (b * (b / p).log() - temperature * b_ * b_.log()).sum()
-    warn_if_nan(energy, "energy")
-    warn_if_inf(energy, "energy")
-    return shift.sum() - energy
-
-
-log_count_one_two_matchings = log_count_one_two_matchings_v3
 
 
 def enumerate_one_two_matchings(num_destins):
