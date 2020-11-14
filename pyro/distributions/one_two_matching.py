@@ -48,8 +48,10 @@ class OneTwoMatching(TorchDistribution):
 
         \log p(v) = \sum_s \text{logits}[s, v[s]] - \log Z
 
-    The :meth:`log_partition_function` and :meth:`log_prob` methods use a Bethe
-    approximation [1,2,3,4]. This currently does not implement :meth:`sample`.
+    Exact computations are expensive. To enable tractable approximations, set a
+    number of belief propagation iterations via the ``bp_iters`` argument.  The
+    :meth:`log_partition_function` and :meth:`log_prob` methods use a Bethe
+    approximation [1,2,3] with fractional free energy [4].
 
     **References:**
 
@@ -68,7 +70,7 @@ class OneTwoMatching(TorchDistribution):
 
     :param Tensor logits: An ``(2 * N, N)``-shaped tensor of edge logits.
     :param int bp_iters: Optional number of belief propagation iterations. If
-        unspecified or ``None`` an expensive exact algorithm will be used.
+        unspecified or ``None`` expensive exact algorithms will be used.
     """
     arg_constraints = {"logits": constraints.real}
     has_enumerate_support = True
@@ -98,6 +100,8 @@ class OneTwoMatching(TorchDistribution):
             return self.logits[s, d].sum(-1).logsumexp(-1)
 
         # Approximate mean field beliefs b via Sinkhorn iteration.
+        # In contrast to [4] we find that Sinkhorn iteration is more robust and
+        # faster than the optimal belief propagation updates Eqns 37-38.
         finfo = torch.finfo(self.logits.dtype)
         shift = self.logits.data.max(1, True).values
         p = (self.logits - shift).exp().clamp(min=finfo.tiny)
@@ -106,8 +110,9 @@ class OneTwoMatching(TorchDistribution):
             b /= b.sum(0)
             b /= b.sum(1, True)
 
-        # Evaluate the free energy [1] Eqn 9, but decrease temperature to 0.5,
-        # which appears to provide much higher accuracy solutions in practice.
+        # Evaluate the fractional free energy [4] Eqn 13.
+        # In agreement with [4] we find that setting gamma=-0.5 provides higher
+        # accuracy than the usual Bethe free energy with gamma=-1.
         b = b.clamp(min=finfo.tiny)
         b_ = (1 - b).clamp(min=finfo.tiny)
         energy = (b * (b / p).log() - 0.5 * b_ * b_.log()).sum()
