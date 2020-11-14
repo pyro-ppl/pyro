@@ -107,7 +107,7 @@ class OneTwoMatching(TorchDistribution):
         shift = self.logits.data.max(1, True).values
         shift.clamp_(min=finfo.min, max=finfo.max)
         p = (self.logits - shift).exp().clamp(min=finfo.tiny ** 0.5)
-        b = p.sqrt().clone()  # Heuristic.
+        b = p / p.sum(1, True)
         for _ in range(self.bp_iters):
             b /= b.sum(0)
             b /= b.sum(1, True)
