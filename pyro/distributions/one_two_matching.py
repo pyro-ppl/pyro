@@ -124,7 +124,7 @@ class OneTwoMatching(TorchDistribution):
         # Then h2 is the entropy of the distribution mapping each destin to an
         # unordered pair of sources, equal to the log of the binomial
         # coefficient: perplexity * (perplexity - 1) / 2.
-        h2 = h + h.exp().sub(1).log() - math.log(2)
+        h2 = h + h.expm1().log() - math.log(2)
         free_energy = internal_energy - h2.sum() - (b_ * b_.log()).sum()
         return shift.sum() - free_energy
 
