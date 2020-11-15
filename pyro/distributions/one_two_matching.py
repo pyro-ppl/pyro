@@ -203,9 +203,9 @@ def min_cost_one_two_matching(logits, max_iters=100):
     logits *= 1 + finfo.eps ** 0.5 * jitter
 
     # Perform loopy max-sum belief propagation.
+    result = logits.new_zeros(num_sources, dtype=torch.long)
     m_sd = torch.zeros_like(logits)
     m_ds = torch.zeros_like(logits)
-    conflicts = torch.ones_like(logits, dtype=torch.bool)
     for step in range(max_iters):
         # For each source choose the best destin.
         objective = logits + m_ds
@@ -213,7 +213,9 @@ def min_cost_one_two_matching(logits, max_iters=100):
         m_sd[:] = objective - values[0, :, None]
         m_sd[s, indices[0]] = values[0] - values[1]
         m_sd -= m_ds
-        result = indices[0]
+        if (indices[0] == result).all():
+            return result
+        result[:] = indices[0]
 
         # For each destin choose the best two sources.
         objective = m_sd
@@ -222,14 +224,6 @@ def min_cost_one_two_matching(logits, max_iters=100):
         m_ds[indices[0], d] = values[0] - values[2]
         m_ds[indices[1], d] = values[1] - values[2]
         m_ds -= m_sd
-
-        # Return when the two local optimizers agree.
-        conflicts[:] = False
-        conflicts[s, result] = True
-        conflicts[indices[0], d] = False
-        conflicts[indices[1], d] = False
-        if not conflicts.any():
-            return result
 
     raise ValueError("Failed to converge after {} iterations; "
                      "try adding jitter so that logit values are unique."
