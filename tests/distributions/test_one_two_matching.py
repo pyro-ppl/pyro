@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from tests.common import assert_close
+from tests.common import assert_close, assert_equal
 
 BP_ITERS = 30
 
@@ -111,3 +111,37 @@ def test_log_prob_phylo_smoke(num_leaves, dtype):
     assert not torch.isnan(logz)
     dt = torch.autograd.grad(logz, [times])[0]
     assert not torch.isnan(dt).any()
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
+def test_mode_full(num_destins, dtype):
+    num_sources = 2 * num_destins
+    logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
+    d = dist.OneTwoMatching(logits)
+    values = d.enumerate_support()
+    i = d.log_prob(values).max(0).indices.item()
+    expected = values[i]
+    actual = d.mode()
+    assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
+def test_mode_phylo(num_leaves, dtype):
+    logits, times = random_phylo_logits(num_leaves, dtype)
+    d = dist.OneTwoMatching(logits)
+    values = d.enumerate_support()
+    i = d.log_prob(values).max(0).indices.item()
+    expected = values[i]
+    actual = d.mode()
+    assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])
+def test_mode_phylo_smoke(num_leaves, dtype):
+    logits, times = random_phylo_logits(num_leaves, dtype)
+    d = dist.OneTwoMatching(logits, bp_iters=10)
+    value = d.mode()
+    assert d.support.check(value)

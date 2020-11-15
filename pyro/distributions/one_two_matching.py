@@ -157,6 +157,9 @@ class OneTwoMatching(TorchDistribution):
         # http://www.cs.toronto.edu/~mvolkovs/nips2012_sampling.pdf
         raise NotImplementedError
 
+    def mode(self):
+        return min_cost_one_two_matching(self.logits)
+
 
 def enumerate_one_two_matchings(num_destins):
     if num_destins == 1:
@@ -182,3 +185,52 @@ def enumerate_one_two_matchings(num_destins):
             block[:, s1 + 1:] = subproblem[:, s1 - 1:]
             pos += subsize
     return result
+
+
+@torch.no_grad()
+def min_cost_one_two_matching(logits, max_iters=100):
+    num_sources, num_destins = logits.shape
+    assert num_sources == 2 * num_destins
+    if num_destins == 1:
+        return logits.new_zeros(num_sources, dtype=torch.long)
+    s = torch.arange(num_sources)
+    d = torch.arange(num_destins)
+
+    # Add jitter to ensure entries are unique, as required for convergence.
+    finfo = torch.finfo(logits.dtype)
+    logits = logits.clamp(min=finfo.min * finfo.eps, max=finfo.max * finfo.eps)
+    jitter = torch.empty_like(logits).uniform_() - 0.5
+    logits *= 1 + finfo.eps ** 0.5 * jitter
+
+    # Perform loopy max-sum belief propagation.
+    m_sd = torch.zeros_like(logits)
+    m_ds = torch.zeros_like(logits)
+    conflicts = torch.ones_like(logits, dtype=torch.bool)
+    for step in range(max_iters):
+        # For each source choose the best destin.
+        objective = logits + m_ds
+        values, indices = objective.T.topk(2, dim=0)
+        m_sd[:] = objective - values[0, :, None]
+        m_sd[s, indices[0]] = values[0] - values[1]
+        m_sd -= m_ds
+        result = indices[0]
+
+        # For each destin choose the best two sources.
+        objective = m_sd
+        values, indices = objective.topk(3, dim=0)
+        m_ds[:] = objective - values[1]
+        m_ds[indices[0], d] = values[0] - values[2]
+        m_ds[indices[1], d] = values[1] - values[2]
+        m_ds -= m_sd
+
+        # Return when the two local optimizers agree.
+        conflicts[:] = False
+        conflicts[s, result] = True
+        conflicts[indices[0], d] = False
+        conflicts[indices[1], d] = False
+        if not conflicts.any():
+            return result
+
+    raise ValueError("Failed to converge after {} iterations; "
+                     "try adding jitter so that logit values are unique."
+                     .format(max_iters))
