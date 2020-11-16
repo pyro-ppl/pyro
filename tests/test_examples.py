@@ -201,7 +201,6 @@ JIT_EXAMPLES = [
     'contrib/epidemiology/sir.py --jit -np=128 -ss=2 -n=4 -d=20 -p=1000 -f 2 --svi',
     'contrib/epidemiology/regional.py --jit -t=2 -w=2 -n=4 -r=3 -d=20 -p=1000 -f 2',
     'contrib/epidemiology/regional.py --jit -ss=2 -n=4 -r=3 -d=20 -p=1000 -f 2 --svi',
-    xfail_jit('lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --jit'),
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm.py --num-epochs=1 --jit'),
     xfail_jit('dmm.py --num-epochs=1 --num-iafs=1 --jit'),

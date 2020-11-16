@@ -227,6 +227,7 @@ class _MultiSampler:
         # Ignore sigint in worker processes; they will be shut down
         # when the main process terminates.
         sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        args = [arg.detach() if torch.is_tensor(arg) else arg for arg in args]
         self.init_workers(*args, **kwargs)
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
