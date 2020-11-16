@@ -112,20 +112,21 @@ class SpanningTree(TorchDistribution):
         # use a Cholesky decomposition to compute the log determinant.
         # See https://en.wikipedia.org/wiki/Kirchhoff%27s_theorem
         V = self.num_vertices
-        grid = make_complete_graph(V)
-        shift = self.edge_logits.detach().max()
-        edge_probs = (self.edge_logits - shift).exp()
-        adjacency = torch.zeros(V, V, dtype=edge_probs.dtype)
-        adjacency[grid[0], grid[1]] = edge_probs
-        adjacency[grid[1], grid[0]] = edge_probs
-        laplacian = adjacency.sum(-1).diag() - adjacency
+        v1, v2 = make_complete_graph(V).unbind(0)
+        logits = self.edge_logits.new_full((V, V), -math.inf)
+        logits[v1, v2] = self.edge_logits
+        logits[v2, v1] = self.edge_logits
+        log_diag = logits.logsumexp(-1)
+        # Numerically stabilize so that laplacian has 1's on the diagonal.
+        shift = 0.5 * log_diag
+        laplacian = torch.eye(V) - (logits - shift - shift[:, None]).exp()
         truncated = laplacian[:-1, :-1]
         try:
             import gpytorch
             log_det = gpytorch.lazy.NonLazyTensor(truncated).logdet()
         except ImportError:
             log_det = torch.cholesky(truncated).diag().log().sum() * 2
-        return log_det + shift * (V - 1)
+        return log_det + log_diag[:-1].sum()
 
     def log_prob(self, edges):
         if self._validate_args:
