@@ -162,8 +162,22 @@ class OneTwoMatching(TorchDistribution):
         # http://www.cs.toronto.edu/~mvolkovs/nips2012_sampling.pdf
         raise NotImplementedError
 
+    @torch.no_grad()
     def mode(self):
-        return min_cost_one_two_matching(self.logits)
+        """
+        Computes a maximum probability matching.
+
+        .. note:: This requires the `lap` package and runs on CPU.
+        """
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ImportWarning)
+            import lap
+        cost = self.logits.cpu().neg_()
+        cost = torch.cat([cost, cost], dim=-1)  # Duplicate destinations.
+        value = lap.lapjv(cost.numpy())[1]
+        value = torch.tensor(value, dtype=torch.long, device=self.logits.device)
+        value %= self.logits.size(1)
+        return value
 
 
 def enumerate_one_two_matchings(num_destins):
@@ -190,51 +204,3 @@ def enumerate_one_two_matchings(num_destins):
             block[:, s1 + 1:] = subproblem[:, s1 - 1:]
             pos += subsize
     return result
-
-
-@torch.no_grad()
-def min_cost_one_two_matching(logits, *, bp_iters=30, max_iters=1000):
-    num_sources, num_destins = logits.shape
-    assert num_sources == 2 * num_destins
-    if num_destins == 1:
-        return logits.new_zeros(num_sources, dtype=torch.long)
-
-    # Precondition via Sinkhorn iteration, improving convergence.
-    logits = logits - logits.max(1, True).values
-    p = logits.exp()
-    d = 2 / p.sum(0)
-    for _ in range(bp_iters):
-        s = 1 / (p @ d)
-        d = 2 / (s @ p)
-    logits += s[:, None].log() + d.log()
-    logits.clamp_(min=-math.log(num_destins * num_sources))
-
-    # Perform loopy max-sum belief propagation.
-    s = torch.arange(num_sources)
-    d = torch.arange(num_destins)
-    m_sd = torch.zeros_like(logits)
-    m_ds = torch.zeros_like(logits)
-    result = logits.new_zeros(num_sources, dtype=torch.long)
-    for step in range(max_iters):
-        # For each source choose the best destin.
-        objective = logits + m_ds
-        values, indices = objective.T.topk(2, dim=0)
-        m_sd[:] = objective - values[0, :, None]
-        m_sd[s, indices[0]] = values[0] - values[1]
-        m_sd -= m_ds
-        if (indices[0] == result).all():
-            logger.info(f"max-product bp converged after {step} steps")
-            return result
-        result[:] = indices[0]
-
-        # For each destin choose the best two sources.
-        objective = m_sd
-        values, indices = objective.topk(3, dim=0)
-        m_ds[:] = objective - values[1]
-        m_ds[indices[0], d] = values[0] - values[2]
-        m_ds[indices[1], d] = values[1] - values[2]
-        m_ds -= m_sd
-
-    raise ValueError("Failed to converge after {} iterations; "
-                     "try adding jitter so the solution is unique."
-                     .format(max_iters))

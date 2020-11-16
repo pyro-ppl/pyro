@@ -29,6 +29,7 @@ def random_phylo_logits(num_leaves, dtype):
     dt = dt * 10 / dt.detach().std()
     logits = torch.where(dt > 0, -dt, dt.new_tensor(-math.inf))
     assert logits.dtype == dtype
+    logits.data += torch.empty_like(logits).uniform_()  # add jitter
 
     return logits, times
 
@@ -116,6 +117,7 @@ def test_log_prob_phylo_smoke(num_leaves, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
 def test_mode_full(num_destins, dtype):
+    pytest.importorskip("lap")
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits)
@@ -129,6 +131,7 @@ def test_mode_full(num_destins, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
 def test_mode_phylo(num_leaves, dtype):
+    pytest.importorskip("lap")
     logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits)
     values = d.enumerate_support()
@@ -141,6 +144,7 @@ def test_mode_phylo(num_leaves, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_destins", [3, 5, 8, 13, 100, 1000])
 def test_mode_full_smoke(num_destins, dtype):
+    pytest.importorskip("lap")
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits)
@@ -151,6 +155,7 @@ def test_mode_full_smoke(num_destins, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])
 def test_mode_phylo_smoke(num_leaves, dtype):
+    pytest.importorskip("lap")
     logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits, bp_iters=10)
     value = d.mode()
