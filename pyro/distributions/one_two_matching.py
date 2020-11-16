@@ -155,29 +155,20 @@ class OneTwoMatching(TorchDistribution):
         if sample_shape:
             return torch.stack([self.sample(sample_shape[1:])
                                 for _ in range(sample_shape[0])])
-        # Consider initializing with heuristic or MAP
-        # https://arxiv.org/pdf/0709.1190
-        # http://proceedings.mlr.press/v15/huang11a/huang11a.pdf
-        # followed by a small number of MCMC steps
-        # http://www.cs.toronto.edu/~mvolkovs/nips2012_sampling.pdf
-        raise NotImplementedError
 
-    @torch.no_grad()
+        # Draw an approximate sample using a low-rank Gumbel-max trick [5,6].
+        tiny = torch.finfo(self.logits.dtype).tiny
+        noise = torch.empty_like(self.logits).uniform_()
+        noise.clamp_(min=tiny).log_().neg_().clamp_(min=tiny).log_()
+        return maximum_weight_matching(self.logits + noise)
+
     def mode(self):
         """
         Computes a maximum probability matching.
 
         .. note:: This requires the `lap` package and runs on CPU.
         """
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=ImportWarning)
-            import lap
-        cost = -self.logits.cpu()
-        cost = torch.cat([cost, cost], dim=-1)  # Duplicate destinations.
-        value = lap.lapjv(cost.numpy())[1]
-        value = torch.tensor(value, dtype=torch.long, device=self.logits.device)
-        value %= self.logits.size(1)
-        return value
+        return maximum_weight_matching(self.logits)
 
 
 def enumerate_one_two_matchings(num_destins):
@@ -204,3 +195,15 @@ def enumerate_one_two_matchings(num_destins):
             block[:, s1 + 1:] = subproblem[:, s1 - 1:]
             pos += subsize
     return result
+
+
+def maximum_weight_matching(logits):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=ImportWarning)
+        import lap
+    cost = -logits.cpu()
+    cost = torch.cat([cost, cost], dim=-1)  # Duplicate destinations.
+    value = lap.lapjv(cost.numpy())[1]
+    value = torch.tensor(value, dtype=torch.long, device=logits.device)
+    value %= logits.size(1)
+    return value
