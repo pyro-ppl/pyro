@@ -40,10 +40,12 @@ class OneTwoMatching(TorchDistribution):
     r"""
     Random matching from ``2*N`` sources to ``N`` destinations where each
     source matches exactly **one** destination and each destination matches
-    exactly **two** sources. Samples are represented as long tensors of shape
-    ``(2*N,)`` taking values in ``{0,...,N-1}`` and satisfying the above
-    one-two constraint. The log probability of a sample ``v`` is the sum of
-    edge logits, up to the log partition function ``log Z``:
+    exactly **two** sources.
+
+    Samples are represented as long tensors of shape ``(2*N,)`` taking
+    values in ``{0,...,N-1}`` and satisfying the above one-two constraint.
+    The log probability of a sample ``v`` is the sum of edge logits, up to
+    the log partition function ``log Z``:
 
     .. math::
 
@@ -52,7 +54,7 @@ class OneTwoMatching(TorchDistribution):
     Exact computations are expensive. To enable tractable approximations, set a
     number of belief propagation iterations via the ``bp_iters`` argument.  The
     :meth:`log_partition_function` and :meth:`log_prob` methods use a Bethe
-    approximation [1,2,3] with fractional free energy [4].
+    approximation [1,2,3,4].
 
     **References:**
 
