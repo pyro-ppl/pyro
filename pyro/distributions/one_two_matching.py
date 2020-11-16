@@ -188,24 +188,20 @@ def enumerate_one_two_matchings(num_destins):
 
 
 @torch.no_grad()
-def min_cost_one_two_matching(logits, max_iters=100):
+def min_cost_one_two_matching(logits, max_iters=1000):
     num_sources, num_destins = logits.shape
     assert num_sources == 2 * num_destins
     if num_destins == 1:
         return logits.new_zeros(num_sources, dtype=torch.long)
-    s = torch.arange(num_sources)
-    d = torch.arange(num_destins)
-
-    # Add jitter to ensure entries are unique, as required for convergence.
-    finfo = torch.finfo(logits.dtype)
-    logits = logits.clamp(min=finfo.min * finfo.eps, max=finfo.max * finfo.eps)
-    jitter = torch.empty_like(logits).uniform_() - 0.5
-    logits *= 1 + finfo.eps ** 0.5 * jitter
 
     # Perform loopy max-sum belief propagation.
-    result = logits.new_zeros(num_sources, dtype=torch.long)
+    finfo = torch.finfo(logits.dtype)
+    logits = logits.clamp(min=finfo.min, max=finfo.max)
+    s = torch.arange(num_sources)
+    d = torch.arange(num_destins)
     m_sd = torch.zeros_like(logits)
     m_ds = torch.zeros_like(logits)
+    result = logits.new_zeros(num_sources, dtype=torch.long)
     for step in range(max_iters):
         # For each source choose the best destin.
         objective = logits + m_ds
@@ -226,5 +222,5 @@ def min_cost_one_two_matching(logits, max_iters=100):
         m_ds -= m_sd
 
     raise ValueError("Failed to converge after {} iterations; "
-                     "try adding jitter so that logit values are unique."
+                     "try adding jitter so the solution is unique."
                      .format(max_iters))

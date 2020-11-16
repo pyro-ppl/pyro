@@ -139,6 +139,16 @@ def test_mode_phylo(num_leaves, dtype):
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+@pytest.mark.parametrize("num_destins", [3, 5, 8, 13, 100, 1000])
+def test_mode_full_smoke(num_destins, dtype):
+    num_sources = 2 * num_destins
+    logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
+    d = dist.OneTwoMatching(logits)
+    value = d.mode()
+    assert d.support.check(value)
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])
 def test_mode_phylo_smoke(num_leaves, dtype):
     logits, times = random_phylo_logits(num_leaves, dtype)
