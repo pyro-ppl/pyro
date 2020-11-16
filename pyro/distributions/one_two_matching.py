@@ -155,12 +155,7 @@ class OneTwoMatching(TorchDistribution):
         if sample_shape:
             return torch.stack([self.sample(sample_shape[1:])
                                 for _ in range(sample_shape[0])])
-
-        # Draw an approximate sample using a low-rank Gumbel-max trick [5,6].
-        tiny = torch.finfo(self.logits.dtype).tiny
-        noise = torch.empty_like(self.logits).uniform_()
-        noise.clamp_(min=tiny).log_().neg_().clamp_(min=tiny).log_()
-        return maximum_weight_matching(self.logits + noise)
+        raise NotImplementedError
 
     def mode(self):
         """
@@ -197,6 +192,7 @@ def enumerate_one_two_matchings(num_destins):
     return result
 
 
+@torch.no_grad()
 def maximum_weight_matching(logits):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=ImportWarning)

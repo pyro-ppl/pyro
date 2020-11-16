@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from tests.common import assert_close, assert_equal
+from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 BP_ITERS = 30
 
@@ -58,7 +58,8 @@ def test_sample_shape_smoke(num_destins, sample_shape, dtype, bp_iters):
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype)
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
-    values = d.sample(sample_shape)
+    with xfail_if_not_implemented():
+        values = d.sample(sample_shape)
     assert values.shape == sample_shape + (num_sources,)
     assert d.support.check(values).all()
 
@@ -163,9 +164,8 @@ def test_mode_phylo_smoke(num_leaves, dtype):
     assert d.support.check(value)
 
 
-
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
-@pytest.mark.parametrize("num_destins", [2, 3, 4, 5])
+@pytest.mark.parametrize("num_destins", [2, 3, 4])
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_sample_full(num_destins, dtype, bp_iters):
     pytest.importorskip("lap")
@@ -173,26 +173,26 @@ def test_sample_full(num_destins, dtype, bp_iters):
     logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
 
+    # Compute an empirical mean.
+    num_samples = 1000
+    s = torch.arange(num_sources)
+    actual = torch.zeros_like(logits)
+    with xfail_if_not_implemented():
+        for v in d.sample([num_samples]):
+            actual[s, v] += 1 / num_samples
+
     # Compute truth via enumeration.
     values = d.enumerate_support()
     probs = d.log_prob(values).exp()
     probs /= probs.sum()
     expected = torch.zeros(num_sources, num_destins)
-    s = torch.arange(num_sources)
     for v, p in zip(values, probs):
         expected[s, v] += p
-
-    # Compute an empirical mean.
-    num_samples = 1000
-    actual = torch.zeros_like(expected)
-    for v in d.sample([num_samples]):
-        actual[s, v] += 1 / num_samples
     assert_close(actual, expected, atol=0.1)
 
 
-
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
-@pytest.mark.parametrize("num_leaves", [3, 4, 5, 6])
+@pytest.mark.parametrize("num_leaves", [3, 4, 5])
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_sample_phylo(num_leaves, dtype, bp_iters):
     pytest.importorskip("lap")
@@ -200,18 +200,19 @@ def test_sample_phylo(num_leaves, dtype, bp_iters):
     num_sources, num_destins = logits.shape
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
 
+    # Compute an empirical mean.
+    num_samples = 1000
+    s = torch.arange(num_sources)
+    actual = torch.zeros_like(logits)
+    with xfail_if_not_implemented():
+        for v in d.sample([num_samples]):
+            actual[s, v] += 1 / num_samples
+
     # Compute truth via enumeration.
     values = d.enumerate_support()
     probs = d.log_prob(values).exp()
     probs /= probs.sum()
     expected = torch.zeros(num_sources, num_destins)
-    s = torch.arange(num_sources)
     for v, p in zip(values, probs):
         expected[s, v] += p
-
-    # Compute an empirical mean.
-    num_samples = 1000
-    actual = torch.zeros_like(expected)
-    for v in d.sample([num_samples]):
-        actual[s, v] += 1 / num_samples
     assert_close(actual, expected, atol=0.1)
