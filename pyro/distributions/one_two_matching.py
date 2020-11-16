@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 import math
 import warnings
 
@@ -10,6 +11,8 @@ from torch.distributions.utils import lazy_property
 
 from .torch import Categorical
 from .torch_distribution import TorchDistribution
+
+logger = logging.getLogger(__name__)
 
 
 class OneTwoMatchingConstraint(constraints.Constraint):
@@ -190,15 +193,23 @@ def enumerate_one_two_matchings(num_destins):
 
 
 @torch.no_grad()
-def min_cost_one_two_matching(logits, max_iters=1000):
+def min_cost_one_two_matching(logits, *, bp_iters=30, max_iters=1000):
     num_sources, num_destins = logits.shape
     assert num_sources == 2 * num_destins
     if num_destins == 1:
         return logits.new_zeros(num_sources, dtype=torch.long)
 
+    # Precondition via Sinkhorn iteration, improving convergence.
+    logits = logits - logits.max(1, True).values
+    p = logits.exp()
+    d = 2 / p.sum(0)
+    for _ in range(bp_iters):
+        s = 1 / (p @ d)
+        d = 2 / (s @ p)
+    logits += s[:, None].log() + d.log()
+    logits.clamp_(min=-math.log(num_destins * num_sources))
+
     # Perform loopy max-sum belief propagation.
-    finfo = torch.finfo(logits.dtype)
-    logits = logits.clamp(min=finfo.min, max=finfo.max)
     s = torch.arange(num_sources)
     d = torch.arange(num_destins)
     m_sd = torch.zeros_like(logits)
@@ -212,6 +223,7 @@ def min_cost_one_two_matching(logits, max_iters=1000):
         m_sd[s, indices[0]] = values[0] - values[1]
         m_sd -= m_ds
         if (indices[0] == result).all():
+            logger.info(f"max-product bp converged after {step} steps")
             return result
         result[:] = indices[0]
 
