@@ -172,7 +172,7 @@ class OneTwoMatching(TorchDistribution):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=ImportWarning)
             import lap
-        cost = self.logits.cpu().neg_()
+        cost = -self.logits.cpu()
         cost = torch.cat([cost, cost], dim=-1)  # Duplicate destinations.
         value = lap.lapjv(cost.numpy())[1]
         value = torch.tensor(value, dtype=torch.long, device=self.logits.device)
