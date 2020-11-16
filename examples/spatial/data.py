@@ -43,21 +43,25 @@ class BatchDataLoader(object):
     def __len__(self):
         return self.num_ref_batches + self.num_ss_batches
 
-    def _sample_batch_indices(self, include_unlabeled=True):
-        if include_unlabeled:
+    def _sample_batch_indices(self, include_unlabeled=True, include_labeled=True):
+        if include_unlabeled and include_labeled:
             batch_order = torch.randperm(len(self)).tolist()
             ref_idx = torch.randperm(self.num_ref_data)
             ss_idx = torch.randperm(self.num_ss_data)
-        else:
+        elif include_labeled:
             batch_order = torch.randperm(self.num_ref_batches).tolist()
             ref_idx = torch.randperm(self.num_ref_data)
+        elif include_unlabeled:
+            batch_order = torch.randperm(self.num_ss_batches).tolist()
+            ss_idx = torch.randperm(self.num_ss_data)
 
         slices = []
 
-        for i in range(self.num_ref_batches):
-            _slice = ref_idx[i * self.batch_size: (i + 1) * self.batch_size]
-            if _slice.size(0) == self.batch_size:
-                slices.append((_slice, 'ref'))
+        if include_labeled:
+            for i in range(self.num_ref_batches):
+                _slice = ref_idx[i * self.batch_size: (i + 1) * self.batch_size]
+                if _slice.size(0) == self.batch_size:
+                    slices.append((_slice, 'ref'))
 
         if include_unlabeled:
             for i in range(self.num_ss_batches):
@@ -89,6 +93,15 @@ class BatchDataLoader(object):
             yield self.X_ref[_slice[0]], \
                   nn.functional.one_hot(self.Y_ref[_slice[0]], num_classes=self.num_classes), \
                   self.l_mean_ref, self.l_scale_ref, "ref"
+
+    def unlabeled_data(self):
+        slices, batch_order = self._sample_batch_indices(include_labeled=False)
+
+        for i in range(len(batch_order)):
+            _slice = slices[batch_order[i]]
+            assert _slice[1] == 'ss'
+            yield self.X_ss[_slice[0]], self.R_ss[_slice[0]], \
+                  self.l_mean_ss, self.l_scale_ss, "ss"
 
 
 def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
@@ -138,35 +151,62 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
     #hvgenes = adata_ref.var.features[highly_variable_genes].tolist()
 
     highly_variable_genes = set(pd.read_csv('middle_diffexp_genes.txt').values[:, 0].tolist())
-    highly_variable_genes = np.array([adata_ref.var.features[i] in highly_variable_genes for i in range(adata_ref.var.features.shape[0])])
+    highly_variable_genes = np.array([adata_ss.var.features[i] in highly_variable_genes for i in range(adata_ss.var.features.shape[0])])
     print("highly_variable_genes.shape", highly_variable_genes.shape, np.sum(highly_variable_genes))
 
     barcodes = pd.read_csv('MIDDLE_LAYER_filtered_barcodes.txt').values[:, 0].tolist()
-    print("len(barcodes)", len(barcodes))
+    #print("len(barcodes)", len(barcodes))
 
-    print("adata_ref.X.shape before", adata_ref.X.shape)
-    adata_ref = adata_ref[:, highly_variable_genes]
-    adata_ref.raw = adata_ss
-    print("adata_ref.X.shape after", adata_ref.X.shape)
+    #print("adata_ref.X.shape before", adata_ref.X.shape)
+    #adata_ref = adata_ref[:, highly_variable_genes]
+    #adata_ref.raw = adata_ss
+    #print("adata_ref.X.shape after", adata_ref.X.shape)
 
     # convert to dense torch tensors
     X_ref = torch.from_numpy(sparse.csr_matrix.todense(adata_ref.X)).float().cuda()
+    #X_ref = X_ref[:, highly_variable_genes]
     Y_ref = torch.from_numpy(adata_ref.obs["liger_ident_coarse"].values).long().cuda()
 
-    print("adata_ss.X.shape before", adata_ss.X.shape)
+    torch.manual_seed(0)
+    idx = torch.randperm(Y_ref.size(0))
+    train, test = idx[:-3000], idx[-3000:]
+    X_ref_train = X_ref[train]
+    Y_ref_train = Y_ref[train]
+    X_ref_test = X_ref[test]
+    Y_ref_test = Y_ref[test]
+
+    adata_ref = adata_ref[train.numpy(), :]
+    #adata_ref = adata_ref[:, highly_variable_genes]
+    adata_ref.raw = adata_ref
+
+    #print("adata_ss.X.shape before", adata_ss.X.shape)
     adata_ss = adata_ss[barcodes, :]
-    adata_ss = adata_ss[:, highly_variable_genes]
+    #adata_ss = adata_ss[:, highly_variable_genes]
     adata_ss.raw = adata_ss
-    print("adata_ss.X.shape after", adata_ss.X.shape)
+    #print("adata_ss.X.shape after", adata_ss.X.shape)
 
     X_ss = torch.from_numpy(sparse.csr_matrix.todense(adata_ss.X)).float().cuda()
     R_ss = np.stack([adata_ss.obs.x.values, adata_ss.obs.y.values], axis=-1)
     R_ss = torch.from_numpy(R_ss).float().cuda()
+    #nonvariable = X_ss[:, ~highly_variable_genes]
+    #X_ss = X_ss[:, highly_variable_genes]
 
-    Xr = X_ref.sum(0).topk(50)[1].data.cpu().tolist()
-    Xs = X_ss.sum(0).topk(50)[1].data.cpu().tolist()
-    common_genes = list(set(Xr).intersection(set(Xs)))
-    print("common_genes", len(common_genes), common_genes)
+    torch.manual_seed(0)
+    idx = torch.randperm(X_ss.size(0))
+    train, test = idx[:-1000], idx[-1000:]
+    X_ss_train = X_ss[train]
+    R_ss_train = R_ss[train]
+    X_ss_test = X_ss[test]
+    R_ss_test = R_ss[test]
+
+    adata_ss = adata_ss[train.numpy(), :]
+    #adata_ss = adata_ss[:, highly_variable_genes]
+    adata_ss.raw = adata_ss
+
+    #Xr = X_ref.sum(0).topk(50)[1].data.cpu().tolist()
+    #Xs = X_ss.sum(0).topk(50)[1].data.cpu().tolist()
+    #common_genes = list(set(Xr).intersection(set(Xs)))
+    #print("common_genes", len(common_genes), common_genes)
 
     #good_ss_cells = (X_ss.sum(-1) >= 50)
     #X_ss, R_ss = X_ss[good_ss_cells], R_ss[good_ss_cells]
@@ -179,6 +219,15 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
     num_classes = np.unique(adata_ref.obs["liger_ident_coarse"].values).shape[0]
     print("num_classes", num_classes)
 
+    print("X_ref, Y_ref", X_ref.shape, Y_ref.shape)
+    print("X_ss, R_ss", X_ss.shape, R_ss.shape)
+    print("X_ss_sum", X_ss.sum(-1).mean().item(), X_ss.std(-1).mean().item())
+    counts = X_ss.sum(-1)
+    print("counts mean median min max", counts.mean(), counts.median(), counts.min(), counts.max(), counts.std())
     #return X_ref, Y_ref, X_ss, R_ss
+    #print("nonvariable", nonvariable.shape)
+    #counts = nonvariable.sum(-1)
+    #print("nonvariable counts mean median min max", counts.mean(), counts.median(), counts.min(), counts.max(), counts.std())
 
-    return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size, num_classes=num_classes)
+    return BatchDataLoader(X_ref_train, Y_ref_train, X_ss_train, R_ss_train, batch_size, num_classes=num_classes), \
+           BatchDataLoader(X_ref_test, Y_ref_test, X_ss_test, R_ss_test, batch_size, num_classes=num_classes), adata_ss, adata_ref
