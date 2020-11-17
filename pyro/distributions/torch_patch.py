@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import math
 import weakref
 
 import torch
@@ -67,6 +68,16 @@ def _Multinomial_support(self):
     if isinstance(total_count, torch.Tensor):
         total_count = total_count.unsqueeze(-1)
     return torch.distributions.constraints.integer_interval(0, total_count)
+
+
+# TODO fix https://github.com/pytorch/pytorch/issues/48054 upstream
+@patch_dependency('torch.distributions.HalfCauchy.log_prob')
+def _HalfCauchy_logprob(self, value):
+    value = torch.as_tensor(value, dtype=self.base_dist.scale.dtype,
+                            device=self.base_dist.scale.device)
+    log_prob = self.base_dist.log_prob(value) + math.log(2)
+    log_prob.masked_fill_(value.expand(log_prob.shape) < 0, -float("inf"))
+    return log_prob
 
 
 # This adds a __call__ method to satisfy sphinx.
