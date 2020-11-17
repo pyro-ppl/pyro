@@ -9,7 +9,7 @@ from pyro.primitives import (barrier, clear_param_store, deterministic, enable_v
                              validation_enabled)
 from pyro.util import set_rng_seed
 
-version_prefix = '1.5.0'
+version_prefix = '1.5.1'
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
