@@ -150,7 +150,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.0')
+    assert pyro.__version__.startswith('1.5.1')
     parser = argparse.ArgumentParser(description="Distributed training via Horovod")
     parser.add_argument("-o", "--outfile")
     parser.add_argument("-s", "--size", default=1000000, type=int)
