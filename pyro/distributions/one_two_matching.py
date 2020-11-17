@@ -155,13 +155,17 @@ class OneTwoMatching(TorchDistribution):
         if sample_shape:
             return torch.stack([self.sample(sample_shape[1:])
                                 for _ in range(sample_shape[0])])
+        # TODO initialize via .mode(), then perform a small number of MCMC steps
+        # https://www.cc.gatech.edu/~vigoda/Permanent.pdf
+        # https://papers.nips.cc/paper/2012/file/4c27cea8526af8cfee3be5e183ac9605-Paper.pdf
         raise NotImplementedError
 
     def mode(self):
         """
         Computes a maximum probability matching.
 
-        .. note:: This requires the `lap` package and runs on CPU.
+        .. note:: This requires the `lap <https://pypi.org/project/lap/>`_
+            package and runs on CPU.
         """
         return maximum_weight_matching(self.logits)
 
