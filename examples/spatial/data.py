@@ -92,7 +92,7 @@ class BatchDataLoader(object):
             assert _slice[1] == 'ref'
             yield self.X_ref[_slice[0]], \
                   self.Y_ref[_slice[0]], \
-                  self.l_mean_ref, self.l_scale_ref, "ref"
+                  _slice[0]
                   #nn.functional.one_hot(self.Y_ref[_slice[0]], num_classes=self.num_classes), \
 
     def unlabeled_data(self):
@@ -102,7 +102,7 @@ class BatchDataLoader(object):
             _slice = slices[batch_order[i]]
             assert _slice[1] == 'ss'
             yield self.X_ss[_slice[0]], self.R_ss[_slice[0]], \
-                  self.l_mean_ss, self.l_scale_ss, "ss"
+                  self.l_mean_ss, self.l_scale_ss
 
 
 def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
@@ -222,7 +222,8 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
 
     print("X_ref, Y_ref", X_ref.shape, Y_ref.shape)
     print("X_ss, R_ss", X_ss.shape, R_ss.shape)
-    #print("X_ss_sum", X_ss.sum(-1).mean().item(), X_ss.std(-1).mean().item())
+    print("X_ss_sum", X_ss.sum(-1).mean().item(), X_ss.sum(-1).std().item())
+    print("X_ref_sum", X_ref.sum(-1).mean().item(), X_ref.sum(-1).std().item())
     #counts = X_ss.sum(-1)
     #print("counts mean median min max", counts.mean(), counts.median(), counts.min(), counts.max(), counts.std())
     #return X_ref, Y_ref, X_ss, R_ss
