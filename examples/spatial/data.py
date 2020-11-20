@@ -17,6 +17,37 @@ import scanpy as sc
 
 
 class BatchDataLoader(object):
+    def __init__(self, X, Y, batch_size):
+        super().__init__()
+        self.X = X
+        self.Y = Y
+        self.batch_size = batch_size
+
+        self.num_data = self.X.size(0)
+        self.num_batches = math.ceil(self.num_data / self.batch_size)
+
+    def __len__(self):
+        return self.num_batches
+
+    def _sample_batch_indices(self):
+        idx = torch.randperm(self.num_data)
+
+        slices = []
+
+        for i in range(self.num_batches):
+            _slice = idx[i * self.batch_size: (i + 1) * self.batch_size]
+            slices.append(_slice)
+
+        return slices
+
+    def __iter__(self):
+        slices = self._sample_batch_indices()
+
+        for _slice in slices:
+            yield self.X[_slice], self.Y[_slice]
+
+
+class OldBatchDataLoader(object):
     def __init__(self, X_ref, Y_ref, X_ss, R_ss, batch_size, num_classes=76):
         super().__init__()
         self.X_ref = X_ref
@@ -105,17 +136,7 @@ class BatchDataLoader(object):
                   self.l_mean_ss, self.l_scale_ss
 
 
-def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
-    if mock:
-        print("Using mock dataset...")
-        num_genes = 3641
-        num_cells = 200
-        X_ref = torch.distributions.Poisson(rate=10.0).sample(sample_shape=(num_cells, num_genes)).cuda()
-        X_ss = torch.distributions.Poisson(rate=10.0).sample(sample_shape=(num_cells, num_genes)).cuda()
-        Y_ref = torch.zeros(num_cells).long().cuda()
-        R_ss = torch.randn(num_cells, 2).cuda()
-        return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size, num_classes=3)
-
+def get_data(batch_size_ref=100, batch_size_ss=100, data_dir="/home/mjankowi/spatial/"):
     ref = 'scRef_MIDDLE_LAYER_Subsampled4000.RDS'
     #ref = 'scRefSubsampled4000_filtered.RDS'
 
@@ -218,7 +239,6 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
     #f.close()
 
     num_classes = np.unique(adata_ref.obs["liger_ident_coarse"].values).shape[0]
-    print("num_classes", num_classes)
 
     print("X_ref, Y_ref", X_ref.shape, Y_ref.shape)
     print("X_ss, R_ss", X_ss.shape, R_ss.shape)
@@ -231,6 +251,8 @@ def get_data(mock=False, batch_size=100, data_dir="/home/mjankowi/spatial/"):
     #counts = nonvariable.sum(-1)
     #print("nonvariable counts mean median min max", counts.mean(), counts.median(), counts.min(), counts.max(), counts.std())
 
-    return BatchDataLoader(X_ref, Y_ref, X_ss, R_ss, batch_size, num_classes=num_classes), adata_ss, adata_ref
+    return BatchDataLoader(X_ref, Y_ref, batch_size_ref), \
+           BatchDataLoader(X_ss, R_ss, batch_size_ss), \
+           num_classes, adata_ref, adata_ss
     #return BatchDataLoader(X_ref_train, Y_ref_train, X_ss_train, R_ss_train, batch_size, num_classes=num_classes), \
     #       BatchDataLoader(X_ref_test, Y_ref_test, X_ss_test, R_ss_test, batch_size, num_classes=num_classes), adata_ss, adata_ref
