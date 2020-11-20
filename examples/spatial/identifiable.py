@@ -3,6 +3,7 @@
 
 import argparse
 import time
+import math
 
 import numpy as np
 
@@ -69,11 +70,10 @@ class Encoder(nn.Module):
 
 
 class Identifiable(nn.Module):
-    def __init__(self, num_genes, num_classes, latent_dim=10, scale_factor=1.0):
+    def __init__(self, num_genes, num_classes, latent_dim=10):
         self.num_genes = num_genes
         self.num_classes = num_classes
         self.latent_dim = latent_dim
-        self.scale_factor = scale_factor
 
         print("Initialized Identifiable with num_genes=%d, num_classes=%d, latent_dim=%d" % (num_genes,
                num_classes, latent_dim))
@@ -97,7 +97,7 @@ class Identifiable(nn.Module):
         z_mean = pyro.param("z_mean").index_select(-2, y)
         z_scale = pyro.param("z_scale").index_select(-2, y)
 
-        with pyro.plate("batch", x.size(-2)), poutine.scale(scale=self.scale_factor):
+        with pyro.plate("batch", x.size(-2)), poutine.scale(scale=1.0 / self.num_genes):
             z = pyro.sample("z", dist.Normal(z_mean, z_scale).to_event(1))
 
             mu = x.sum(-1, keepdims=True) * self.decoder(z)
@@ -106,7 +106,7 @@ class Identifiable(nn.Module):
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
     def guide(self, x, y):
-        with pyro.plate("batch", x.size(-2)), poutine.scale(scale=self.scale_factor):
+        with pyro.plate("batch", x.size(-2)), poutine.scale(scale=1.0 / self.num_genes):
             y = one_hot(y, num_classes=self.num_classes)
             z_loc, z_scale = self.encoder(x, y)
             z = pyro.sample("z", dist.Normal(z_loc, z_scale).to_event(1))
@@ -117,11 +117,12 @@ def main(args):
     pyro.util.set_rng_seed(args.seed)
     pyro.enable_validation(True)
 
-    dataloader_ref, dataloader_ss, num_classes, adata_ref, adata_ss = get_data(batch_size_ref=args.batch_size, batch_size_ss=20)
+    dataloader_ref, dataloader_ss, num_classes, adata_ref, adata_ss = \
+        get_data(batch_size_ref=args.batch_size, batch_size_ss=25)
 
     num_cells, num_genes = dataloader_ref.X.shape
 
-    identifiable = Identifiable(num_genes, num_classes, scale_factor=1.0 / (args.batch_size * num_genes)).cuda()
+    identifiable = Identifiable(num_genes, num_classes).cuda()
 
     adam = torch.optim.Adam(list(identifiable.parameters()) + list(pyro.get_param_store()._params.values()),
                             lr=args.learning_rate)
@@ -137,7 +138,7 @@ def main(args):
         losses = []
 
         for x, y in dataloader_ref:
-            loss = diff_loss_fn(identifiable.model, identifiable.guide, x, y)
+            loss = diff_loss_fn(identifiable.model, identifiable.guide, x, y) / float(x.size(0))
             loss.backward()
             adam.step()
             adam.zero_grad()
@@ -151,13 +152,42 @@ def main(args):
         dt = 0.0 if epoch == 0 else ts[-1] - ts[-2]
         print("[Epoch %04d]  Loss: %.5f     [dt: %.3f]" % (epoch, np.mean(losses), dt))
 
+        if epoch % 5 == 0:
+            with torch.no_grad():
+                identifiable.eval()
+                NLL = 0.0
+                num_include = 0
+                for X, _ in dataloader_ss:
+                    num_include += 1
+                    X = X.unsqueeze(0).expand(19, X.size(0), X.size(1))
+                    y = torch.arange(19, device=x.device).unsqueeze(-1).expand(19, X.size(1))
+                    x = X.reshape(-1, X.size(-1))
+                    y = y.reshape(-1)
+                    num_samples = 32
+                    model_trace = vectorized_importance_weights(identifiable.model, identifiable.guide, x, y,
+                                                                num_samples=num_samples, max_plate_nesting=1)[1]
+                    log_pz = model_trace.nodes['z']['unscaled_log_prob'].reshape((num_samples,) + X.shape[:2])
+                    log_px = model_trace.nodes['x']['unscaled_log_prob'].reshape((num_samples,) + X.shape[:2])
+                    log_p = torch.logsumexp(log_pz + log_px, dim=0) - math.log(num_samples)
+                    log_p, labels = log_p.max(0)
+                    labels = ["{:02}".format(l) for l in labels.data.cpu().numpy().tolist()]
+                    nll = -log_p.mean().item() / num_genes
+                    NLL += nll * X.size(0)
+                    #print("NLL:  {:.5f}  labels: {}".format(nll, " ".join(labels)))
+                    if num_include == 300:
+                        break
+                identifiable.train()
+                print("NLL", NLL / (300 * 25))
+
+    theta_ref = pyro.param("inverse_dispersion").data.cpu()
+    print("theta_ref: %.3f %.3f %.3f" % (theta_ref.mean().item(), theta_ref.min().item(), theta_ref.max().item()))
+
     # Done training
     identifiable.eval()
 
     with torch.no_grad():
-        if epoch % 2 == 0:
-            identifiable.eval()
-            X = dataloader.X_ss[:10]
+        identifiable.eval()
+        for X, _ in dataloader_ss:
             X = X.unsqueeze(0).expand(19, X.size(0), X.size(1))
             y = torch.arange(19, device=x.device).unsqueeze(-1).expand(19, X.size(1))
             x = X.reshape(-1, X.size(-1))
@@ -167,17 +197,14 @@ def main(args):
                                                         num_samples=num_samples, max_plate_nesting=1)[1]
             log_pz = model_trace.nodes['z']['unscaled_log_prob'].reshape((num_samples,) + X.shape[:2])
             log_px = model_trace.nodes['x']['unscaled_log_prob'].reshape((num_samples,) + X.shape[:2])
-            log_p = torch.logsumexp(log_pz + log_px, dim=0)
+            log_p = torch.logsumexp(log_pz + log_px, dim=0) - math.log(num_samples)
             log_p, labels = log_p.max(0)
-            labels = labels.data.cpu().numpy().tolist()
-            labels = ["{:02}".format(l) for l in labels]
-            print("NLL:  {:.5f}  labels: ".format(-log_p.mean().item() / num_genes), " ".join(labels))
-            theta_ref = pyro.param("inverse_dispersion").data.cpu()
+            labels = ["{:02}".format(l) for l in labels.data.cpu().numpy().tolist()]
+            nll = -log_p.mean().item() / num_genes
+            print("NLL:  {:.5f}  labels: {}".format(nll, " ".join(labels)))
+        identifiable.train()
 
-            print("theta_ref: %.3f %.3f %.3f" % (theta_ref.mean().item(), theta_ref.min().item(), theta_ref.max().item()))
-            identifiable.train()
-
-    x = dataloader.X_ref
+        x = dataloader.X_ref
     y = dataloader.Y_ref
     latent_rep = identifiable.encoder(x, one_hot(y, num_classes=identifiable.num_classes))[0]
     adata_ref.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
@@ -230,7 +257,7 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('1.4.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=60, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=50, type=int, help='number of training epochs')
     parser.add_argument('-bs', '--batch-size', default=128, type=int, help='mini-batch size')
     parser.add_argument('-lr', '--learning-rate', default=0.005, type=float, help='learning rate')
     args = parser.parse_args()
