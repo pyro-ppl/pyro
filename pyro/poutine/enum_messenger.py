@@ -153,7 +153,7 @@ class EnumMessenger(Messenger):
                     param_dims.update(self._value_dims[name])
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
         self._param_dims[msg["name"]] = param_dims
-        if msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
+        if msg["is_observed"] is True or msg["infer"].get("enumerate") != "parallel":
             return
 
         # Compute an enumerated value (at an arbitrary dim).
@@ -184,6 +184,11 @@ class EnumMessenger(Messenger):
         value_dims = {dim: param_dims[dim] for dim in range(event_dim - value.dim(), 0)
                       if value.size(dim - event_dim) > 1 and dim in param_dims}
         value_dims[target_dim] = id_
+
+        # Interleave masked observations with enumerated values.
+        if msg["is_observed"] is not False:
+            obs_mask = msg["is_observed"].reshape(msg["is_observed"] + (1,) * event_dim)
+            value = torch.where(obs_mask, msg["value"], value)
 
         msg["infer"]["_enumerate_dim"] = target_dim
         msg["infer"]["_dim_to_id"] = value_dims

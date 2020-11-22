@@ -8,7 +8,7 @@ from pyro.poutine.messenger import Messenger
 
 def _block_fn(expose, expose_types, hide, hide_types, hide_all, msg):
     # handle observes
-    if msg["type"] == "sample" and msg["is_observed"]:
+    if msg["type"] == "sample" and msg["is_observed"] is not False:
         msg_type = "observe"
     else:
         msg_type = msg["type"]

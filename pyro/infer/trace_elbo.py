@@ -17,10 +17,14 @@ def _compute_log_r(model_trace, guide_trace):
     stacks = get_plate_stacks(model_trace)
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
-            log_r_term = model_site["log_prob"]
-            if not model_site["is_observed"]:
-                log_r_term = log_r_term - guide_trace.nodes[name]["log_prob"]
-            log_r.add((stacks[name], log_r_term.detach()))
+            log_r_term = model_site["log_prob"].detach()
+            obs_mask = model_site["is_observed"]
+            if obs_mask is not True:
+                log_q_term = guide_trace.nodes[name]["log_prob"].detach()
+                if obs_mask is not False:
+                    log_q_term = log_q_term.masked_fill(obs_mask, 0)
+                log_r_term = log_r_term - log_q_term
+            log_r.add((stacks[name], log_r_term))
     return log_r
 
 

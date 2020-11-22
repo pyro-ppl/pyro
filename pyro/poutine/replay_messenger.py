@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
+
 from .messenger import Messenger
 
 
@@ -59,13 +61,18 @@ class ReplayMessenger(Messenger):
         name = msg["name"]
         if self.trace is not None and name in self.trace:
             guide_msg = self.trace.nodes[name]
-            if msg["is_observed"]:
+            obs_mask = msg["is_observed"]
+            if obs_mask is True:
                 return None
-            if guide_msg["type"] != "sample" or \
-                    guide_msg["is_observed"]:
+            if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sampled in trace".format(name))
+            if obs_mask is False:
+                msg["value"] = guide_msg["value"]
+            else:
+                event_dim = getattr(msg["fn"], "event_dim", 0)
+                obs_mask = obs_mask.reshape(msg["is_observed"].shape + (1,) * event_dim)
+                msg["value"] = torch.where(obs_mask, msg["value"], guide_msg["value"])
             msg["done"] = True
-            msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
         return None
 

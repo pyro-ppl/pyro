@@ -227,10 +227,10 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf
                    if site["type"] == "sample"
                    if site["infer"].get("is_auxiliary"))
     model_vars = set(name for name, site in model_trace.nodes.items()
-                     if site["type"] == "sample" and not site["is_observed"]
+                     if site["type"] == "sample" and site["is_observed"] is not True
                      if type(site["fn"]).__name__ != "_Subsample")
     enum_vars = set(name for name, site in model_trace.nodes.items()
-                    if site["type"] == "sample" and not site["is_observed"]
+                    if site["type"] == "sample" and site["is_observed"] is not True
                     if type(site["fn"]).__name__ != "_Subsample"
                     if site["infer"].get("_enumerate_dim") is not None
                     if name not in guide_vars)
@@ -273,7 +273,7 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf
 
     # Check subsample sites introduced by plate.
     model_vars = set(name for name, site in model_trace.nodes.items()
-                     if site["type"] == "sample" and not site["is_observed"]
+                     if site["type"] == "sample" and site["is_observed"] is not True
                      if type(site["fn"]).__name__ == "_Subsample")
     guide_vars = set(name for name, site in guide_trace.nodes.items()
                      if site["type"] == "sample"

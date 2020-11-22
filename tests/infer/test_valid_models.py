@@ -2458,3 +2458,35 @@ def test_ordered_logistic_plate():
         pyro.sample("cutpoints", dist.Normal(cp_mu, cp_std).to_event(1))
 
     assert_ok(model, guide, Trace_ELBO())
+
+
+@pytest.mark.parametrize("num_particles", [1, 6])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("event_shape", [(), (5,)], ids=str)
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+])
+def test_obs_mask(num_particles, batch_shape, event_shape, Elbo):
+    event_dim = len(event_shape)
+    obs_mask = torch.empty(batch_shape, dtype=torch.bool).bernoulli_(0.5)
+    obs = torch.randn(batch_shape + event_shape)
+
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event())
+        with pyro.plate_stack("batch", batch_shape):
+            pyro.sample("x", dist.Normal(z, 1).to_event(event_dim),
+                        obs=obs, obs_mask=obs_mask)
+
+    def guide():
+        loc = pyro.param("loc", torch.zeros(event_shape))
+        scale = pyro.param("scale", torch.ones(event_shape),
+                           constraint=constraints.positive)
+        z = pyro.sample("z", dist.Normal(loc, scale).to_event())
+        with pyro.plate_stack("batch", batch_shape):
+            pyro.sample("x", dist.Normal(z, 1).to_event(event_dim))
+
+    elbo = Elbo(num_particles=num_particles, vectorize_particles=True,
+                strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)

@@ -72,11 +72,14 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
+    :param obs_mask: mask specifying which events are observed (optional,
+        should only be used if ``obs`` is specified)
     :param dict infer: Optional dictionary of inference parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
     """
     obs = kwargs.pop("obs", None)
+    obs_mask = kwargs.pop("obs_mask", True)
     infer = kwargs.pop("infer", {}).copy()
     # check if stack is empty
     # if stack empty, default behavior (defined here)
@@ -108,7 +111,7 @@ def sample(name, fn, *args, **kwargs):
         # handle observation
         if obs is not None:
             msg["value"] = obs
-            msg["is_observed"] = True
+            msg["is_observed"] = obs_mask
         # apply the stack and return its return value
         apply_stack(msg)
         return msg["value"]

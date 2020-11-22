@@ -15,7 +15,7 @@ from pyro.util import check_model_guide_match, check_site_shape, ignore_jit_warn
 
 def iter_discrete_escape(trace, msg):
     return ((msg["type"] == "sample") and
-            (not msg["is_observed"]) and
+            (msg["is_observed"] is not True) and
             (msg["infer"].get("enumerate") == "sequential") and  # only sequential
             (msg["name"] not in trace))
 
@@ -89,7 +89,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
 
 
 def _config_fn(default, expand, num_samples, tmc, site):
-    if site["type"] != "sample" or site["is_observed"]:
+    if site["type"] != "sample" or site["is_observed"] is True:
         return {}
     if type(site["fn"]).__name__ == "_Subsample":
         return {}
