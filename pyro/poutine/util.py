@@ -1,7 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-_VALIDATION_ENABLED = False
+_VALIDATION_ENABLED = __debug__
 
 
 def enable_validation(is_validate):

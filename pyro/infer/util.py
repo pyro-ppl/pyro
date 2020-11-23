@@ -16,7 +16,7 @@ from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MarginalRing
 from pyro.poutine.util import site_is_subsample
 
-_VALIDATION_ENABLED = False
+_VALIDATION_ENABLED = __debug__
 LAST_CACHE_SIZE = [Counter()]  # for profiling
 
 
