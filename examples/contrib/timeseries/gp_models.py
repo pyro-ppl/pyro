@@ -12,8 +12,6 @@ from os.path import exists
 from urllib.request import urlopen
 
 
-
-
 # download dataset from UCI archive
 def download_data():
     if not exists("eeg.dat"):
