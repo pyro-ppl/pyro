@@ -44,7 +44,6 @@ References
 """
 
 
-pyro.enable_validation(True)
 torch.set_default_tensor_type('torch.FloatTensor')
 
 

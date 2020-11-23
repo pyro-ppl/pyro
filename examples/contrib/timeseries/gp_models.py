@@ -12,7 +12,6 @@ from os.path import exists
 from urllib.request import urlopen
 
 
-pyro.enable_validation(__debug__)
 
 
 # download dataset from UCI archive

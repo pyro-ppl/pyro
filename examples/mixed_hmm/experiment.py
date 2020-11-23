@@ -46,7 +46,6 @@ def run_expt(args):
     schedule = [] if not args["schedule"] else [int(i) for i in args["schedule"].split(",")]
     random_effects = {"group": args["group"], "individual": args["individual"]}
 
-    pyro.enable_validation(args["validation"])
     pyro.set_rng_seed(seed)  # reproducible random effect parameter init
 
     filename = os.path.join(data_dir, "prep_seal_data.csv")
@@ -149,7 +148,6 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--resultsdir", default="./results", type=str)
     parser.add_argument("-s", "--seed", default=101, type=int)
     parser.add_argument("--schedule", default="", type=str)
-    parser.add_argument('--validation', action='store_true')
     args = parser.parse_args()
 
     if args.group == "none":

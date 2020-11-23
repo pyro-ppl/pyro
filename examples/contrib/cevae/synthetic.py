@@ -44,7 +44,6 @@ def generate_data(args):
 
 
 def main(args):
-    pyro.enable_validation(__debug__)
     if args.cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
 

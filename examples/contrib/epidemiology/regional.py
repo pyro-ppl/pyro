@@ -127,7 +127,6 @@ def predict(args, model, truth):
 
 
 def main(args):
-    pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
     # Generate data.
