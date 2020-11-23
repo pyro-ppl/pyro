@@ -88,7 +88,10 @@ class CVAE(nn.Module):
                 # In training, we will only sample in the masked image
                 mask_loc = loc[(xs == -1).view(-1, 784)].view(batch_size, -1)
                 mask_ys = ys[xs == -1].view(batch_size, -1)
-                pyro.sample('y', dist.Bernoulli(mask_loc).to_event(1), obs=mask_ys)
+                pyro.sample('y',
+                            dist.Bernoulli(mask_loc, validate_args=False)
+                                .to_event(1),
+                            obs=mask_ys)
             else:
                 # In testing, no need to sample: the output is already a
                 # probability in [0, 1] range, which better represent pixel
