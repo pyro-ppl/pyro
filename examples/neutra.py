@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 from matplotlib.gridspec import GridSpec
+from torch.distributions.utils import broadcast_all
 
 import pyro
 import pyro.distributions as dist
@@ -43,12 +44,11 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
 class BananaShaped(dist.TorchDistribution):
+    arg_constraints = {"a": constraints.positive, "b": constraints.real}
     support = constraints.real_vector
 
     def __init__(self, a, b, rho=0.9):
-        self.a = a
-        self.b = b
-        self.rho = rho
+        self.a, self.b, self.rho = broadcast_all(a, b, rho)
         self.mvn = dist.MultivariateNormal(torch.tensor([0., 0.]),
                                            covariance_matrix=torch.tensor([[1., self.rho], [self.rho, 1.]]))
         super().__init__(event_shape=(2,))
