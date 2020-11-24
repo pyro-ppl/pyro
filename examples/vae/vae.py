@@ -92,8 +92,11 @@ class VAE(nn.Module):
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
             # decode the latent code z
             loc_img = self.decoder.forward(z)
-            # score against actual images
-            pyro.sample("obs", dist.Bernoulli(loc_img).to_event(1), obs=x.reshape(-1, 784))
+            # score against actual images (with relaxed Bernoulli values)
+            pyro.sample("obs",
+                        dist.Bernoulli(loc_img, validate_args=False)
+                            .to_event(1),
+                        obs=x.reshape(-1, 784))
             # return the loc so we can visualize it later
             return loc_img
 
