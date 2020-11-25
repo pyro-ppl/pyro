@@ -435,9 +435,9 @@ def enable_validation(is_validate=True):
     validation of mature models to speed up inference.
 
     The default behavior mimics Python's ``assert`` statement: validation is on
-    by default, but is disabled if Python is run in optimized mode (``python
-    -O``). Equivalently, the default behavior depends on Python's global
-    ``__debug__`` value via ``pyro.enable_validation(__debug__)``.
+    by default, but is disabled if Python is run in optimized mode (via
+    ``python -O``). Equivalently, the default behavior depends on Python's
+    global ``__debug__`` value via ``pyro.enable_validation(__debug__)``.
 
     Validation is temporarily disabled during jit compilation, for all
     inference algorithms that support the PyTorch jit. We recommend developing
