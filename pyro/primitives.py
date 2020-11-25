@@ -430,9 +430,19 @@ def enable_validation(is_validate=True):
     """
     Enable or disable validation checks in Pyro. Validation checks provide
     useful warnings and errors, e.g. NaN checks, validating distribution
-    arguments and support values, etc. which is useful for debugging.
-    Since some of these checks may be expensive, we recommend turning
-    this off for mature models.
+    arguments and support values, detecting incorrect use of ELBO and MCMC.
+    Since some of these checks may be expensive, you may want to disable
+    validation of mature models to speed up inference.
+
+    The default behavior mimics Python's ``assert`` statement: validation is on
+    by default, but is disabled if Python is run in optimized mode (``python
+    -O``). Equivalently, the default behavior depends on Python's global
+    ``__debug__`` value via ``pyro.enable_validation(__debug__)``.
+
+    Validation is temporarily disabled during jit compilation, for all
+    inference algorithms that support the PyTorch jit. We recommend developing
+    models with non-jitted inference algorithms to ease debugging, then
+    optionally moving to jitted inference once a model is correct.
 
     :param bool is_validate: (optional; defaults to True) whether to
         enable validation checks.
