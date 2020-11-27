@@ -109,6 +109,7 @@ class NamedMessenger(ReentrantMessenger):
 class MarkovMessenger(NamedMessenger):
     """
     Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
+
     :param int history: The number of previous contexts visible from the
         current context. Defaults to 1. If zero, this is similar to
         :class:`pyro.plate`.
@@ -203,6 +204,8 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
 
         # history size 1
         self._iterable = ("_prev", "_curr")
+        # sarkka_bilmes style
+        # self._iterable = ("P" * i for i in reversed(range(self.history+1)))
         self._indices = funsor.Tensor(
             indices, OrderedDict([(self.name, funsor.Bint[self.size])]), self.size
         )
