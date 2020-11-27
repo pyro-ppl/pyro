@@ -4,8 +4,13 @@
 from collections import OrderedDict
 from contextlib import ExitStack
 
-from pyro.poutine.reentrant_messenger import ReentrantMessenger
+import funsor
 
+from pyro.poutine.reentrant_messenger import ReentrantMessenger
+from pyro.poutine.broadcast_messenger import BroadcastMessenger
+from pyro.poutine.indep_messenger import CondIndepStackFrame
+
+from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, StackFrame
 
 
@@ -104,7 +109,6 @@ class NamedMessenger(ReentrantMessenger):
 class MarkovMessenger(NamedMessenger):
     """
     Handler for converting to/from funsors consistent with Pyro's positional batch dimensions.
-
     :param int history: The number of previous contexts visible from the
         current context. Defaults to 1. If zero, this is similar to
         :class:`pyro.plate`.
@@ -178,3 +182,61 @@ class GlobalNamedMessenger(NamedMessenger):
     def __exit__(self, *args):
         self._saved_frames.append(_DIM_STACK.pop_global())
         return super().__exit__(*args)
+
+
+class VectorizedMarkovMessenger(GlobalNamedMessenger):
+    """
+    Pyro interface for ``modified_partial_sum_product``
+
+    :param int history: The number of previous contexts visible from the
+        current context. Defaults to 1. If zero, this is similar to
+        :class:`pyro.plate`.
+    """
+    def __init__(self, name=None, size=None, dim=None, history=1):
+        self.history = history
+        self.dim_type = DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
+        self.name = name if name is not None else funsor.interpreter.gensym("MARKOV")
+        self.size = size
+        self.dim = dim
+        indices = funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size)
+        assert len(indices) == size
+
+        # history size 1
+        self._iterable = ("_prev", "_curr")
+        self._indices = funsor.Tensor(
+            indices, OrderedDict([(self.name, funsor.Bint[self.size])]), self.size
+        )
+        self._saved_frames = []
+        super().__init__()
+
+    def _process_message(self, msg):
+        if msg["type"] == "sample":
+            msg["infer"]["markov"] = True
+        return super()._process_message(msg)
+
+    def __iter__(self):
+        assert self._iterable is not None
+        with self:
+            for i, value in enumerate(self._iterable):
+                self.markov_iter = i
+                yield value
+
+    def __enter__(self):
+        super().__enter__()  # do this first to take care of globals recycling
+        name_to_dim = OrderedDict([(self.name, DimRequest(self.dim, self.dim_type))])
+        indices = to_data(self._indices, name_to_dim=name_to_dim)
+        # extract the dimension allocated by to_data to match plate's current behavior
+        self.dim, self.indices = -indices.dim(), indices.squeeze()
+        return self
+
+    def _pyro_sample(self, msg):
+        if self.markov_iter == self.history:
+            msg["infer"]["markov"] = None
+            frame = CondIndepStackFrame(self.name, self.dim, self.size, 0)
+            msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+            BroadcastMessenger._pyro_sample(msg)
+
+    def _pyro_param(self, msg):
+        if self.markov_iter == self.history:
+            frame = CondIndepStackFrame(self.name, self.dim, self.size, 0)
+            msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
