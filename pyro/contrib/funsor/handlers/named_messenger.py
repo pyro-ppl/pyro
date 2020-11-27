@@ -10,7 +10,7 @@ from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 
-from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
+from pyro.contrib.funsor.handlers.primitives import to_data
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, StackFrame
 
 
