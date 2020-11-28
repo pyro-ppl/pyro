@@ -9,9 +9,15 @@ import funsor
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+from pyro.poutine.runtime import effectful
 
-from pyro.contrib.funsor.handlers.primitives import to_data
+from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, StackFrame
+
+
+@effectful(type="markov_step")
+def markov_step(name, step):
+    return name, step
 
 
 class NamedMessenger(ReentrantMessenger):
@@ -195,6 +201,8 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
     """
     def __init__(self, name=None, size=None, dim=None, history=1):
         self.history = history
+        if self.history > 1:
+            raise NotImplementedError("history > 1 is not yet supported!")
         self.dim_type = DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
         self.name = name if name is not None else funsor.interpreter.gensym("MARKOV")
         self.size = size
@@ -211,6 +219,7 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         )
         self._saved_frames = []
         super().__init__()
+        self._step = {}
 
     def _process_message(self, msg):
         if msg["type"] == "sample":
@@ -230,7 +239,12 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         indices = to_data(self._indices, name_to_dim=name_to_dim)
         # extract the dimension allocated by to_data to match plate's current behavior
         self.dim, self.indices = -indices.dim(), indices.squeeze()
+        self._step = {}
         return self
+
+    def __exit__(self, *args):
+        super().__exit__(*args)
+        markov_step(self.name, self._step.copy())
 
     def _pyro_sample(self, msg):
         if self.markov_iter == self.history:
@@ -239,7 +253,9 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
             msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
             BroadcastMessenger._pyro_sample(msg)
 
-    def _pyro_param(self, msg):
+    def _pyro_post_sample(self, msg):
         if self.markov_iter == self.history:
-            frame = CondIndepStackFrame(self.name, self.dim, self.size, 0)
-            msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+            funsor_log_prob = to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
+            for name in funsor_log_prob.inputs:
+                if name.endswith("_prev"):
+                    self._step[name] = name.replace("_prev", "_curr")

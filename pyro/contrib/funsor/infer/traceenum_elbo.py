@@ -18,7 +18,7 @@ def terms_from_trace(tr):
     # data structure containing densities, measures, scales, and identification
     # of free variables as either product (plate) variables or sum (measure) variables
     terms = {"log_factors": [], "log_measures": [], "scale": to_funsor(1.),
-             "plate_vars": frozenset(), "measure_vars": frozenset()}
+             "plate_vars": frozenset(), "measure_vars": frozenset(), "plate_to_step": tr.plate_to_step}
     for name, node in tr.nodes.items():
         if node["type"] != "sample" or type(node["fn"]).__name__ == "_Subsample":
             continue

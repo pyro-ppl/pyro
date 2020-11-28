@@ -22,6 +22,7 @@ class TraceMessenger(OrigTraceMessenger):
     def __init__(self, graph_type=None, param_only=None, pack_online=True):
         super().__init__(graph_type=graph_type, param_only=param_only)
         self.pack_online = True if pack_online is None else pack_online
+        self.trace.plate_to_step = {}
 
     def _pyro_post_sample(self, msg):
         if msg["infer"].get("markov") is True:
@@ -53,3 +54,7 @@ class TraceMessenger(OrigTraceMessenger):
             msg["funsor"]["dim_to_name"].update(_DIM_STACK.names_from_batch_shape(
                 msg["value"].shape[:len(msg["value"]).shape - len(msg["fn"].event_shape)]))
         return super()._pyro_post_sample(msg)
+
+    def _pyro_markov_step(self, msg):
+        name, step = msg["args"]
+        self.trace.plate_to_step[name] = step
