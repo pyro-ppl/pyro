@@ -28,6 +28,7 @@ def test_vectorized_markov():
     locs = pyro.param("locs", lambda: torch.rand((3,)))
 
     def model():
+        x_prev = None
         for i in pyro.markov(range(len(data))):
             x_curr = pyro.sample(
                 "x_{}".format(i), dist.Categorical(
@@ -37,6 +38,7 @@ def test_vectorized_markov():
             x_prev = x_curr
 
     def vectorized_model():
+        x_prev = None
         for i in pyro.vectorized_markov(name="time", size=len(data), dim=-1):
             x_curr = pyro.sample(
                 "x_{}".format(i), dist.Categorical(
