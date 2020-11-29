@@ -250,7 +250,6 @@ def main(args):
     # Fix random number seed
     pyro.util.set_rng_seed(args.seed)
     # Enable optional validation warnings
-    pyro.enable_validation(True)
 
     # Load and pre-process data
     dataloader, num_genes, l_mean, l_scale, anndata = get_data(dataset=args.dataset, batch_size=args.batch_size,

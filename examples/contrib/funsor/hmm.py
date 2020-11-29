@@ -540,7 +540,6 @@ def main(args):
     num_observations = float(lengths.sum())
     pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
-    pyro.enable_validation(__debug__)
 
     # We'll train using MAP Baum-Welch, i.e. MAP estimation while marginalizing
     # out the hidden state x. This is accomplished via an automatic guide that
