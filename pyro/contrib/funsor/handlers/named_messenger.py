@@ -210,10 +210,6 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         indices = funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size)
         assert len(indices) == size
 
-        # history size 1
-        self._iterable = ("_prev", "_curr")
-        # sarkka_bilmes style
-        # self._iterable = ("P" * i for i in reversed(range(self.history+1)))
         self._indices = funsor.Tensor(
             indices, OrderedDict([(self.name, funsor.Bint[self.size])]), self.size
         )
@@ -227,11 +223,10 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         return super()._process_message(msg)
 
     def __iter__(self):
-        assert self._iterable is not None
         with self:
-            for i, value in enumerate(self._iterable):
+            for i in range(self.history+1):
                 self.markov_iter = i
-                yield value
+                yield self.indices[:self.size-self.history+i]
 
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
@@ -257,5 +252,8 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         if self.markov_iter == self.history:
             funsor_log_prob = to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
             for name in funsor_log_prob.inputs:
-                if name.endswith("_prev"):
-                    self._step[name] = name.replace("_prev", "_curr")
+                if name.endswith(str(self.indices[:self.size-self.history])):
+                    self._step[name] = name.replace(
+                            str(self.indices[:self.size-self.history]),
+                            str(self.indices)
+                    )
