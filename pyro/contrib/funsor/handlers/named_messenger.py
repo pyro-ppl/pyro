@@ -244,7 +244,7 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
             frame = CondIndepStackFrame(self.name, self.dim, self.size-self.history, 0)
             msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
             BroadcastMessenger._pyro_sample(msg)
-        elif msg["type"] == "sample":
+        else:
             msg["infer"]["_do_not_trace"] = True
             msg["infer"]["is_auxiliary"] = True
             msg["is_observed"] = False
