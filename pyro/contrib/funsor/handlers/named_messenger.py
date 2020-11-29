@@ -217,11 +217,6 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         super().__init__()
         self._step = {}
 
-    def _process_message(self, msg):
-        if msg["type"] == "sample":
-            msg["infer"]["markov"] = True
-        return super()._process_message(msg)
-
     def __iter__(self):
         # handle initialization
         for i in range(self.history):
@@ -246,10 +241,13 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
 
     def _pyro_sample(self, msg):
         if self.markov_iter == self.history:
-            msg["infer"]["markov"] = None
             frame = CondIndepStackFrame(self.name, self.dim, self.size-self.history, 0)
             msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
             BroadcastMessenger._pyro_sample(msg)
+        elif msg["type"] == "sample":
+            msg["infer"]["_do_not_trace"] = True
+            msg["infer"]["is_auxiliary"] = True
+            msg["is_observed"] = False
 
     def _pyro_post_sample(self, msg):
         if self.markov_iter == self.history:

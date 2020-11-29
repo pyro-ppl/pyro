@@ -24,8 +24,6 @@ class TraceMessenger(OrigTraceMessenger):
         self.pack_online = True if pack_online is None else pack_online
 
     def _pyro_post_sample(self, msg):
-        if msg["infer"].get("markov") is True:
-            return
         if msg["name"] in self.trace:
             return
         if "funsor" not in msg:
