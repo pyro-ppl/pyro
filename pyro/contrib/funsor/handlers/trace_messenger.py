@@ -22,7 +22,6 @@ class TraceMessenger(OrigTraceMessenger):
     def __init__(self, graph_type=None, param_only=None, pack_online=True):
         super().__init__(graph_type=graph_type, param_only=param_only)
         self.pack_online = True if pack_online is None else pack_online
-        self.trace.plate_to_step = {}
 
     def _pyro_post_sample(self, msg):
         if msg["infer"].get("markov") is True:

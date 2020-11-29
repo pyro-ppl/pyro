@@ -76,6 +76,7 @@ class TraceMessenger(Messenger):
 
     def __enter__(self):
         self.trace = Trace(graph_type=self.graph_type)
+        self.trace.plate_to_step = {}
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
