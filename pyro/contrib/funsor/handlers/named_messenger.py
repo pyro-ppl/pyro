@@ -208,7 +208,7 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         self.size = size
         self.dim = dim
         indices = funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size)
-        assert len(indices) == size
+        assert len(indices) == self.size
 
         self._indices = funsor.Tensor(
             indices, OrderedDict([(self.name, funsor.Bint[self.size])]), self.size
@@ -223,10 +223,13 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         return super()._process_message(msg)
 
     def __iter__(self):
+        # handle initialization
+        for i in range(self.history):
+            yield i
         with self:
             for i in range(self.history+1):
                 self.markov_iter = i
-                yield self.indices[:self.size-self.history+i]
+                yield self.indices[i:self.size-self.history+i]
 
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
@@ -244,7 +247,7 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
     def _pyro_sample(self, msg):
         if self.markov_iter == self.history:
             msg["infer"]["markov"] = None
-            frame = CondIndepStackFrame(self.name, self.dim, self.size, 0)
+            frame = CondIndepStackFrame(self.name, self.dim, self.size-self.history, 0)
             msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
             BroadcastMessenger._pyro_sample(msg)
 
@@ -255,5 +258,4 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
                 if name.endswith(str(self.indices[:self.size-self.history])):
                     self._step[name] = name.replace(
                             str(self.indices[:self.size-self.history]),
-                            str(self.indices)
-                    )
+                            str(self.indices[self.history:]))
