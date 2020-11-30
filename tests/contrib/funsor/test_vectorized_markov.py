@@ -68,7 +68,7 @@ def model_2(data, vectorized):
     pyro.get_param_store().clear()
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
-    y_init = pyro.param("y_init", lambda: torch.rand(y_dim), constraint=constraints.simplex)
+    y_init = pyro.param("y_init", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex)
     y_trans = pyro.param("y_trans", lambda: torch.rand((x_dim, y_dim, y_dim)), constraint=constraints.simplex)
 
     x_prev = y_prev = None
@@ -82,7 +82,7 @@ def model_2(data, vectorized):
             infer={"enumerate": "parallel"})
         with pyro.plate("tones", data.shape[-1], dim=-1):
             y_curr = pyro.sample("y_{}".format(i), dist.Categorical(
-                y_init if isinstance(i, int) and i < 1 else Vindex(y_trans)[x_curr, y_prev]),
+                y_init[x_curr] if isinstance(i, int) and i < 1 else Vindex(y_trans)[x_curr, y_prev]),
                 obs=data[i])
         x_prev, y_prev = x_curr, y_curr
 
