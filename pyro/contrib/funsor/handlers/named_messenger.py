@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
 
 import funsor
@@ -16,8 +16,18 @@ from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType
 
 
 @effectful(type="markov_step")
-def markov_step(name, step):
-    return name, step
+def _markov_step(name, markov_vars, suffixes):
+    """
+    Only for internal use by ``VectorizedMarkovMessenger`` to produce
+    a `step` collection for a `plate_to_step` dict.
+
+    `plate_to_step` maps markov dim name `name` to a `step` collection.
+    This function creates a step tuple for each markov var and adds it to `step`.
+    """
+    step = frozenset()
+    for var in markov_vars:
+        step |= frozenset({tuple("{}{}".format(var, suffix) for suffix in suffixes)})
+    return step
 
 
 class NamedMessenger(ReentrantMessenger):
@@ -194,15 +204,9 @@ class GlobalNamedMessenger(NamedMessenger):
 class VectorizedMarkovMessenger(GlobalNamedMessenger):
     """
     Pyro interface for ``modified_partial_sum_product``
-
-    :param int history: The number of previous contexts visible from the
-        current context. Defaults to 1. If zero, this is similar to
-        :class:`pyro.plate`.
     """
     def __init__(self, name=None, size=None, dim=None, history=1):
         self.history = history
-        if self.history > 1:
-            raise NotImplementedError("history > 1 is not yet supported!")
         self.dim_type = DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
         self.name = name if name is not None else funsor.interpreter.gensym("MARKOV")
         self.size = size
@@ -215,16 +219,19 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         )
         self._saved_frames = []
         super().__init__()
-        self._step = {}
 
     def __iter__(self):
-        # handle initialization
-        for i in range(self.history):
-            yield i
         with self:
-            for i in range(self.history+1):
-                self.markov_iter = i
-                yield self.indices[i:self.size-self.history+i]
+            for i in range(2*self.history+1):
+                if i < self.history:
+                    # init factors
+                    self._suffix = i
+                else:
+                    # vectorized trans factors
+                    i -= self.history
+                    self._suffix = self.indices[i:self.size+i-self.history]
+                self._suffixes.append(self._suffix)
+                yield self._suffix
 
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
@@ -232,28 +239,35 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         indices = to_data(self._indices, name_to_dim=name_to_dim)
         # extract the dimension allocated by to_data to match plate's current behavior
         self.dim, self.indices = -indices.dim(), indices.squeeze()
-        self._step = {}
+        self._markov_vars = set()
+        self._auxiliary_to_markov = {}
+        # _suffixes is used by _markov_step to create a step
+        self._suffixes = []
         return self
 
     def __exit__(self, *args):
         super().__exit__(*args)
-        markov_step(self.name, self._step.copy())
+        _markov_step(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
     def _pyro_sample(self, msg):
-        if self.markov_iter == self.history:
+        if type(msg["fn"]).__name__ == "_Subsample":
+            return
+        if not isinstance(self._suffix, int):
             frame = CondIndepStackFrame(self.name, self.dim, self.size-self.history, 0)
             msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
             BroadcastMessenger._pyro_sample(msg)
-        else:
-            msg["infer"]["_do_not_trace"] = True
-            msg["infer"]["is_auxiliary"] = True
-            msg["is_observed"] = False
+            if str(self._suffix) != str(self.indices[self.history:self.size]):
+                # do not trace if not the last step in the loop
+                msg["infer"]["_do_not_trace"] = True
+                msg["infer"]["is_auxiliary"] = True
+                msg["is_observed"] = False
+                # map to markov var name
+                markov = msg["name"].replace(str(self._suffix), "")
+                self._auxiliary_to_markov[msg["name"]] = markov
 
     def _pyro_post_sample(self, msg):
-        if self.markov_iter == self.history:
+        if str(self._suffix) == str(self.indices[self.history:self.size]):
             funsor_log_prob = to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
-            for name in funsor_log_prob.inputs:
-                if name.endswith(str(self.indices[:self.size-self.history])):
-                    self._step[name] = name.replace(
-                            str(self.indices[:self.size-self.history]),
-                            str(self.indices[self.history:]))
+            for name in set(funsor_log_prob.inputs) & set(self._auxiliary_to_markov):
+                markov = self._auxiliary_to_markov[name]
+                self._markov_vars.add(markov)
