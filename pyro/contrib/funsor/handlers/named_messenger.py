@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from contextlib import ExitStack
 
 import funsor

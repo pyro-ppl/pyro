@@ -19,8 +19,8 @@ except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
 
-def model_0(data, vectorized):
-    x_dim, history = 3, 1
+def model_0(data, history, vectorized):
+    x_dim = 3
     pyro.set_rng_seed(0)
     pyro.get_param_store().clear()
     init = pyro.param("init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
@@ -40,8 +40,8 @@ def model_0(data, vectorized):
         x_prev = x_curr
 
 
-def model_1(data, vectorized):
-    x_dim, history = 3, 1
+def model_1(data, history, vectorized):
+    x_dim = 3
     pyro.set_rng_seed(0)
     pyro.get_param_store().clear()
     init = pyro.param("init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
@@ -62,8 +62,8 @@ def model_1(data, vectorized):
         x_prev = x_curr
 
 
-def model_2(data, vectorized):
-    x_dim, y_dim, history = 3, 2, 1
+def model_2(data, history, vectorized):
+    x_dim, y_dim = 3, 2
     pyro.set_rng_seed(0)
     pyro.get_param_store().clear()
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
@@ -87,8 +87,8 @@ def model_2(data, vectorized):
         x_prev, y_prev = x_curr, y_curr
 
 
-def model_3(data, vectorized):
-    w_dim, x_dim, y_dim, history = 2, 3, 2, 1
+def model_3(data, history, vectorized):
+    w_dim, x_dim, y_dim = 2, 3, 2
     pyro.set_rng_seed(0)
     pyro.get_param_store().clear()
     w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
@@ -117,8 +117,8 @@ def model_3(data, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
-def model_4(data, vectorized):
-    w_dim, x_dim, y_dim, history = 2, 3, 2, 1
+def model_4(data, history, vectorized):
+    w_dim, x_dim, y_dim = 2, 3, 2
     pyro.set_rng_seed(0)
     pyro.get_param_store().clear()
     w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
@@ -147,8 +147,8 @@ def model_4(data, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
-def model_5(data, vectorized):
-    x_dim, y_dim, history = 3, 2, 2
+def model_5(data, history, vectorized):
+    x_dim, y_dim = 3, 2
     pyro.set_rng_seed(0)
     pyro.get_param_store().clear()
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
@@ -190,13 +190,13 @@ def test_vectorized_markov(model, data, var, history):
 
     with pyro_backend("contrib.funsor"), \
             handlers.enum():
-        trace = handlers.trace(model).get_trace(data, False)
+        trace = handlers.trace(model).get_trace(data, history, False)
         factors = list()
         for i in range(len(data)):
             for v in var:
                 factors.append(trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
 
-        vectorized_trace = handlers.trace(model).get_trace(data, True)
+        vectorized_trace = handlers.trace(model).get_trace(data, history, True)
         vectorized_factors = list()
         for i in range(history):
             for v in var:
@@ -210,6 +210,17 @@ def test_vectorized_markov(model, data, var, history):
                         for j in range(history+1) for k in var})
                     )
 
+        # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
             assert set(f1.inputs) == set(f2.inputs)
             assert torch.equal(pyro.to_data(f1), pyro.to_data(f2))
+
+        # assert correct step
+        actual_step = vectorized_trace.nodes["time"]["infer"]["step"]
+        # expected step: assume that all but the last var is markov
+        expected_step = frozenset()
+        for v in var[:-1]:
+            v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
+                     + tuple("{}_{}".format(v, torch.arange(j, len(data)-history+j)) for j in range(history+1))
+            expected_step |= frozenset({v_step})
+        assert actual_step == expected_step
