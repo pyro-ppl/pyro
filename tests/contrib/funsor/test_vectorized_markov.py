@@ -147,15 +147,46 @@ def model_4(data, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
-@pytest.mark.parametrize("model,data,var", [
-    (model_0, torch.rand(5), "xy"),
-    (model_1, torch.rand(5, 4), "xy"),
-    (model_2, torch.ones((5, 4), dtype=torch.long), "xy"),
-    (model_3, torch.ones((5, 4), dtype=torch.long), "wxy"),
-    (model_4, torch.ones((5, 4), dtype=torch.long), "wxy"),
+def model_5(data, vectorized):
+    x_dim, y_dim, history = 3, 2, 2
+    pyro.set_rng_seed(0)
+    pyro.get_param_store().clear()
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
+    x_init_2 = pyro.param("x_init_2", lambda: torch.rand(x_dim, x_dim), constraint=constraints.simplex)
+    x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim, x_dim)), constraint=constraints.simplex)
+    y_probs = pyro.param("y_probs", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex)
+
+    x_prev = x_prev_2 = None
+    markov_loop = \
+        pyro.vectorized_markov(name="time", size=len(data), dim=-2, history=history) if vectorized \
+        else pyro.markov(range(len(data)), history=history)
+    for i in markov_loop:
+        if isinstance(i, int) and i == 0:
+            x_probs = x_init
+        elif isinstance(i, int) and i == 1:
+            x_probs = Vindex(x_init_2)[x_prev]
+        else:
+            x_probs = Vindex(x_trans)[x_prev_2, x_prev]
+
+        x_curr = pyro.sample(
+            "x_{}".format(i), dist.Categorical(x_probs),
+            infer={"enumerate": "parallel"})
+        with pyro.plate("tones", data.shape[-1], dim=-1):
+            pyro.sample("y_{}".format(i), dist.Categorical(
+                Vindex(y_probs)[x_curr]),
+                obs=data[i])
+        x_prev_2, x_prev = x_prev, x_curr
+
+
+@pytest.mark.parametrize("model,data,var,history", [
+    (model_0, torch.rand(5), "xy", 1),
+    (model_1, torch.rand(5, 4), "xy", 1),
+    (model_2, torch.ones((5, 4), dtype=torch.long), "xy", 1),
+    (model_3, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
+    (model_4, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
+    (model_5, torch.ones((5, 4), dtype=torch.long), "xy", 2),
 ])
-def test_vectorized_markov(model, data, var):
-    history = 1
+def test_vectorized_markov(model, data, var, history):
 
     with pyro_backend("contrib.funsor"), \
             handlers.enum():
@@ -174,12 +205,9 @@ def test_vectorized_markov(model, data, var):
             for v in var:
                 vectorized_factors.append(
                     vectorized_trace.nodes["{}_{}".format(v, torch.arange(history, len(data)))]["funsor"]["log_prob"]
-                    (**{"time": i-history,
-                        "x_{}".format(torch.arange(history, len(data))): "x_{}".format(i),
-                        "x_{}".format(torch.arange(len(data)-history)): "x_{}".format(i-history),
-                        "w_{}".format(torch.arange(history, len(data))): "w_{}".format(i),
-                        "w_{}".format(torch.arange(len(data)-history)): "w_{}".format(i-history),
-                        "y_{}".format(torch.arange(history, len(data))): "y_{}".format(i)}),
+                    (**{"time": i-history},
+                     **{"{}_{}".format(k, torch.arange(history-j, len(data)-j)): "{}_{}".format(k, i-j)
+                        for j in range(history+1) for k in var})
                     )
 
         for f1, f2 in zip(factors, vectorized_factors):
