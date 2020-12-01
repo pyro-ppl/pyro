@@ -53,5 +53,7 @@ class TraceMessenger(OrigTraceMessenger):
         return super()._pyro_post_sample(msg)
 
     def _pyro_markov_step(self, msg):
-        name, step = msg["args"]
-        self.trace.plate_to_step[name] = step
+        step = msg["fn"](msg["name"], **msg["kwargs"])
+        msg["infer"]["step"] = step
+        msg["done"] = True
+        self.trace.add_node(msg["name"], **msg.copy())
