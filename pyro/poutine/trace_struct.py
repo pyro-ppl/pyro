@@ -146,8 +146,6 @@ class Trace:
         new_tr.nodes.update(self.nodes)
         new_tr._succ.update(self._succ)
         new_tr._pred.update(self._pred)
-        if hasattr(self, "plate_to_step"):
-            new_tr.plate_to_step = self.plate_to_step
         return new_tr
 
     def _dfs(self, site, visited):
