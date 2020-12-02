@@ -205,6 +205,7 @@ def model_6(data, history, vectorized):
         x_prev = x_curr
 
 
+@pytest.mark.parametrize("use_replay", [True, False])
 @pytest.mark.parametrize("model,data,var,history", [
     (model_0, torch.rand(5), "xy", 1),
     (model_1, torch.rand(5, 4), "xy", 1),
@@ -214,17 +215,25 @@ def model_6(data, history, vectorized):
     (model_5, torch.ones((5, 4), dtype=torch.long), "xy", 2),
     (model_6, torch.rand(5, 4), "xy", 1),
 ])
-def test_vectorized_markov(model, data, var, history):
+def test_vectorized_markov(model, data, var, history, use_replay):
 
     with pyro_backend("contrib.funsor"), \
             handlers.enum():
+        # sequential trace
         trace = handlers.trace(model).get_trace(data, history, False)
+
+        # sequential factors
         factors = list()
         for i in range(len(data)):
             for v in var:
                 factors.append(trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
 
+        # vectorized trace
         vectorized_trace = handlers.trace(model).get_trace(data, history, True)
+        if use_replay:
+            vectorized_trace = handlers.trace(handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
+
+        # vectorized factors
         vectorized_factors = list()
         for i in range(history):
             for v in var:
@@ -296,25 +305,32 @@ def model_7(weeks_data, days_data, history, vectorized):
         w_prev = w_curr
 
 
+@pytest.mark.parametrize("use_replay", [True, False])
 @pytest.mark.parametrize("model,weeks_data,days_data,vars1,vars2,history", [
     (model_7, torch.ones(3), torch.zeros(9), "xy", "wz", 1),
 ])
-def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, history):
+def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, history, use_replay):
 
     with pyro_backend("contrib.funsor"), \
             handlers.enum():
+        # sequential factors
         trace = handlers.trace(model).get_trace(weeks_data, days_data, history, False)
+
         factors = list()
-        # weeks factors
+        # sequential weeks factors
         for i in range(len(weeks_data)):
             for v in vars1:
                 factors.append(trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
-        # days factors
+        # sequential days factors
         for j in range(len(days_data)):
             for v in vars2:
                 factors.append(trace.nodes["{}_{}".format(v, j)]["funsor"]["log_prob"])
 
+        # vectorized trace
         vectorized_trace = handlers.trace(model).get_trace(weeks_data, days_data, history, True)
+        if use_replay:
+            vectorized_trace = handlers.trace(handlers.replay(model, trace=vectorized_trace)).get_trace(weeks_data, days_data, history, True)
+
         vectorized_factors = list()
         # vectorized weeks factors
         for i in range(history):
