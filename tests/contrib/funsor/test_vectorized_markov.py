@@ -205,6 +205,36 @@ def model_6(data, history, vectorized):
         x_prev = x_curr
 
 
+def model_8(data, history, vectorized):
+    w_dim, x_dim, y_dim = 2, 3, 2
+    pyro.set_rng_seed(0)
+    pyro.get_param_store().clear()
+    w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
+    w_trans = pyro.param("w_trans", lambda: torch.rand((x_dim, w_dim)), constraint=constraints.simplex)
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
+    x_trans = pyro.param("x_trans", lambda: torch.rand((w_dim, x_dim)), constraint=constraints.simplex)
+    y_probs = pyro.param("y_probs", lambda: torch.rand(w_dim, x_dim, y_dim), constraint=constraints.simplex)
+
+    w_prev = x_prev = None
+    markov_loop = \
+        pyro.vectorized_markov(name="time", size=len(data), dim=-2, history=history) if vectorized \
+        else pyro.markov(range(len(data)), history=history)
+    for i in markov_loop:
+        w_curr = pyro.sample(
+            "w_{}".format(i), dist.Categorical(
+                w_init if isinstance(i, int) and i < 1 else w_trans[x_prev]),
+            infer={"enumerate": "parallel"})
+        x_curr = pyro.sample(
+            "x_{}".format(i), dist.Categorical(
+                x_init if isinstance(i, int) and i < 1 else x_trans[w_prev]),
+            infer={"enumerate": "parallel"})
+        with pyro.plate("tones", data.shape[-1], dim=-1):
+            pyro.sample("y_{}".format(i), dist.Categorical(
+                Vindex(y_probs)[w_curr, x_curr]),
+                obs=data[i])
+        x_prev, w_prev = x_curr, w_curr
+
+
 @pytest.mark.parametrize("use_replay", [True, False])
 @pytest.mark.parametrize("model,data,var,history", [
     (model_0, torch.rand(5), "xy", 1),
@@ -214,6 +244,7 @@ def model_6(data, history, vectorized):
     (model_4, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
     (model_5, torch.ones((5, 4), dtype=torch.long), "xy", 2),
     (model_6, torch.rand(5, 4), "xy", 1),
+    (model_8, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
 ])
 def test_vectorized_markov(model, data, var, history, use_replay):
 
