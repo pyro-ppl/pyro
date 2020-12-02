@@ -40,6 +40,10 @@ def model_0(data, history, vectorized):
         x_prev = x_curr
 
 
+#     x[t-1] --> x[t] --> x[t+1]
+#        |        |         |
+#        V        V         V
+#     y[t-1]     y[t]     y[t+1]
 def model_1(data, history, vectorized):
     x_dim = 3
     pyro.set_rng_seed(0)
@@ -62,6 +66,10 @@ def model_1(data, history, vectorized):
         x_prev = x_curr
 
 
+#     x[t-1] --> x[t] --> x[t+1]
+#        |        |         |
+#        V        V         V
+#     y[t-1] --> y[t] --> y[t+1]
 def model_2(data, history, vectorized):
     x_dim, y_dim = 3, 2
     pyro.set_rng_seed(0)
@@ -87,6 +95,11 @@ def model_2(data, history, vectorized):
         x_prev, y_prev = x_curr, y_curr
 
 
+#    w[t-1] ----> w[t] ---> w[t+1]
+#        \ x[t-1] --\-> x[t] --\-> x[t+1]
+#         \  /       \  /       \  /
+#          \/         \/         \/
+#        y[t-1]      y[t]      y[t+1]
 def model_3(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
     pyro.set_rng_seed(0)
@@ -117,6 +130,12 @@ def model_3(data, history, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
+#     w[t-1] ----> w[t] ---> w[t+1]
+#        |  \       |  \       |   \
+#        | x[t-1] ----> x[t] ----> x[t+1]
+#        |   /      |   /      |   /
+#        V  /       V  /       V  /
+#     y[t-1]       y[t]      y[t+1]
 def model_4(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
     pyro.set_rng_seed(0)
@@ -147,6 +166,13 @@ def model_4(data, history, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
+#                     _______>______
+#         _____>_____/______        \
+#        /          /       \        \
+#     x[t-1] --> x[t] --> x[t+1] --> x[t+2]
+#        |        |          |          |
+#        V        V          V          V
+#     y[t-1]     y[t]     y[t+1]     y[t+2]
 def model_5(data, history, vectorized):
     x_dim, y_dim = 3, 2
     pyro.set_rng_seed(0)
@@ -178,6 +204,12 @@ def model_5(data, history, vectorized):
         x_prev_2, x_prev = x_prev, x_curr
 
 
+# x_trans is time dependent
+#
+#     x[t-1] --> x[t] --> x[t+1]
+#        |        |         |
+#        V        V         V
+#     y[t-1]     y[t]     y[t+1]
 def model_6(data, history, vectorized):
     x_dim = 3
     pyro.set_rng_seed(0)
@@ -205,6 +237,14 @@ def model_6(data, history, vectorized):
         x_prev = x_curr
 
 
+#     w[t-1]      w[t]      w[t+1]
+#        |  \    ^  | \    ^   |
+#        |   \  /   |  \  /    |
+#        v    \/    v   \/     v
+#     y[t-1]  /\  y[t]  /\   y[t+1]
+#        ^   /  \   ^  /  \    ^
+#        |  /    v  | /    v   |
+#     x[t-1]      x[t]      x[t+1]
 def model_8(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
     pyro.set_rng_seed(0)
@@ -295,6 +335,15 @@ def test_vectorized_markov(model, data, var, history, use_replay):
         assert actual_step == expected_step
 
 
+#     x[i-1] --> x[i] --> x[i+1]
+#        |        |         |
+#        V        V         V
+#     y[i-1]     y[i]     y[i+1]
+#
+#     w[j-1] --> w[j] --> w[j+1]
+#        |        |         |
+#        V        V         V
+#     z[j-1]     z[j]     z[j+1]
 def model_7(weeks_data, days_data, history, vectorized):
     x_dim, y_dim, w_dim, z_dim = 3, 2, 2, 3
     pyro.set_rng_seed(0)
