@@ -231,7 +231,8 @@ def test_vectorized_markov(model, data, var, history, use_replay):
         # vectorized trace
         vectorized_trace = handlers.trace(model).get_trace(data, history, True)
         if use_replay:
-            vectorized_trace = handlers.trace(handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
+            vectorized_trace = handlers.trace(
+                    handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
 
         # vectorized factors
         vectorized_factors = list()
@@ -329,7 +330,8 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
         # vectorized trace
         vectorized_trace = handlers.trace(model).get_trace(weeks_data, days_data, history, True)
         if use_replay:
-            vectorized_trace = handlers.trace(handlers.replay(model, trace=vectorized_trace)).get_trace(weeks_data, days_data, history, True)
+            vectorized_trace = handlers.trace(
+                    handlers.replay(model, trace=vectorized_trace)).get_trace(weeks_data, days_data, history, True)
 
         vectorized_factors = list()
         # vectorized weeks factors
@@ -339,7 +341,8 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
         for i in range(history, len(weeks_data)):
             for v in vars1:
                 vectorized_factors.append(
-                    vectorized_trace.nodes["{}_{}".format(v, torch.arange(history, len(weeks_data)))]["funsor"]["log_prob"]
+                    vectorized_trace.nodes[
+                        "{}_{}".format(v, torch.arange(history, len(weeks_data)))]["funsor"]["log_prob"]
                     (**{"weeks": i-history},
                      **{"{}_{}".format(k, torch.arange(history-j, len(weeks_data)-j)): "{}_{}".format(k, i-j)
                         for j in range(history+1) for k in vars1})
@@ -351,7 +354,8 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
         for i in range(history, len(days_data)):
             for v in vars2:
                 vectorized_factors.append(
-                    vectorized_trace.nodes["{}_{}".format(v, torch.arange(history, len(days_data)))]["funsor"]["log_prob"]
+                    vectorized_trace.nodes[
+                        "{}_{}".format(v, torch.arange(history, len(days_data)))]["funsor"]["log_prob"]
                     (**{"days": i-history},
                      **{"{}_{}".format(k, torch.arange(history-j, len(days_data)-j)): "{}_{}".format(k, i-j)
                         for j in range(history+1) for k in vars2})
