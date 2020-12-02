@@ -214,7 +214,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
     is interchangeable with `pyro.markov`.
 
     The for loop generates both `int` and 1-dimensional :class:`torch.Tensor` indices:
-    (`0, ..., history-1, torch.arange(0, size), ..., torch.arange(history, size-history)`).
+    (`0, ..., history-1, torch.arange(0, size-history), ..., torch.arange(history, size)`).
     `int` indices are used to initiate the Markov chain and :class:`torch.Tensor` indices
     are used to construct vectorized transition probabilities for efficient elimination by
     the parallel-scan algorithm.
@@ -303,16 +303,15 @@ class VectorizedMarkovMessenger(NamedMessenger):
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``plate`` contexts.
-    :param int history: Memory (order) of the Markov chain. The number of previous contexts visible from the
-        current context. Defaults to 1. If zero, this is similar to
-        :class:`pyro.plate`.
+    :param int history: Memory (order) of the Markov chain. Also the number
+        of previous contexts visible from the current context. Defaults to 1.
+        If zero, this is similar to :class:`pyro.plate`.
     :param bool keep: If true, frames are replayable. This is important
         when branching: if ``keep=True``, neighboring branches at the same
         level can depend on each other; if ``keep=False``, neighboring branches
         are independent (conditioned on their shared ancestors).
-    :return: First, returns `history` number of `int` indices that initialize the Markov chain (`0,..,history-1`).
-        Then, returns `history+1` number of 1-dimensional :class:`torch.Tensor` indices for each `step`
-        (`torch.arange(0, size-history),...,torch.arange(history, size)`).
+    :return: Returns both `int` and 1-dimensional :class:`torch.Tensor` indices:
+        (`0, ..., history-1, torch.arange(size-history), ..., torch.arange(history, size)`).
     """
     def __init__(self, name=None, size=None, dim=None, history=1, keep=False):
         self.keep = keep
