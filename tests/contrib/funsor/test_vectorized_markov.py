@@ -292,7 +292,6 @@ def test_vectorized_markov(model, data, var, history, use_replay):
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
                      + tuple("{}_{}".format(v, torch.arange(j, len(data)-history+j)) for j in range(history+1))
             expected_step |= frozenset({v_step})
-        breakpoint()
         assert actual_step == expected_step
 
 
