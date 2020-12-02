@@ -18,6 +18,8 @@ from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType
 @effectful(type="markov_step")
 def _markov_step(name, markov_vars, suffixes):
     """
+    TODO edit docstring
+
     Only for internal use by ``VectorizedMarkovMessenger`` to produce
     a `step` collection for a `plate_to_step` dict.
 
@@ -201,9 +203,9 @@ class GlobalNamedMessenger(NamedMessenger):
         return super().__exit__(*args)
 
 
-class VectorizedMarkovMessenger(GlobalNamedMessenger):
+class VectorizedMarkovMessenger(NamedMessenger):
     """
-    Pyro interface for ``modified_partial_sum_product``
+    TODO add docstring
     """
     def __init__(self, name=None, size=None, dim=None, history=1, keep=False):
         self.keep = keep
@@ -234,7 +236,6 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         # extra information
         self._markov_vars = set()
         self._auxiliary_to_markov = {}
-        # _suffixes is used by _markov_step to create a step
         self._suffixes = []
         # MarkovMessenger
         _DIM_STACK.push_iter(_DIM_STACK.local_frame)
@@ -250,8 +251,11 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
                     self._suffix = self.indices[i:self.size+i-self.history]
                 self._suffixes.append(self._suffix)
                 yield self._suffix
+        # MarkovMessenger
         _DIM_STACK.pop_iter()
+        # GlobalNamedMessenger
         self._saved_frames.append(_DIM_STACK.pop_global())
+        # extra
         _markov_step(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
     def __enter__(self):
@@ -272,14 +276,6 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         else:
             _DIM_STACK.pop_local()
         return super().__exit__(*args, **kwargs)
-
-    #  def __enter__(self):
-    #      super().__enter__()  # do this first to take care of globals recycling
-    #      return self
-    #
-    #  def __exit__(self, *args):
-    #      super().__exit__(*args)
-    #      _markov_step(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
     def _pyro_sample(self, msg):
         if type(msg["fn"]).__name__ == "_Subsample":
