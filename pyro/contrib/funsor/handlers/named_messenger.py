@@ -205,7 +205,8 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
     """
     Pyro interface for ``modified_partial_sum_product``
     """
-    def __init__(self, name=None, size=None, dim=None, history=1):
+    def __init__(self, name=None, size=None, dim=None, history=1, keep=False):
+        self.keep = keep
         self.history = history
         self.dim_type = DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
         self.name = name if name is not None else funsor.interpreter.gensym("MARKOV")
@@ -221,8 +222,25 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
         super().__init__()
 
     def __iter__(self):
-        with self:
+        # GlobalNamedMessenger
+        frame = self._saved_frames.pop() if self._saved_frames else StackFrame(
+            name_to_dim=OrderedDict(), dim_to_name=OrderedDict())
+        _DIM_STACK.push_global(frame)
+        # IndepMessenger
+        name_to_dim = OrderedDict([(self.name, DimRequest(self.dim, self.dim_type))])
+        indices = to_data(self._indices, name_to_dim=name_to_dim)
+        # extract the dimension allocated by to_data to match plate's current behavior
+        self.dim, self.indices = -indices.dim(), indices.squeeze()
+        # extra information
+        self._markov_vars = set()
+        self._auxiliary_to_markov = {}
+        # _suffixes is used by _markov_step to create a step
+        self._suffixes = []
+        # MarkovMessenger
+        _DIM_STACK.push_iter(_DIM_STACK.local_frame)
+        with ExitStack() as stack:
             for i in range(2*self.history+1):
+                stack.enter_context(self)
                 if i < self.history:
                     # init factors
                     self._suffix = i
@@ -232,22 +250,36 @@ class VectorizedMarkovMessenger(GlobalNamedMessenger):
                     self._suffix = self.indices[i:self.size+i-self.history]
                 self._suffixes.append(self._suffix)
                 yield self._suffix
+        _DIM_STACK.pop_iter()
+        self._saved_frames.append(_DIM_STACK.pop_global())
+        _markov_step(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
     def __enter__(self):
-        super().__enter__()  # do this first to take care of globals recycling
-        name_to_dim = OrderedDict([(self.name, DimRequest(self.dim, self.dim_type))])
-        indices = to_data(self._indices, name_to_dim=name_to_dim)
-        # extract the dimension allocated by to_data to match plate's current behavior
-        self.dim, self.indices = -indices.dim(), indices.squeeze()
-        self._markov_vars = set()
-        self._auxiliary_to_markov = {}
-        # _suffixes is used by _markov_step to create a step
-        self._suffixes = []
-        return self
+        if self.keep and self._saved_frames:
+            frame = self._saved_frames.pop()
+        else:
+            frame = StackFrame(
+                name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
+                history=self.history, keep=self.keep,
+            )
 
-    def __exit__(self, *args):
-        super().__exit__(*args)
-        _markov_step(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
+        _DIM_STACK.push_local(frame)
+        return super().__enter__()
+
+    def __exit__(self, *args, **kwargs):
+        if self.keep:
+            self._saved_frames.append(_DIM_STACK.pop_local())
+        else:
+            _DIM_STACK.pop_local()
+        return super().__exit__(*args, **kwargs)
+
+    #  def __enter__(self):
+    #      super().__enter__()  # do this first to take care of globals recycling
+    #      return self
+    #
+    #  def __exit__(self, *args):
+    #      super().__exit__(*args)
+    #      _markov_step(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
     def _pyro_sample(self, msg):
         if type(msg["fn"]).__name__ == "_Subsample":
