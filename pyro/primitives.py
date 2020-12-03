@@ -356,9 +356,10 @@ def module(name, nn_module, update_module_params=False):
 
             if param_value._cdata != returned_param._cdata:
                 target_state_dict[param_name] = returned_param
-        else:
-            warnings.warn("{} was not registered in the param store because".format(param_name) +
-                          " requires_grad=False")
+        elif nn_module.training:
+            warnings.warn(f"{param_name} was not registered in the param store "
+                          "because requires_grad=False. You can silence this "
+                          "warning by calling my_module.train(False)")
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
