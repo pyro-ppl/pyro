@@ -303,16 +303,17 @@ class VectorizedMarkovMessenger(NamedMessenger):
     def _pyro_sample(self, msg):
         if type(msg["fn"]).__name__ == "_Subsample":
             return
-        if not isinstance(self._suffix, int):
-            BroadcastMessenger._pyro_sample(msg)
-            if str(self._suffix) != str(self._suffixes[-1]):
-                # do not trace auxiliary vars
-                msg["infer"]["_do_not_trace"] = True
-                msg["infer"]["is_auxiliary"] = True
-                msg["is_observed"] = False
-                # map auxiliary var to markov var name prefix
-                markov_var = msg["name"].replace(str(self._suffix), "")
-                self._auxiliary_to_markov[msg["name"]] = markov_var
+        BroadcastMessenger._pyro_sample(msg)
+        if str(self._suffix) != str(self._suffixes[-1]):
+            # do not trace auxiliary vars
+            msg["infer"]["_do_not_trace"] = True
+            msg["infer"]["is_auxiliary"] = True
+            msg["is_observed"] = False
+            # map auxiliary var to markov var name prefix
+            # assuming that site name has a format: "markov_var{}".format(_suffix)
+            # is there a better way?
+            markov_var = msg["name"].replace(str(self._suffix), "")
+            self._auxiliary_to_markov[msg["name"]] = markov_var
 
     def _pyro_post_sample(self, msg):
         """
