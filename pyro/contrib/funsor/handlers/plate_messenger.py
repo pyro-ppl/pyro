@@ -171,6 +171,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
     the parallel-scan algorithm.
 
     When `history==0` `pyro.vectorized_markov` behaves like a `pyro.plate`.
+
     After the for loop is run, Markov variables are identified and then the `step`
     information is constructed and added to the trace. `step` informs inference algorithms
     which variables belong to a Markov chain.
@@ -197,7 +198,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
                             obs=data[i])
                 x_prev = x_curr
 
-        #  trace.nodes["time"]["infer"]["step"]
+        #  trace.nodes["time"]["value"]
         #  frozenset({('x_0', 'x_tensor([0, 1])', 'x_tensor([1, 2])')})
         #
         #  pyro.vectorized_markov trace
@@ -319,9 +320,12 @@ class VectorizedMarkovMessenger(NamedMessenger):
         """
         At the last step of the for loop identify markov variables.
         """
+        if type(msg["fn"]).__name__ == "_Subsample":
+            return
         # if last step in the for loop
         if str(self._suffix) == str(self._suffixes[-1]):
-            funsor_log_prob = to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
+            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg["funsor"] else \
+                to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
             # for auxiliary sites in the log_prob
             for name in set(funsor_log_prob.inputs) & set(self._auxiliary_to_markov):
                 # add markov var name prefix to self._markov_vars

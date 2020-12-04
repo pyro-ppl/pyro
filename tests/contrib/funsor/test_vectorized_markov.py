@@ -19,23 +19,31 @@ except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
 
+#     x[t-1] --> x[t] --> x[t+1]
+#        |        |         |
+#        V        V         V
+#     y[t-1]     y[t]     y[t+1]
 def model_0(data, history, vectorized):
     x_dim = 3
     init = pyro.param("init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     trans = pyro.param("trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     locs = pyro.param("locs", lambda: torch.rand(x_dim))
 
-    x_prev = None
-    markov_loop = \
-        pyro.vectorized_markov(name="time", size=len(data), dim=-1, history=history) if vectorized \
-        else pyro.markov(range(len(data)), history=history)
-    for i in markov_loop:
-        x_curr = pyro.sample(
-            "x_{}".format(i), dist.Categorical(
-                init if isinstance(i, int) and i < 1 else trans[x_prev]),
-            infer={"enumerate": "parallel"})
-        pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., x_curr], 1.), obs=data[i])
-        x_prev = x_curr
+    with pyro.plate("sequences", data.shape[0], dim=-3) as sequences:
+        sequences = sequences[:, None]
+        x_prev = None
+        markov_loop = \
+            pyro.vectorized_markov(name="time", size=data.shape[1], dim=-2, history=history) if vectorized \
+            else pyro.markov(range(data.shape[1]), history=history)
+        for i in markov_loop:
+            x_curr = pyro.sample(
+                "x_{}".format(i), dist.Categorical(
+                    init if isinstance(i, int) and i < 1 else trans[x_prev]),
+                infer={"enumerate": "parallel"})
+            with pyro.plate("tones", data.shape[2], dim=-1):
+                pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., x_curr], 1.),
+                            obs=Vindex(data)[sequences, i])
+            x_prev = x_curr
 
 
 #     x[t-1] --> x[t] --> x[t+1]
@@ -231,7 +239,7 @@ def model_6(data, history, vectorized):
 #        ^   /  \   ^  /  \    ^
 #        |  /    v  | /    v   |
 #     x[t-1]      x[t]      x[t+1]
-def model_8(data, history, vectorized):
+def model_7(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
     w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
     w_trans = pyro.param("w_trans", lambda: torch.rand((x_dim, w_dim)), constraint=constraints.simplex)
@@ -261,14 +269,16 @@ def model_8(data, history, vectorized):
 
 @pytest.mark.parametrize("use_replay", [True, False])
 @pytest.mark.parametrize("model,data,var,history", [
-    (model_0, torch.rand(5), "xy", 1),
+    (model_0, torch.rand(3, 5, 4), "xy", 1),
     (model_1, torch.rand(5, 4), "xy", 1),
     (model_2, torch.ones((5, 4), dtype=torch.long), "xy", 1),
     (model_3, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
     (model_4, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
     (model_5, torch.ones((5, 4), dtype=torch.long), "xy", 2),
     (model_6, torch.rand(5, 4), "xy", 1),
-    (model_8, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
+    (model_6, torch.rand(100, 4), "xy", 1),
+    (model_7, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
+    (model_7, torch.ones((50, 4), dtype=torch.long), "wxy", 1),
 ])
 def test_vectorized_markov(model, data, var, history, use_replay):
 
@@ -279,7 +289,7 @@ def test_vectorized_markov(model, data, var, history, use_replay):
 
         # sequential factors
         factors = list()
-        for i in range(len(data)):
+        for i in range(data.shape[-2]):
             for v in var:
                 factors.append(trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
 
@@ -294,19 +304,19 @@ def test_vectorized_markov(model, data, var, history, use_replay):
         for i in range(history):
             for v in var:
                 vectorized_factors.append(vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
-        for i in range(history, len(data)):
+        for i in range(history, data.shape[-2]):
             for v in var:
                 vectorized_factors.append(
-                    vectorized_trace.nodes["{}_{}".format(v, torch.arange(history, len(data)))]["funsor"]["log_prob"]
+                    vectorized_trace.nodes[
+                        "{}_{}".format(v, torch.arange(history, data.shape[-2]))]["funsor"]["log_prob"]
                     (**{"time": i-history},
-                     **{"{}_{}".format(k, torch.arange(history-j, len(data)-j)): "{}_{}".format(k, i-j)
+                     **{"{}_{}".format(k, torch.arange(history-j, data.shape[-2]-j)): "{}_{}".format(k, i-j)
                         for j in range(history+1) for k in var})
                     )
 
         # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
-            assert set(f1.inputs) == set(f2.inputs)
-            assert torch.equal(pyro.to_data(f1), pyro.to_data(f2))
+            funsor.testing.assert_close(f2, f1.align(tuple(f2.inputs)))
 
         # assert correct step
         actual_step = vectorized_trace.nodes["time"]["value"]
@@ -314,7 +324,7 @@ def test_vectorized_markov(model, data, var, history, use_replay):
         expected_step = frozenset()
         for v in var[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
-                     + tuple("{}_{}".format(v, torch.arange(j, len(data)-history+j)) for j in range(history+1))
+                     + tuple("{}_{}".format(v, torch.arange(j, data.shape[-2]-history+j)) for j in range(history+1))
             expected_step |= frozenset({v_step})
         assert actual_step == expected_step
 
@@ -328,7 +338,7 @@ def test_vectorized_markov(model, data, var, history, use_replay):
 #        |        |         |
 #        V        V         V
 #     z[j-1]     z[j]     z[j+1]
-def model_7(weeks_data, days_data, history, vectorized):
+def model_8(weeks_data, days_data, history, vectorized):
     x_dim, y_dim, w_dim, z_dim = 3, 2, 2, 3
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
@@ -370,7 +380,8 @@ def model_7(weeks_data, days_data, history, vectorized):
 
 @pytest.mark.parametrize("use_replay", [True, False])
 @pytest.mark.parametrize("model,weeks_data,days_data,vars1,vars2,history", [
-    (model_7, torch.ones(3), torch.zeros(9), "xy", "wz", 1),
+    (model_8, torch.ones(3), torch.zeros(9), "xy", "wz", 1),
+    (model_8, torch.ones(30), torch.zeros(50), "xy", "wz", 1),
 ])
 def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, history, use_replay):
 
@@ -425,8 +436,7 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
 
         # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
-            assert set(f1.inputs) == set(f2.inputs)
-            assert torch.equal(pyro.to_data(f1), pyro.to_data(f2))
+            funsor.testing.assert_close(f2, f1.align(tuple(f2.inputs)))
 
         # assert correct step
 
