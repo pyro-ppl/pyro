@@ -15,7 +15,7 @@ from pyro.util import ignore_jit_warnings
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger, \
-        MarkovMessenger, NamedMessenger
+        NamedMessenger
 from pyro.poutine.runtime import effectful
 
 funsor.set_backend("torch")
@@ -288,12 +288,15 @@ class VectorizedMarkovMessenger(NamedMessenger):
     def __iter__(self):
         self._auxiliary_to_markov = {}
         self._markov_vars = set()
+        self._suffixes = []
+        for self._suffix in range(self.history):
+            self._suffixes.append(self._suffix)
+            yield self._suffix
         with self:
             with IndepMessenger(name=self.name, size=self.size-self.history, dim=self.dim) as time:
-                self._suffixes = \
-                    list(range(self.history)) \
-                    + list(time.indices+i for i in range(self.history+1))
-                for self._suffix in MarkovMessenger(history=self.history)(self._suffixes):
+                time_slices = [time.indices+i for i in range(self.history+1)]
+                self._suffixes.extend(time_slices)
+                for self._suffix in time_slices:
                     yield self._suffix
         self._markov_chain(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
