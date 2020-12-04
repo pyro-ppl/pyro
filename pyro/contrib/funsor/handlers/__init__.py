@@ -9,8 +9,8 @@ from pyro.poutine import (  # noqa: F401
 )
 
 from .enum_messenger import EnumMessenger, queue  # noqa: F401
-from .named_messenger import MarkovMessenger, NamedMessenger, VectorizedMarkovMessenger
-from .plate_messenger import PlateMessenger
+from .named_messenger import MarkovMessenger, NamedMessenger
+from .plate_messenger import PlateMessenger, VectorizedMarkovMessenger
 from .replay_messenger import ReplayMessenger
 from .trace_messenger import TraceMessenger
 

@@ -14,7 +14,9 @@ from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsample
 from pyro.util import ignore_jit_warnings
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger
+from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger, \
+        MarkovMessenger, NamedMessenger
+from pyro.poutine.runtime import effectful
 
 funsor.set_backend("torch")
 
@@ -154,3 +156,170 @@ class _SequentialPlateMessenger(Messenger):
         frame = CondIndepStackFrame(self.name, None, self.size, self._counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         msg["scale"] = msg["scale"] * self._scale
+
+
+class VectorizedMarkovMessenger(NamedMessenger):
+    """
+    Construct for Markov chain of variables designed for efficient elimination of Markov
+    dimensions using the parallel-scan algorithm. Whenever permissible, `pyro.vectorized_markov`
+    is interchangeable with `pyro.markov`.
+
+    The for loop generates both `int` and 1-dimensional :class:`torch.Tensor` indices:
+    (`0, ..., history-1, torch.arange(0, size-history), ..., torch.arange(history, size)`).
+    `int` indices are used to initiate the Markov chain and :class:`torch.Tensor` indices
+    are used to construct vectorized transition probabilities for efficient elimination by
+    the parallel-scan algorithm.
+
+    When `history==0` `pyro.vectorized_markov` behaves like a `pyro.plate`.
+    After the for loop is run, Markov variables are identified and then the `step`
+    information is constructed and added to the trace. `step` informs inference algorithms
+    which variables belong to a Markov chain.
+
+    .. code-block:: py
+
+        data = torch.ones(3, dtype=torch.float)
+
+        def model(data, vectorized=True):
+
+            init = pyro.param("init", lambda: torch.rand(3), constraint=constraints.simplex)
+            trans = pyro.param("trans", lambda: torch.rand((3, 3)), constraint=constraints.simplex)
+            locs = pyro.param("locs", lambda: torch.rand(3,))
+
+            markov_chain = \
+                pyro.vectorized_markov(name="time", size=len(data), dim=-1) if vectorized \
+                else pyro.markov(range(len(data)))
+            for i in markov_chain:
+                x_curr = pyro.sample("x_{}".format(i), dist.Categorical(
+                    init if isinstance(i, int) and i < 1 else trans[x_prev]),
+
+                pyro.sample("y_{}".format(i),
+                            dist.Normal(Vindex(locs)[..., x_curr], 1.),
+                            obs=data[i])
+                x_prev = x_curr
+
+        #  trace.nodes["time"]["infer"]["step"]
+        #  frozenset({('x_0', 'x_tensor([0, 1])', 'x_tensor([1, 2])')})
+        #
+        #  pyro.vectorized_markov trace
+        #  ...
+        #  Sample Sites:
+        #      locs dist               | 3
+        #          value               | 3
+        #       log_prob               |
+        #       x_0 dist               |
+        #          value     3 1 1 1 1 |
+        #       log_prob     3 1 1 1 1 |
+        #       y_0 dist     3 1 1 1 1 |
+        #          value               |
+        #       log_prob     3 1 1 1 1 |
+        #  x_tensor([1, 2]) dist   3 1 1 1 1 2 |
+        #          value 3 1 1 1 1 1 1 |
+        #       log_prob 3 3 1 1 1 1 2 |
+        #  y_tensor([1, 2]) dist 3 1 1 1 1 1 2 |
+        #          value             2 |
+        #       log_prob 3 1 1 1 1 1 2 |
+        #
+        #  pyro.markov trace
+        #  ...
+        #  Sample Sites:
+        #      locs dist             | 3
+        #          value             | 3
+        #       log_prob             |
+        #       x_0 dist             |
+        #          value   3 1 1 1 1 |
+        #       log_prob   3 1 1 1 1 |
+        #       y_0 dist   3 1 1 1 1 |
+        #          value             |
+        #       log_prob   3 1 1 1 1 |
+        #       x_1 dist   3 1 1 1 1 |
+        #          value 3 1 1 1 1 1 |
+        #       log_prob 3 3 1 1 1 1 |
+        #       y_1 dist 3 1 1 1 1 1 |
+        #          value             |
+        #       log_prob 3 1 1 1 1 1 |
+        #       x_2 dist 3 1 1 1 1 1 |
+        #          value   3 1 1 1 1 |
+        #       log_prob 3 3 1 1 1 1 |
+        #       y_2 dist   3 1 1 1 1 |
+        #          value             |
+        #       log_prob   3 1 1 1 1 |
+
+    .. warning::  This is only valid if there is only one Markov
+        dimension per branch.
+
+    :param str name: A unique name of a Markov dimension to help inference algorithm
+        eliminate variables in the Markov chain.
+    :param int size: Length (size) of the Markov chain.
+    :param int dim: An optional dimension to use for this independence index.
+        If specified, ``dim`` should be negative, i.e. should index from the
+        right. If not specified, ``dim`` is set to the rightmost dim that is
+        left of all enclosing ``plate`` contexts.
+    :param int history: Memory (order) of the Markov chain. Also the number
+        of previous contexts visible from the current context. Defaults to 1.
+        If zero, this is similar to :class:`pyro.plate`.
+    :return: Returns both `int` and 1-dimensional :class:`torch.Tensor` indices:
+        (`0, ..., history-1, torch.arange(size-history), ..., torch.arange(history, size)`).
+    """
+    def __init__(self, name=None, size=None, dim=None, history=1):
+        self.name = name
+        self.size = size
+        self.dim = dim
+        self.history = history
+        super().__init__()
+
+    @staticmethod
+    @effectful(type="markov_chain")
+    def _markov_chain(name=None, markov_vars=set(), suffixes=list()):
+        """
+        Constructs names of markov variables in the `chain`
+        from markov_vars prefixes and suffixes.
+
+        :param str name: The name of the markov dimension.
+        :param set markov_vars: Markov variable name markov_vars.
+        :param list suffixes: Markov variable name suffixes.
+            (`0, ..., history-1, torch.arange(0, size-history), ..., torch.arange(history, size)`)
+        :return: step information
+        :rtype: frozenset
+        """
+        chain = frozenset({tuple("{}{}".format(var, suffix) for suffix in suffixes)
+                          for var in markov_vars})
+        return chain
+
+    def __iter__(self):
+        self._auxiliary_to_markov = {}
+        self._markov_vars = set()
+        with self:
+            with IndepMessenger(name=self.name, size=self.size-self.history, dim=self.dim) as time:
+                self._suffixes = \
+                    list(range(self.history)) \
+                    + list(time.indices+i for i in range(self.history+1))
+                for self._suffix in MarkovMessenger(history=self.history)(self._suffixes):
+                    yield self._suffix
+        self._markov_chain(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
+
+    def _pyro_sample(self, msg):
+        if type(msg["fn"]).__name__ == "_Subsample":
+            return
+        if not isinstance(self._suffix, int):
+            BroadcastMessenger._pyro_sample(msg)
+            if str(self._suffix) != str(self._suffixes[-1]):
+                # do not trace auxiliary vars
+                msg["infer"]["_do_not_trace"] = True
+                msg["infer"]["is_auxiliary"] = True
+                msg["is_observed"] = False
+                # map auxiliary var to markov var name prefix
+                markov_var = msg["name"].replace(str(self._suffix), "")
+                self._auxiliary_to_markov[msg["name"]] = markov_var
+
+    def _pyro_post_sample(self, msg):
+        """
+        At the last step of the for loop identify markov variables.
+        """
+        # if last step in the for loop
+        if str(self._suffix) == str(self._suffixes[-1]):
+            funsor_log_prob = to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
+            # for auxiliary sites in the log_prob
+            for name in set(funsor_log_prob.inputs) & set(self._auxiliary_to_markov):
+                # add markov var name prefix to self._markov_vars
+                markov_var = self._auxiliary_to_markov[name]
+                self._markov_vars.add(markov_var)

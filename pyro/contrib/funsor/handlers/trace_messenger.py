@@ -52,9 +52,6 @@ class TraceMessenger(OrigTraceMessenger):
                 msg["value"].shape[:len(msg["value"]).shape - len(msg["fn"].event_shape)]))
         return super()._pyro_post_sample(msg)
 
-    def _pyro_markov_step(self, msg):
+    def _pyro_post_markov_chain(self, msg):
         # add step information to the trace
-        step = msg["fn"](msg["name"], **msg["kwargs"])
-        msg["infer"]["step"] = step
-        msg["done"] = True
         self.trace.add_node(msg["name"], **msg.copy())
