@@ -21,8 +21,6 @@ except ImportError:
 
 def model_0(data, history, vectorized):
     x_dim = 3
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     init = pyro.param("init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     trans = pyro.param("trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     locs = pyro.param("locs", lambda: torch.rand(x_dim))
@@ -46,8 +44,6 @@ def model_0(data, history, vectorized):
 #     y[t-1]     y[t]     y[t+1]
 def model_1(data, history, vectorized):
     x_dim = 3
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     init = pyro.param("init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     trans = pyro.param("trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     locs = pyro.param("locs", lambda: torch.rand(x_dim))
@@ -72,8 +68,6 @@ def model_1(data, history, vectorized):
 #     y[t-1] --> y[t] --> y[t+1]
 def model_2(data, history, vectorized):
     x_dim, y_dim = 3, 2
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     y_init = pyro.param("y_init", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex)
@@ -102,8 +96,6 @@ def model_2(data, history, vectorized):
 #        y[t-1]      y[t]      y[t+1]
 def model_3(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
     w_trans = pyro.param("w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex)
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
@@ -138,8 +130,6 @@ def model_3(data, history, vectorized):
 #     y[t-1]       y[t]      y[t+1]
 def model_4(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
     w_trans = pyro.param("w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex)
     x_init = pyro.param("x_init", lambda: torch.rand(w_dim, x_dim), constraint=constraints.simplex)
@@ -175,8 +165,6 @@ def model_4(data, history, vectorized):
 #     y[t-1]     y[t]     y[t+1]     y[t+2]
 def model_5(data, history, vectorized):
     x_dim, y_dim = 3, 2
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     x_init_2 = pyro.param("x_init_2", lambda: torch.rand(x_dim, x_dim), constraint=constraints.simplex)
     x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim, x_dim)), constraint=constraints.simplex)
@@ -212,8 +200,6 @@ def model_5(data, history, vectorized):
 #     y[t-1]     y[t]     y[t+1]
 def model_6(data, history, vectorized):
     x_dim = 3
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     x_trans = pyro.param("x_trans", lambda: torch.rand((len(data)-1, x_dim, x_dim)), constraint=constraints.simplex)
     locs = pyro.param("locs", lambda: torch.rand(x_dim))
@@ -247,8 +233,6 @@ def model_6(data, history, vectorized):
 #     x[t-1]      x[t]      x[t+1]
 def model_8(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
     w_trans = pyro.param("w_trans", lambda: torch.rand((x_dim, w_dim)), constraint=constraints.simplex)
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
@@ -325,7 +309,7 @@ def test_vectorized_markov(model, data, var, history, use_replay):
             assert torch.equal(pyro.to_data(f1), pyro.to_data(f2))
 
         # assert correct step
-        actual_step = vectorized_trace.nodes["time"]["infer"]["step"]
+        actual_step = vectorized_trace.nodes["time"]["value"]
         # expected step: assume that all but the last var is markov
         expected_step = frozenset()
         for v in var[:-1]:
@@ -346,8 +330,6 @@ def test_vectorized_markov(model, data, var, history, use_replay):
 #     z[j-1]     z[j]     z[j+1]
 def model_7(weeks_data, days_data, history, vectorized):
     x_dim, y_dim, w_dim, z_dim = 3, 2, 2, 3
-    pyro.set_rng_seed(0)
-    pyro.get_param_store().clear()
     x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     y_probs = pyro.param("y_probs", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex)
@@ -448,7 +430,7 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
 
         # assert correct step
 
-        actual_weeks_step = vectorized_trace.nodes["weeks"]["infer"]["step"]
+        actual_weeks_step = vectorized_trace.nodes["weeks"]["value"]
         # expected step: assume that all but the last var is markov
         expected_weeks_step = frozenset()
         for v in vars1[:-1]:
@@ -456,7 +438,7 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
                      + tuple("{}_{}".format(v, torch.arange(j, len(weeks_data)-history+j)) for j in range(history+1))
             expected_weeks_step |= frozenset({v_step})
 
-        actual_days_step = vectorized_trace.nodes["days"]["infer"]["step"]
+        actual_days_step = vectorized_trace.nodes["days"]["value"]
         # expected step: assume that all but the last var is markov
         expected_days_step = frozenset()
         for v in vars2[:-1]:
