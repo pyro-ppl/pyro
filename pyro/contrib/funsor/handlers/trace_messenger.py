@@ -37,7 +37,7 @@ class TraceMessenger(OrigTraceMessenger):
             if "value" not in msg["funsor"]:
                 # value_output = funsor.Reals[getattr(msg["fn"], "event_shape", ())]
                 msg["funsor"]["value"] = to_funsor(msg["value"], msg["funsor"]["fn"].inputs[msg["name"]])
-            if "log_prob" not in msg["funsor"]:
+            if "log_prob" not in msg["funsor"] and not msg["infer"].get("_do_not_trace"):
                 fn_masked = msg["fn"].mask(msg["mask"]) if msg["mask"] is not None else msg["fn"]
                 msg["funsor"]["log_prob"] = to_funsor(fn_masked.log_prob(msg["value"]), output=funsor.Real)
                 # TODO support this pattern which uses funsor directly - blocked by casting issues

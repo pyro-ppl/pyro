@@ -313,7 +313,10 @@ class VectorizedMarkovMessenger(NamedMessenger):
             # map auxiliary var to markov var name prefix
             # assuming that site name has a format: "markov_var{}".format(_suffix)
             # is there a better way?
-            markov_var = msg["name"].replace(str(self._suffix), "")
+            if msg["name"].endswith(str(self._suffix)):
+                markov_var = msg["name"][:-len(str(self._suffix))]
+            else:
+                raise ValueError("{} has to end with {}".format(msg["name"], self._suffix))
             self._auxiliary_to_markov[msg["name"]] = markov_var
 
     def _pyro_post_sample(self, msg):
