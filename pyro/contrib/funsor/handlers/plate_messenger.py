@@ -199,7 +199,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
                 x_prev = x_curr
 
         #  trace.nodes["time"]["value"]
-        #  frozenset({('x_0', 'x_tensor([0, 1])', 'x_tensor([1, 2])')})
+        #  frozenset({('x_0', 'x_slice(0, 1, None)', 'x_slice(1, 2, None)')})
         #
         #  pyro.vectorized_markov trace
         #  ...
@@ -213,10 +213,10 @@ class VectorizedMarkovMessenger(NamedMessenger):
         #       y_0 dist     3 1 1 1 1 |
         #          value               |
         #       log_prob     3 1 1 1 1 |
-        #  x_tensor([1, 2]) dist   3 1 1 1 1 2 |
+        #  x_slice(1, 2, None) dist   3 1 1 1 1 2 |
         #          value 3 1 1 1 1 1 1 |
         #       log_prob 3 3 1 1 1 1 2 |
-        #  y_tensor([1, 2]) dist 3 1 1 1 1 1 2 |
+        #  y_slice(1, 2, None) dist 3 1 1 1 1 1 2 |
         #          value             2 |
         #       log_prob 3 1 1 1 1 1 2 |
         #
@@ -295,16 +295,20 @@ class VectorizedMarkovMessenger(NamedMessenger):
             yield self._suffix
         with self:
             with IndepMessenger(name=self.name, size=self.size-self.history, dim=self.dim) as time:
-                time_slices = [time.indices+i for i in range(self.history+1)]
+                time_indices = [time.indices+i for i in range(self.history+1)]
+                time_slices = [slice(i, self.size-self.history+i) for i in range(self.history+1)]
                 self._suffixes.extend(time_slices)
-                for self._suffix in time_slices:
-                    yield self._suffix
+                for self._suffix, self._indices in zip(time_slices, time_indices):
+                    yield self._indices
         self._markov_chain(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
     def _pyro_sample(self, msg):
         if type(msg["fn"]).__name__ == "_Subsample":
             return
         BroadcastMessenger._pyro_sample(msg)
+        # replace tensor suffix with a nice slice suffix
+        if isinstance(self._suffix, slice):
+            msg["name"] = msg["name"][:-len(str(self._indices))] + str(self._suffix)
         if str(self._suffix) != str(self._suffixes[-1]):
             # do not trace auxiliary vars
             msg["infer"]["_do_not_trace"] = True

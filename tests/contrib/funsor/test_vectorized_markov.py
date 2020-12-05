@@ -307,10 +307,9 @@ def test_vectorized_markov(model, data, var, history, use_replay):
         for i in range(history, data.shape[-2]):
             for v in var:
                 vectorized_factors.append(
-                    vectorized_trace.nodes[
-                        "{}_{}".format(v, torch.arange(history, data.shape[-2]))]["funsor"]["log_prob"]
+                    vectorized_trace.nodes["{}_{}".format(v, slice(history, data.shape[-2]))]["funsor"]["log_prob"]
                     (**{"time": i-history},
-                     **{"{}_{}".format(k, torch.arange(history-j, data.shape[-2]-j)): "{}_{}".format(k, i-j)
+                     **{"{}_{}".format(k, slice(history-j, data.shape[-2]-j)): "{}_{}".format(k, i-j)
                         for j in range(history+1) for k in var})
                     )
 
@@ -324,7 +323,7 @@ def test_vectorized_markov(model, data, var, history, use_replay):
         expected_step = frozenset()
         for v in var[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
-                     + tuple("{}_{}".format(v, torch.arange(j, data.shape[-2]-history+j)) for j in range(history+1))
+                     + tuple("{}_{}".format(v, slice(j, data.shape[-2]-history+j)) for j in range(history+1))
             expected_step |= frozenset({v_step})
         assert actual_step == expected_step
 
@@ -415,9 +414,9 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
             for v in vars1:
                 vectorized_factors.append(
                     vectorized_trace.nodes[
-                        "{}_{}".format(v, torch.arange(history, len(weeks_data)))]["funsor"]["log_prob"]
+                        "{}_{}".format(v, slice(history, len(weeks_data)))]["funsor"]["log_prob"]
                     (**{"weeks": i-history},
-                     **{"{}_{}".format(k, torch.arange(history-j, len(weeks_data)-j)): "{}_{}".format(k, i-j)
+                     **{"{}_{}".format(k, slice(history-j, len(weeks_data)-j)): "{}_{}".format(k, i-j)
                         for j in range(history+1) for k in vars1})
                     )
         # vectorized days factors
@@ -428,9 +427,9 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
             for v in vars2:
                 vectorized_factors.append(
                     vectorized_trace.nodes[
-                        "{}_{}".format(v, torch.arange(history, len(days_data)))]["funsor"]["log_prob"]
+                        "{}_{}".format(v, slice(history, len(days_data)))]["funsor"]["log_prob"]
                     (**{"days": i-history},
-                     **{"{}_{}".format(k, torch.arange(history-j, len(days_data)-j)): "{}_{}".format(k, i-j)
+                     **{"{}_{}".format(k, slice(history-j, len(days_data)-j)): "{}_{}".format(k, i-j)
                         for j in range(history+1) for k in vars2})
                     )
 
@@ -445,7 +444,7 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
         expected_weeks_step = frozenset()
         for v in vars1[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
-                     + tuple("{}_{}".format(v, torch.arange(j, len(weeks_data)-history+j)) for j in range(history+1))
+                     + tuple("{}_{}".format(v, slice(j, len(weeks_data)-history+j)) for j in range(history+1))
             expected_weeks_step |= frozenset({v_step})
 
         actual_days_step = vectorized_trace.nodes["days"]["value"]
@@ -453,7 +452,7 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
         expected_days_step = frozenset()
         for v in vars2[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
-                     + tuple("{}_{}".format(v, torch.arange(j, len(days_data)-history+j)) for j in range(history+1))
+                     + tuple("{}_{}".format(v, slice(j, len(days_data)-history+j)) for j in range(history+1))
             expected_days_step |= frozenset({v_step})
 
         assert actual_weeks_step == expected_weeks_step
