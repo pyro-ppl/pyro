@@ -308,6 +308,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
         BroadcastMessenger._pyro_sample(msg)
         # replace tensor suffix with a nice slice suffix
         if isinstance(self._suffix, slice):
+            assert msg["name"].endswith(str(self._indices))
             msg["name"] = msg["name"][:-len(str(self._indices))] + str(self._suffix)
         if str(self._suffix) != str(self._suffixes[-1]):
             # do not trace auxiliary vars
@@ -317,10 +318,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             # map auxiliary var to markov var name prefix
             # assuming that site name has a format: "markov_var{}".format(_suffix)
             # is there a better way?
-            if msg["name"].endswith(str(self._suffix)):
-                markov_var = msg["name"][:-len(str(self._suffix))]
-            else:
-                raise ValueError("{} has to end with {}".format(msg["name"], self._suffix))
+            markov_var = msg["name"][:-len(str(self._suffix))]
             self._auxiliary_to_markov[msg["name"]] = markov_var
 
     def _pyro_post_sample(self, msg):
