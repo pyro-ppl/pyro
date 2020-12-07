@@ -218,7 +218,7 @@ def prefix_condition(d, data):
 @prefix_condition.register(dist.MaskedDistribution)
 def _(d, data):
     base_dist = prefix_condition(d.base_dist, data)
-    mask = d._mask[tuple(map(slice, base_dist.batch_shape))]
+    mask = d._mask[tuple(slice(-size, None) for size in base_dist.batch_shape)]
     return base_dist.mask(mask)
 
 
