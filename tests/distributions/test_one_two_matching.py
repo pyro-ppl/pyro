@@ -10,7 +10,7 @@ import torch
 import pyro.distributions as dist
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
-BP_ITERS = 30
+BP_ITERS = 50
 
 
 def _hash(value):
@@ -114,6 +114,50 @@ def test_log_prob_phylo_smoke(num_leaves, dtype):
     assert not torch.isnan(logz)
     dt = torch.autograd.grad(logz, [times])[0]
     assert not torch.isnan(dt).any()
+
+
+@pytest.mark.parametrize("num_destins", [2, 3, 4, 5])
+@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
+def test_grad_full(num_destins, bp_iters):
+    num_sources = 2 * num_destins
+    logits = torch.randn(num_sources, num_destins) * 10
+    logits.requires_grad_()
+
+    def fn(logits):
+        d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
+        return d.log_partition_function
+
+    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+
+
+@pytest.mark.parametrize("num_destins", [2, 3, 4])
+@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
+def test_grad_hard(num_destins, bp_iters):
+    num_sources = 2 * num_destins
+    i = torch.arange(num_sources)[:, None]
+    j = torch.arange(num_destins)
+    logits = torch.randn(num_sources, num_destins) * 10
+    logits[i < j] = -100
+    logits.requires_grad_()
+
+    def fn(logits):
+        d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
+        return d.log_partition_function
+
+    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+
+
+@pytest.mark.parametrize("num_leaves", [2, 3, 4, 5])
+@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
+def test_grad_phylo(num_leaves, bp_iters):
+    logits, times = random_phylo_logits(num_leaves, torch.double)
+    logits = logits.detach().requires_grad_()
+
+    def fn(logits):
+        d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
+        return d.log_partition_function
+
+    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
