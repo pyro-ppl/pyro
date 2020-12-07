@@ -127,7 +127,7 @@ def test_grad_full(num_destins, bp_iters):
         d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
         return d.log_partition_function
 
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    torch.autograd.gradcheck(fn, logits, atol=1e-3, rtol=1e-3)
 
 
 @pytest.mark.parametrize("num_destins", [2, 3, 4])
@@ -144,7 +144,7 @@ def test_grad_hard(num_destins, bp_iters):
         d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
         return d.log_partition_function
 
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    torch.autograd.gradcheck(fn, logits, atol=1e-3, rtol=1e-3)
 
 
 @pytest.mark.parametrize("num_leaves", [2, 3, 4, 5])
@@ -157,7 +157,7 @@ def test_grad_phylo(num_leaves, bp_iters):
         d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
         return d.log_partition_function
 
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    torch.autograd.gradcheck(fn, logits, atol=1e-3, rtol=1e-3)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
