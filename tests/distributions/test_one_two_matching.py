@@ -116,23 +116,37 @@ def test_log_prob_phylo_smoke(num_leaves, dtype):
     assert not torch.isnan(dt).any()
 
 
-@pytest.mark.parametrize("num_destins", [2, 3, 4, 5])
-@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
-def test_grad_full(num_destins, bp_iters):
-    num_sources = 2 * num_destins
-    logits = torch.randn(num_sources, num_destins) * 10
-    logits.requires_grad_()
+def assert_grads_ok(logits, bp_iters=None):
 
     def fn(logits):
         d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
         return d.log_partition_function
 
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    torch.autograd.gradcheck(fn, logits, atol=1e-3, rtol=1e-3)
+
+
+def assert_grads_agree(logits):
+    d1 = dist.OneTwoMatching(logits)
+    d2 = dist.OneTwoMatching(logits, bp_iters=BP_ITERS)
+    expected = torch.autograd.grad(d1.log_partition_function, [logits])[0]
+    actual = torch.autograd.grad(d2.log_partition_function, [logits])[0]
+    assert torch.allclose(actual, expected, atol=0.2, rtol=1e-3), \
+        f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
+
+
+@pytest.mark.parametrize("num_destins", [2, 3, 4, 5])
+def test_grad_full(num_destins):
+    num_sources = 2 * num_destins
+    logits = torch.randn(num_sources, num_destins) * 10
+    logits.requires_grad_()
+
+    assert_grads_ok(logits)
+    assert_grads_ok(logits, bp_iters=BP_ITERS)
+    assert_grads_agree(logits)
 
 
 @pytest.mark.parametrize("num_destins", [2, 3, 4])
-@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
-def test_grad_hard(num_destins, bp_iters):
+def test_grad_hard(num_destins):
     num_sources = 2 * num_destins
     i = torch.arange(num_sources)[:, None]
     j = torch.arange(num_destins)
@@ -140,24 +154,19 @@ def test_grad_hard(num_destins, bp_iters):
     logits[i < j] = -100
     logits.requires_grad_()
 
-    def fn(logits):
-        d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
-        return d.log_partition_function
-
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    assert_grads_ok(logits)
+    assert_grads_ok(logits, bp_iters=BP_ITERS)
+    assert_grads_agree(logits)
 
 
 @pytest.mark.parametrize("num_leaves", [2, 3, 4, 5])
-@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
-def test_grad_phylo(num_leaves, bp_iters):
+def test_grad_phylo(num_leaves):
     logits, times = random_phylo_logits(num_leaves, torch.double)
     logits = logits.detach().requires_grad_()
 
-    def fn(logits):
-        d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
-        return d.log_partition_function
-
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    assert_grads_ok(logits)
+    assert_grads_ok(logits, bp_iters=BP_ITERS)
+    assert_grads_agree(logits)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)

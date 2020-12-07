@@ -67,32 +67,44 @@ def test_log_prob_hard(dtype, bp_iters):
     assert_close(log_total, 0., atol=0.5)
 
 
-@pytest.mark.parametrize("num_nodes", [2, 3, 4, 5])
-@pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
-def test_grad_full(num_nodes, bp_iters):
-    logits = torch.randn(num_nodes, num_nodes) * 10
-    logits.requires_grad_()
+def assert_grads_ok(logits, bp_iters=None):
 
     def fn(logits):
         d = dist.OneOneMatching(logits, bp_iters=bp_iters)
         return d.log_partition_function
 
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    torch.autograd.gradcheck(fn, logits, atol=1e-3, rtol=1e-3)
+
+
+def assert_grads_agree(logits):
+    d1 = dist.OneOneMatching(logits)
+    d2 = dist.OneOneMatching(logits, bp_iters=BP_ITERS)
+    expected = torch.autograd.grad(d1.log_partition_function, [logits])[0]
+    actual = torch.autograd.grad(d2.log_partition_function, [logits])[0]
+    assert torch.allclose(actual, expected, atol=0.2, rtol=1e-3), \
+        f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
 
 
 @pytest.mark.parametrize("num_nodes", [2, 3, 4, 5])
-@pytest.mark.parametrize("bp_iters", [None, 200], ids=["exact", "bp"])
-def test_grad_hard(num_nodes, bp_iters):
+def test_grad_full(num_nodes):
+    logits = torch.randn(num_nodes, num_nodes) * 10
+    logits.requires_grad_()
+
+    assert_grads_ok(logits)
+    assert_grads_ok(logits, bp_iters=BP_ITERS)
+    assert_grads_agree(logits)
+
+
+@pytest.mark.parametrize("num_nodes", [2, 3, 4, 5])
+def test_grad_hard(num_nodes):
     i = torch.arange(num_nodes)
     logits = torch.randn(num_nodes, num_nodes) * 10
     logits[i[:, None] < i] = -100
     logits.requires_grad_()
 
-    def fn(logits):
-        d = dist.OneOneMatching(logits, bp_iters=bp_iters)
-        return d.log_partition_function
-
-    torch.autograd.gradcheck(fn, logits, atol=0.01, rtol=0.01)
+    assert_grads_ok(logits)
+    assert_grads_ok(logits, bp_iters=BP_ITERS)
+    assert_grads_agree(logits)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)

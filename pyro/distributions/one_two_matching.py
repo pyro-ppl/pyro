@@ -109,29 +109,34 @@ class OneTwoMatching(TorchDistribution):
         # We find that Sinkhorn iteration is more robust and faster than the
         # optimal belief propagation updates suggested in [1-4].
         finfo = torch.finfo(self.logits.dtype)
-        shift = self.logits.data.max(1, True).values
-        shift.clamp_(min=finfo.min, max=finfo.max)
-        p = (self.logits - shift).exp().clamp(min=finfo.tiny ** 0.5)
-        d = 2 / p.sum(0)
+        # Note gradients are more accurate when shift is not detached.
+        shift = self.logits.max(1, True).values
+        shift.data.clamp_(min=finfo.min, max=finfo.max)
+        logits = self.logits - shift
+        d = logits.logsumexp(0) - math.log(2)
         for _ in range(self.bp_iters):
-            s = 1 / (p @ d)
-            d = 2 / (s @ p)
-        b = s[:, None] * d * p
+            s = (logits - d).logsumexp(-1, True)
+            d = (logits - s).logsumexp(0) - math.log(2)
+        b = (logits - (d + s)).exp()
+
+        def log(x):
+            return x.clamp(min=finfo.tiny).log()
 
         # Evaluate the Bethe free energy, adapting [4] Eqn 4 to one-two
         # matchings.
-        b = b.clamp(min=finfo.tiny ** 0.5)
-        b_ = (1 - b).clamp(min=finfo.tiny ** 0.5)
-        internal_energy = -(b * p.log()).sum()
+        b_ = (1 - b).clamp(min=0)
+        internal_energy = -(b * logits.clamp(min=-1 / finfo.eps)).sum()
         # Let h be the entropy of matching each destin to one source.
         z = b / 2
-        h = -(z * z.log()).sum(0)
+        h = -(z * log(z)).sum(0)
         # Then h2 is the entropy of the distribution mapping each destin to an
         # unordered pair of sources, equal to the log of the binomial
         # coefficient: perplexity * (perplexity - 1) / 2.
-        h2 = h + h.expm1().log() - math.log(2)
-        free_energy = internal_energy - h2.sum() - (b_ * b_.log()).sum()
-        return shift.sum() - free_energy
+        h2 = h + log(h.expm1()) - math.log(2)
+        free_energy = internal_energy - h2.sum() - (b_ * log(b_)).sum()
+        log_Z = shift.sum() - free_energy
+        assert torch.isfinite(log_Z)
+        return log_Z
 
     def log_prob(self, value):
         if self._validate_args:
