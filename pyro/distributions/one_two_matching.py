@@ -92,7 +92,6 @@ class OneTwoMatching(TorchDistribution):
         event_shape = (self.num_sources,)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
         self.bp_iters = bp_iters
-        # print(f"DEBUG {logits.data.numpy()}")
 
     @constraints.dependent_property
     def support(self):
