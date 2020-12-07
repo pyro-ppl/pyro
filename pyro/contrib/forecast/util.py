@@ -215,6 +215,13 @@ def prefix_condition(d, data):
         raise NotImplementedError("prefix_condition() does not suport {}".format(type(d))) from e
 
 
+@prefix_condition.register(dist.MaskedDistribution)
+def _(d, data):
+    base_dist = prefix_condition(d.base_dist, data)
+    mask = d._mask[tuple(map(slice, base_dist.batch_shape))]
+    return base_dist.mask(mask)
+
+
 @prefix_condition.register(dist.Independent)
 def _(d, data):
     base_dist = prefix_condition(d.base_dist, data)
@@ -270,6 +277,13 @@ def reshape_batch(d, batch_shape):
     :rtype: ~pyro.distributions.Distribution
     """
     raise NotImplementedError("reshape_batch() does not suport {}".format(type(d)))
+
+
+@reshape_batch.register(dist.MaskedDistribution)
+def _(d, batch_shape):
+    mask = d._mask.reshape(batch_shape)
+    base_dist = reshape_batch(d.base_dist, batch_shape)
+    return base_dist.mask(mask)
 
 
 @reshape_batch.register(dist.Independent)
