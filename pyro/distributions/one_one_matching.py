@@ -42,7 +42,7 @@ class OneOneMatching(TorchDistribution):
     r"""
     Random perfect matching from ``N`` sources to ``N`` destinations where each
     source matches exactly **one** destination and each destination matches
-    exactly **one** sources.
+    exactly **one** source.
 
     Samples are represented as long tensors of shape ``(N,)`` taking values in
     ``{0,...,N-1}`` and satisfying the above one-one constraint. The log
