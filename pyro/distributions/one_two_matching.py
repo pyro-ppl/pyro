@@ -109,19 +109,22 @@ class OneTwoMatching(TorchDistribution):
         # Approximate mean field beliefs b via Sinkhorn iteration.
         # We find that Sinkhorn iteration is more robust and faster than the
         # optimal belief propagation updates suggested in [1-4].
-        logits = self.logits
-        d = math.log(2) - logits.logsumexp(0)
+        finfo = torch.finfo(self.logits.dtype)
+        # Note gradients are more accurate when shift is not detached.
+        shift = self.logits.max(1, True).values
+        shift.data.clamp_(min=finfo.min, max=finfo.max)
+        logits = self.logits - shift
+        d = logits.logsumexp(0) - math.log(2)
         for _ in range(self.bp_iters):
-            s = -(logits + d).logsumexp(-1, True)
-            d = math.log(2) - (logits + s).logsumexp(0)
-        b = (s + d + logits).exp()
+            s = (logits - d).logsumexp(-1, True)
+            d = (logits - s).logsumexp(0) - math.log(2)
+        b = (logits - (d + s)).exp()
 
         def log(x):
             return x.clamp(min=finfo.tiny).log()
 
         # Evaluate the Bethe free energy, adapting [4] Eqn 4 to one-two
         # matchings.
-        finfo = torch.finfo(logits.dtype)
         b_ = (1 - b).clamp(min=0)
         internal_energy = -(b * logits.clamp(min=-1 / finfo.eps)).sum()
         # Let h be the entropy of matching each destin to one source.
@@ -132,8 +135,9 @@ class OneTwoMatching(TorchDistribution):
         # coefficient: perplexity * (perplexity - 1) / 2.
         h2 = h + log(h.expm1()) - math.log(2)
         free_energy = internal_energy - h2.sum() - (b_ * log(b_)).sum()
-        assert torch.isfinite(free_energy)
-        return -free_energy
+        result = shift.sum() - free_energy
+        assert torch.isfinite(result)
+        return result
 
     def log_prob(self, value):
         if self._validate_args:
