@@ -108,20 +108,26 @@ class OneOneMatching(TorchDistribution):
         # We find that Sinkhorn iteration is more robust and faster than the
         # optimal belief propagation updates suggested in [1-4].
         finfo = torch.finfo(self.logits.dtype)
-        shift = self.logits.data.max(1, True).values
-        shift.clamp_(min=finfo.min, max=finfo.max)
-        p = (self.logits - shift).exp().clamp(min=finfo.tiny ** 0.5)
-        d = 1 / p.sum(0)
+        # Note gradients are more accurate when shift is not detached.
+        shift = self.logits.max(1, True).values
+        shift.data.clamp_(min=finfo.min, max=finfo.max)
+        logits = self.logits - shift
+        d = logits.logsumexp(0)
         for _ in range(self.bp_iters):
-            s = 1 / (p @ d)
-            d = 1 / (s @ p)
-        b = s[:, None] * d * p
+            s = (logits - d).logsumexp(-1, True)
+            d = (logits - s).logsumexp(0)
+        b = (logits - (d + s)).exp()
+
+        def log(x):
+            return x.clamp(min=finfo.tiny).log()
 
         # Evaluate the Bethe free energy.
-        b = b.clamp(min=finfo.tiny ** 0.5)
-        b_ = (1 - b).clamp(min=finfo.tiny ** 0.5)
-        free_energy = (b * (b.log() - p.log())).sum() - (b_ * b_.log()).sum()
-        return shift.sum() - free_energy
+        b_ = (1 - b).clamp(min=0)
+        logits = logits.clamp(min=-1 / finfo.eps)
+        free_energy = (b * (log(b) - logits)).sum() - (b_ * log(b_)).sum()
+        log_Z = shift.sum() - free_energy
+        assert torch.isfinite(log_Z)
+        return log_Z
 
     def log_prob(self, value):
         if self._validate_args:

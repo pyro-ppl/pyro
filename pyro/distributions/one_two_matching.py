@@ -135,9 +135,9 @@ class OneTwoMatching(TorchDistribution):
         # coefficient: perplexity * (perplexity - 1) / 2.
         h2 = h + log(h.expm1()) - math.log(2)
         free_energy = internal_energy - h2.sum() - (b_ * log(b_)).sum()
-        result = shift.sum() - free_energy
-        assert torch.isfinite(result)
-        return result
+        log_Z = shift.sum() - free_energy
+        assert torch.isfinite(log_Z)
+        return log_Z
 
     def log_prob(self, value):
         if self._validate_args:
