@@ -175,9 +175,6 @@ class CoalescentTimesWithRate(TorchDistribution):
         number of time steps, ``N`` is the number of leaves, and ``S =
         sample_shape.numel()`` is the number of samples of ``value``.
 
-        This is differentiable wrt ``rate_grid`` but neither ``leaf_times`` nor
-        ``value = coal_times``.
-
         :param torch.Tensor value: A tensor of coalescent times. These denote
             sets of size ``leaf_times.size(-1) - 1`` along the trailing
             dimension and should be sorted along that dimension.
@@ -399,18 +396,22 @@ def _interpolate_scatter_add_(dst, x, src):
 def _weak_memoize(fn):
     cache = {}
 
-    def safe_hash(x):
-        "We check Tensor._version to avoid cache hit after mutation."
-        return id(x), getattr(x, "_version", None)
-
     @functools.wraps(fn)
     def memoized_fn(*args):
-        key = tuple(map(safe_hash, args))
-        if key not in cache:
-            cache[key] = fn(*args)
-            for arg in args:
-                weakref.finalize(arg, cache.pop, key, None)
-        return cache[key]
+        key = tuple(map(id, args))
+
+        # Allow cache hit only when tensors have not since been mutated.
+        version = tuple(arg._version for arg in args)
+        if key in cache:
+            old_version, result = cache[key]
+            if old_version == version:
+                return result
+
+        result = fn(*args)
+        cache[key] = version, result
+        for arg in args:
+            weakref.finalize(arg, cache.pop, key, None)
+        return result
 
     return memoized_fn
 
