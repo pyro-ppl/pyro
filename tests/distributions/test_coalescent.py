@@ -104,7 +104,7 @@ def test_log_prob_scale(num_leaves, num_steps, batch_shape, sample_shape):
 @pytest.mark.parametrize("sample_shape", [(), (5,)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("num_leaves", [2, 7, 11])
-def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape):
+def test_log_prob_constant_rate_1(num_leaves, num_steps, batch_shape, sample_shape):
     rate = torch.randn(batch_shape).exp()
     rate_grid = rate.unsqueeze(-1).expand(batch_shape + (num_steps,))
     leaf_times_2 = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
@@ -126,7 +126,7 @@ def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape
 @pytest.mark.parametrize("sample_shape", [(), (5,)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("num_leaves", [2, 7, 11])
-def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape):
+def test_log_prob_constant_rate_2(num_leaves, num_steps, batch_shape, sample_shape):
     rate = torch.randn(batch_shape).exp()
     rate_grid = rate.unsqueeze(-1).expand(batch_shape + (num_steps,))
     leaf_times = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
