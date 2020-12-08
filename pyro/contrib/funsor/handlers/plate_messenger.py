@@ -161,19 +161,21 @@ class _SequentialPlateMessenger(Messenger):
 class VectorizedMarkovMessenger(NamedMessenger):
     """
     Construct for Markov chain of variables designed for efficient elimination of Markov
-    dimensions using the parallel-scan algorithm. Whenever permissible, `pyro.vectorized_markov`
-    is interchangeable with `pyro.markov`.
+    dimensions using the parallel-scan algorithm. Whenever permissible,
+    :class:`~pyro.contrib.funsor.vectorized_markov` is interchangeable with
+    :class:`~pyro.contrib.funsor.markov`.
 
-    The for loop generates both `int` and 1-dimensional :class:`torch.Tensor` indices:
-    (`0, ..., history-1, torch.arange(0, size-history), ..., torch.arange(history, size)`).
-    `int` indices are used to initiate the Markov chain and :class:`torch.Tensor` indices
+    The for loop generates both :class:`int` and 1-dimensional :class:`torch.Tensor` indices:
+    :code:`(0, ..., history-1, torch.arange(0, size-history), ..., torch.arange(history, size))`.
+    :class:`int` indices are used to initiate the Markov chain and :class:`torch.Tensor` indices
     are used to construct vectorized transition probabilities for efficient elimination by
     the parallel-scan algorithm.
 
-    When `history==0` `pyro.vectorized_markov` behaves like a `pyro.plate`.
+    When ``history==0`` :class:`~pyro.contrib.funsor.vectorized_markov` behaves
+    similar to :class:`~pyro.contrib.funsor.plate`.
 
-    After the for loop is run, Markov variables are identified and then the `step`
-    information is constructed and added to the trace. `step` informs inference algorithms
+    After the for loop is run, Markov variables are identified and then the ``step``
+    information is constructed and added to the trace. ``step`` informs inference algorithms
     which variables belong to a Markov chain.
 
     .. code-block:: py
@@ -186,7 +188,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             trans = pyro.param("trans", lambda: torch.rand((3, 3)), constraint=constraints.simplex)
             locs = pyro.param("locs", lambda: torch.rand(3,))
 
-            markov_chain = \
+            markov_chain = \\
                 pyro.vectorized_markov(name="time", size=len(data), dim=-1) if vectorized \
                 else pyro.markov(range(len(data)))
             for i in markov_chain:
@@ -251,15 +253,15 @@ class VectorizedMarkovMessenger(NamedMessenger):
     :param str name: A unique name of a Markov dimension to help inference algorithm
         eliminate variables in the Markov chain.
     :param int size: Length (size) of the Markov chain.
-    :param int dim: An optional dimension to use for this independence index.
+    :param int dim: An optional dimension to use for this Markov dimension.
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``plate`` contexts.
     :param int history: Memory (order) of the Markov chain. Also the number
         of previous contexts visible from the current context. Defaults to 1.
-        If zero, this is similar to :class:`pyro.plate`.
-    :return: Returns both `int` and 1-dimensional :class:`torch.Tensor` indices:
-        (`0, ..., history-1, torch.arange(size-history), ..., torch.arange(history, size)`).
+        If zero, this is similar to :class:`~pyro.contrib.funsor.plate`.
+    :return: Returns both :class:`int` and 1-dimensional :class:`torch.Tensor` indices:
+        ``(0, ..., history-1, torch.arange(size-history), ..., torch.arange(history, size))``.
     """
     def __init__(self, name=None, size=None, dim=None, history=1):
         self.name = name
