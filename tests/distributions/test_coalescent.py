@@ -83,6 +83,27 @@ def test_log_prob_unit_rate(num_leaves, num_steps, batch_shape, sample_shape):
 @pytest.mark.parametrize("sample_shape", [(), (5,)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("num_leaves", [2, 7, 11])
+def test_log_prob_scale(num_leaves, num_steps, batch_shape, sample_shape):
+    rate = torch.randn(batch_shape).exp()
+    leaf_times_2 = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
+    leaf_times_1 = leaf_times_2 * rate.unsqueeze(-1)
+
+    d1 = CoalescentTimes(leaf_times_1)
+    coal_times_1 = d1.sample(sample_shape)
+    log_prob_1 = d1.log_prob(coal_times_1)
+
+    d2 = CoalescentTimes(leaf_times_2, rate)
+    coal_times_2 = coal_times_1 / rate.unsqueeze(-1)
+    log_prob_2 = d2.log_prob(coal_times_2)
+
+    log_abs_det_jacobian = -coal_times_2.size(-1) * rate.log()
+    assert_close(log_prob_1 - log_abs_det_jacobian, log_prob_2)
+
+
+@pytest.mark.parametrize("num_steps", [9])
+@pytest.mark.parametrize("sample_shape", [(), (5,)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("num_leaves", [2, 7, 11])
 def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape):
     rate = torch.randn(batch_shape).exp()
     rate_grid = rate.unsqueeze(-1).expand(batch_shape + (num_steps,))
@@ -99,6 +120,25 @@ def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape
 
     log_abs_det_jacobian = -coal_times_2.size(-1) * rate.log()
     assert_close(log_prob_1 - log_abs_det_jacobian, log_prob_2)
+
+
+@pytest.mark.parametrize("num_steps", [9])
+@pytest.mark.parametrize("sample_shape", [(), (5,)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("num_leaves", [2, 7, 11])
+def test_log_prob_constant_rate(num_leaves, num_steps, batch_shape, sample_shape):
+    rate = torch.randn(batch_shape).exp()
+    rate_grid = rate.unsqueeze(-1).expand(batch_shape + (num_steps,))
+    leaf_times = torch.rand(batch_shape + (num_leaves,)).pow(0.5) * num_steps
+
+    d1 = CoalescentTimes(leaf_times, rate)
+    coal_times = d1.sample(sample_shape)
+    log_prob_1 = d1.log_prob(coal_times)
+
+    d2 = CoalescentTimesWithRate(leaf_times, rate_grid)
+    log_prob_2 = d2.log_prob(coal_times)
+
+    assert_close(log_prob_1, log_prob_2)
 
 
 @pytest.mark.parametrize("clamped", [True, False], ids=["clamped", "unclamped"])

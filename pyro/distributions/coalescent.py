@@ -54,13 +54,20 @@ class CoalescentTimes(TorchDistribution):
     :param torch.Tensor leaf_times: Vector of times of sampling events, i.e.
         leaf nodes in the phylogeny. These can be arbitrary real numbers with
         arbitrary order and duplicates.
+    :param torch.Tensor rate: Base coalescent rate (pairwise rate of
+        coalescence) under a constant population size model. For example in
+        a simple SIR model this might be ``beta S / I``. Defaults to 1.
     """
-    arg_constraints = {"leaf_times": constraints.real}
+    arg_constraints = {"leaf_times": constraints.real,
+                       "rate": constraints.positive}
 
-    def __init__(self, leaf_times, *, validate_args=None):
+    def __init__(self, leaf_times, rate=1., *, validate_args=None):
+        rate = torch.as_tensor(rate, dtype=leaf_times.dtype,
+                               device=leaf_times.device)
         event_shape = (leaf_times.size(-1) - 1,)
-        batch_shape = leaf_times.shape[:-1]
+        batch_shape = broadcast_shape(rate.shape, leaf_times.shape[:-1])
         self.leaf_times = leaf_times
+        self.rate = rate
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @constraints.dependent_property
@@ -77,7 +84,8 @@ class CoalescentTimes(TorchDistribution):
         # in the number of lineages, which changes at each event.
         binomial = phylogeny.binomial[..., :-1]
         interval = phylogeny.times[..., :-1] - phylogeny.times[..., 1:]
-        log_prob = -(binomial * interval).sum(-1)
+        log_prob = (self.rate.log() * interval.size(-1)
+                    - self.rate * (binomial * interval).sum(-1))
 
         # Scaling by those rates and accounting for log|jacobian|, the density
         # is that of a collection of independent Exponential intervals.
