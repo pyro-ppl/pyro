@@ -189,7 +189,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             locs = pyro.param("locs", lambda: torch.rand(3,))
 
             markov_chain = \\
-                pyro.vectorized_markov(name="time", size=len(data), dim=-1) if vectorized \
+                pyro.vectorized_markov(name="time", size=len(data), dim=-1) if vectorized \\
                 else pyro.markov(range(len(data)))
             for i in markov_chain:
                 x_curr = pyro.sample("x_{}".format(i), dist.Categorical(
@@ -256,7 +256,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
     :param int dim: An optional dimension to use for this Markov dimension.
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
-        left of all enclosing ``plate`` contexts.
+        left of all enclosing :class:`~pyro.contrib.funsor.plate` contexts.
     :param int history: Memory (order) of the Markov chain. Also the number
         of previous contexts visible from the current context. Defaults to 1.
         If zero, this is similar to :class:`~pyro.contrib.funsor.plate`.
