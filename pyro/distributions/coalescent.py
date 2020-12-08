@@ -34,13 +34,15 @@ class CoalescentTimesConstraint(constraints.Constraint):
 
 class CoalescentTimes(TorchDistribution):
     """
-    Distribution over coalescent times given irregular sampled ``leaf_times``.
+    Distribution over sorted coalescent times given irregular sampled
+    ``leaf_times`` and constant population size.
 
-    Sample values will be sorted sets of binary coalescent times. Each sample
-    ``value`` will have cardinality ``value.size(-1) = leaf_times.size(-1) -
-    1``, so that phylogenies are complete binary trees.  This distribution can
-    thus be batched over multiple samples of phylogenies given fixed (number
-    of) leaf times, e.g. over phylogeny samples from BEAST or MrBayes.
+    Sample values will be **sorted** sets of binary coalescent times. Each
+    sample ``value`` will have cardinality ``value.size(-1) =
+    leaf_times.size(-1) - 1``, so that phylogenies are complete binary trees.
+    This distribution can thus be batched over multiple samples of phylogenies
+    given fixed (number of) leaf times, e.g. over phylogeny samples from BEAST
+    or MrBayes.
 
     **References**
 
@@ -55,8 +57,7 @@ class CoalescentTimes(TorchDistribution):
         leaf nodes in the phylogeny. These can be arbitrary real numbers with
         arbitrary order and duplicates.
     :param torch.Tensor rate: Base coalescent rate (pairwise rate of
-        coalescence) under a constant population size model. For example in
-        a simple SIR model this might be ``beta S / I``. Defaults to 1.
+        coalescence) under a constant population size model. Defaults to 1.
     """
     arg_constraints = {"leaf_times": constraints.real,
                        "rate": constraints.positive}
@@ -64,8 +65,8 @@ class CoalescentTimes(TorchDistribution):
     def __init__(self, leaf_times, rate=1., *, validate_args=None):
         rate = torch.as_tensor(rate, dtype=leaf_times.dtype,
                                device=leaf_times.device)
-        event_shape = (leaf_times.size(-1) - 1,)
         batch_shape = broadcast_shape(rate.shape, leaf_times.shape[:-1])
+        event_shape = (leaf_times.size(-1) - 1,)
         self.leaf_times = leaf_times
         self.rate = rate
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
@@ -84,7 +85,7 @@ class CoalescentTimes(TorchDistribution):
         # in the number of lineages, which changes at each event.
         binomial = phylogeny.binomial[..., :-1]
         interval = phylogeny.times[..., :-1] - phylogeny.times[..., 1:]
-        log_prob = (self.rate.log() * interval.size(-1)
+        log_prob = (self.rate.log() * coal_times.size(-1)
                     - self.rate * (binomial * interval).sum(-1))
 
         # Scaling by those rates and accounting for log|jacobian|, the density
@@ -398,9 +399,13 @@ def _interpolate_scatter_add_(dst, x, src):
 def _weak_memoize(fn):
     cache = {}
 
+    def safe_hash(x):
+        "We check Tensor._version to avoid cache hit after mutation."
+        return id(x), getattr(x, "_version", None)
+
     @functools.wraps(fn)
     def memoized_fn(*args):
-        key = tuple(map(id, args))
+        key = tuple(map(safe_hash, args))
         if key not in cache:
             cache[key] = fn(*args)
             for arg in args:
@@ -420,8 +425,6 @@ _Phylogeny = namedtuple("_Phylogeny", (
 @torch.no_grad()
 def _make_phylogeny(leaf_times, coal_times):
     assert leaf_times.size(-1) == 1 + coal_times.size(-1)
-    assert not leaf_times.requires_grad
-    assert not coal_times.requires_grad
 
     # Expand shapes to match.
     N = leaf_times.size(-1)
