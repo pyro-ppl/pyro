@@ -17,7 +17,7 @@ class TraceMessenger(OrigTraceMessenger):
 
     Setting ``pack_online=False`` computes information necessary to do packing after execution.
     Each sample site is annotated with a "dim_to_name" dictionary,
-    which can be passed directly to funsor.to_funsor.
+    which can be passed directly to :func:`~funsor.to_funsor`.
     """
     def __init__(self, graph_type=None, param_only=None, pack_online=True):
         super().__init__(graph_type=graph_type, param_only=param_only)

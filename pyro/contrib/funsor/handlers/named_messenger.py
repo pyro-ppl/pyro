@@ -11,10 +11,10 @@ from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType
 
 class NamedMessenger(ReentrantMessenger):
     """
-    Base effect handler class for the :func:~`pyro.contrib.funsor.to_funsor`
-    and :func:~`pyro.contrib.funsor.to_data` primitives.
+    Base effect handler class for the :func:`~pyro.contrib.funsor.to_funsor`
+    and :func:`~pyro.contrib.funsor.to_data` primitives.
     Any effect handlers that invoke these primitives internally or wrap
-    code that does should inherit from ``NamedMessenger``.
+    code that does should inherit from :class:`~NamedMessenger`.
 
     This design ensures that the global name-dim mapping is reset upon handler exit
     rather than potentially persisting until the entire program terminates.
