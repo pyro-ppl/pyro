@@ -11,10 +11,11 @@ from pyro.ops.indexing import Vindex
 # put all funsor-related imports here, so test collection works without funsor
 try:
     import funsor
+    from funsor.testing import assert_close
     import pyro.contrib.funsor
     from pyroapi import distributions as dist
     funsor.set_backend("torch")
-    from pyroapi import handlers, pyro, pyro_backend
+    from pyroapi import handlers, pyro, pyro_backend, infer
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
@@ -44,6 +45,10 @@ def model_0(data, history, vectorized):
                 pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., x_curr], 1.),
                             obs=Vindex(data)[sequences, i])
             x_prev = x_curr
+
+
+def guide(data, history, vectorized):
+    pass
 
 
 #     x[t-1] --> x[t] --> x[t+1]
@@ -327,6 +332,14 @@ def test_vectorized_markov(model, data, var, history, use_replay):
             expected_step |= frozenset({v_step})
         assert actual_step == expected_step
 
+    with pyro_backend("contrib.funsor"):
+        if model != model_5:
+            elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
+            expected_loss = elbo.differentiable_loss(model, guide, data, history, False)
+            vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
+            actual_loss = vectorized_elbo.differentiable_loss(model, guide, data, history, True)
+            assert_close(actual_loss, expected_loss)
+
 
 #     x[i-1] --> x[i] --> x[i+1]
 #        |        |         |
@@ -435,7 +448,7 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
 
         # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
-            funsor.testing.assert_close(f2, f1.align(tuple(f2.inputs)))
+            assert_close(f2, f1.align(tuple(f2.inputs)))
 
         # assert correct step
 
