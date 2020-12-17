@@ -16,6 +16,7 @@ try:
     from pyroapi import distributions as dist
     funsor.set_backend("torch")
     from pyroapi import handlers, pyro, pyro_backend, infer
+    from pyro.contrib.funsor.infer.traceenum_elbo import terms_from_trace
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
@@ -272,6 +273,7 @@ def model_7(data, history, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
+
 @pytest.mark.parametrize("use_replay", [True, False])
 @pytest.mark.parametrize("model,data,var,history", [
     (model_0, torch.rand(3, 5, 4), "xy", 1),
@@ -287,59 +289,44 @@ def model_7(data, history, vectorized):
 ])
 def test_vectorized_markov(model, data, var, history, use_replay):
 
-    with pyro_backend("contrib.funsor"), \
-            handlers.enum():
-        # sequential trace
-        trace = handlers.trace(model).get_trace(data, history, False)
+    with pyro_backend("contrib.funsor"):
+        with handlers.enum():
+            # sequential trace
+            trace = handlers.trace(model).get_trace(data, history, False)
+            # vectorized trace
+            vectorized_trace = handlers.trace(model).get_trace(data, history, True)
+            if use_replay:
+                vectorized_trace = handlers.trace(
+                        handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
 
-        # sequential factors
-        factors = list()
-        for i in range(data.shape[-2]):
-            for v in var:
-                factors.append(trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
+        terms = terms_from_trace(trace)
+        vectorized_terms = terms_from_trace(vectorized_trace)
 
-        # vectorized trace
-        vectorized_trace = handlers.trace(model).get_trace(data, history, True)
-        if use_replay:
-            vectorized_trace = handlers.trace(
-                    handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
+        factors = terms["log_factors"]
+        vectorized_factors = vectorized_terms["log_factors"]
+        time_vars = frozenset({key for key, value in vectorized_terms["plate_to_step"].items() if value})
+        markov_vars = set.union(*(set(chain) for time in time_vars
+                                for chain in vectorized_terms["plate_to_step"][time]))
+        vectorized_factors, _, _ = funsor.sum_product.partial_unroll(
+                vectorized_factors,
+                eliminate=time_vars | markov_vars,
+                plate_to_step=vectorized_terms["plate_to_step"])
 
-        # vectorized factors
-        vectorized_factors = list()
-        for i in range(history):
-            for v in var:
-                vectorized_factors.append(vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
-        for i in range(history, data.shape[-2]):
-            for v in var:
-                vectorized_factors.append(
-                    vectorized_trace.nodes["{}_{}".format(v, slice(history, data.shape[-2]))]["funsor"]["log_prob"]
-                    (**{"time": i-history},
-                     **{"{}_{}".format(k, slice(history-j, data.shape[-2]-j)): "{}_{}".format(k, i-j)
-                        for j in range(history+1) for k in var})
-                    )
-
+        factor_names = [set(f.inputs) for f in factors]
+        vectorized_factors.sort(key=lambda x: factor_names.index(set(x.inputs)))
         # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
             assert_close(f2, f1.align(tuple(f2.inputs)))
 
-        # assert correct step
-        actual_step = vectorized_trace.nodes["time"]["value"]
-        # expected step: assume that all but the last var is markov
-        expected_step = frozenset()
-        for v in var[:-1]:
-            v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
-                     + tuple("{}_{}".format(v, slice(j, data.shape[-2]-history+j)) for j in range(history+1))
-            expected_step |= frozenset({v_step})
-        assert actual_step == expected_step
-
-    with pyro_backend("contrib.funsor"):
         if history > 1:
             pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
 
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
         expected_loss = elbo.differentiable_loss(model, guide, data, history, False)
+
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
         actual_loss = vectorized_elbo.differentiable_loss(model, guide, data, history, True)
+
         assert_close(actual_loss, expected_loss)
 
 
