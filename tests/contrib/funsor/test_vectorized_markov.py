@@ -320,7 +320,7 @@ def test_vectorized_markov(model, data, var, history, use_replay):
 
         # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
-            funsor.testing.assert_close(f2, f1.align(tuple(f2.inputs)))
+            assert_close(f2, f1.align(tuple(f2.inputs)))
 
         # assert correct step
         actual_step = vectorized_trace.nodes["time"]["value"]
@@ -333,12 +333,14 @@ def test_vectorized_markov(model, data, var, history, use_replay):
         assert actual_step == expected_step
 
     with pyro_backend("contrib.funsor"):
-        if model != model_5:
-            elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-            expected_loss = elbo.differentiable_loss(model, guide, data, history, False)
-            vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-            actual_loss = vectorized_elbo.differentiable_loss(model, guide, data, history, True)
-            assert_close(actual_loss, expected_loss)
+        if history > 1:
+            pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
+
+        elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
+        expected_loss = elbo.differentiable_loss(model, guide, data, history, False)
+        vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
+        actual_loss = vectorized_elbo.differentiable_loss(model, guide, data, history, True)
+        assert_close(actual_loss, expected_loss)
 
 
 #     x[i-1] --> x[i] --> x[i+1]
