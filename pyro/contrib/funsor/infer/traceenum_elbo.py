@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+from functools import reduce
 
 import funsor
 
@@ -89,12 +90,13 @@ class TraceMarkovEnum_ELBO(ELBO):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 # compute the marginal logq in the guide corresponding to this cost term
-                log_prob = funsor.sum_product.modified_sum_product(
+                factors = funsor.sum_product.modified_partial_sum_product(
                     funsor.ops.logaddexp, funsor.ops.add,
                     guide_terms["log_measures"],
                     plate_to_step=plate_to_step,
                     eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs)
                 )
+                log_prob = reduce(funsor.ops.add, factors, funsor.Number(funsor.ops.UNITS[funsor.ops.add]))
                 # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
                 elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
