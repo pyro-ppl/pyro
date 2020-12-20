@@ -20,8 +20,8 @@ def terms_from_trace(tr):
     terms = {"log_factors": [], "log_measures": [], "scale": to_funsor(1.),
              "plate_vars": frozenset(), "measure_vars": frozenset(), "plate_to_step": dict()}
     for name, node in tr.nodes.items():
+        # add markov dimensions to the plate_to_step dictionary
         if node["type"] == "markov_chain":
-            # add markov dimensions to the plate_to_step dictionary
             terms["plate_to_step"][node["name"]] = node["value"]
         if node["type"] != "sample" or type(node["fn"]).__name__ == "_Subsample":
             continue
@@ -31,8 +31,7 @@ def terms_from_trace(tr):
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
             # sum (measure) variables: the fresh non-plate variables at a site
-            # terms["measure_vars"] |= (frozenset(node["funsor"]["value"].inputs) | {name}) - terms["plate_vars"]
-            terms["measure_vars"] |= (frozenset(node["funsor"]["log_prob"].inputs) | {name}) - terms["plate_vars"]
+            terms["measure_vars"] |= (frozenset(node["funsor"]["value"].inputs) | {name}) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
         if node.get("replay_active", False) and set(node["funsor"]["log_prob"].inputs) & terms["measure_vars"] and \
                 float(to_data(node["funsor"]["scale"])) != 1.:
@@ -43,7 +42,7 @@ def terms_from_trace(tr):
         # grab the log-density, found at all sites except those that are not replayed
         if node["is_observed"] or not node.get("replay_skipped", False):
             terms["log_factors"].append(node["funsor"]["log_prob"])
-    # add plate dimenstions to the plate_to_step dictionary
+    # add plate dimensions to the plate_to_step dictionary
     terms["plate_to_step"].update({plate: terms["plate_to_step"].get(plate, {}) for plate in terms["plate_vars"]})
     return terms
 
@@ -63,6 +62,7 @@ class TraceMarkovEnum_ELBO(ELBO):
         guide_terms = terms_from_trace(guide_tr)
         model_terms = terms_from_trace(model_tr)
 
+        # guide side enumeration is not supported
         if any(guide_terms["plate_to_step"].values()):
             raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side enumeration")
 
@@ -76,12 +76,13 @@ class TraceMarkovEnum_ELBO(ELBO):
                 else:
                     uncontracted_factors.append(f)
             # incorporate the effects of subsampling and handlers.scale through a common scale factor
+            markov_dims = frozenset({
+                    plate for plate, step in model_terms["plate_to_step"].items() if step})
             contracted_costs = [model_terms["scale"] * f for f in funsor.sum_product.modified_partial_sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
                 model_terms["log_measures"] + contracted_factors,
                 plate_to_step=model_terms["plate_to_step"],
-                eliminate=model_terms["measure_vars"] | frozenset({
-                    p for p, s in model_terms["plate_to_step"].items() if s})
+                eliminate=model_terms["measure_vars"] | markov_dims
             )]
 
             costs = contracted_costs + uncontracted_factors  # model costs: logp

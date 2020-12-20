@@ -490,13 +490,13 @@ def test_model_enumerated_elbo(model, guide, data, history):
         assert_close(actual_loss, expected_loss)
 
 
-def guide_empyt_multi(weeks_data, days_data, history, vectorized):
+def guide_empty_multi(weeks_data, days_data, history, vectorized):
     pass
 
 
 @pytest.mark.parametrize("model,guide,weeks_data,days_data,history", [
-    (model_8, guide_empyt_multi, torch.ones(3), torch.zeros(9), 1),
-    (model_8, guide_empyt_multi, torch.ones(30), torch.zeros(50), 1),
+    (model_8, guide_empty_multi, torch.ones(3), torch.zeros(9), 1),
+    (model_8, guide_empty_multi, torch.ones(30), torch.zeros(50), 1),
 ])
 def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, history):
 
@@ -547,7 +547,7 @@ def guide_10(data, vectorized):
 @pytest.mark.parametrize("model,guide,data,", [
     (model_10, guide_10, torch.ones(5)),
 ])
-def test_guide_enumerated_elbo_guide(model, guide, data):
+def test_guide_enumerated_elbo(model, guide, data):
 
     with pyro_backend("contrib.funsor"):
         with pytest.raises(
