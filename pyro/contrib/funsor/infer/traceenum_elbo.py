@@ -64,7 +64,7 @@ class TraceMarkovEnum_ELBO(ELBO):
 
         # guide side enumeration is not supported
         if any(guide_terms["plate_to_step"].values()):
-            raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side enumeration")
+            raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration")
 
         # build up a lazy expression for the elbo
         with funsor.interpreter.interpretation(funsor.terms.lazy):

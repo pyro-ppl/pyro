@@ -482,12 +482,16 @@ def test_model_enumerated_elbo(model, guide, data, history):
             pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
 
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-        expected_loss = elbo.differentiable_loss(model, guide, data, history, False)
+        expected_loss = elbo.loss_and_grads(model, guide, data, history, False)
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-        actual_loss = vectorized_elbo.differentiable_loss(model, guide, data, history, True)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, history, True)
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         assert_close(actual_loss, expected_loss)
+        for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+            assert_close(actual_grad, expected_grad)
 
 
 def guide_empty_multi(weeks_data, days_data, history, vectorized):
@@ -503,12 +507,16 @@ def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, histor
     with pyro_backend("contrib.funsor"):
 
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-        expected_loss = elbo.differentiable_loss(model, guide, weeks_data, days_data, history, False)
+        expected_loss = elbo.loss_and_grads(model, guide, weeks_data, days_data, history, False)
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-        actual_loss = vectorized_elbo.differentiable_loss(model, guide, weeks_data, days_data, history, True)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, weeks_data, days_data, history, True)
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         assert_close(actual_loss, expected_loss)
+        for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+            assert_close(actual_grad, expected_grad)
 
 
 def model_10(data, vectorized):
@@ -552,12 +560,16 @@ def test_guide_enumerated_elbo(model, guide, data):
     with pyro_backend("contrib.funsor"):
         with pytest.raises(
                 NotImplementedError,
-                match="TraceMarkovEnum_ELBO does not yet support guide side enumeration"):
+                match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
 
             elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-            expected_loss = elbo.differentiable_loss(model, guide, data, False)
+            expected_loss = elbo.loss_and_grads(model, guide, data, False)
+            expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
             vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-            actual_loss = vectorized_elbo.differentiable_loss(model, guide, data, True)
+            actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
+            actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
             assert_close(actual_loss, expected_loss)
+            for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+                assert_close(actual_grad, expected_grad)
