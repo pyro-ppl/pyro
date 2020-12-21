@@ -476,6 +476,7 @@ def guide_empty(data, history, vectorized):
     (model_7, guide_empty, torch.ones((50, 4), dtype=torch.long), 1),
 ])
 def test_model_enumerated_elbo(model, guide, data, history):
+    pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
         if history > 1:
@@ -503,6 +504,7 @@ def guide_empty_multi(weeks_data, days_data, history, vectorized):
     (model_8, guide_empty_multi, torch.ones(30), torch.zeros(50), 1),
 ])
 def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, history):
+    pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
 
@@ -556,6 +558,7 @@ def guide_10(data, vectorized):
     (model_10, guide_10, torch.ones(5)),
 ])
 def test_guide_enumerated_elbo(model, guide, data):
+    pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
         with pytest.raises(
