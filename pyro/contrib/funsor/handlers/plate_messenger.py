@@ -23,7 +23,8 @@ funsor.set_backend("torch")
 
 class IndepMessenger(GlobalNamedMessenger):
     """
-    Vectorized plate implementation using to_data instead of _DIM_ALLOCATOR.
+    Vectorized plate implementation using :func:`~pyro.contrib.funsor.to_data` instead of
+    :class:`~pyro.poutine.runtime._DimAllocator`.
     """
     def __init__(self, name=None, size=None, dim=None, indices=None):
         assert size > 1
@@ -114,7 +115,7 @@ class SubsampleMessenger(IndepMessenger):
 class PlateMessenger(SubsampleMessenger):
     """
     Combines new :class:`~IndepMessenger` implementation with existing
-    :class:`~pyro.poutine.BroadcastMessenger`. Should eventually be a drop-in
+    :class:`pyro.poutine.BroadcastMessenger`. Should eventually be a drop-in
     replacement for :class:`pyro.plate`.
     """
     def __enter__(self):
