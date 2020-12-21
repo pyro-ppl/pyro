@@ -56,7 +56,8 @@ class DimStack:
     """
     Single piece of global state to keep track of the mapping between names and dimensions.
 
-    Replaces the plate DimAllocator, the enum EnumAllocator, the ``stack`` in :class:`~MarkovMessenger`,
+    Replaces the plate :class:`~pyro.poutine.runtime._DimAllocator`,
+    the enum :class:`~pyro.poutine.runtime._EnumAllocator`, the ``stack`` in :class:`~MarkovMessenger`,
     ``_param_dims`` and ``_value_dims`` in :class:`~EnumMessenger`, and ``dim_to_symbol`` in ``msg['infer']``
     """
     def __init__(self):

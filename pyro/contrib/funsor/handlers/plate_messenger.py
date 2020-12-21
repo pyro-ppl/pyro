@@ -115,7 +115,7 @@ class PlateMessenger(SubsampleMessenger):
     """
     Combines new :class:`~IndepMessenger` implementation with existing
     :class:`~pyro.poutine.BroadcastMessenger`. Should eventually be a drop-in
-    replacement for :class:`~pyro.plate`.
+    replacement for :class:`pyro.plate`.
     """
     def __enter__(self):
         super().__enter__()
