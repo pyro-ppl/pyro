@@ -1,8 +1,10 @@
 import collections
 import copy
+import functools
 
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.poutine.runtime import effectful
+import pyro
 
 
 @effectful(type="genname")
@@ -99,6 +101,11 @@ class AutonameMessenger(ReentrantMessenger):
             _AUTONAME_LOCAL_COUNTERS.pop(deleted_context, None)
             _AUTONAME_STACK.pop(-1)
             self.frame.counter = 0
+
+
+def autoname(fn=None, name=None):
+    msngr = AutonameMessenger(name=name)
+    return msngr(fn) if fn is not None else msngr
 
 
 @functools.singledispatch
