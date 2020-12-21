@@ -8,7 +8,7 @@ from enum import Enum
 class StackFrame:
     """
     Consistent bidirectional mapping between integer positional dimensions and names.
-    Can be queried like a dictionary (value = frame[key], frame[key] = value).
+    Can be queried like a dictionary (``value = frame[key]``, ``frame[key] = value``).
     """
     def __init__(self, name_to_dim, dim_to_name, history=1, keep=False):
         assert isinstance(name_to_dim, OrderedDict) and \
@@ -56,8 +56,9 @@ class DimStack:
     """
     Single piece of global state to keep track of the mapping between names and dimensions.
 
-    Replaces the plate DimAllocator, the enum EnumAllocator, the stack in MarkovMessenger,
-    _param_dims and _value_dims in EnumMessenger, and dim_to_symbol in msg['infer']
+    Replaces the plate :class:`~pyro.poutine.runtime._DimAllocator`,
+    the enum :class:`~pyro.poutine.runtime._EnumAllocator`, the ``stack`` in :class:`~MarkovMessenger`,
+    ``_param_dims`` and ``_value_dims`` in :class:`~EnumMessenger`, and ``dim_to_symbol`` in ``msg['infer']``
     """
     def __init__(self):
         global_frame = StackFrame(

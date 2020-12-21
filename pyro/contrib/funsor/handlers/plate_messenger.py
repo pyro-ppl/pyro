@@ -23,7 +23,8 @@ funsor.set_backend("torch")
 
 class IndepMessenger(GlobalNamedMessenger):
     """
-    Vectorized plate implementation using to_data instead of _DIM_ALLOCATOR.
+    Vectorized plate implementation using :func:`~pyro.contrib.funsor.to_data` instead of
+    :class:`~pyro.poutine.runtime._DimAllocator`.
     """
     def __init__(self, name=None, size=None, dim=None, indices=None):
         assert size > 1
@@ -113,8 +114,9 @@ class SubsampleMessenger(IndepMessenger):
 
 class PlateMessenger(SubsampleMessenger):
     """
-    Combines new IndepMessenger implementation with existing BroadcastMessenger.
-    Should eventually be a drop-in replacement for pyro.plate.
+    Combines new :class:`~IndepMessenger` implementation with existing
+    :class:`pyro.poutine.BroadcastMessenger`. Should eventually be a drop-in
+    replacement for :class:`pyro.plate`.
     """
     def __enter__(self):
         super().__enter__()
@@ -201,7 +203,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
                 x_prev = x_curr
 
         #  trace.nodes["time"]["value"]
-        #  frozenset({('x_0', 'x_slice(0, 1, None)', 'x_slice(1, 2, None)')})
+        #  frozenset({('x_0', 'x_slice(0, 2, None)', 'x_slice(1, 3, None)')})
         #
         #  pyro.vectorized_markov trace
         #  ...
@@ -215,10 +217,10 @@ class VectorizedMarkovMessenger(NamedMessenger):
         #       y_0 dist     3 1 1 1 1 |
         #          value               |
         #       log_prob     3 1 1 1 1 |
-        #  x_slice(1, 2, None) dist   3 1 1 1 1 2 |
+        #  x_slice(1, 3, None) dist   3 1 1 1 1 2 |
         #          value 3 1 1 1 1 1 1 |
         #       log_prob 3 3 1 1 1 1 2 |
-        #  y_slice(1, 2, None) dist 3 1 1 1 1 1 2 |
+        #  y_slice(1, 3, None) dist 3 1 1 1 1 1 2 |
         #          value             2 |
         #       log_prob 3 1 1 1 1 1 2 |
         #
