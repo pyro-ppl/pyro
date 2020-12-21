@@ -11,10 +11,11 @@ from pyro.ops.indexing import Vindex
 # put all funsor-related imports here, so test collection works without funsor
 try:
     import funsor
+    from funsor.testing import assert_close
     import pyro.contrib.funsor
     from pyroapi import distributions as dist
     funsor.set_backend("torch")
-    from pyroapi import handlers, pyro, pyro_backend
+    from pyroapi import handlers, pyro, pyro_backend, infer
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
@@ -280,24 +281,23 @@ def model_7(data, history, vectorized):
     (model_7, torch.ones((5, 4), dtype=torch.long), "wxy", 1),
     (model_7, torch.ones((50, 4), dtype=torch.long), "wxy", 1),
 ])
-def test_vectorized_markov(model, data, var, history, use_replay):
+def test_enumeration(model, data, var, history, use_replay):
 
-    with pyro_backend("contrib.funsor"), \
-            handlers.enum():
-        # sequential trace
-        trace = handlers.trace(model).get_trace(data, history, False)
+    with pyro_backend("contrib.funsor"):
+        with handlers.enum():
+            # sequential trace
+            trace = handlers.trace(model).get_trace(data, history, False)
+            # vectorized trace
+            vectorized_trace = handlers.trace(model).get_trace(data, history, True)
+            if use_replay:
+                vectorized_trace = handlers.trace(
+                        handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
 
         # sequential factors
         factors = list()
         for i in range(data.shape[-2]):
             for v in var:
                 factors.append(trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
-
-        # vectorized trace
-        vectorized_trace = handlers.trace(model).get_trace(data, history, True)
-        if use_replay:
-            vectorized_trace = handlers.trace(
-                    handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
 
         # vectorized factors
         vectorized_factors = list()
@@ -315,7 +315,7 @@ def test_vectorized_markov(model, data, var, history, use_replay):
 
         # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
-            funsor.testing.assert_close(f2, f1.align(tuple(f2.inputs)))
+            assert_close(f2, f1.align(tuple(f2.inputs)))
 
         # assert correct step
         actual_step = vectorized_trace.nodes["time"]["value"]
@@ -382,12 +382,18 @@ def model_8(weeks_data, days_data, history, vectorized):
     (model_8, torch.ones(3), torch.zeros(9), "xy", "wz", 1),
     (model_8, torch.ones(30), torch.zeros(50), "xy", "wz", 1),
 ])
-def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, history, use_replay):
+def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, use_replay):
 
-    with pyro_backend("contrib.funsor"), \
-            handlers.enum():
-        # sequential factors
-        trace = handlers.trace(model).get_trace(weeks_data, days_data, history, False)
+    with pyro_backend("contrib.funsor"):
+        with handlers.enum():
+            # sequential factors
+            trace = handlers.trace(model).get_trace(weeks_data, days_data, history, False)
+
+            # vectorized trace
+            vectorized_trace = handlers.trace(model).get_trace(weeks_data, days_data, history, True)
+            if use_replay:
+                vectorized_trace = handlers.trace(
+                    handlers.replay(model, trace=vectorized_trace)).get_trace(weeks_data, days_data, history, True)
 
         factors = list()
         # sequential weeks factors
@@ -398,12 +404,6 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
         for j in range(len(days_data)):
             for v in vars2:
                 factors.append(trace.nodes["{}_{}".format(v, j)]["funsor"]["log_prob"])
-
-        # vectorized trace
-        vectorized_trace = handlers.trace(model).get_trace(weeks_data, days_data, history, True)
-        if use_replay:
-            vectorized_trace = handlers.trace(
-                    handlers.replay(model, trace=vectorized_trace)).get_trace(weeks_data, days_data, history, True)
 
         vectorized_factors = list()
         # vectorized weeks factors
@@ -435,7 +435,7 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
 
         # assert correct factors
         for f1, f2 in zip(factors, vectorized_factors):
-            funsor.testing.assert_close(f2, f1.align(tuple(f2.inputs)))
+            assert_close(f2, f1.align(tuple(f2.inputs)))
 
         # assert correct step
 
@@ -457,3 +457,122 @@ def test_vectorized_markov_multi(model, weeks_data, days_data, vars1, vars2, his
 
         assert actual_weeks_step == expected_weeks_step
         assert actual_days_step == expected_days_step
+
+
+def guide_empty(data, history, vectorized):
+    pass
+
+
+@pytest.mark.parametrize("model,guide,data,history", [
+    (model_0, guide_empty, torch.rand(3, 5, 4), 1),
+    (model_1, guide_empty, torch.rand(5, 4), 1),
+    (model_2, guide_empty, torch.ones((5, 4), dtype=torch.long), 1),
+    (model_3, guide_empty, torch.ones((5, 4), dtype=torch.long), 1),
+    (model_4, guide_empty, torch.ones((5, 4), dtype=torch.long), 1),
+    (model_5, guide_empty, torch.ones((5, 4), dtype=torch.long), 2),
+    (model_6, guide_empty, torch.rand(5, 4), 1),
+    (model_6, guide_empty, torch.rand(100, 4), 1),
+    (model_7, guide_empty, torch.ones((5, 4), dtype=torch.long), 1),
+    (model_7, guide_empty, torch.ones((50, 4), dtype=torch.long), 1),
+])
+def test_model_enumerated_elbo(model, guide, data, history):
+    pyro.clear_param_store()
+
+    with pyro_backend("contrib.funsor"):
+        if history > 1:
+            pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
+
+        elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
+        expected_loss = elbo.loss_and_grads(model, guide, data, history, False)
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+
+        vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, history, True)
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+
+        assert_close(actual_loss, expected_loss)
+        for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+            assert_close(actual_grad, expected_grad)
+
+
+def guide_empty_multi(weeks_data, days_data, history, vectorized):
+    pass
+
+
+@pytest.mark.parametrize("model,guide,weeks_data,days_data,history", [
+    (model_8, guide_empty_multi, torch.ones(3), torch.zeros(9), 1),
+    (model_8, guide_empty_multi, torch.ones(30), torch.zeros(50), 1),
+])
+def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, history):
+    pyro.clear_param_store()
+
+    with pyro_backend("contrib.funsor"):
+
+        elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
+        expected_loss = elbo.loss_and_grads(model, guide, weeks_data, days_data, history, False)
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+
+        vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, weeks_data, days_data, history, True)
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+
+        assert_close(actual_loss, expected_loss)
+        for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+            assert_close(actual_grad, expected_grad)
+
+
+def model_10(data, vectorized):
+    init_probs = torch.tensor([0.5, 0.5])
+    transition_probs = pyro.param("transition_probs",
+                                  torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                  constraint=constraints.simplex)
+    emission_probs = pyro.param("emission_probs",
+                                torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                constraint=constraints.simplex)
+    x = None
+    markov_loop = \
+        pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
+        else pyro.markov(range(len(data)))
+    for i in markov_loop:
+        probs = init_probs if x is None else transition_probs[x]
+        x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+        pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
+
+
+def guide_10(data, vectorized):
+    init_probs = torch.tensor([0.5, 0.5])
+    transition_probs = pyro.param("transition_probs",
+                                  torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                  constraint=constraints.simplex)
+    x = None
+    markov_loop = \
+        pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
+        else pyro.markov(range(len(data)))
+    for i in markov_loop:
+        probs = init_probs if x is None else transition_probs[x]
+        x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
+                        infer={"enumerate": "parallel"})
+
+
+@pytest.mark.parametrize("model,guide,data,", [
+    (model_10, guide_10, torch.ones(5)),
+])
+def test_guide_enumerated_elbo(model, guide, data):
+    pyro.clear_param_store()
+
+    with pyro_backend("contrib.funsor"):
+        with pytest.raises(
+                NotImplementedError,
+                match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
+
+            elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
+            expected_loss = elbo.loss_and_grads(model, guide, data, False)
+            expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+
+            vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
+            actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
+            actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+
+            assert_close(actual_loss, expected_loss)
+            for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+                assert_close(actual_grad, expected_grad)
