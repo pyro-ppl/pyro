@@ -8,7 +8,7 @@ import torch
 import pyro
 import pyro.distributions.torch as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoname import scope, name_count, autoname
+from pyro.contrib.autoname import scope, name_count, autoname, sample
 
 logger = logging.getLogger(__name__)
 
@@ -137,37 +137,37 @@ def test_basic_scope():
 
     @autoname
     def f1():
-        return pyro.sample("x", dist.Bernoulli(0.5))
+        return sample(dist.Bernoulli(0.5))
 
     @autoname
     def f2():
         f1()
-        return pyro.sample("y", dist.Bernoulli(0.5))
+        return sample(dist.Bernoulli(0.5))
 
     tr1 = poutine.trace(f1).get_trace()
-    breakpoint()
-    assert "f1/x" in tr1.nodes
+    assert "f1_0/Bernoulli_0" in tr1.nodes
 
     tr2 = poutine.trace(f2).get_trace()
-    assert "f2/f1/x" in tr2.nodes
-    assert "f2/y" in tr2.nodes
+    assert "f2_0/f1_0/Bernoulli_0" in tr2.nodes
+    assert "f2_0/Bernoulli_0" in tr2.nodes
 
 
 def test_nested_traces():
 
-    @scope
+    @autoname
     def f1():
-        return pyro.sample("x", dist.Bernoulli(0.5))
+        return sample(dist.Bernoulli(0.5))
 
-    @scope
+    @autoname
     def f2():
         f1()
         f1()
         f1()
-        return pyro.sample("y", dist.Bernoulli(0.5))
+        return sample(dist.Bernoulli(0.5))
 
     expected_names = ["f2/f1/x", "f2/f1__1/x", "f2/f1__2/x", "f2/y"]
-    tr2 = poutine.trace(name_count(name_count(f2))).get_trace()
+    tr2 = poutine.trace(f2).get_trace()
+    breakpoint()
     actual_names = [name for name, node in tr2.nodes.items()
                     if node['type'] == "sample"]
     assert expected_names == actual_names

@@ -62,7 +62,7 @@ class AutonameMessenger(ReentrantMessenger):
         if callable(fn_or_iter):
             if self.frame.name is None:
                 self.frame.name = fn_or_iter.__name__
-            return effectful(type="call_scope")(super().__call__(fn_or_iter))
+            return super().__call__(effectful(type="call_scope")(fn_or_iter))
         self._iter = fn_or_iter
         return self
 
@@ -71,8 +71,9 @@ class AutonameMessenger(ReentrantMessenger):
         raw_name = msg["fn"](*msg["args"])
         
         context = tuple(_AUTONAME_STACK)
+        msg["value"] = "/".join("{}_{}".format(frame.name, frame.counter) for frame in _AUTONAME_STACK) + \
+            "/" + raw_name + "_" + str(_AUTONAME_LOCAL_COUNTERS[context])
         _AUTONAME_LOCAL_COUNTERS[context] += 1
-        msg["value"] = "/".join(_AUTONAME_STACK) + raw_name + str(_AUTONAME_LOCAL_COUNTERS[context])
         msg["stop"] = True
         msg["done"] = True
 
@@ -122,4 +123,4 @@ def _sample_name(name, d, *args, **kwargs):  # the current syntax of pyro.sample
 def _sample_dist(d, *args, **kwargs):
     name = kwargs.pop("name", None)
     name = genname(type(d).__name__ if name is None else name)
-    return sample(name, d, *args, **kwargs)
+    return pyro.sample(name, d, *args, **kwargs)
