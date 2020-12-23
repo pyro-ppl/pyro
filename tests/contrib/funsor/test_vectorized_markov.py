@@ -534,9 +534,10 @@ def model_10(data, vectorized):
         pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
         else pyro.markov(range(len(data)))
     for i in markov_loop:
-        probs = init_probs if x is None else transition_probs[x]
-        x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
-        pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
+        probs = init_probs if x is None else Vindex(transition_probs)[x]
+        x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
+                        infer={"enumerate": "parallel"})  # XXX hack - fix and remove
+        pyro.sample("y_{}".format(i), dist.Categorical(Vindex(emission_probs)[x]), obs=data[i])
 
 
 def guide_10(data, vectorized):
@@ -549,7 +550,7 @@ def guide_10(data, vectorized):
         pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
         else pyro.markov(range(len(data)))
     for i in markov_loop:
-        probs = init_probs if x is None else transition_probs[x]
+        probs = init_probs if x is None else Vindex(transition_probs)[x]
         x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
                         infer={"enumerate": "parallel"})
 
@@ -561,18 +562,15 @@ def test_guide_enumerated_elbo(model, guide, data):
     pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
-        with pytest.raises(
-                NotImplementedError,
-                match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
 
-            elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-            expected_loss = elbo.loss_and_grads(model, guide, data, False)
-            expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+        elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
+        expected_loss = elbo.loss_and_grads(model, guide, data, False)
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
-            vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-            actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
-            actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+        vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
-            assert_close(actual_loss, expected_loss)
-            for actual_grad, expected_grad in zip(actual_grads, expected_grads):
-                assert_close(actual_grad, expected_grad)
+        assert_close(actual_loss, expected_loss)
+        for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+            assert_close(actual_grad, expected_grad)
