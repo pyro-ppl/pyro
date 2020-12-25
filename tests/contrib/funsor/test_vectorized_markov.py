@@ -534,10 +534,9 @@ def model_10(data, vectorized):
         pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
         else pyro.markov(range(len(data)))
     for i in markov_loop:
-        probs = init_probs if x is None else Vindex(transition_probs)[x]
-        x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
-                        infer={"enumerate": "parallel"})  # XXX hack - fix and remove
-        pyro.sample("y_{}".format(i), dist.Categorical(Vindex(emission_probs)[x]), obs=data[i])
+        probs = init_probs if x is None else transition_probs[x]
+        x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+        pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
 
 
 def guide_10(data, vectorized):
@@ -550,7 +549,7 @@ def guide_10(data, vectorized):
         pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
         else pyro.markov(range(len(data)))
     for i in markov_loop:
-        probs = init_probs if x is None else Vindex(transition_probs)[x]
+        probs = init_probs if x is None else transition_probs[x]
         x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
                         infer={"enumerate": "parallel"})
 

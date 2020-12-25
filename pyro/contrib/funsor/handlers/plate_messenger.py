@@ -316,7 +316,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             msg["name"] = msg["name"][:-len(str(self._indices))] + str(self._suffix)
         if str(self._suffix) != str(self._suffixes[-1]):
             # do not trace auxiliary vars
-            msg["infer"]["_do_not_trace"] = True
+            msg["infer"]["_do_not_score"] = True
             msg["infer"]["is_auxiliary"] = True
             msg["is_observed"] = False
             # map auxiliary var to markov var name prefix

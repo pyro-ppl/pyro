@@ -23,7 +23,8 @@ def terms_from_trace(tr):
         # add markov dimensions to the plate_to_step dictionary
         if node["type"] == "markov_chain":
             terms["plate_to_step"][node["name"]] = node["value"]
-        if node["type"] != "sample" or type(node["fn"]).__name__ == "_Subsample":
+        if node["type"] != "sample" or type(node["fn"]).__name__ == "_Subsample" or \
+                node["infer"].get("_do_not_score", False):
             continue
         # grab plate dimensions from the cond_indep_stack
         terms["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
@@ -95,7 +96,6 @@ class TraceMarkovEnum_ELBO(ELBO):
         targets = [funsor.Tensor(funsor.ops.new_zeros(funsor.tensor.get_default_prototype(), ()).expand(
             tuple(v.size for v in cost.inputs.values()) + cost.output.shape), cost.inputs, cost.dtype)
             for cost in contracted_costs + uncontracted_factors] + guide_terms["log_measures"]
-        assert all(target.output.shape == () for target in targets)
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             logzq = sum(funsor.sum_product.modified_partial_sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
