@@ -318,7 +318,6 @@ class VectorizedMarkovMessenger(NamedMessenger):
             # do not trace auxiliary vars
             msg["infer"]["_do_not_score"] = True
             msg["infer"]["is_auxiliary"] = True
-            msg["is_observed"] = False
             # map auxiliary var to markov var name prefix
             # assuming that site name has a format: "markov_var{}".format(_suffix)
             # is there a better way?
