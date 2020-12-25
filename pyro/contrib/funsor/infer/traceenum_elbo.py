@@ -88,15 +88,11 @@ class TraceMarkovEnum_ELBO(ELBO):
         # finally, integrate out guide variables in the elbo and all plates
         guide_markov_dims = frozenset(plate for plate, step in guide_terms["plate_to_step"].items() if step)
         # first compute all marginal logqs eagerly in a single forward-backward pass
-        # we create normalized dummy factors for each model cost to ensure all requisite marginals are computed
+        # we create dummy factors for each model cost to ensure all required marginals are computed
         targets = []
         for cost in contracted_costs + uncontracted_factors:
             target = funsor.Tensor(funsor.ops.new_zeros(funsor.tensor.get_default_prototype(), ()).expand(
                 tuple(v.size for v in cost.inputs.values())), cost.inputs, cost.dtype)
-            # this normalization step should guarantee that the resulting elbo
-            # is not off by an arbitrary scalar constant relative to sequential case
-            # TODO use fill_like instead to avoid allocating tensor memory
-            target -= sum([funsor.ops.log(v.size) for k, v in target.inputs.items() if k in guide_terms["measure_vars"]], 0)
             targets.append(target)
         targets += guide_terms["log_measures"]
         with funsor.interpreter.interpretation(funsor.terms.lazy):
@@ -109,13 +105,13 @@ class TraceMarkovEnum_ELBO(ELBO):
 
         with funsor.adjoint.AdjointTape() as tape:
             logzq = funsor.optimizer.apply_optimizer(logzq)
-        log_qs = tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets))
+        log_qs = tuple(tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets)).values())
 
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 # look up the marginal logq in the guide corresponding to this cost term
-                log_prob = next(iter(log_q for log_q in log_qs.values() if dict(log_q.inputs) == dict(cost.inputs)))
+                log_prob = next(iter(log_q for log_q in log_qs if dict(log_q.inputs) == dict(cost.inputs)))
                 # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
                 elbo_term = funsor.Integrate(
                     log_prob, cost, frozenset(cost.inputs) - frozenset(guide_terms["plate_to_step"]))
