@@ -333,7 +333,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             return
         # if last step in the for loop
         if str(self._suffix) == str(self._suffixes[-1]):
-            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg["funsor"] else \
+            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg.get("funsor", {}) else \
                 to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
             # for auxiliary sites in the log_prob
             for name in set(funsor_log_prob.inputs) & set(self._auxiliary_to_markov):
