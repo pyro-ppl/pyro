@@ -525,7 +525,7 @@ def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, histor
             assert_close(actual_grad, expected_grad)
 
 
-def model_10(data, vectorized):
+def model_10(data, history, vectorized):
     init_probs = torch.tensor([0.5, 0.5])
     transition_probs = pyro.param("transition_probs",
                                   torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
@@ -535,43 +535,61 @@ def model_10(data, vectorized):
                                 constraint=constraints.simplex)
     x = None
     markov_loop = \
-        pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
-        else pyro.markov(range(len(data)))
+        pyro.vectorized_markov(name="time", size=len(data), history=history) if vectorized \
+        else pyro.markov(range(len(data)), history=history)
     for i in markov_loop:
         probs = init_probs if x is None else transition_probs[x]
         x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
         pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
 
 
-def guide_10(data, vectorized):
+def guide_10(data, history, vectorized):
     init_probs = torch.tensor([0.5, 0.5])
     transition_probs = pyro.param("transition_probs",
                                   torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                   constraint=constraints.simplex)
     x = None
     markov_loop = \
-        pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
-        else pyro.markov(range(len(data)))
+        pyro.vectorized_markov(name="time", size=len(data), history=history) if vectorized \
+        else pyro.markov(range(len(data)), history=history)
     for i in markov_loop:
         probs = init_probs if x is None else transition_probs[x]
         x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
                         infer={"enumerate": "parallel"})
 
 
-@pytest.mark.parametrize("model,guide,data,", [
-    (model_10, guide_10, torch.ones(5)),
+@pyro_backend("contrib.funsor")
+def _guide_from_model(model):
+    return handlers.block(infer.config_enumerate(model, default="parallel"),
+                          lambda msg: msg.get("is_observed", False))
+
+
+@pytest.mark.parametrize("model,guide,data,history", [
+    (model_0, _guide_from_model(model_0), torch.rand(3, 5, 4), 1),
+    (model_1, _guide_from_model(model_1), torch.rand(5, 4), 1),
+    (model_2, _guide_from_model(model_2), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_3, _guide_from_model(model_3), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_4, _guide_from_model(model_4), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_5, _guide_from_model(model_5), torch.ones((5, 4), dtype=torch.long), 2),
+    (model_6, _guide_from_model(model_6), torch.rand(5, 4), 1),
+    # (model_6, _guide_from_model(model_6), torch.rand(100, 4), 1),
+    (model_7, _guide_from_model(model_7), torch.ones((5, 4), dtype=torch.long), 1),
+    # (model_7, _guide_from_model(model_7), torch.ones((50, 4), dtype=torch.long), 1),
+    (model_10, guide_10, torch.ones(5), 1),
 ])
-def test_guide_enumerated_elbo(model, guide, data):
+def test_guide_enumerated_elbo(model, guide, data, history):
     pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
+        if history > 1:
+            pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
 
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-        expected_loss = elbo.loss_and_grads(model, guide, data, False)
+        expected_loss = elbo.loss_and_grads(model, guide, data, history, False)
         expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, history, True)
         actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         assert_close(actual_loss, expected_loss)
