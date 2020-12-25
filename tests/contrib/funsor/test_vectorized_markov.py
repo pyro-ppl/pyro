@@ -379,6 +379,7 @@ def model_8(weeks_data, days_data, history, vectorized):
     (model_8, torch.ones(30), torch.zeros(50), "xy", "wz", 1),
 ])
 def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, use_replay):
+    pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
         with handlers.enum():
