@@ -94,7 +94,7 @@ class TraceMarkovEnum_ELBO(ELBO):
             target = funsor.Tensor(funsor.ops.new_zeros(funsor.tensor.get_default_prototype(), ()).expand(
                 tuple(v.size for v in cost.inputs.values())), cost.inputs, cost.dtype)
             # this normalization step should guarantee that the resulting elbo
-            # is not off by an arbitrary constant
+            # is not off by an arbitrary scalar constant relative to sequential case
             # TODO use fill_like instead to avoid allocating tensor memory
             target -= sum([funsor.ops.log(v.size) for k, v in target.inputs.items() if k in guide_terms["measure_vars"]], 0)
             targets.append(target)
