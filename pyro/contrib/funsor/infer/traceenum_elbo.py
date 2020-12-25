@@ -115,7 +115,7 @@ class TraceMarkovEnum_ELBO(ELBO):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 # look up the marginal logq in the guide corresponding to this cost term
-                log_prob = next(iter(log_q for log_q in log_qs if dict(log_q.inputs) == dict(cost.inputs)))
+                log_prob = next(iter(log_q for log_q in log_qs.values() if dict(log_q.inputs) == dict(cost.inputs)))
                 # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
                 elbo_term = funsor.Integrate(
                     log_prob, cost, frozenset(cost.inputs) - frozenset(guide_terms["plate_to_step"]))
