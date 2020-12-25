@@ -88,10 +88,17 @@ class TraceMarkovEnum_ELBO(ELBO):
         # finally, integrate out guide variables in the elbo and all plates
         guide_markov_dims = frozenset(plate for plate, step in guide_terms["plate_to_step"].items() if step)
         # first compute all marginal logqs eagerly in a single forward-backward pass
-        # we create dummy tensors for each model cost to ensure all requisite marginals are computed
-        targets = [funsor.Tensor(funsor.ops.new_zeros(funsor.tensor.get_default_prototype(), ()).expand(
-            tuple(v.size for v in cost.inputs.values()) + cost.output.shape), cost.inputs, cost.dtype)
-            for cost in contracted_costs + uncontracted_factors] + guide_terms["log_measures"]
+        # we create normalized dummy factors for each model cost to ensure all requisite marginals are computed
+        targets = []
+        for cost in contracted_costs + uncontracted_factors:
+            target = funsor.Tensor(funsor.ops.new_zeros(funsor.tensor.get_default_prototype(), ()).expand(
+                tuple(v.size for v in cost.inputs.values())), cost.inputs, cost.dtype)
+            # this normalization step should guarantee that the resulting elbo
+            # is not off by an arbitrary constant
+            # TODO use fill_like instead to avoid allocating tensor memory
+            target -= sum([funsor.ops.log(v.size) for k, v in target.inputs.items() if k in guide_terms["measure_vars"]], 0)
+            targets.append(target)
+        targets += guide_terms["log_measures"]
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             logzq = sum(funsor.sum_product.modified_partial_sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
