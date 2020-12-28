@@ -11,11 +11,10 @@ def mg2k(m, g):
 
 class profile(PyroModule):
 
-    def __init__(self, M, dtype=torch.float64, epsilon=1e-32):
+    def __init__(self, M, epsilon=1e-32):
         super().__init__()
         self.M = M
         self.K = 2*(M+1)
-        self.dtype = dtype
         self.epsilon = epsilon
 
         self._make_transfer()
@@ -34,11 +33,11 @@ class profile(PyroModule):
         # ...transf_0 -> initial transition vector
         # ...transf -> transition matrix
         self.register_buffer('r_transf_0',
-                             torch.zeros((M+1, 3, 2, K), dtype=self.dtype))
+                             torch.zeros((M+1, 3, 2, K)))
         self.register_buffer('u_transf_0',
-                             torch.zeros((M+1, 3, 2, K), dtype=self.dtype))
+                             torch.zeros((M+1, 3, 2, K)))
         self.register_buffer('null_transf_0',
-                             torch.zeros((K,), dtype=self.dtype))
+                             torch.zeros((K,)))
         m, g = -1, 0
         for mp in range(M+1):
             for gp in range(2):
@@ -72,11 +71,11 @@ class profile(PyroModule):
         self.u_transf_0[-1, :, :, :] = 0.
 
         self.register_buffer('r_transf',
-                             torch.zeros((M+1, 3, 2, K, K), dtype=self.dtype))
+                             torch.zeros((M+1, 3, 2, K, K)))
         self.register_buffer('u_transf',
-                             torch.zeros((M+1, 3, 2, K, K), dtype=self.dtype))
+                             torch.zeros((M+1, 3, 2, K, K)))
         self.register_buffer('null_transf',
-                             torch.zeros((K, K), dtype=self.dtype))
+                             torch.zeros((K, K)))
         for m in range(M+1):
             for g in range(2):
                 for mp in range(M+1):
@@ -111,9 +110,9 @@ class profile(PyroModule):
         self.u_transf[-1, :, :, :, :] = 0.
 
         self.register_buffer('vx_transf',
-                             torch.zeros((M+1, K), dtype=self.dtype))
+                             torch.zeros((M+1, K)))
         self.register_buffer('vc_transf',
-                             torch.zeros((M+1, K), dtype=self.dtype))
+                             torch.zeros((M+1, K)))
         for m in range(M+1):
             for g in range(2):
                 k = mg2k(m, g)
