@@ -29,6 +29,10 @@ Example Models
 --------------
 .. automodule:: pyro.contrib.epidemiology.models
 
+Strain Tracking Models
+----------------------
+.. automodule:: pyro.contrib.epidemiology.strains
+
 Distributions
 -------------
 .. automodule:: pyro.contrib.epidemiology.distributions
