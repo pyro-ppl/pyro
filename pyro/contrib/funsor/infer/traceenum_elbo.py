@@ -92,15 +92,15 @@ class TraceMarkovEnum_ELBO(ELBO):
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
-                # compute the marginal logq in the guide corresponding to this cost term
-                log_prob = funsor.sum_product.sum_product(
-                    funsor.ops.logaddexp, funsor.ops.add,
+                # compute the expected cost term E_q[logp] or E_q[-logq]
+                markov_dims = frozenset({
+                    plate for plate, step in guide_terms["plate_to_step"].items() if step})
+                elbo_term = funsor.sum_product.compute_expectation(
                     guide_terms["log_measures"],
-                    plates=plate_vars,
-                    eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs)
+                    cost,
+                    plate_to_step=guide_terms["plate_to_step"],
+                    eliminate=(plate_vars | guide_terms["measure_vars"] | markov_dims)
                 )
-                # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
-                elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
@@ -146,13 +146,15 @@ class TraceEnum_ELBO(ELBO):
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
-                # compute the expected cost term E_q[logp] or E_q[-logq]
-                elbo_term = funsor.sum_product.sum_product(
-                    funsor.ops.add, funsor.ops.mul,
-                    [term.exp() for term in guide_terms["log_measures"]] + [cost],
-                    plates=plate_vars - frozenset(cost.inputs),
-                    eliminate=((plate_vars - frozenset(cost.inputs)) | guide_terms["measure_vars"])
+                # compute the marginal logq in the guide corresponding to this cost term
+                log_prob = funsor.sum_product.sum_product(
+                    funsor.ops.logaddexp, funsor.ops.add,
+                    guide_terms["log_measures"],
+                    plates=plate_vars,
+                    eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs)
                 )
+                # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
+                elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
