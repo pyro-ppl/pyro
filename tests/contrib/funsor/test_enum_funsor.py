@@ -1395,7 +1395,7 @@ def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, out
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_9():
     #        Model   Guide
-    #          a        
+    #          a
     #  +-------|-------+
     #  | M=2   V       |
     #  |       b -> c  |
