@@ -258,6 +258,12 @@ def model_7(data, history, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
+@pyro_backend("contrib.funsor")
+def _guide_from_model(model):
+    return handlers.block(infer.config_enumerate(model, default="parallel"),
+                          lambda msg: msg.get("is_observed", False))
+
+
 @pytest.mark.parametrize("use_replay", [True, False])
 @pytest.mark.parametrize("model,data,var,history", [
     (model_0, torch.rand(3, 5, 4), "xy", 1),
@@ -281,11 +287,9 @@ def test_enumeration(model, data, var, history, use_replay):
             trace = handlers.trace(enum_model).get_trace(data, history, False)
             # vectorized trace
             if use_replay:
-                guide_trace = handlers.trace(
-                    handlers.block(enum_model, lambda msg: msg.get("is_observed", False))
-                ).get_trace(data, history, True)
+                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(data, history, True)
                 vectorized_trace = handlers.trace(
-                        handlers.replay(model, trace=guide_trace)).get_trace(data, history, True)
+                    handlers.replay(model, trace=guide_trace)).get_trace(data, history, True)
             else:
                 vectorized_trace = handlers.trace(enum_model).get_trace(data, history, True)
 
@@ -389,11 +393,9 @@ def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, 
 
             # vectorized trace
             if use_replay:
-                guide_trace = handlers.trace(
-                    handlers.block(enum_model, lambda msg: msg.get("is_observed", False))
-                ).get_trace(weeks_data, days_data, history, True)
+                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(weeks_data, days_data, history, True)
                 vectorized_trace = handlers.trace(
-                        handlers.replay(model, trace=guide_trace)).get_trace(weeks_data, days_data, history, True)
+                    handlers.replay(model, trace=guide_trace)).get_trace(weeks_data, days_data, history, True)
             else:
                 vectorized_trace = handlers.trace(enum_model).get_trace(weeks_data, days_data, history, True)
 
@@ -556,12 +558,6 @@ def guide_10(data, history, vectorized):
         probs = init_probs if x is None else transition_probs[x]
         x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
                         infer={"enumerate": "parallel"})
-
-
-@pyro_backend("contrib.funsor")
-def _guide_from_model(model):
-    return handlers.block(infer.config_enumerate(model, default="parallel"),
-                          lambda msg: msg.get("is_observed", False))
 
 
 @pytest.mark.parametrize("model,guide,data,history", [
