@@ -32,6 +32,9 @@ Example Models
 Strain Tracking Models
 ----------------------
 .. automodule:: pyro.contrib.epidemiology.strains
+    :members:
+    :show-inheritance:
+    :member-order: bysource
 
 Distributions
 -------------

@@ -44,7 +44,7 @@ class TimeSpaceStrainModel(nn.Module):
     This model fuses three types of data:
 
     1.  **Aggregate epidemiological data** in the form of case counts and death
-        counts.
+        counts in each (time, region) bucket.
     2.  **Transit data** in the form of a number of covariates believed to
         predict inter-region infection rates. These might combine measured data
         such as flight information and mobile phone records with prior
@@ -66,11 +66,11 @@ class TimeSpaceStrainModel(nn.Module):
     countries + local provinces), and coarse phylogenies with ~100-1000
     strains.
 
-    :param Tensor case_data: A ``(T, R)``-shaped tensor of confirmed case
+    :param Tensor case_data: A ``(T,R)``-shaped tensor of confirmed case counts
+        in each (time,region) bucket.
+    :param Tensor death_data: A ``(T,R)``-shaped tensor of confirmed death
         counts in each (time,region) bucket.
-    :param Tensor death_data: A ``(T, R)``-shaped tensor of confirmed death
-        counts in each (time,region) bucket.
-    :param Tensor transit_data: A ``(T, R, R, P)``-shaped tensor of ``P``-many
+    :param Tensor transit_data: A ``(T,R,R,P)``-shaped tensor of ``P``-many
         covariates, each defining time-dependent region-to-region transition
         rates. Values must be nonnegative.
     :param Tensor sample_time:
@@ -79,9 +79,9 @@ class TimeSpaceStrainModel(nn.Module):
         containing the time, region, and strain classification of each of ``N``
         genetic samples.
     :param Tensor strain_distance: An ``(S,S)``-shaped array of genetic
-        distances between strains. This could be constructed e.g. by learning
-        a coarse phylogeny among strains and measuring the edge distance
-        between each pair of strains.
+        distances between each pair of ``S``-many strains. This could be
+        constructed e.g. by estimating a coarse phylogeny among strains and
+        measuring the edge distance between each pair of strains.
     """
     def __init__(
         self,
