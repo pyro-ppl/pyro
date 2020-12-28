@@ -572,15 +572,17 @@ def _guide_from_model(model):
     (model_4, _guide_from_model(model_4), torch.ones((5, 4), dtype=torch.long), 1),
     (model_5, _guide_from_model(model_5), torch.ones((5, 4), dtype=torch.long), 2),
     (model_6, _guide_from_model(model_6), torch.rand(5, 4), 1),
-    # (model_6, _guide_from_model(model_6), torch.rand(100, 4), 1),
     (model_7, _guide_from_model(model_7), torch.ones((5, 4), dtype=torch.long), 1),
-    # (model_7, _guide_from_model(model_7), torch.ones((50, 4), dtype=torch.long), 1),
     (model_10, guide_10, torch.ones(5), 1),
 ])
 def test_guide_enumerated_elbo(model, guide, data, history):
     pyro.clear_param_store()
 
-    with pyro_backend("contrib.funsor"):
+    with pyro_backend("contrib.funsor"), \
+        pytest.raises(
+            NotImplementedError,
+            match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
+
         if history > 1:
             pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
 

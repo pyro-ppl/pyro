@@ -315,7 +315,8 @@ class VectorizedMarkovMessenger(NamedMessenger):
             assert msg["name"].endswith(str(self._indices))
             msg["name"] = msg["name"][:-len(str(self._indices))] + str(self._suffix)
         if str(self._suffix) != str(self._suffixes[-1]):
-            # do not trace auxiliary vars
+            # _do_not_score: record these sites when tracing for use with replay,
+            # but do not include them in ELBO computation.
             msg["infer"]["_do_not_score"] = True
             msg["infer"]["is_auxiliary"] = True
             # map auxiliary var to markov var name prefix
