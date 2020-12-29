@@ -264,7 +264,7 @@ def _guide_from_model(model):
         with pyro_backend("contrib.funsor"):
             return handlers.block(infer.config_enumerate(model, default="parallel"),
                                   lambda msg: msg.get("is_observed", False))
-    except KeyError:
+    except KeyError:  # for test collection without funsor
         return model
 
 
@@ -549,21 +549,6 @@ def model_10(data, history, vectorized):
         pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
 
 
-def guide_10(data, history, vectorized):
-    init_probs = torch.tensor([0.5, 0.5])
-    transition_probs = pyro.param("transition_probs",
-                                  torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
-                                  constraint=constraints.simplex)
-    x = None
-    markov_loop = \
-        pyro.vectorized_markov(name="time", size=len(data), history=history) if vectorized \
-        else pyro.markov(range(len(data)), history=history)
-    for i in markov_loop:
-        probs = init_probs if x is None else transition_probs[x]
-        x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
-                        infer={"enumerate": "parallel"})
-
-
 @pytest.mark.parametrize("model,guide,data,history", [
     (model_0, _guide_from_model(model_0), torch.rand(3, 5, 4), 1),
     (model_1, _guide_from_model(model_1), torch.rand(5, 4), 1),
@@ -573,7 +558,7 @@ def guide_10(data, history, vectorized):
     (model_5, _guide_from_model(model_5), torch.ones((5, 4), dtype=torch.long), 2),
     (model_6, _guide_from_model(model_6), torch.rand(5, 4), 1),
     (model_7, _guide_from_model(model_7), torch.ones((5, 4), dtype=torch.long), 1),
-    (model_10, guide_10, torch.ones(5), 1),
+    (model_10, _guide_from_model(model_10), torch.ones(5), 1),
 ])
 def test_guide_enumerated_elbo(model, guide, data, history):
     pyro.clear_param_store()

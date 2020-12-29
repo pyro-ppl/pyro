@@ -318,7 +318,6 @@ class VectorizedMarkovMessenger(NamedMessenger):
             # _do_not_score: record these sites when tracing for use with replay,
             # but do not include them in ELBO computation.
             msg["infer"]["_do_not_score"] = True
-            msg["infer"]["is_auxiliary"] = True
             # map auxiliary var to markov var name prefix
             # assuming that site name has a format: "markov_var{}".format(_suffix)
             # is there a better way?
