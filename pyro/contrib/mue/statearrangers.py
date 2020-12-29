@@ -122,31 +122,30 @@ class profile(PyroModule):
                     self.vc_transf[m, k] = 1
 
     def forward(self, ancestor_seq_logits, insert_seq_logits,
-                insert_logits, delete_logits, subsitute_logits=None):
+                insert_logits, delete_logits, substitute_logits=None):
         """Assemble the HMM parameters based on the transfer matrices."""
-
         initial_logits = (
-            torch.einsum('...ijk,...ijkl->...l',
+            torch.einsum('...ijk,ijkl->...l',
                          delete_logits, self.u_transf_0) +
-            torch.einsum('...ijk,...ijkl->...l',
+            torch.einsum('...ijk,ijkl->...l',
                          insert_logits, self.r_transf_0) +
             (-1/self.epsilon)*self.null_transf_0)
         transition_logits = (
-             torch.einsum('...ijk,...ijklf->...lf',
+             torch.einsum('...ijk,ijklf->...lf',
                           delete_logits, self.u_transf) +
-             torch.einsum('...ijk,...ijklf->...lf',
+             torch.einsum('...ijk,ijklf->...lf',
                           insert_logits, self.r_transf) +
              (-1/self.epsilon)*self.null_transf)
         seq_logits = (
-             torch.einsum('...ij,...ik->...kj',
+             torch.einsum('...ij,ik->...kj',
                           ancestor_seq_logits, self.vx_transf) +
-             torch.einsum('...ij,...ik->...kj',
+             torch.einsum('...ij,ik->...kj',
                           insert_seq_logits, self.vc_transf))
 
         # Option to include the substitution matrix.
-        if subsitute_logits is not None:
+        if substitute_logits is not None:
             observation_logits = torch.logsumexp(
-                seq_logits[:, :, None] + subsitute_logits[None, :, :], dim=1)
+                seq_logits.unsqueeze(-1) + substitute_logits, dim=-2)
         else:
             observation_logits = seq_logits
 
