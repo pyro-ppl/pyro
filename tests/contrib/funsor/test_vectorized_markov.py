@@ -4,7 +4,6 @@
 import pytest
 import torch
 
-from pyroapi import pyro_backend
 from torch.distributions import constraints
 
 from pyro.ops.indexing import Vindex
@@ -16,7 +15,7 @@ try:
     import pyro.contrib.funsor
     from pyroapi import distributions as dist
     funsor.set_backend("torch")
-    from pyroapi import handlers, pyro, infer
+    from pyroapi import handlers, pyro, pyro_backend, infer
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
@@ -259,10 +258,10 @@ def model_7(data, history, vectorized):
         x_prev, w_prev = x_curr, w_curr
 
 
-@pyro_backend("contrib.funsor")
 def _guide_from_model(model):
-    return handlers.block(infer.config_enumerate(model, default="parallel"),
-                          lambda msg: msg.get("is_observed", False))
+    with pyro_backend("contrib.funsor"):
+        return handlers.block(infer.config_enumerate(model, default="parallel"),
+                              lambda msg: msg.get("is_observed", False))
 
 
 @pytest.mark.parametrize("use_replay", [True, False])
