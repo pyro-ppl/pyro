@@ -1,7 +1,7 @@
 import torch
+import pytest
 
 from pyro.contrib.mue.statearrangers import profile, mg2k
-import pytest
 
 
 def simpleprod(lst):
