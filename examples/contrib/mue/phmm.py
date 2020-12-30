@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 class ProfileHMM(nn.Module):
 
     def __init__(self, latent_seq_length, alphabet_length,
-                 prior_scale=1., indel_prior_strength=100.):
+                 prior_scale=1., indel_prior_strength=10.):
         super().__init__()
 
         assert isinstance(latent_seq_length, int) and latent_seq_length > 0
@@ -133,16 +133,11 @@ def main():
                                     [0., 0.],
                                     [0., 0.]])[None, :, :]
                      for j in range(4*mult_dat)], dim=0)
-    print('data shape', data.shape)
     # Set up inference.
     latent_seq_length, alphabet_length = 6, 2
     adam_params = {"lr": 0.05, "betas": (0.90, 0.999)}
     optimizer = Adam(adam_params)
     model = ProfileHMM(latent_seq_length, alphabet_length)
-
-    trace = poutine.trace(model.model).get_trace(data)
-    trace.compute_log_prob()  # optional, but allows printing of log_prob shapes
-    print('format shapes', trace.format_shapes())
 
     svi = SVI(model.model, model.guide, optimizer, loss=Trace_ELBO())
     n_steps = 10*mult_step
@@ -163,6 +158,30 @@ def main():
     plt.xlabel('step')
     plt.ylabel('loss')
     plt.savefig('phmm/loss_{}.pdf'.format(time_stamp))
+
+    plt.figure(figsize=(6, 6))
+    ancestor_seq = pyro.param("ancestor_seq_q_mn").detach()
+    ancestor_seq_expect = torch.exp(ancestor_seq -
+                                    ancestor_seq.logsumexp(-1, True))
+    plt.plot(ancestor_seq_expect[:, 1].numpy())
+    plt.xlabel('position')
+    plt.ylabel('probability of character 1')
+    plt.savefig('phmm/ancestor_seq_prob_{}.pdf'.format(time_stamp))
+
+    plt.figure(figsize=(6, 6))
+    insert = pyro.param("insert_q_mn").detach()
+    insert_expect = torch.exp(insert - insert.logsumexp(-1, True))
+    plt.plot(insert_expect[:, :, 1].numpy())
+    plt.xlabel('position')
+    plt.ylabel('probability of insert')
+    plt.savefig('phmm/insert_prob_{}.pdf'.format(time_stamp))
+    plt.figure(figsize=(6, 6))
+    delete = pyro.param("delete_q_mn").detach()
+    delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
+    plt.plot(delete_expect[:, :, 1].numpy())
+    plt.xlabel('position')
+    plt.ylabel('probability of delete')
+    plt.savefig('phmm/delete_prob_{}.pdf'.format(time_stamp))
 
 
 if __name__ == '__main__':

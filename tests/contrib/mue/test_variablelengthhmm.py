@@ -21,7 +21,7 @@ def test_hmm_log_prob():
                                           torch.log(e))
     lp = hmm_distr.log_prob(x)
 
-    f = torch.matmul(a0, a) * e[:, 1]
+    f = a0 * e[:, 1]
     f = torch.matmul(f, a) * e[:, 0]
     f = torch.matmul(f, a) * e[:, 1]
     f = torch.matmul(f, a) * e[:, 1]
@@ -41,7 +41,7 @@ def test_hmm_log_prob():
                       [0., 0.]])[None, :, :]], dim=0)
     lp = hmm_distr.log_prob(x)
 
-    f = torch.matmul(a0, a) * e[:, 0]
+    f = a0 * e[:, 0]
     f = torch.matmul(f, a) * e[:, 0]
     f = torch.matmul(f, a) * e[:, 0]
     chk_lp = torch.cat([chk_lp[None], torch.log(torch.sum(f))[None]])
@@ -62,7 +62,7 @@ def test_hmm_log_prob():
                                           torch.log(e))
     lp = hmm_distr.log_prob(x)
 
-    f = torch.matmul(a0[1, :], a[1, :, :]) * e[1, :, 0]
+    f = a0[1, :] * e[1, :, 0]
     f = torch.matmul(f, a[1, :, :]) * e[1, :, 0]
     f = torch.matmul(f, a[1, :, :]) * e[1, :, 0]
     chk_lp = torch.cat([chk_lp[0][None], torch.log(torch.sum(f))[None]])

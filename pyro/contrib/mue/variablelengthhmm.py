@@ -46,10 +46,10 @@ class VariableLengthDiscreteHMM(TorchDistribution):
             batch_shape, event_shape, validate_args=validate_args)
 
     def log_prob(self, value):
-        """Warning: like in pyro's DiscreteHMM, the probability of the first
-        state is computed as
+        """Warning: unlike in pyro's DiscreteHMM, which computes the
+        probability of the first state as
         initial.T @ transition @ emission
-        rather than the more conventional HMM parameterization,
+        this distribution uses the standard HMM convention,
         initial.T @ emission
         """
         # observation_logits:
@@ -61,7 +61,7 @@ class VariableLengthDiscreteHMM(TorchDistribution):
         # transition_logits:
         # batch_shape (option) x state_dim (old) x state_dim (new)
         # result 1
-        # batch_shape (option) x num_steps x state_dim (old) x state_dim (new)
+        # batch_shape (option) x num_steps-1 x state_dim (old) x state_dim (new)
         # result 2
         # batch_shape (option) x state_dim (old) x state_dim (new)
         # initial_logits
@@ -73,13 +73,14 @@ class VariableLengthDiscreteHMM(TorchDistribution):
         value_logits = torch.matmul(
                 value, torch.transpose(self.observation_logits, -2, -1))
         result = (self.transition_logits.unsqueeze(-3) +
-                  value_logits.unsqueeze(-2))
+                  value_logits[..., 1:, None, :])
 
         # Eliminate time dimension.
         result = _sequential_logmatmulexp(result)
 
         # Combine initial factor.
-        result = self.initial_logits + result.logsumexp(-1)
+        result = (self.initial_logits + value_logits[..., 0, :]
+                  + result.logsumexp(-1))
 
         # Marginalize out final state.
         result = result.logsumexp(-1)
