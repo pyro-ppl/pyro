@@ -34,8 +34,8 @@ class VariableLengthDiscreteHMM(TorchDistribution):
         shape = broadcast_shape(initial_logits.shape[:-1] + (1,),
                                 transition_logits.shape[:-2],
                                 observation_logits.shape[:-2])
-        batch_shape = shape[:-1]
-        event_shape = observation_logits.shape[-1:]
+        batch_shape = shape
+        event_shape = (1, observation_logits.shape[-1])
         self.initial_logits = (initial_logits -
                                initial_logits.logsumexp(-1, True))
         self.transition_logits = (transition_logits -

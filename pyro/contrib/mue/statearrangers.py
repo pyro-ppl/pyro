@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 import torch
-from pyro.nn import PyroModule
+import torch.nn as nn
 
 
 def mg2k(m, g):
@@ -9,7 +9,7 @@ def mg2k(m, g):
     return 2*m + 1 - g
 
 
-class profile(PyroModule):
+class profile(nn.Module):
 
     def __init__(self, M, epsilon=1e-32):
         super().__init__()
