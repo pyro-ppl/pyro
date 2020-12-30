@@ -521,6 +521,54 @@ def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, histor
             assert_close(actual_grad, expected_grad)
 
 
+def model_9(data, vectorized):
+    theta_dim, m_dim = 3, 2
+    theta_init = pyro.param("theta_init", lambda: torch.rand(theta_dim), constraint=constraints.simplex)
+    theta_trans = pyro.param("theta_trans", lambda: torch.rand((theta_dim, theta_dim)), constraint=constraints.simplex)
+    m_prior = pyro.param("m_prior", lambda: torch.rand((theta_dim, m_dim)), constraint=constraints.simplex)
+    locs = pyro.param("locs", lambda: torch.rand(m_dim))
+
+    with pyro.plate("targets", size=data.shape[-2], dim=-2) as targets:
+        targets = targets[:, None]
+        theta_prev = None
+        markov_loop = \
+            pyro.vectorized_markov(name="frames", size=data.shape[-1], dim=-1) if vectorized \
+            else pyro.markov(range(data.shape[-1]))
+        for i in markov_loop:
+            theta_curr = pyro.sample(
+                "theta_{}".format(i), dist.Categorical(
+                    theta_init if isinstance(i, int) and i < 1 else theta_trans[theta_prev]),
+                infer={"enumerate": "parallel"})
+            m = pyro.sample("m_{}".format(i), dist.Categorical(m_prior[theta_curr]),
+                            infer={"enumerate": "parallel"})
+            pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., m], 1.), obs=Vindex(data)[targets, i])
+            theta_prev = theta_curr
+
+
+def guide_9(data, vectorized):
+    theta_dim, m_dim = 3, 2
+    theta_init = pyro.param("theta_init", lambda: torch.rand(theta_dim), constraint=constraints.simplex)
+    theta_trans = pyro.param("theta_trans", lambda: torch.rand((theta_dim, theta_dim)), constraint=constraints.simplex)
+    m_probs = pyro.param("m_probs",
+                         lambda: torch.rand((data.shape[-2], data.shape[-1], m_dim)),
+                         constraint=constraints.simplex)
+
+    with pyro.plate("targets", size=data.shape[-2], dim=-2) as targets:
+        targets = targets[:, None]
+        theta_prev = None
+        markov_loop = \
+            pyro.vectorized_markov(name="frames", size=data.shape[-1], dim=-1) if vectorized \
+            else pyro.markov(range(data.shape[-1]))
+        for i in markov_loop:
+            theta_curr = pyro.sample(
+                "theta_{}".format(i), dist.Categorical(
+                    theta_init if isinstance(i, int) and i < 1 else theta_trans[theta_prev]),
+                infer={"enumerate": "parallel"})
+            pyro.sample("m_{}".format(i), dist.Categorical(Vindex(m_probs)[targets, i]),
+                        infer={"enumerate": "parallel"})
+            theta_prev = theta_curr
+
+
 def model_10(data, vectorized):
     init_probs = torch.tensor([0.5, 0.5])
     transition_probs = pyro.param("transition_probs",
@@ -535,7 +583,8 @@ def model_10(data, vectorized):
         else pyro.markov(range(len(data)))
     for i in markov_loop:
         probs = init_probs if x is None else transition_probs[x]
-        x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+        x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
+                        infer={"enumerate": "parallel"})
         pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
 
 
@@ -556,23 +605,25 @@ def guide_10(data, vectorized):
 
 @pytest.mark.parametrize("model,guide,data,", [
     (model_10, guide_10, torch.ones(5)),
+    (model_9, guide_9, torch.rand(5, 5)),
 ])
 def test_guide_enumerated_elbo(model, guide, data):
     pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
-        with pytest.raises(
-                NotImplementedError,
-                match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
+        #  with pytest.raises(
+        #          NotImplementedError,
+        #          match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
 
-            elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-            expected_loss = elbo.loss_and_grads(model, guide, data, False)
-            expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+        elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
+        expected_loss = elbo.loss_and_grads(model, guide, data, False)
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
-            vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-            actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
-            actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
+        vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
-            assert_close(actual_loss, expected_loss)
-            for actual_grad, expected_grad in zip(actual_grads, expected_grads):
-                assert_close(actual_grad, expected_grad)
+        breakpoint()
+        assert_close(actual_loss, expected_loss)
+        for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+            assert_close(actual_grad, expected_grad)

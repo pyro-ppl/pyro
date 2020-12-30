@@ -62,12 +62,12 @@ class TraceMarkovEnum_ELBO(ELBO):
         guide_terms = terms_from_trace(guide_tr)
         model_terms = terms_from_trace(model_tr)
 
-        # guide side enumeration is not supported
-        if any(guide_terms["plate_to_step"].values()):
-            raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration")
+        #  # guide side enumeration is not supported
+        #  if any(guide_terms["plate_to_step"].values()):
+        #      raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration")
 
         # build up a lazy expression for the elbo
-        with funsor.interpreter.interpretation(funsor.terms.lazy):
+        with funsor.interpreter.interpretation(funsor.terms.eager):
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
@@ -93,11 +93,13 @@ class TraceMarkovEnum_ELBO(ELBO):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 # compute the expected cost term E_q[logp] or E_q[-logq]
+                markov_dims = frozenset({
+                    plate for plate, step in guide_terms["plate_to_step"].items() if step})
                 elbo_term = funsor.sum_product.compute_expectation(
                     guide_terms["log_measures"],
                     cost,
                     plate_to_step=guide_terms["plate_to_step"],
-                    eliminate=(plate_vars | guide_terms["measure_vars"])
+                    eliminate=(plate_vars | guide_terms["measure_vars"] | markov_dims)
                 )
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
