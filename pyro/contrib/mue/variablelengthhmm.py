@@ -3,8 +3,8 @@
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.hmm import _sequential_logmatmulexp
+from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
 

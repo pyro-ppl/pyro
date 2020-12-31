@@ -5,6 +5,9 @@
 A PCA model with a MuE emission (FactorMuE). Uses the MuE package.
 """
 
+import datetime
+
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
@@ -13,16 +16,10 @@ from torch.optim import Adam
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.optim import MultiStepLR
-from pyro.infer import SVI, Trace_ELBO
-
 from pyro.contrib.mue.statearrangers import profile
 from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
-
-import datetime
-import matplotlib.pyplot as plt
-
-import pdb
+from pyro.infer import SVI, Trace_ELBO
+from pyro.optim import MultiStepLR
 
 
 class Encoder(nn.Module):
@@ -183,7 +180,7 @@ class FactorMuE(nn.Module):
         z_loc = self.encoder(data)[0]
         # Reconstruct
         latent_seq = self.decoder(z_loc)
-        # Construct ancestral.
+        # Construct ancestral sequence.
         ancestor_seq_logits = latent_seq[..., 0, :, :] * softplus(inverse_temp)
         ancestor_seq_logits = (ancestor_seq_logits -
                                ancestor_seq_logits.logsumexp(-1, True))
@@ -204,6 +201,7 @@ def main():
         mult_dat = 10
         mult_step = 400
 
+    # Construct example dataset.
     xs = [torch.tensor([[0., 1.],
                         [1., 0.],
                         [0., 1.],
@@ -242,10 +240,6 @@ def main():
     losses = []
     t0 = datetime.datetime.now()
     for step in range(n_steps):
-
-        #trace = poutine.trace(poutine.enum(model.model, first_available_dim=-3)).get_trace(data)
-        #trace.compute_log_prob()
-        #print(trace.nodes)
 
         loss = svi.step(data)
         losses.append(loss)
