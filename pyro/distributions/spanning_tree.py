@@ -170,6 +170,29 @@ class SpanningTree(TorchDistribution):
         trees = enumerate_spanning_trees(self.num_vertices)
         return torch.tensor(trees, dtype=torch.long)
 
+    def edge_mean(self):
+        """
+        Computes marginal probabilities of each edge being active.
+
+        ..note:: This is similar to other distributions' ``.mean()``
+            method, but with a different shape because this distribution's
+            values are note encoded as binary matrices.
+
+        :returns: A symmetric square ``(V,V)``-shaped matrix with values
+            in ``[0,1]`` denoting the marginal probability of each edge
+            being in a sampled value.
+        :rtype: Tensor
+        """
+        V = self.num_vertices
+        v1, v2 = make_complete_graph(V).unbind(0)
+        logits = self.edge_logits - self.edge_logits.max()
+        w = self.edge_logits.new_zeros(V, V)
+        w[v1, v2] = w[v2, v1] = logits.exp()
+        laplacian = w.sum(-1).diag_embed() - w
+        inv = (laplacian + 1 / V).pinverse()
+        resistance = inv.diag() + inv.diag()[..., None] - 2 * inv
+        return resistance * w
+
 
 ################################################################################
 # Sampler implementation.
