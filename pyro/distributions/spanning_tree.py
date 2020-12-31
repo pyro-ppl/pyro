@@ -170,6 +170,14 @@ class SpanningTree(TorchDistribution):
         trees = enumerate_spanning_trees(self.num_vertices)
         return torch.tensor(trees, dtype=torch.long)
 
+    def mode(self):
+        """
+        :returns: The maximum weight spanning tree.
+        :rtype: Tensor
+        """
+        backend = self.sampler_options.get("backend", "python")
+        return find_best_tree(self.edge_logits, backend=backend)
+
     def edge_mean(self):
         """
         Computes marginal probabilities of each edge being active.
@@ -453,6 +461,62 @@ def sample_tree(edge_logits, init_edges=None, mcmc_steps=1, backend="python"):
     for step in range(mcmc_steps):
         edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
     return edges
+
+
+@torch.no_grad()
+def _find_best_tree(edge_logits):
+    K = len(edge_logits)
+    V = int(round(0.5 + (0.25 + 2 * K)**0.5))
+    assert K == V * (V - 1) // 2
+    E = V - 1
+    grid = make_complete_graph(V)
+
+    # Each of E edges in the tree is stored as an id k in [0, K) indexing into
+    # the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
+    edge_ids = torch.empty((E,), dtype=torch.long)
+    # This maps each vertex to whether it is a member of the cumulative tree.
+    components = torch.zeros(V, dtype=torch.bool)
+
+    # Find the first edge.
+    k = edge_logits.argmax(0).item()
+    components[grid[:, k]] = 1
+    edge_ids[0] = k
+
+    # Find edges connecting the cumulative tree to a new leaf.
+    for e in range(1, E):
+        c1, c2 = components[grid]
+        mask = (c1 != c2)
+        valid_logits = edge_logits[mask]
+        k = valid_logits.argmax(0).item()
+        k = mask.nonzero(as_tuple=False)[k]
+        components[grid[:, k]] = 1
+        edge_ids[e] = k
+
+    # Convert edge ids to a canonical list of pairs.
+    edge_ids = edge_ids.sort()[0]
+    edges = torch.empty((E, 2), dtype=torch.long)
+    edges[:, 0] = grid[0, edge_ids]
+    edges[:, 1] = grid[1, edge_ids]
+    return edges
+
+
+def find_best_tree(edge_logits, backend="python"):
+    """
+    Find the maximum weight spanning tree of a dense weighted graph.
+
+    :param torch.Tensor edge_logits: A length-K array of nonnormalized log
+        probabilities.
+    :returns: An E x 2 tensor of edges in the form of (vertex,vertex) pairs.
+        Each edge should be sorted and the entire tensor should be
+        lexicographically sorted.
+    :rtype: torch.Tensor
+    """
+    if backend == "python":
+        return _find_best_tree(edge_logits)
+    elif backend == "cpp":
+        return _get_cpp_module().find_best_tree(edge_logits)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
 
 
 ################################################################################
