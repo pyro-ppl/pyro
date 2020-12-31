@@ -8,11 +8,12 @@ A PCA model with a MuE emission (FactorMuE). Uses the MuE package.
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
+from torch.optim import Adam
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.optim import Adam
+from pyro.optim import MultiStepLR
 from pyro.infer import SVI, Trace_ELBO
 
 from pyro.contrib.mue.statearrangers import profile
@@ -137,17 +138,12 @@ class FactorMuE(nn.Module):
             initial_logits, transition_logits, observation_logits = (
                     self.statearrange(ancestor_seq_logits, insert_seq_logits,
                                       insert_logits, delete_logits))
-            print('initial_logits', initial_logits)
-            print('transition_logits', transition_logits)
             # Draw samples.
             pyro.sample("obs",
                         VariableLengthDiscreteHMM(initial_logits,
                                                   transition_logits,
                                                   observation_logits),
                         obs=data)
-            print(VariableLengthDiscreteHMM(initial_logits,
-                                      transition_logits,
-                                      observation_logits).log_prob(data))
 
     def guide(self, data):
         # Register encoder with pyro.
@@ -159,8 +155,6 @@ class FactorMuE(nn.Module):
                                  * self.indel_prior)
         insert_q_sd = pyro.param("insert_q_sd",
                                  torch.zeros(self.indel_shape))
-        print('insert_q_sd', insert_q_mn)
-        print('softplus insert', softplus(insert_q_sd))
         pyro.sample("insert", dist.Normal(
                 insert_q_mn, softplus(insert_q_sd)).to_event(3))
         delete_q_mn = pyro.param("delete_q_mn",
@@ -208,7 +202,7 @@ def main():
         mult_step = 1
     else:
         mult_dat = 10
-        mult_step = 100
+        mult_step = 400
 
     xs = [torch.tensor([[0., 1.],
                         [1., 0.],
@@ -233,11 +227,15 @@ def main():
                      [xs[2][None, :, :] for j in range(4*mult_dat)], dim=0)
     # Set up inference.
     obs_seq_length, alphabet_length, z_dim = 6, 2, 2
-    adam_params = {"lr": 0.1, "betas": (0.90, 0.999)}
-    optimizer = Adam(adam_params)
+    # adam_params = {"lr": 0.1, "betas": (0.90, 0.999)}
+    scheduler = MultiStepLR({'optimizer': Adam,
+                             'optim_args': {'lr': 0.1},
+                             'milestones': [20, 100, 1000, 2000],
+                             'gamma': 0.5})
+    # optimizer = Adam(adam_params)
     model = FactorMuE(obs_seq_length, alphabet_length, z_dim)
 
-    svi = SVI(model.model, model.guide, optimizer, loss=Trace_ELBO())
+    svi = SVI(model.model, model.guide, scheduler, loss=Trace_ELBO())
     n_steps = 10*mult_step
 
     # Run inference.
@@ -251,8 +249,9 @@ def main():
 
         loss = svi.step(data)
         losses.append(loss)
+        scheduler.step()
         if step % 10 == 0:
-            print(loss, ' ', datetime.datetime.now() - t0)
+            print(step, loss, ' ', datetime.datetime.now() - t0)
 
     # Plots.
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
