@@ -13,7 +13,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.optim import Adam
 from pyro.infer import SVI, Trace_ELBO
-import pyro.poutine as poutine
 
 from pyro.contrib.mue.statearrangers import profile
 from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
@@ -32,6 +31,7 @@ class ProfileHMM(nn.Module):
         self.latent_seq_length = latent_seq_length
         assert isinstance(alphabet_length, int) and alphabet_length > 0
         self.alphabet_length = alphabet_length
+
         self.seq_shape = (latent_seq_length+1, alphabet_length)
         self.indel_shape = (latent_seq_length+1, 3, 2)
 
