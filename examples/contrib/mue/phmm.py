@@ -5,21 +5,22 @@
 A standard profile HMM model example, using the MuE package.
 """
 
+import argparse
+import datetime
+import matplotlib.pyplot as plt
+
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
 
 import pyro
 import pyro.distributions as dist
-from pyro.optim import Adam
-from pyro.infer import SVI, Trace_ELBO
 
 from pyro.contrib.mue.statearrangers import profile
 from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
 
-import argparse
-import datetime
-import matplotlib.pyplot as plt
+from pyro.infer import SVI, Trace_ELBO
+from pyro.optim import Adam
 
 
 class ProfileHMM(nn.Module):
@@ -162,7 +163,7 @@ def main(args):
     plt.plot(losses)
     plt.xlabel('step')
     plt.ylabel('loss')
-    plt.savefig('phmm.loss_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm_plot.loss_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     ancestor_seq = pyro.param("ancestor_seq_q_mn").detach()
@@ -171,7 +172,7 @@ def main(args):
     plt.plot(ancestor_seq_expect[:, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of character 1')
-    plt.savefig('phmm.ancestor_seq_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm_plot.ancestor_seq_prob_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     insert = pyro.param("insert_q_mn").detach()
@@ -179,14 +180,14 @@ def main(args):
     plt.plot(insert_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of insert')
-    plt.savefig('phmm.insert_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm_plot.insert_prob_{}.pdf'.format(time_stamp))
     plt.figure(figsize=(6, 6))
     delete = pyro.param("delete_q_mn").detach()
     delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
     plt.plot(delete_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of delete')
-    plt.savefig('phmm.delete_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm_plot.delete_prob_{}.pdf'.format(time_stamp))
 
 
 if __name__ == '__main__':

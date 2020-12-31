@@ -5,6 +5,10 @@
 A PCA model with a MuE emission (FactorMuE). Uses the MuE package.
 """
 
+import argparse
+import datetime
+import matplotlib.pyplot as plt
+
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
@@ -12,16 +16,13 @@ from torch.optim import Adam
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
-from pyro.optim import MultiStepLR
-from pyro.infer import SVI, Trace_ELBO
 
 from pyro.contrib.mue.statearrangers import profile
 from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
 
-import argparse
-import datetime
-import matplotlib.pyplot as plt
+from pyro.infer import SVI, Trace_ELBO
+from pyro.optim import MultiStepLR
+import pyro.poutine as poutine
 
 
 class Encoder(nn.Module):
@@ -255,14 +256,14 @@ def main(args):
     plt.plot(losses)
     plt.xlabel('step')
     plt.ylabel('loss')
-    plt.savefig('FactorMuE.loss_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE_plot.loss_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     latent = model.encoder(data)[0].detach()
     plt.scatter(latent[:, 0], latent[:, 1])
     plt.xlabel('z_1')
     plt.ylabel('z_2')
-    plt.savefig('FactorMuE.latent_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE_plot.latent_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     decoder_bias = pyro.param('decoder$$$f.bias').detach()
@@ -271,7 +272,7 @@ def main(args):
     plt.plot(decoder_bias[0, 0, :, 1])
     plt.xlabel('position')
     plt.ylabel('bias for character 1')
-    plt.savefig('FactorMuE.decoder_bias_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE_plot.decoder_bias_{}.pdf'.format(time_stamp))
 
     for xi, x in enumerate(xs):
         reconstruct_x = model.reconstruct_ancestor_seq(
@@ -282,7 +283,7 @@ def main(args):
         plt.xlabel('position')
         plt.ylabel('probability of character 1')
         plt.legend()
-        plt.savefig('FactorMuE.reconstruction_{}_{}.pdf'.format(
+        plt.savefig('FactorMuE_plot.reconstruction_{}_{}.pdf'.format(
                         xi, time_stamp))
 
     plt.figure(figsize=(6, 6))
@@ -291,14 +292,14 @@ def main(args):
     plt.plot(insert_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of insert')
-    plt.savefig('FactorMuE.insert_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE_plot.insert_prob_{}.pdf'.format(time_stamp))
     plt.figure(figsize=(6, 6))
     delete = pyro.param("delete_q_mn").detach()
     delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
     plt.plot(delete_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of delete')
-    plt.savefig('FactorMuE.delete_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE_plot.delete_prob_{}.pdf'.format(time_stamp))
 
 
 if __name__ == '__main__':
