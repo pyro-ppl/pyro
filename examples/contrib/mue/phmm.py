@@ -17,6 +17,7 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.contrib.mue.statearrangers import profile
 from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
 
+import argparse
 import datetime
 import matplotlib.pyplot as plt
 
@@ -109,8 +110,12 @@ class ProfileHMM(nn.Module):
                 delete_q_mn, softplus(delete_q_sd)).to_event(3))
 
 
-def main():
-    small_test = False
+def main(args):
+
+    torch.manual_seed(0)
+    torch.set_default_tensor_type('torch.DoubleTensor')
+
+    small_test = args.test
 
     if small_test:
         mult_dat = 1
@@ -157,7 +162,7 @@ def main():
     plt.plot(losses)
     plt.xlabel('step')
     plt.ylabel('loss')
-    plt.savefig('phmm/loss_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm.loss_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     ancestor_seq = pyro.param("ancestor_seq_q_mn").detach()
@@ -166,7 +171,7 @@ def main():
     plt.plot(ancestor_seq_expect[:, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of character 1')
-    plt.savefig('phmm/ancestor_seq_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm.ancestor_seq_prob_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     insert = pyro.param("insert_q_mn").detach()
@@ -174,15 +179,20 @@ def main():
     plt.plot(insert_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of insert')
-    plt.savefig('phmm/insert_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm.insert_prob_{}.pdf'.format(time_stamp))
     plt.figure(figsize=(6, 6))
     delete = pyro.param("delete_q_mn").detach()
     delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
     plt.plot(delete_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of delete')
-    plt.savefig('phmm/delete_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm.delete_prob_{}.pdf'.format(time_stamp))
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(
+        description="Basic profile HMM model (constant + MuE).")
+    parser.add_argument('-t', '--test', action='store_true', default=False,
+                        help='small dataset, a few steps')
+    args = parser.parse_args()
+    main(args)

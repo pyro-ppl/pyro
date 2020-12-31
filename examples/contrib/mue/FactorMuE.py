@@ -5,9 +5,6 @@
 A PCA model with a MuE emission (FactorMuE). Uses the MuE package.
 """
 
-import datetime
-
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
@@ -16,10 +13,15 @@ from torch.optim import Adam
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.optim import MultiStepLR
+from pyro.infer import SVI, Trace_ELBO
+
 from pyro.contrib.mue.statearrangers import profile
 from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
-from pyro.infer import SVI, Trace_ELBO
-from pyro.optim import MultiStepLR
+
+import argparse
+import datetime
+import matplotlib.pyplot as plt
 
 
 class Encoder(nn.Module):
@@ -187,12 +189,12 @@ class FactorMuE(nn.Module):
         return torch.exp(ancestor_seq_logits)
 
 
-def main():
+def main(args):
 
     torch.manual_seed(9)
     torch.set_default_tensor_type('torch.DoubleTensor')
 
-    small_test = False
+    small_test = args.test
 
     if small_test:
         mult_dat = 1
@@ -253,14 +255,14 @@ def main():
     plt.plot(losses)
     plt.xlabel('step')
     plt.ylabel('loss')
-    plt.savefig('FactorMuE/loss_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE.loss_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     latent = model.encoder(data)[0].detach()
     plt.scatter(latent[:, 0], latent[:, 1])
     plt.xlabel('z_1')
     plt.ylabel('z_2')
-    plt.savefig('FactorMuE/latent_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE.latent_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     decoder_bias = pyro.param('decoder$$$f.bias').detach()
@@ -269,7 +271,7 @@ def main():
     plt.plot(decoder_bias[0, 0, :, 1])
     plt.xlabel('position')
     plt.ylabel('bias for character 1')
-    plt.savefig('FactorMuE/decoder_bias_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE.decoder_bias_{}.pdf'.format(time_stamp))
 
     for xi, x in enumerate(xs):
         reconstruct_x = model.reconstruct_ancestor_seq(
@@ -280,7 +282,7 @@ def main():
         plt.xlabel('position')
         plt.ylabel('probability of character 1')
         plt.legend()
-        plt.savefig('FactorMuE/reconstruction_{}_{}.pdf'.format(
+        plt.savefig('FactorMuE.reconstruction_{}_{}.pdf'.format(
                         xi, time_stamp))
 
     plt.figure(figsize=(6, 6))
@@ -289,15 +291,19 @@ def main():
     plt.plot(insert_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of insert')
-    plt.savefig('FactorMuE/insert_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE.insert_prob_{}.pdf'.format(time_stamp))
     plt.figure(figsize=(6, 6))
     delete = pyro.param("delete_q_mn").detach()
     delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
     plt.plot(delete_expect[:, :, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of delete')
-    plt.savefig('FactorMuE/delete_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('FactorMuE.delete_prob_{}.pdf'.format(time_stamp))
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="Basic Factor MuE model.")
+    parser.add_argument('-t', '--test', action='store_true', default=False,
+                        help='small dataset, a few steps')
+    args = parser.parse_args()
+    main(args)
