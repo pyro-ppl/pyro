@@ -27,6 +27,7 @@ DISTS = [
     dist.Laplace,
     dist.LinearHMM,
     dist.LogNormal,
+    dist.MaskedDistribution,
     dist.MultivariateNormal,
     dist.NegativeBinomial,
     dist.Normal,
@@ -39,6 +40,10 @@ DISTS = [
 def random_dist(Dist, shape, transform=None):
     if Dist is dist.FoldedDistribution:
         return Dist(random_dist(dist.Normal, shape))
+    if Dist is dist.MaskedDistribution:
+        base_dist = random_dist(dist.Normal, shape)
+        mask = torch.empty(shape, dtype=torch.bool).bernoulli_(0.5)
+        return base_dist.mask(mask)
     elif Dist in (dist.GaussianHMM, dist.LinearHMM):
         batch_shape, duration, obs_dim = shape[:-2], shape[-2], shape[-1]
         hidden_dim = obs_dim + 1

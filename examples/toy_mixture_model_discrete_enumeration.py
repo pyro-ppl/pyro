@@ -84,7 +84,6 @@ def guide(prior, obs, num_obs):
 
 
 def train(prior, data, num_steps, num_obs):
-    pyro.enable_validation(True)
     pyro.clear_param_store()
     # max_plate_nesting = 1 because there is a single plate in the model
     loss_func = pyro.infer.TraceEnum_ELBO(max_plate_nesting=1)

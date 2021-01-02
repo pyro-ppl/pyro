@@ -253,6 +253,13 @@ OMTMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+OneOneMatching
+--------------
+.. autoclass:: pyro.distributions.OneOneMatching
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 OneTwoMatching
 --------------
 .. autoclass:: pyro.distributions.OneTwoMatching

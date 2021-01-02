@@ -140,8 +140,8 @@ def enumerate_site(dist, msg):
 
 class EnumMessenger(NamedMessenger):
     """
-    This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
-    for each discrete sample site.
+    This version of :class:`~EnumMessenger` uses :func:`~pyro.contrib.funsor.to_data`
+    to allocate a fresh enumeration dim for each discrete sample site.
     """
     def _pyro_sample(self, msg):
         if msg["done"] or msg["is_observed"] or \

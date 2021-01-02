@@ -348,7 +348,6 @@ if __name__ == "__main__":
 
     pyro.set_rng_seed(args.rng_seed)
     # Enable validation checks
-    pyro.enable_validation(__debug__)
 
     # work around with the error "RuntimeError: received 0 items of ancdata"
     # see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823

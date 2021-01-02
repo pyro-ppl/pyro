@@ -116,7 +116,6 @@ class Model(ForecastingModel):
 
 
 def main(args):
-    pyro.enable_validation(__debug__)
     data, covariates = preprocess(args)
 
     # We will model positive count data by log1p-transforming it into real

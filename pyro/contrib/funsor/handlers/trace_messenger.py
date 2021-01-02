@@ -16,8 +16,8 @@ class TraceMessenger(OrigTraceMessenger):
     converting all distributions and values to Funsors as soon as they are available.
 
     Setting ``pack_online=False`` computes information necessary to do packing after execution.
-    Each sample site is annotated with a "dim_to_name" dictionary,
-    which can be passed directly to funsor.to_funsor.
+    Each sample site is annotated with a ``dim_to_name`` dictionary,
+    which can be passed directly to :func:`~pyro.contrib.funsor.to_funsor`.
     """
     def __init__(self, graph_type=None, param_only=None, pack_online=True):
         super().__init__(graph_type=graph_type, param_only=param_only)
@@ -37,7 +37,7 @@ class TraceMessenger(OrigTraceMessenger):
             if "value" not in msg["funsor"]:
                 # value_output = funsor.Reals[getattr(msg["fn"], "event_shape", ())]
                 msg["funsor"]["value"] = to_funsor(msg["value"], msg["funsor"]["fn"].inputs[msg["name"]])
-            if "log_prob" not in msg["funsor"]:
+            if "log_prob" not in msg["funsor"] and not msg["infer"].get("_do_not_trace"):
                 fn_masked = msg["fn"].mask(msg["mask"]) if msg["mask"] is not None else msg["fn"]
                 msg["funsor"]["log_prob"] = to_funsor(fn_masked.log_prob(msg["value"]), output=funsor.Real)
                 # TODO support this pattern which uses funsor directly - blocked by casting issues
@@ -51,3 +51,7 @@ class TraceMessenger(OrigTraceMessenger):
             msg["funsor"]["dim_to_name"].update(_DIM_STACK.names_from_batch_shape(
                 msg["value"].shape[:len(msg["value"]).shape - len(msg["fn"].event_shape)]))
         return super()._pyro_post_sample(msg)
+
+    def _pyro_post_markov_chain(self, msg):
+        # add step information to the trace
+        self.trace.add_node(msg["name"], **msg.copy())

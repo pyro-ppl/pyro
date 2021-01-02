@@ -9,7 +9,7 @@ from pyro.primitives import (  # noqa: F401
 )
 
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor  # noqa: F401
-from pyro.contrib.funsor.handlers import condition, do, markov  # noqa: F401
+from pyro.contrib.funsor.handlers import condition, do, markov, vectorized_markov  # noqa: F401
 from pyro.contrib.funsor.handlers import plate as _plate
 
 

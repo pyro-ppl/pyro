@@ -186,7 +186,7 @@ class PyroVAEImpl(VAE):
             z = pyro.sample('latent', Normal(z_mean, z_std).to_event(1))
             img = decoder.forward(z)
             pyro.sample('obs',
-                        Bernoulli(img).to_event(1),
+                        Bernoulli(img, validate_args=False).to_event(1),
                         obs=data.reshape(-1, 784))
 
     def guide(self, data):

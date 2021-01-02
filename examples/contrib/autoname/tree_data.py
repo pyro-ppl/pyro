@@ -72,7 +72,6 @@ def guide_recurse(data, latent):
 
 def main(args):
     pyro.set_rng_seed(0)
-    pyro.enable_validation(__debug__)
 
     optim = Adam({"lr": 0.1})
     inference = SVI(model, guide, optim, loss=Trace_ELBO())

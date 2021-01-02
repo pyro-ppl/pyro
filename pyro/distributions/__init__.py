@@ -43,6 +43,7 @@ from pyro.distributions.lkj import LKJCorrCholesky
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
+from pyro.distributions.one_one_matching import OneOneMatching
 from pyro.distributions.one_two_matching import OneTwoMatching
 from pyro.distributions.ordered_logistic import OrderedLogistic
 from pyro.distributions.polya_gamma import TruncatedPolyaGamma
@@ -107,6 +108,7 @@ __all__ = [
     "MixtureOfDiagNormalsSharedCovariance",
     "MultivariateStudentT",
     "OMTMultivariateNormal",
+    "OneOneMatching",
     "OneTwoMatching",
     "OrderedLogistic",
     "Rejector",

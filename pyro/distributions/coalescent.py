@@ -34,13 +34,15 @@ class CoalescentTimesConstraint(constraints.Constraint):
 
 class CoalescentTimes(TorchDistribution):
     """
-    Distribution over coalescent times given irregular sampled ``leaf_times``.
+    Distribution over sorted coalescent times given irregular sampled
+    ``leaf_times`` and constant population size.
 
-    Sample values will be sorted sets of binary coalescent times. Each sample
-    ``value`` will have cardinality ``value.size(-1) = leaf_times.size(-1) -
-    1``, so that phylogenies are complete binary trees.  This distribution can
-    thus be batched over multiple samples of phylogenies given fixed (number
-    of) leaf times, e.g. over phylogeny samples from BEAST or MrBayes.
+    Sample values will be **sorted** sets of binary coalescent times. Each
+    sample ``value`` will have cardinality ``value.size(-1) =
+    leaf_times.size(-1) - 1``, so that phylogenies are complete binary trees.
+    This distribution can thus be batched over multiple samples of phylogenies
+    given fixed (number of) leaf times, e.g. over phylogeny samples from BEAST
+    or MrBayes.
 
     **References**
 
@@ -54,13 +56,19 @@ class CoalescentTimes(TorchDistribution):
     :param torch.Tensor leaf_times: Vector of times of sampling events, i.e.
         leaf nodes in the phylogeny. These can be arbitrary real numbers with
         arbitrary order and duplicates.
+    :param torch.Tensor rate: Base coalescent rate (pairwise rate of
+        coalescence) under a constant population size model. Defaults to 1.
     """
-    arg_constraints = {"leaf_times": constraints.real}
+    arg_constraints = {"leaf_times": constraints.real,
+                       "rate": constraints.positive}
 
-    def __init__(self, leaf_times, *, validate_args=None):
+    def __init__(self, leaf_times, rate=1., *, validate_args=None):
+        rate = torch.as_tensor(rate, dtype=leaf_times.dtype,
+                               device=leaf_times.device)
+        batch_shape = broadcast_shape(rate.shape, leaf_times.shape[:-1])
         event_shape = (leaf_times.size(-1) - 1,)
-        batch_shape = leaf_times.shape[:-1]
         self.leaf_times = leaf_times
+        self.rate = rate
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @constraints.dependent_property
@@ -77,7 +85,8 @@ class CoalescentTimes(TorchDistribution):
         # in the number of lineages, which changes at each event.
         binomial = phylogeny.binomial[..., :-1]
         interval = phylogeny.times[..., :-1] - phylogeny.times[..., 1:]
-        log_prob = -(binomial * interval).sum(-1)
+        log_prob = (self.rate.log() * coal_times.size(-1)
+                    - self.rate * (binomial * interval).sum(-1))
 
         # Scaling by those rates and accounting for log|jacobian|, the density
         # is that of a collection of independent Exponential intervals.
@@ -165,9 +174,6 @@ class CoalescentTimesWithRate(TorchDistribution):
         This has time complexity ``O(T + S N log(N))`` where ``T`` is the
         number of time steps, ``N`` is the number of leaves, and ``S =
         sample_shape.numel()`` is the number of samples of ``value``.
-
-        This is differentiable wrt ``rate_grid`` but neither ``leaf_times`` nor
-        ``value = coal_times``.
 
         :param torch.Tensor value: A tensor of coalescent times. These denote
             sets of size ``leaf_times.size(-1) - 1`` along the trailing
@@ -393,11 +399,19 @@ def _weak_memoize(fn):
     @functools.wraps(fn)
     def memoized_fn(*args):
         key = tuple(map(id, args))
-        if key not in cache:
-            cache[key] = fn(*args)
-            for arg in args:
-                weakref.finalize(arg, cache.pop, key, None)
-        return cache[key]
+
+        # Allow cache hit only when tensors have not since been mutated.
+        version = tuple(arg._version for arg in args)
+        if key in cache:
+            old_version, result = cache[key]
+            if old_version == version:
+                return result
+
+        result = fn(*args)
+        cache[key] = version, result
+        for arg in args:
+            weakref.finalize(arg, cache.pop, key, None)
+        return result
 
     return memoized_fn
 
@@ -412,8 +426,6 @@ _Phylogeny = namedtuple("_Phylogeny", (
 @torch.no_grad()
 def _make_phylogeny(leaf_times, coal_times):
     assert leaf_times.size(-1) == 1 + coal_times.size(-1)
-    assert not leaf_times.requires_grad
-    assert not coal_times.requires_grad
 
     # Expand shapes to match.
     N = leaf_times.size(-1)
