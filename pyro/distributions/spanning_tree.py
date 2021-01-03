@@ -184,9 +184,9 @@ class SpanningTree(TorchDistribution):
         """
         Computes marginal probabilities of each edge being active.
 
-        ..note:: This is similar to other distributions' ``.mean()``
+        .. note:: This is similar to other distributions' ``.mean()``
             method, but with a different shape because this distribution's
-            values are note encoded as binary matrices.
+            values are not encoded as binary matrices.
 
         :returns: A symmetric square ``(V,V)``-shaped matrix with values
             in ``[0,1]`` denoting the marginal probability of each edge
