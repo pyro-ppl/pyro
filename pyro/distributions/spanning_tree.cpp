@@ -175,8 +175,52 @@ at::Tensor sample_tree_approx(at::Tensor edge_logits) {
   return edges;
 }
 
+at::Tensor find_best_tree(at::Tensor edge_logits) {
+  torch::NoGradGuard no_grad;
+  const int K = edge_logits.size(0);
+  const int V = static_cast<int>(0.5 + std::sqrt(0.25 + 2 * K));
+  const int E = V - 1;
+  auto grid = make_complete_graph(V);
+
+  // Each of E edges in the tree is stored as an id k in [0, K) indexing into
+  // the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
+  auto edge_ids = torch::empty({E}, at::kLong);
+  // This maps each vertex to whether it is a member of the cumulative tree.
+  auto components = torch::zeros({V}, at::kBool);
+
+  // Find the first edge.
+  auto probs = (edge_logits - edge_logits.max()).exp();
+  int k = probs.argmax(0).item().to<int>();
+  components[grid[0][k]] = 1;
+  components[grid[1][k]] = 1;
+  edge_ids[0] = k;
+
+  // Find edges connecting the cumulative tree to a new leaf.
+  for (int e = 1; e != E; ++e) {
+    auto c1 = components.index_select(0, grid[0]);
+    auto c2 = components.index_select(0, grid[1]);
+    auto mask = c1.__xor__(c2);
+    auto valid_logits = edge_logits.masked_select(mask);
+    int k = valid_logits.argmax(0).item().to<int>();
+    k = mask.nonzero().view(-1)[k].item().to<int>();
+    components[grid[0][k]] = 1;
+    components[grid[1][k]] = 1;
+    edge_ids[e] = k;
+  }
+
+  // Convert edge ids to a canonical list of pairs.
+  edge_ids = std::get<0>(edge_ids.sort());
+  auto edges = torch::empty({E, 2}, at::kLong);
+  for (int e = 0; e != E; ++e) {
+    edges[e][0] = grid[0][edge_ids[e]];
+    edges[e][1] = grid[1][edge_ids[e]];
+  }
+  return edges;
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("sample_tree_mcmc", &sample_tree_mcmc, "Sample a random spanning tree using MCMC");
   m.def("sample_tree_approx", &sample_tree_approx, "Approximate sample a random spanning tree");
+  m.def("find_best_tree", &find_best_tree, "Finds a maximum weight spanning tree");
   m.def("make_complete_graph", &make_complete_graph, "Constructs a complete graph");
 }
