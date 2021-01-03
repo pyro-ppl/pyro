@@ -137,7 +137,7 @@ def test_edge_mean_function(num_edges):
     probs = d.log_prob(support).exp()[:, None].expand_as(k)
     expected = torch.zeros(K).scatter_add_(0, k.reshape(-1), probs.reshape(-1))
 
-    actual = d.edge_mean()
+    actual = d.edge_mean
     assert actual.shape == (V, V)
     v1, v2 = make_complete_graph(V)
     assert (actual[v1, v2] - expected).abs().max() < 1e-5, (actual, expected)
@@ -158,7 +158,7 @@ def test_mode(num_edges, backend):
     v2 = support[..., 1]
     k = v1 + v2 * (v2 - 1) // 2
     expected = support[edge_logits[k].sum(-1).argmax(0)]
-    actual = d.mode()
+    actual = d.mode
     assert (actual == expected).all()
 
 

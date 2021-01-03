@@ -170,6 +170,7 @@ class SpanningTree(TorchDistribution):
         trees = enumerate_spanning_trees(self.num_vertices)
         return torch.tensor(trees, dtype=torch.long)
 
+    @property
     def mode(self):
         """
         :returns: The maximum weight spanning tree.
@@ -178,6 +179,7 @@ class SpanningTree(TorchDistribution):
         backend = self.sampler_options.get("backend", "python")
         return find_best_tree(self.edge_logits, backend=backend)
 
+    @property
     def edge_mean(self):
         """
         Computes marginal probabilities of each edge being active.
