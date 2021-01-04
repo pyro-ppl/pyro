@@ -32,6 +32,7 @@ DISTS = [
     dist.NegativeBinomial,
     dist.Normal,
     dist.StudentT,
+    dist.TransformedDistribution,
     dist.ZeroInflatedPoisson,
     dist.ZeroInflatedNegativeBinomial,
 ]
@@ -40,10 +41,20 @@ DISTS = [
 def random_dist(Dist, shape, transform=None):
     if Dist is dist.FoldedDistribution:
         return Dist(random_dist(dist.Normal, shape))
-    if Dist is dist.MaskedDistribution:
+    elif Dist is dist.MaskedDistribution:
         base_dist = random_dist(dist.Normal, shape)
         mask = torch.empty(shape, dtype=torch.bool).bernoulli_(0.5)
         return base_dist.mask(mask)
+    elif Dist is dist.TransformedDistribution:
+        base_dist = random_dist(dist.Normal, shape)
+        transforms = [
+            dist.transforms.ExpTransform(),
+            dist.transforms.ComposeTransform([
+                dist.transforms.AffineTransform(1, 1),
+                dist.transforms.ExpTransform().inv,
+            ]),
+        ]
+        return dist.TransformedDistribution(base_dist, transforms)
     elif Dist in (dist.GaussianHMM, dist.LinearHMM):
         batch_shape, duration, obs_dim = shape[:-2], shape[-2], shape[-1]
         hidden_dim = obs_dim + 1
