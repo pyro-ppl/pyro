@@ -20,10 +20,10 @@ class UnitJacobianReparam(Reparam):
 
     :param transform: A transform whose Jacobian has determinant 1.
     :type transform: ~torch.distributions.transforms.Transform
+    :param str suffix: A suffix to append to the transformed site.
     :param bool experimental_allow_batch: EXPERIMENTAL allow coupling across a
         batch dimension. The targeted batch dimension and all batch dimensions
         to the right will be converted to event dimensions. Defaults to False.
-    :param str suffix: A suffix to append to the transformed site.
     """
     def __init__(self, transform, suffix="transformed", *,
                  experimental_allow_batch=False):
