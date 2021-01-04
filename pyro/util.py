@@ -317,7 +317,7 @@ def check_site_shape(site, max_plate_nesting):
                 'at site "{}", invalid log_prob shape'.format(site["name"]),
                 'Expected {}, actual {}'.format(expected_shape, actual_shape),
                 'Try one of the following fixes:',
-                '- enclose the batched tensor in a with plate(...): context',
+                '- enclose the batched tensor in a with pyro.plate(...): context',
                 '- .to_event(...) the distribution being sampled',
                 '- .permute() data dimensions']))
 

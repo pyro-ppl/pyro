@@ -737,9 +737,9 @@ def test_subsample_guide(auto_class, init_fn):
         num_time_steps = len(batch)
         result = [None] * num_time_steps
         drift = pyro.sample("drift", dist.LogNormal(-1, 0.5))
-        plate = pyro.plate("data", full_size, subsample=subsample)
-        assert plate.size == 50
-        with plate:
+        data_plate = pyro.plate("data", full_size, subsample=subsample)
+        assert data_plate.size == 50
+        with data_plate:
             z = 0.
             for t in range(num_time_steps):
                 z = pyro.sample("state_{}".format(t), dist.Normal(z, drift))

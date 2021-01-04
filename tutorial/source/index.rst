@@ -108,6 +108,7 @@ List of Tutorials
    scanvi
    cevae
    sparse_gamma
+   prodlda
 
 .. toctree::
    :maxdepth: 1
