@@ -52,8 +52,7 @@ class UnitJacobianReparam(Reparam):
                                                     old_shape + fn.event_shape,
                                                     new_shape + fn.event_shape)
                 for dim in range(-shift, 0):
-                    if old_shape[dim] != 1:
-                        stack.enter_context(block_plate(dim=dim))
+                    stack.enter_context(block_plate(dim=dim, strict=False))
 
             # Draw noise from the base distribution.
             transform = ComposeTransform([biject_to(fn.support).inv.with_cache(),

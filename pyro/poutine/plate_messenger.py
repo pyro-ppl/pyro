@@ -25,7 +25,7 @@ class PlateMessenger(SubsampleMessenger):
 
 
 @contextmanager
-def block_plate(name=None, dim=None):
+def block_plate(name=None, dim=None, *, strict=True):
     """
     EXPERIMENTAL Context manager to temporarily block a single enclosing plate.
 
@@ -50,7 +50,9 @@ def block_plate(name=None, dim=None):
 
     :param str name: Optional name of plate to match.
     :param int dim: Optional dim of plate to match. Must be negative.
-    :raises: ValueError if no enclosing plate was found.
+    :param bool strict: Whether to error if no matching plate is found.
+        Defaults to True.
+    :raises: ValueError if no enclosing plate was found and ``strict=True``.
     """
     if (name is not None) == (dim is not None):
         raise ValueError("Exactly one of name,dim must be specified")
@@ -70,5 +72,7 @@ def block_plate(name=None, dim=None):
 
     with block_messengers(predicate) as matches:
         if len(matches) != 1:
-            raise ValueError("block_plate matched {} messengers".format(len(matches)))
+            raise ValueError(f"block_plate matched {len(matches)} messengers. "
+                             "Try either removing the block_plate or "
+                             "setting strict=False.")
         yield
