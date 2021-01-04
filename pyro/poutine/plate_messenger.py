@@ -71,7 +71,7 @@ def block_plate(name=None, dim=None, *, strict=True):
             return messenger.dim == dim
 
     with block_messengers(predicate) as matches:
-        if len(matches) != 1:
+        if strict and len(matches) != 1:
             raise ValueError(f"block_plate matched {len(matches)} messengers. "
                              "Try either removing the block_plate or "
                              "setting strict=False.")
