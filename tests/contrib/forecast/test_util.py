@@ -33,6 +33,7 @@ DISTS = [
     dist.Normal,
     dist.StudentT,
     dist.TransformedDistribution,
+    dist.Uniform,
     dist.ZeroInflatedPoisson,
     dist.ZeroInflatedNegativeBinomial,
 ]
@@ -74,6 +75,10 @@ def random_dist(Dist, shape, transform=None):
         return Dist(base_dist)
     elif Dist is dist.MultivariateNormal:
         return random_mvn(shape[:-1], shape[-1])
+    elif Dist is dist.Uniform:
+        low = torch.randn(shape)
+        high = low + torch.randn(shape).exp()
+        return Dist(low, high)
     else:
         params = {
             name: transform_to(Dist.arg_constraints[name])(torch.rand(shape) - 0.5)

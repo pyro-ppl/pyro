@@ -191,6 +191,7 @@ UNIVARIATE_DISTS = {
     dist.Poisson: ("rate",),
     dist.Stable: ("stability", "skew", "scale", "loc"),
     dist.StudentT: ("df", "loc", "scale"),
+    dist.Uniform: ("low", "high"),
     dist.ZeroInflatedPoisson: ("rate", "gate"),
     dist.ZeroInflatedNegativeBinomial: ("total_count", "logits", "gate"),
 }
