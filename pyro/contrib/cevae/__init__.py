@@ -503,7 +503,8 @@ class CEVAE(nn.Module):
             batch_size=100,
             learning_rate=1e-3,
             learning_rate_decay=0.1,
-            weight_decay=1e-4):
+            weight_decay=1e-4,
+            log_every=100):
         """
         Train using :class:`~pyro.infer.svi.SVI` with the
         :class:`TraceCausalEffect_ELBO` loss.
@@ -520,6 +521,8 @@ class CEVAE(nn.Module):
             learning rate will be ``learning_rate * learning_rate_decay``.
             Defaults to 0.1.
         :param float weight_decay: Weight decay. Defaults to 1e-4.
+        :param int log_every: Log loss each this-many steps. If zero,
+            do not log loss. Defaulst to 100.
         :return: list of epoch losses
         """
         assert x.dim() == 2 and x.size(-1) == self.feature_dim
@@ -540,7 +543,8 @@ class CEVAE(nn.Module):
             for x, t, y in dataloader:
                 x = self.whiten(x)
                 loss = svi.step(x, t, y, size=len(dataset)) / len(dataset)
-                logger.debug("step {: >5d} loss = {:0.6g}".format(len(losses), loss))
+                if log_every and len(losses) % log_every == 0:
+                    logger.debug("step {: >5d} loss = {:0.6g}".format(len(losses), loss))
                 assert not torch_isnan(loss)
                 losses.append(loss)
         return losses
