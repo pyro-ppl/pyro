@@ -522,7 +522,7 @@ class CEVAE(nn.Module):
             Defaults to 0.1.
         :param float weight_decay: Weight decay. Defaults to 1e-4.
         :param int log_every: Log loss each this-many steps. If zero,
-            do not log loss. Defaulst to 100.
+            do not log loss. Defaults to 100.
         :return: list of epoch losses
         """
         assert x.dim() == 2 and x.size(-1) == self.feature_dim
