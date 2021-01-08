@@ -315,10 +315,9 @@ class VectorizedMarkovMessenger(NamedMessenger):
             assert msg["name"].endswith(str(self._indices))
             msg["name"] = msg["name"][:-len(str(self._indices))] + str(self._suffix)
         if str(self._suffix) != str(self._suffixes[-1]):
-            # do not trace auxiliary vars
-            msg["infer"]["_do_not_trace"] = True
-            msg["infer"]["is_auxiliary"] = True
-            msg["is_observed"] = False
+            # _do_not_score: record these sites when tracing for use with replay,
+            # but do not include them in ELBO computation.
+            msg["infer"]["_do_not_score"] = True
             # map auxiliary var to markov var name prefix
             # assuming that site name has a format: "markov_var{}".format(_suffix)
             # is there a better way?
@@ -333,7 +332,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             return
         # if last step in the for loop
         if str(self._suffix) == str(self._suffixes[-1]):
-            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg["funsor"] else \
+            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg.get("funsor", {}) else \
                 to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
             # for auxiliary sites in the log_prob
             for name in set(funsor_log_prob.inputs) & set(self._auxiliary_to_markov):

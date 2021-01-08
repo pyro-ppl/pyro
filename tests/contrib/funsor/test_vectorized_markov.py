@@ -4,6 +4,7 @@
 import pytest
 import torch
 
+from pyroapi import pyro_backend
 from torch.distributions import constraints
 
 from pyro.ops.indexing import Vindex
@@ -15,7 +16,7 @@ try:
     import pyro.contrib.funsor
     from pyroapi import distributions as dist
     funsor.set_backend("torch")
-    from pyroapi import handlers, pyro, pyro_backend, infer
+    from pyroapi import handlers, pyro, infer
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
@@ -39,8 +40,7 @@ def model_0(data, history, vectorized):
         for i in markov_loop:
             x_curr = pyro.sample(
                 "x_{}".format(i), dist.Categorical(
-                    init if isinstance(i, int) and i < 1 else trans[x_prev]),
-                infer={"enumerate": "parallel"})
+                    init if isinstance(i, int) and i < 1 else trans[x_prev]))
             with pyro.plate("tones", data.shape[2], dim=-1):
                 pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., x_curr], 1.),
                             obs=Vindex(data)[sequences, i])
@@ -64,8 +64,7 @@ def model_1(data, history, vectorized):
     for i in markov_loop:
         x_curr = pyro.sample(
             "x_{}".format(i), dist.Categorical(
-                init if isinstance(i, int) and i < 1 else trans[x_prev]),
-            infer={"enumerate": "parallel"})
+                init if isinstance(i, int) and i < 1 else trans[x_prev]))
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., x_curr], 1.), obs=data[i])
         x_prev = x_curr
@@ -89,8 +88,7 @@ def model_2(data, history, vectorized):
     for i in markov_loop:
         x_curr = pyro.sample(
             "x_{}".format(i), dist.Categorical(
-                x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]),
-            infer={"enumerate": "parallel"})
+                x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]))
         with pyro.plate("tones", data.shape[-1], dim=-1):
             y_curr = pyro.sample("y_{}".format(i), dist.Categorical(
                 y_init[x_curr] if isinstance(i, int) and i < 1 else Vindex(y_trans)[x_curr, y_prev]),
@@ -118,12 +116,10 @@ def model_3(data, history, vectorized):
     for i in markov_loop:
         w_curr = pyro.sample(
             "w_{}".format(i), dist.Categorical(
-                w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]),
-            infer={"enumerate": "parallel"})
+                w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]))
         x_curr = pyro.sample(
             "x_{}".format(i), dist.Categorical(
-                x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]),
-            infer={"enumerate": "parallel"})
+                x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]))
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample("y_{}".format(i), dist.Categorical(
                 Vindex(y_probs)[w_curr, x_curr]),
@@ -152,12 +148,10 @@ def model_4(data, history, vectorized):
     for i in markov_loop:
         w_curr = pyro.sample(
             "w_{}".format(i), dist.Categorical(
-                w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]),
-            infer={"enumerate": "parallel"})
+                w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]))
         x_curr = pyro.sample(
             "x_{}".format(i), dist.Categorical(
-                x_init[w_curr] if isinstance(i, int) and i < 1 else x_trans[w_curr, x_prev]),
-            infer={"enumerate": "parallel"})
+                x_init[w_curr] if isinstance(i, int) and i < 1 else x_trans[w_curr, x_prev]))
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample("y_{}".format(i), dist.Categorical(
                 Vindex(y_probs)[w_curr, x_curr]),
@@ -192,8 +186,7 @@ def model_5(data, history, vectorized):
             x_probs = Vindex(x_trans)[x_prev_2, x_prev]
 
         x_curr = pyro.sample(
-            "x_{}".format(i), dist.Categorical(x_probs),
-            infer={"enumerate": "parallel"})
+            "x_{}".format(i), dist.Categorical(x_probs))
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample("y_{}".format(i), dist.Categorical(
                 Vindex(y_probs)[x_curr]),
@@ -226,7 +219,7 @@ def model_6(data, history, vectorized):
             x_probs = Vindex(x_trans)[(i-1)[:, None], x_prev]
 
         x_curr = pyro.sample(
-            "x_{}".format(i), dist.Categorical(x_probs), infer={"enumerate": "parallel"})
+            "x_{}".format(i), dist.Categorical(x_probs))
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., x_curr], 1.), obs=data[i])
         x_prev = x_curr
@@ -255,17 +248,24 @@ def model_7(data, history, vectorized):
     for i in markov_loop:
         w_curr = pyro.sample(
             "w_{}".format(i), dist.Categorical(
-                w_init if isinstance(i, int) and i < 1 else w_trans[x_prev]),
-            infer={"enumerate": "parallel"})
+                w_init if isinstance(i, int) and i < 1 else w_trans[x_prev]))
         x_curr = pyro.sample(
             "x_{}".format(i), dist.Categorical(
-                x_init if isinstance(i, int) and i < 1 else x_trans[w_prev]),
-            infer={"enumerate": "parallel"})
+                x_init if isinstance(i, int) and i < 1 else x_trans[w_prev]))
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample("y_{}".format(i), dist.Categorical(
                 Vindex(y_probs)[w_curr, x_curr]),
                 obs=data[i])
         x_prev, w_prev = x_curr, w_curr
+
+
+def _guide_from_model(model):
+    try:
+        with pyro_backend("contrib.funsor"):
+            return handlers.block(infer.config_enumerate(model, default="parallel"),
+                                  lambda msg: msg.get("is_observed", False))
+    except KeyError:  # for test collection without funsor
+        return model
 
 
 @pytest.mark.parametrize("use_replay", [True, False])
@@ -282,16 +282,20 @@ def model_7(data, history, vectorized):
     (model_7, torch.ones((50, 4), dtype=torch.long), "wxy", 1),
 ])
 def test_enumeration(model, data, var, history, use_replay):
+    pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
         with handlers.enum():
+            enum_model = infer.config_enumerate(model, default="parallel")
             # sequential trace
-            trace = handlers.trace(model).get_trace(data, history, False)
+            trace = handlers.trace(enum_model).get_trace(data, history, False)
             # vectorized trace
-            vectorized_trace = handlers.trace(model).get_trace(data, history, True)
             if use_replay:
+                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(data, history, True)
                 vectorized_trace = handlers.trace(
-                        handlers.replay(model, trace=vectorized_trace)).get_trace(data, history, True)
+                    handlers.replay(model, trace=guide_trace)).get_trace(data, history, True)
+            else:
+                vectorized_trace = handlers.trace(enum_model).get_trace(data, history, True)
 
         # sequential factors
         factors = list()
@@ -357,7 +361,7 @@ def model_8(weeks_data, days_data, history, vectorized):
             x_probs = Vindex(x_trans)[x_prev]
 
         x_curr = pyro.sample(
-            "x_{}".format(i), dist.Categorical(x_probs), infer={"enumerate": "parallel"})
+            "x_{}".format(i), dist.Categorical(x_probs))
         pyro.sample("y_{}".format(i), dist.Categorical(Vindex(y_probs)[x_curr]), obs=weeks_data[i])
         x_prev = x_curr
 
@@ -372,7 +376,7 @@ def model_8(weeks_data, days_data, history, vectorized):
             w_probs = Vindex(w_trans)[w_prev]
 
         w_curr = pyro.sample(
-            "w_{}".format(j), dist.Categorical(w_probs), infer={"enumerate": "parallel"})
+            "w_{}".format(j), dist.Categorical(w_probs))
         pyro.sample("z_{}".format(j), dist.Categorical(Vindex(z_probs)[w_curr]), obs=days_data[j])
         w_prev = w_curr
 
@@ -383,17 +387,21 @@ def model_8(weeks_data, days_data, history, vectorized):
     (model_8, torch.ones(30), torch.zeros(50), "xy", "wz", 1),
 ])
 def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, use_replay):
+    pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
         with handlers.enum():
+            enum_model = infer.config_enumerate(model, default="parallel")
             # sequential factors
-            trace = handlers.trace(model).get_trace(weeks_data, days_data, history, False)
+            trace = handlers.trace(enum_model).get_trace(weeks_data, days_data, history, False)
 
             # vectorized trace
-            vectorized_trace = handlers.trace(model).get_trace(weeks_data, days_data, history, True)
             if use_replay:
+                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(weeks_data, days_data, history, True)
                 vectorized_trace = handlers.trace(
-                    handlers.replay(model, trace=vectorized_trace)).get_trace(weeks_data, days_data, history, True)
+                    handlers.replay(model, trace=guide_trace)).get_trace(weeks_data, days_data, history, True)
+            else:
+                vectorized_trace = handlers.trace(enum_model).get_trace(weeks_data, days_data, history, True)
 
         factors = list()
         # sequential weeks factors
@@ -482,6 +490,7 @@ def test_model_enumerated_elbo(model, guide, data, history):
         if history > 1:
             pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
 
+        model = infer.config_enumerate(model, default="parallel")
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
         expected_loss = elbo.loss_and_grads(model, guide, data, history, False)
         expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
@@ -508,6 +517,7 @@ def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, histor
 
     with pyro_backend("contrib.funsor"):
 
+        model = infer.config_enumerate(model, default="parallel")
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
         expected_loss = elbo.loss_and_grads(model, guide, weeks_data, days_data, history, False)
         expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
@@ -521,12 +531,12 @@ def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, histor
             assert_close(actual_grad, expected_grad)
 
 
-def model_9(data, vectorized):
+def model_9(data, history, vectorized):
     theta_dim, m_dim = 3, 2
     theta_init = pyro.param("theta_init", lambda: torch.rand(theta_dim), constraint=constraints.simplex)
     theta_trans = pyro.param("theta_trans", lambda: torch.rand((theta_dim, theta_dim)), constraint=constraints.simplex)
     m_prior = pyro.param("m_prior", lambda: torch.rand((theta_dim, m_dim)), constraint=constraints.simplex)
-    locs = pyro.param("locs", lambda: torch.rand(m_dim))
+    locs = pyro.param("locs", lambda: torch.rand(theta_dim))
 
     with pyro.plate("targets", size=data.shape[-2], dim=-2) as targets:
         targets = targets[:, None]
@@ -537,21 +547,21 @@ def model_9(data, vectorized):
         for i in markov_loop:
             theta_curr = pyro.sample(
                 "theta_{}".format(i), dist.Categorical(
-                    theta_init if isinstance(i, int) and i < 1 else theta_trans[theta_prev]),
-                infer={"enumerate": "parallel"})
-            m = pyro.sample("m_{}".format(i), dist.Categorical(m_prior[theta_curr]),
-                            infer={"enumerate": "parallel"})
-            pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., m], 1.), obs=Vindex(data)[targets, i])
+                    theta_init if isinstance(i, int) and i < 1 else theta_trans[theta_prev]))
+            m = pyro.sample("m_{}".format(i), dist.Categorical(m_prior[theta_curr]))
+            pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., theta_curr], 1.))
+            # pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., m], 1.), obs=Vindex(data)[targets, i])
             theta_prev = theta_curr
 
 
-def guide_9(data, vectorized):
+def guide_9(data, history, vectorized):
     theta_dim, m_dim = 3, 2
     theta_init = pyro.param("theta_init", lambda: torch.rand(theta_dim), constraint=constraints.simplex)
     theta_trans = pyro.param("theta_trans", lambda: torch.rand((theta_dim, theta_dim)), constraint=constraints.simplex)
     m_probs = pyro.param("m_probs",
                          lambda: torch.rand((data.shape[-2], data.shape[-1], m_dim)),
                          constraint=constraints.simplex)
+    locs = pyro.param("locs", lambda: torch.rand(theta_dim))
 
     with pyro.plate("targets", size=data.shape[-2], dim=-2) as targets:
         targets = targets[:, None]
@@ -564,12 +574,13 @@ def guide_9(data, vectorized):
                 "theta_{}".format(i), dist.Categorical(
                     theta_init if isinstance(i, int) and i < 1 else theta_trans[theta_prev]),
                 infer={"enumerate": "parallel"})
-            pyro.sample("m_{}".format(i), dist.Categorical(Vindex(m_probs)[targets, i]),
+            m = pyro.sample("m_{}".format(i), dist.Categorical(Vindex(m_probs)[targets, i]),
                         infer={"enumerate": "parallel"})
+            pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., theta_curr], 1.))
             theta_prev = theta_curr
 
 
-def model_10(data, vectorized):
+def model_10(data, history, vectorized):
     init_probs = torch.tensor([0.5, 0.5])
     transition_probs = pyro.param("transition_probs",
                                   torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
@@ -579,8 +590,8 @@ def model_10(data, vectorized):
                                 constraint=constraints.simplex)
     x = None
     markov_loop = \
-        pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
-        else pyro.markov(range(len(data)))
+        pyro.vectorized_markov(name="time", size=len(data), history=history) if vectorized \
+        else pyro.markov(range(len(data)), history=history)
     for i in markov_loop:
         probs = init_probs if x is None else transition_probs[x]
         x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
@@ -588,42 +599,35 @@ def model_10(data, vectorized):
         pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
 
 
-def guide_10(data, vectorized):
-    init_probs = torch.tensor([0.5, 0.5])
-    transition_probs = pyro.param("transition_probs",
-                                  torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
-                                  constraint=constraints.simplex)
-    x = None
-    markov_loop = \
-        pyro.vectorized_markov(name="time", size=len(data)) if vectorized \
-        else pyro.markov(range(len(data)))
-    for i in markov_loop:
-        probs = init_probs if x is None else transition_probs[x]
-        x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
-                        infer={"enumerate": "parallel"})
-
-
-@pytest.mark.parametrize("model,guide,data,", [
-    (model_10, guide_10, torch.ones(5)),
-    (model_9, guide_9, torch.rand(5, 5)),
+@pytest.mark.parametrize("model,guide,data,history", [
+    (model_9, guide_9, torch.rand(5, 5), 1),
+    (model_0, _guide_from_model(model_0), torch.rand(3, 5, 4), 1),
+    (model_1, _guide_from_model(model_1), torch.rand(5, 4), 1),
+    (model_1, _guide_from_model(model_1), torch.rand(6, 4), 1),
+    (model_2, _guide_from_model(model_2), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_3, _guide_from_model(model_3), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_4, _guide_from_model(model_4), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_5, _guide_from_model(model_5), torch.ones((5, 4), dtype=torch.long), 2),
+    (model_6, _guide_from_model(model_6), torch.rand(5, 4), 1),
+    (model_7, _guide_from_model(model_7), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_10, _guide_from_model(model_10), torch.ones(5), 1),
 ])
-def test_guide_enumerated_elbo(model, guide, data):
+def test_guide_enumerated_elbo(model, guide, data, history):
     pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
-        #  with pytest.raises(
-        #          NotImplementedError,
-        #          match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
+
+        if history > 1:
+            pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
 
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-        expected_loss = elbo.loss_and_grads(model, guide, data, False)
+        expected_loss = elbo.loss_and_grads(model, guide, data, history, False)
         expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, True)
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, history, True)
         actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
-        breakpoint()
         assert_close(actual_loss, expected_loss)
         for actual_grad, expected_grad in zip(actual_grads, expected_grads):
             assert_close(actual_grad, expected_grad)
