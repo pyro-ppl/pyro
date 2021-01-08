@@ -25,7 +25,9 @@ def terms_from_trace(tr):
             terms["plate_to_step"][node["name"]] = node["value"]
             # ensure previous step variables are added to measure_vars
             for step in node["value"]:
-                terms["measure_vars"] |= frozenset(step[1:-1])
+                terms["measure_vars"] |= frozenset({
+                    var for var in step[1:-1]
+                    if tr.nodes[var]["funsor"].get("log_measure", None) is not None})
         if node["type"] != "sample" or type(node["fn"]).__name__ == "_Subsample" or \
                 node["infer"].get("_do_not_score", False):
             continue
