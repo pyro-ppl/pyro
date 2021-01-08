@@ -30,6 +30,9 @@ class DiscreteCosineReparam(UnitJacobianReparam):
         noise to white noise; when 1 this transforms Brownian noise to to white
         noise; when -1 this transforms violet noise to white noise; etc. Any
         real number is allowed. https://en.wikipedia.org/wiki/Colors_of_noise.
+    :param bool experimental_allow_batch: EXPERIMENTAL allow coupling across a
+        batch dimension. The targeted batch dimension and all batch dimensions
+        to the right will be converted to event dimensions. Defaults to False.
     """
     def __init__(self, dim=-1, smooth=0., *,
                  experimental_allow_batch=False):

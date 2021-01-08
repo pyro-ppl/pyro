@@ -24,6 +24,9 @@ class HaarReparam(UnitJacobianReparam):
         This is an absolute dim counting from the right.
     :param bool flip: Whether to flip the time axis before applying the
         Haar transform. Defaults to false.
+    :param bool experimental_allow_batch: EXPERIMENTAL allow coupling across a
+        batch dimension. The targeted batch dimension and all batch dimensions
+        to the right will be converted to event dimensions. Defaults to False.
     """
     def __init__(self, dim=-1, flip=False, *,
                  experimental_allow_batch=False):

@@ -23,6 +23,9 @@ def terms_from_trace(tr):
         # add markov dimensions to the plate_to_step dictionary
         if node["type"] == "markov_chain":
             terms["plate_to_step"][node["name"]] = node["value"]
+            # ensure previous step variables are added to measure_vars
+            for step in node["value"]:
+                terms["measure_vars"] |= frozenset(step[1:-1])
         if node["type"] != "sample" or type(node["fn"]).__name__ == "_Subsample" or \
                 node["infer"].get("_do_not_score", False):
             continue

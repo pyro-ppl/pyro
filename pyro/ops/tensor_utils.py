@@ -10,6 +10,20 @@ from .fft import irfft, rfft
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
 
 
+def as_complex(x):
+    """
+    Similar to :func:`torch.view_as_complex` but copies data in case strides
+    are not multiples of two.
+    """
+    if any(stride % 2 for stride in x.stride()[:-1]):
+        # First try to normalize strides.
+        x = x.squeeze().reshape(x.shape)
+    if any(stride % 2 for stride in x.stride()[:-1]):
+        # Fall back to copying data.
+        x = x.clone()
+    return torch.view_as_complex(x)
+
+
 def block_diag_embed(mat):
     """
     Takes a tensor of shape (..., B, M, N) and returns a block diagonal tensor
@@ -278,7 +292,7 @@ def dct(x, dim=-1):
     coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
     M = Y.size(-1)
     coef = torch.stack([coef_real[:M], -coef_real[-M:].flip(-1)], dim=-1)
-    X = torch.view_as_complex(coef) * Y
+    X = as_complex(coef) * Y
     # NB: if we use the full-length version Y_full = fft(y, n=N), then
     # the real part of the later half of X will be the flip
     # of the negative of the imaginary part of the first half
@@ -320,7 +334,7 @@ def idct(x, dim=-1):
     X = torch.stack([x[..., :M], xi], dim=-1)
     coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
     coef = torch.stack([coef_real[:M], coef_real[-M:].flip(-1)], dim=-1)
-    Y = torch.view_as_complex(coef) * torch.view_as_complex(X)
+    Y = as_complex(coef) * as_complex(X)
     # Step 2
     y = irfft(Y, n=N)
     # Step 3

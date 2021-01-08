@@ -594,22 +594,20 @@ def model_10(data, history, vectorized):
         else pyro.markov(range(len(data)), history=history)
     for i in markov_loop:
         probs = init_probs if x is None else transition_probs[x]
-        x = pyro.sample("x_{}".format(i), dist.Categorical(probs),
-                        infer={"enumerate": "parallel"})
+        x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
         pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
 
 
 @pytest.mark.parametrize("model,guide,data,history", [
-    (model_9, guide_9, torch.rand(5, 5), 1),
     (model_0, _guide_from_model(model_0), torch.rand(3, 5, 4), 1),
     (model_1, _guide_from_model(model_1), torch.rand(5, 4), 1),
-    (model_1, _guide_from_model(model_1), torch.rand(6, 4), 1),
     (model_2, _guide_from_model(model_2), torch.ones((5, 4), dtype=torch.long), 1),
     (model_3, _guide_from_model(model_3), torch.ones((5, 4), dtype=torch.long), 1),
     (model_4, _guide_from_model(model_4), torch.ones((5, 4), dtype=torch.long), 1),
     (model_5, _guide_from_model(model_5), torch.ones((5, 4), dtype=torch.long), 2),
     (model_6, _guide_from_model(model_6), torch.rand(5, 4), 1),
     (model_7, _guide_from_model(model_7), torch.ones((5, 4), dtype=torch.long), 1),
+    (model_9, guide_9, torch.rand(5, 5), 1),
     (model_10, _guide_from_model(model_10), torch.ones(5), 1),
 ])
 def test_guide_enumerated_elbo(model, guide, data, history):
