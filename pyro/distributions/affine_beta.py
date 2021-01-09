@@ -12,8 +12,10 @@ class AffineBeta(TransformedDistribution):
         f(X) = loc + scale * X
         Y = f(X) ~ AffineBeta(concentration1, concentration0, loc, scale)
 
-    :param float or torch.Tensor concentration1: alpha parameter.
-    :param float or torch.Tensor concentration0: beta parameter.
+    :param float or torch.Tensor concentration1: 1st concentration parameter
+        (alpha) for the Beta distribution.
+    :param float or torch.Tensor concentration0: 2nd concentration parameter
+        (beta) for the Beta distribution.
     :param float or torch.Tensor loc: location parameter.
     :param float or torch.Tensor scale: scale parameter.
     """
@@ -35,7 +37,6 @@ class AffineBeta(TransformedDistribution):
         )
 
     def expand(self, batch_shape, _instance=None):
-        """"""
         new = self._get_checked_instance(AffineBeta, _instance)
         return super(AffineBeta, self).expand(batch_shape, _instance=new)
 
@@ -51,7 +52,7 @@ class AffineBeta(TransformedDistribution):
                 x = transform(x)
             # eps = torch.finfo(x.dtype).eps
             eps = 1e-5
-            x = x.clamp(min=self.loc + eps, max=self.loc + self.scale - eps)
+            x = torch.max(torch.min(x, self.loc + eps), self.loc + self.scale - eps)
             return x
 
     def rsample(self, sample_shape=torch.Size()):
@@ -65,7 +66,7 @@ class AffineBeta(TransformedDistribution):
             x = transform(x)
         # eps = torch.finfo(x.dtype).eps
         eps = 1e-5
-        x = x.clamp(min=self.loc + eps, max=self.loc + self.scale - eps)
+        x = torch.max(torch.min(x, self.loc + eps), self.loc + self.scale - eps)
         return x
 
     @property
