@@ -1,6 +1,6 @@
 import torch
-from pyro.distributions.torch import TransformedDistribution
-from torch.distributions import Beta, constraints
+from pyro.distributions.torch import Beta, TransformedDistribution
+from torch.distributions import constraints
 from torch.distributions.transforms import AffineTransform
 
 
@@ -52,7 +52,7 @@ class AffineBeta(TransformedDistribution):
                 x = transform(x)
             # eps = torch.finfo(x.dtype).eps
             eps = 1e-5
-            x = torch.max(torch.min(x, self.loc + eps), self.loc + self.scale - eps)
+            x = torch.max(torch.min(x, self.low + eps), self.high - eps)
             return x
 
     def rsample(self, sample_shape=torch.Size()):
@@ -66,7 +66,7 @@ class AffineBeta(TransformedDistribution):
             x = transform(x)
         # eps = torch.finfo(x.dtype).eps
         eps = 1e-5
-        x = torch.max(torch.min(x, self.loc + eps), self.loc + self.scale - eps)
+        x = torch.max(torch.min(x, self.low + eps), self.high - eps)
         return x
 
     @constraints.dependent_property
