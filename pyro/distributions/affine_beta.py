@@ -78,12 +78,24 @@ class AffineBeta(TransformedDistribution):
         return self.base_dist.concentration0
 
     @property
+    def size(self):
+        return self.concentration1 + self.concentration0
+
+    @property
     def loc(self):
         return torch.as_tensor(self.transforms[0].loc)
 
     @property
     def scale(self):
         return torch.as_tensor(self.transforms[0].scale)
+
+    @property
+    def low(self):
+        return self.loc
+
+    @property
+    def high(self):
+        return self.loc + self.scale
 
     @property
     def mean(self):
