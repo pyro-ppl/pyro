@@ -69,6 +69,10 @@ class AffineBeta(TransformedDistribution):
         x = torch.max(torch.min(x, self.loc + eps), self.loc + self.scale - eps)
         return x
 
+    @constraints.dependent_property
+    def support(self):
+        return constraints.interval(self.low, self.high)
+
     @property
     def concentration1(self):
         return self.base_dist.concentration1
