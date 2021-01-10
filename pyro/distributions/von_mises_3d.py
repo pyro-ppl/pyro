@@ -5,8 +5,8 @@ import math
 
 import torch
 
-import pyro.distributions.constraints as constraints
-from pyro.distributions import TorchDistribution
+from . import constraints
+from .torch_distribution import TorchDistribution
 
 
 class VonMises3D(TorchDistribution):

@@ -3,9 +3,9 @@
 
 import torch
 
-import pyro.distributions.constraints as constraints
-from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import broadcast_shape
+from . import constraints
+from .torch_distribution import TorchDistribution
+from .util import broadcast_shape
 
 
 def safe_project(x):
