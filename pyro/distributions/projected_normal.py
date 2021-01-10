@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import torch
 
 from . import constraints
@@ -39,6 +41,8 @@ class ProjectedNormal(TorchDistribution):
             direction = pyro.sample("direction", ProjectedNormal(torch.zeros(3)))
             ...
 
+    .. note:: This implements :meth:`log_prob` only for dimensions {2,3}.
+
     [1] D. Hernandez-Stumpfhauser, F.J. Breidt, M.J. van der Woerd (2017)
         "The General Projected Normal Distribution of Arbitrary Dimension:
         Modeling and Bayesian Inference"
@@ -46,6 +50,7 @@ class ProjectedNormal(TorchDistribution):
     """
     arg_constraints = {"concentration": constraints.real_vector}
     support = constraints.sphere
+    _log_prob_impls = {}
 
     def __init__(self, concentration, *, validate_args=None):
         self.concentration = concentration
@@ -61,6 +66,16 @@ class ProjectedNormal(TorchDistribution):
         new._validate_args = self.__dict__.get('_validate_args')
         return new
 
+    @property
+    def mean(self):
+        # Note this is the mean in the sense of a centroid
+        # that minimizes expected squared geodesic distance.
+        return safe_project(self.concentration)
+
+    @property
+    def mode(self):
+        return safe_project(self.concentration)
+
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         x = self.concentration.new_empty(shape).normal_()
@@ -70,9 +85,61 @@ class ProjectedNormal(TorchDistribution):
 
     def log_prob(self, value):
         if self._validate_args:
+            event_shape = value.shape[:-1]
+            if event_shape != self.event_shape:
+                raise ValueError(f"Expected event shape {self.event_shape}, "
+                                 f"but got {event_shape}")
             self._validate_sample(value)
-        raise NotImplementedError("Use poutine.reparam with ProjectedNormalReparam")
+        dim = int(self.concentration.size(-1))
+        try:
+            impl = self._log_prob_impls[dim]
+        except KeyError:
+            raise NotImplementedError(
+                f"ProjectedNormal.log_prob() is not implemented for dim = {dim}. "
+                "Consider using poutine.reparam with ProjectedNormalReparam.")
+        return impl(self.concentration, value)
 
-    @property
-    def mode(self):
-        return safe_project(self.concentration)
+    @classmethod
+    def _register_log_prob(cls, dim, fn=None):
+        if fn is None:
+            return lambda fn: cls._register_log_prob(dim, fn)
+        cls._log_prob_impls[dim] = fn
+        return fn
+
+
+def _dot(x, y):
+    return (x[..., None, :] @ y[..., None]).squeeze([-2, -1])
+
+
+@ProjectedNormal._register_log_prob(dim=2)
+def _log_prob_2(concentration, value):
+    c = concentration
+    x = value
+    cx = _dot(c, x)
+    cx2 = cx.square()
+    # This corresponds to the mathematica definite integral
+    # Integrate[x/(E^((x-c)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
+    para_part = (cx2.mul(-0.5).exp().mul((2 / math.pi) ** 0.5)
+                 + cx + cx * (cx * 0.5 ** 0.5).erf()).mul(0.5).log()
+
+    c_perp_x = _dot(c, c) - cx2
+    perp_part = c_perp_x.mul(-0.5).exp() - 0.5 * math.log(2 * math.pi)
+
+    return para_part + perp_part
+
+
+@ProjectedNormal._register_log_prob(dim=3)
+def _log_prob_3(concentration, value):
+    c = concentration
+    x = value
+    cx = _dot(c, x)
+    cx2 = cx.square()
+    # This corresponds to the mathematica definite integral
+    # Integrate[x^2/(E^((x-c)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
+    para_part = (0.5 * (cx2 + 1) * (1 + (cx * 0.5 ** 0.5).erf())
+                 + cx2.mul(-0.5).exp() * c / (2 * math.pi) ** 0.5).log()
+
+    c_perp_x = _dot(c, c) - cx2
+    perp_part = c_perp_x.mul(-0.5).exp() - math.log(2 * math.pi)
+
+    return para_part + perp_part
