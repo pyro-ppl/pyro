@@ -47,6 +47,7 @@ from pyro.distributions.one_one_matching import OneOneMatching
 from pyro.distributions.one_two_matching import OneTwoMatching
 from pyro.distributions.ordered_logistic import OrderedLogistic
 from pyro.distributions.polya_gamma import TruncatedPolyaGamma
+from pyro.distributions.projected_normal import ProjectedNormal
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (
     RelaxedBernoulliStraightThrough,
@@ -111,6 +112,7 @@ __all__ = [
     "OneOneMatching",
     "OneTwoMatching",
     "OrderedLogistic",
+    "ProjectedNormal",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",

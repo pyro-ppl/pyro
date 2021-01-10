@@ -43,6 +43,21 @@ class _Integer(Constraint):
         return self.__class__.__name__[1:]
 
 
+class _Sphere(Constraint):
+    """
+    Constrain to the Euclidean n-sphere.
+    """
+    reltol = 10.
+
+    def check(self, value):
+        eps = torch.finfo(value.dtype).eps
+        error = torch.linalg.norm(value, dim=-1).sub(1).abs()
+        return error < self.reltol * eps * value.size(-1) ** 0.5
+
+    def __repr__(self):
+        return self.__class__.__name__[1:]
+
+
 class _CorrCholesky(Constraint):
     """
     Constrains to lower-triangular square matrices with positive diagonals and
@@ -73,12 +88,14 @@ class _OrderedVector(Constraint):
 corr_cholesky_constraint = _CorrCholesky()
 integer = _Integer()
 ordered_vector = _OrderedVector()
+sphere = _Sphere()
 
 __all__ = [
     'IndependentConstraint',
     'corr_cholesky_constraint',
     'integer',
     'ordered_vector',
+    'sphere',
 ]
 
 __all__.extend(torch_constraints)
