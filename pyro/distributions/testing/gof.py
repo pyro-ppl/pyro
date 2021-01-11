@@ -3,7 +3,7 @@
 # Copyright (c) 2016, Google, Inc.
 # Copyright (c) 2019, Gamalon, Inc.
 # Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0 AND MIT
+# SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
 
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -59,7 +59,7 @@ import torch
 
 from .special import chi2sf
 
-HISTOGRAM_WIDTH = 60.0
+HISTOGRAM_WIDTH = 60
 
 
 class InvalidTest(ValueError):
