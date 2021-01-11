@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.distributions.torch_patch  # noqa F403
+from pyro.distributions.affine_beta import AffineBeta
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.coalescent import (
     CoalescentRateLikelihood,
@@ -74,6 +75,7 @@ from pyro.distributions.zero_inflated import (
 from . import constraints, kl, transforms
 
 __all__ = [
+    "AffineBeta",
     "AVFMultivariateNormal",
     "BetaBinomial",
     "CoalescentRateLikelihood",
