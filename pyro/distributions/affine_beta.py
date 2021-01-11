@@ -26,7 +26,6 @@ class AffineBeta(TransformedDistribution):
         "loc": constraints.real,
         "scale": constraints.positive,
     }
-    has_rsample = True
 
     def __init__(self, concentration1, concentration0, loc, scale, validate_args=None):
         base_dist = Beta(concentration1, concentration0)
@@ -50,8 +49,7 @@ class AffineBeta(TransformedDistribution):
             x = self.base_dist.sample(sample_shape)
             for transform in self.transforms:
                 x = transform(x)
-            # eps = torch.finfo(x.dtype).eps
-            eps = 1e-5
+            eps = torch.finfo(x.dtype).eps * self.scale
             x = torch.min(torch.max(x, self.low + eps), self.high - eps)
             return x
 
@@ -64,8 +62,7 @@ class AffineBeta(TransformedDistribution):
         x = self.base_dist.rsample(sample_shape)
         for transform in self.transforms:
             x = transform(x)
-        # eps = torch.finfo(x.dtype).eps
-        eps = 1e-5
+        eps = torch.finfo(x.dtype).eps * self.scale
         x = torch.min(torch.max(x, self.low + eps), self.high - eps)
         return x
 
