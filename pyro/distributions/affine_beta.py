@@ -28,7 +28,7 @@ class AffineBeta(TransformedDistribution):
     }
 
     def __init__(self, concentration1, concentration0, loc, scale, validate_args=None):
-        base_dist = Beta(concentration1, concentration0)
+        base_dist = Beta(concentration1, concentration0, validate_args=validate_args)
         super(AffineBeta, self).__init__(
             base_dist,
             AffineTransform(loc=loc, scale=scale),
@@ -38,20 +38,6 @@ class AffineBeta(TransformedDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(AffineBeta, _instance)
         return super(AffineBeta, self).expand(batch_shape, _instance=new)
-
-    def sample(self, sample_shape=torch.Size()):
-        """
-        Generates a sample from `Beta` distribution and applies `AffineTransform`.
-        Additionally clamps the output in order to avoid `NaN` and `Inf` values
-        in the gradients.
-        """
-        with torch.no_grad():
-            x = self.base_dist.sample(sample_shape)
-            for transform in self.transforms:
-                x = transform(x)
-            eps = torch.finfo(x.dtype).eps * self.scale
-            x = torch.min(torch.max(x, self.low + eps), self.high - eps)
-            return x
 
     def rsample(self, sample_shape=torch.Size()):
         """
@@ -79,7 +65,7 @@ class AffineBeta(TransformedDistribution):
         return self.base_dist.concentration0
 
     @property
-    def size(self):
+    def sample_size(self):
         return self.concentration1 + self.concentration0
 
     @property
