@@ -1,7 +1,7 @@
-# Copyright Contributors to the Pyro project.
 # Copyright (c) 2014, Salesforce.com, Inc.  All rights reserved.
 # Copyright (c) 2015-2016, Gamelan Labs, Inc.
 # Copyright (c) 2016, Google, Inc.
+# Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0 AND MIT
 #
 # Redistribution and use in source and binary forms, with or without

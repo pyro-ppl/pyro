@@ -2,6 +2,8 @@
 # Copyright (c) 2015, Gamelan Labs, Inc.
 # Copyright (c) 2016, Google, Inc.
 # Copyright (c) 2019, Gamalon, Inc.
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -28,100 +30,98 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import division
-from collections import defaultdict
-from math import gamma
-try:
-    from itertools import izip as zip
-except ImportError:
+"""
+Goodness of Fit Testing
+-----------------------
+
+This module implements goodness of fit tests for checking agreement between
+distributions' ``.sample()`` and ``.log_prob()`` methods. The main functions
+return a goodness of fit p-value ``gof`` which for good data should be
+``Uniform(0,1)`` distributed and for bad data should be close to zero. To use
+this returned number in tests, set a global variable ``TEST_FAILURE_RATE`` to
+something smaller than 1 / number of tests in your suite, then in each test
+assert ``gof > TEST_FAILURE_RATE``. For example::
+
+    TEST_FAILURE_RATE = 1 / 20  # For 1 in 20 chance of spurious failure.
+
+    def test_my_distribution():
+        d = MyDistribution()
+        samples = d.sample([10000])
+        probs = d.log_prob(samples).exp()
+        gof = auto_goodness_of_fit(samples, probs)
+        assert gof > TEST_FAILURE_RATE
+"""
+
+import warnings
+import math
+
+import torch
+
+from .special import chi2sf
+
+HISTOGRAM_WIDTH = 60.0
+
+
+class InvalidTest(ValueError):
     pass
-import random
-import sys
-
-import numpy
-import numpy.random
-from numpy import pi
-from scipy.spatial import cKDTree
-
-from .utils import chi2sf
-
-NoneType = type(None)
-
-#: Data types for integral random variables.
-#:
-#: For Python 2.7, this tuple also includes `long`.
-INTEGRAL_TYPES = (int, )
-
-#: Data types for continuous random variables.
-CONTINUOUS_TYPES = (float, numpy.float32, numpy.float64)
-
-#: Data types for discrete random variables.
-#:
-#: For Python 2.7, this tuple also includes `long` and `basestring`.
-DISCRETE_TYPES = (NoneType, bool, int, str, numpy.int32, numpy.int64)
-
-if sys.version_info < (3, ):
-    # `str` is a subclass of `basestring`, so this is doing a little
-    # more work than is necessary, but it should not cause a problem.
-    DISCRETE_TYPES += (long, basestring)  # noqa
-    INTEGRAL_TYPES += (long, )  # noqa
-
-
-def seed_all(seed):
-    random.seed(seed)
-    numpy.random.seed(seed)
-
-
-def get_dim(thing):
-    if hasattr(thing, '__len__'):
-        return len(thing)
-    else:
-        return 1
 
 
 def print_histogram(probs, counts):
-    WIDTH = 60.0
     max_count = max(counts)
     print('{: >8} {: >8}'.format('Prob', 'Count'))
     for prob, count in sorted(zip(probs, counts), reverse=True):
-        width = int(round(WIDTH * count / max_count))
+        width = int(round(HISTOGRAM_WIDTH * count / max_count))
         print('{: >8.3f} {: >8d} {}'.format(prob, count, '-' * width))
 
 
+@torch.no_grad()
 def multinomial_goodness_of_fit(
-        probs,
-        counts,
-        total_count,
-        truncated=False,
-        plot=False):
+    probs,
+    counts,
+    *,
+    total_count=None,
+    plot=False,
+):
     """
     Pearson's chi^2 test, on possibly truncated data.
     http://en.wikipedia.org/wiki/Pearson%27s_chi-squared_test
 
-    Returns:
-        p-value of truncated multinomial sample.
+    :param Tensor probs: Vector of probabilities.
+    :param Tensor counts: Vector of counts.
+    :param int total_count: Optional total count in case data is truncated,
+        otherwise None.
+    :param bool plot: Whether to print a histogram. Defaults to False.
+    :returns: p-value of truncated multinomial sample.
+    :rtype: float
     """
-    assert len(probs) == len(counts)
-    assert truncated or total_count == sum(counts)
-    chi_squared = 0
-    dof = 0
+    assert probs.dim() == 1
+    assert probs.shape == counts.shape
+    if total_count is None:
+        truncated = False
+        total_count = int(counts.sum())
+    else:
+        truncated = True
+        assert total_count >= counts.sum()
     if plot:
         print_histogram(probs, counts)
-    for p, c in zip(probs, counts):
+
+    chi_squared = 0
+    dof = 0
+    for p, c in zip(probs.tolist(), counts.tolist()):
         if abs(p - 1) < 1e-8:
             return 1 if c == total_count else 0
-        assert p < 1, 'bad probability: %g' % p
+        assert p < 1, f'bad probability: {p:g}'
         if p > 0:
             mean = total_count * p
             variance = total_count * p * (1 - p)
-            assert variance > 1,\
-                'WARNING goodness of fit is inaccurate; use more samples'
+            if not (variance > 1):
+                raise InvalidTest('Goodness of fit is inaccurate; use more samples')
             chi_squared += (c - mean) ** 2 / variance
             dof += 1
         else:
-            print('WARNING zero probability in goodness-of-fit test')
+            warnings.warn('Zero probability in goodness-of-fit test')
             if c > 0:
-                return float('inf')
+                return math.inf
 
     if not truncated:
         dof -= 1
@@ -130,267 +130,150 @@ def multinomial_goodness_of_fit(
     return survival
 
 
-def unif01_goodness_of_fit(samples, plot=False):
+@torch.no_grad()
+def unif01_goodness_of_fit(samples, *, plot=False):
     """
     Bin uniformly distributed samples and apply Pearson's chi^2 test.
+
+    :param Tensor samples: A vector of real-valued samples from a candidate
+        distribution that should be Uniform(0, 1)-distributed.
+    :param bool plot: Whether to print a histogram. Defaults to False.
+    :returns: Goodness of fit, as a p-value.
+    :rtype: float
     """
-    samples = numpy.array(samples, dtype=float)
-    assert samples.min() >= 0.0
-    assert samples.max() <= 1.0
+    assert samples.min() >= 0
+    assert samples.max() <= 1
     bin_count = int(round(len(samples) ** 0.333))
-    assert bin_count >= 7, 'WARNING imprecise test, use more samples'
-    probs = numpy.ones(bin_count, dtype=numpy.float) / bin_count
-    counts = numpy.zeros(bin_count, dtype=numpy.int)
-    for sample in samples:
-        counts[min(bin_count - 1, int(bin_count * sample))] += 1
-    return multinomial_goodness_of_fit(probs, counts, len(samples), plot=plot)
+    if bin_count < 7:
+        raise InvalidTest('imprecise test, use more samples')
+    probs = torch.ones(bin_count) / bin_count
+    binned = samples.mul(bin_count).long().clamp(min=0, max=bin_count - 1)
+    counts = torch.zeros(bin_count).scatter_add_(0, binned, torch.ones(()))
+    return multinomial_goodness_of_fit(probs, counts, plot=plot)
 
 
-def exp_goodness_of_fit(
-        samples,
-        plot=False,
-        normalized=True,
-        return_dict=False):
+@torch.no_grad()
+def exp_goodness_of_fit(samples, plot=False):
     """
-    Transform exponentially distribued samples to unif01 distribution
-    and assess goodness of fit via binned Pearson's chi^2 test.
+    Transform exponentially distribued samples to Uniform(0,1) distribution and
+    assess goodness of fit via binned Pearson's chi^2 test.
 
-    Inputs:
-        samples - a list of real-valued samples from a candidate distribution
+    :param Tensor samples: A vector of real-valued samples from a candidate
+        distribution that should be Exponential(1)-distributed.
+    :param bool plot: Whether to print a histogram. Defaults to False.
+    :returns: Goodness of fit, as a p-value.
+    :rtype: float
     """
-    result = {}
-    if not normalized:
-        result['norm'] = numpy.mean(samples)
-        samples /= result['norm']
-    unif01_samples = numpy.exp(-samples)
-    result['gof'] = unif01_goodness_of_fit(unif01_samples, plot=plot)
-    return result if return_dict else result['gof']
+    unif01_samples = samples.neg().exp()
+    return unif01_goodness_of_fit(unif01_samples, plot=plot)
 
 
-def density_goodness_of_fit(
-        samples,
-        probs,
-        plot=False,
-        normalized=True,
-        return_dict=False):
+@torch.no_grad()
+def density_goodness_of_fit(samples, probs, plot=False):
     """
-    Transform arbitrary continuous samples to unif01 distribution
-    and assess goodness of fit via binned Pearson's chi^2 test.
+    Transform arbitrary continuous samples to Uniform(0,1) distribution and
+    assess goodness of fit via binned Pearson's chi^2 test.
 
-    Inputs:
-        samples - a list of real-valued samples from a distribution
-        probs - a list of probability densities evaluated at those samples
+    :param Tensor samples: A vector list of real-valued samples from a
+        distribution.
+    :param Tensor probs: A vector of probability densities evaluated at those
+        samples.
+    :param bool plot: Whether to print a histogram. Defaults to False.
+    :returns: Goodness of fit, as a p-value.
+    :rtype: float
     """
-    assert len(samples) == len(probs)
-    assert len(samples) > 100, 'WARNING imprecision; use more samples'
-    pairs = list(zip(samples, probs))
-    pairs.sort()
-    samples = numpy.array([x for x, p in pairs])
-    probs = numpy.array([p for x, p in pairs])
-    density = len(samples) * numpy.sqrt(probs[1:] * probs[:-1])
+    assert samples.shape == probs.shape
+    if len(samples) <= 100:
+        raise InvalidTest('imprecision; use more samples')
+
+    samples, index = samples.sort(0)
+    probs = probs[index]
     gaps = samples[1:] - samples[:-1]
+
+    sparsity = 1 / probs
+    sparsity = 0.5 * (sparsity[1:] + sparsity[:-1])
+    density = len(samples) / sparsity
+
     exp_samples = density * gaps
-    return exp_goodness_of_fit(exp_samples, plot, normalized, return_dict)
+    return exp_goodness_of_fit(exp_samples, plot=plot)
 
 
 def volume_of_sphere(dim, radius):
-    assert isinstance(dim, INTEGRAL_TYPES)
-    return radius ** dim * pi ** (0.5 * dim) / gamma(0.5 * dim + 1)
+    return radius ** dim * math.pi ** (0.5 * dim) / math.gamma(0.5 * dim + 1)
 
 
 def get_nearest_neighbor_distances(samples):
-    if not hasattr(samples[0], '__iter__'):
-        samples = numpy.array([samples]).T
-    distances, indices = cKDTree(samples).query(samples, k=2)
-    return distances[:, 1]
+    try:
+        # This version scales as O(N log(N)).
+        from scipy.spatial import cKDTree
+        samples = samples.cpu().numpy()
+        distances, indices = cKDTree(samples).query(samples, k=2)
+        return torch.from_numpy(distances[:, 1])
+    except ImportError:
+        # This version scales as O(N^2).
+        distances, indices = torch.cdist(samples, samples).kthvalue(k=2)
+        return distances
 
 
-def vector_density_goodness_of_fit(
-        samples,
-        probs,
-        plot=False,
-        normalized=True,
-        return_dict=False):
+@torch.no_grad()
+def vector_density_goodness_of_fit(samples, probs, *, dim=None, plot=False):
     """
-    Transform arbitrary multivariate continuous samples
-    to unif01 distribution via nearest neighbor distribution [1,2,3]
-    and assess goodness of fit via binned Pearson's chi^2 test.
+    Transform arbitrary multivariate continuous samples to Univariate(0,1)
+    distribution via nearest neighbor distribution [1,2,3] and assess goodness
+    of fit via binned Pearson's chi^2 test.
 
     [1] http://projecteuclid.org/download/pdf_1/euclid.aop/1176993668
     [2] http://arxiv.org/pdf/1006.3019v2.pdf
     [3] http://en.wikipedia.org/wiki/Nearest_neighbour_distribution
 
-    Inputs:
-        samples - a list of real-vector-valued samples from a distribution
-        probs - a list of probability densities evaluated at those samples
+    :param Tensor samples: A tensor of real-vector-valued samples from a
+        distribution.
+    :param Tensor probs: A vector of probability densities evaluated at those
+        samples.
+    :param int dim: Optional dimension of the submanifold on which data lie.
+        Defaults to ``samples.shape[-1]``.
+    :param bool plot: Whether to print a histogram. Defaults to False.
+    :returns: Goodness of fit, as a p-value.
+    :rtype: float
     """
-    assert len(samples)
-    assert len(samples) == len(probs)
-    dim = get_dim(samples[0])
+    assert samples.shape and len(samples)
+    assert probs.shape == samples.shape[:1]
+    if dim is None:
+        dim = samples.shape[-1]
     assert dim
-    assert len(samples) > 1000 * dim, 'WARNING imprecision; use more samples'
+    if len(samples) <= 1000 * dim:
+        raise InvalidTest('imprecision; use more samples')
     radii = get_nearest_neighbor_distances(samples)
-    density = len(samples) * numpy.array(probs)
+    density = len(samples) * probs
     volume = volume_of_sphere(dim, radii)
     exp_samples = density * volume
-    return exp_goodness_of_fit(exp_samples, plot, normalized, return_dict)
+    return exp_goodness_of_fit(exp_samples, plot=plot)
 
 
-def trivial_density_goodness_of_fit(
-        samples,
-        probs,
-        plot=False,
-        normalized=True,
-        return_dict=False):
-    assert len(samples)
-    assert all(sample == samples[0] for sample in samples)
-    result = {'gof': 1.0}
-    if not normalized:
-        result['norm'] = probs[0]
-    if return_dict:
-        return result
-    else:
-        return result['gof']
-
-
-def auto_density_goodness_of_fit(
-        samples,
-        probs,
-        plot=False,
-        normalized=True,
-        return_dict=False):
+@torch.no_grad()
+def auto_goodness_of_fit(samples, probs, *, dim=None, plot=False):
     """
-    Dispatch on sample dimention and delegate to one of:
-    - density_goodness_of_fit
-    - vector_density_goodness_of_fit
-    - trivial_density_goodness_of_fit
+    Dispatch on sample dimension and delegate to either
+    :func:`density_goodness_of_fit` or :func:`vector_density_goodness_of_fit`.
+
+    :param Tensor samples: A tensor of samples stacked on their leftmost
+        dimension.
+    :param Tensor probs: A vector of probabilities evaluated at those samples.
+    :param int dim: Optional manifold dimension, defaults to
+        ``samples.shape[1:].numel()``.
+    :param bool plot: Whether to print a histogram. Defaults to False.
     """
-    assert len(samples)
-    dim = get_dim(samples[0])
-    if dim == 0:
-        fun = trivial_density_goodness_of_fit
-    elif dim == 1:
-        fun = density_goodness_of_fit
-        if hasattr(samples[0], '__len__'):
-            samples = [sample[0] for sample in samples]
-    else:
-        fun = vector_density_goodness_of_fit
-    return fun(samples, probs, plot, normalized, return_dict)
+    assert samples.shape and samples.shape[0]
+    assert probs.shape == samples.shape[:1]
 
+    samples = samples.reshape(samples.shape[0], -1)
+    ambient_dim = samples.shape[1:].numel()
+    if dim is None:
+        dim = ambient_dim
 
-def discrete_goodness_of_fit(
-        samples,
-        probs_dict,
-        truncate_beyond=8,
-        plot=False,
-        normalized=True):
-    """
-    Transform arbitrary discrete data to multinomial
-    and assess goodness of fit via Pearson's chi^2 test.
-    """
-    if not normalized:
-        norm = sum(probs_dict.values())
-        probs_dict = {i: p / norm for i, p in probs_dict.items()}
-    counts = defaultdict(lambda: 0)
-    for sample in samples:
-        assert sample in probs_dict
-        counts[sample] += 1
-    items = [(prob, counts.get(i, 0)) for i, prob in probs_dict.items()]
-    items.sort(reverse=True)
-    truncated = (truncate_beyond and truncate_beyond < len(items))
-    if truncated:
-        items = items[:truncate_beyond]
-    probs = [prob for prob, count in items]
-    counts = [count for prob, count in items]
-    assert sum(counts) > 100, 'WARNING imprecision; use more samples'
-    return multinomial_goodness_of_fit(
-        probs,
-        counts,
-        len(samples),
-        truncated=truncated,
-        plot=plot)
-
-
-def split_discrete_continuous(data):
-    """
-    Convert arbitrary data to a pair `(discrete, continuous)`
-    where `discrete` is hashable and `continuous` is a list of floats.
-    """
-    if isinstance(data, DISCRETE_TYPES):
-        return data, []
-    elif isinstance(data, CONTINUOUS_TYPES):
-        return None, [data]
-    elif isinstance(data, (tuple, list)):
-        discrete = []
-        continuous = []
-        for part in data:
-            d, c = split_discrete_continuous(part)
-            discrete.append(d)
-            continuous += c
-        return tuple(discrete), continuous
-    elif isinstance(data, numpy.ndarray):
-        assert data.dtype in [numpy.float64, numpy.float32]
-        return (None,) * len(data), list(map(float, data))
-    else:
-        raise TypeError(
-            'split_discrete_continuous does not accept {} of type {}'.format(
-                repr(data), str(type(data))))
-
-
-def mixed_density_goodness_of_fit(samples, probs, plot=False, normalized=True):
-    """
-    Test general mixed discrete+continuous datatypes by
-    (1) testing the continuous part conditioned on each discrete value
-    (2) testing the discrete part marginalizing over the continuous part
-    (3) testing the estimated total probability (if normalized = True)
-
-    Inputs:
-        samples - a list of plain-old-data samples from a distribution
-        probs - a list of probability densities evaluated at those samples
-    """
-    assert len(samples)
-    discrete_samples = []
-    strata = defaultdict(lambda: ([], []))
-    for sample, prob in zip(samples, probs):
-        d, c = split_discrete_continuous(sample)
-        discrete_samples.append(d)
-        samples, probs = strata[d]
-        samples.append(c)
-        probs.append(prob)
-
-    # Continuous part
-    gofs = []
-    discrete_probs = {}
-    for key, (samples, probs) in strata.items():
-        result = auto_density_goodness_of_fit(
-            samples,
-            probs,
-            plot=plot,
-            normalized=False,
-            return_dict=True)
-        gofs.append(result['gof'])
-        discrete_probs[key] = result['norm']
-
-    # Discrete part
-    if len(strata) > 1:
-        gofs.append(discrete_goodness_of_fit(
-            discrete_samples,
-            discrete_probs,
-            plot=plot,
-            normalized=False))
-
-    # Normalization
-    if normalized:
-        norm = sum(discrete_probs.values())
-        discrete_counts = [len(samples) for samples, _ in strata.values()]
-        norm_variance = sum(1.0 / count for count in discrete_counts)
-        dof = len(discrete_counts)
-        chi_squared = (1 - norm) ** 2 / norm_variance
-        gofs.append(chi2sf(chi_squared, dof))
-        if plot:
-            print('norm = {:.4g} +- {:.4g}'.format(norm, norm_variance ** 0.5))
-            print('     = {}'.format(
-                ' + '.join(map('{:.4g}'.format, discrete_probs.values()))))
-
-    return min(gofs)
-
+    if ambient_dim == 0:
+        return 1.0
+    if ambient_dim == 1:
+        samples = samples.reshape(-1)
+        return density_goodness_of_fit(samples, probs, plot=plot)
+    return vector_density_goodness_of_fit(samples, probs, dim=dim, plot=plot)
