@@ -263,6 +263,13 @@ continuous_dists = [
                 {'df': 1.5, 'loc': [0.2, 0.3], 'scale_tril': [[0.8, 0.0], [1.3, 0.4]],
                  'test_data': [-3., 2]},
                 ]),
+    Fixture(pyro_dist=dist.ProjectedNormal,
+            examples=[
+                {'concentration': [0., 0.], 'test_data': [1., 0.]},
+                {'concentration': [5., 9.], 'test_data': [0., 1.]},
+                {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
+                {'concentration': [-1., 5., 9.], 'test_data': [0., 0., 1.]},
+                ]),
 ]
 
 discrete_dists = [

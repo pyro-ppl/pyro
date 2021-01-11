@@ -7,7 +7,6 @@ import torch
 
 from . import constraints
 from .torch_distribution import TorchDistribution
-from .util import broadcast_shape
 
 
 def safe_project(x):
@@ -19,7 +18,8 @@ def safe_project(x):
     :returns: A normalized version ``x / ||x||_2``.
     :rtype: Tensor
     """
-    x = x / torch.linalg.norm(x, dim=-1).clamp(min=torch.finfo(x.dtype).tiny)
+    norm = torch.linalg.norm(x, dim=-1, keepdim=True)
+    x = x / norm.clamp(min=torch.finfo(x.dtype).tiny)
     x.data[..., 0][x.data.eq(0).all(dim=-1)] = 1  # Avoid the singularity.
     return x
 
@@ -59,8 +59,8 @@ class ProjectedNormal(TorchDistribution):
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
+        batch_shape = torch.Size(batch_shape)
         new = self._get_checked_instance(ProjectedNormal, _instance)
-        batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
         new.concentration = self.concentration.expand(batch_shape + (-1,))
         super(ProjectedNormal, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
@@ -81,11 +81,12 @@ class ProjectedNormal(TorchDistribution):
         x = self.concentration.new_empty(shape).normal_()
         x = x + self.concentration
         x = safe_project(x)
+        assert (x.norm(dim=-1) - 1).abs().max() < 1e-6  # DEBUG
         return x
 
     def log_prob(self, value):
         if self._validate_args:
-            event_shape = value.shape[:-1]
+            event_shape = value.shape[-1:]
             if event_shape != self.event_shape:
                 raise ValueError(f"Expected event shape {self.event_shape}, "
                                  f"but got {event_shape}")
@@ -108,7 +109,7 @@ class ProjectedNormal(TorchDistribution):
 
 
 def _dot(x, y):
-    return (x[..., None, :] @ y[..., None]).squeeze([-2, -1])
+    return (x[..., None, :] @ y[..., None])[..., 0, 0]
 
 
 @ProjectedNormal._register_log_prob(dim=2)
@@ -137,7 +138,7 @@ def _log_prob_3(concentration, value):
     # This corresponds to the mathematica definite integral
     # Integrate[x^2/(E^((x-c)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
     para_part = (0.5 * (cx2 + 1) * (1 + (cx * 0.5 ** 0.5).erf())
-                 + cx2.mul(-0.5).exp() * c / (2 * math.pi) ** 0.5).log()
+                 + cx2.mul(-0.5).exp() * cx / (2 * math.pi) ** 0.5).log()
 
     c_perp_x = _dot(c, c) - cx2
     perp_part = c_perp_x.mul(-0.5).exp() - math.log(2 * math.pi)
