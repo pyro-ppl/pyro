@@ -50,6 +50,13 @@ TorchDistribution
     :show-inheritance:
     :member-order: bysource
 
+AffineBeta
+---------------------
+.. autoclass:: pyro.distributions.AffineBeta
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 AVFMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.AVFMultivariateNormal

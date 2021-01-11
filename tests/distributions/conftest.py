@@ -131,6 +131,20 @@ continuous_dists = [
                  'test_data': [[5.5], [6.4]]}
             ],
             scipy_arg_fn=lambda loc, scale: ((np.array(scale),), {"scale": np.exp(np.array(loc))})),
+    Fixture(pyro_dist=dist.AffineBeta,
+            scipy_dist=sp.beta,
+            examples=[
+                {'concentration1': [2.4], 'concentration0': [3.6], 'loc': [-1.0], 'scale': [2.0],
+                 'test_data': [-0.4]},
+                {'concentration1': [[2.4, 2.4], [3.6, 3.6]], 'concentration0': [[2.5, 2.5], [2.5, 2.5]],
+                 'loc': [[-1.0, -1.0], [2.0, 2.0]], 'scale': [[2.0, 2.0], [1.0, 1.0]],
+                 'test_data': [[[-0.4, 0.4], [2.5, 2.6]]]},
+                {'concentration1': [[2.4], [3.7]], 'concentration0': [[3.6], [2.5]],
+                 'loc': [[-1.0], [2.0]], 'scale': [[2.0], [2.0]],
+                 'test_data': [[0.0], [3.0]]}
+            ],
+            scipy_arg_fn=lambda concentration1, concentration0, loc, scale:
+            ((np.array(concentration1), np.array(concentration0), np.array(loc), np.array(scale)), {})),
     Fixture(pyro_dist=dist.Normal,
             scipy_dist=sp.norm,
             examples=[
