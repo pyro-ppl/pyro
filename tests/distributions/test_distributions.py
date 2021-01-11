@@ -10,9 +10,7 @@ import pyro.distributions as dist
 from pyro.distributions import TorchDistribution
 from pyro.distributions.testing.gof import auto_goodness_of_fit
 from pyro.distributions.util import broadcast_shape
-from tests.common import assert_equal, xfail_if_not_implemented
-
-TEST_FAILURE_RATE = 1 / 1000
+from tests.common import TEST_FAILURE_RATE, assert_equal, xfail_if_not_implemented
 
 
 def _log_prob_shape(dist, x_size=torch.Size()):
@@ -87,10 +85,10 @@ def test_score_errors_non_broadcastable_data_shape(dist):
 
 # Distributions tests - continuous distributions
 
-def test_density(continuous_dist):
+def test_gof(continuous_dist):
     Dist = continuous_dist.pyro_dist
     d = Dist(**continuous_dist.get_dist_params(0))
-    samples = d.sample(torch.Size([10000]))
+    samples = d.sample(torch.Size([20000]))
     with xfail_if_not_implemented():
         probs = d.log_prob(samples).exp()
 
