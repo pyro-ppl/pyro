@@ -8,8 +8,11 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions import TorchDistribution
+from pyro.distributions.testing.gof import auto_goodness_of_fit
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_equal, xfail_if_not_implemented
+
+TEST_FAILURE_RATE = 1 / 1000
 
 
 def _log_prob_shape(dist, x_size=torch.Size()):
@@ -80,6 +83,28 @@ def test_score_errors_non_broadcastable_data_shape(dist):
         test_data_non_broadcastable = torch.ones(non_broadcastable_shape)
         with pytest.raises((ValueError, RuntimeError)):
             d.log_prob(test_data_non_broadcastable)
+
+
+# Distributions tests - continuous distributions
+
+def test_density(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    d = Dist(**continuous_dist.get_dist_params(0))
+    samples = d.sample(torch.Size([10000]))
+    with xfail_if_not_implemented():
+        probs = d.log_prob(samples).exp()
+
+    # Select a single event.
+    for _ in range(len(d.batch_shape)):
+        samples = samples[:, 0]
+        probs = probs[:, 0]
+
+    gof = auto_goodness_of_fit(samples, probs)
+    if "Dirichlet" in Dist.__name__:
+        pytest.xfail(reason="incorrect submanifold scaling")
+    if Dist is dist.LKJCorrCholesky:
+        pytest.xfail(reason="incorrect submanifold scaling")
+    assert gof > TEST_FAILURE_RATE
 
 
 # Distributions tests - discrete distributions

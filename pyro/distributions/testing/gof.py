@@ -148,7 +148,8 @@ def unif01_goodness_of_fit(samples, *, plot=False):
         raise InvalidTest('imprecise test, use more samples')
     probs = torch.ones(bin_count) / bin_count
     binned = samples.mul(bin_count).long().clamp(min=0, max=bin_count - 1)
-    counts = torch.zeros(bin_count).scatter_add_(0, binned, torch.ones(()))
+    counts = torch.zeros(bin_count)
+    counts.scatter_add_(0, binned, torch.ones(binned.shape))
     return multinomial_goodness_of_fit(probs, counts, plot=plot)
 
 

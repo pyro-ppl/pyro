@@ -504,6 +504,13 @@ def all_distributions(request):
     return request.param
 
 
+@pytest.fixture(name='continuous_dist',
+                params=continuous_dists,
+                ids=lambda x: x.get_test_distribution_name())
+def continuous_distributions(request):
+    return request.param
+
+
 @pytest.fixture(name='discrete_dist',
                 params=discrete_dists,
                 ids=lambda x: x.get_test_distribution_name())

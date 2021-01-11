@@ -9,7 +9,10 @@ import torch
 from torch import optim
 
 from pyro.distributions import VonMises, VonMises3D
-from tests.common import skipif_param
+from pyro.distributions.testing.gof import auto_goodness_of_fit
+from tests.common import skipif_param, xfail_if_not_implemented
+
+TEST_FAILURE_RATE = 1 / 1000
 
 
 def _eval_poly(y, coef):
@@ -107,6 +110,16 @@ def test_log_prob_normalized(concentration):
     assert abs(norm - 1) < 1e-3, norm
 
 
+@pytest.mark.parametrize('loc', [-math.pi/2.0, 0.0, math.pi/2.0])
+@pytest.mark.parametrize('concentration', [0.03, 0.1, 0.3, 1., 3., 10., 30.])
+def test_von_mises_density(loc, concentration):
+    d = VonMises(loc, concentration)
+    samples = d.sample(torch.Size([10000]))
+    probs = d.log_prob(samples).exp()
+    gof = auto_goodness_of_fit(samples, probs, dim=2)
+    assert gof > TEST_FAILURE_RATE
+
+
 @pytest.mark.parametrize('scale', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 def test_von_mises_3d(scale):
     concentration = torch.randn(3)
@@ -121,3 +134,17 @@ def test_von_mises_3d(scale):
     expected_total = 1 / (4 * math.pi)
     ratio = actual_total / expected_total
     assert torch.abs(ratio - 1) < 0.01, ratio
+
+
+@pytest.mark.parametrize('scale', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
+def test_von_mises_3d_density(scale):
+    concentration = torch.randn(3)
+    concentration = concentration * (scale / concentration.norm(2))
+    d = VonMises3D(concentration, validate_args=True)
+
+    with xfail_if_not_implemented():
+        samples = d.sample(torch.Size([10000]))
+    probs = d.log_prob(samples).exp()
+
+    gof = auto_goodness_of_fit(samples, probs, dim=2)
+    assert gof > TEST_FAILURE_RATE
