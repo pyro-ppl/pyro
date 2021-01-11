@@ -22,7 +22,7 @@ Pyro Documentation
    optimization
    poutine
    ops
-   distributions.testing
+   testing
 
 .. toctree::
    :glob:

@@ -50,6 +50,9 @@ assert ``gof > TEST_FAILURE_RATE``. For example::
         probs = d.log_prob(samples).exp()
         gof = auto_goodness_of_fit(samples, probs)
         assert gof > TEST_FAILURE_RATE
+
+This module is a port of the
+`goftests <https://github.com/posterior/goftests>`_ library.
 """
 
 import warnings
@@ -84,7 +87,7 @@ def multinomial_goodness_of_fit(
 ):
     """
     Pearson's chi^2 test, on possibly truncated data.
-    http://en.wikipedia.org/wiki/Pearson%27s_chi-squared_test
+    https://en.wikipedia.org/wiki/Pearson%27s_chi-squared_test
 
     :param Tensor probs: Vector of probabilities.
     :param Tensor counts: Vector of counts.
@@ -223,9 +226,16 @@ def vector_density_goodness_of_fit(samples, probs, *, dim=None, plot=False):
     distribution via nearest neighbor distribution [1,2,3] and assess goodness
     of fit via binned Pearson's chi^2 test.
 
-    [1] http://projecteuclid.org/download/pdf_1/euclid.aop/1176993668
-    [2] http://arxiv.org/pdf/1006.3019v2.pdf
-    [3] http://en.wikipedia.org/wiki/Nearest_neighbour_distribution
+    [1] Peter J. Bickel and Leo Breiman (1983)
+        "Sums of Functions of Nearest Neighbor Distances, Moment Bounds, Limit
+        Theorems and a Goodness of Fit Test"
+        https://projecteuclid.org/download/pdf_1/euclid.aop/1176993668
+    [2] Mike Williams (2010)
+        "How good are your fits? Unbinned multivariate goodness-of-fit tests in
+        high energy physics."
+        https://arxiv.org/abs/1006.3019
+    [3] Nearest Neighbour Distribution
+        https://en.wikipedia.org/wiki/Nearest_neighbour_distribution
 
     :param Tensor samples: A tensor of real-vector-valued samples from a
         distribution.

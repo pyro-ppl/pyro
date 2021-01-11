@@ -1,5 +1,5 @@
-Distribution Testing
---------------------
+Testing Utilities
+-----------------
 
 .. automodule:: pyro.distributions.testing.gof
    :members:
