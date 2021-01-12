@@ -1,3 +1,6 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from pyro.distributions.torch import Beta, TransformedDistribution
 from torch.distributions import constraints
