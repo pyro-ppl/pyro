@@ -87,12 +87,10 @@ def test_score_errors_non_broadcastable_data_shape(dist):
 
 def test_gof(continuous_dist):
     Dist = continuous_dist.pyro_dist
-    if "Dirichlet" in Dist.__name__:
-        pytest.xfail(reason="incorrect submanifold scaling")
     if Dist is dist.LKJCorrCholesky:
         pytest.xfail(reason="incorrect submanifold scaling")
 
-    num_samples = 20000
+    num_samples = 50000
     for i in range(continuous_dist.get_num_test_data()):
         d = Dist(**continuous_dist.get_dist_params(i))
         samples = d.sample(torch.Size([num_samples]))
@@ -102,6 +100,9 @@ def test_gof(continuous_dist):
         # Test each batch independently.
         probs = probs.reshape(num_samples, -1)
         samples = samples.reshape(probs.shape + d.event_shape)
+        if "Dirichlet" in Dist.__name__:
+            # The Dirichlet density is over all but one of the probs.
+            samples = samples[..., :-1]
         for b in range(probs.size(-1)):
             gof = auto_goodness_of_fit(samples[:, b], probs[:, b])
             assert gof > TEST_FAILURE_RATE
