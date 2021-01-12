@@ -89,8 +89,8 @@ def multinomial_goodness_of_fit(
     Pearson's chi^2 test, on possibly truncated data.
     https://en.wikipedia.org/wiki/Pearson%27s_chi-squared_test
 
-    :param Tensor probs: Vector of probabilities.
-    :param Tensor counts: Vector of counts.
+    :param torch.Tensor probs: Vector of probabilities.
+    :param torch.Tensor counts: Vector of counts.
     :param int total_count: Optional total count in case data is truncated,
         otherwise None.
     :param bool plot: Whether to print a histogram. Defaults to False.
@@ -138,8 +138,8 @@ def unif01_goodness_of_fit(samples, *, plot=False):
     """
     Bin uniformly distributed samples and apply Pearson's chi^2 test.
 
-    :param Tensor samples: A vector of real-valued samples from a candidate
-        distribution that should be Uniform(0, 1)-distributed.
+    :param torch.Tensor samples: A vector of real-valued samples from a
+        candidate distribution that should be Uniform(0, 1)-distributed.
     :param bool plot: Whether to print a histogram. Defaults to False.
     :returns: Goodness of fit, as a p-value.
     :rtype: float
@@ -162,8 +162,8 @@ def exp_goodness_of_fit(samples, plot=False):
     Transform exponentially distribued samples to Uniform(0,1) distribution and
     assess goodness of fit via binned Pearson's chi^2 test.
 
-    :param Tensor samples: A vector of real-valued samples from a candidate
-        distribution that should be Exponential(1)-distributed.
+    :param torch.Tensor samples: A vector of real-valued samples from a
+        candidate distribution that should be Exponential(1)-distributed.
     :param bool plot: Whether to print a histogram. Defaults to False.
     :returns: Goodness of fit, as a p-value.
     :rtype: float
@@ -178,10 +178,10 @@ def density_goodness_of_fit(samples, probs, plot=False):
     Transform arbitrary continuous samples to Uniform(0,1) distribution and
     assess goodness of fit via binned Pearson's chi^2 test.
 
-    :param Tensor samples: A vector list of real-valued samples from a
+    :param torch.Tensor samples: A vector list of real-valued samples from a
         distribution.
-    :param Tensor probs: A vector of probability densities evaluated at those
-        samples.
+    :param torch.Tensor probs: A vector of probability densities evaluated at
+        those samples.
     :param bool plot: Whether to print a histogram. Defaults to False.
     :returns: Goodness of fit, as a p-value.
     :rtype: float
@@ -237,10 +237,10 @@ def vector_density_goodness_of_fit(samples, probs, *, dim=None, plot=False):
     [3] Nearest Neighbour Distribution
         https://en.wikipedia.org/wiki/Nearest_neighbour_distribution
 
-    :param Tensor samples: A tensor of real-vector-valued samples from a
+    :param torch.Tensor samples: A tensor of real-vector-valued samples from a
         distribution.
-    :param Tensor probs: A vector of probability densities evaluated at those
-        samples.
+    :param torch.Tensor probs: A vector of probability densities evaluated at
+        those samples.
     :param int dim: Optional dimension of the submanifold on which data lie.
         Defaults to ``samples.shape[-1]``.
     :param bool plot: Whether to print a histogram. Defaults to False.
@@ -267,9 +267,10 @@ def auto_goodness_of_fit(samples, probs, *, dim=None, plot=False):
     Dispatch on sample dimension and delegate to either
     :func:`density_goodness_of_fit` or :func:`vector_density_goodness_of_fit`.
 
-    :param Tensor samples: A tensor of samples stacked on their leftmost
+    :param torch.Tensor samples: A tensor of samples stacked on their leftmost
         dimension.
-    :param Tensor probs: A vector of probabilities evaluated at those samples.
+    :param torch.Tensor probs: A vector of probabilities evaluated at those
+        samples.
     :param int dim: Optional manifold dimension, defaults to
         ``samples.shape[1:].numel()``.
     :param bool plot: Whether to print a histogram. Defaults to False.
