@@ -38,7 +38,8 @@ class ProjectedNormal(TorchDistribution):
 
         @poutine.reparam(config={"direction": ProjectedNormalReparam()})
         def model():
-            direction = pyro.sample("direction", ProjectedNormal(torch.zeros(3)))
+            direction = pyro.sample("direction",
+                                    ProjectedNormal(torch.zeros(3)))
             ...
 
     .. note:: This implements :meth:`log_prob` only for dimensions {2,3}.
@@ -50,9 +51,10 @@ class ProjectedNormal(TorchDistribution):
     """
     arg_constraints = {"concentration": constraints.real_vector}
     support = constraints.sphere
-    _log_prob_impls = {}
+    _log_prob_impls = {}  # maps dim -> function(concentration, value)
 
     def __init__(self, concentration, *, validate_args=None):
+        assert concentration.dim() >= 1
         self.concentration = concentration
         batch_shape = concentration.shape[:-1]
         event_shape = concentration.shape[-1:]
@@ -68,8 +70,10 @@ class ProjectedNormal(TorchDistribution):
 
     @property
     def mean(self):
-        # Note this is the mean in the sense of a centroid
-        # that minimizes expected squared geodesic distance.
+        """
+        Note this is the mean in the sense of a centroid in the submanifold
+        that minimizes expected squared geodesic distance.
+        """
         return safe_project(self.concentration)
 
     @property
@@ -81,7 +85,6 @@ class ProjectedNormal(TorchDistribution):
         x = self.concentration.new_empty(shape).normal_()
         x = x + self.concentration
         x = safe_project(x)
-        assert (x.norm(dim=-1) - 1).abs().max() < 1e-6  # DEBUG
         return x
 
     def log_prob(self, value):
@@ -95,9 +98,10 @@ class ProjectedNormal(TorchDistribution):
         try:
             impl = self._log_prob_impls[dim]
         except KeyError:
-            raise NotImplementedError(
-                f"ProjectedNormal.log_prob() is not implemented for dim = {dim}. "
-                "Consider using poutine.reparam with ProjectedNormalReparam.")
+            msg = f"ProjectedNormal.log_prob() is not implemented for dim = {dim}."
+            if value.requires_grad:  # For latent variables but not observations.
+                msg += " Consider using poutine.reparam with ProjectedNormalReparam."
+            raise NotImplementedError(msg)
         return impl(self.concentration, value)
 
     @classmethod
@@ -114,9 +118,9 @@ def _dot(x, y):
 
 @ProjectedNormal._register_log_prob(dim=2)
 def _log_prob_2(concentration, value):
-    # We integrate along a ray, factorizing the integrand as a truncated normal
-    # distribution over t parallel to the ray multiplied by a univariate normal
-    # distribution over r perpendicular to the ray.
+    # We integrate along a ray, factorizing the integrand as a product of:
+    # a truncated normal distribution over coordinate t parallel to the ray, and
+    # a univariate normal distribution over coordinate r perpendicular to the ray.
     t = _dot(concentration, value)
     t2 = t.square()
     r2 = _dot(concentration, concentration) - t2
@@ -133,9 +137,9 @@ def _log_prob_2(concentration, value):
 
 @ProjectedNormal._register_log_prob(dim=3)
 def _log_prob_3(concentration, value):
-    # We integrate along a ray, factorizing the integrand as a truncated normal
-    # distribution over t parallel to the ray multiplied by a bivariate normal
-    # distribution over r perpendicular to the ray.
+    # We integrate along a ray, factorizing the integrand as a product of:
+    # a truncated normal distribution over coordinate t parallel to the ray, and
+    # a bivariate normal distribution over coordinate r perpendicular to the ray.
     t = _dot(concentration, value)
     t2 = t.square()
     r2 = _dot(concentration, concentration) - t2
