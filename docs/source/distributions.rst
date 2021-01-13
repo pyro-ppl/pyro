@@ -283,7 +283,7 @@ OrderedLogistic
 
 ProjectedNormal
 ---------------
-.. autoclass:: pyro.distributions.projected_normal
+.. autoclass:: pyro.distributions.ProjectedNormal
     :members:
     :undoc-members:
     :show-inheritance:

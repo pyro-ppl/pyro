@@ -36,7 +36,7 @@ class ProjectedNormal(TorchDistribution):
     inference via reparametrized gradients.
 
     To use this distribution with autoguides, use ``poutine.reparam`` with a
-    :class:`~pyro.infer.reparam.projectednormal.ProjectedNormalReparam`
+    :class:`~pyro.infer.reparam.projected_normal.ProjectedNormalReparam`
     reparametrizer in the model, e.g.::
 
         @poutine.reparam(config={"direction": ProjectedNormalReparam()})
