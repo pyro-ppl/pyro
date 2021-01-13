@@ -47,7 +47,7 @@ class _Sphere(Constraint):
     """
     Constrain to the Euclidean n-sphere.
     """
-    reltol = 10.
+    reltol = 10.  # Relative to finfo.eps.
 
     def check(self, value):
         eps = torch.finfo(value.dtype).eps
