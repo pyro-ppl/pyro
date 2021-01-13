@@ -51,6 +51,7 @@ class ProjectedNormal(TorchDistribution):
     """
     arg_constraints = {"concentration": constraints.real_vector}
     support = constraints.sphere
+    has_rsample = True
     _log_prob_impls = {}  # maps dim -> function(concentration, value)
 
     def __init__(self, concentration, *, validate_args=None):
