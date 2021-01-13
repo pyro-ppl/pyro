@@ -18,7 +18,10 @@ def safe_project(x):
     :returns: A normalized version ``x / ||x||_2``.
     :rtype: Tensor
     """
-    norm = torch.linalg.norm(x, dim=-1, keepdim=True)
+    try:
+        norm = torch.linalg.norm(x, dim=-1, keepdim=True)  # torch 1.7+
+    except AttributeError:
+        norm = x.norm(dim=-1, keepdim=True)  # torch 1.6
     x = x / norm.clamp(min=torch.finfo(x.dtype).tiny)
     x.data[..., 0][x.data.eq(0).all(dim=-1)] = 1  # Avoid the singularity.
     return x

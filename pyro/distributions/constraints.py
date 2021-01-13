@@ -51,7 +51,11 @@ class _Sphere(Constraint):
 
     def check(self, value):
         eps = torch.finfo(value.dtype).eps
-        error = torch.linalg.norm(value, dim=-1).sub(1).abs()
+        try:
+            norm = torch.linalg.norm(value, dim=-1)  # torch 1.7+
+        except AttributeError:
+            norm = value.norm(dim=-1)  # torch 1.6
+        error = (norm - 1).abs()
         return error < self.reltol * eps * value.size(-1) ** 0.5
 
     def __repr__(self):
