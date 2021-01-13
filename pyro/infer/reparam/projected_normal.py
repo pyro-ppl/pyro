@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
+
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.projected_normal import safe_project
@@ -21,11 +23,11 @@ class ProjectedNormalReparam(Reparam):
         assert obs is None, "ProjectedNormalReparam does not support observe statements"
 
         # Draw parameter-free noise.
-        new_fn = dist.Normal(fn.concentration, 1).to_event(1)
+        new_fn = dist.Normal(torch.zeros_like(fn.concentration), 1).to_event(1)
         x = pyro.sample("{}_normal".format(name), self._wrap(new_fn, event_dim))
 
         # Differentiably transform.
-        value = safe_project(x)
+        value = safe_project(x + fn.concentration)
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)
