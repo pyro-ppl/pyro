@@ -57,5 +57,6 @@ def helpful_support_errors(site):
             raise ValueError(
                 f"Continuous inference cannot handle spherical sample site '{name}'. "
                 "Consider using ProjectedNormal distribution together with "
-                "poutine.reparam and a ProjectedNormalReparam reparametrizer.")
+                "a reparameterizer, e.g. "
+                f"poutine.reparam(config={{'{name}': ProjectedNormalReparam()}}).")
         raise e from None
