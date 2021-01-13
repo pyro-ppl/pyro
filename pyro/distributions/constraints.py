@@ -43,6 +43,25 @@ class _Integer(Constraint):
         return self.__class__.__name__[1:]
 
 
+class _Sphere(Constraint):
+    """
+    Constrain to the Euclidean sphere of any dimension.
+    """
+    reltol = 10.  # Relative to finfo.eps.
+
+    def check(self, value):
+        eps = torch.finfo(value.dtype).eps
+        try:
+            norm = torch.linalg.norm(value, dim=-1)  # torch 1.7+
+        except AttributeError:
+            norm = value.norm(dim=-1)  # torch 1.6
+        error = (norm - 1).abs()
+        return error < self.reltol * eps * value.size(-1) ** 0.5
+
+    def __repr__(self):
+        return self.__class__.__name__[1:]
+
+
 class _CorrCholesky(Constraint):
     """
     Constrains to lower-triangular square matrices with positive diagonals and
@@ -73,12 +92,14 @@ class _OrderedVector(Constraint):
 corr_cholesky_constraint = _CorrCholesky()
 integer = _Integer()
 ordered_vector = _OrderedVector()
+sphere = _Sphere()
 
 __all__ = [
     'IndependentConstraint',
     'corr_cholesky_constraint',
     'integer',
     'ordered_vector',
+    'sphere',
 ]
 
 __all__.extend(torch_constraints)
@@ -100,7 +121,8 @@ __doc__ += "\n".join([
         _name,
         "alias of :class:`torch.distributions.constraints.{}`".format(_name)
         if globals()[_name].__module__.startswith("torch") else
-        ".. autoclass:: {}".format(_name)
+        ".. autoclass:: {}".format(_name if type(globals()[_name]) is type else
+                                   type(globals()[_name]).__name__)
     )
     for _name in sorted(__all__)
 ])

@@ -281,6 +281,13 @@ OrderedLogistic
     :undoc-members:
     :show-inheritance:
 
+ProjectedNormal
+---------------
+.. autoclass:: pyro.distributions.ProjectedNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RelaxedBernoulliStraightThrough
 -------------------------------
 .. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough
