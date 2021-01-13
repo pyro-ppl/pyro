@@ -129,8 +129,8 @@ def _log_prob_2(concentration, value):
     # This is the log of a definite integral, computed by mathematica:
     # Integrate[x/(E^((x-t)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
     # = (t + Sqrt[2/Pi]/E^(t^2/2) + t Erf[t/Sqrt[2]])/2
-    para_part = (t + t2.mul(-0.5).exp().mul((2 / math.pi) ** 0.5)
-                 + t * (t * 0.5 ** 0.5).erf()).mul(0.5).log()
+    para_part = (t2.mul(-0.5).exp().mul((2 / math.pi) ** 0.5)
+                 + t * (1 + (t * 0.5 ** 0.5).erf())).mul(0.5).log()
 
     return para_part + perp_part
 

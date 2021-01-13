@@ -281,8 +281,8 @@ continuous_dists = [
             examples=[
                 {'concentration': [0., 0.], 'test_data': [1., 0.]},
                 {'concentration': [5., 9.], 'test_data': [0., 1.]},
-                {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
-                {'concentration': [-1., 5., 9.], 'test_data': [0., 0., 1.]},
+                # {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
+                # {'concentration': [-1., 5., 9.], 'test_data': [0., 0., 1.]},
                 ]),
 ]
 
