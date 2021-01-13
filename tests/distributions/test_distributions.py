@@ -98,15 +98,15 @@ def test_gof(continuous_dist):
             probs = d.log_prob(samples).exp()
 
         dim = None
-        if "Dirichlet" in Dist.__name__:
-            # The Dirichlet density is over all but one of the probs.
-            samples = samples[..., :-1]
         if "ProjectedNormal" in Dist.__name__:
             dim = samples.size(-1) - 1
 
         # Test each batch independently.
         probs = probs.reshape(num_samples, -1)
         samples = samples.reshape(probs.shape + d.event_shape)
+        if "Dirichlet" in Dist.__name__:
+            # The Dirichlet density is over all but one of the probs.
+            samples = samples[..., :-1]
         for b in range(probs.size(-1)):
             gof = auto_goodness_of_fit(samples[:, b], probs[:, b], dim=dim)
             assert gof > TEST_FAILURE_RATE

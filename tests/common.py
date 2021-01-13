@@ -27,7 +27,7 @@ Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = os.path.join(TESTS_DIR, 'resources')
 EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
-TEST_FAILURE_RATE = 1 / 1000  # For all goodness-of-fit tests.
+TEST_FAILURE_RATE = 2e-5  # For all goodness-of-fit tests.
 
 
 def xfail_param(*args, **kwargs):

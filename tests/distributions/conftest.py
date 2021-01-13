@@ -280,9 +280,9 @@ continuous_dists = [
     Fixture(pyro_dist=dist.ProjectedNormal,
             examples=[
                 {'concentration': [0., 0.], 'test_data': [1., 0.]},
-                {'concentration': [5., 9.], 'test_data': [0., 1.]},
-                # {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
-                # {'concentration': [-1., 5., 9.], 'test_data': [0., 0., 1.]},
+                {'concentration': [2., 3.], 'test_data': [0., 1.]},
+                {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
+                {'concentration': [-1., 2., 3.], 'test_data': [0., 0., 1.]},
                 ]),
 ]
 
