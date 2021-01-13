@@ -809,3 +809,57 @@ def test_subsample_guide_2(auto_class, independent):
     data = torch.randn(10, 10)
     for step in range(2):
         svi.step(data)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_discrete_helpful_error(auto_class, init_loc_fn):
+
+    def model():
+        p = pyro.sample("p", dist.Beta(2., 2.))
+        x = pyro.sample("x", dist.Bernoulli(p))
+        pyro.sample("obs", p * x + (1 - p) * (1 - x),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    with pytest.raises(ValueError, match=".*enumeration.html.*"):
+        guide()
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_helpful_error(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([2]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    with pytest.raises(ValueError, match=".*ProjectedNormalReparam.*"):
+        guide()

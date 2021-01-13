@@ -20,8 +20,10 @@ from pyro.infer.util import is_validation_enabled
 from pyro.poutine.messenger import Messenger
 from pyro.util import torch_isnan
 
+from .utils import helpful_support_errors
 
 # TODO: move this file out of `autoguide` in a minor release
+
 
 def _is_multivariate(d):
     while isinstance(d, (Independent, MaskedDistribution)):
@@ -180,7 +182,7 @@ class InitMessenger(Messenger):
     def _pyro_sample(self, msg):
         if msg["done"] or msg["is_observed"] or type(msg["fn"]).__name__ == "_Subsample":
             return
-        with torch.no_grad():
+        with torch.no_grad(), helpful_support_errors(msg):
             value = self.init_fn(msg)
         if is_validation_enabled() and msg["value"] is not None:
             if not isinstance(value, type(msg["value"])):
