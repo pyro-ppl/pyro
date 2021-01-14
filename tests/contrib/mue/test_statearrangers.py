@@ -18,6 +18,7 @@ def simpleprod(lst):
 def test_profile(M, batch_size, substitute):
     torch.set_default_tensor_type('torch.DoubleTensor')
 
+    # --- Setup random model. ---
     pf_arranger = profile(M)
 
     u1 = torch.rand((M+1, 3))
@@ -35,6 +36,7 @@ def test_profile(M, batch_size, substitute):
         u1 = torch.rand((batch_size, M+1, 3))
         u = torch.cat([(1-u1)[:, :, :, None], u1[:, :, :, None]], dim=3)
 
+    # Compute forward pass of state arranger to get HMM parameters.
     if substitute:
         ll = torch.rand((4, 5))
         ll = ll/torch.sum(ll, dim=1, keepdim=True)
@@ -45,7 +47,11 @@ def test_profile(M, batch_size, substitute):
         a0ln, aln, eln = pf_arranger.forward(torch.log(s), torch.log(c),
                                              torch.log(r), torch.log(u))
 
-    # - Remake transition matrices. -
+    # - Remake HMM parameters to check. -
+    # Here we implement Equation S40 from the MuE paper
+    # (https://www.biorxiv.org/content/10.1101/2020.07.31.231381v1.full.pdf)
+    # more directly, iterating over all the indices of the transition matrix
+    # and initial transition vector.
     K = 2*(M+1)
     if batch_size is None:
         batch_dim_size = 1
@@ -125,7 +131,8 @@ def test_profile(M, batch_size, substitute):
                     chk_e[b, k, :] = c[b, m, :]
     if substitute:
         chk_e = torch.matmul(chk_e, ll)
-    # - -
+
+    # --- Check ---
     if batch_size is None:
         chk_a = chk_a.squeeze()
         chk_a0 = chk_a0.squeeze()
@@ -139,3 +146,61 @@ def test_profile(M, batch_size, substitute):
     assert torch.allclose(chk_a0, torch.exp(a0ln))
     assert torch.allclose(chk_a, torch.exp(aln))
     assert torch.allclose(chk_e, torch.exp(eln))
+
+
+@pytest.mark.parametrize('batch_ancestor_seq', [False, True])
+@pytest.mark.parametrize('batch_insert_seq', [False, True])
+@pytest.mark.parametrize('batch_insert', [False, True])
+@pytest.mark.parametrize('batch_delete', [False, True])
+@pytest.mark.parametrize('batch_substitute', [False, True])
+def test_profile_shapes(batch_ancestor_seq, batch_insert_seq, batch_insert,
+                        batch_delete, batch_substitute):
+
+    M = 5
+    pf_arranger = profile(M)
+    u1 = torch.rand((M+1, 3))
+    u = torch.cat([(1-u1)[:, :, None], u1[:, :, None]], dim=2)
+    r1 = torch.rand((M+1, 3))
+    r = torch.cat([(1-r1)[:, :, None], r1[:, :, None]], dim=2)
+    s = torch.rand((M+1, 4))
+    s = s/torch.sum(s, dim=1, keepdim=True)
+    c = torch.rand((M+1, 4))
+    c = c/torch.sum(c, dim=1, keepdim=True)
+    ll = torch.rand((4, 5))
+    ll = ll/torch.sum(ll, dim=1, keepdim=True)
+    a0ln, aln, eln = pf_arranger.forward(torch.log(s), torch.log(c),
+                                         torch.log(r), torch.log(u),
+                                         torch.log(ll))
+
+
+@pytest.mark.parametrize('M', [2, 20])
+@pytest.mark.parametrize('batch_size', [None, 5])
+def test_profile_trivial_case(M, batch_size):
+
+    torch.set_default_tensor_type('torch.DoubleTensor')
+
+    # --- Setup random model. ---
+    pf_arranger = profile(M)
+
+    u1 = torch.rand((M+1, 3))
+    u = torch.cat([(1-u1)[:, :, None], u1[:, :, None]], dim=2)
+    r1 = torch.rand((M+1, 3))
+    r = torch.cat([(1-r1)[:, :, None], r1[:, :, None]], dim=2)
+    s = torch.rand((M+1, 4))
+    s = s/torch.sum(s, dim=1, keepdim=True)
+    c = torch.rand((M+1, 4))
+    c = c/torch.sum(c, dim=1, keepdim=True)
+
+    if batch_size is not None:
+        s = torch.rand((batch_size, M+1, 4))
+        s = s/torch.sum(s, dim=2, keepdim=True)
+        u1 = torch.rand((batch_size, M+1, 3))
+        u = torch.cat([(1-u1)[:, :, :, None], u1[:, :, :, None]], dim=3)
+
+    # Compute forward pass of state arranger to get HMM parameters.
+    if substitute:
+        ll = torch.rand((4, 5))
+        ll = ll/torch.sum(ll, dim=1, keepdim=True)
+        a0ln, aln, eln = pf_arranger.forward(torch.log(s), torch.log(c),
+                                             torch.log(r), torch.log(u),
+                                             torch.log(ll))
