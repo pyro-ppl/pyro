@@ -142,7 +142,8 @@ class profile(nn.Module):
         # Option to include the substitution matrix.
         if substitute_logits is not None:
             observation_logits = torch.logsumexp(
-                seq_logits.unsqueeze(-1) + substitute_logits, dim=-2)
+                seq_logits.unsqueeze(-1) + substitute_logits.unsqueeze(-3),
+                dim=-2)
         else:
             observation_logits = seq_logits
 

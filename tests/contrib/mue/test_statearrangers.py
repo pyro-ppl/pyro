@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from pyro.contrib.mue.statearrangers import mg2k, profile
+from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
 
 
 def simpleprod(lst):
@@ -156,33 +157,61 @@ def test_profile(M, batch_size, substitute):
 def test_profile_shapes(batch_ancestor_seq, batch_insert_seq, batch_insert,
                         batch_delete, batch_substitute):
 
-    M, D, B = 5, 2, 6
+    M, D, B = 5, 2, 3
     K = 2*(M+1)
     batch_size = 6
     pf_arranger = profile(M)
-    sln = torch.randn([batch_size]*batch_ancestor_seq + [M+1, 4])
-    cln = torch.randn([batch_size]*batch_insert_seq + [M+1, 4])
+    sln = torch.randn([batch_size]*batch_ancestor_seq + [M+1, D])
+    cln = torch.randn([batch_size]*batch_insert_seq + [M+1, D])
     rln = torch.randn([batch_size]*batch_insert + [M+1, 3, 2])
     uln = torch.randn([batch_size]*batch_delete + [M+1, 3, 2])
     lln = torch.randn([batch_size]*batch_substitute + [D, B])
     a0ln, aln, eln = pf_arranger.forward(sln, cln, rln, uln, lln)
 
-    if all([not batch_ancestor_seq, not batch_insert_seq, not batch_insert,
-            not batch_delete, not batch_substitute]):
+    if all([not batch_ancestor_seq, not batch_insert_seq,
+            not batch_substitute]):
+        assert eln.shape == (K, B)
+    else:
+        assert eln.shape == (batch_size, K, B)
+
+    if all([not batch_insert, not batch_delete]):
         assert a0ln.shape == (K,)
         assert aln.shape == (K, K)
-        assert eln.shape == (K, B)
     else:
         assert a0ln.shape == (batch_size, K)
         assert aln.shape == (batch_size, K, K)
-        assert eln.shape == (batch_size, K, B)
 
 
 @pytest.mark.parametrize('M', [2, 20])
-@pytest.mark.parametrize('batch_size', [None, 5])
-def test_profile_trivial_cases(M, batch_size):
+def test_profile_trivial_cases(M):
+    # Trivial case: indel probabability of zero. Expected value of
+    # HMM should match ancestral sequence times substitution matrix.
 
+    # --- Setup model. ---
     torch.set_default_tensor_type('torch.DoubleTensor')
-
-    # --- Setup random model. ---
+    D, B = 2, 2
+    batch_size = 5
     pf_arranger = profile(M)
+    sln = torch.randn([batch_size, M+1, D])
+    sln = sln - sln.logsumexp(-1, True)
+    cln = torch.randn([batch_size, M+1, D])
+    cln = cln - cln.logsumexp(-1, True)
+    rln = torch.cat([torch.zeros([M+1, 3, 1]),
+                     -1/pf_arranger.epsilon*torch.ones([M+1, 3, 1])], axis=-1)
+    uln = torch.cat([torch.zeros([M+1, 3, 1]),
+                     -1/pf_arranger.epsilon*torch.ones([M+1, 3, 1])], axis=-1)
+    lln = torch.randn([D, B])
+    lln = lln - lln.logsumexp(-1, True)
+
+    a0ln, aln, eln = pf_arranger.forward(sln, cln, rln, uln, lln)
+
+    # --- Compute expected value per step. ---
+    # TODO: replace with VariableLengthDiscreteHMM function once implemented.
+    Eyln = torch.zeros([batch_size, M, B])
+    ai = a0ln
+    for j in range(M):
+        Eyln[:, j, :] = torch.logsumexp(ai.unsqueeze(-1) + eln, axis=-2)
+        ai = torch.logsumexp(ai.unsqueeze(-1) + aln, axis=-2)
+
+    no_indel = torch.logsumexp(sln.unsqueeze(-1) + lln.unsqueeze(-3), axis=-2)
+    assert torch.allclose(Eyln, no_indel[:, :-1, :])
