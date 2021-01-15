@@ -4,13 +4,10 @@ import torch
 import torch.nn as nn
 
 
-def mg2k(m, g):
-    """Convert from (m, g) indexing to k indexing."""
-    return 2*m + 1 - g
-
-
 class profile(nn.Module):
-
+    """
+    Profile HMM state arrangement.
+    """
     def __init__(self, M, epsilon=1e-32):
         super().__init__()
         self.M = M
@@ -150,3 +147,8 @@ class profile(nn.Module):
             observation_logits = seq_logits
 
         return initial_logits, transition_logits, observation_logits
+
+
+def mg2k(m, g):
+    """Convert from (m, g) indexing to k indexing."""
+    return 2*m + 1 - g

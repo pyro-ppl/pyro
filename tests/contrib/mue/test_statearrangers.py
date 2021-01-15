@@ -156,51 +156,33 @@ def test_profile(M, batch_size, substitute):
 def test_profile_shapes(batch_ancestor_seq, batch_insert_seq, batch_insert,
                         batch_delete, batch_substitute):
 
-    M = 5
+    M, D, B = 5, 2, 6
+    K = 2*(M+1)
+    batch_size = 6
     pf_arranger = profile(M)
-    u1 = torch.rand((M+1, 3))
-    u = torch.cat([(1-u1)[:, :, None], u1[:, :, None]], dim=2)
-    r1 = torch.rand((M+1, 3))
-    r = torch.cat([(1-r1)[:, :, None], r1[:, :, None]], dim=2)
-    s = torch.rand((M+1, 4))
-    s = s/torch.sum(s, dim=1, keepdim=True)
-    c = torch.rand((M+1, 4))
-    c = c/torch.sum(c, dim=1, keepdim=True)
-    ll = torch.rand((4, 5))
-    ll = ll/torch.sum(ll, dim=1, keepdim=True)
-    a0ln, aln, eln = pf_arranger.forward(torch.log(s), torch.log(c),
-                                         torch.log(r), torch.log(u),
-                                         torch.log(ll))
+    sln = torch.randn([batch_size]*batch_ancestor_seq + [M+1, 4])
+    cln = torch.randn([batch_size]*batch_insert_seq + [M+1, 4])
+    rln = torch.randn([batch_size]*batch_insert + [M+1, 3, 2])
+    uln = torch.randn([batch_size]*batch_delete + [M+1, 3, 2])
+    lln = torch.randn([batch_size]*batch_substitute + [D, B])
+    a0ln, aln, eln = pf_arranger.forward(sln, cln, rln, uln, lln)
+
+    if all([not batch_ancestor_seq, not batch_insert_seq, not batch_insert,
+            not batch_delete, not batch_substitute]):
+        assert a0ln.shape == (K,)
+        assert aln.shape == (K, K)
+        assert eln.shape == (K, B)
+    else:
+        assert a0ln.shape == (batch_size, K)
+        assert aln.shape == (batch_size, K, K)
+        assert eln.shape == (batch_size, K, B)
 
 
 @pytest.mark.parametrize('M', [2, 20])
 @pytest.mark.parametrize('batch_size', [None, 5])
-def test_profile_trivial_case(M, batch_size):
+def test_profile_trivial_cases(M, batch_size):
 
     torch.set_default_tensor_type('torch.DoubleTensor')
 
     # --- Setup random model. ---
     pf_arranger = profile(M)
-
-    u1 = torch.rand((M+1, 3))
-    u = torch.cat([(1-u1)[:, :, None], u1[:, :, None]], dim=2)
-    r1 = torch.rand((M+1, 3))
-    r = torch.cat([(1-r1)[:, :, None], r1[:, :, None]], dim=2)
-    s = torch.rand((M+1, 4))
-    s = s/torch.sum(s, dim=1, keepdim=True)
-    c = torch.rand((M+1, 4))
-    c = c/torch.sum(c, dim=1, keepdim=True)
-
-    if batch_size is not None:
-        s = torch.rand((batch_size, M+1, 4))
-        s = s/torch.sum(s, dim=2, keepdim=True)
-        u1 = torch.rand((batch_size, M+1, 3))
-        u = torch.cat([(1-u1)[:, :, :, None], u1[:, :, :, None]], dim=3)
-
-    # Compute forward pass of state arranger to get HMM parameters.
-    if substitute:
-        ll = torch.rand((4, 5))
-        ll = ll/torch.sum(ll, dim=1, keepdim=True)
-        a0ln, aln, eln = pf_arranger.forward(torch.log(s), torch.log(c),
-                                             torch.log(r), torch.log(u),
-                                             torch.log(ll))
