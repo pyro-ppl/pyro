@@ -1,8 +1,7 @@
 import pytest
 import torch
 
-from pyro.contrib.mue.statearrangers import mg2k, profile
-from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
+from pyro.contrib.mue.statearrangers import mg2k, Profile
 
 
 def simpleprod(lst):
@@ -17,10 +16,9 @@ def simpleprod(lst):
 @pytest.mark.parametrize('batch_size', [None, 5])
 @pytest.mark.parametrize('substitute', [False, True])
 def test_profile(M, batch_size, substitute):
-    torch.set_default_tensor_type('torch.DoubleTensor')
 
     # --- Setup random model. ---
-    pf_arranger = profile(M)
+    pf_arranger = Profile(M)
 
     u1 = torch.rand((M+1, 3))
     u = torch.cat([(1-u1)[:, :, None], u1[:, :, None]], dim=2)
@@ -160,7 +158,7 @@ def test_profile_shapes(batch_ancestor_seq, batch_insert_seq, batch_insert,
     M, D, B = 5, 2, 3
     K = 2*(M+1)
     batch_size = 6
-    pf_arranger = profile(M)
+    pf_arranger = Profile(M)
     sln = torch.randn([batch_size]*batch_ancestor_seq + [M+1, D])
     cln = torch.randn([batch_size]*batch_insert_seq + [M+1, D])
     rln = torch.randn([batch_size]*batch_insert + [M+1, 3, 2])
@@ -188,10 +186,9 @@ def test_profile_trivial_cases(M):
     # HMM should match ancestral sequence times substitution matrix.
 
     # --- Setup model. ---
-    torch.set_default_tensor_type('torch.DoubleTensor')
     D, B = 2, 2
     batch_size = 5
-    pf_arranger = profile(M)
+    pf_arranger = Profile(M)
     sln = torch.randn([batch_size, M+1, D])
     sln = sln - sln.logsumexp(-1, True)
     cln = torch.randn([batch_size, M+1, D])

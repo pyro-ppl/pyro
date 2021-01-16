@@ -8,10 +8,16 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
 
-class VariableLengthDiscreteHMM(TorchDistribution):
+class MissingDataDiscreteHMM(TorchDistribution):
     """
     HMM with discrete latent states and discrete observations, allowing for
     variable length sequences.
+
+    .. warning:: Unlike in pyro's DiscreteHMM, which computes the
+        probability of the first state as
+        initial.T @ transition @ emission
+        this distribution uses the standard HMM convention,
+        initial.T @ emission
     """
     arg_constraints = {"initial_logits": constraints.real,
                        "transition_logits": constraints.real,
@@ -46,12 +52,6 @@ class VariableLengthDiscreteHMM(TorchDistribution):
             batch_shape, event_shape, validate_args=validate_args)
 
     def log_prob(self, value):
-        """Warning: unlike in pyro's DiscreteHMM, which computes the
-        probability of the first state as
-        initial.T @ transition @ emission
-        this distribution uses the standard HMM convention,
-        initial.T @ emission
-        """
         # observation_logits:
         # batch_shape (option) x state_dim x observation_dim
         # value:

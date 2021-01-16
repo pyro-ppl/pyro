@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 
-class profile(nn.Module):
+class Profile(nn.Module):
     """
     Profile HMM state arrangement.
     """

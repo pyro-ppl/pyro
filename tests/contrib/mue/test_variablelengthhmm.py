@@ -1,13 +1,11 @@
 from pyro.distributions import DiscreteHMM, Categorical
-from pyro.distributions.util import broadcast_shape
 import pytest
 import torch
 
-from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
+from pyro.contrib.mue.variablelengthhmm import MissingDataDiscreteHMM
 
 
 def test_hmm_log_prob():
-    torch.set_default_tensor_type('torch.DoubleTensor')
 
     a0 = torch.tensor([0.9, 0.08, 0.02])
     a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
@@ -20,8 +18,8 @@ def test_hmm_log_prob():
                       [1., 0.],
                       [0., 0.]])
 
-    hmm_distr = VariableLengthDiscreteHMM(torch.log(a0), torch.log(a),
-                                          torch.log(e))
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
     lp = hmm_distr.log_prob(x)
 
     f = a0 * e[:, 1]
@@ -61,8 +59,8 @@ def test_hmm_log_prob():
         e[None, :, :],
         torch.tensor([[0.4, 0.6], [0.99, 0.01], [0.7, 0.3]])[None, :, :]],
         dim=0)
-    hmm_distr = VariableLengthDiscreteHMM(torch.log(a0), torch.log(a),
-                                          torch.log(e))
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
     lp = hmm_distr.log_prob(x)
 
     f = a0[1, :] * e[1, :, 0]
@@ -78,7 +76,6 @@ def test_hmm_log_prob():
 @pytest.mark.parametrize('batch_observation', [False, True])
 @pytest.mark.parametrize('batch_data', [False, True])
 def test_shapes(batch_initial, batch_transition, batch_observation, batch_data):
-    torch.set_default_tensor_type('torch.DoubleTensor')
 
     # Dimensions.
     batch_size = 3
@@ -97,8 +94,8 @@ def test_shapes(batch_initial, batch_transition, batch_observation, batch_data):
     observation_logits = (observation_logits -
                           observation_logits.logsumexp(-1, True))
 
-    hmm = VariableLengthDiscreteHMM(initial_logits, transition_logits,
-                                    observation_logits)
+    hmm = MissingDataDiscreteHMM(initial_logits, transition_logits,
+                                 observation_logits)
 
     # Random observations.
     value = (torch.randint(observation_dim,
@@ -147,9 +144,9 @@ def test_DiscreteHMM_comparison(batch_initial, batch_transition,
     # Create distribution object for DiscreteHMM
     observation_dist = Categorical(logits=observation_logits.unsqueeze(-3))
 
-    vldhmm = VariableLengthDiscreteHMM(initial_logits_vldhmm,
-                                       transition_logits_vldhmm,
-                                       observation_logits)
+    vldhmm = MissingDataDiscreteHMM(initial_logits_vldhmm,
+                                    transition_logits_vldhmm,
+                                    observation_logits)
     dhmm = DiscreteHMM(initial_logits_dhmm, transition_logits_dhmm,
                        observation_dist)
 
