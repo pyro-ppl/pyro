@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from pyro.distributions.torch import Beta, TransformedDistribution
 from torch.distributions import constraints
 from torch.distributions.transforms import AffineTransform
+
+from pyro.distributions.torch import Beta, TransformedDistribution
 
 
 class AffineBeta(TransformedDistribution):
@@ -15,12 +16,16 @@ class AffineBeta(TransformedDistribution):
         f(X) = loc + scale * X
         Y = f(X) ~ AffineBeta(concentration1, concentration0, loc, scale)
 
-    :param float or torch.Tensor concentration1: 1st concentration parameter
+    :param concentration1: 1st concentration parameter
         (alpha) for the Beta distribution.
-    :param float or torch.Tensor concentration0: 2nd concentration parameter
+    :type concentration1: float or torch.Tensor
+    :param concentration0: 2nd concentration parameter
         (beta) for the Beta distribution.
-    :param float or torch.Tensor loc: location parameter.
-    :param float or torch.Tensor scale: scale parameter.
+    :type concentration0: float or torch.Tensor
+    :param loc: location parameter.
+    :type loc: float or torch.Tensor
+    :param scale: scale parameter.
+    :type scale: float or torch.Tensor
     """
 
     arg_constraints = {
