@@ -385,6 +385,7 @@ class AutoDelta(AutoGuide):
                                                             event_dim=site["fn"].event_dim))
         return result
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -392,7 +393,8 @@ class AutoDelta(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        return self(*args, **kwargs)
+        result = self(*args, **kwargs)
+        return {k: v.detach() for k, v in result.items()}
 
 
 class AutoNormal(AutoGuide):
@@ -516,6 +518,7 @@ class AutoNormal(AutoGuide):
 
         return result
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -533,6 +536,7 @@ class AutoNormal(AutoGuide):
 
         return medians
 
+    @torch.no_grad()
     def quantiles(self, quantiles, *args, **kwargs):
         """
         Returns posterior quantiles each latent variable. Example::
@@ -723,6 +727,7 @@ class AutoContinuous(AutoGuide):
         """
         raise NotImplementedError
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -731,9 +736,11 @@ class AutoContinuous(AutoGuide):
         :rtype: dict
         """
         loc, _ = self._loc_scale(*args, **kwargs)
+        loc = loc.detach()
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self._unpack_latent(loc)}
 
+    @torch.no_grad()
     def quantiles(self, quantiles, *args, **kwargs):
         """
         Returns posterior quantiles each latent variable. Example::

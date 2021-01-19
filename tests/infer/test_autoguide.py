@@ -332,6 +332,9 @@ def test_quantiles(auto_class, Elbo):
     quantiles = guide.quantiles([0.1, 0.5, 0.9])
     median = guide.median()
     for name in ["x", "y", "z"]:
+        assert not median[name].requires_grad
+        for q in quantiles[name]:
+            assert not q.requires_grad
         assert_equal(median[name], quantiles[name][1])
     quantiles = {name: [v.item() for v in value] for name, value in quantiles.items()}
 
