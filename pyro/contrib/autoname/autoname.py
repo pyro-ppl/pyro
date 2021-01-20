@@ -23,7 +23,8 @@ class AutonameFrame:
         self.counter = counter
 
     def __hash__(self):
-        return hash((self.name, self.counter))
+        return hash(self.name)
+        # return hash((self.name, self.counter))
 
     def __eq__(self, other):
         return type(self) == type(other) and (self.name, self.counter) == (other.name, other.counter)
@@ -71,6 +72,7 @@ class AutonameMessenger(ReentrantMessenger):
         raw_name = msg["fn"](*msg["args"])
         
         context = tuple(_AUTONAME_STACK)
+        breakpoint()
         msg["value"] = "/".join("{}_{}".format(frame.name, frame.counter) for frame in _AUTONAME_STACK) + \
             "/" + raw_name + "_" + str(_AUTONAME_LOCAL_COUNTERS[context])
         _AUTONAME_LOCAL_COUNTERS[context] += 1
@@ -78,16 +80,21 @@ class AutonameMessenger(ReentrantMessenger):
         msg["done"] = True
 
     def _pyro_call_scope(self, msg):
+        # breakpoint()
         _AUTONAME_STACK.append(copy.copy(self.frame))
-        context = tuple(_AUTONAME_STACK)
+        context = tuple(hash(frame) for frame in _AUTONAME_STACK)
         _AUTONAME_CALL_COUNTERS[context] += 1
         self.frame.counter = _AUTONAME_CALL_COUNTERS[context]
         msg["stop"] = True
 
     def _pyro_post_call_scope(self, msg):
-        deleted_context = tuple(_AUTONAME_STACK)
-        _AUTONAME_CALL_COUNTERS.pop(deleted_context, None)
-        _AUTONAME_LOCAL_COUNTERS.pop(deleted_context, None)
+        # breakpoint()
+        # deleted_context = tuple(_AUTONAME_STACK)
+        deleted_context = tuple(hash(frame) for frame in _AUTONAME_STACK)
+        #  _AUTONAME_CALL_COUNTERS[deleted_context] -= 1
+        #  self.frame.counter = _AUTONAME_CALL_COUNTERS[deleted_context]
+        #  _AUTONAME_CALL_COUNTERS.pop(deleted_context, None)
+        #  _AUTONAME_LOCAL_COUNTERS.pop(deleted_context, None)
         _AUTONAME_STACK.pop(-1)
         msg["stop"] = True
 

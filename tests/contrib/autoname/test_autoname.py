@@ -152,6 +152,32 @@ def test_basic_scope():
     assert "f2_0/Bernoulli_0" in tr2.nodes
 
 
+def test_for_loops():
+
+    @autoname
+    def f1():
+        return sample(dist.Bernoulli(0.5))
+
+    @autoname(name="model")
+    def f2():
+        f1()
+        for i in autoname(name="time")(range(2)):
+            f1()
+        for i in range(2):
+            f1()
+        return sample(dist.Bernoulli(0.5))
+
+    expected_names = [
+            "f2_0/f1_0/Bernoulli_0",
+            "f2_0/f1_1/Bernoulli_0",
+            "f2_0/f1_2/Bernoulli_0",
+            "f2_0/Bernoulli_0"]
+    tr2 = poutine.trace(f2).get_trace()
+    actual_names = [name for name, node in tr2.nodes.items()
+                    if node['type'] == "sample"]
+    assert expected_names == actual_names
+
+
 def test_nested_traces():
 
     @autoname
@@ -165,9 +191,12 @@ def test_nested_traces():
         f1()
         return sample(dist.Bernoulli(0.5))
 
-    expected_names = ["f2/f1/x", "f2/f1__1/x", "f2/f1__2/x", "f2/y"]
+    expected_names = [
+            "f2_0/f1_0/Bernoulli_0",
+            "f2_0/f1_1/Bernoulli_0",
+            "f2_0/f1_2/Bernoulli_0",
+            "f2_0/Bernoulli_0"]
     tr2 = poutine.trace(f2).get_trace()
-    breakpoint()
     actual_names = [name for name, node in tr2.nodes.items()
                     if node['type'] == "sample"]
     assert expected_names == actual_names
