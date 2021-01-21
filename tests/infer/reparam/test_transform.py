@@ -38,7 +38,8 @@ def test_log_normal(batch_shape, event_shape):
         fn = dist.TransformedDistribution(
             dist.Normal(torch.zeros_like(loc), torch.ones_like(scale)),
             [AffineTransform(loc, scale), ExpTransform()])
-        fn = fn.to_event(len(event_shape))
+        if event_shape:
+            fn = fn.to_event(len(event_shape))
         with pyro.plate_stack("plates", batch_shape):
             with pyro.plate("particles", 200000):
                 return pyro.sample("x", fn)
