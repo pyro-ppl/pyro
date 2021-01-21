@@ -1,10 +1,9 @@
-import collections
-import copy
 import functools
+from collections import defaultdict
 
+import pyro
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.poutine.runtime import effectful
-import pyro
 
 
 @effectful(type="genname")
@@ -12,26 +11,57 @@ def genname(name="name"):
     return name
 
 
-_AUTONAME_STACK = []
-_AUTONAME_LOCAL_COUNTERS = collections.defaultdict(int)
-_AUTONAME_CALL_COUNTERS = collections.defaultdict(int)
-
-
-class AutonameFrame:
-    def __init__(self, name, counter):
+class NameScope:
+    def __init__(self, name=None):
         self.name = name
-        self.counter = counter
+        self.counter = 0
+        self._inner_scopes = defaultdict(int)
 
-    def __hash__(self):
-        return hash(self.name)
-        # return hash((self.name, self.counter))
+    @property
+    def full_name(self):
+        if self.counter:
+            return f"{self.name}__{self.counter}"
+        return self.name
 
-    def __eq__(self, other):
-        return type(self) == type(other) and (self.name, self.counter) == (other.name, other.counter)
+
+class ScopeStack:
+    """
+    Single global state to keep track of scope stacks.
+    """
+
+    def __init__(self):
+        self._stack = []
+
+    @property
+    def local_scope(self):
+        if len(self._stack):
+            return self._stack[-1]
+        return NameScope()
+
+    def push_scope(self, scope):
+        scope.counter = self.local_scope._inner_scopes[scope.name]
+        self.local_scope._inner_scopes[scope.name] += 1
+        self._stack.append(scope)
+
+    def pop_scope(self):
+        return self._stack.pop(-1)
+
+    def new_name(self, name):
+        counter = self.local_scope._inner_scopes[name]
+        self.local_scope._inner_scopes[name] += 1
+        if counter:
+            return name + str(counter)
+        return name
+
+    @property
+    def full_scope_name(self):
+        return "/".join(scope.full_name for scope in self._stack)
 
 
 class AutonameMessenger(ReentrantMessenger):
     """
+    Naming random variables.
+
     @autoname
     def model(x):
         for i in autoname(vectorized_markov(range(3), name="time")):
@@ -48,67 +78,57 @@ class AutonameMessenger(ReentrantMessenger):
     @autoname
     def f3():
         ...
-        
+
     @autoname
     def f2():
         f1()  # f2_0/f1_0, f2_0/f1_0/f3_0
         f1()  # f2_0/f1_1, f2_0/f1_1/f3_1 (should be f2_0/f1_1/f3_0)
         f3()  # currently f2_0/f3_3 (should be f2_0/f3_0)
     """
+
     def __init__(self, name=None):
-        self.frame = AutonameFrame(name, 0)
+        self.scope = NameScope(name)
         super().__init__()
 
     def __call__(self, fn_or_iter):
+        # reuse sequential pyro.plate name
+        # also get suffix names from pyro.vectorized_plate and add to NameScope?
+        if hasattr(fn_or_iter, "name"):
+            self.scope.name = fn_or_iter.name
+            self._iter = fn_or_iter
+            return self
         if callable(fn_or_iter):
-            if self.frame.name is None:
-                self.frame.name = fn_or_iter.__name__
+            if self.scope.name is None:
+                self.scope.name = fn_or_iter.__name__
             return super().__call__(effectful(type="call_scope")(fn_or_iter))
         self._iter = fn_or_iter
         return self
 
-    def _pyro_genname(self, msg):
+    @staticmethod  # only depends on the global _SCOPE_STACK state, not self
+    def _pyro_genname(msg):
         # example: genname() -> model_0/time_0/var0, model_0/time_0/var1, model_0/time_1/var0
         raw_name = msg["fn"](*msg["args"])
-        
-        context = tuple(_AUTONAME_STACK)
-        breakpoint()
-        msg["value"] = "/".join("{}_{}".format(frame.name, frame.counter) for frame in _AUTONAME_STACK) + \
-            "/" + raw_name + "_" + str(_AUTONAME_LOCAL_COUNTERS[context])
-        _AUTONAME_LOCAL_COUNTERS[context] += 1
+        new_name = _SCOPE_STACK.new_name(raw_name)
+
+        msg["value"] = _SCOPE_STACK.full_scope_name + "/" + new_name
         msg["stop"] = True
-        msg["done"] = True
 
     def _pyro_call_scope(self, msg):
-        # breakpoint()
-        _AUTONAME_STACK.append(copy.copy(self.frame))
-        context = tuple(hash(frame) for frame in _AUTONAME_STACK)
-        _AUTONAME_CALL_COUNTERS[context] += 1
-        self.frame.counter = _AUTONAME_CALL_COUNTERS[context]
+        _SCOPE_STACK.push_scope(self.scope)
         msg["stop"] = True
 
     def _pyro_post_call_scope(self, msg):
-        # breakpoint()
-        # deleted_context = tuple(_AUTONAME_STACK)
-        deleted_context = tuple(hash(frame) for frame in _AUTONAME_STACK)
-        #  _AUTONAME_CALL_COUNTERS[deleted_context] -= 1
-        #  self.frame.counter = _AUTONAME_CALL_COUNTERS[deleted_context]
-        #  _AUTONAME_CALL_COUNTERS.pop(deleted_context, None)
-        #  _AUTONAME_LOCAL_COUNTERS.pop(deleted_context, None)
-        _AUTONAME_STACK.pop(-1)
+        scope = _SCOPE_STACK.pop_scope()
+        scope._inner_scopes = defaultdict(int)
         msg["stop"] = True
 
     def __iter__(self):
         with self:
-            _AUTONAME_STACK.append(self.frame)
             for i in self._iter:
-                self.frame.counter = i
+                _SCOPE_STACK.push_scope(self.scope)
                 yield i
-            deleted_context = tuple(_AUTONAME_STACK)
-            _AUTONAME_CALL_COUNTERS.pop(deleted_context, None)
-            _AUTONAME_LOCAL_COUNTERS.pop(deleted_context, None)
-            _AUTONAME_STACK.pop(-1)
-            self.frame.counter = 0
+                scope = _SCOPE_STACK.pop_scope()
+                scope._inner_scopes = defaultdict(int)
 
 
 def autoname(fn=None, name=None):
@@ -123,6 +143,7 @@ def sample(*args):
 
 @sample.register(str)
 def _sample_name(name, d, *args, **kwargs):  # the current syntax of pyro.sample
+    name = genname(name)
     return pyro.sample(name, d, *args, **kwargs)
 
 
@@ -131,3 +152,6 @@ def _sample_dist(d, *args, **kwargs):
     name = kwargs.pop("name", None)
     name = genname(type(d).__name__ if name is None else name)
     return pyro.sample(name, d, *args, **kwargs)
+
+
+_SCOPE_STACK = ScopeStack()
