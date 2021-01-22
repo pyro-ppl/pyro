@@ -20,15 +20,23 @@ class TransformReparam(Reparam):
     """
     def __call__(self, name, fn, obs):
         assert obs is None, "TransformReparam does not support observe statements"
+        fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.TransformedDistribution)
 
         # Draw noise from the base distribution.
-        x = pyro.sample("{}_base".format(name), fn.base_dist)
+        base_event_dim = event_dim
+        try:  # requires https://github.com/pyro-ppl/pyro/pull/2739
+            for t in reversed(fn.transforms):
+                base_event_dim += t.domain.event_dim - t.codomain.event_dim
+        except AttributeError:
+            pass
+        x = pyro.sample("{}_base".format(name),
+                        self._wrap(fn.base_dist, base_event_dim))
 
         # Differentiably transform.
         for t in fn.transforms:
             x = t(x)
 
         # Simulate a pyro.deterministic() site.
-        new_fn = dist.Delta(x, event_dim=fn.event_dim)
+        new_fn = dist.Delta(x, event_dim=event_dim).mask(False)
         return new_fn, x
