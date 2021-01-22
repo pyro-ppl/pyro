@@ -60,30 +60,38 @@ class ScopeStack:
 
 class AutonameMessenger(ReentrantMessenger):
     """
-    Naming random variables.
+    Assign unique names to random variables.
 
-    @autoname
-    def model(x):
-        for i in autoname(vectorized_markov(range(3), name="time")):
-            print(genname())  # -> ...var1...
-            print(genname())  # -> ...var2...
-            sample(genname(), ...)
-            param(genname(), ...)
+    1. For a new varialbe use its declared name if given, otherwise use the distribution name::
+    
+        sample("x", dist.Bernoulli ... )  # -> x
+        sample(dist.Bernoulli ... )  # -> Bernoulli
 
+    2. For repeated variables names append the counter as a suffix::
 
-    @autoname
-    def f1():
-        f3()
+        sample(dist.Bernoulli ... )  # -> Bernoulli
+        sample(dist.Bernoulli ... )  # -> Bernoulli1
+        sample(dist.Bernoulli ... )  # -> Bernoulli2
 
-    @autoname
-    def f3():
-        ...
+    3. Functions and iterators can be used as a name scope::
 
-    @autoname
-    def f2():
-        f1()  # f2_0/f1_0, f2_0/f1_0/f3_0
-        f1()  # f2_0/f1_1, f2_0/f1_1/f3_1 (should be f2_0/f1_1/f3_0)
-        f3()  # currently f2_0/f3_3 (should be f2_0/f3_0)
+        @autoname
+        def f1():
+            sample(dist.Bernoulli ... )
+
+        @autoname
+        def f2():
+            f1()  # -> f2/f1/Bernoulli
+            f1()  # -> f2/f1__1/Bernoulli
+            sample(dist.Bernoulli ... )  # -> f2/Bernoulli
+
+        @autoname(name="model")
+        def f3():
+            for i in autoname(name="time")(range(3)):
+                # model/time/Bernoulli .. model/time__1/Bernoulli .. model/time__2/Bernoulli
+                sample(dist.Bernoulli ... )
+                # model/time/f1/Bernoulli .. model/time__1/f1/Bernoulli .. model/time__2/f1/Bernoulli
+                f1()
     """
 
     def __init__(self, name=None):
