@@ -160,3 +160,28 @@ def test_sequential_plate():
         if node["type"] == "sample" and type(node["fn"]).__name__ != "_Subsample"
     ]
     assert expected_names == actual_names
+
+
+def test_model_guide():
+    @autoname
+    def model():
+        sample("x", dist.HalfNormal(1))
+        return sample(dist.Bernoulli(0.5))
+
+    @autoname(name="model")
+    def guide():
+        sample("x", dist.Gamma(1, 1))
+        return sample(dist.Bernoulli(0.5))
+
+    model_tr = poutine.trace(model).get_trace()
+    guide_tr = poutine.trace(guide).get_trace()
+    assert "model/x" in model_tr.nodes
+    assert "model/x" in guide_tr.nodes
+    assert "model/Bernoulli" in model_tr.nodes
+    assert "model/Bernoulli" in guide_tr.nodes
+
+    def f1():
+        model()
+        model()
+
+    tr1 = poutine.trace(f1).get_trace()
