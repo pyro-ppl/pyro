@@ -881,7 +881,7 @@ def test_sphere_helpful_error(auto_class, init_loc_fn):
     init_to_median,
     init_to_sample,
 ])
-def test_sphere_ok(auto_class, init_loc_fn):
+def test_sphere_reparam_ok(auto_class, init_loc_fn):
 
     def model():
         x = pyro.sample("x", dist.Normal(0., 1.).expand([3]).to_event(1))
@@ -889,11 +889,25 @@ def test_sphere_ok(auto_class, init_loc_fn):
         pyro.sample("obs", dist.Normal(y, 1),
                     obs=torch.tensor([1., 0.]))
 
-    if auto_class is AutoDelta:
-        # AutoDelta should work even without ProjectedNormalReparam.
-        guide = auto_class(model, init_loc_fn=init_loc_fn)
-        poutine.trace(guide).get_trace().compute_log_prob()
-
     model = poutine.reparam(model, {"y": ProjectedNormalReparam()})
     guide = auto_class(model)
+    poutine.trace(guide).get_trace().compute_log_prob()
+
+
+@pytest.mark.parametrize("auto_class", [AutoDelta])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_raw_ok(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([3]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
     poutine.trace(guide).get_trace().compute_log_prob()
