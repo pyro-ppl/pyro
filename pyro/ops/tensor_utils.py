@@ -416,3 +416,24 @@ def precision_to_scale_tril(P):
     L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
                                L_inv, upper=False)[0]
     return L
+
+
+def safe_normalize(x, *, p=2):
+    """
+    Safely project a vector onto the sphere wrt the ``p``-norm. This avoids the
+    singularity at zero by mapping zero to the vector ``[1, 0, 0, ..., 0]``.
+
+    :param torch.Tensor x: A vector
+    :param float p: The norm exponent, defaults to 2 i.e. the Euclidean norm.
+    :returns: A normalized version ``x / ||x||_p``.
+    :rtype: Tensor
+    """
+    assert isinstance(p, (float, int))
+    assert p >= 0
+    try:
+        norm = torch.linalg.norm(x, dim=-1, ord=p, keepdim=True)  # torch 1.7+
+    except AttributeError:
+        norm = x.norm(dim=-1, p=p, keepdim=True)  # torch 1.6
+    x = x / norm.clamp(min=torch.finfo(x.dtype).tiny)
+    x.data[..., 0][x.data.eq(0).all(dim=-1)] = 1  # Avoid the singularity.
+    return x

@@ -7,24 +7,7 @@ import torch
 
 from . import constraints
 from .torch_distribution import TorchDistribution
-
-
-def safe_project(x):
-    """
-    Safely project a vector onto the sphere. This avoid the singularity at zero
-    by mapping to the vector ``[1, 0, 0, ..., 0]``.
-
-    :param Tensor x: A vector
-    :returns: A normalized version ``x / ||x||_2``.
-    :rtype: Tensor
-    """
-    try:
-        norm = torch.linalg.norm(x, dim=-1, keepdim=True)  # torch 1.7+
-    except AttributeError:
-        norm = x.norm(dim=-1, keepdim=True)  # torch 1.6
-    x = x / norm.clamp(min=torch.finfo(x.dtype).tiny)
-    x.data[..., 0][x.data.eq(0).all(dim=-1)] = 1  # Avoid the singularity.
-    return x
+from pyro.ops.tensor_utils import safe_normalize
 
 
 class ProjectedNormal(TorchDistribution):
@@ -78,17 +61,17 @@ class ProjectedNormal(TorchDistribution):
         Note this is the mean in the sense of a centroid in the submanifold
         that minimizes expected squared geodesic distance.
         """
-        return safe_project(self.concentration)
+        return safe_normalize(self.concentration)
 
     @property
     def mode(self):
-        return safe_project(self.concentration)
+        return safe_normalize(self.concentration)
 
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         x = self.concentration.new_empty(shape).normal_()
         x = x + self.concentration
-        x = safe_project(x)
+        x = safe_normalize(x)
         return x
 
     def log_prob(self, value):
