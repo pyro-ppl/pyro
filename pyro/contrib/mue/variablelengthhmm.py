@@ -11,13 +11,28 @@ from pyro.distributions.util import broadcast_shape
 class MissingDataDiscreteHMM(TorchDistribution):
     """
     HMM with discrete latent states and discrete observations, allowing for
-    variable length sequences.
+    missing data or variable length sequences. Observations are assumed
+    to be one hot encoded; rows with all zeros indicate missing data.
 
     .. warning:: Unlike in pyro's DiscreteHMM, which computes the
         probability of the first state as
         initial.T @ transition @ emission
         this distribution uses the standard HMM convention,
         initial.T @ emission
+
+    :param ~torch.Tensor initial_logits: A logits tensor for an initial
+        categorical distribution over latent states. Should have rightmost
+        size ``state_dim`` and be broadcastable to
+        ``(batch_size, state_dim)``.
+    :param ~torch.Tensor transition_logits: A logits tensor for transition
+        conditional distributions between latent states. Should have rightmost
+        shape ``(state_dim, state_dim)`` (old, new), and be broadcastable
+        to ``(batch_size, state_dim, state_dim)``.
+    :param ~torch.Tensor observation_logits: A logits tensor for observation
+        distributions from latent states. Should have rightmost shape
+        ``(state_dim, categorical_size)``, where ``categorical_size`` is the
+        dimension of the categorical output, and be broadcastable
+        to ``(batch_size, state_dim, categorical_size)``.
     """
     arg_constraints = {"initial_logits": constraints.real,
                        "transition_logits": constraints.real,
@@ -48,10 +63,20 @@ class MissingDataDiscreteHMM(TorchDistribution):
                                   transition_logits.logsumexp(-1, True))
         self.observation_logits = (observation_logits -
                                    observation_logits.logsumexp(-1, True))
-        super(VariableLengthDiscreteHMM, self).__init__(
+        super(MissingDataDiscreteHMM, self).__init__(
             batch_shape, event_shape, validate_args=validate_args)
 
     def log_prob(self, value):
+        """
+        :param ~torch.Tensor value: One-hot encoded observation. Must be
+            real-valued (float) and broadcastable to
+            ``(batch_size, num_steps, categorical_size)`` where
+            ``categorical_size`` is the dimension of the categorical output.
+            Missing data is represented by zeros, i.e.
+            ``value[batch, step, :] == tensor([0, ..., 0])``.
+            Variable length observation sequences can be handled by padding
+            the sequence with zeros at the end.
+        """
         # observation_logits:
         # batch_shape (option) x state_dim x observation_dim
         # value:

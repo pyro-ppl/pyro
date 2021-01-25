@@ -6,7 +6,24 @@ import torch.nn as nn
 
 class Profile(nn.Module):
     """
-    Profile HMM state arrangement.
+    Profile HMM state arrangement. Parameterizes an HMM according to
+    Equation S40 in [1]. For further background on profile HMMs see [2].
+
+    **References**
+
+    [1] E. N. Weinstein, D. S. Marks (2020)
+    "Generative probabilistic biological sequence models that account for
+    mutational variability"
+    https://www.biorxiv.org/content/10.1101/2020.07.31.231381v1.full.pdf
+    [2] R. Durbin, S. R. Eddy, A. Krogh, and G. Mitchison (1998)
+    "Biological sequence analysis: probabilistic models of proteins and nucleic
+    acids"
+    Cambridge university press
+
+    :param M: Length of precursor (ancestral) sequence.
+    :type M: int
+    :param epsilon: Small value for approximate zeros in log space.
+    :type epsilon: float
     """
     def __init__(self, M, epsilon=1e-32):
         super().__init__()
@@ -118,9 +135,38 @@ class Profile(nn.Module):
                 elif g == 1:
                     self.vc_transf[m, k] = 1
 
-    def forward(self, ancestor_seq_logits, insert_seq_logits,
+    def forward(self, precursor_seq_logits, insert_seq_logits,
                 insert_logits, delete_logits, substitute_logits=None):
-        """Assemble the HMM parameters based on the transfer matrices."""
+        """
+        Assemble HMM parameters given profile parameters.
+
+        :param ~torch.Tensor precursor_seq_logits: Initial (relaxed) sequence
+            *log(x)*. Should have rightmost dimension ``(M+1, D)`` and be
+            broadcastable to ``(batch_size, M+1, D)``, where
+            D is the latent alphabet size. Should be normalized to one along the
+            final axis, i.e. ``precursor_seq_logits.logsumexp(-1) = zeros``.
+        :param ~torch.Tensor insert_seq_logits: Insertion sequence *log(c)*.
+            Should have rightmost dimension ``(M+1, D)`` and be broadcastable
+            to ``(batch_size, M+1, D)``. Should be normalized
+            along the final axis.
+        :param ~torch.Tensor insert_logits: Insertion probabilities *log(r)*.
+            Should have rightmost dimension ``(M+1, 3, 2)`` and be broadcastable
+            to ``(batch_size, M+1, 3, 2)``. Should be normalized along the
+            final axis.
+        :param ~torch.Tensor delete_logits: Deletion probabilities *log(u)*.
+            Should have rightmost dimension ``(M+1, 3, 2)`` and be broadcastable
+            to ``(batch_size, M+1, 3, 2)``. Should be normalized along the
+            final axis.
+        :param ~torch.Tensor substitute_logits: Substiution probabilities
+            *log(l)*. Should have rightmost dimension ``(D, B)``, where
+            B is the alphabet size of the data, and broadcastable to
+            ``(batch_size, D, B)``. Must be normalized along the
+            final axis.
+        :return: *initial_logits*, *transition_logits*, and
+            *observation_logits*. These parameters can be used to directly
+            initialize the MissingDataDiscreteHMM distribution.
+        :rtype: ~torch.Tensor, ~torch.Tensor, ~torch.Tensor
+        """
         initial_logits = (
             torch.einsum('...ijk,ijkl->...l',
                          delete_logits, self.u_transf_0) +
@@ -135,7 +181,7 @@ class Profile(nn.Module):
              (-1/self.epsilon)*self.null_transf)
         seq_logits = (
              torch.einsum('...ij,ik->...kj',
-                          ancestor_seq_logits, self.vx_transf) +
+                          precursor_seq_logits, self.vx_transf) +
              torch.einsum('...ij,ik->...kj',
                           insert_seq_logits, self.vc_transf))
 
