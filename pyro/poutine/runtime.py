@@ -270,6 +270,9 @@ def inspect():
     """
     EXPERIMENTAL Inspect the Pyro stack.
 
+    .. warning:: The format of the returned message may change at any time and
+        does not guarantee backwards compatibility.
+
     :returns: A message with all effects applied.
     :rtype: dict
     """
