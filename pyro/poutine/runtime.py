@@ -264,3 +264,30 @@ def effectful(fn=None, type=None):
             return msg["value"]
     _fn._is_effectful = True
     return _fn
+
+
+def inspect():
+    """
+    EXPERIMENTAL Inspect the Pyro stack.
+
+    :returns: A message with all effects applied.
+    :rtype: dict
+    """
+    msg = {
+        "type": "inspect",
+        "name": "_pyro_inspect",
+        "fn": lambda: True,
+        "is_observed": False,
+        "args": (),
+        "kwargs": {},
+        "value": None,
+        "infer": {"_do_not_trace": True},
+        "scale": 1.0,
+        "mask": None,
+        "cond_indep_stack": (),
+        "done": False,
+        "stop": False,
+        "continuation": None,
+    }
+    apply_stack(msg)
+    return msg
