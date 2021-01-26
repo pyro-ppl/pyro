@@ -103,13 +103,19 @@ class TransformTests(TestCase):
         base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
-        J_1 = transform.log_abs_det_jacobian(x_true, y)
         x_calculated = transform._inverse(y)
-        J_2 = transform.log_abs_det_jacobian(x_true, y)
-        assert (x_true - x_calculated).abs().max().item() < self.delta
+        if transform.bijective:
+            assert (x_true - x_calculated).abs().max().item() < self.delta
+        else:
+            # Check the weaker pseudoinverse equation.
+            y2 = transform._call(x_calculated)
+            assert (y - y2).abs().max().item() < self.delta
 
-        # Test that Jacobian after inverse op is same as after forward
-        assert (J_1 - J_2).abs().max().item() < self.delta
+        if transform.bijective:
+            # Test that Jacobian after inverse op is same as after forward
+            J_1 = transform.log_abs_det_jacobian(x_true, y)
+            J_2 = transform.log_abs_det_jacobian(x_calculated, y)
+            assert (J_1 - J_2).abs().max().item() < self.delta
 
     def _test_shape(self, base_shape, transform):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
@@ -149,7 +155,7 @@ class TransformTests(TestCase):
                 for shape in [(3,), (3, 4), (3, 4, 5)]:
                     base_shape = shape + event_shape
                     self._test_shape(base_shape, transform)
-            if jacobian:
+            if jacobian and transform.bijective:
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
                 self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
@@ -317,3 +323,7 @@ class TransformTests(TestCase):
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
+
+    def test_normalize_transform(self):
+        for p in [1., 2.]:
+            self._test(lambda p: T.Normalize(p=p), autodiff=False)

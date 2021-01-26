@@ -5,7 +5,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.projected_normal import safe_project
+from pyro.ops.tensor_utils import safe_normalize
 
 from .reparam import Reparam
 
@@ -27,7 +27,7 @@ class ProjectedNormalReparam(Reparam):
         x = pyro.sample("{}_normal".format(name), self._wrap(new_fn, event_dim))
 
         # Differentiably transform.
-        value = safe_project(x + fn.concentration)
+        value = safe_normalize(x + fn.concentration)
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)
