@@ -58,7 +58,7 @@ from pyro.distributions.spanning_tree import SpanningTree
 from pyro.distributions.stable import Stable
 from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch import __all__ as torch_dists
-from pyro.distributions.torch_distribution import MaskedDistribution, TorchDistribution
+from pyro.distributions.torch_distribution import ExpandedDistribution, MaskedDistribution, TorchDistribution
 from pyro.distributions.torch_transform import ComposeTransformModule, TransformModule
 from pyro.distributions.unit import Unit
 from pyro.distributions.util import (
@@ -92,6 +92,7 @@ __all__ = [
     "DiscreteHMM",
     "Distribution",
     "Empirical",
+    "ExpandedDistribution",
     "ExtendedBetaBinomial",
     "ExtendedBinomial",
     "FoldedDistribution",
