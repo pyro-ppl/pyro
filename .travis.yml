@@ -25,7 +25,9 @@ install:
     - pip install -U pip
     # Keep track of pyro-api master branch
     - pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-    - pip install torch==1.6.0+cpu torchvision==0.7.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+    # Download PyTorch nightly
+    - pip install --pre torch torchvision torchaudio -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+    # - pip install torch==1.6.0+cpu torchvision==0.7.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - pip install .[test]
     - pip install coveralls
     - pip freeze

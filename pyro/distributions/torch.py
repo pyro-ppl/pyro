@@ -4,12 +4,12 @@
 import math
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.distributions.util import sum_rightmost
 from pyro.ops.special import log_binomial
+
+from . import constraints
 
 
 def _clamp_by_zero(x):
@@ -94,6 +94,8 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
 # and merely reshape the self.logits tensor. This is especially important for
 # Pyro models that use enumeration.
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+    arg_constraints = {"probs": constraints.simplex,
+                       "logits": constraints.real_vector}
 
     def log_prob(self, value):
         if getattr(value, '_pyro_categorical_support', None) == id(self):
@@ -119,6 +121,7 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
+
     def conjugate_update(self, other):
         """
         EXPERIMENTAL.
@@ -174,19 +177,11 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
         return super(torch.distributions.LogNormal, self).expand(batch_shape, _instance=new)
 
 
-class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
-    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
-
-
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
     pass
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
-    @constraints.dependent_property
-    def support(self):
-        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
-
     @property
     def _validate_args(self):
         return self.base_dist._validate_args
@@ -219,7 +214,7 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         new._unbroadcasted_high = self._unbroadcasted_high
         return new
 
-    @constraints.dependent_property
+    @constraints.dependent_property(is_discrete=False, event_dim=0)
     def support(self):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 

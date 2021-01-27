@@ -18,7 +18,7 @@ def test_constraint(value_shape):
     value.diagonal(dim1=-2, dim2=-1).exp_()
     value = value / value.norm(2, dim=-1, keepdim=True)
 
-    assert (constraints.corr_cholesky_constraint.check(value) == 1).all()
+    assert (constraints.corr_cholesky.check(value) == 1).all()
 
 
 def _autograd_log_det(ys, x):
@@ -62,7 +62,7 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
 @pytest.mark.parametrize("x_shape", [(1,), (3, 1), (6,), (1, 6), (5, 6)])
 @pytest.mark.parametrize("mapping", [biject_to, transform_to])
 def test_corr_cholesky_transform(x_shape, mapping):
-    transform = mapping(constraints.corr_cholesky_constraint)
+    transform = mapping(constraints.corr_cholesky)
     x = torch.randn(x_shape, requires_grad=True).clamp(-2, 2)
     y = transform(x)
 

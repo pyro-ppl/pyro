@@ -1,0 +1,4 @@
+,1 quadrant
+NN (baseline),122.1695668765912
+CVAE (Monte Carlo),122.79430435716915
+Performance gap,-0.6247374805779486

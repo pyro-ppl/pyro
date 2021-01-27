@@ -4,13 +4,14 @@
 from functools import partial
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms.spline import ConditionalSpline
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
+
+from .. import constraints
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
+from .spline import ConditionalSpline
 
 
 @copy_docs_from(TransformModule)
@@ -72,7 +73,6 @@ class SplineAutoregressive(TransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
     autoregressive = True
 
     def __init__(
@@ -200,7 +200,6 @@ class ConditionalSplineAutoregressive(ConditionalTransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, input_dim, autoregressive_nn, **kwargs):
         super().__init__()

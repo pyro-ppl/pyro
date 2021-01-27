@@ -60,19 +60,11 @@ def _TransformedDistribution_clear_cache(self):
         t.clear_cache()
 
 
-# Fixes a shape error in Multinomial.support with inhomogeneous .total_count
-@patch_dependency('torch.distributions.Multinomial.support')
-@torch.distributions.constraints.dependent_property
-def _Multinomial_support(self):
-    total_count = self.total_count
-    if isinstance(total_count, torch.Tensor):
-        total_count = total_count.unsqueeze(-1)
-    return torch.distributions.constraints.integer_interval(0, total_count)
-
-
 # TODO fix https://github.com/pytorch/pytorch/issues/48054 upstream
 @patch_dependency('torch.distributions.HalfCauchy.log_prob')
 def _HalfCauchy_logprob(self, value):
+    if self._validate_args:
+        self._validate_sample(value)
     value = torch.as_tensor(value, dtype=self.base_dist.scale.dtype,
                             device=self.base_dist.scale.device)
     log_prob = self.base_dist.log_prob(value) + math.log(2)

@@ -6,7 +6,6 @@ import math
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.constraints import corr_cholesky_constraint
 from pyro.distributions.torch import Beta
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.transforms.cholesky import _vector_to_l_cholesky
@@ -39,7 +38,7 @@ class LKJCorrCholesky(TorchDistribution):
     :param torch.Tensor eta: A single positive number parameterizing the distribution.
     """
     arg_constraints = {"eta": constraints.positive}
-    support = corr_cholesky_constraint
+    support = constraints.corr_cholesky
     has_rsample = False
 
     def __init__(self, d, eta, validate_args=None):

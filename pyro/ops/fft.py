@@ -6,7 +6,7 @@ import torch
 try:
     # This works in PyTorch 1.7+
     from torch.fft import irfft, rfft
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError):
     # This works in PyTorch 1.6
     def rfft(input, n=None):
         if n is not None:

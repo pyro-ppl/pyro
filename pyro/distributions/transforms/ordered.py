@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from pyro.distributions.transforms import Transform
-from pyro.distributions import constraints
+from torch.distributions.transforms import Transform
+
+from .. import constraints
 
 
 class OrderedTransform(Transform):
@@ -17,8 +18,6 @@ class OrderedTransform(Transform):
     domain = constraints.real_vector
     codomain = constraints.ordered_vector
     bijective = True
-    sign = +1
-    event_dim = 1
 
     def _call(self, x):
         z = torch.cat([x[..., :1], x[..., 1:].exp()], dim=-1)

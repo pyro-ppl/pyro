@@ -2,20 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions import Transform, constraints
+from torch.distributions import Transform
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
+
+from .. import constraints
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
 
 
 @copy_docs_from(Transform)
 class ConditionedGeneralizedChannelPermute(Transform):
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.independent(constraints.real, 3)
+    codomain = constraints.independent(constraints.real, 3)
     bijective = True
-    event_dim = 3
 
     def __init__(self, permutation=None, LU=None):
         super(ConditionedGeneralizedChannelPermute, self).__init__(cache_size=1)
@@ -157,10 +158,9 @@ class GeneralizedChannelPermute(ConditionedGeneralizedChannelPermute, TransformM
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.independent(constraints.real, 3)
+    codomain = constraints.independent(constraints.real, 3)
     bijective = True
-    event_dim = 3
 
     def __init__(self, channels=3, permutation=None):
         super(GeneralizedChannelPermute, self).__init__()
@@ -254,10 +254,9 @@ class ConditionalGeneralizedChannelPermute(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.independent(constraints.real, 3)
+    codomain = constraints.independent(constraints.real, 3)
     bijective = True
-    event_dim = 3
 
     def __init__(self, nn, channels=3, permutation=None):
         super().__init__()

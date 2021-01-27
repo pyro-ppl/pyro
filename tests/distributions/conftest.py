@@ -15,8 +15,18 @@ from tests.distributions.dist_fixture import Fixture
 
 
 class FoldedNormal(dist.FoldedDistribution):
+    arg_constraints = dist.Normal.arg_constraints
+
     def __init__(self, loc, scale):
         super().__init__(dist.Normal(loc, scale))
+
+    @property
+    def loc(self):
+        return self.base_dist.loc
+
+    @property
+    def scale(self):
+        return self.base_dist.scale
 
 
 continuous_dists = [
@@ -242,7 +252,7 @@ continuous_dists = [
                 {'scale': [1.2],
                  'test_data': [1.0]},
                 {'scale': [1.2, 1.2],
-                 'test_data': [[1.0, -1.0], [1.0, -1.0]]},
+                 'test_data': [[1.0, 2.0], [1.0, 2.0]]},
                 {'scale': [[1.2], [1.0]],
                  'test_data': [[0.54], [0.35]]}
             ],
