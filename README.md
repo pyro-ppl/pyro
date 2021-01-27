@@ -60,19 +60,26 @@ Make sure that the models come from the same release version of the [Pyro source
 ### Installing Pyro dev branch
 
 For recent features you can install Pyro from source.
+Pyro's dev branch requires PyTorch [nightly builds](https://pytorch.org/get-started/locally/).
 
-**Install using pip:**
+**Install PyTorch nightly:**
+
+```sh
+pip install numpy
+pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+```
+
+**Install Pyro using pip:**
 
 ```sh
 pip install git+https://github.com/pyro-ppl/pyro.git
 ```
-
 or, with the `extras` dependency to run the probabilistic models included in the `examples`/`tutorials` directories:
 ```sh
 pip install git+https://github.com/pyro-ppl/pyro.git#egg=project[extras]
 ```
 
-**Install from source:**
+**Install Pyro from source:**
 
 ```sh
 git clone https://github.com/pyro-ppl/pyro
