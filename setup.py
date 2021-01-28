@@ -60,7 +60,7 @@ EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'graphviz>=0.8',
     'matplotlib>=1.3',
-    'torchvision>=0.7.0',
+    'torchvision>=0.7.0<=1.8.2',
     'visdom>=0.1.4',
     'pandas',
     'scikit-learn',
@@ -88,7 +88,7 @@ setup(
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'pyro-api>=0.1.1',
-        'torch>=1.6.0',
+        'torch>=1.6.0<=1.7.1',
         'tqdm>=4.36',
     ],
     extras_require={
