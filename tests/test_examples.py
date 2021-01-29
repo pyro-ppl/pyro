@@ -195,7 +195,8 @@ def xfail_jit(*args, **kwargs):
 
 JIT_EXAMPLES = [
     'air/main.py --num-steps=1 --jit',
-    'baseball.py --num-samples=200 --warmup-steps=100 --jit',
+    xfail_jit('baseball.py --num-samples=200 --warmup-steps=100 --jit',
+              reason='unreproducible RuntimeError on CI'),
     'contrib/autoname/mixture.py --num-epochs=1 --jit',
     'contrib/cevae/synthetic.py --num-epochs=1 --jit',
     'contrib/epidemiology/sir.py --jit -np=128 -t=2 -w=2 -n=4 -d=20 -p=1000 -f 2',
@@ -205,8 +206,7 @@ JIT_EXAMPLES = [
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm.py --num-epochs=1 --jit'),
     xfail_jit('dmm.py --num-epochs=1 --num-iafs=1 --jit'),
-    xfail_jit('eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
-              reason='unreproducible RuntimeError on CI'),
+    'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
     'eight_schools/svi.py --num-epochs=1 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=1 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=2 --jit',
