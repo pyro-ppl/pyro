@@ -4,8 +4,7 @@
 import math
 
 import torch
-
-from .fft import irfft, rfft
+from torch.fft import irfft, rfft
 
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
 
@@ -430,10 +429,7 @@ def safe_normalize(x, *, p=2):
     """
     assert isinstance(p, (float, int))
     assert p >= 0
-    try:
-        norm = torch.linalg.norm(x, dim=-1, ord=p, keepdim=True)  # torch 1.7+
-    except AttributeError:
-        norm = x.norm(dim=-1, p=p, keepdim=True)  # torch 1.6
+    norm = torch.linalg.norm(x, dim=-1, ord=p, keepdim=True)
     x = x / norm.clamp(min=torch.finfo(x.dtype).tiny)
     x.data[..., 0][x.data.eq(0).all(dim=-1)] = 1  # Avoid the singularity.
     return x
