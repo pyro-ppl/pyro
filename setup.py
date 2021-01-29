@@ -60,7 +60,7 @@ EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'graphviz>=0.8',
     'matplotlib>=1.3',
-    'torchvision>=0.8.0',
+    'torchvision>=0.8.1',
     'visdom>=0.1.4',
     'pandas',
     'scikit-learn',
