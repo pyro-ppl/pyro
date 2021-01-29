@@ -162,6 +162,37 @@ def test_sequential_plate():
     assert expected_names == actual_names
 
 
+def test_nested_plate():
+    @autoname
+    def f1():
+        return sample(dist.Bernoulli(0.5))
+
+    @autoname(name="model")
+    def f2():
+        for i in autoname(pyro.plate(name="data", size=3)):
+            for j in autoname(name="xy")(range(2)):
+                f1()
+        return sample(dist.Bernoulli(0.5))
+
+    expected_names = [
+        "model/data/xy/f1/Bernoulli",
+        "model/data/xy__1/f1/Bernoulli",
+        "model/data__1/xy/f1/Bernoulli",
+        "model/data__1/xy__1/f1/Bernoulli",
+        "model/data__2/xy/f1/Bernoulli",
+        "model/data__2/xy__1/f1/Bernoulli",
+        "model/Bernoulli",
+    ]
+
+    tr = poutine.trace(f2).get_trace()
+    actual_names = [
+        name
+        for name, node in tr.nodes.items()
+        if node["type"] == "sample" and type(node["fn"]).__name__ != "_Subsample"
+    ]
+    assert expected_names == actual_names
+
+
 def test_model_guide():
     @autoname
     def model():
@@ -180,8 +211,10 @@ def test_model_guide():
     assert "model/Bernoulli" in model_tr.nodes
     assert "model/Bernoulli" in guide_tr.nodes
 
-    def f1():
-        model()
-        model()
-
-    tr1 = poutine.trace(f1).get_trace()
+    #  @autoname
+    #  def f1():
+    #      with autoname(name="prefix"):  # should this work?
+    #          model()
+    #          model()
+    #
+    #  tr1 = poutine.trace(f1).get_trace()
