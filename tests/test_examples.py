@@ -187,8 +187,9 @@ CUDA_EXAMPLES = [
 ]
 
 
-def xfail_jit(*args):
-    return pytest.param(*args, marks=[pytest.mark.xfail(reason="not jittable"),
+def xfail_jit(*args, **kwargs):
+    reason = kwargs.pop("reason", "not jittable")
+    return pytest.param(*args, marks=[pytest.mark.xfail(reason=reason),
                                       pytest.mark.skipif('CI' in os.environ, reason='slow test')])
 
 
@@ -204,7 +205,8 @@ JIT_EXAMPLES = [
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm.py --num-epochs=1 --jit'),
     xfail_jit('dmm.py --num-epochs=1 --num-iafs=1 --jit'),
-    'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
+    xfail_jit('eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
+              reason='unreproducible RuntimeError on CI'),
     'eight_schools/svi.py --num-epochs=1 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=1 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=2 --jit',
