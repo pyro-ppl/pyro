@@ -5,9 +5,9 @@ import math
 import numbers
 
 import torch
+from torch.fft import irfft, rfft
 
 from .tensor_utils import next_fast_len
-from .fft import rfft, irfft
 
 
 def _compute_chain_variance_stats(input):
