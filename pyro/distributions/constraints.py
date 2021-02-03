@@ -87,6 +87,7 @@ class _OrderedVector(Constraint):
 
 
 corr_cholesky_constraint = _CorrCholesky()
+independent = IndependentConstraint
 integer = _Integer()
 ordered_vector = _OrderedVector()
 sphere = _Sphere()
@@ -94,6 +95,7 @@ sphere = _Sphere()
 __all__ = [
     'IndependentConstraint',
     'corr_cholesky_constraint',
+    'independent',
     'integer',
     'ordered_vector',
     'sphere',

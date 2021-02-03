@@ -4,10 +4,11 @@
 import numbers
 
 import torch
-from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import sum_rightmost
+
+from . import constraints
 
 
 class Delta(TorchDistribution):
