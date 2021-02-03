@@ -25,8 +25,8 @@ class Delta(TorchDistribution):
     :param int event_dim: Optional event dimension, defaults to zero.
     """
     has_rsample = True
-    arg_constraints = {'v': constraints.real, 'log_density': constraints.real}
-    support = constraints.real
+    arg_constraints = {'v': constraints.dependent,
+                       'log_density': constraints.real}
 
     def __init__(self, v, log_density=0.0, event_dim=0, validate_args=None):
         if event_dim > v.dim():
@@ -42,6 +42,10 @@ class Delta(TorchDistribution):
         self.v = v
         self.log_density = log_density
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
+
+    @constraints.dependent_property
+    def support(self):
+        return constraints.independent(constraints.real, self.event_dim)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(Delta, _instance)
