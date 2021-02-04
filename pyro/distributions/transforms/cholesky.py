@@ -89,10 +89,11 @@ class InvCholeskyTransform(Transform):
     sign = +1
     event_dim = 2
 
-    def __init__(self, domain=constraints.lower_cholesky):
+    def __init__(self, domain=constraints.lower_cholesky, cache_size=0):
         # TODO: change corr_cholesky_constraint to corr_cholesky when it is available
         assert domain in [constraints.lower_cholesky, constraints.corr_cholesky_constraint]
         self.domain = domain
+        super().__init__(cache_size=cache_size)
 
     def __eq__(self, other):
         return isinstance(other, InvCholeskyTransform) and other.domain is self.domain
@@ -104,11 +105,11 @@ class InvCholeskyTransform(Transform):
         else:
             return constraints.corr_matrix
 
-    def __call__(self, x):
-        return torch.matmul(x, torch.swapaxes(x, -2, -1))
+    def _call(self, x):
+        return torch.matmul(x, torch.transpose(x, -2, -1))
 
     def _inverse(self, y):
-        return jnp.linalg.cholesky(y)
+        return torch.cholesky(y)
 
     def log_abs_det_jacobian(self, x, y):
         if self.domain is constraints.lower_cholesky:

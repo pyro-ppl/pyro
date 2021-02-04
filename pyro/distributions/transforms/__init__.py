@@ -6,8 +6,8 @@ from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
 
 from ..constraints import (IndependentConstraint, corr_cholesky_constraint, corr_matrix,
-                           ordered_vector, positive_ordered_vector, sphere)
-from ..torch_transform import ComposeTransformModule, LowerCholeskyTransform
+                           ordered_vector, positive_definite, positive_ordered_vector, sphere)
+from ..torch_transform import ComposeTransformModule
 from .affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive, affine_autoregressive,
                                     conditional_affine_autoregressive)
 from .affine_coupling import AffineCoupling, ConditionalAffineCoupling, affine_coupling, conditional_affine_coupling
@@ -56,6 +56,7 @@ def _transform_to_corr_cholesky(constraint):
 
 
 @biject_to.register(corr_matrix)
+@transform_to.register(corr_matrix)
 def _transform_to_corr_matrix(constraint):
     return ComposeTransform([CorrCholeskyTransform(),
                              InvCholeskyTransform(domain=corr_cholesky_constraint)])
@@ -73,7 +74,8 @@ def _transform_to_positive_ordered_vector(constraint):
     return ComposedTransform([OrderedTransform(), ExpTransform()])
 
 
-@biject_to.register(constraints.positive_definite)
+# TODO: register biject_to when LowerCholeskyTransform is bijective
+@transform_to.register(positive_definite)
 def _transform_to_positive_definite(constraint):
     return ComposeTransform([LowerCholeskyTransform(), InvCholeskyTransform()])
 
