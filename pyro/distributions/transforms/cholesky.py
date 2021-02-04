@@ -4,10 +4,9 @@
 import math
 
 import torch
-from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
-from pyro.distributions.constraints import corr_cholesky_constraint
+from pyro.distributions import constraints
 
 
 def _vector_to_l_cholesky(z):
@@ -44,7 +43,7 @@ class CorrLCholeskyTransform(Transform):
 
     """
     domain = constraints.real_vector
-    codomain = corr_cholesky_constraint
+    codomain = constraints.corr_cholesky_constraint
     bijective = True
     sign = +1
     event_dim = 1
@@ -79,3 +78,46 @@ class CorrLCholeskyTransform(Transform):
         tanpart = x.cosh().log().sum(-1).mul(-2)
         matpart = (1 - y.pow(2).cumsum(-1).tril(diagonal=-2)).log().div(2).sum(-1).sum(-1)
         return tanpart + matpart
+
+
+class InvCholeskyTransform(Transform):
+    r"""
+    Transform via the mapping :math:`y = x @ x.T`, where `x` is a lower
+    triangular matrix with positive diagonal.
+    """
+    bijective = True
+    sign = +1
+    event_dim = 2
+
+    def __init__(self, domain=constraints.lower_cholesky):
+        # TODO: change corr_cholesky_constraint to corr_cholesky when it is available
+        assert domain in [constraints.lower_cholesky, constraints.corr_cholesky_constraint]
+        self.domain = domain
+
+    def __eq__(self, other):
+        return isinstance(other, InvCholeskyTransform) and other.domain is self.domain
+
+    @property
+    def codomain(self):
+        if self.domain is constraints.lower_cholesky:
+            return constraints.positive_definite
+        else:
+            return constraints.corr_matrix
+
+    def __call__(self, x):
+        return torch.matmul(x, torch.swapaxes(x, -2, -1))
+
+    def _inverse(self, y):
+        return jnp.linalg.cholesky(y)
+
+    def log_abs_det_jacobian(self, x, y):
+        if self.domain is constraints.lower_cholesky:
+            # Ref: http://web.mit.edu/18.325/www/handouts/handout2.pdf page 13
+            n = x.shape[-1]
+            order = torch.arange(n, 0, -1, dtype=x.dtype, device=x.device)
+            return n * math.log(2) + (order * torch.diagonal(x, dim1=-2, dim2=-1).log()).sum(-1)
+        else:
+            # NB: see derivation in LKJCholesky implementation
+            n = x.shape[-1]
+            order = torch.arange(n - 1, -1, -1, dtype=x.dtype, device=x.device)
+            return (order * torch.diagonal(x, dim1=-2, dim2=-1).log()).sum(-1)

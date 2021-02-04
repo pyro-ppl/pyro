@@ -211,6 +211,13 @@ LinearHMM
     :undoc-members:
     :show-inheritance:
 
+LKJ
+---
+.. autoclass:: pyro.distributions.LKJ
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LKJCorrCholesky
 ---------------
 .. autoclass:: pyro.distributions.LKJCorrCholesky
@@ -556,6 +563,13 @@ GeneralizedChannelPermute
 Householder
 -----------
 .. autoclass:: pyro.distributions.transforms.Householder
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+InvCholeskyTransform
+--------------------
+.. autoclass:: pyro.distributions.transforms.InvCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:

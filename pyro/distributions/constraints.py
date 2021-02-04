@@ -71,6 +71,17 @@ class _CorrCholesky(Constraint):
         return lower_cholesky.check(value) & unit_norm_row
 
 
+class _CorrMatrix(Constraint):
+    """
+    Constrains to a correlation matrix.
+    """
+ 
+    def check(self, value):
+        # check for diagonal equal to 1
+        unit_variance = torch.all(torch.abs(torch.diagonal(x, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1)
+        return positive_definite.check(value) & unit_variance
+
+
 class _OrderedVector(Constraint):
     """
     Constrains to a real-valued tensor where the elements are monotonically
@@ -86,18 +97,32 @@ class _OrderedVector(Constraint):
             return torch.all(value[..., 1:] > value[..., :-1], dim=-1)
 
 
+class _PositiveOrderedVector(Constraint):
+    """
+    Constrains to a positive real-valued tensor where the elements are monotonically
+    increasing along the `event_shape` dimension.
+    """
+
+    def check(self, value):
+        return ordered_vector.check(value) & independent(positive, 1).check(value)
+
+
 corr_cholesky_constraint = _CorrCholesky()
+corr_matrix = _CorrMatrix()
 independent = IndependentConstraint
 integer = _Integer()
 ordered_vector = _OrderedVector()
+positive_ordered_vector = _PositiveOrderedVector()
 sphere = _Sphere()
 
 __all__ = [
     'IndependentConstraint',
     'corr_cholesky_constraint',
+    'corr_matrix',
     'independent',
     'integer',
     'ordered_vector',
+    'positive_ordered_vector',
     'sphere',
 ]
 
