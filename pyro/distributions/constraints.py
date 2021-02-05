@@ -5,7 +5,7 @@ import torch
 from torch.distributions.constraints import *  # noqa F403
 from torch.distributions.constraints import Constraint
 from torch.distributions.constraints import __all__ as torch_constraints
-from torch.distributions.constraints import lower_cholesky
+from torch.distributions.constraints import lower_cholesky, positive, positive_definite
 
 
 # TODO move this upstream to torch.distributions
@@ -75,10 +75,10 @@ class _CorrMatrix(Constraint):
     """
     Constrains to a correlation matrix.
     """
- 
+
     def check(self, value):
         # check for diagonal equal to 1
-        unit_variance = torch.all(torch.abs(torch.diagonal(x, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1)
+        unit_variance = torch.all(torch.abs(torch.diagonal(value, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1)
         return positive_definite.check(value) & unit_variance
 
 

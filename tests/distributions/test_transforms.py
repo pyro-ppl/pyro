@@ -340,7 +340,7 @@ def test_inv_cholesky_transform(batch_shape, dim, domain):
     z = torch.randn(batch_shape + (dim * (dim - 1) // 2,))
     x = T.CorrLCholeskyTransform()(z)
     if domain is dist.constraints.corr_cholesky_constraint:
-        tril_mask = arange < arange.view(-1, 1)        
+        tril_mask = arange < arange.view(-1, 1)
     else:
         tril_mask = arange < arange.view(-1, 1) + 1
 

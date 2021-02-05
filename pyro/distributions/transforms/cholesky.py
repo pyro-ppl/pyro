@@ -4,9 +4,10 @@
 import math
 
 import torch
+from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
-from pyro.distributions import constraints
+from pyro.distributions.constraints import corr_cholesky_constraint, corr_matrix
 
 
 def _vector_to_l_cholesky(z):
@@ -43,7 +44,7 @@ class CorrLCholeskyTransform(Transform):
 
     """
     domain = constraints.real_vector
-    codomain = constraints.corr_cholesky_constraint
+    codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
     event_dim = 1
@@ -91,7 +92,7 @@ class InvCholeskyTransform(Transform):
 
     def __init__(self, domain=constraints.lower_cholesky, cache_size=0):
         # TODO: change corr_cholesky_constraint to corr_cholesky when it is available
-        assert domain in [constraints.lower_cholesky, constraints.corr_cholesky_constraint]
+        assert domain in [constraints.lower_cholesky, corr_cholesky_constraint]
         self.domain = domain
         super().__init__(cache_size=cache_size)
 
@@ -103,7 +104,7 @@ class InvCholeskyTransform(Transform):
         if self.domain is constraints.lower_cholesky:
             return constraints.positive_definite
         else:
-            return constraints.corr_matrix
+            return corr_matrix
 
     def _call(self, x):
         return torch.matmul(x, torch.transpose(x, -2, -1))

@@ -4,6 +4,7 @@
 from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
+from torch.distributions.transforms import ComposeTransform, ExpTransform, LowerCholeskyTransform
 
 from ..constraints import (IndependentConstraint, corr_cholesky_constraint, corr_matrix,
                            ordered_vector, positive_definite, positive_ordered_vector, sphere)
@@ -58,7 +59,7 @@ def _transform_to_corr_cholesky(constraint):
 @biject_to.register(corr_matrix)
 @transform_to.register(corr_matrix)
 def _transform_to_corr_matrix(constraint):
-    return ComposeTransform([CorrCholeskyTransform(),
+    return ComposeTransform([CorrLCholeskyTransform(),
                              InvCholeskyTransform(domain=corr_cholesky_constraint)])
 
 
@@ -71,7 +72,7 @@ def _transform_to_ordered_vector(constraint):
 @biject_to.register(positive_ordered_vector)
 @transform_to.register(positive_ordered_vector)
 def _transform_to_positive_ordered_vector(constraint):
-    return ComposedTransform([OrderedTransform(), ExpTransform()])
+    return ComposeTransform([OrderedTransform(), ExpTransform()])
 
 
 # TODO: register biject_to when LowerCholeskyTransform is bijective
