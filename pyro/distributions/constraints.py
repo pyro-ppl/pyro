@@ -79,6 +79,7 @@ class _CorrMatrix(Constraint):
     def check(self, value):
         # check for diagonal equal to 1
         unit_variance = torch.all(torch.abs(torch.diagonal(value, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1)
+        # TODO: fix upstream - positive_definite has an extra dimension in front of output shape
         return positive_definite.check(value) & unit_variance
 
 
