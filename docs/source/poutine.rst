@@ -4,6 +4,9 @@ Poutine (Effect handlers)
 Beneath the built-in inference algorithms, Pyro has a library of composable
 effect handlers for creating new inference algorithms and working with probabilistic
 programs. Pyro's inference algorithms are all built by applying these handlers to stochastic functions.
+In order to get a general understanding what effect handlers are and what problem they solve, read
+`An Introduction to Algebraic Effects and Handlers <https://www.eff-lang.org/handlers-tutorial.pdf>`_
+by Matija Pretnar.
 
 Handlers
 ---------
