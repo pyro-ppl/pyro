@@ -9,7 +9,7 @@ from torch.distributions import constraints
 from pyro.distributions.constraints import corr_cholesky_constraint, corr_matrix
 from pyro.distributions.torch import Beta, TransformedDistribution
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.transforms.cholesky import InvCholeskyTransform, _vector_to_l_cholesky
+from pyro.distributions.transforms.cholesky import CorrMatrixCholeskyTransform, _vector_to_l_cholesky
 
 
 # TODO: Modify class to support more than one eta value at a time?
@@ -145,7 +145,7 @@ class LKJ(TransformedDistribution):
         # TODO: use upstream LKJCholesky distribution
         base_dist = LKJCorrCholesky(dim, concentration)
         self.dim, self.concentration = base_dist._d, base_dist.eta
-        super(LKJ, self).__init__(base_dist, InvCholeskyTransform(domain=corr_cholesky_constraint),
+        super(LKJ, self).__init__(base_dist, CorrMatrixCholeskyTransform(),
                                   validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):

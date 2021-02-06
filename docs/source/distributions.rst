@@ -382,9 +382,23 @@ ConditionalTransform
     :undoc-members:
     :show-inheritance:
 
+CholeskyTransform
+-----------------
+.. autoclass:: pyro.distributions.transforms.CholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 CorrLCholeskyTransform
 ----------------------
 .. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+CorrMatrixCholeskyTransform
+---------------------------
+.. autoclass:: pyro.distributions.transforms.CorrMatrixCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -563,13 +577,6 @@ GeneralizedChannelPermute
 Householder
 -----------
 .. autoclass:: pyro.distributions.transforms.Householder
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-InvCholeskyTransform
---------------------
-.. autoclass:: pyro.distributions.transforms.InvCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:

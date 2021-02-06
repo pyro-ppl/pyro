@@ -22,7 +22,7 @@ class Flatten(dist.TransformModule):
     """
     event_dim = 1
 
-    def __init__(self, transform, input_shape):
+    def __init__(self, transform, input_shape, active):
         super().__init__(cache_size=1)
         assert(transform.event_dim == len(input_shape))
 
@@ -332,36 +332,37 @@ class TransformTests(TestCase):
 
 @pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
 @pytest.mark.parametrize('dim', [2, 3, 5])
-@pytest.mark.parametrize('domain', [dist.constraints.corr_cholesky_constraint,
-                                    dist.constraints.lower_cholesky])
-def test_inv_cholesky_transform(batch_shape, dim, domain):
-    t = T.InvCholeskyTransform(domain)
+@pytest.mark.parametrize('transform', [T.CholeskyTransform(), T.CorrMatrixCholeskyTransform()])
+def test_cholesky_transform(batch_shape, dim, transform):
     arange = torch.arange(dim)
+    domain = transform.domain
     z = torch.randn(batch_shape + (dim * (dim - 1) // 2,))
-    x = T.CorrLCholeskyTransform()(z)
-    if domain is dist.constraints.corr_cholesky_constraint:
+    if domain is dist.constraints.corr_matrix:
         tril_mask = arange < arange.view(-1, 1)
     else:
         tril_mask = arange < arange.view(-1, 1) + 1
+    x = transform.inv(T.CorrLCholeskyTransform()(z))  # creates corr_matrix
 
     def vec_to_mat(x_vec):
         x_mat = x_vec.new_zeros(batch_shape + (dim, dim))
         x_mat[..., tril_mask] = x_vec
-        if domain is dist.constraints.corr_cholesky_constraint:
-            x_mat = x_mat + (1 - x_mat.pow(2).sum(-1)).sqrt().diag_embed()
+        x_mat = x_mat + x_mat.transpose(-2, -1) - x_mat.diagonal(dim1=-2, dim2=-1).diag_embed()
+        if domain == dist.constraints.corr_matrix:
+            x_mat = x_mat + x_mat.new_ones(x_mat.shape[-1]).diag_embed()
         return x_mat
 
     def transform_to_vec(x_vec):
-        return t(vec_to_mat(x_vec))[..., tril_mask]
+        x_mat = vec_to_mat(x_vec)
+        return transform(x_mat)[..., tril_mask]
 
     x_vec = x[..., tril_mask].clone().requires_grad_()
     x_mat = vec_to_mat(x_vec)
-    y = t(x_mat)
-    log_det = t.log_abs_det_jacobian(x_mat, y)
+    y = transform(x_mat)
+    log_det = transform.log_abs_det_jacobian(x_mat, y)
     if batch_shape == ():
         jacobian = torch.autograd.functional.jacobian(transform_to_vec, x_vec)
         assert_close(log_det, torch.slogdet(jacobian)[1])
 
     assert log_det.shape == batch_shape
-    assert_close(y, x_mat @ x_mat.transpose(-1, -2))
-    assert_close(t.inv(y), x_mat)
+    assert_close(y, x_mat.cholesky())
+    assert_close(transform.inv(y), x_mat)

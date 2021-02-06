@@ -15,7 +15,7 @@ from .affine_coupling import AffineCoupling, ConditionalAffineCoupling, affine_c
 from .basic import ELUTransform, LeakyReLUTransform, elu, leaky_relu
 from .batchnorm import BatchNorm, batchnorm
 from .block_autoregressive import BlockAutoregressive, block_autoregressive
-from .cholesky import CorrLCholeskyTransform, InvCholeskyTransform
+from .cholesky import CholeskyTransform, CorrLCholeskyTransform, CorrMatrixCholeskyTransform
 from .discrete_cosine import DiscreteCosineTransform
 from .generalized_channel_permute import (ConditionalGeneralizedChannelPermute, GeneralizedChannelPermute,
                                           conditional_generalized_channel_permute, generalized_channel_permute)
@@ -59,8 +59,7 @@ def _transform_to_corr_cholesky(constraint):
 @biject_to.register(corr_matrix)
 @transform_to.register(corr_matrix)
 def _transform_to_corr_matrix(constraint):
-    return ComposeTransform([CorrLCholeskyTransform(),
-                             InvCholeskyTransform(domain=corr_cholesky_constraint)])
+    return ComposeTransform([CorrLCholeskyTransform(), CorrMatrixCholeskyTransform().inv])
 
 
 @biject_to.register(ordered_vector)
@@ -78,7 +77,7 @@ def _transform_to_positive_ordered_vector(constraint):
 # TODO: register biject_to when LowerCholeskyTransform is bijective
 @transform_to.register(positive_definite)
 def _transform_to_positive_definite(constraint):
-    return ComposeTransform([LowerCholeskyTransform(), InvCholeskyTransform()])
+    return ComposeTransform([LowerCholeskyTransform(), CholeskyTransform().inv])
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
@@ -102,6 +101,7 @@ __all__ = [
     'AffineCoupling',
     'BatchNorm',
     'BlockAutoregressive',
+    'CholeskyTransform',
     'ComposeTransformModule',
     'ConditionalAffineAutoregressive',
     'ConditionalAffineCoupling',
@@ -114,12 +114,12 @@ __all__ = [
     'ConditionalSpline',
     'ConditionalSplineAutoregressive',
     'CorrLCholeskyTransform',
+    'CorrMatrixCholeskyTransform',
     'DiscreteCosineTransform',
     'ELUTransform',
     'GeneralizedChannelPermute',
     'HaarTransform',
     'Householder',
-    'InvCholeskyTransform',
     'LeakyReLUTransform',
     'LowerCholeskyAffine',
     'MatrixExponential',

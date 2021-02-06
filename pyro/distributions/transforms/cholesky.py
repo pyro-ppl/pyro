@@ -81,45 +81,50 @@ class CorrLCholeskyTransform(Transform):
         return tanpart + matpart
 
 
-class InvCholeskyTransform(Transform):
+class CholeskyTransform(Transform):
     r"""
-    Transform via the mapping :math:`y = x @ x.T`, where `x` is a lower
-    triangular matrix with positive diagonal.
+    Transform via the mapping :math:`y = cholesky(x)`, where `x` is a
+    positive definite matrix.
     """
     bijective = True
     sign = +1
     event_dim = 2
-
-    def __init__(self, domain=constraints.lower_cholesky, cache_size=0):
-        # TODO: change corr_cholesky_constraint to corr_cholesky when it is available
-        assert domain in [constraints.lower_cholesky, corr_cholesky_constraint]
-        self.domain = domain
-        super().__init__(cache_size=cache_size)
+    domain = constraints.positive_definite
+    codomain = constraints.lower_cholesky
 
     def __eq__(self, other):
-        return isinstance(other, InvCholeskyTransform) and other.domain is self.domain
-
-    @property
-    def codomain(self):
-        if self.domain is constraints.lower_cholesky:
-            return constraints.positive_definite
-        else:
-            return corr_matrix
+        return isinstance(other, CholeskyTransform)
 
     def _call(self, x):
-        return torch.matmul(x, torch.transpose(x, -2, -1))
+        return torch.cholesky(x)
 
     def _inverse(self, y):
-        return torch.cholesky(y)
+        return torch.matmul(y, torch.transpose(y, -2, -1))
 
     def log_abs_det_jacobian(self, x, y):
-        if self.domain is constraints.lower_cholesky:
-            # Ref: http://web.mit.edu/18.325/www/handouts/handout2.pdf page 13
-            n = x.shape[-1]
-            order = torch.arange(n, 0, -1, dtype=x.dtype, device=x.device)
-            return n * math.log(2) + (order * torch.diagonal(x, dim1=-2, dim2=-1).log()).sum(-1)
-        else:
-            # NB: see derivation in LKJCholesky implementation
-            n = x.shape[-1]
-            order = torch.arange(n - 1, -1, -1, dtype=x.dtype, device=x.device)
-            return (order * torch.diagonal(x, dim1=-2, dim2=-1).log()).sum(-1)
+        # Ref: http://web.mit.edu/18.325/www/handouts/handout2.pdf page 13
+        n = x.shape[-1]
+        order = torch.arange(n, 0, -1, dtype=x.dtype, device=x.device)
+        return -n * math.log(2) - (order * torch.diagonal(y, dim1=-2, dim2=-1).log()).sum(-1)
+
+
+class CorrMatrixCholeskyTransform(CholeskyTransform):
+    r"""
+    Transform via the mapping :math:`y = cholesky(x)`, where `x` is a
+    correlation matrix.
+    """
+    bijective = True
+    sign = +1
+    event_dim = 2
+    domain = corr_matrix
+    # TODO: change corr_cholesky_constraint to corr_cholesky when the latter is availabler
+    codomain = corr_cholesky_constraint
+
+    def __eq__(self, other):
+        return isinstance(other, CorrMatrixCholeskyTransform)
+
+    def log_abs_det_jacobian(self, x, y):
+        # NB: see derivation in LKJCholesky implementation
+        n = x.shape[-1]
+        order = torch.arange(n - 1, -1, -1, dtype=x.dtype, device=x.device)
+        return -(order * torch.diagonal(y, dim1=-2, dim2=-1).log()).sum(-1)
