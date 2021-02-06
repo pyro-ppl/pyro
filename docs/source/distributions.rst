@@ -50,6 +50,13 @@ TorchDistribution
     :show-inheritance:
     :member-order: bysource
 
+AffineBeta
+---------------------
+.. autoclass:: pyro.distributions.AffineBeta
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 AVFMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.AVFMultivariateNormal
@@ -274,6 +281,13 @@ OrderedLogistic
     :undoc-members:
     :show-inheritance:
 
+ProjectedNormal
+---------------
+.. autoclass:: pyro.distributions.ProjectedNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RelaxedBernoulliStraightThrough
 -------------------------------
 .. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough
@@ -368,6 +382,13 @@ CorrLCholeskyTransform
     :undoc-members:
     :show-inheritance:
 
+DiscreteCosineTransform
+-----------------------
+.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ELUTransform
 ------------
 .. autoclass:: pyro.distributions.transforms.ELUTransform
@@ -396,6 +417,13 @@ LowerCholeskyAffine
     :undoc-members:
     :show-inheritance:
 
+Normalize
+---------
+.. autoclass:: pyro.distributions.transforms.Normalize
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 OrderedTransform
 ----------------
 .. autoclass:: pyro.distributions.transforms.OrderedTransform
@@ -406,13 +434,6 @@ OrderedTransform
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-DiscreteCosineTransform
------------------------
-.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
     :members:
     :undoc-members:
     :show-inheritance:

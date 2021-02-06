@@ -5,11 +5,11 @@ import logging
 import os
 from collections import Counter
 
+import pyro
 import pytest
 import torch
-
-import pyro
-from pyro.distributions.spanning_tree import NUM_SPANNING_TREES, SpanningTree, make_complete_graph, sample_tree
+from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, find_best_tree, make_complete_graph,
+                                              sample_tree)
 from tests.common import assert_equal, xfail_if_not_implemented
 
 pytestmark = pytest.mark.skipif("CUDA_TEST" in os.environ, reason="spanning_tree unsupported on CUDA.")
@@ -56,6 +56,19 @@ def test_sample_tree_approx_smoke(num_edges, backend):
     edge_logits = torch.rand(K)
     for _ in range(10 if backend == "cpp" or num_edges <= 30 else 1):
         sample_tree(edge_logits, backend=backend)
+
+
+@pytest.mark.filterwarnings("always")
+@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
+@pytest.mark.parametrize('backend', ["python", "cpp"])
+def test_find_best_tree_smoke(num_edges, backend):
+    pyro.set_rng_seed(num_edges)
+    E = num_edges
+    V = 1 + E
+    K = V * (V - 1) // 2
+    for _ in range(10 if backend == "cpp" or num_edges <= 30 else 1):
+        edge_logits = torch.rand(K)
+        find_best_tree(edge_logits, backend=backend)
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
@@ -105,6 +118,48 @@ def test_log_prob(num_edges):
     assert log_probs.shape == (len(support),)
     log_total = log_probs.logsumexp(0).item()
     assert abs(log_total) < 1e-6, log_total
+
+
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
+def test_edge_mean_function(num_edges):
+    pyro.set_rng_seed(2 ** 32 - num_edges)
+    E = num_edges
+    V = 1 + E
+    K = V * (V - 1) // 2
+    edge_logits = torch.randn(K)
+    d = SpanningTree(edge_logits)
+
+    with xfail_if_not_implemented():
+        support = d.enumerate_support()
+    v1 = support[..., 0]
+    v2 = support[..., 1]
+    k = v1 + v2 * (v2 - 1) // 2
+    probs = d.log_prob(support).exp()[:, None].expand_as(k)
+    expected = torch.zeros(K).scatter_add_(0, k.reshape(-1), probs.reshape(-1))
+
+    actual = d.edge_mean
+    assert actual.shape == (V, V)
+    v1, v2 = make_complete_graph(V)
+    assert (actual[v1, v2] - expected).abs().max() < 1e-5, (actual, expected)
+
+
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
+@pytest.mark.parametrize('backend', ["python", "cpp"])
+def test_mode(num_edges, backend):
+    pyro.set_rng_seed(2 ** 32 - num_edges)
+    E = num_edges
+    V = 1 + E
+    K = V * (V - 1) // 2
+    edge_logits = torch.randn(K)
+    d = SpanningTree(edge_logits, sampler_options={"backend": backend})
+    with xfail_if_not_implemented():
+        support = d.enumerate_support()
+    v1 = support[..., 0]
+    v2 = support[..., 1]
+    k = v1 + v2 * (v2 - 1) // 2
+    expected = support[edge_logits[k].sum(-1).argmax(0)]
+    actual = d.mode
+    assert (actual == expected).all()
 
 
 @pytest.mark.filterwarnings("always")

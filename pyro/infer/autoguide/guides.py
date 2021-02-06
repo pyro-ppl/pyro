@@ -31,12 +31,13 @@ import pyro.poutine as poutine
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_feasible, init_to_median
-from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
+
+from .utils import _product, helpful_support_errors
 
 
 def _deep_setattr(obj, key, val):
@@ -355,7 +356,8 @@ class AutoDelta(AutoGuide):
                     value = periodic_repeat(value, full_size, dim).contiguous()
 
             value = PyroParam(value, site["fn"].support, event_dim)
-            _deep_setattr(self, name, value)
+            with helpful_support_errors(site):
+                _deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
         """
@@ -383,6 +385,7 @@ class AutoDelta(AutoGuide):
                                                             event_dim=site["fn"].event_dim))
         return result
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -390,7 +393,8 @@ class AutoDelta(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        return self(*args, **kwargs)
+        result = self(*args, **kwargs)
+        return {k: v.detach() for k, v in result.items()}
 
 
 class AutoNormal(AutoGuide):
@@ -447,7 +451,8 @@ class AutoNormal(AutoGuide):
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect unconstrained event_dims, which may differ from constrained event_dims.
-            init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
+            with helpful_support_errors(site):
+                init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
             event_dim = site["fn"].event_dim + init_loc.dim() - site["value"].dim()
             self._event_dims[name] = event_dim
 
@@ -513,6 +518,7 @@ class AutoNormal(AutoGuide):
 
         return result
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -530,6 +536,7 @@ class AutoNormal(AutoGuide):
 
         return medians
 
+    @torch.no_grad()
     def quantiles(self, quantiles, *args, **kwargs):
         """
         Returns posterior quantiles each latent variable. Example::
@@ -591,7 +598,8 @@ class AutoContinuous(AutoGuide):
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect the shapes of unconstrained values.
             # These may differ from the shapes of constrained values.
-            self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
+            with helpful_support_errors(site):
+                self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
 
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
@@ -719,6 +727,7 @@ class AutoContinuous(AutoGuide):
         """
         raise NotImplementedError
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -727,9 +736,11 @@ class AutoContinuous(AutoGuide):
         :rtype: dict
         """
         loc, _ = self._loc_scale(*args, **kwargs)
+        loc = loc.detach()
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self._unpack_latent(loc)}
 
+    @torch.no_grad()
     def quantiles(self, quantiles, *args, **kwargs):
         """
         Returns posterior quantiles each latent variable. Example::

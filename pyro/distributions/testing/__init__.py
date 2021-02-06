@@ -2,6 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-This module contains distributions that are useful for testing new Pyro
-inference algorithms.
+This module contains tools for testing new distributions and distributions for
+testing new Pyro inference algorithms.
 """
