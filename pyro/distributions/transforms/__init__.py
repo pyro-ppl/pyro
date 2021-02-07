@@ -4,8 +4,10 @@
 from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
+from torch.distributions.transforms import ComposeTransform, ExpTransform, LowerCholeskyTransform
 
-from ..constraints import IndependentConstraint, corr_cholesky_constraint, ordered_vector, sphere
+from ..constraints import (IndependentConstraint, corr_cholesky_constraint, corr_matrix,
+                           ordered_vector, positive_definite, positive_ordered_vector, sphere)
 from ..torch_transform import ComposeTransformModule
 from .affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive, affine_autoregressive,
                                     conditional_affine_autoregressive)
@@ -13,7 +15,7 @@ from .affine_coupling import AffineCoupling, ConditionalAffineCoupling, affine_c
 from .basic import ELUTransform, LeakyReLUTransform, elu, leaky_relu
 from .batchnorm import BatchNorm, batchnorm
 from .block_autoregressive import BlockAutoregressive, block_autoregressive
-from .cholesky import CorrLCholeskyTransform
+from .cholesky import CholeskyTransform, CorrLCholeskyTransform, CorrMatrixCholeskyTransform
 from .discrete_cosine import DiscreteCosineTransform
 from .generalized_channel_permute import (ConditionalGeneralizedChannelPermute, GeneralizedChannelPermute,
                                           conditional_generalized_channel_permute, generalized_channel_permute)
@@ -54,10 +56,28 @@ def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
 
 
+@biject_to.register(corr_matrix)
+@transform_to.register(corr_matrix)
+def _transform_to_corr_matrix(constraint):
+    return ComposeTransform([CorrLCholeskyTransform(), CorrMatrixCholeskyTransform().inv])
+
+
 @biject_to.register(ordered_vector)
 @transform_to.register(ordered_vector)
 def _transform_to_ordered_vector(constraint):
     return OrderedTransform()
+
+
+@biject_to.register(positive_ordered_vector)
+@transform_to.register(positive_ordered_vector)
+def _transform_to_positive_ordered_vector(constraint):
+    return ComposeTransform([OrderedTransform(), ExpTransform()])
+
+
+# TODO: register biject_to when LowerCholeskyTransform is bijective
+@transform_to.register(positive_definite)
+def _transform_to_positive_definite(constraint):
+    return ComposeTransform([LowerCholeskyTransform(), CholeskyTransform().inv])
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
@@ -81,6 +101,7 @@ __all__ = [
     'AffineCoupling',
     'BatchNorm',
     'BlockAutoregressive',
+    'CholeskyTransform',
     'ComposeTransformModule',
     'ConditionalAffineAutoregressive',
     'ConditionalAffineCoupling',
@@ -93,6 +114,7 @@ __all__ = [
     'ConditionalSpline',
     'ConditionalSplineAutoregressive',
     'CorrLCholeskyTransform',
+    'CorrMatrixCholeskyTransform',
     'DiscreteCosineTransform',
     'ELUTransform',
     'GeneralizedChannelPermute',

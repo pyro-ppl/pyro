@@ -87,7 +87,7 @@ def test_score_errors_non_broadcastable_data_shape(dist):
 
 def test_gof(continuous_dist):
     Dist = continuous_dist.pyro_dist
-    if Dist is dist.LKJCorrCholesky:
+    if Dist in [dist.LKJ, dist.LKJCorrCholesky]:
         pytest.xfail(reason="incorrect submanifold scaling")
 
     num_samples = 50000
