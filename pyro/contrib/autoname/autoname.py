@@ -1,8 +1,10 @@
-import functools
 from collections import defaultdict
+from collections.abc import Iterable
+from functools import singledispatch
 
 import pyro
-from pyro.poutine.reentrant_messenger import ReentrantMessenger
+from pyro.poutine.handlers import _make_handler
+from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import effectful
 
 
@@ -36,7 +38,7 @@ class ScopeStack:
     def local_scope(self):
         if len(self._stack):
             return self._stack[-1]
-        return NameScope()
+        return NameScope()  # don't keep counter for a global scope
 
     def push_scope(self, scope):
         scope.counter = self.local_scope._inner_scopes[scope.name]
@@ -58,12 +60,12 @@ class ScopeStack:
         return "/".join(scope.full_name for scope in self._stack)
 
 
-class AutonameMessenger(ReentrantMessenger):
+class AutonameMessenger(Messenger):
     """
     Assign unique names to random variables.
 
     1. For a new varialbe use its declared name if given, otherwise use the distribution name::
-    
+
         sample("x", dist.Bernoulli ... )  # -> x
         sample(dist.Bernoulli ... )  # -> Bernoulli
 
@@ -87,7 +89,7 @@ class AutonameMessenger(ReentrantMessenger):
 
         @autoname(name="model")
         def f3():
-            for i in autoname(name="time")(range(3)):
+            for i in autoname(range(3), name="time"):
                 # model/time/Bernoulli .. model/time__1/Bernoulli .. model/time__2/Bernoulli
                 sample(dist.Bernoulli ... )
                 # model/time/f1/Bernoulli .. model/time__1/f1/Bernoulli .. model/time__2/f1/Bernoulli
@@ -99,67 +101,63 @@ class AutonameMessenger(ReentrantMessenger):
         super().__init__()
 
     def __call__(self, fn_or_iter):
-        # reuse sequential pyro.plate name
-        # also get suffix names from pyro.vectorized_plate and add to NameScope?
-        if hasattr(fn_or_iter, "name"):
-            self.scope.name = fn_or_iter.name
+        if isinstance(fn_or_iter, Iterable):
+            if self.scope.name is None:
+                self.scope.name = fn_or_iter.name
             self._iter = fn_or_iter
             return self
         if callable(fn_or_iter):
             if self.scope.name is None:
                 self.scope.name = fn_or_iter.__name__
-            return super().__call__(effectful(type="call_scope")(fn_or_iter))
-        self._iter = fn_or_iter
-        return self
+            return super().__call__(fn_or_iter)
+        raise ValueError(f"{fn_or_iter} has to be iterable or callable.")
 
     @staticmethod  # only depends on the global _SCOPE_STACK state, not self
     def _pyro_genname(msg):
-        # example: genname() -> model_0/time_0/var0, model_0/time_0/var1, model_0/time_1/var0
         raw_name = msg["fn"](*msg["args"])
         new_name = _SCOPE_STACK.new_name(raw_name)
 
         msg["value"] = _SCOPE_STACK.full_scope_name + "/" + new_name
         msg["stop"] = True
 
-    def _pyro_call_scope(self, msg):
+    def __enter__(self):
         _SCOPE_STACK.push_scope(self.scope)
-        msg["stop"] = True
+        return super().__enter__()
 
-    def _pyro_post_call_scope(self, msg):
+    def __exit__(self, *args):
         scope = _SCOPE_STACK.pop_scope()
         scope._inner_scopes = defaultdict(int)
-        msg["stop"] = True
+        return super().__exit__(*args)
 
     def __iter__(self):
-        with self:
-            for i in self._iter:
-                _SCOPE_STACK.push_scope(self.scope)
-                yield i
-                scope = _SCOPE_STACK.pop_scope()
-                scope._inner_scopes = defaultdict(int)
+        for i in self._iter:
+            _SCOPE_STACK.push_scope(self.scope)
+            yield i
+            scope = _SCOPE_STACK.pop_scope()
+            scope._inner_scopes = defaultdict(int)
 
 
-def autoname(fn=None, name=None):
-    msngr = AutonameMessenger(name=name)
-    return msngr(fn) if fn is not None else msngr
+_handler_name, _handler = _make_handler(AutonameMessenger)
+_handler.__module__ = __name__
+locals()[_handler_name] = _handler
 
 
-@functools.singledispatch
+@singledispatch
 def sample(*args):
     raise NotImplementedError
 
 
 @sample.register(str)
-def _sample_name(name, d, *args, **kwargs):  # the current syntax of pyro.sample
+def _sample_name(name, fn, *args, **kwargs):  # the current syntax of pyro.sample
     name = genname(name)
-    return pyro.sample(name, d, *args, **kwargs)
+    return pyro.sample(name, fn, *args, **kwargs)
 
 
 @sample.register(pyro.distributions.Distribution)
-def _sample_dist(d, *args, **kwargs):
+def _sample_dist(fn, *args, **kwargs):
     name = kwargs.pop("name", None)
-    name = genname(type(d).__name__ if name is None else name)
-    return pyro.sample(name, d, *args, **kwargs)
+    name = genname(type(fn).__name__ if name is None else name)
+    return pyro.sample(name, fn, *args, **kwargs)
 
 
 _SCOPE_STACK = ScopeStack()

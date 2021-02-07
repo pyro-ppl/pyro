@@ -119,7 +119,8 @@ def test_named_loop():
     @autoname(name="model")
     def f2():
         f1()
-        for i in autoname(name="loop")(range(3)):
+        # for i in autoname(name="loop")(range(3)): <- this works too
+        for i in autoname(range(3), name="loop"):
             f1()
             sample("x", dist.Bernoulli(0.5))
         return sample(dist.Normal(0.0, 1.0))
@@ -170,7 +171,7 @@ def test_nested_plate():
     @autoname(name="model")
     def f2():
         for i in autoname(pyro.plate(name="data", size=3)):
-            for j in autoname(name="xy")(range(2)):
+            for j in autoname(range(2), name="xy"):
                 f1()
         return sample(dist.Bernoulli(0.5))
 
@@ -211,10 +212,17 @@ def test_model_guide():
     assert "model/Bernoulli" in model_tr.nodes
     assert "model/Bernoulli" in guide_tr.nodes
 
-    #  @autoname
-    #  def f1():
-    #      with autoname(name="prefix"):  # should this work?
-    #          model()
-    #          model()
-    #
-    #  tr1 = poutine.trace(f1).get_trace()
+
+def test_context_manager():
+    @autoname
+    def f1():
+        return sample(dist.Bernoulli(0.5))
+
+    def f2():
+        with autoname(name="prefix"):
+            f1()
+            f1()
+
+    tr2 = poutine.trace(f2).get_trace()
+    assert "prefix/f1/Bernoulli" in tr2.nodes
+    assert "prefix/f1__1/Bernoulli" in tr2.nodes
