@@ -4,7 +4,7 @@ from functools import singledispatch
 
 import pyro
 from pyro.poutine.handlers import _make_handler
-from pyro.poutine.messenger import Messenger
+from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.poutine.runtime import effectful
 
 
@@ -60,7 +60,7 @@ class ScopeStack:
         return "/".join(scope.full_name for scope in self._stack)
 
 
-class AutonameMessenger(Messenger):
+class AutonameMessenger(ReentrantMessenger):
     """
     Assign unique names to random variables.
 
@@ -94,23 +94,29 @@ class AutonameMessenger(Messenger):
                 sample(dist.Bernoulli ... )
                 # model/time/f1/Bernoulli .. model/time__1/f1/Bernoulli .. model/time__2/f1/Bernoulli
                 f1()
+
+        def f4():
+            with autoname(name="prefix"):
+                f1()  # -> prefix/f1/Bernoulli
+                f1()  # -> prefix/f1__1/Bernoulli
+                sample(dist.Bernoulli ... )  # -> prefix/Bernoulli
     """
 
     def __init__(self, name=None):
-        self.scope = NameScope(name)
+        self.name = name
         super().__init__()
 
     def __call__(self, fn_or_iter):
         if isinstance(fn_or_iter, Iterable):
-            if self.scope.name is None:
-                self.scope.name = fn_or_iter.name
+            if self.name is None:
+                self.name = fn_or_iter.name  # name of a sequential pyro.plate
             self._iter = fn_or_iter
             return self
         if callable(fn_or_iter):
-            if self.scope.name is None:
-                self.scope.name = fn_or_iter.__name__
+            if self.name is None:
+                self.name = fn_or_iter.__name__
             return super().__call__(fn_or_iter)
-        raise ValueError(f"{fn_or_iter} has to be iterable or callable.")
+        raise ValueError(f"{fn_or_iter} has to be an iterable or a callable.")
 
     @staticmethod  # only depends on the global _SCOPE_STACK state, not self
     def _pyro_genname(msg):
@@ -121,20 +127,20 @@ class AutonameMessenger(Messenger):
         msg["stop"] = True
 
     def __enter__(self):
-        _SCOPE_STACK.push_scope(self.scope)
+        scope = NameScope(self.name)
+        _SCOPE_STACK.push_scope(scope)
         return super().__enter__()
 
     def __exit__(self, *args):
-        scope = _SCOPE_STACK.pop_scope()
-        scope._inner_scopes = defaultdict(int)
+        _SCOPE_STACK.pop_scope()
         return super().__exit__(*args)
 
     def __iter__(self):
         for i in self._iter:
-            _SCOPE_STACK.push_scope(self.scope)
+            scope = NameScope(self.name)
+            _SCOPE_STACK.push_scope(scope)
             yield i
             scope = _SCOPE_STACK.pop_scope()
-            scope._inner_scopes = defaultdict(int)
 
 
 _handler_name, _handler = _make_handler(AutonameMessenger)
