@@ -17,13 +17,12 @@ class NameScope:
     def __init__(self, name=None):
         self.name = name
         self.counter = 0
-        self._inner_scopes = defaultdict(int)
+        self._namespace = defaultdict(int)
 
-    @property
-    def full_name(self):
+    def __str__(self):
         if self.counter:
             return f"{self.name}__{self.counter}"
-        return self.name
+        return str(self.name)
 
 
 class ScopeStack:
@@ -34,30 +33,33 @@ class ScopeStack:
     def __init__(self):
         self._stack = []
 
+    def __str__(self):
+        return "/".join(str(scope) for scope in self._stack)
+
     @property
-    def local_scope(self):
+    def global_scope(self):
+        return NameScope()  # don't keep a counter for a global scope
+
+    @property
+    def current_scope(self):
         if len(self._stack):
             return self._stack[-1]
-        return NameScope()  # don't keep counter for a global scope
+        return self.global_scope
 
     def push_scope(self, scope):
-        scope.counter = self.local_scope._inner_scopes[scope.name]
-        self.local_scope._inner_scopes[scope.name] += 1
+        scope.counter = self.current_scope._namespace[scope.name]
+        self.current_scope._namespace[scope.name] += 1
         self._stack.append(scope)
 
     def pop_scope(self):
         return self._stack.pop(-1)
 
-    def new_name(self, name):
-        counter = self.local_scope._inner_scopes[name]
-        self.local_scope._inner_scopes[name] += 1
+    def fresh_name(self, name):
+        counter = self.current_scope._namespace[name]
+        self.current_scope._namespace[name] += 1
         if counter:
             return name + str(counter)
         return name
-
-    @property
-    def full_scope_name(self):
-        return "/".join(scope.full_name for scope in self._stack)
 
 
 class AutonameMessenger(ReentrantMessenger):
@@ -118,14 +120,6 @@ class AutonameMessenger(ReentrantMessenger):
             return super().__call__(fn_or_iter)
         raise ValueError(f"{fn_or_iter} has to be an iterable or a callable.")
 
-    @staticmethod  # only depends on the global _SCOPE_STACK state, not self
-    def _pyro_genname(msg):
-        raw_name = msg["fn"](*msg["args"])
-        new_name = _SCOPE_STACK.new_name(raw_name)
-
-        msg["value"] = _SCOPE_STACK.full_scope_name + "/" + new_name
-        msg["stop"] = True
-
     def __enter__(self):
         scope = NameScope(self.name)
         _SCOPE_STACK.push_scope(scope)
@@ -141,6 +135,14 @@ class AutonameMessenger(ReentrantMessenger):
             _SCOPE_STACK.push_scope(scope)
             yield i
             scope = _SCOPE_STACK.pop_scope()
+
+    @staticmethod  # only depends on the global _SCOPE_STACK state, not self
+    def _pyro_genname(msg):
+        raw_name = msg["fn"](*msg["args"])
+        fresh_name = _SCOPE_STACK.fresh_name(raw_name)
+
+        msg["value"] = str(_SCOPE_STACK) + "/" + fresh_name
+        msg["stop"] = True
 
 
 _handler_name, _handler = _make_handler(AutonameMessenger)
