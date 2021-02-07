@@ -145,7 +145,7 @@ class LKJ(TransformedDistribution):
         # TODO: use upstream LKJCholesky distribution
         base_dist = LKJCorrCholesky(dim, concentration)
         self.dim, self.concentration = base_dist._d, base_dist.eta
-        super(LKJ, self).__init__(base_dist, CorrMatrixCholeskyTransform(),
+        super(LKJ, self).__init__(base_dist, CorrMatrixCholeskyTransform().inv,
                                   validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):

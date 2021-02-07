@@ -22,7 +22,7 @@ class Flatten(dist.TransformModule):
     """
     event_dim = 1
 
-    def __init__(self, transform, input_shape, active):
+    def __init__(self, transform, input_shape):
         super().__init__(cache_size=1)
         assert(transform.event_dim == len(input_shape))
 
