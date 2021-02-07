@@ -24,6 +24,11 @@ class NameScope:
             return f"{self.name}__{self.counter}"
         return str(self.name)
 
+    def allocate(self, name):
+        counter = self._namespace[name]
+        self._namespace[name] += 1
+        return counter
+
 
 class ScopeStack:
     """
@@ -47,16 +52,14 @@ class ScopeStack:
         return self.global_scope
 
     def push_scope(self, scope):
-        scope.counter = self.current_scope._namespace[scope.name]
-        self.current_scope._namespace[scope.name] += 1
+        scope.counter = self.current_scope.allocate(scope.name)
         self._stack.append(scope)
 
     def pop_scope(self):
         return self._stack.pop(-1)
 
     def fresh_name(self, name):
-        counter = self.current_scope._namespace[name]
-        self.current_scope._namespace[name] += 1
+        counter = self.current_scope.allocate(name)
         if counter:
             return name + str(counter)
         return name
