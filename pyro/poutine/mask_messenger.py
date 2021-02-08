@@ -3,8 +3,6 @@
 
 import torch
 
-from pyro.util import ignore_jit_warnings
-
 from .messenger import Messenger
 
 
@@ -22,11 +20,9 @@ class MaskMessenger(Messenger):
         if isinstance(mask, torch.Tensor):
             if mask.dtype != torch.bool:
                 raise ValueError('Expected mask to be a BoolTensor but got {}'.format(type(mask)))
-        else:
-            if mask not in (True, False):
-                raise ValueError('Expected mask to be a boolean but got {}'.format(type(mask)))
-            with ignore_jit_warnings():
-                mask = torch.tensor(mask)
+
+        elif mask not in (True, False):
+            raise ValueError('Expected mask to be a boolean but got {}'.format(type(mask)))
         super().__init__()
         self.mask = mask
 
