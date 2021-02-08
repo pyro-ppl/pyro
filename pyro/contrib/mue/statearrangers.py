@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 import torch
 import torch.nn as nn
+import pdb
 
 
 class Profile(nn.Module):
     """
     Profile HMM state arrangement. Parameterizes an HMM according to
-    Equation S40 in [1]. For further background on profile HMMs see [2].
+    Equation S40 in [1] (with r_{M+1,j} = 1 and u_{M+1,j} = 0
+    for j in {0, 1, 2}). For further background on profile HMMs see [2].
 
     **References**
 
@@ -28,7 +30,7 @@ class Profile(nn.Module):
     def __init__(self, M, epsilon=1e-32):
         super().__init__()
         self.M = M
-        self.K = 2*(M+1)
+        self.K = 2*M+1
         self.epsilon = epsilon
 
         self._make_transfer()
@@ -46,21 +48,22 @@ class Profile(nn.Module):
         # null -> locations in the transition matrix equal to 0
         # ...transf_0 -> initial transition vector
         # ...transf -> transition matrix
+        # We fix r_{M+1,j} = 1 for j in {0, 1, 2}
         self.register_buffer('r_transf_0',
-                             torch.zeros((M+1, 3, 2, K)))
+                             torch.zeros((M, 3, 2, K)))
         self.register_buffer('u_transf_0',
-                             torch.zeros((M+1, 3, 2, K)))
+                             torch.zeros((M, 3, 2, K)))
         self.register_buffer('null_transf_0',
                              torch.zeros((K,)))
         m, g = -1, 0
-        for mp in range(M+1):
-            for gp in range(2):
-                kp = mg2k(mp, gp)
+        for gp in range(2):
+            for mp in range(M+gp):
+                kp = mg2k(mp, gp, M)
                 if m + 1 - g == mp and gp == 0:
                     self.r_transf_0[m+1-g, g, 0, kp] = 1
                     self.u_transf_0[m+1-g, g, 0, kp] = 1
 
-                elif m + 1 - g < mp and mp <= M and gp == 0:
+                elif m + 1 - g < mp and gp == 0:
                     self.r_transf_0[m+1-g, g, 0, kp] = 1
                     self.u_transf_0[m+1-g, g, 1, kp] = 1
                     for mpp in range(m+2-g, mp):
@@ -70,36 +73,37 @@ class Profile(nn.Module):
                     self.u_transf_0[mp, 2, 0, kp] = 1
 
                 elif m + 1 - g == mp and gp == 1:
-                    self.r_transf_0[m+1-g, g, 1, kp] = 1
+                    if mp < M:
+                        self.r_transf_0[m+1-g, g, 1, kp] = 1
 
-                elif m + 1 - g < mp and mp <= M and gp == 1:
+                elif m + 1 - g < mp and gp == 1:
                     self.r_transf_0[m+1-g, g, 0, kp] = 1
                     self.u_transf_0[m+1-g, g, 1, kp] = 1
                     for mpp in range(m+2-g, mp):
                         self.r_transf_0[mpp, 2, 0, kp] = 1
                         self.u_transf_0[mpp, 2, 1, kp] = 1
-                    self.r_transf_0[mp, 2, 1, kp] = 1
+                    if mp < M:
+                        self.r_transf_0[mp, 2, 1, kp] = 1
 
                 else:
                     self.null_transf_0[kp] = 1
-        self.u_transf_0[-1, :, :, :] = 0.
 
         self.register_buffer('r_transf',
-                             torch.zeros((M+1, 3, 2, K, K)))
+                             torch.zeros((M, 3, 2, K, K)))
         self.register_buffer('u_transf',
-                             torch.zeros((M+1, 3, 2, K, K)))
+                             torch.zeros((M, 3, 2, K, K)))
         self.register_buffer('null_transf',
                              torch.zeros((K, K)))
-        for m in range(M+1):
-            for g in range(2):
-                for mp in range(M+1):
-                    for gp in range(2):
-                        k, kp = mg2k(m, g), mg2k(mp, gp)
+        for g in range(2):
+            for m in range(M+g):
+                for gp in range(2):
+                    for mp in range(M+gp):
+                        k, kp = mg2k(m, g, M), mg2k(mp, gp, M)
                         if m + 1 - g == mp and gp == 0:
                             self.r_transf[m+1-g, g, 0, k, kp] = 1
                             self.u_transf[m+1-g, g, 0, k, kp] = 1
 
-                        elif m + 1 - g < mp and mp <= M and gp == 0:
+                        elif m + 1 - g < mp and gp == 0:
                             self.r_transf[m+1-g, g, 0, k, kp] = 1
                             self.u_transf[m+1-g, g, 1, k, kp] = 1
                             for mpp in range(m+2-g, mp):
@@ -109,27 +113,28 @@ class Profile(nn.Module):
                             self.u_transf[mp, 2, 0, k, kp] = 1
 
                         elif m + 1 - g == mp and gp == 1:
-                            self.r_transf[m+1-g, g, 1, k, kp] = 1
+                            if mp < M:
+                                self.r_transf[m+1-g, g, 1, k, kp] = 1
 
-                        elif m + 1 - g < mp and mp <= M and gp == 1:
+                        elif m + 1 - g < mp and gp == 1:
                             self.r_transf[m+1-g, g, 0, k, kp] = 1
                             self.u_transf[m+1-g, g, 1, k, kp] = 1
                             for mpp in range(m+2-g, mp):
                                 self.r_transf[mpp, 2, 0, k, kp] = 1
                                 self.u_transf[mpp, 2, 1, k, kp] = 1
-                            self.r_transf[mp, 2, 1, k, kp] = 1
+                            if mp < M:
+                                self.r_transf[mp, 2, 1, k, kp] = 1
 
-                        elif not (m == M and mp == M and g == 0 and gp == 0):
+                        else:
                             self.null_transf[k, kp] = 1
-        self.u_transf[-1, :, :, :, :] = 0.
 
         self.register_buffer('vx_transf',
-                             torch.zeros((M+1, K)))
+                             torch.zeros((M, K)))
         self.register_buffer('vc_transf',
                              torch.zeros((M+1, K)))
-        for m in range(M+1):
-            for g in range(2):
-                k = mg2k(m, g)
+        for g in range(2):
+            for m in range(M+g):
+                k = mg2k(m, g, M)
                 if g == 0:
                     self.vx_transf[m, k] = 1
                 elif g == 1:
@@ -141,8 +146,8 @@ class Profile(nn.Module):
         Assemble HMM parameters given profile parameters.
 
         :param ~torch.Tensor precursor_seq_logits: Initial (relaxed) sequence
-            *log(x)*. Should have rightmost dimension ``(M+1, D)`` and be
-            broadcastable to ``(batch_size, M+1, D)``, where
+            *log(x)*. Should have rightmost dimension ``(M, D)`` and be
+            broadcastable to ``(batch_size, M, D)``, where
             D is the latent alphabet size. Should be normalized to one along the
             final axis, i.e. ``precursor_seq_logits.logsumexp(-1) = zeros``.
         :param ~torch.Tensor insert_seq_logits: Insertion sequence *log(c)*.
@@ -150,14 +155,14 @@ class Profile(nn.Module):
             to ``(batch_size, M+1, D)``. Should be normalized
             along the final axis.
         :param ~torch.Tensor insert_logits: Insertion probabilities *log(r)*.
-            Should have rightmost dimension ``(M+1, 3, 2)`` and be broadcastable
-            to ``(batch_size, M+1, 3, 2)``. Should be normalized along the
+            Should have rightmost dimension ``(M, 3, 2)`` and be broadcastable
+            to ``(batch_size, M, 3, 2)``. Should be normalized along the
             final axis.
         :param ~torch.Tensor delete_logits: Deletion probabilities *log(u)*.
-            Should have rightmost dimension ``(M+1, 3, 2)`` and be broadcastable
-            to ``(batch_size, M+1, 3, 2)``. Should be normalized along the
+            Should have rightmost dimension ``(M, 3, 2)`` and be broadcastable
+            to ``(batch_size, M, 3, 2)``. Should be normalized along the
             final axis.
-        :param ~torch.Tensor substitute_logits: Substiution probabilities
+        :param ~torch.Tensor substitute_logits: Substitution probabilities
             *log(l)*. Should have rightmost dimension ``(D, B)``, where
             B is the alphabet size of the data, and broadcastable to
             ``(batch_size, D, B)``. Must be normalized along the
@@ -179,11 +184,15 @@ class Profile(nn.Module):
              torch.einsum('...ijk,ijklf->...lf',
                           insert_logits, self.r_transf) +
              (-1/self.epsilon)*self.null_transf)
-        seq_logits = (
-             torch.einsum('...ij,ik->...kj',
-                          precursor_seq_logits, self.vx_transf) +
-             torch.einsum('...ij,ik->...kj',
-                          insert_seq_logits, self.vc_transf))
+        # Broadcasting for concatenation.
+        if len(precursor_seq_logits.size()) > len(insert_seq_logits.size()):
+            insert_seq_logits = insert_seq_logits.unsqueeze(0).expand(
+                    [precursor_seq_logits.size()[0], -1, -1])
+        elif len(insert_seq_logits.size()) > len(precursor_seq_logits.size()):
+            precursor_seq_logits = precursor_seq_logits.unsqueeze(0).expand(
+                    [insert_seq_logits.size()[0], -1, -1])
+        seq_logits = torch.cat([precursor_seq_logits, insert_seq_logits],
+                               dim=-2)
 
         # Option to include the substitution matrix.
         if substitute_logits is not None:
@@ -196,6 +205,6 @@ class Profile(nn.Module):
         return initial_logits, transition_logits, observation_logits
 
 
-def mg2k(m, g):
+def mg2k(m, g, M):
     """Convert from (m, g) indexing to k indexing."""
-    return 2*m + 1 - g
+    return m + M*g
