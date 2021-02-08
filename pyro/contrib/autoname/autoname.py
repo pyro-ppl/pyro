@@ -1,3 +1,6 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import defaultdict
 from collections.abc import Iterable
 from functools import singledispatch
@@ -99,6 +102,8 @@ class AutonameMessenger(ReentrantMessenger):
                 sample(dist.Bernoulli ... )
                 # model/time/f1/Bernoulli .. model/time__1/f1/Bernoulli .. model/time__2/f1/Bernoulli
                 f1()
+
+    4. Or scopes can be added using the with statement::
 
         def f4():
             with autoname(name="prefix"):
