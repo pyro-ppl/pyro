@@ -266,7 +266,7 @@ def effectful(fn=None, type=None):
     return _fn
 
 
-def inspect():
+def _inspect():
     """
     EXPERIMENTAL Inspect the Pyro stack.
 
@@ -294,3 +294,23 @@ def inspect():
     }
     apply_stack(msg)
     return msg
+
+
+def get_mask():
+    """
+    Records the effects of enclosing ``poutine.mask`` handlers.
+
+    This is useful for avoiding expensive ``pyro.factor()`` computations during
+    prediction, when the log density need not be computed, e.g.::
+
+        def model():
+            # ...
+            if poutine.get_mask() is not False:
+                log_density = my_expensive_computation()
+                pyro.factor("foo", log_density)
+            # ...
+
+    :returns: The mask.
+    :rtype: None, bool, or torch.Tensor
+    """
+    return _inspect()["mask"]

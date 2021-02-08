@@ -5,6 +5,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 
 from .reparam import Reparam
 
@@ -52,6 +53,9 @@ class SplitReparam(Reparam):
         value = torch.cat(parts, dim=-self.event_dim)
 
         # Combine parts.
-        log_prob = fn.log_prob(value)
-        new_fn = dist.Delta(value, event_dim=fn.event_dim, log_density=log_prob)
+        if poutine.get_mask() is False:
+            log_density = 0.0
+        else:
+            log_density = fn.log_prob(value)
+        new_fn = dist.Delta(value, event_dim=fn.event_dim, log_density=log_density)
         return new_fn, value

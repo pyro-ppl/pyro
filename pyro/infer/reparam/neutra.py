@@ -59,8 +59,8 @@ class NeuTraReparam(Reparam):
         if name not in self.guide.prototype_trace.nodes:
             return fn, obs
         assert obs is None, "NeuTraReparam does not support observe statements"
-        log_density = 0.
-        compute_density = (poutine.inspect()["mask"] is not False)
+        log_density = 0.0
+        compute_density = (poutine.get_mask() is not False)
         if not self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
             try:
