@@ -10,105 +10,12 @@ import datetime
 import matplotlib.pyplot as plt
 
 import torch
-import torch.nn as nn
-from torch.nn.functional import softplus
-
 import pyro
-import pyro.distributions as dist
 
-from pyro.contrib.mue.statearrangers import profile
-from pyro.contrib.mue.variablelengthhmm import VariableLengthDiscreteHMM
+from pyro.contrib.mue.models import ProfileHMM
 
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
-
-
-class ProfileHMM(nn.Module):
-
-    def __init__(self, latent_seq_length, alphabet_length,
-                 prior_scale=1., indel_prior_strength=10.):
-        super().__init__()
-
-        assert isinstance(latent_seq_length, int) and latent_seq_length > 0
-        self.latent_seq_length = latent_seq_length
-        assert isinstance(alphabet_length, int) and alphabet_length > 0
-        self.alphabet_length = alphabet_length
-
-        self.seq_shape = (latent_seq_length+1, alphabet_length)
-        self.indel_shape = (latent_seq_length+1, 3, 2)
-
-        assert isinstance(prior_scale, float)
-        self.prior_scale = prior_scale
-        assert isinstance(indel_prior_strength, float)
-        self.indel_prior = torch.tensor([indel_prior_strength, 0.])
-
-        # Initialize state arranger.
-        self.statearrange = profile(latent_seq_length)
-
-    def model(self, data):
-
-        # Latent sequence.
-        ancestor_seq = pyro.sample("ancestor_seq", dist.Normal(
-                torch.zeros(self.seq_shape),
-                self.prior_scale * torch.ones(self.seq_shape)).to_event(2))
-        ancestor_seq_logits = ancestor_seq - ancestor_seq.logsumexp(-1, True)
-        insert_seq = pyro.sample("insert_seq", dist.Normal(
-                torch.zeros(self.seq_shape),
-                self.prior_scale * torch.ones(self.seq_shape)).to_event(2))
-        insert_seq_logits = insert_seq - insert_seq.logsumexp(-1, True)
-
-        # Indel probabilities.
-        insert = pyro.sample("insert", dist.Normal(
-                self.indel_prior * torch.ones(self.indel_shape),
-                self.prior_scale * torch.ones(self.indel_shape)).to_event(3))
-        insert_logits = insert - insert.logsumexp(-1, True)
-        delete = pyro.sample("delete", dist.Normal(
-                self.indel_prior * torch.ones(self.indel_shape),
-                self.prior_scale * torch.ones(self.indel_shape)).to_event(3))
-        delete_logits = delete - delete.logsumexp(-1, True)
-
-        # Construct HMM parameters.
-        initial_logits, transition_logits, observation_logits = (
-                self.statearrange(ancestor_seq_logits, insert_seq_logits,
-                                  insert_logits, delete_logits))
-        # Draw samples.
-        for i in pyro.plate("data", data.shape[0]):
-            pyro.sample("obs_{}".format(i),
-                        VariableLengthDiscreteHMM(initial_logits,
-                                                  transition_logits,
-                                                  observation_logits),
-                        obs=data[i])
-
-    def guide(self, data):
-        # Sequence.
-        ancestor_seq_q_mn = pyro.param("ancestor_seq_q_mn",
-                                       torch.zeros(self.seq_shape))
-        ancestor_seq_q_sd = pyro.param("ancestor_seq_q_sd",
-                                       torch.zeros(self.seq_shape))
-        pyro.sample("ancestor_seq", dist.Normal(
-                ancestor_seq_q_mn, softplus(ancestor_seq_q_sd)).to_event(2))
-        insert_seq_q_mn = pyro.param("insert_seq_q_mn",
-                                     torch.zeros(self.seq_shape))
-        insert_seq_q_sd = pyro.param("insert_seq_q_sd",
-                                     torch.zeros(self.seq_shape))
-        pyro.sample("insert_seq", dist.Normal(
-                insert_seq_q_mn, softplus(insert_seq_q_sd)).to_event(2))
-
-        # Indels.
-        insert_q_mn = pyro.param("insert_q_mn",
-                                 torch.ones(self.indel_shape)
-                                 * self.indel_prior)
-        insert_q_sd = pyro.param("insert_q_sd",
-                                 torch.zeros(self.indel_shape))
-        pyro.sample("insert", dist.Normal(
-                insert_q_mn, softplus(insert_q_sd)).to_event(3))
-        delete_q_mn = pyro.param("delete_q_mn",
-                                 torch.ones(self.indel_shape)
-                                 * self.indel_prior)
-        delete_q_sd = pyro.param("delete_q_sd",
-                                 torch.zeros(self.indel_shape))
-        pyro.sample("delete", dist.Normal(
-                delete_q_mn, softplus(delete_q_sd)).to_event(3))
 
 
 def main(args):
@@ -166,13 +73,13 @@ def main(args):
     plt.savefig('phmm_plot.loss_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
-    ancestor_seq = pyro.param("ancestor_seq_q_mn").detach()
-    ancestor_seq_expect = torch.exp(ancestor_seq -
-                                    ancestor_seq.logsumexp(-1, True))
-    plt.plot(ancestor_seq_expect[:, 1].numpy())
+    precursor_seq = pyro.param("precursor_seq_q_mn").detach()
+    precursor_seq_expect = torch.exp(precursor_seq -
+                                     precursor_seq.logsumexp(-1, True))
+    plt.plot(precursor_seq_expect[:, 1].numpy())
     plt.xlabel('position')
     plt.ylabel('probability of character 1')
-    plt.savefig('phmm_plot.ancestor_seq_prob_{}.pdf'.format(time_stamp))
+    plt.savefig('phmm_plot.precursor_seq_prob_{}.pdf'.format(time_stamp))
 
     plt.figure(figsize=(6, 6))
     insert = pyro.param("insert_q_mn").detach()

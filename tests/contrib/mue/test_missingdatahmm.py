@@ -2,7 +2,7 @@ from pyro.distributions import DiscreteHMM, Categorical
 import pytest
 import torch
 
-from pyro.contrib.mue.variablelengthhmm import MissingDataDiscreteHMM
+from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
 
 
 def test_hmm_log_prob():

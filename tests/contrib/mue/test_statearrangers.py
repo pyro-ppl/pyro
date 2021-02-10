@@ -1,8 +1,6 @@
 import pytest
 import torch
 
-import pdb
-
 from pyro.contrib.mue.statearrangers import mg2k, Profile
 
 
