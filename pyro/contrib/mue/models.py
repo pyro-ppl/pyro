@@ -17,8 +17,6 @@ from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
 
 import pyro.poutine as poutine
 
-import pdb
-
 
 class ProfileHMM(nn.Module):
     """Model: Constant + MuE. """
@@ -128,23 +126,6 @@ class Encoder(nn.Module):
         return z_loc, z_scale
 
 
-"""class Decoder(nn.Module):
-    def __init__(self, latent_seq_length, alphabet_length, z_dim):
-        super().__init__()
-
-        self.latent_seq_length = latent_seq_length
-        self.alphabet_length = alphabet_length
-        self.output_size = (2 * latent_seq_length+1) * alphabet_length
-        self.f = nn.Linear(z_dim, self.output_size)
-
-    def forward(self, z):
-
-        seq = self.f(z)
-        seq = seq.reshape([-1, 2, self.latent_seq_length+1,
-                           self.alphabet_length])
-        return seq"""
-
-
 class FactorMuE(nn.Module):
     """Model: pPCA + MuE."""
     def __init__(self, data_length, alphabet_length, z_dim,
@@ -217,7 +198,6 @@ class FactorMuE(nn.Module):
 
         # Initialize layers.
         self.encoder = Encoder(data_length, alphabet_length, z_dim)
-        # self.decoder = Decoder(latent_seq_length, alphabet_length, z_dim)
         self.statearrange = Profile(latent_seq_length)
 
     def decoder(self, z, W, B, inverse_temp):
@@ -257,8 +237,6 @@ class FactorMuE(nn.Module):
         return out
 
     def model(self, data):
-
-        # pyro.module("decoder", self.decoder)
 
         # ARD prior.
         if self.ARD_prior:
