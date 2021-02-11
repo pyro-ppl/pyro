@@ -15,8 +15,6 @@ import pyro.distributions as dist
 from pyro.contrib.mue.statearrangers import Profile
 from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
 
-import pyro.poutine as poutine
-
 
 class ProfileHMM(nn.Module):
     """Model: Constant + MuE. """
@@ -129,7 +127,7 @@ class Encoder(nn.Module):
 class FactorMuE(nn.Module):
     """Model: pPCA + MuE."""
     def __init__(self, data_length, alphabet_length, z_dim,
-                 batch_scale_factor=1.,
+                 batch_size=10,
                  latent_seq_length=None,
                  indel_factor_dependence=False,
                  indel_prior_scale=1.,
@@ -194,7 +192,8 @@ class FactorMuE(nn.Module):
         self.z_prior_distribution = z_prior_distribution
 
         # Batch control.
-        self.batch_scale_factor = batch_scale_factor
+        assert isinstance(batch_size, int)
+        self.batch_size = batch_size
 
         # Initialize layers.
         self.encoder = Encoder(data_length, alphabet_length, z_dim)
@@ -283,8 +282,8 @@ class FactorMuE(nn.Module):
                         self.latent_alphabet_length, self.alphabet_length])
                 ).to_event(2))
 
-        with pyro.plate("batch", data.shape[0]), poutine.scale(
-                    scale=self.batch_scale_factor):
+        with pyro.plate("batch", len(data),
+                        subsample_size=self.batch_size) as ind:
             # Sample latent variable from prior.
             if self.z_prior_distribution == 'Normal':
                 z = pyro.sample("latent", dist.Normal(
@@ -314,14 +313,15 @@ class FactorMuE(nn.Module):
                                       decoded['insert_seq_logits'],
                                       insert_logits, delete_logits))
             # Draw samples.
+            L_data_ind, seq_data_ind = data[ind]
             if self.length_model:
-                data, L = data
-                pyro.sample("obs_L", dist.Poisson(decoded['L_mean']), obs=L)
-            pyro.sample("obs",
+                pyro.sample("obs_L", dist.Poisson(decoded['L_mean']),
+                            obs=L_data_ind)
+            pyro.sample("obs_seq",
                         MissingDataDiscreteHMM(initial_logits,
                                                transition_logits,
                                                observation_logits),
-                        obs=data)
+                        obs=seq_data_ind)
 
     def guide(self, data):
         # Register encoder with pyro.
@@ -376,8 +376,7 @@ class FactorMuE(nn.Module):
                     substitute_q_mn, softplus(substitute_q_sd)).to_event(2))
 
         # Per data latent variables.
-        with pyro.plate("batch", data.shape[0]), poutine.scale(
-                    scale=self.batch_scale_factor):
+        with pyro.plate("batch", data.shape[0], subsample_size=self.batch_size):
             # Encode seq.
             z_loc, z_scale = self.encoder(data)
             # Sample.
@@ -385,6 +384,11 @@ class FactorMuE(nn.Module):
                 pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
             elif self.z_prior_distribution == 'Laplace':
                 pyro.sample("latent", dist.Laplace(z_loc, z_scale).to_event(1))
+
+    def fit_svi(self, dataloader, epochs=1, scheduler=None):
+        """Infer model parameters with stochastic variational inference."""
+
+
 
     def reconstruct_precursor_seq(self, data, param):
         # Encode seq.
