@@ -509,10 +509,22 @@ class AutoNormal(AutoGuide):
                 )
 
                 value = transform(unconstrained_latent)
-                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_latent)
-                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-                delta_dist = dist.Delta(value, log_density=log_density,
-                                        event_dim=site["fn"].event_dim)
+                if poutine.get_mask() is False:
+                    log_density = 0.0
+                else:
+                    log_density = transform.inv.log_abs_det_jacobian(
+                        value,
+                        unconstrained_latent,
+                    )
+                    log_density = sum_rightmost(
+                        log_density,
+                        log_density.dim() - value.dim() + site["fn"].event_dim,
+                    )
+                delta_dist = dist.Delta(
+                    value,
+                    log_density=log_density,
+                    event_dim=site["fn"].event_dim,
+                )
 
                 result[name] = pyro.sample(name, delta_dist)
 
@@ -709,9 +721,22 @@ class AutoContinuous(AutoGuide):
             name = site["name"]
             transform = biject_to(site["fn"].support)
             value = transform(unconstrained_value)
-            log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
-            log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-            delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
+            if poutine.get_mask() is False:
+                log_density = 0.0
+            else:
+                log_density = transform.inv.log_abs_det_jacobian(
+                    value,
+                    unconstrained_value,
+                )
+                log_density = sum_rightmost(
+                    log_density,
+                    log_density.dim() - value.dim() + site["fn"].event_dim,
+                )
+            delta_dist = dist.Delta(
+                value,
+                log_density=log_density,
+                event_dim=site["fn"].event_dim,
+            )
 
             with ExitStack() as stack:
                 for frame in self._cond_indep_stacks[name]:

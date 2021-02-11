@@ -5,6 +5,7 @@ import torch
 from torch.distributions.constraints import *  # noqa F403
 from torch.distributions.constraints import Constraint
 from torch.distributions.constraints import __all__ as torch_constraints
+from torch.distributions.constraints import independent, lower_cholesky, positive, positive_definite
 
 
 # TODO move this upstream to torch.distributions
@@ -30,15 +31,36 @@ class _Sphere(Constraint):
 
     def check(self, value):
         eps = torch.finfo(value.dtype).eps
-        try:
-            norm = torch.linalg.norm(value, dim=-1)  # torch 1.7+
-        except AttributeError:
-            norm = value.norm(dim=-1)  # torch 1.6
+        norm = torch.linalg.norm(value, dim=-1)
         error = (norm - 1).abs()
         return error < self.reltol * eps * value.size(-1) ** 0.5
 
     def __repr__(self):
         return self.__class__.__name__[1:]
+
+
+class _CorrCholesky(Constraint):
+    """
+    Constrains to lower-triangular square matrices with positive diagonals and
+    Euclidean norm of each row is 1, such that `torch.mm(omega, omega.t())` will
+    have unit diagonal.
+    """
+
+    def check(self, value):
+        unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-4).min(-1)[0]
+        return lower_cholesky.check(value) & unit_norm_row
+
+
+class _CorrMatrix(Constraint):
+    """
+    Constrains to a correlation matrix.
+    """
+
+    def check(self, value):
+        # check for diagonal equal to 1
+        unit_variance = torch.all(torch.abs(torch.diagonal(value, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1)
+        # TODO: fix upstream - positive_definite has an extra dimension in front of output shape
+        return positive_definite.check(value) & unit_variance
 
 
 class _OrderedVector(Constraint):
@@ -57,14 +79,30 @@ class _OrderedVector(Constraint):
             return torch.all(value[..., 1:] > value[..., :-1], dim=-1)
 
 
+class _PositiveOrderedVector(Constraint):
+    """
+    Constrains to a positive real-valued tensor where the elements are monotonically
+    increasing along the `event_shape` dimension.
+    """
+
+    def check(self, value):
+        return ordered_vector.check(value) & independent(positive, 1).check(value)
+
+
+corr_cholesky_constraint = _CorrCholesky()
+corr_matrix = _CorrMatrix()
 integer = _Integer()
 ordered_vector = _OrderedVector()
+positive_ordered_vector = _PositiveOrderedVector()
 sphere = _Sphere()
 corr_cholesky_constraint = corr_cholesky  # noqa: F405 DEPRECATED
 
 __all__ = [
+    'corr_cholesky_constraint',
+    'corr_matrix',
     'integer',
     'ordered_vector',
+    'positive_ordered_vector',
     'sphere',
 ]
 

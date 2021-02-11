@@ -28,6 +28,8 @@ install:
     # Download PyTorch nightly
     - pip install numpy
     - pip install --pre torch torchvision torchaudio -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+    # TODO replace nightly with stable before release
+    # - pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - pip install .[test]
     - pip install coveralls
     - pip freeze

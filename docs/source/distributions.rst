@@ -211,6 +211,13 @@ LinearHMM
     :undoc-members:
     :show-inheritance:
 
+LKJ
+---
+.. autoclass:: pyro.distributions.LKJ
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LKJCorrCholesky
 ---------------
 .. autoclass:: pyro.distributions.LKJCorrCholesky
@@ -375,9 +382,23 @@ ConditionalTransform
     :undoc-members:
     :show-inheritance:
 
+CholeskyTransform
+-----------------
+.. autoclass:: pyro.distributions.transforms.CholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 CorrLCholeskyTransform
 ----------------------
 .. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+CorrMatrixCholeskyTransform
+---------------------------
+.. autoclass:: pyro.distributions.transforms.CorrMatrixCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:

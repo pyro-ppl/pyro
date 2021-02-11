@@ -72,6 +72,16 @@ def _HalfCauchy_logprob(self, value):
     return log_prob
 
 
+# TODO fix batch_shape have an extra singleton dimension upstream
+@patch_dependency('torch.distributions.constraints._PositiveDefinite.check')
+def _PositiveDefinite_check(self, value):
+    matrix_shape = value.shape[-2:]
+    batch_shape = value.shape[:-2]
+    flattened_value = value.reshape((-1,) + matrix_shape)
+    return torch.stack([v.symeig(eigenvectors=False)[0][:1] > 0.0
+                        for v in flattened_value]).view(batch_shape)
+
+
 # This adds a __call__ method to satisfy sphinx.
 @patch_dependency('torch.distributions.utils.lazy_property.__call__')
 def _lazy_property__call__(self):
