@@ -8,12 +8,19 @@ Example MuE observation models.
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
+from torch.optim import Adam
+
+import datetime
+import numpy as np
 
 import pyro
 import pyro.distributions as dist
 
 from pyro.contrib.mue.statearrangers import Profile
 from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
+
+from pyro.infer import SVI, Trace_ELBO
+from pyro.optim import MultiStepLR
 
 
 class ProfileHMM(nn.Module):
@@ -68,7 +75,7 @@ class ProfileHMM(nn.Module):
                 self.statearrange(precursor_seq_logits, insert_seq_logits,
                                   insert_logits, delete_logits))
         # Draw samples.
-        for i in pyro.plate("data", data.shape[0]):
+        for i in pyro.plate("data", len(data)):
             pyro.sample("obs_{}".format(i),
                         MissingDataDiscreteHMM(initial_logits,
                                                transition_logits,
@@ -313,7 +320,7 @@ class FactorMuE(nn.Module):
                                       decoded['insert_seq_logits'],
                                       insert_logits, delete_logits))
             # Draw samples.
-            L_data_ind, seq_data_ind = data[ind]
+            seq_data_ind, L_data_ind = data[ind]
             if self.length_model:
                 pyro.sample("obs_L", dist.Poisson(decoded['L_mean']),
                             obs=L_data_ind)
@@ -376,19 +383,42 @@ class FactorMuE(nn.Module):
                     substitute_q_mn, softplus(substitute_q_sd)).to_event(2))
 
         # Per data latent variables.
-        with pyro.plate("batch", data.shape[0], subsample_size=self.batch_size):
-            # Encode seq.
-            z_loc, z_scale = self.encoder(data)
+        with pyro.plate("batch", len(data),
+                        subsample_size=self.batch_size) as ind:
+            # Encode sequences.
+            z_loc, z_scale = self.encoder(data[ind][0])
             # Sample.
             if self.z_prior_distribution == 'Normal':
                 pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
             elif self.z_prior_distribution == 'Laplace':
                 pyro.sample("latent", dist.Laplace(z_loc, z_scale).to_event(1))
 
-    def fit_svi(self, dataloader, epochs=1, scheduler=None):
+    def fit_svi(self, dataset, epochs=1, batch_size=None, scheduler=None):
         """Infer model parameters with stochastic variational inference."""
 
+        # Setup.
+        if batch_size is not None:
+            self.batch_size = batch_size
+        if scheduler is None:
+            scheduler = MultiStepLR({'optimizer': Adam,
+                                     'optim_args': {'lr': 0.01},
+                                     'milestones': [],
+                                     'gamma': 0.5})
+        n_steps = int(np.ceil(torch.tensor(len(dataset)/self.batch_size))
+                      )*epochs
+        svi = SVI(self.model, self.guide, scheduler, loss=Trace_ELBO())
 
+        # Run inference.
+        losses = []
+        t0 = datetime.datetime.now()
+        for step in range(n_steps):
+            loss = svi.step(dataset)
+            losses.append(loss)
+            scheduler.step()
+            if (step + 1) % (n_steps/epochs) == 0:
+                print(int(epochs*(step+1)/n_steps), loss, ' ',
+                      datetime.datetime.now() - t0)
+        return losses
 
     def reconstruct_precursor_seq(self, data, param):
         # Encode seq.

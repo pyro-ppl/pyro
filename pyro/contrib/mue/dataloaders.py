@@ -28,7 +28,7 @@ class BiosequenceDataset(Dataset):
 
         # Get lengths.
         self.L_data = torch.tensor([len(seq) for seq in seqs])
-        self.max_length = torch.max(self.L_data)
+        self.max_length = int(torch.max(self.L_data))
         self.data_size = len(self.L_data)
 
         # Get alphabet.
@@ -38,6 +38,7 @@ class BiosequenceDataset(Dataset):
             alphabet = alphabets[alphabet]
         else:
             assert 'Alphabet unavailable, please provide a list of letters.'
+        self.alphabet_length = len(alphabet)
 
         # Build dataset.
         self.seq_data = torch.cat([self._one_hot(

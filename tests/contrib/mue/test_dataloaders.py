@@ -54,6 +54,7 @@ T
     assert dataset.max_length == max_length_check
     assert len(dataset) == data_size_check
     assert dataset.data_size == data_size_check
+    assert dataset.alphabet_length == len(alphabet_list)
     assert torch.allclose(dataset.seq_data, seq_data_check)
     ind = torch.tensor([0, 2])
     assert torch.allclose(dataset[ind][0],
