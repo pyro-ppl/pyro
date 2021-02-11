@@ -25,10 +25,10 @@ install:
     - pip install -U pip
     # Keep track of pyro-api master branch
     - pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-    # Download PyTorch nightly
+    # Download PyTorch
     - pip install numpy
-    - pip install torch torchvision -f https://download.pytorch.org/whl/nightly/cpu/torch_test.html
-    # TODO replace nightly with stable before release
+    - pip install torch torchvision -f https://download.pytorch.org/whl/test/cpu/torch_test.html
+    # TODO replace with stable before release
     # - pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - pip install .[test]
     - pip install coveralls
