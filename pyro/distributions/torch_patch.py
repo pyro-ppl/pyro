@@ -82,6 +82,13 @@ def _PositiveDefinite_check(self, value):
                         for v in flattened_value]).view(batch_shape)
 
 
+@patch_dependency('torch.distributions.constraints._CorrCholesky.check')
+def _CorrCholesky_check(self, value):
+    row_norm = torch.linalg.norm(value.detach(), dim=-1)
+    unit_row_norm = (row_norm - 1.).abs().le(1e-4).all(dim=-1)
+    return torch.distributions.constraints.lower_cholesky.check(value) & unit_row_norm
+
+
 # This adds a __call__ method to satisfy sphinx.
 @patch_dependency('torch.distributions.utils.lazy_property.__call__')
 def _lazy_property__call__(self):
