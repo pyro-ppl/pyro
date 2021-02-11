@@ -45,7 +45,6 @@ class CorrLCholeskyTransform(Transform):
     domain = constraints.real_vector
     codomain = constraints.corr_cholesky
     bijective = True
-    sign = +1
 
     def __eq__(self, other):
         return isinstance(other, CorrLCholeskyTransform)
@@ -85,8 +84,6 @@ class CholeskyTransform(Transform):
     positive definite matrix.
     """
     bijective = True
-    sign = +1
-    event_dim = 2
     domain = constraints.positive_definite
     codomain = constraints.lower_cholesky
 
@@ -112,8 +109,6 @@ class CorrMatrixCholeskyTransform(CholeskyTransform):
     correlation matrix.
     """
     bijective = True
-    sign = +1
-    event_dim = 2
     domain = constraints.corr_matrix
     # TODO: change corr_cholesky_constraint to corr_cholesky when the latter is availabler
     codomain = constraints.corr_cholesky_constraint

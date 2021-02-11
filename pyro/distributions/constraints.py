@@ -45,6 +45,7 @@ class _CorrCholesky(Constraint):
     Euclidean norm of each row is 1, such that `torch.mm(omega, omega.t())` will
     have unit diagonal.
     """
+    event_dim = 2
 
     def check(self, value):
         unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-4).min(-1)[0]
@@ -55,6 +56,7 @@ class _CorrMatrix(Constraint):
     """
     Constrains to a correlation matrix.
     """
+    event_dim = 2
 
     def check(self, value):
         # check for diagonal equal to 1
