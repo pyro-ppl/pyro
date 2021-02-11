@@ -27,7 +27,7 @@ install:
     - pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
     # Download PyTorch nightly
     - pip install numpy
-    - pip install --pre torch torchvision torchaudio -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+    - pip install torch torchvision -f https://download.pytorch.org/whl/nightly/cpu/torch_test.html
     # TODO replace nightly with stable before release
     # - pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - pip install .[test]

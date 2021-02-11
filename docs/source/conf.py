@@ -215,7 +215,7 @@ def setup(app):
 if 'READTHEDOCS' in os.environ:
     os.system('pip install numpy')
     # TODO replace nightly with torch_stable before release
-    os.system('pip install --pre torch torchvision '
-              '-f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html')
+    os.system('pip install torch torchvision '
+              '-f https://download.pytorch.org/whl/nightly/cpu/torch_test.html')
     # os.system('pip install torch==1.7.0+cpu torchvision==0.8.1+cpu '
     #           '-f https://download.pytorch.org/whl/torch_stable.html')
