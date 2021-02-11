@@ -222,6 +222,6 @@ if 'READTHEDOCS' in os.environ:
     #           '-f https://download.pytorch.org/whl/test/cpu/torch_test.html')
     # This is the last nightly release of 1.8.0 before splitting to 1.9.0.
     os.system('pip install --pre '
-             'torch==1.8.0.dev20210210+cpu '
-             'torchvision==0.9.0.dev20210210+cpu '
+              'torch==1.8.0.dev20210210+cpu '
+              'torchvision==0.9.0.dev20210210+cpu '
               '-f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html')

@@ -66,7 +66,7 @@ Pyro's dev branch requires PyTorch [nightly builds](https://pytorch.org/get-star
 
 ```sh
 pip install numpy
-pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+pip install --pre torch==1.8.0.dev20210210 torchvision==0.9.0.dev20210210 -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
 ```
 
 **Install Pyro using pip:**
