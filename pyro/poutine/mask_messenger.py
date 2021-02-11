@@ -27,5 +27,5 @@ class MaskMessenger(Messenger):
         self.mask = mask
 
     def _process_message(self, msg):
-        msg["mask"] = self.mask if msg["mask"] is None else self.mask & msg["mask"]
+        msg["mask"] = self.mask if msg["mask"] is None else msg["mask"] & self.mask
         return None
