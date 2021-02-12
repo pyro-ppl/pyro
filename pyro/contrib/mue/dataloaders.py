@@ -27,7 +27,7 @@ class BiosequenceDataset(Dataset):
             seqs = self._load_fasta(source)
 
         # Get lengths.
-        self.L_data = torch.tensor([len(seq) for seq in seqs])
+        self.L_data = torch.tensor([float(len(seq)) for seq in seqs])
         self.max_length = int(torch.max(self.L_data))
         self.data_size = len(self.L_data)
 

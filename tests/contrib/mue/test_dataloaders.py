@@ -1,7 +1,6 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import numpy as np
 import pytest
 import torch
 
@@ -50,7 +49,8 @@ T
     dataset = BiosequenceDataset(source, source_type, alphabet)
 
     # Check.
-    assert torch.allclose(dataset.L_data, torch.tensor(L_data_check))
+    assert torch.allclose(dataset.L_data,
+                          torch.tensor(L_data_check, dtype=torch.float64))
     assert dataset.max_length == max_length_check
     assert len(dataset) == data_size_check
     assert dataset.data_size == data_size_check
@@ -60,4 +60,4 @@ T
     assert torch.allclose(dataset[ind][0],
                           torch.cat([seq_data_check[0, None, :, :],
                                      seq_data_check[2, None, :, :]]))
-    assert torch.allclose(dataset[ind][1], torch.tensor([4, 1]))
+    assert torch.allclose(dataset[ind][1], torch.tensor([4., 1.]))

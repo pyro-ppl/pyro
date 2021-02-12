@@ -22,6 +22,8 @@ from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import MultiStepLR
 
+import pdb
+
 
 class ProfileHMM(nn.Module):
     """Model: Constant + MuE. """
@@ -165,10 +167,9 @@ class FactorMuE(nn.Module):
         self.z_dim = z_dim
 
         # Parameter shapes.
-        if latent_alphabet_length is None:
+        if (not substitution_matrix) or (latent_alphabet_length is None):
             latent_alphabet_length = alphabet_length
         self.latent_alphabet_length = latent_alphabet_length
-        # self.seq_shape = (latent_seq_length, latent_alphabet_length)
         self.indel_shape = (latent_seq_length, 3, 2)
         self.total_factor_size = (
                 (2*latent_seq_length+1)*latent_alphabet_length +
@@ -215,7 +216,7 @@ class FactorMuE(nn.Module):
         if self.length_model:
             # Extract expected length.
             v, L_v = v.split([self.total_factor_size-1, 1], dim=1)
-            out['L_mean'] = softplus(L_v)
+            out['L_mean'] = softplus(L_v).squeeze(1)
         if self.indel_factor_dependence:
             # Extract insertion and deletion parameters.
             v, insert_v, delete_v = v.split([
@@ -227,7 +228,7 @@ class FactorMuE(nn.Module):
             delete_v = (delete_v.reshape([-1, self.latent_seq_length, 3, 2])
                         + self.indel_prior)
             out['delete_logits'] = delete_v - delete_v.logsumexp(-1, True)
-        # Extraction precursor and insertion sequences.
+        # Extract precursor and insertion sequences.
         precursor_seq_v, insert_seq_v = (v*softplus(inverse_temp)).split([
                 self.latent_seq_length*self.latent_alphabet_length,
                 (self.latent_seq_length+1)*self.latent_alphabet_length], dim=1)
@@ -420,9 +421,9 @@ class FactorMuE(nn.Module):
                       datetime.datetime.now() - t0)
         return losses
 
-    def reconstruct_precursor_seq(self, data, param):
+    def reconstruct_precursor_seq(self, data, ind, param):
         # Encode seq.
-        z_loc = self.encoder(data)[0]
+        z_loc = self.encoder(data[ind][0])[0]
         # Reconstruct
         decoded = self.decoder(z_loc, param("W_q_mn"), param("B_q_mn"),
                                param("inverse_temp_q_mn"))

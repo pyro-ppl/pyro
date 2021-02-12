@@ -52,9 +52,11 @@ class MissingDataDiscreteHMM(TorchDistribution):
             raise ValueError(
                     "expected observation_logits to have at least two dims, "
                     "actual shape = {}".format(transition_logits.shape))
-        shape = broadcast_shape(initial_logits.shape[:-1] + (1,),
+        shape = broadcast_shape(initial_logits.shape[:-1],
                                 transition_logits.shape[:-2],
                                 observation_logits.shape[:-2])
+        if len(shape) == 0:
+            shape = torch.Size([1])
         batch_shape = shape
         event_shape = (1, observation_logits.shape[-1])
         self.initial_logits = (initial_logits -

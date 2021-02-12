@@ -36,27 +36,7 @@ def main(args):
     # Construct example dataset.
     seqs = ['BABBA']*mult_dat + ['BAAB']*mult_dat + ['BABBB']*mult_dat
     dataset = BiosequenceDataset(seqs, 'list', ['A', 'B'])
-    """xs = [torch.tensor([[0., 1.],
-                        [1., 0.],
-                        [0., 1.],
-                        [0., 1.],
-                        [1., 0.],
-                        [0., 0.]]),
-          torch.tensor([[0., 1.],
-                        [1., 0.],
-                        [1., 0.],
-                        [0., 1.],
-                        [0., 0.],
-                        [0., 0.]]),
-          torch.tensor([[0., 1.],
-                        [1., 0.],
-                        [0., 1.],
-                        [0., 1.],
-                        [0., 1.],
-                        [0., 0.]])]
-    data = torch.cat([xs[0][None, :, :] for j in range(6*mult_dat)] +
-                     [xs[1][None, :, :] for j in range(4*mult_dat)] +
-                     [xs[2][None, :, :] for j in range(4*mult_dat)], dim=0)"""
+
     # Set up inference.
     z_dim = 2
     scheduler = MultiStepLR({'optimizer': Adam,
