@@ -28,7 +28,7 @@ import pdb
 class ProfileHMM(nn.Module):
     """Model: Constant + MuE. """
     def __init__(self, latent_seq_length, alphabet_length,
-                 prior_scale=1., indel_prior_strength=10.):
+                 length_model=False, prior_scale=1., indel_prior_strength=10.):
         super().__init__()
 
         assert isinstance(latent_seq_length, int) and latent_seq_length > 0
@@ -40,6 +40,8 @@ class ProfileHMM(nn.Module):
         self.insert_seq_shape = (latent_seq_length+1, alphabet_length)
         self.indel_shape = (latent_seq_length, 3, 2)
 
+        assert isinstance(length_model, bool)
+        self.length_model = length_model
         assert isinstance(prior_scale, float)
         self.prior_scale = prior_scale
         assert isinstance(indel_prior_strength, float)
@@ -76,13 +78,26 @@ class ProfileHMM(nn.Module):
         initial_logits, transition_logits, observation_logits = (
                 self.statearrange(precursor_seq_logits, insert_seq_logits,
                                   insert_logits, delete_logits))
+
+        # Length model.
+        if self.length_model:
+            length = pyro.sample("length", dist.Normal(
+                    torch.tensor(200.), torch.tensor(1000.)))
+            L_mean = softplus(length)
+
         # Draw samples.
-        for i in pyro.plate("data", len(data)):
-            pyro.sample("obs_{}".format(i),
+        with pyro.plate("batch", len(data),
+                        subsample_size=self.batch_size) as ind:
+
+            seq_data_ind, L_data_ind = data[ind]
+            if self.length_model:
+                pyro.sample("obs_L", dist.Poisson(L_mean),
+                            obs=L_data_ind)
+            pyro.sample("obs_seq",
                         MissingDataDiscreteHMM(initial_logits,
                                                transition_logits,
                                                observation_logits),
-                        obs=data[i])
+                        obs=seq_data_ind)
 
     def guide(self, data):
         # Sequence.
@@ -114,6 +129,40 @@ class ProfileHMM(nn.Module):
                                  torch.zeros(self.indel_shape))
         pyro.sample("delete", dist.Normal(
                 delete_q_mn, softplus(delete_q_sd)).to_event(3))
+
+        # Length.
+        if self.length_model:
+            length_q_mn = pyro.param("length_q_mn", torch.zeros(1))
+            length_q_sd = pyro.param("length_q_sd", torch.zeros(1))
+            pyro.sample("length", dist.Normal(
+                    length_q_mn, softplus(length_q_sd)))
+
+    def fit_svi(self, dataset, epochs=1, batch_size=None, scheduler=None):
+        """Infer model parameters with stochastic variational inference."""
+
+        # Setup.
+        if batch_size is not None:
+            self.batch_size = batch_size
+        if scheduler is None:
+            scheduler = MultiStepLR({'optimizer': Adam,
+                                     'optim_args': {'lr': 0.01},
+                                     'milestones': [],
+                                     'gamma': 0.5})
+        n_steps = int(np.ceil(torch.tensor(len(dataset)/self.batch_size))
+                      )*epochs
+        svi = SVI(self.model, self.guide, scheduler, loss=Trace_ELBO())
+
+        # Run inference.
+        losses = []
+        t0 = datetime.datetime.now()
+        for step in range(n_steps):
+            loss = svi.step(dataset)
+            losses.append(loss)
+            scheduler.step()
+            if (step + 1) % (n_steps/epochs) == 0:
+                print(int(epochs*(step+1)/n_steps), loss, ' ',
+                      datetime.datetime.now() - t0)
+        return losses
 
 
 class Encoder(nn.Module):

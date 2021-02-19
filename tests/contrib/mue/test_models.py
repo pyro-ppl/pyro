@@ -15,6 +15,27 @@ from pyro.contrib.mue.models import ProfileHMM, FactorMuE
 from pyro.optim import MultiStepLR
 
 
+@pytest.mark.parametrize('length_model', [False, True])
+def test_ProfileHMM_smoke(length_model):
+    # Setup dataset.
+    seqs = ['BABBA', 'BAAB', 'BABBB']
+    alph = ['A', 'B']
+    dataset = BiosequenceDataset(seqs, 'list', alph)
+
+    # Infer.
+    scheduler = MultiStepLR({'optimizer': Adam,
+                             'optim_args': {'lr': 0.1},
+                             'milestones': [20, 100, 1000, 2000],
+                             'gamma': 0.5})
+    model = ProfileHMM(dataset.max_length, dataset.alphabet_length,
+                       length_model)
+    n_epochs = 5
+    batch_size = 2
+    losses = model.fit_svi(dataset, n_epochs, batch_size, scheduler)
+
+    assert not np.isnan(losses[-1])
+
+
 @pytest.mark.parametrize('indel_factor_dependence', [False, True])
 @pytest.mark.parametrize('z_prior_distribution', ['Normal', 'Laplace'])
 @pytest.mark.parametrize('ARD_prior', [False, True])
