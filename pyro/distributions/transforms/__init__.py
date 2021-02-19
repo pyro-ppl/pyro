@@ -35,6 +35,7 @@ from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
                                     conditional_spline_autoregressive, spline_autoregressive)
 from .spline_coupling import SplineCoupling, spline_coupling
+from .stable import SoftplusTransform, StableLowerCholeskyTransform
 from .sylvester import Sylvester, sylvester
 
 ########################################
@@ -74,6 +75,17 @@ def _transform_to_positive_ordered_vector(constraint):
 @transform_to.register(constraints.positive_definite)
 def _transform_to_positive_definite(constraint):
     return ComposeTransform([LowerCholeskyTransform(), CholeskyTransform().inv])
+
+
+@biject_to.register(constraints.stable_positive)
+@transform_to.register(constraints.stable_positive)
+def _transform_to_stable_positive(constraint):
+    return SoftplusTransform()
+
+
+@transform_to.register(constraints.stable_lower_cholesky)
+def _transform_to_stable_lower_cholesky(constraint):
+    return StableLowerCholeskyTransform()
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
@@ -127,8 +139,10 @@ __all__ = [
     'Polynomial',
     'Radial',
     'Spline',
+    'SoftplusTransform',
     'SplineAutoregressive',
     'SplineCoupling',
+    'StableLowerCholeskyTransform',
     'Sylvester',
     'affine_autoregressive',
     'affine_coupling',

@@ -227,7 +227,7 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    optim = Adam({'lr': 0.02, 'betas': (0.8, 0.99)})
     elbo = Elbo(strict_enumeration_warning=False,
                 num_particles=100, vectorize_particles=True)
     infer = SVI(model, guide, optim, elbo)
