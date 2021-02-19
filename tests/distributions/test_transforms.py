@@ -345,13 +345,18 @@ class TransformTests(TestCase):
         self._test(T.sylvester, inverse=False)
 
     def test_normalize_transform(self):
-        for p in [1., 2.]:
-            self._test(lambda p: T.Normalize(p=p), autodiff=False)
+        self._test(lambda p: T.Normalize(p=p), autodiff=False)
+
+    def test_softplus(self):
+        self._test(lambda _: T.SoftplusTransform(), autodiff=False)
 
 
 @pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
 @pytest.mark.parametrize('dim', [2, 3, 5])
-@pytest.mark.parametrize('transform', [T.CholeskyTransform(), T.CorrMatrixCholeskyTransform()])
+@pytest.mark.parametrize('transform', [
+    T.CholeskyTransform(),
+    T.CorrMatrixCholeskyTransform(),
+], ids=lambda t: type(t).__name__)
 def test_cholesky_transform(batch_shape, dim, transform):
     arange = torch.arange(dim)
     domain = transform.domain
@@ -385,3 +390,21 @@ def test_cholesky_transform(batch_shape, dim, transform):
     assert log_det.shape == batch_shape
     assert_close(y, x_mat.cholesky())
     assert_close(transform.inv(y), x_mat)
+
+
+@pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
+@pytest.mark.parametrize('dim', [2, 3, 5])
+@pytest.mark.parametrize('transform', [
+    T.LowerCholeskyTransform(),
+    T.StableLowerCholeskyTransform(),
+], ids=lambda t: type(t).__name__)
+def test_lower_cholesky_transform(transform, batch_shape, dim):
+    shape = batch_shape + (dim, dim)
+    x = torch.randn(shape)
+    y = transform(x)
+    assert y.shape == shape
+    x2 = transform.inv(y)
+    assert x2.shape == shape
+    y2 = transform(x2)
+    assert y2.shape == shape
+    assert_close(y, y2)
