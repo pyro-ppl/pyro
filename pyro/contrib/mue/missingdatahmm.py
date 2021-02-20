@@ -1,8 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 import torch
-from torch.distributions import constraints
 
+from pyro.distributions import constraints
 from pyro.distributions.hmm import _sequential_logmatmulexp
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
@@ -34,9 +34,12 @@ class MissingDataDiscreteHMM(TorchDistribution):
         dimension of the categorical output, and be broadcastable
         to ``(batch_size, state_dim, categorical_size)``.
     """
-    arg_constraints = {"initial_logits": constraints.real,
-                       "transition_logits": constraints.real,
-                       "observation_logits": constraints.real}
+    arg_constraints = {"initial_logits": constraints.real_vector,
+                       "transition_logits": constraints.independent(
+                                                    constraints.real, 2),
+                       "observation_logits": constraints.independent(
+                                                    constraints.real, 2)}
+    support = constraints.independent(constraints.nonnegative_integer, 2)
 
     def __init__(self, initial_logits, transition_logits, observation_logits,
                  validate_args=None):

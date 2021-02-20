@@ -18,6 +18,8 @@ class BiosequenceDataset(Dataset):
 
     def __init__(self, source, source_type='list', alphabet='amino-acid'):
 
+        super().__init__()
+
         # Get sequences.
         if source_type == 'list':
             seqs = source
