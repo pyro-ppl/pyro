@@ -5,12 +5,11 @@ import contextlib
 
 import funsor
 
-from pyro.distributions.util import copy_docs_from
-from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
-
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 from pyro.contrib.funsor.infer.elbo import ELBO, Jit_ELBO
+from pyro.distributions.util import copy_docs_from
+from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
 
 
 def terms_from_trace(tr):

@@ -5,9 +5,9 @@ import torch
 from torch.distributions import constraints
 
 import pyro.distributions as dist
-from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.contrib.tracking.extended_kalman_filter import EKFState
 from pyro.contrib.tracking.measurements import PositionMeasurement
+from pyro.distributions.torch_distribution import TorchDistribution
 
 
 class EKFDistribution(TorchDistribution):

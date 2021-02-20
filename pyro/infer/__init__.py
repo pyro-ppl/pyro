@@ -17,13 +17,13 @@ from pyro.infer.rws import ReweightedWakeSleep
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svgd import SVGD, IMQSteinKernel, RBFSteinKernel
 from pyro.infer.svi import SVI
-from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.trace_elbo import JitTrace_ELBO, Trace_ELBO
 from pyro.infer.trace_mean_field_elbo import JitTraceMeanField_ELBO, TraceMeanField_ELBO
 from pyro.infer.trace_mmd import Trace_MMD
 from pyro.infer.trace_tail_adaptive_elbo import TraceTailAdaptive_ELBO
 from pyro.infer.traceenum_elbo import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.tracegraph_elbo import JitTraceGraph_ELBO, TraceGraph_ELBO
+from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import enable_validation, is_validation_enabled
 
 __all__ = [

@@ -6,9 +6,8 @@ import torch
 from torch import tensor
 from torch.distributions import kl_divergence
 
-from pyro.distributions.util import broadcast_shape
 from pyro.distributions.torch import Bernoulli, Normal
-from pyro.distributions.util import scale_and_mask
+from pyro.distributions.util import broadcast_shape, scale_and_mask
 from tests.common import assert_equal
 
 

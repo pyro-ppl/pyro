@@ -5,9 +5,10 @@ import math
 
 import torch
 
+from pyro.ops.tensor_utils import safe_normalize
+
 from . import constraints
 from .torch_distribution import TorchDistribution
-from pyro.ops.tensor_utils import safe_normalize
 
 
 class ProjectedNormal(TorchDistribution):

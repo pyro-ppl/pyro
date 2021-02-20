@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.poutine.runtime
-
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType
 
 

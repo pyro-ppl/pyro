@@ -10,7 +10,7 @@ from torch.distributions import kl_divergence
 import pyro.ops.jit
 from pyro.distributions.util import scale_and_mask
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import is_validation_enabled, torch_item, check_fully_reparametrized
+from pyro.infer.util import check_fully_reparametrized, is_validation_enabled, torch_item
 from pyro.util import warn_if_nan
 
 

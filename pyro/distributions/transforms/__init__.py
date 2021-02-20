@@ -3,11 +3,11 @@
 
 from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
-from torch.distributions.transforms import __all__ as torch_transforms
 from torch.distributions.transforms import ComposeTransform, ExpTransform, LowerCholeskyTransform
+from torch.distributions.transforms import __all__ as torch_transforms
 
-from ..constraints import (IndependentConstraint, corr_cholesky_constraint, corr_matrix,
-                           ordered_vector, positive_definite, positive_ordered_vector, sphere)
+from ..constraints import (IndependentConstraint, corr_cholesky_constraint, corr_matrix, ordered_vector,
+                           positive_definite, positive_ordered_vector, sphere)
 from ..torch_transform import ComposeTransformModule
 from .affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive, affine_autoregressive,
                                     conditional_affine_autoregressive)
@@ -26,12 +26,12 @@ from .matrix_exponential import (ConditionalMatrixExponential, MatrixExponential
                                  matrix_exponential)
 from .neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
                                     conditional_neural_autoregressive, neural_autoregressive)
+from .normalize import Normalize
 from .ordered import OrderedTransform
 from .permute import Permute, permute
 from .planar import ConditionalPlanar, Planar, conditional_planar, planar
 from .polynomial import Polynomial, polynomial
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
-from .normalize import Normalize
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
                                     conditional_spline_autoregressive, spline_autoregressive)

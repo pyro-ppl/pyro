@@ -1,14 +1,16 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import numpy as np
 from pathlib import Path
-import pyro
-import pyro.distributions as dist
-from pyro.infer import SVI, Trace_ELBO
+
+import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+
+import pyro
+import pyro.distributions as dist
+from pyro.infer import SVI, Trace_ELBO
 
 
 class Encoder(nn.Module):

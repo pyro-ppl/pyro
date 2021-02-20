@@ -1,17 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
 import pytest
+import torch
 
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.oed.eig import (
-    nmc_eig, posterior_eig, marginal_eig, marginal_likelihood_eig, vnmc_eig, lfire_eig,
-    donsker_varadhan_eig)
+from pyro.contrib.oed.eig import (donsker_varadhan_eig, lfire_eig, marginal_eig, marginal_likelihood_eig, nmc_eig,
+                                  posterior_eig, vnmc_eig)
 from pyro.contrib.util import iter_plates_to_shape
-
 from tests.common import assert_equal
 
 try:

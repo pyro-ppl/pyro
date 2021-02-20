@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
+import pytest
 import torch
 
-import pytest
 from pyro.distributions import AVFMultivariateNormal, MultivariateNormal, OMTMultivariateNormal
 from tests.common import assert_equal
 

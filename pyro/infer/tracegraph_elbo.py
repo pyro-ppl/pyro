@@ -11,8 +11,7 @@ import pyro.ops.jit
 from pyro.distributions.util import detach, is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.enum import get_importance_trace
-from pyro.infer.util import (MultiFrameTensor, get_plate_stacks,
-                             is_validation_enabled, torch_backward, torch_item)
+from pyro.infer.util import MultiFrameTensor, get_plate_stacks, is_validation_enabled, torch_backward, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
 

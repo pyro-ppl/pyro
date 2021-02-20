@@ -12,9 +12,10 @@ from tests.common import xfail_param
 # put all funsor-related imports here, so test collection works without funsor
 try:
     import funsor
-    import pyro.contrib.funsor
     from pyroapi import distributions as dist
     from pyroapi import infer, pyro
+
+    import pyro.contrib.funsor
     from tests.contrib.funsor.test_valid_models_enum import assert_ok
     funsor.set_backend("torch")
 except ImportError:

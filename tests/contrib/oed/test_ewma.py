@@ -3,9 +3,9 @@
 
 import math
 
+import pytest
 import torch
 
-import pytest
 from pyro.contrib.oed.eig import EwmaLog
 from tests.common import assert_equal
 
