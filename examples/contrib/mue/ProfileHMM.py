@@ -2,18 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-A standard profile HMM model example, using the MuE package.
+A standard profile HMM model.
 """
 
 import argparse
 import datetime
+
 import matplotlib.pyplot as plt
-
 import torch
+
 import pyro
-
 from pyro.contrib.mue.models import ProfileHMM
-
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 

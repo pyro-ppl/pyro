@@ -2,10 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
-
 import torch
 from torch.utils.data import Dataset
-
 
 alphabets = {'amino-acid': np.array(
                 ['R', 'H', 'K', 'D', 'E',

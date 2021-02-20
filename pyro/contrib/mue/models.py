@@ -5,24 +5,20 @@
 Example MuE observation models.
 """
 
+import datetime
+
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
 from torch.optim import Adam
 
-import datetime
-import numpy as np
-
 import pyro
 import pyro.distributions as dist
-
-from pyro.contrib.mue.statearrangers import Profile
 from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
-
+from pyro.contrib.mue.statearrangers import Profile
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import MultiStepLR
-
-import pdb
 
 
 class ProfileHMM(nn.Module):

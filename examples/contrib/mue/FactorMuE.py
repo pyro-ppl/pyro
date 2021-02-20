@@ -2,22 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-A PCA model with a MuE emission (FactorMuE). Uses the MuE package.
+A PCA model with a MuE emission (FactorMuE).
 """
 
 import argparse
 import datetime
-import matplotlib.pyplot as plt
 import json
 import os
 
+import matplotlib.pyplot as plt
 import torch
 from torch.optim import Adam
-import pyro
 
+import pyro
 from pyro.contrib.mue.dataloaders import BiosequenceDataset
 from pyro.contrib.mue.models import FactorMuE
-
 from pyro.optim import MultiStepLR
 
 

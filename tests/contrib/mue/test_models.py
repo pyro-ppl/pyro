@@ -1,17 +1,13 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
-
 import numpy as np
-import torch
+import pytest
 from torch.optim import Adam
 
 import pyro
-
 from pyro.contrib.mue.dataloaders import BiosequenceDataset
-from pyro.contrib.mue.models import ProfileHMM, FactorMuE
-
+from pyro.contrib.mue.models import FactorMuE, ProfileHMM
 from pyro.optim import MultiStepLR
 
 

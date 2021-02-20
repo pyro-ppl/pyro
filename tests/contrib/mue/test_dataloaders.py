@@ -4,7 +4,7 @@
 import pytest
 import torch
 
-from pyro.contrib.mue.dataloaders import alphabets, BiosequenceDataset
+from pyro.contrib.mue.dataloaders import BiosequenceDataset, alphabets
 
 
 @pytest.mark.parametrize('source_type', ['list', 'fasta'])

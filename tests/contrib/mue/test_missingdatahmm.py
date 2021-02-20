@@ -1,11 +1,11 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from pyro.distributions import DiscreteHMM, Categorical
 import pytest
 import torch
 
 from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
+from pyro.distributions import Categorical, DiscreteHMM
 
 
 def test_hmm_log_prob():
