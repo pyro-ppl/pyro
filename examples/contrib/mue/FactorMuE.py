@@ -37,7 +37,7 @@ def main(args):
 
     pyro.set_rng_seed(args.rng_seed)
 
-    # Construct example dataset.
+    # Load dataset.
     if args.test:
         dataset = generate_data(args.small)
     else:
@@ -73,8 +73,8 @@ def main(args):
     losses = model.fit_svi(dataset, n_epochs, args.batch_size, scheduler)
 
     # Plot and save.
+    time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     if args.plots:
-        time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         plt.figure(figsize=(6, 6))
         plt.plot(losses)
         plt.xlabel('step')
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     parser.add_argument("--small", action='store_true', default=False,
                         help='Run with small example dataset.')
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
-    parser.add_argument("-f", "--file", default=None,
+    parser.add_argument("-f", "--file", default=None, type=str,
                         help='Input file (fasta format).')
     parser.add_argument("-a", "--alphabet", default='amino-acid',
                         help='Alphabet (amino-acid OR dna).')
@@ -143,7 +143,7 @@ if __name__ == '__main__':
                         help='z space dimension.')
     parser.add_argument("-b", "--batch-size", default=10, type=int,
                         help='Batch size.')
-    parser.add_argument("-M", "--latent-seq-length", default=None,
+    parser.add_argument("-M", "--latent-seq-length", default=None, type=int,
                         help='Latent sequence length.')
     parser.add_argument("-idfac", "--indel-factor", default=False, type=bool,
                         help='Indel parameters depend on latent variable.')
@@ -153,7 +153,7 @@ if __name__ == '__main__':
                         help='Use automatic relevance detection prior.')
     parser.add_argument("-sub", "--substitution-matrix", default=True, type=bool,
                         help='Use substitution matrix.')
-    parser.add_argument("-D", "--latent-alphabet", default=None,
+    parser.add_argument("-D", "--latent-alphabet", default=None, type=int,
                         help='Latent alphabet length.')
     parser.add_argument("-L", "--length-model", default=False, type=bool,
                         help='Model sequence length.')
