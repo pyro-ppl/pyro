@@ -6,8 +6,9 @@ import torch
 import torch.tensor as tt
 from torch.autograd.functional import jacobian
 
-from pyro.distributions import Normal, OrderedLogistic
+from pyro.distributions import OrderedLogistic, Normal
 from pyro.distributions.transforms import OrderedTransform
+
 
 # Tests for the OrderedLogistic distribution
 

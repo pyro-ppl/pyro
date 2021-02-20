@@ -6,7 +6,7 @@ import warnings
 import torch
 
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import check_fully_reparametrized, is_validation_enabled
+from pyro.infer.util import is_validation_enabled, check_fully_reparametrized
 
 
 class TraceTailAdaptive_ELBO(Trace_ELBO):

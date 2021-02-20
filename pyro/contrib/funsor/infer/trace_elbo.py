@@ -5,13 +5,14 @@ import contextlib
 
 import funsor
 
-from pyro.contrib.funsor import to_data, to_funsor
-from pyro.contrib.funsor.handlers import enum, plate, replay, trace
-from pyro.contrib.funsor.infer import config_enumerate
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import Trace_ELBO as _OrigTrace_ELBO
 
-from .elbo import ELBO, Jit_ELBO
+from pyro.contrib.funsor import to_data, to_funsor
+from pyro.contrib.funsor.handlers import enum, plate, replay, trace
+from pyro.contrib.funsor.infer import config_enumerate
+
+from .elbo import Jit_ELBO, ELBO
 from .traceenum_elbo import terms_from_trace
 
 

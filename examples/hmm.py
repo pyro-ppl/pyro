@@ -47,8 +47,8 @@ import pyro
 import pyro.contrib.examples.polyphonic_data_loader as poly
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.infer.autoguide import AutoDelta
+from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings

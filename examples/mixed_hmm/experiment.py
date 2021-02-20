@@ -2,18 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-import functools
-import json
 import os
+import json
 import uuid
+import functools
 
 import torch
-from model import guide_generic, model_generic
-from seal_data import prepare_seal
 
 import pyro
 import pyro.poutine as poutine
 from pyro.infer import TraceEnum_ELBO
+
+from model import model_generic, guide_generic
+from seal_data import prepare_seal
 
 
 def aic_num_parameters(model, guide=None):

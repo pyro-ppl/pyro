@@ -3,12 +3,14 @@
 
 import pyroapi
 
-from pyro.contrib.funsor.handlers import condition, do, markov  # noqa: F401
-from pyro.contrib.funsor.handlers import plate as _plate
-from pyro.contrib.funsor.handlers import vectorized_markov  # noqa: F401
+from pyro.primitives import (  # noqa: F401
+    clear_param_store, deterministic, enable_validation, factor, get_param_store,
+    module, param, random_module, sample, set_rng_seed, subsample,
+)
+
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor  # noqa: F401
-from pyro.primitives import (clear_param_store, deterministic, enable_validation, factor, get_param_store,  # noqa: F401
-                             module, param, random_module, sample, set_rng_seed, subsample)
+from pyro.contrib.funsor.handlers import condition, do, markov, vectorized_markov  # noqa: F401
+from pyro.contrib.funsor.handlers import plate as _plate
 
 
 def plate(*args, **kwargs):

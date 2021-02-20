@@ -8,7 +8,6 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.autoguide.guides import AutoContinuous
-
 from .reparam import Reparam
 
 

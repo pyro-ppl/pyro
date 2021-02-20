@@ -1,8 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import logging
 from collections import OrderedDict
+import logging
 
 import pytest
 import torch
@@ -11,7 +11,6 @@ import torch
 try:
     import funsor
     from funsor.tensor import Tensor
-
     import pyro.contrib.funsor
     from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
     funsor.set_backend("torch")

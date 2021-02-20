@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import queue
-
-import pyro.poutine as poutine
 from pyro.infer.abstract_infer import TracePosterior
+import pyro.poutine as poutine
 
 ###################################
 # Search borrowed from RSA example

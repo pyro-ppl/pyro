@@ -20,16 +20,19 @@ import os
 
 import numpy as np
 import torch
-import wget
 from torch.nn.functional import softplus
 
 import pyro
 import pyro.optim as optim
-from pyro.contrib.easyguide import EasyGuide
+import wget
+
 from pyro.contrib.examples.util import get_data_directory
-from pyro.distributions import Gamma, Normal, Poisson
+from pyro.distributions import Gamma, Poisson, Normal
 from pyro.infer import SVI, TraceMeanField_ELBO
-from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
+from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import init_to_feasible
+from pyro.contrib.easyguide import EasyGuide
+
 
 torch.set_default_tensor_type('torch.FloatTensor')
 pyro.util.set_rng_seed(0)

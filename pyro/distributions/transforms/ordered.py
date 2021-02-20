@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-
-from pyro.distributions import constraints
 from pyro.distributions.transforms import Transform
+from pyro.distributions import constraints
 
 
 class OrderedTransform(Transform):

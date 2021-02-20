@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from pyroapi.testing import MODELS
 
-from pyro.generic import handlers, infer, ops, pyro, pyro_backend
+from pyro.generic import handlers, infer, pyro, pyro_backend, ops
+from pyroapi.testing import MODELS
 from tests.common import xfail_if_not_implemented
 
 pytestmark = pytest.mark.stage('unit')

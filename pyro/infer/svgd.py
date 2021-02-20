@@ -1,8 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import math
 from abc import ABCMeta, abstractmethod
+import math
 
 import torch
 from torch.distributions import biject_to
@@ -10,10 +10,10 @@ from torch.distributions import biject_to
 import pyro
 from pyro import poutine
 from pyro.distributions import Delta
-from pyro.distributions.util import copy_docs_from
+from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.autoguide.guides import AutoContinuous
 from pyro.infer.autoguide.initialization import init_to_sample
-from pyro.infer.trace_elbo import Trace_ELBO
+from pyro.distributions.util import copy_docs_from
 
 
 def vectorize(fn, num_particles, max_plate_nesting):

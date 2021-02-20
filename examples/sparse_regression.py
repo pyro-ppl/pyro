@@ -2,17 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-import math
 
 import numpy as np
 import torch
-from torch.optim import Adam
+import math
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.infer.autoguide import AutoDelta
 from pyro.infer import Trace_ELBO
-from pyro.infer.autoguide import AutoDelta, init_to_median
+from pyro.infer.autoguide import init_to_median
+
+from torch.optim import Adam
+
 
 """
 We demonstrate how to do sparse linear regression using a variant of the

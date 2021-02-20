@@ -1,15 +1,17 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from contextlib import ExitStack
-
 import torch
 from torch import nn
+
+from contextlib import ExitStack
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib.util import iter_plates_to_shape, lexpand, rmv, rtril, rvv, tensor_to_dict
+from pyro.contrib.util import (
+    tensor_to_dict, rmv, rvv, rtril, lexpand, iter_plates_to_shape
+)
 from pyro.ops.linalg import rinverse
 
 

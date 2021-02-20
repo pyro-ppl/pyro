@@ -64,6 +64,7 @@ except ImportError:
 from pyroapi import distributions as dist
 from pyroapi import handlers, infer, optim, pyro, pyro_backend
 
+
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.DEBUG)
 
 # Add another handler for logging debugging events (e.g. for profiling)

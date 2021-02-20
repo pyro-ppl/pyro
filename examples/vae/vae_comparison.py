@@ -10,13 +10,13 @@ import torch
 import torch.nn as nn
 from torch.nn import functional
 from torchvision.utils import save_image
-from utils.mnist_cached import DATA_DIR, RESULTS_DIR
 
 import pyro
 from pyro.contrib.examples import util
 from pyro.distributions import Bernoulli, Normal
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
+from utils.mnist_cached import DATA_DIR, RESULTS_DIR
 
 """
 Comparison of VAE implementation in PyTorch and Pyro. This example can be

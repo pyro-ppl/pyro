@@ -9,17 +9,18 @@ import functools
 import math
 from collections import OrderedDict
 
-import funsor
 import torch
+import funsor
 
 import pyro.poutine.runtime
 import pyro.poutine.util
-from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
-from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.replay_messenger import ReplayMessenger
-from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
 from pyro.poutine.escape_messenger import EscapeMessenger
 from pyro.poutine.subsample_messenger import _Subsample
+
+from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
+from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
+from pyro.contrib.funsor.handlers.replay_messenger import ReplayMessenger
+from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
 
 funsor.set_backend("torch")
 

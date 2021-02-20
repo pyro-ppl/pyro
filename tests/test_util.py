@@ -2,10 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-
 import pytest
-import torch
 
+import torch
 from pyro import util
 
 pytestmark = pytest.mark.stage('unit')

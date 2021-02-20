@@ -11,6 +11,7 @@ from pyro.contrib.gp.likelihoods import Binary, MultiClass, Poisson
 from pyro.contrib.gp.models import VariationalGP, VariationalSparseGP
 from pyro.contrib.gp.util import train
 
+
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
 
 X = torch.tensor([[1.0, 5.0, 3.0], [4.0, 3.0, 7.0], [3.0, 4.0, 6.0]])

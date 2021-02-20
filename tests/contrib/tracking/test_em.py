@@ -16,6 +16,7 @@ from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.optim.multi import MixedMultiOptimizer, Newton
 
+
 logger = logging.getLogger(__name__)
 
 

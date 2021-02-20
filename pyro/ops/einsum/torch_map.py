@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
+
 from functools import reduce
 
 from pyro.ops import packed

@@ -1,8 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from pyro.contrib.funsor.handlers.primitives import to_data
 from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
+from pyro.contrib.funsor.handlers.primitives import to_data
 
 
 class ReplayMessenger(OrigReplayMessenger):

@@ -11,9 +11,9 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer.mcmc import NUTS
-from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.hmc import HMC
-from tests.common import assert_close, assert_equal
+from pyro.infer.mcmc.api import MCMC
+from tests.common import assert_equal, assert_close
 
 logger = logging.getLogger(__name__)
 

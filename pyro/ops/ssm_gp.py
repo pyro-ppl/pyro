@@ -6,7 +6,7 @@ import math
 import torch
 from torch.distributions import constraints
 
-from pyro.nn import PyroModule, PyroParam, pyro_method
+from pyro.nn import PyroModule, pyro_method, PyroParam
 
 root_three = math.sqrt(3.0)
 root_five = math.sqrt(5.0)

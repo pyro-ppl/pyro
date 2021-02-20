@@ -185,7 +185,6 @@ def _get_cpp_module():
     global _cpp_module
     if _cpp_module is None:
         import os
-
         from torch.utils.cpp_extension import load
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spanning_tree.cpp")
         _cpp_module = load(name="cpp_spanning_tree",

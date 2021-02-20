@@ -14,7 +14,7 @@ import urllib
 
 import torch
 
-from pyro.contrib.examples.util import _mkdir_p, get_data_directory
+from pyro.contrib.examples.util import get_data_directory, _mkdir_p
 
 DATA = get_data_directory(__file__)
 

@@ -3,9 +3,9 @@
 
 import inspect
 import io
-import pickle
 
 import pytest
+import pickle
 import torch
 
 import pyro.distributions as dist

@@ -1,10 +1,10 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import queue
 import warnings
 import weakref
 from collections import OrderedDict
+import queue
 
 import torch
 from opt_einsum import shared_intermediates

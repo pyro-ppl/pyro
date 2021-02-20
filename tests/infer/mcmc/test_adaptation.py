@@ -4,7 +4,12 @@
 import pytest
 import torch
 
-from pyro.infer.mcmc.adaptation import ArrowheadMassMatrix, BlockMassMatrix, WarmupAdapter, adapt_window
+from pyro.infer.mcmc.adaptation import (
+    ArrowheadMassMatrix,
+    BlockMassMatrix,
+    WarmupAdapter,
+    adapt_window,
+)
 from tests.common import assert_close, assert_equal
 
 

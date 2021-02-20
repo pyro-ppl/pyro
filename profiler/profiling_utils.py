@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import cProfile
+from io import StringIO
 import functools
 import os
 import pstats
 import timeit
 from contextlib import contextmanager
-from io import StringIO
 
 from prettytable import ALL, PrettyTable
 

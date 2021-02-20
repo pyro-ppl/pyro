@@ -5,11 +5,11 @@ import argparse
 import logging
 
 import torch
-from data import J, sigma, y
 from torch.distributions import constraints, transforms
 
 import pyro
 import pyro.distributions as dist
+from data import J, sigma, y
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 

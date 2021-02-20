@@ -7,7 +7,7 @@ import torch
 from torch.distributions import transform_to, transforms
 
 import pyro.distributions as dist
-from pyro.infer.reparam import DiscreteCosineReparam, HaarReparam
+from pyro.infer.reparam import HaarReparam, DiscreteCosineReparam
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 from pyro.primitives import get_param_store

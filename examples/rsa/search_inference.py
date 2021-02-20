@@ -8,10 +8,10 @@ Adapted from: http://dippl.org/chapters/03-enumeration.html
 """
 
 import collections
-import functools
-import queue
 
 import torch
+import queue
+import functools
 
 import pyro.distributions as dist
 import pyro.poutine as poutine

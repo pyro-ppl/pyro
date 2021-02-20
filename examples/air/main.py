@@ -19,15 +19,15 @@ from functools import partial
 import numpy as np
 import torch
 import visdom
-from air import AIR, latents_to_tensor
-from viz import draw_many, tensor_to_objs
 
 import pyro
 import pyro.contrib.examples.multi_mnist as multi_mnist
 import pyro.optim as optim
 import pyro.poutine as poutine
+from air import AIR, latents_to_tensor
 from pyro.contrib.examples.util import get_data_directory
 from pyro.infer import SVI, JitTraceGraph_ELBO, TraceGraph_ELBO
+from viz import draw_many, tensor_to_objs
 
 
 def count_accuracy(X, true_counts, air, batch_size):

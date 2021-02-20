@@ -1,19 +1,20 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import torch
+import pytest
 
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.oed.eig import (donsker_varadhan_eig, laplace_eig, lfire_eig, marginal_eig, marginal_likelihood_eig,
-                                  nmc_eig, posterior_eig, vnmc_eig)
-from pyro.contrib.oed.glmm import known_covariance_linear_model
-from pyro.contrib.oed.glmm.guides import LinearModelLaplaceGuide
-from pyro.contrib.oed.util import linear_model_ground_truth
-from pyro.contrib.util import rmv, rvv
 from pyro.infer import Trace_ELBO
+from pyro.contrib.oed.glmm import known_covariance_linear_model
+from pyro.contrib.oed.util import linear_model_ground_truth
+from pyro.contrib.oed.eig import (
+    nmc_eig, posterior_eig, marginal_eig, marginal_likelihood_eig, vnmc_eig, laplace_eig, lfire_eig,
+    donsker_varadhan_eig)
+from pyro.contrib.util import rmv, rvv
+from pyro.contrib.oed.glmm.guides import LinearModelLaplaceGuide
 from tests.common import assert_equal
 
 
