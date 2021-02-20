@@ -43,6 +43,7 @@ def main(args):
         dataset = generate_data(args.small)
     else:
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
+    args.batch_size = min([dataset.data_size, args.batch_size])
 
     # Construct model.
     model = FactorMuE(dataset.max_length, dataset.alphabet_length, args.z_dim,
@@ -94,26 +95,38 @@ def main(args):
                  args.out_folder,
                  'FactorMuE_plot.latent_{}.pdf'.format(time_stamp)))
 
-        plt.figure(figsize=(6, 6))
-        insert = pyro.param("insert_q_mn").detach()
-        insert_expect = torch.exp(insert - insert.logsumexp(-1, True))
-        plt.plot(insert_expect[:, :, 1].numpy())
-        plt.xlabel('position')
-        plt.ylabel('probability of insert')
-        if args.save:
-            plt.savefig(os.path.join(
-                 args.out_folder,
-                 'FactorMuE_plot.insert_prob_{}.pdf'.format(time_stamp)))
-        plt.figure(figsize=(6, 6))
-        delete = pyro.param("delete_q_mn").detach()
-        delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
-        plt.plot(delete_expect[:, :, 1].numpy())
-        plt.xlabel('position')
-        plt.ylabel('probability of delete')
-        if args.save:
-            plt.savefig(os.path.join(
-                 args.out_folder,
-                 'FactorMuE_plot.delete_prob_{}.pdf'.format(time_stamp)))
+        if not args.indel_factor:
+            plt.figure(figsize=(6, 6))
+            insert = pyro.param("insert_q_mn").detach()
+            insert_expect = torch.exp(insert - insert.logsumexp(-1, True))
+            plt.plot(insert_expect[:, :, 1].numpy())
+            plt.xlabel('position')
+            plt.ylabel('probability of insert')
+            if args.save:
+                plt.savefig(os.path.join(
+                     args.out_folder,
+                     'FactorMuE_plot.insert_prob_{}.pdf'.format(time_stamp)))
+            plt.figure(figsize=(6, 6))
+            delete = pyro.param("delete_q_mn").detach()
+            delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
+            plt.plot(delete_expect[:, :, 1].numpy())
+            plt.xlabel('position')
+            plt.ylabel('probability of delete')
+            if args.save:
+                plt.savefig(os.path.join(
+                     args.out_folder,
+                     'FactorMuE_plot.delete_prob_{}.pdf'.format(time_stamp)))
+    if args.save:
+        pyro.get_param_store().save(os.path.join(
+                args.out_folder,
+                'FactorMuE_results.params_{}.out'.format(time_stamp)))
+        with open(os.path.join(
+                args.out_folder,
+                'FactorMuE_results.input_{}.txt'.format(time_stamp)),
+                'w') as ow:
+            ow.write('[args]\n')
+            for elem in list(args.__dict__.keys()):
+                ow.write('{} = {}\n'.format(elem, args.__getattribute__(elem)))
 
 
 if __name__ == '__main__':
