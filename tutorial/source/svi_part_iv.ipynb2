@@ -1,0 +1,167 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# SVI Part IV: Tips and Tricks\n",
+    "\n",
+    "The three SVI tutorials leading up to this one ([Part I](http://pyro.ai/examples/svi_part_i.html), [Part II](http://pyro.ai/examples/svi_part_ii.html), & [Part III](http://pyro.ai/examples/svi_part_iii.html)) go through\n",
+    "the various steps involved in using Pyro to do variational\n",
+    "inference.\n",
+    "Along the way we defined models and guides (i.e. variational distributions),\n",
+    "setup variational objectives (in particular [ELBOs](https://docs.pyro.ai/en/dev/inference_algos.html?highlight=elbo#module-pyro.infer.elbo)), \n",
+    "and constructed optimizers ([pyro.optim](http://docs.pyro.ai/en/dev/optimization.html)). \n",
+    "The effect of all this machinery is to cast Bayesian inference as a *stochastic optimization problem*. \n",
+    "\n",
+    "This is all very useful, but in order to arrive at our ultimate goal—learning model parameters, inferring approximate posteriors, making predictions with the posterior predictive distribution, etc.—we need to successfully solve this optimization problem. \n",
+    "Depending on the details of the particular problem—for example the dimensionality of the latent spaces, whether we have discrete latent variables, and so on—this can be easy or hard. \n",
+    "In this tutorial we cover a few tips and tricks we expect to be generally useful for users doing variational inference in Pyro. *ELBO not converging!? Running into NaNs!?* Look below for possible solutions!  "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1. Start with a small learning rate\n",
+    "\n",
+    "While large learning rates might be appropriate for some problems, it's usually good practice to start with small learning rates like $10^{-3}$\n",
+    "or $10^{-4}$:\n",
+    "```python\n",
+    "optimizer = pyro.optim.Adam({\"lr\": 0.001})\n",
+    "```\n",
+    "This is because ELBO gradients are *stochastic*, and potentially high variance, so large learning rates can quickly lead to regions of model/guide parameter space that are numerically unstable or otherwise undesirable.\n",
+    "\n",
+    "You can try a larger learning rate once you have achieved stable\n",
+    "ELBO optimization using a smaller learning rate. \n",
+    "This is often a good idea because excessively small learning rates can lead to poor optimization. \n",
+    "In particular small learning rates can lead to getting stuck in poor local optima of the ELBO."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 2. Make sure your model and guide distributions have the same support\n",
+    "\n",
+    "Suppose you have a distribution in your `model` with constrained support, e.g. a LogNormal distribution, which has support on the positive real axis:\n",
+    "```python\n",
+    "def model():\n",
+    "    pyro.sample(\"x\", dist.LogNormal(0.0, 1.0))\n",
+    "``` \n",
+    "Then you need to ensure that the accompanying `sample` site in the `guide` has the same support:\n",
+    "```python\n",
+    "def good_guide():\n",
+    "    loc = pyro.param(\"loc\", torch.tensor(0.0))\n",
+    "    pyro.sample(\"x\", dist.LogNormal(loc, 1.0))\n",
+    "``` \n",
+    "If you fail to do this and use for example the following inadmissable guide:\n",
+    "```python\n",
+    "def bad_guide():\n",
+    "    loc = pyro.param(\"loc\", torch.tensor(0.0))\n",
+    "    pyro.sample(\"x\", dist.Normal(loc, 1.0))\n",
+    "```\n",
+    "you will likely run into NaNs very quickly. This is because the `log_prob` of a LogNormal distribution evaluated at a sample `x` that satisfies `x<0` is undefined, and the `bad_guide` is likely to produce such samples.\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 3. Constrain parameters that need to be constrained\n",
+    "In a similar vein, you need to make sure that the parameters used to instantiate distributions are valid; otherwise you will quickly run into NaNs. For example the `scale` parameter of a Normal distribution needs to be positive. Thus the following `bad_guide` is problematic:\n",
+    "```python\n",
+    "def bad_guide():\n",
+    "    scale = pyro.sample(\"scale\", torch.tensor(1.0))\n",
+    "    pyro.sample(\"x\", dist.Normal(0.0, scale))\n",
+    "``` \n",
+    "while the following `good_guide` correctly uses a constraint to ensure positivity:\n",
+    "```python\n",
+    "from torch.distributions import constraints\n",
+    "\n",
+    "def good_guide():\n",
+    "    scale = pyro.sample(\"scale\", torch.tensor(0.05),               \n",
+    "                        constraint=constraints.positive)\n",
+    "    pyro.sample(\"x\", dist.Normal(0.0, scale))\n",
+    "``` "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 4. If you are having trouble constructing a custom guide, use an AutoGuide\n",
+    "In order for a model/guide pair to lead to stable optimization a number of conditions need to be satisfied, some of which we have covered above. \n",
+    "Sometimes the problem is actually in your model even though you think it's in the guide. \n",
+    "Conversely, sometimes the problem is in your guide even though you think it's in the model or somewhere else. \n",
+    "For these reasons it can be helpful to reduce the number of moving parts while you try to identify the underyling issue.\n",
+    "One convenient way to do this is to replace your custom guide with a [pyro.infer.AutoGuide](http://docs.pyro.ai/en/stable/infer.autoguide.html#module-pyro.infer.autoguide). \n",
+    "For example, if all the latent variables in your model are continuous, you can try a [pyro.infer.AutoNormal](http://docs.pyro.ai/en/stable/infer.autoguide.html#autonormal) guide.\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 4. If you are having trouble constructing a custom guide, try MAP inference\n",
+    "\n",
+    "If all the latent variables in your model are continuous, you can use MAP inference instead of full-blown variational inference. See the [MLE/MAP](http://pyro.ai/examples/mle_map.html) tutorial for further details. Once you have MAP inference working, there's good reason to believe that your model is setup correctly (at least form the point of optimization and numerical stability). If you're interested in obtaining approximate posterior distributions, you can now follow-up with full-blown SVI."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 5. Parameter initialization matters: initialize guide distributions to have low variance\n",
+    "\n",
+    "Initialization in optimization problems can make all the difference between finding a good solution and catastrophic failure. \n",
+    "It is difficult to come up with a comprehensive set of good practices for initialization, as good initialization schemes are often very problem dependent. In the context of Stochastic Variational Inference it is generally a good idea to initialize your guide distributions so that they have **low variance**. This is because the ELBO gradients you use to optimize the ELBO are stochastic. If the ELBO gradients you get at the beginning of ELBO optimization exhibit high variance, you may be led into numerically unstable or otherwise undesirable regions of parameter space. One way to guard against this potential hazard is to pay close attention to parameters in your guide that control variance. \n",
+    "For example we would generally expect this to be a reasonably initializated guide:\n",
+    "```python\n",
+    "from torch.distributions import constraints\n",
+    "\n",
+    "def good_guide():\n",
+    "    scale = pyro.sample(\"scale\", torch.tensor(0.05),               \n",
+    "                        constraint=constraints.positive)\n",
+    "    pyro.sample(\"x\", dist.Normal(0.0, scale))\n",
+    "``` \n",
+    "while the following high-variance guide is very likely to lead to problems:\n",
+    "```python\n",
+    "def bad_guide():\n",
+    "    scale = pyro.sample(\"scale\", torch.tensor(12345.6),               \n",
+    "                        constraint=constraints.positive)\n",
+    "    pyro.sample(\"x\", dist.Normal(0.0, scale))\n",
+    "``` "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "celltoolbar": "Raw Cell Format",
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
