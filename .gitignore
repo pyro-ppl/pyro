@@ -18,6 +18,7 @@ pyro/_version.py
 processed
 raw
 *.pkl
+*.fasta
 
 # Logs
 logs
