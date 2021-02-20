@@ -8,8 +8,9 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions import TorchDistribution
+from pyro.distributions.testing.gof import auto_goodness_of_fit
 from pyro.distributions.util import broadcast_shape
-from tests.common import assert_equal, xfail_if_not_implemented
+from tests.common import TEST_FAILURE_RATE, assert_equal, xfail_if_not_implemented
 
 
 def _log_prob_shape(dist, x_size=torch.Size()):
@@ -80,6 +81,35 @@ def test_score_errors_non_broadcastable_data_shape(dist):
         test_data_non_broadcastable = torch.ones(non_broadcastable_shape)
         with pytest.raises((ValueError, RuntimeError)):
             d.log_prob(test_data_non_broadcastable)
+
+
+# Distributions tests - continuous distributions
+
+def test_gof(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    if Dist in [dist.LKJ, dist.LKJCorrCholesky]:
+        pytest.xfail(reason="incorrect submanifold scaling")
+
+    num_samples = 50000
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        samples = d.sample(torch.Size([num_samples]))
+        with xfail_if_not_implemented():
+            probs = d.log_prob(samples).exp()
+
+        dim = None
+        if "ProjectedNormal" in Dist.__name__:
+            dim = samples.size(-1) - 1
+
+        # Test each batch independently.
+        probs = probs.reshape(num_samples, -1)
+        samples = samples.reshape(probs.shape + d.event_shape)
+        if "Dirichlet" in Dist.__name__:
+            # The Dirichlet density is over all but one of the probs.
+            samples = samples[..., :-1]
+        for b in range(probs.size(-1)):
+            gof = auto_goodness_of_fit(samples[:, b], probs[:, b], dim=dim)
+            assert gof > TEST_FAILURE_RATE
 
 
 # Distributions tests - discrete distributions

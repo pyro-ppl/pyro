@@ -6,17 +6,15 @@ from numbers import Number
 
 import funsor
 
+from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger, NamedMessenger
+from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.distributions.util import copy_docs_from
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import effectful
 from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
 from pyro.util import ignore_jit_warnings
-
-from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger, \
-        NamedMessenger
-from pyro.poutine.runtime import effectful
 
 funsor.set_backend("torch")
 
@@ -27,7 +25,6 @@ class IndepMessenger(GlobalNamedMessenger):
     :class:`~pyro.poutine.runtime._DimAllocator`.
     """
     def __init__(self, name=None, size=None, dim=None, indices=None):
-        assert size > 1
         assert dim is None or dim < 0
         super().__init__()
         # without a name or dim, treat as a "vectorize" effect and allocate a non-visible dim
@@ -50,7 +47,7 @@ class IndepMessenger(GlobalNamedMessenger):
         name_to_dim = OrderedDict([(self.name, DimRequest(self.dim, self.dim_type))])
         indices = to_data(self._indices, name_to_dim=name_to_dim)
         # extract the dimension allocated by to_data to match plate's current behavior
-        self.dim, self.indices = -indices.dim(), indices.squeeze()
+        self.dim, self.indices = -indices.dim(), indices.reshape(-1)
         return self
 
     def _pyro_sample(self, msg):
@@ -315,10 +312,9 @@ class VectorizedMarkovMessenger(NamedMessenger):
             assert msg["name"].endswith(str(self._indices))
             msg["name"] = msg["name"][:-len(str(self._indices))] + str(self._suffix)
         if str(self._suffix) != str(self._suffixes[-1]):
-            # do not trace auxiliary vars
-            msg["infer"]["_do_not_trace"] = True
-            msg["infer"]["is_auxiliary"] = True
-            msg["is_observed"] = False
+            # _do_not_score: record these sites when tracing for use with replay,
+            # but do not include them in ELBO computation.
+            msg["infer"]["_do_not_score"] = True
             # map auxiliary var to markov var name prefix
             # assuming that site name has a format: "markov_var{}".format(_suffix)
             # is there a better way?
@@ -333,7 +329,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             return
         # if last step in the for loop
         if str(self._suffix) == str(self._suffixes[-1]):
-            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg["funsor"] else \
+            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg.get("funsor", {}) else \
                 to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
             # for auxiliary sites in the log_prob
             for name in set(funsor_log_prob.inputs) & set(self._auxiliary_to_markov):

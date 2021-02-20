@@ -7,7 +7,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
-from pyro.distributions.constraints import corr_cholesky_constraint
+from pyro.distributions.constraints import corr_cholesky_constraint, corr_matrix
 
 
 def _vector_to_l_cholesky(z):
@@ -79,3 +79,52 @@ class CorrLCholeskyTransform(Transform):
         tanpart = x.cosh().log().sum(-1).mul(-2)
         matpart = (1 - y.pow(2).cumsum(-1).tril(diagonal=-2)).log().div(2).sum(-1).sum(-1)
         return tanpart + matpart
+
+
+class CholeskyTransform(Transform):
+    r"""
+    Transform via the mapping :math:`y = cholesky(x)`, where `x` is a
+    positive definite matrix.
+    """
+    bijective = True
+    sign = +1
+    event_dim = 2
+    domain = constraints.positive_definite
+    codomain = constraints.lower_cholesky
+
+    def __eq__(self, other):
+        return isinstance(other, CholeskyTransform)
+
+    def _call(self, x):
+        return torch.cholesky(x)
+
+    def _inverse(self, y):
+        return torch.matmul(y, torch.transpose(y, -2, -1))
+
+    def log_abs_det_jacobian(self, x, y):
+        # Ref: http://web.mit.edu/18.325/www/handouts/handout2.pdf page 13
+        n = x.shape[-1]
+        order = torch.arange(n, 0, -1, dtype=x.dtype, device=x.device)
+        return -n * math.log(2) - (order * torch.diagonal(y, dim1=-2, dim2=-1).log()).sum(-1)
+
+
+class CorrMatrixCholeskyTransform(CholeskyTransform):
+    r"""
+    Transform via the mapping :math:`y = cholesky(x)`, where `x` is a
+    correlation matrix.
+    """
+    bijective = True
+    sign = +1
+    event_dim = 2
+    domain = corr_matrix
+    # TODO: change corr_cholesky_constraint to corr_cholesky when the latter is availabler
+    codomain = corr_cholesky_constraint
+
+    def __eq__(self, other):
+        return isinstance(other, CorrMatrixCholeskyTransform)
+
+    def log_abs_det_jacobian(self, x, y):
+        # NB: see derivation in LKJCholesky implementation
+        n = x.shape[-1]
+        order = torch.arange(n - 1, -1, -1, dtype=x.dtype, device=x.device)
+        return -(order * torch.diagonal(y, dim1=-2, dim2=-1).log()).sum(-1)

@@ -189,14 +189,16 @@ CUDA_EXAMPLES = [
 ]
 
 
-def xfail_jit(*args):
-    return pytest.param(*args, marks=[pytest.mark.xfail(reason="not jittable"),
+def xfail_jit(*args, **kwargs):
+    reason = kwargs.pop("reason", "not jittable")
+    return pytest.param(*args, marks=[pytest.mark.xfail(reason=reason),
                                       pytest.mark.skipif('CI' in os.environ, reason='slow test')])
 
 
 JIT_EXAMPLES = [
     'air/main.py --num-steps=1 --jit',
-    'baseball.py --num-samples=200 --warmup-steps=100 --jit',
+    xfail_jit('baseball.py --num-samples=200 --warmup-steps=100 --jit',
+              reason='unreproducible RuntimeError on CI'),
     'contrib/autoname/mixture.py --num-epochs=1 --jit',
     'contrib/cevae/synthetic.py --num-epochs=1 --jit',
     'contrib/epidemiology/sir.py --jit -np=128 -t=2 -w=2 -n=4 -d=20 -p=1000 -f 2',

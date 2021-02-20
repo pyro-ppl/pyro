@@ -7,10 +7,13 @@ generating unique, semantically meaningful names for sample sites.
 """
 from pyro.contrib.autoname import named
 from pyro.contrib.autoname.scoping import scope, name_count
+from pyro.contrib.autoname.autoname import autoname, sample
 
 
 __all__ = [
     "named",
     "scope",
     "name_count",
+    "autoname",
+    "sample",
 ]

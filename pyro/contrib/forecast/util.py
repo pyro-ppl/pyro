@@ -1,13 +1,14 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import numbers
 from functools import singledispatch
 
 import torch
 from torch.distributions import transform_to, transforms
 
 import pyro.distributions as dist
-from pyro.infer.reparam import HaarReparam, DiscreteCosineReparam
+from pyro.infer.reparam import DiscreteCosineReparam, HaarReparam
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 from pyro.primitives import get_param_store
@@ -190,6 +191,7 @@ UNIVARIATE_DISTS = {
     dist.Poisson: ("rate",),
     dist.Stable: ("stability", "skew", "scale", "loc"),
     dist.StudentT: ("df", "loc", "scale"),
+    dist.Uniform: ("low", "high"),
     dist.ZeroInflatedPoisson: ("rate", "gate"),
     dist.ZeroInflatedNegativeBinomial: ("total_count", "logits", "gate"),
 }
@@ -241,6 +243,14 @@ def _(d, data):
     return dist.FoldedDistribution(base_dist)
 
 
+@prefix_condition.register(dist.TransformedDistribution)
+def _(d, data):
+    for t in reversed(d.transforms):
+        data = t.inv(data)
+    base_dist = prefix_condition(d.base_dist, data)
+    return dist.TransformedDistribution(base_dist, d.transforms)
+
+
 def _prefix_condition_univariate(d, data):
     t = data.size(-2)
     params = {name: getattr(d, name)[..., t:, :]
@@ -281,7 +291,9 @@ def reshape_batch(d, batch_shape):
 
 @reshape_batch.register(dist.MaskedDistribution)
 def _(d, batch_shape):
-    mask = d._mask.reshape(batch_shape)
+    mask = d._mask
+    if not isinstance(d._mask, numbers.Number):
+        mask = mask.reshape(batch_shape)
     base_dist = reshape_batch(d.base_dist, batch_shape)
     return base_dist.mask(mask)
 
@@ -304,6 +316,16 @@ def _(d, batch_shape):
 def _(d, batch_shape):
     base_dist = reshape_batch(d.base_dist, batch_shape)
     return dist.FoldedDistribution(base_dist)
+
+
+@reshape_batch.register(dist.TransformedDistribution)
+def _(d, batch_shape):
+    base_dist = reshape_batch(d.base_dist, batch_shape)
+    old_shape = d.base_dist.shape()
+    new_shape = base_dist.shape()
+    transforms = [reshape_transform_batch(t, old_shape, new_shape)
+                  for t in d.transforms]
+    return dist.TransformedDistribution(base_dist, transforms)
 
 
 def _reshape_batch_univariate(d, batch_shape):
@@ -412,10 +434,27 @@ def reshape_transform_batch(t, old_shape, new_shape):
 
 
 def _reshape_batch_univariate_transform(t, old_shape, new_shape):
-    params = {name: getattr(t, name).expand(old_shape).reshape(new_shape)
-              for name in UNIVARIATE_TRANSFORMS[type(t)]}
+    params = {}
+    for name in UNIVARIATE_TRANSFORMS[type(t)]:
+        value = getattr(t, name)
+        if not isinstance(value, numbers.Number):
+            value = value.expand(old_shape).reshape(new_shape)
+        params[name] = value
     params["cache_size"] = t._cache_size
     return type(t)(**params)
+
+
+@reshape_transform_batch.register(torch.distributions.transforms._InverseTransform)
+def _(t, old_shape, new_shape):
+    return reshape_transform_batch(t.inv, old_shape, new_shape).inv
+
+
+@reshape_transform_batch.register(dist.transforms.ComposeTransform)
+def _(t, old_shape, new_shape):
+    return dist.transforms.ComposeTransform([
+        reshape_transform_batch(part, old_shape, new_shape)
+        for part in t.parts
+    ])
 
 
 for _type in UNIVARIATE_TRANSFORMS:

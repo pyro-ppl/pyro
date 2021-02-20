@@ -8,6 +8,7 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
+from tests.common import assert_close
 
 from functools import partial, reduce
 import operator
@@ -103,13 +104,19 @@ class TransformTests(TestCase):
         base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
-        J_1 = transform.log_abs_det_jacobian(x_true, y)
         x_calculated = transform._inverse(y)
-        J_2 = transform.log_abs_det_jacobian(x_true, y)
-        assert (x_true - x_calculated).abs().max().item() < self.delta
+        if transform.bijective:
+            assert (x_true - x_calculated).abs().max().item() < self.delta
+        else:
+            # Check the weaker pseudoinverse equation.
+            y2 = transform._call(x_calculated)
+            assert (y - y2).abs().max().item() < self.delta
 
-        # Test that Jacobian after inverse op is same as after forward
-        assert (J_1 - J_2).abs().max().item() < self.delta
+        if transform.bijective:
+            # Test that Jacobian after inverse op is same as after forward
+            J_1 = transform.log_abs_det_jacobian(x_true, y)
+            J_2 = transform.log_abs_det_jacobian(x_calculated, y)
+            assert (J_1 - J_2).abs().max().item() < self.delta
 
     def _test_shape(self, base_shape, transform):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
@@ -149,7 +156,7 @@ class TransformTests(TestCase):
                 for shape in [(3,), (3, 4), (3, 4, 5)]:
                     base_shape = shape + event_shape
                     self._test_shape(base_shape, transform)
-            if jacobian:
+            if jacobian and transform.bijective:
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
                 self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
@@ -317,3 +324,45 @@ class TransformTests(TestCase):
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
+
+    def test_normalize_transform(self):
+        for p in [1., 2.]:
+            self._test(lambda p: T.Normalize(p=p), autodiff=False)
+
+
+@pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
+@pytest.mark.parametrize('dim', [2, 3, 5])
+@pytest.mark.parametrize('transform', [T.CholeskyTransform(), T.CorrMatrixCholeskyTransform()])
+def test_cholesky_transform(batch_shape, dim, transform):
+    arange = torch.arange(dim)
+    domain = transform.domain
+    z = torch.randn(batch_shape + (dim * (dim - 1) // 2,))
+    if domain is dist.constraints.corr_matrix:
+        tril_mask = arange < arange.view(-1, 1)
+    else:
+        tril_mask = arange < arange.view(-1, 1) + 1
+    x = transform.inv(T.CorrLCholeskyTransform()(z))  # creates corr_matrix
+
+    def vec_to_mat(x_vec):
+        x_mat = x_vec.new_zeros(batch_shape + (dim, dim))
+        x_mat[..., tril_mask] = x_vec
+        x_mat = x_mat + x_mat.transpose(-2, -1) - x_mat.diagonal(dim1=-2, dim2=-1).diag_embed()
+        if domain == dist.constraints.corr_matrix:
+            x_mat = x_mat + x_mat.new_ones(x_mat.shape[-1]).diag_embed()
+        return x_mat
+
+    def transform_to_vec(x_vec):
+        x_mat = vec_to_mat(x_vec)
+        return transform(x_mat)[..., tril_mask]
+
+    x_vec = x[..., tril_mask].clone().requires_grad_()
+    x_mat = vec_to_mat(x_vec)
+    y = transform(x_mat)
+    log_det = transform.log_abs_det_jacobian(x_mat, y)
+    if batch_shape == ():
+        jacobian = torch.autograd.functional.jacobian(transform_to_vec, x_vec)
+        assert_close(log_det, torch.slogdet(jacobian)[1])
+
+    assert log_det.shape == batch_shape
+    assert_close(y, x_mat.cholesky())
+    assert_close(transform.inv(y), x_mat)
