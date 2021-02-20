@@ -7,7 +7,6 @@ import warnings
 import torch
 
 import pyro.poutine as poutine
-
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend

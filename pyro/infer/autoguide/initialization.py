@@ -20,7 +20,6 @@ from pyro.infer.util import is_validation_enabled
 from pyro.poutine.messenger import Messenger
 from pyro.util import torch_isnan
 
-
 # TODO: move this file out of `autoguide` in a minor release
 
 def _is_multivariate(d):

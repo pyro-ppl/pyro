@@ -6,6 +6,7 @@ from abc import ABCMeta, abstractmethod
 import torch
 from torch import nn
 from torch.nn import Parameter
+
 import pyro.distributions as dist
 from pyro.distributions.util import eye_like
 

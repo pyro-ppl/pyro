@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-import pandas as pd
-import pyro
-import torch
+
 import baseline
 import cvae
-from util import get_data, visualize, generate_table
+import pandas as pd
+import torch
+from util import generate_table, get_data, visualize
+
+import pyro
 
 
 def main(args):

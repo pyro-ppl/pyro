@@ -9,17 +9,16 @@ Taken from:
 [1] https://gscontras.github.io/probLang/chapters/07-generics.html
 """
 
-import torch
-
 import argparse
-import numbers
 import collections
+import numbers
+
+import torch
+from search_inference import HashingMarginal, Search, memoize
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-
-from search_inference import HashingMarginal, memoize, Search
 
 torch.set_default_dtype(torch.float64)  # double precision for numerical stability
 

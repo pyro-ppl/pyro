@@ -3,7 +3,6 @@
 
 import pytest
 import torch
-
 from torch.distributions import constraints
 
 from pyro.ops.indexing import Vindex
@@ -12,10 +11,11 @@ from pyro.ops.indexing import Vindex
 try:
     import funsor
     from funsor.testing import assert_close
-    import pyro.contrib.funsor
     from pyroapi import distributions as dist
+
+    import pyro.contrib.funsor
     funsor.set_backend("torch")
-    from pyroapi import handlers, pyro, pyro_backend, infer
+    from pyroapi import handlers, infer, pyro, pyro_backend
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 

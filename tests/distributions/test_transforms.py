@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import operator
+from functools import partial, reduce
 from unittest import TestCase
 
 import pytest
@@ -8,9 +10,6 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
-
-from functools import partial, reduce
-import operator
 
 pytestmark = pytest.mark.init(rng_seed=123)
 

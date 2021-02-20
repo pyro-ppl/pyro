@@ -14,6 +14,13 @@ Reference:
 MuE models were described in Weinstein and Marks (2020),
 https://www.biorxiv.org/content/10.1101/2020.07.31.231381v1.
 
+Example MuE Models
+------------------
+.. automodule:: pyro.contrib.mue.models
+    :members:
+    :show-inheritance:
+    :member-order: bysource
+
 State Arrangers for Parameterizing MuEs
 ---------------------------------------
 .. automodule:: pyro.contrib.mue.statearrangers
@@ -23,7 +30,7 @@ State Arrangers for Parameterizing MuEs
 
 Variable Length/Missing Data HMM
 --------------------------------
-.. automodule:: pyro.contrib.mue.variablelengthhmm
+.. automodule:: pyro.contrib.mue.missingdatahmm
     :members:
     :show-inheritance:
     :member-order: bysource

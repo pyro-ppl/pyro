@@ -5,7 +5,6 @@ import pytest
 import torch
 
 from pyro.ops.arrowhead import SymmArrowhead, sqrt, triu_gram, triu_inverse, triu_matvecmul
-
 from tests.common import assert_close
 
 

@@ -11,7 +11,6 @@ from torch.autograd import grad
 from pyro.ops.newton import newton_step
 from tests.common import assert_equal
 
-
 logger = logging.getLogger(__name__)
 
 

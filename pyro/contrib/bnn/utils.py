@@ -1,8 +1,9 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
 import math
+
+import torch
 
 
 def xavier_uniform(D_in, D_out):
