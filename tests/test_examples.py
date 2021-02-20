@@ -53,6 +53,8 @@ CPU_EXAMPLES = [
     'contrib/forecast/bart.py --num-steps=2 --stride=99999',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',
     'contrib/gp/sv-dkl.py --binary --epochs=1 --num-inducing=4 --batch-size=1000',
+    'contrib/mue/FactorMuE.py --test --small',
+    'contrib/mue/FactorMuE.py --test --small -ard True -idfac True -sub False',
     'contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
     'contrib/timeseries/gp_models.py -m imgp --test --num-steps=2',
     'contrib/timeseries/gp_models.py -m lcmgp --test --num-steps=2',
