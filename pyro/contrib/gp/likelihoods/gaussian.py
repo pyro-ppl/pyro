@@ -6,6 +6,7 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
+
 from pyro.contrib.gp.likelihoods.likelihood import Likelihood
 from pyro.nn.module import PyroParam
 

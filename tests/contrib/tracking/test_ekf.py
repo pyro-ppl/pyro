@@ -3,9 +3,10 @@
 
 import torch
 
-from pyro.contrib.tracking.dynamic_models import NcpContinuous, NcvContinuous
 from pyro.contrib.tracking.extended_kalman_filter import EKFState
+from pyro.contrib.tracking.dynamic_models import NcpContinuous, NcvContinuous
 from pyro.contrib.tracking.measurements import PositionMeasurement
+
 from tests.common import assert_equal, assert_not_equal
 
 

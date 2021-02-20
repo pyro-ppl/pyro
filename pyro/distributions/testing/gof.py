@@ -55,8 +55,8 @@ This module is a port of the
 `goftests <https://github.com/posterior/goftests>`_ library.
 """
 
-import math
 import warnings
+import math
 
 import torch
 

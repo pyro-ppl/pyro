@@ -1,11 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import torch
 
-from pyro.contrib.timeseries import GenericLGSSM, GenericLGSSMWithGPNoiseModel
 from tests.common import assert_equal
+from pyro.contrib.timeseries import GenericLGSSM, GenericLGSSMWithGPNoiseModel
+import pytest
 
 
 @pytest.mark.parametrize('model_class', ['lgssm', 'lgssmgp'])

@@ -8,8 +8,10 @@ from torch.distributions.transforms import AffineTransform, SigmoidTransform
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.oed.glmm import (group_linear_model, known_covariance_linear_model, logistic_regression_model,
-                                   normal_inverse_gamma_linear_model, sigmoid_model, zero_mean_unit_obs_sd_lm)
+from pyro.contrib.oed.glmm import (
+    known_covariance_linear_model, group_linear_model, zero_mean_unit_obs_sd_lm,
+    normal_inverse_gamma_linear_model, logistic_regression_model, sigmoid_model
+)
 from tests.common import assert_equal
 
 

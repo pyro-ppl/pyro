@@ -14,8 +14,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
 from pyro.distributions.util import broadcast_shape, sum_rightmost
-from pyro.infer.autoguide.guides import prototype_hide_fn
 from pyro.infer.autoguide.initialization import InitMessenger
+from pyro.infer.autoguide.guides import prototype_hide_fn
 from pyro.nn.module import PyroModule, PyroParam
 
 

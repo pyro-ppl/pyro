@@ -1,10 +1,10 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections import defaultdict
 import contextlib
 import logging
 import os
-from collections import defaultdict
 from queue import LifoQueue
 
 import pytest
@@ -19,12 +19,11 @@ from pyro.util import check_traceenum_requirements
 # put all funsor-related imports here, so test collection works without funsor
 try:
     import funsor
-
     import pyro.contrib.funsor
     from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
     funsor.set_backend("torch")
     from pyroapi import distributions as dist
-    from pyroapi import handlers, infer, pyro, pyro_backend
+    from pyroapi import infer, handlers, pyro, pyro_backend
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 

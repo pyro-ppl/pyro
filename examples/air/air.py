@@ -14,10 +14,10 @@ from collections import namedtuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from modules import MLP, Decoder, Encoder, Identity, Predict
 
 import pyro
 import pyro.distributions as dist
+from modules import MLP, Decoder, Encoder, Identity, Predict
 
 
 # Default prior success probability for z_pres.

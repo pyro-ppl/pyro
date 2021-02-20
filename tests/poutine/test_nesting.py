@@ -4,9 +4,10 @@
 import logging
 
 import pyro
-import pyro.distributions as dist
 import pyro.poutine as poutine
+import pyro.distributions as dist
 import pyro.poutine.runtime
+
 
 logger = logging.getLogger(__name__)
 

@@ -6,12 +6,12 @@ import io
 import logging
 import pickle
 import warnings
-from queue import Queue
 from unittest import TestCase
 
 import pytest
 import torch
 import torch.nn as nn
+from queue import Queue
 
 import pyro
 import pyro.distributions as dist
@@ -19,7 +19,7 @@ import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
 from pyro.poutine.util import all_escape, discrete_escape
-from tests.common import assert_close, assert_equal, assert_not_equal
+from tests.common import assert_equal, assert_not_equal, assert_close
 
 logger = logging.getLogger(__name__)
 

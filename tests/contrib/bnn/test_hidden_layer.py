@@ -1,11 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import torch
 import torch.nn.functional as F
 from torch.distributions import Normal
 
+import pytest
 from pyro.contrib.bnn import HiddenLayer
 from tests.common import assert_equal
 

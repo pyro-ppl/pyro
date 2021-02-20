@@ -67,7 +67,7 @@ Statistical Science (1995): 273-304.
 
 """
 
-from pyro.contrib.oed import eig, search
+from pyro.contrib.oed import search, eig
 
 __all__ = [
     "search",

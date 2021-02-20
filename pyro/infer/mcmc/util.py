@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
-import traceback as tb
 import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial, reduce
 from itertools import product
+import traceback as tb
 
 import torch
-from opt_einsum import shared_intermediates
 from torch.distributions import biject_to
+from opt_einsum import shared_intermediates
 
 import pyro
 import pyro.poutine as poutine

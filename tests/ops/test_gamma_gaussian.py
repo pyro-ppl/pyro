@@ -9,8 +9,12 @@ from torch.nn.functional import pad
 
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
-                                     matrix_and_mvn_to_gamma_gaussian)
+from pyro.ops.gamma_gaussian import (
+    GammaGaussian,
+    gamma_gaussian_tensordot,
+    matrix_and_mvn_to_gamma_gaussian,
+    gamma_and_mvn_to_gamma_gaussian,
+)
 from tests.common import assert_close
 from tests.ops.gamma_gaussian import assert_close_gamma_gaussian, random_gamma, random_gamma_gaussian
 from tests.ops.gaussian import random_mvn

@@ -12,13 +12,12 @@ by recursively reasoning about one another.
 Taken from: http://forestdb.org/models/schelling-falsebelief.html
 """
 import argparse
-
 import torch
-from search_inference import HashingMarginal, Search
 
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli
+from search_inference import HashingMarginal, Search
 
 
 def location(preference):

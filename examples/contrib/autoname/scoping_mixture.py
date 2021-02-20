@@ -2,15 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-
 import torch
 from torch.distributions import constraints
 
 import pyro
-import pyro.distributions as dist
 import pyro.optim
+import pyro.distributions as dist
+
+from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
+
 from pyro.contrib.autoname import scope
-from pyro.infer import SVI, TraceEnum_ELBO, config_enumerate
 
 
 def model(K, data):

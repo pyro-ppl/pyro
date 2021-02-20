@@ -5,10 +5,9 @@ import logging
 import os
 from collections import Counter
 
+import pyro
 import pytest
 import torch
-
-import pyro
 from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, find_best_tree, make_complete_graph,
                                               sample_tree)
 from tests.common import assert_equal, xfail_if_not_implemented

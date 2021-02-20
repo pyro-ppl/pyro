@@ -4,7 +4,6 @@
 import math
 
 import torch.tensor as tt
-
 from pyro.distributions import Uniform
 
 N_SAMPLES = 100

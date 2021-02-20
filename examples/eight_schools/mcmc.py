@@ -4,9 +4,9 @@
 import argparse
 import logging
 
-import data
 import torch
 
+import data
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine

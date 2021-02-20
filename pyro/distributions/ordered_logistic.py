@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-
 from pyro.distributions import constraints
 from pyro.distributions.torch import Categorical
 

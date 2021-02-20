@@ -10,12 +10,12 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.infer.autoguide import AutoDelta
+from pyro.contrib.conjugate.infer import BetaBinomialPair, collapse_conjugate, GammaPoissonPair, posterior_replay
+from pyro.infer import TraceEnum_ELBO, SVI
+from pyro.infer.mcmc import ArrowheadMassMatrix, MCMC, NUTS
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.contrib.conjugate.infer import BetaBinomialPair, GammaPoissonPair, collapse_conjugate, posterior_replay
-from pyro.infer import SVI, TraceEnum_ELBO
-from pyro.infer.autoguide import AutoDelta
-from pyro.infer.mcmc import MCMC, NUTS, ArrowheadMassMatrix
 from pyro.util import ignore_jit_warnings
 from tests.common import assert_close, assert_equal
 

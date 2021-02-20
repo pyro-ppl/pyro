@@ -11,7 +11,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.mcmc import HMC, NUTS
-from pyro.infer.mcmc.api import MCMC, _MultiSampler, _UnarySampler
+from pyro.infer.mcmc.api import MCMC, _UnarySampler, _MultiSampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
 from pyro.util import optional

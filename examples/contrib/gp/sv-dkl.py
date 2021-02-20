@@ -39,7 +39,7 @@ from torchvision import transforms
 import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
-from pyro.contrib.examples.util import get_data_directory, get_data_loader
+from pyro.contrib.examples.util import get_data_loader, get_data_directory
 
 
 class CNN(nn.Module):

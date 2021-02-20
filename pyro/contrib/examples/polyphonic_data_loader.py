@@ -17,15 +17,16 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 """
 
 import os
-import pickle
 from collections import namedtuple
 from urllib.request import urlopen
+import pickle
 
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 
 from pyro.contrib.examples.util import get_data_directory
+
 
 dset = namedtuple("dset", ["name", "url", "filename"])
 

@@ -1,18 +1,17 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
 import math
 import warnings
 
-import torch
-
 import pyro
 from pyro import poutine
-from pyro.contrib.oed.search import Search
-from pyro.contrib.util import lexpand
-from pyro.infer import SVI, EmpiricalMarginal, Importance
 from pyro.infer.autoguide.utils import mean_field_entropy
-from pyro.util import torch_isinf, torch_isnan
+from pyro.contrib.oed.search import Search
+from pyro.infer import EmpiricalMarginal, Importance, SVI
+from pyro.util import torch_isnan, torch_isinf
+from pyro.contrib.util import lexpand
 
 __all__ = [
     "laplace_eig",

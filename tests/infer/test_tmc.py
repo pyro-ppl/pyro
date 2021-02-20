@@ -15,9 +15,10 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import config_enumerate
 from pyro.infer.importance import vectorized_importance_weights
-from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
+from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from tests.common import assert_equal
+
 
 logger = logging.getLogger(__name__)
 

@@ -4,11 +4,13 @@
 import logging
 import math
 
-import pytest
 import torch
 
-from pyro.distributions import GaussianScaleMixture, MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance
+import pytest
+from pyro.distributions import MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture
+from pyro.distributions import MixtureOfDiagNormals
 from tests.common import assert_equal
+
 
 logger = logging.getLogger(__name__)
 

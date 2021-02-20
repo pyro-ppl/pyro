@@ -8,10 +8,11 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoLaplaceApproximation
+from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
 from tests.common import assert_equal
+
 
 pytestmark = pytest.mark.filterwarnings("ignore::PendingDeprecationWarning")
 

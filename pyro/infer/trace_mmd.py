@@ -9,8 +9,8 @@ import pyro
 import pyro.ops.jit
 from pyro import poutine
 from pyro.infer.elbo import ELBO
+from pyro.infer.util import torch_item, is_validation_enabled
 from pyro.infer.enum import get_importance_trace
-from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
 

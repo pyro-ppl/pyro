@@ -39,9 +39,10 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer import SVI, TraceEnum_ELBO, TraceTMC_ELBO
 from pyro.optim import Adam
+
 
 """
 Our first and simplest CJS model variant only has two continuous

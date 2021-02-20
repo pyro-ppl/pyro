@@ -3,17 +3,17 @@
 
 import warnings
 from collections import OrderedDict
-from contextlib import ExitStack
 from functools import partial
+from contextlib import ExitStack
 
 import torch
+from torch.nn.functional import softplus
 from torch.distributions import constraints
 from torch.distributions.transforms import AffineTransform, SigmoidTransform
-from torch.nn.functional import softplus
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.util import iter_plates_to_shape, rmv
+from pyro.contrib.util import rmv, iter_plates_to_shape
 
 # TODO read from torch float spec
 epsilon = torch.tensor(2**-24)
