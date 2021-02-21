@@ -296,7 +296,7 @@ class FactorMuE(nn.Module):
 
         return out
 
-    def model(self, seq_data, L_data, local_scale):
+    def model(self, seq_data, L_data, local_scale, local_prior_scale):
 
         # ARD prior.
         if self.ARD_prior:
@@ -345,15 +345,16 @@ class FactorMuE(nn.Module):
 
         with pyro.plate("batch", L_data.shape[0]):
             with poutine.scale(scale=local_scale):
-                # Sample latent variable from prior.
-                if self.z_prior_distribution == 'Normal':
-                    z = pyro.sample("latent", dist.Normal(
+                with poutine.scale(scale=local_prior_scale):
+                    # Sample latent variable from prior.
+                    if self.z_prior_distribution == 'Normal':
+                        z = pyro.sample("latent", dist.Normal(
+                                torch.zeros(self.z_dim), torch.ones(self.z_dim)
+                                ).to_event(1))
+                    elif self.z_prior_distribution == 'Laplace':
+                        z = pyro.sample("latent", dist.Laplace(
                             torch.zeros(self.z_dim), torch.ones(self.z_dim)
                             ).to_event(1))
-                elif self.z_prior_distribution == 'Laplace':
-                    z = pyro.sample("latent", dist.Laplace(
-                        torch.zeros(self.z_dim), torch.ones(self.z_dim)
-                        ).to_event(1))
 
                 # Decode latent sequence.
                 decoded = self.decoder(z, W, B, inverse_temp)
@@ -383,7 +384,7 @@ class FactorMuE(nn.Module):
                                                    observation_logits),
                             obs=seq_data)
 
-    def guide(self, seq_data, L_data, local_scale):
+    def guide(self, seq_data, L_data, local_scale, local_prior_scale):
         # Register encoder with pyro.
         pyro.module("encoder", self.encoder)
 
@@ -440,7 +441,7 @@ class FactorMuE(nn.Module):
             # Encode sequences.
             z_loc, z_scale = self.encoder(seq_data)
             # Scale log likelihood to account for mini-batching.
-            with poutine.scale(scale=local_scale):
+            with poutine.scale(scale=local_scale*local_prior_scale):
                 # Sample.
                 if self.z_prior_distribution == 'Normal':
                     pyro.sample("latent",
@@ -449,8 +450,8 @@ class FactorMuE(nn.Module):
                     pyro.sample("latent",
                                 dist.Laplace(z_loc, z_scale).to_event(1))
 
-    def fit_svi(self, dataset, epochs=1, batch_size=None, scheduler=None,
-                jit=False):
+    def fit_svi(self, dataset, epochs=2, anneal_length=1, batch_size=None,
+                scheduler=None, jit=False):
         """Infer model parameters with stochastic variational inference."""
 
         # Setup.
@@ -464,8 +465,9 @@ class FactorMuE(nn.Module):
         dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         # Initialize guide.
         for seq_data, L_data in dataload:
-            self.guide(seq_data, L_data, torch.tensor(1.))
+            self.guide(seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
             break
+        # Setup stochastic variational inference.
         if jit:
             Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
         else:
@@ -474,15 +476,25 @@ class FactorMuE(nn.Module):
 
         # Run inference.
         losses = []
+        step_i = 1
         t0 = datetime.datetime.now()
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
                 loss = svi.step(seq_data, L_data,
-                                torch.tensor(dataset.data_size/L_data.shape[0]))
+                                torch.tensor(dataset.data_size/L_data.shape[0]),
+                                self._beta_anneal(step_i, batch_size,
+                                                  dataset.data_size,
+                                                  anneal_length))
                 losses.append(loss)
                 scheduler.step()
+                step_i += 1
             print(epoch, loss, ' ', datetime.datetime.now() - t0)
         return losses
+
+    def _beta_anneal(self, step, batch_size, data_size, anneal_length):
+        """Annealing schedule for prior KL term (beta annealing)."""
+        anneal_frac = step*batch_size/(anneal_length*data_size)
+        return torch.tensor(min([anneal_frac, 1.]))
 
     def reconstruct_precursor_seq(self, data, ind, param):
         # Encode seq.

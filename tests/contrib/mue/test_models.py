@@ -3,6 +3,7 @@
 
 import numpy as np
 import pytest
+import torch
 from torch.optim import Adam
 
 import pyro
@@ -59,11 +60,16 @@ def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
                       substitution_matrix=substitution_matrix,
                       length_model=length_model)
     n_epochs = 5
-    batch_size = 3
-    losses = model.fit_svi(dataset, n_epochs, batch_size, scheduler, jit)
+    anneal_length = 2
+    batch_size = 2
+    losses = model.fit_svi(dataset, n_epochs, anneal_length, batch_size,
+                           scheduler, jit)
 
     # Reconstruct.
     recon = model.reconstruct_precursor_seq(dataset, 1, pyro.param)
 
     assert not np.isnan(losses[-1])
     assert recon.shape == (1, max([len(seq) for seq in seqs]), len(alph))
+
+    assert torch.allclose(model._beta_anneal(3, 2, 6, 2), torch.tensor(0.5))
+    assert torch.allclose(model._beta_anneal(100, 2, 6, 2), torch.tensor(1.))
