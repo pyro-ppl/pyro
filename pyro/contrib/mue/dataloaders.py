@@ -16,7 +16,8 @@ alphabets = {'amino-acid': np.array(
 class BiosequenceDataset(Dataset):
     """Load biological sequence data."""
 
-    def __init__(self, source, source_type='list', alphabet='amino-acid'):
+    def __init__(self, source, source_type='list', alphabet='amino-acid',
+                 max_length=None):
 
         super().__init__()
 
@@ -28,7 +29,10 @@ class BiosequenceDataset(Dataset):
 
         # Get lengths.
         self.L_data = torch.tensor([float(len(seq)) for seq in seqs])
-        self.max_length = int(torch.max(self.L_data))
+        if max_length is None:
+            self.max_length = int(torch.max(self.L_data))
+        else:
+            self.max_length = max_length
         self.data_size = len(self.L_data)
 
         # Get alphabet.

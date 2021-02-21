@@ -169,33 +169,32 @@ class ProfileHMM(nn.Module):
 
     def evaluate(self, dataset_train, dataset_test, jit=False):
         """Evaluate performance on train and test datasets."""
+        dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
+        dataload_test = DataLoader(dataset_test, batch_size=1, shuffle=False)
         self.guide(None, None, None)
         if jit:
             Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
         else:
             Elbo = Trace_ELBO()
-        scheduler = MultiStepLR({'optimizer': Adam,
-                                 'optim_args': {'lr': 0.01},
-                                 'milestones': [],
-                                 'gamma': 0.5})
+        scheduler = MultiStepLR({'optimizer': Adam, 'optim_args': {'lr': 0.01}})
         svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
-        dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
-        dataload_test = DataLoader(dataset_test, batch_size=1, shuffle=False)
-        train_lp, train_perplex = 0., 0.
-        for seq_data, L_data in dataload_train:
-            lp = svi.evaluate_loss(
-                seq_data, L_data, torch.tensor(dataset_train.data_size))
-            train_lp += -lp
-            train_perplex += lp / (L_data[0] + int(self.length_model))
-        train_perplex = np.exp(train_perplex)
-        test_lp, test_perplex = 0., 0.
-        for seq_data, L_data in dataload_test:
-            lp = svi.evaluate_loss(
-                seq_data, L_data, torch.tensor(dataset_test.data_size))
-            test_lp += -lp
-            test_perplex += lp / (L_data[0].numpy() + int(self.length_model))
-        test_perplex = np.exp(test_perplex)
+        # Compute elbo and perplexity.
+        train_lp, train_perplex = self._evaluate_elbo(
+                svi, dataload_train, dataset_train.data_size, self.length_model)
+        test_lp, test_perplex = self._evaluate_elbo(
+                svi, dataload_test, dataset_test.data_size, self.length_model)
         return train_lp, test_lp, train_perplex, test_perplex
+
+    def _evaluate_elbo(self, svi, dataload, data_size, length_model):
+        """Evaluate elbo and average per residue perplexity."""
+        lp, perplex = 0., 0.
+        for seq_data, L_data in dataload:
+            lp_i = svi.evaluate_loss(
+                seq_data, L_data, torch.tensor(data_size)) / data_size
+            lp += -lp_i
+            perplex += lp_i / (L_data[0].numpy() + int(self.length_model))
+        perplex = np.exp(perplex / data_size)
+        return lp, perplex
 
 
 class Encoder(nn.Module):
@@ -525,6 +524,40 @@ class FactorMuE(nn.Module):
         """Annealing schedule for prior KL term (beta annealing)."""
         anneal_frac = step*batch_size/(anneal_length*data_size)
         return torch.tensor(min([anneal_frac, 1.]))
+
+    def evaluate(self, dataset_train, dataset_test, jit=False):
+        """Evaluate performance on train and test datasets."""
+        dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
+        dataload_test = DataLoader(dataset_test, batch_size=1, shuffle=False)
+        # Initialize guide.
+        for seq_data, L_data in dataload_train:
+            self.guide(seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
+            break
+        if jit:
+            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+        else:
+            Elbo = Trace_ELBO()
+        scheduler = MultiStepLR({'optimizer': Adam, 'optim_args': {'lr': 0.01}})
+        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
+
+        # Compute elbo and perplexity.
+        train_lp, train_perplex = self._evaluate_elbo(
+                svi, dataload_train, dataset_train.data_size, self.length_model)
+        test_lp, test_perplex = self._evaluate_elbo(
+                svi, dataload_test, dataset_test.data_size, self.length_model)
+        return train_lp, test_lp, train_perplex, test_perplex
+
+    def _evaluate_elbo(self, svi, dataload, data_size, length_model):
+        """Evaluate elbo and average per residue perplexity."""
+        lp, perplex = 0., 0.
+        for seq_data, L_data in dataload:
+            lp_i = svi.evaluate_loss(
+                seq_data, L_data, torch.tensor(data_size),
+                torch.tensor(1.)) / data_size
+            lp += -lp_i
+            perplex += lp_i / (L_data[0].numpy() + int(self.length_model))
+        perplex = np.exp(perplex / data_size)
+        return lp, perplex
 
     def reconstruct_precursor_seq(self, data, ind, param):
         # Encode seq.
