@@ -12,13 +12,17 @@ import torch
 import torch.nn as nn
 from torch.nn.functional import softplus
 from torch.optim import Adam
+from torch.utils.data import DataLoader
 
 import pyro
+from pyro import poutine
 import pyro.distributions as dist
 from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
 from pyro.contrib.mue.statearrangers import Profile
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import MultiStepLR
+
+import pdb
 
 
 class ProfileHMM(nn.Module):
@@ -46,7 +50,7 @@ class ProfileHMM(nn.Module):
         # Initialize state arranger.
         self.statearrange = Profile(latent_seq_length)
 
-    def model(self, data=None):
+    def model(self, seq_data, L_data, local_scale, local_length=1):
 
         # Latent sequence.
         precursor_seq = pyro.sample("precursor_seq", dist.Normal(
@@ -81,21 +85,19 @@ class ProfileHMM(nn.Module):
                     torch.tensor(200.), torch.tensor(1000.)))
             L_mean = softplus(length)
 
-        # Draw samples.
-        with pyro.plate("batch", len(data),
-                        subsample_size=self.batch_size) as ind:
+        with pyro.plate("batch", local_length):
+            with poutine.scale(scale=local_scale):
 
-            seq_data_ind, L_data_ind = data[ind]
-            if self.length_model:
-                pyro.sample("obs_L", dist.Poisson(L_mean),
-                            obs=L_data_ind)
-            pyro.sample("obs_seq",
-                        MissingDataDiscreteHMM(initial_logits,
-                                               transition_logits,
-                                               observation_logits),
-                        obs=seq_data_ind)
+                if self.length_model:
+                    pyro.sample("obs_L", dist.Poisson(L_mean),
+                                obs=L_data)
+                pyro.sample("obs_seq",
+                            MissingDataDiscreteHMM(initial_logits,
+                                                   transition_logits,
+                                                   observation_logits),
+                            obs=seq_data)
 
-    def guide(self, data=None):
+    def guide(self, seq_data, L_data, local_scale, local_length=1):
         # Sequence.
         precursor_seq_q_mn = pyro.param("precursor_seq_q_mn",
                                         torch.zeros(self.precursor_seq_shape))
@@ -133,7 +135,7 @@ class ProfileHMM(nn.Module):
             pyro.sample("length", dist.Normal(
                     length_q_mn, softplus(length_q_sd)))
 
-    def fit_svi(self, dataset, epochs=1, batch_size=None, scheduler=None):
+    def fit_svi(self, dataset, epochs=1, batch_size=1, scheduler=None):
         """Infer model parameters with stochastic variational inference."""
 
         # Setup.
@@ -144,20 +146,20 @@ class ProfileHMM(nn.Module):
                                      'optim_args': {'lr': 0.01},
                                      'milestones': [],
                                      'gamma': 0.5})
-        n_steps = int(np.ceil(torch.tensor(len(dataset)/self.batch_size))
-                      )*epochs
-        svi = SVI(self.model, self.guide, scheduler, loss=Trace_ELBO())
+        svi = SVI(self.model, self.guide, scheduler, loss=JitTrace_ELBO())
+        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         # Run inference.
         losses = []
         t0 = datetime.datetime.now()
-        for step in range(n_steps):
-            loss = svi.step(dataset)
-            losses.append(loss)
-            scheduler.step()
-            if (step + 1) % (n_steps/epochs) == 0:
-                print(int(epochs*(step+1)/n_steps), loss, ' ',
-                      datetime.datetime.now() - t0)
+        for epoch in range(epochs):
+            for seq_data, L_data in dataload:
+                loss = svi.step(seq_data, L_data,
+                                torch.tensor(dataset.data_size/L_data.shape[0]),
+                                local_length=L_data.shape[0])
+                losses.append(loss)
+                scheduler.step()
+            print(epoch, loss, ' ', datetime.datetime.now() - t0)
         return losses
 
 
