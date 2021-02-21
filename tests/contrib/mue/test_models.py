@@ -33,6 +33,13 @@ def test_ProfileHMM_smoke(length_model, jit):
 
     assert not np.isnan(losses[-1])
 
+    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(
+        dataset, dataset, jit)
+    assert train_lp < 0.
+    assert test_lp < 0.
+    assert train_perplex > 0.
+    assert test_perplex > 0.
+
 
 @pytest.mark.parametrize('indel_factor_dependence', [False, True])
 @pytest.mark.parametrize('z_prior_distribution', ['Normal', 'Laplace'])

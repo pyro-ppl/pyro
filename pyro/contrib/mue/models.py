@@ -167,6 +167,36 @@ class ProfileHMM(nn.Module):
             print(epoch, loss, ' ', datetime.datetime.now() - t0)
         return losses
 
+    def evaluate(self, dataset_train, dataset_test, jit=False):
+        """Evaluate performance on train and test datasets."""
+        self.guide(None, None, None)
+        if jit:
+            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+        else:
+            Elbo = Trace_ELBO()
+        scheduler = MultiStepLR({'optimizer': Adam,
+                                 'optim_args': {'lr': 0.01},
+                                 'milestones': [],
+                                 'gamma': 0.5})
+        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
+        dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
+        dataload_test = DataLoader(dataset_test, batch_size=1, shuffle=False)
+        train_lp, train_perplex = 0., 0.
+        for seq_data, L_data in dataload_train:
+            lp = svi.evaluate_loss(
+                seq_data, L_data, torch.tensor(dataset_train.data_size))
+            train_lp += -lp
+            train_perplex += lp / (L_data[0] + int(self.length_model))
+        train_perplex = np.exp(train_perplex)
+        test_lp, test_perplex = 0., 0.
+        for seq_data, L_data in dataload_test:
+            lp = svi.evaluate_loss(
+                seq_data, L_data, torch.tensor(dataset_test.data_size))
+            test_lp += -lp
+            test_perplex += lp / (L_data[0].numpy() + int(self.length_model))
+        test_perplex = np.exp(test_perplex)
+        return train_lp, test_lp, train_perplex, test_perplex
+
 
 class Encoder(nn.Module):
     def __init__(self, data_length, alphabet_length, z_dim):
@@ -480,11 +510,11 @@ class FactorMuE(nn.Module):
         t0 = datetime.datetime.now()
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
-                loss = svi.step(seq_data, L_data,
-                                torch.tensor(dataset.data_size/L_data.shape[0]),
-                                self._beta_anneal(step_i, batch_size,
-                                                  dataset.data_size,
-                                                  anneal_length))
+                loss = svi.step(
+                    seq_data, L_data,
+                    torch.tensor(dataset.data_size/L_data.shape[0]),
+                    self._beta_anneal(step_i, batch_size, dataset.data_size,
+                                      anneal_length))
                 losses.append(loss)
                 scheduler.step()
                 step_i += 1
