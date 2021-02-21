@@ -147,6 +147,7 @@ class ProfileHMM(nn.Module):
                                      'optim_args': {'lr': 0.01},
                                      'milestones': [],
                                      'gamma': 0.5})
+        self.guide(None, None, None)
         if jit:
             Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
         else:
@@ -266,13 +267,14 @@ class FactorMuE(nn.Module):
         out = dict()
         if self.length_model:
             # Extract expected length.
-            v, L_v = v.split([self.total_factor_size-1, 1], dim=1)
-            out['L_mean'] = softplus(L_v).squeeze(1)
+            L_v = v[:, -1]
+            out['L_mean'] = softplus(L_v)
         if self.indel_factor_dependence:
             # Extract insertion and deletion parameters.
-            v, insert_v, delete_v = v.split([
-                (2*self.latent_seq_length+1)*self.latent_alphabet_length,
-                self.latent_seq_length*3*2, self.latent_seq_length*3*2], dim=1)
+            ind0 = (2*self.latent_seq_length+1)*self.latent_alphabet_length
+            ind1 = ind0 + self.latent_seq_length*3*2
+            ind2 = ind1 + self.latent_seq_length*3*2
+            insert_v, delete_v = v[:, ind0:ind1], v[:, ind1:ind2]
             insert_v = (insert_v.reshape([-1, self.latent_seq_length, 3, 2])
                         + self.indel_prior)
             out['insert_logits'] = insert_v - insert_v.logsumexp(-1, True)
@@ -280,14 +282,14 @@ class FactorMuE(nn.Module):
                         + self.indel_prior)
             out['delete_logits'] = delete_v - delete_v.logsumexp(-1, True)
         # Extract precursor and insertion sequences.
-        precursor_seq_v, insert_seq_v = (v*softplus(inverse_temp)).split([
-                self.latent_seq_length*self.latent_alphabet_length,
-                (self.latent_seq_length+1)*self.latent_alphabet_length], dim=1)
-        precursor_seq_v = precursor_seq_v.reshape([
+        ind0 = self.latent_seq_length*self.latent_alphabet_length
+        ind1 = ind0 + (self.latent_seq_length+1)*self.latent_alphabet_length
+        precursor_seq_v, insert_seq_v = v[:, :ind0], v[:, ind0:ind1]
+        precursor_seq_v = (precursor_seq_v*softplus(inverse_temp)).reshape([
                 -1, self.latent_seq_length, self.latent_alphabet_length])
         out['precursor_seq_logits'] = (
                 precursor_seq_v - precursor_seq_v.logsumexp(-1, True))
-        insert_seq_v = insert_seq_v.reshape([
+        insert_seq_v = (insert_seq_v*softplus(inverse_temp)).reshape([
                 -1, self.latent_seq_length+1, self.latent_alphabet_length])
         out['insert_seq_logits'] = (
                 insert_seq_v - insert_seq_v.logsumexp(-1, True))
@@ -346,8 +348,8 @@ class FactorMuE(nn.Module):
                 # Sample latent variable from prior.
                 if self.z_prior_distribution == 'Normal':
                     z = pyro.sample("latent", dist.Normal(
-                        torch.zeros(self.z_dim), torch.ones(self.z_dim)
-                        ).to_event(1))
+                            torch.zeros(self.z_dim), torch.ones(self.z_dim)
+                            ).to_event(1))
                 elif self.z_prior_distribution == 'Laplace':
                     z = pyro.sample("latent", dist.Laplace(
                         torch.zeros(self.z_dim), torch.ones(self.z_dim)
@@ -394,11 +396,11 @@ class FactorMuE(nn.Module):
         # Factors.
         W_q_mn = pyro.param("W_q_mn", torch.randn([
                     self.z_dim, self.total_factor_size]))
-        W_q_sd = pyro.param("W_q_sd", torch.randn([
+        W_q_sd = pyro.param("W_q_sd", torch.ones([
                     self.z_dim, self.total_factor_size]))
         pyro.sample("W", dist.Normal(W_q_mn, softplus(W_q_sd)).to_event(2))
         B_q_mn = pyro.param("B_q_mn", torch.randn(self.total_factor_size))
-        B_q_sd = pyro.param("B_q_sd", torch.randn(self.total_factor_size))
+        B_q_sd = pyro.param("B_q_sd", torch.ones(self.total_factor_size))
         pyro.sample("B", dist.Normal(B_q_mn, softplus(B_q_sd)).to_event(1))
 
         # Indel probabilities.
@@ -433,11 +435,11 @@ class FactorMuE(nn.Module):
             pyro.sample("substitute", dist.Normal(
                     substitute_q_mn, softplus(substitute_q_sd)).to_event(2))
 
-        # Per data latent variables.
+        # Per datapoint local latent variables.
         with pyro.plate("batch", L_data.shape[0]):
             # Encode sequences.
             z_loc, z_scale = self.encoder(seq_data)
-            # Scale log likelihood since mini-batching.
+            # Scale log likelihood to account for mini-batching.
             with poutine.scale(scale=local_scale):
                 # Sample.
                 if self.z_prior_distribution == 'Normal':
@@ -475,7 +477,6 @@ class FactorMuE(nn.Module):
         t0 = datetime.datetime.now()
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
-                print(seq_data)
                 loss = svi.step(seq_data, L_data,
                                 torch.tensor(dataset.data_size/L_data.shape[0]))
                 losses.append(loss)

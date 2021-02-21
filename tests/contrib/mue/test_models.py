@@ -33,11 +33,11 @@ def test_ProfileHMM_smoke(length_model, jit):
     assert not np.isnan(losses[-1])
 
 
-@pytest.mark.parametrize('indel_factor_dependence', [False])#, True])
-@pytest.mark.parametrize('z_prior_distribution', ['Normal'])#, 'Laplace'])
-@pytest.mark.parametrize('ARD_prior', [False])#, True])
-@pytest.mark.parametrize('substitution_matrix', [False])#, True])
-@pytest.mark.parametrize('length_model', [False])#, True])
+@pytest.mark.parametrize('indel_factor_dependence', [False, True])
+@pytest.mark.parametrize('z_prior_distribution', ['Normal', 'Laplace'])
+@pytest.mark.parametrize('ARD_prior', [False, True])
+@pytest.mark.parametrize('substitution_matrix', [False, True])
+@pytest.mark.parametrize('length_model', [False, True])
 @pytest.mark.parametrize('jit', [False, True])
 def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
                          ARD_prior, substitution_matrix, length_model, jit):
