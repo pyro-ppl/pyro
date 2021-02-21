@@ -50,7 +50,7 @@ class ProfileHMM(nn.Module):
         # Initialize state arranger.
         self.statearrange = Profile(latent_seq_length)
 
-    def model(self, seq_data, L_data, local_scale, local_length=1):
+    def model(self, seq_data, L_data, local_scale, local_num=1):
 
         # Latent sequence.
         precursor_seq = pyro.sample("precursor_seq", dist.Normal(
@@ -85,7 +85,7 @@ class ProfileHMM(nn.Module):
                     torch.tensor(200.), torch.tensor(1000.)))
             L_mean = softplus(length)
 
-        with pyro.plate("batch", local_length):
+        with pyro.plate("batch", local_num):
             with poutine.scale(scale=local_scale):
 
                 if self.length_model:
@@ -97,7 +97,7 @@ class ProfileHMM(nn.Module):
                                                    observation_logits),
                             obs=seq_data)
 
-    def guide(self, seq_data, L_data, local_scale, local_length=1):
+    def guide(self, seq_data, L_data, local_scale, local_num=1):
         # Sequence.
         precursor_seq_q_mn = pyro.param("precursor_seq_q_mn",
                                         torch.zeros(self.precursor_seq_shape))
@@ -135,7 +135,8 @@ class ProfileHMM(nn.Module):
             pyro.sample("length", dist.Normal(
                     length_q_mn, softplus(length_q_sd)))
 
-    def fit_svi(self, dataset, epochs=1, batch_size=1, scheduler=None):
+    def fit_svi(self, dataset, epochs=1, batch_size=1, scheduler=None,
+                jit=False):
         """Infer model parameters with stochastic variational inference."""
 
         # Setup.
@@ -146,7 +147,11 @@ class ProfileHMM(nn.Module):
                                      'optim_args': {'lr': 0.01},
                                      'milestones': [],
                                      'gamma': 0.5})
-        svi = SVI(self.model, self.guide, scheduler, loss=JitTrace_ELBO())
+        if jit:
+            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+        else:
+            Elbo = Trace_ELBO()
+        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
         dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         # Run inference.
@@ -156,7 +161,7 @@ class ProfileHMM(nn.Module):
             for seq_data, L_data in dataload:
                 loss = svi.step(seq_data, L_data,
                                 torch.tensor(dataset.data_size/L_data.shape[0]),
-                                local_length=L_data.shape[0])
+                                local_num=L_data.shape[0])
                 losses.append(loss)
                 scheduler.step()
             print(epoch, loss, ' ', datetime.datetime.now() - t0)

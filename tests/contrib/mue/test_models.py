@@ -12,7 +12,8 @@ from pyro.optim import MultiStepLR
 
 
 @pytest.mark.parametrize('length_model', [False, True])
-def test_ProfileHMM_smoke(length_model):
+@pytest.mark.parametrize('jit', [False, True])
+def test_ProfileHMM_smoke(length_model, jit):
     # Setup dataset.
     seqs = ['BABBA', 'BAAB', 'BABBB']
     alph = ['A', 'B']
@@ -27,7 +28,7 @@ def test_ProfileHMM_smoke(length_model):
                        length_model)
     n_epochs = 5
     batch_size = 2
-    losses = model.fit_svi(dataset, n_epochs, batch_size, scheduler)
+    losses = model.fit_svi(dataset, n_epochs, batch_size, scheduler, jit)
 
     assert not np.isnan(losses[-1])
 
