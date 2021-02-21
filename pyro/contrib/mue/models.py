@@ -50,7 +50,7 @@ class ProfileHMM(nn.Module):
         # Initialize state arranger.
         self.statearrange = Profile(latent_seq_length)
 
-    def model(self, seq_data, L_data, local_scale, local_num=1):
+    def model(self, seq_data, L_data, local_scale):
 
         # Latent sequence.
         precursor_seq = pyro.sample("precursor_seq", dist.Normal(
@@ -85,7 +85,7 @@ class ProfileHMM(nn.Module):
                     torch.tensor(200.), torch.tensor(1000.)))
             L_mean = softplus(length)
 
-        with pyro.plate("batch", local_num):
+        with pyro.plate("batch", L_data.shape[0]):
             with poutine.scale(scale=local_scale):
 
                 if self.length_model:
@@ -97,7 +97,7 @@ class ProfileHMM(nn.Module):
                                                    observation_logits),
                             obs=seq_data)
 
-    def guide(self, seq_data, L_data, local_scale, local_num=1):
+    def guide(self, seq_data, L_data, local_scale):
         # Sequence.
         precursor_seq_q_mn = pyro.param("precursor_seq_q_mn",
                                         torch.zeros(self.precursor_seq_shape))
@@ -160,8 +160,7 @@ class ProfileHMM(nn.Module):
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
                 loss = svi.step(seq_data, L_data,
-                                torch.tensor(dataset.data_size/L_data.shape[0]),
-                                local_num=L_data.shape[0])
+                                torch.tensor(dataset.data_size/L_data.shape[0]))
                 losses.append(loss)
                 scheduler.step()
             print(epoch, loss, ' ', datetime.datetime.now() - t0)
@@ -295,7 +294,7 @@ class FactorMuE(nn.Module):
 
         return out
 
-    def model(self, data):
+    def model(self, seq_data, L_data, local_scale):
 
         # ARD prior.
         if self.ARD_prior:
@@ -342,48 +341,47 @@ class FactorMuE(nn.Module):
                         self.latent_alphabet_length, self.alphabet_length])
                 ).to_event(2))
 
-        with pyro.plate("batch", len(data),
-                        subsample_size=self.batch_size) as ind:
-            # Sample latent variable from prior.
-            if self.z_prior_distribution == 'Normal':
-                z = pyro.sample("latent", dist.Normal(
-                    torch.zeros(self.z_dim), torch.ones(self.z_dim)
-                    ).to_event(1))
-            elif self.z_prior_distribution == 'Laplace':
-                z = pyro.sample("latent", dist.Laplace(
-                    torch.zeros(self.z_dim), torch.ones(self.z_dim)
-                    ).to_event(1))
+        with pyro.plate("batch", L_data.shape[0]):
+            with poutine.scale(scale=local_scale):
+                # Sample latent variable from prior.
+                if self.z_prior_distribution == 'Normal':
+                    z = pyro.sample("latent", dist.Normal(
+                        torch.zeros(self.z_dim), torch.ones(self.z_dim)
+                        ).to_event(1))
+                elif self.z_prior_distribution == 'Laplace':
+                    z = pyro.sample("latent", dist.Laplace(
+                        torch.zeros(self.z_dim), torch.ones(self.z_dim)
+                        ).to_event(1))
 
-            # Decode latent sequence.
-            decoded = self.decoder(z, W, B, inverse_temp)
-            if self.indel_factor_dependence:
-                insert_logits = decoded['insert_logits']
-                delete_logits = decoded['delete_logits']
+                # Decode latent sequence.
+                decoded = self.decoder(z, W, B, inverse_temp)
+                if self.indel_factor_dependence:
+                    insert_logits = decoded['insert_logits']
+                    delete_logits = decoded['delete_logits']
 
-            # Construct HMM parameters.
-            if self.substitution_matrix:
-                initial_logits, transition_logits, observation_logits = (
-                    self.statearrange(decoded['precursor_seq_logits'],
-                                      decoded['insert_seq_logits'],
-                                      insert_logits, delete_logits,
-                                      substitute))
-            else:
-                initial_logits, transition_logits, observation_logits = (
-                    self.statearrange(decoded['precursor_seq_logits'],
-                                      decoded['insert_seq_logits'],
-                                      insert_logits, delete_logits))
-            # Draw samples.
-            seq_data_ind, L_data_ind = data[ind]
-            if self.length_model:
-                pyro.sample("obs_L", dist.Poisson(decoded['L_mean']),
-                            obs=L_data_ind)
-            pyro.sample("obs_seq",
-                        MissingDataDiscreteHMM(initial_logits,
-                                               transition_logits,
-                                               observation_logits),
-                        obs=seq_data_ind)
+                # Construct HMM parameters.
+                if self.substitution_matrix:
+                    initial_logits, transition_logits, observation_logits = (
+                        self.statearrange(decoded['precursor_seq_logits'],
+                                          decoded['insert_seq_logits'],
+                                          insert_logits, delete_logits,
+                                          substitute))
+                else:
+                    initial_logits, transition_logits, observation_logits = (
+                        self.statearrange(decoded['precursor_seq_logits'],
+                                          decoded['insert_seq_logits'],
+                                          insert_logits, delete_logits))
+                # Draw samples.
+                if self.length_model:
+                    pyro.sample("obs_L", dist.Poisson(decoded['L_mean']),
+                                obs=L_data)
+                pyro.sample("obs_seq",
+                            MissingDataDiscreteHMM(initial_logits,
+                                                   transition_logits,
+                                                   observation_logits),
+                            obs=seq_data)
 
-    def guide(self, data):
+    def guide(self, seq_data, L_data, local_scale):
         # Register encoder with pyro.
         pyro.module("encoder", self.encoder)
 
@@ -436,17 +434,21 @@ class FactorMuE(nn.Module):
                     substitute_q_mn, softplus(substitute_q_sd)).to_event(2))
 
         # Per data latent variables.
-        with pyro.plate("batch", len(data),
-                        subsample_size=self.batch_size) as ind:
+        with pyro.plate("batch", L_data.shape[0]):
             # Encode sequences.
-            z_loc, z_scale = self.encoder(data[ind][0])
-            # Sample.
-            if self.z_prior_distribution == 'Normal':
-                pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
-            elif self.z_prior_distribution == 'Laplace':
-                pyro.sample("latent", dist.Laplace(z_loc, z_scale).to_event(1))
+            z_loc, z_scale = self.encoder(seq_data)
+            # Scale log likelihood since mini-batching.
+            with poutine.scale(scale=local_scale):
+                # Sample.
+                if self.z_prior_distribution == 'Normal':
+                    pyro.sample("latent",
+                                dist.Normal(z_loc, z_scale).to_event(1))
+                elif self.z_prior_distribution == 'Laplace':
+                    pyro.sample("latent",
+                                dist.Laplace(z_loc, z_scale).to_event(1))
 
-    def fit_svi(self, dataset, epochs=1, batch_size=None, scheduler=None):
+    def fit_svi(self, dataset, epochs=1, batch_size=None, scheduler=None,
+                jit=False):
         """Infer model parameters with stochastic variational inference."""
 
         # Setup.
@@ -457,20 +459,28 @@ class FactorMuE(nn.Module):
                                      'optim_args': {'lr': 0.01},
                                      'milestones': [],
                                      'gamma': 0.5})
-        n_steps = int(np.ceil(torch.tensor(len(dataset)/self.batch_size))
-                      )*epochs
-        svi = SVI(self.model, self.guide, scheduler, loss=Trace_ELBO())
+        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        # Initialize guide.
+        for seq_data, L_data in dataload:
+            self.guide(seq_data, L_data, torch.tensor(1.))
+            break
+        if jit:
+            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+        else:
+            Elbo = Trace_ELBO()
+        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
 
         # Run inference.
         losses = []
         t0 = datetime.datetime.now()
-        for step in range(n_steps):
-            loss = svi.step(dataset)
-            losses.append(loss)
-            scheduler.step()
-            if (step + 1) % (n_steps/epochs) == 0:
-                print(int(epochs*(step+1)/n_steps), loss, ' ',
-                      datetime.datetime.now() - t0)
+        for epoch in range(epochs):
+            for seq_data, L_data in dataload:
+                print(seq_data)
+                loss = svi.step(seq_data, L_data,
+                                torch.tensor(dataset.data_size/L_data.shape[0]))
+                losses.append(loss)
+                scheduler.step()
+            print(epoch, loss, ' ', datetime.datetime.now() - t0)
         return losses
 
     def reconstruct_precursor_seq(self, data, ind, param):
