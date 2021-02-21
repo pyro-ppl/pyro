@@ -17,14 +17,14 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
 from pyro.contrib.mue.statearrangers import Profile
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import MultiStepLR
 
 
 class ProfileHMM(nn.Module):
     """Model: Constant + MuE. """
     def __init__(self, latent_seq_length, alphabet_length,
-                 length_model=False, prior_scale=1., indel_prior_strength=10.):
+                 length_model=False, prior_scale=1., indel_prior_bias=10.):
         super().__init__()
 
         assert isinstance(latent_seq_length, int) and latent_seq_length > 0
@@ -40,13 +40,13 @@ class ProfileHMM(nn.Module):
         self.length_model = length_model
         assert isinstance(prior_scale, float)
         self.prior_scale = prior_scale
-        assert isinstance(indel_prior_strength, float)
-        self.indel_prior = torch.tensor([indel_prior_strength, 0.])
+        assert isinstance(indel_prior_bias, float)
+        self.indel_prior = torch.tensor([indel_prior_bias, 0.])
 
         # Initialize state arranger.
         self.statearrange = Profile(latent_seq_length)
 
-    def model(self, data):
+    def model(self, data=None):
 
         # Latent sequence.
         precursor_seq = pyro.sample("precursor_seq", dist.Normal(
@@ -95,7 +95,7 @@ class ProfileHMM(nn.Module):
                                                observation_logits),
                         obs=seq_data_ind)
 
-    def guide(self, data):
+    def guide(self, data=None):
         # Sequence.
         precursor_seq_q_mn = pyro.param("precursor_seq_q_mn",
                                         torch.zeros(self.precursor_seq_shape))
