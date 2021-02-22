@@ -428,6 +428,7 @@ class AutoNormal(AutoGuide):
         or iterable of plates. Plates not returned will be created
         automatically as usual. This is useful for data subsampling.
     """
+
     scale_constraint = constraints.softplus_positive
 
     def __init__(self, model, *,
@@ -812,6 +813,7 @@ class AutoMultivariateNormal(AutoContinuous):
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
     """
+
     scale_tril_constraint = constraints.softplus_lower_cholesky
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
@@ -863,6 +865,7 @@ class AutoDiagonalNormal(AutoContinuous):
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
     """
+
     scale_constraint = constraints.softplus_positive
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
@@ -919,6 +922,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     :param float init_scale: Approximate initial scale for the standard
         deviation of each (unconstrained transformed) latent variable.
     """
+
     scale_constraint = constraints.softplus_positive
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1, rank=None):
