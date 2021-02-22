@@ -470,7 +470,7 @@ class AutoNormal(AutoGuide):
 
             _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
             _deep_setattr(self.scales, name,
-                          PyroParam(init_scale, constraints.stable_positive, event_dim))
+                          PyroParam(init_scale, constraints.softplus_positive, event_dim))
 
     def _get_loc_and_scale(self, name):
         site_loc = _deep_getattr(self.locs, name)
@@ -822,7 +822,7 @@ class AutoMultivariateNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         self.scale_tril = PyroParam(eye_like(self.loc, self.latent_dim) * self._init_scale,
-                                    constraints.stable_lower_cholesky)
+                                    constraints.softplus_lower_cholesky)
 
     def get_base_dist(self):
         return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
@@ -872,7 +872,7 @@ class AutoDiagonalNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         self.scale = PyroParam(self.loc.new_full((self.latent_dim,), self._init_scale),
-                               constraints.stable_positive)
+                               constraints.softplus_positive)
 
     def get_base_dist(self):
         return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
@@ -933,7 +933,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
             self.rank = int(round(self.latent_dim ** 0.5))
         self.scale = PyroParam(
             self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
-            constraint=constraints.stable_positive)
+            constraint=constraints.softplus_positive)
         self.cov_factor = nn.Parameter(
             self.loc.new_empty(self.latent_dim, self.rank).normal_(0, 1 / self.rank ** 0.5))
 

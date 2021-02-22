@@ -396,7 +396,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
 @pytest.mark.parametrize('dim', [2, 3, 5])
 @pytest.mark.parametrize('transform', [
     T.LowerCholeskyTransform(),
-    T.StableLowerCholeskyTransform(),
+    T.SoftplusLowerCholeskyTransform(),
 ], ids=lambda t: type(t).__name__)
 def test_lower_cholesky_transform(transform, batch_shape, dim):
     shape = batch_shape + (dim, dim)

@@ -33,18 +33,17 @@ class SoftplusTransform(Transform):
         return -(-x).exp().log1p()  # FIXME stabilize
 
 
-class StableLowerCholeskyTransform(Transform):
+class SoftplusLowerCholeskyTransform(Transform):
     """
     Transform from unconstrained matrices to lower-triangular matrices with
-    nonnegative diagonal entries.
-    This is useful for parameterizing positive definite matrices in terms of
-    their Cholesky factorization.
+    nonnegative diagonal entries. This is useful for parameterizing positive
+    definite matrices in terms of their Cholesky factorization.
     """
     domain = constraints.independent(constraints.real, 2)
     codomain = constraints.lower_cholesky
 
     def __eq__(self, other):
-        return isinstance(other, StableLowerCholeskyTransform)
+        return isinstance(other, SoftplusLowerCholeskyTransform)
 
     def _call(self, x):
         diag = softplus(x.diagonal(dim1=-2, dim2=-1))
@@ -57,5 +56,5 @@ class StableLowerCholeskyTransform(Transform):
 
 __all__ = [
     'SoftplusTransform',
-    'StableLowerCholeskyTransform',
+    'SoftplusLowerCholeskyTransform',
 ]

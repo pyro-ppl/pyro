@@ -31,11 +31,11 @@ from .permute import Permute, permute
 from .planar import ConditionalPlanar, Planar, conditional_planar, planar
 from .polynomial import Polynomial, polynomial
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
+from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
                                     conditional_spline_autoregressive, spline_autoregressive)
 from .spline_coupling import SplineCoupling, spline_coupling
-from .stable import SoftplusTransform, StableLowerCholeskyTransform
 from .sylvester import Sylvester, sylvester
 
 ########################################
@@ -77,15 +77,15 @@ def _transform_to_positive_definite(constraint):
     return ComposeTransform([LowerCholeskyTransform(), CholeskyTransform().inv])
 
 
-@biject_to.register(constraints.stable_positive)
-@transform_to.register(constraints.stable_positive)
-def _transform_to_stable_positive(constraint):
+@biject_to.register(constraints.softplus_positive)
+@transform_to.register(constraints.softplus_positive)
+def _transform_to_softplus_positive(constraint):
     return SoftplusTransform()
 
 
-@transform_to.register(constraints.stable_lower_cholesky)
-def _transform_to_stable_lower_cholesky(constraint):
-    return StableLowerCholeskyTransform()
+@transform_to.register(constraints.softplus_lower_cholesky)
+def _transform_to_softplus_lower_cholesky(constraint):
+    return SoftplusLowerCholeskyTransform()
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
@@ -138,11 +138,11 @@ __all__ = [
     'Planar',
     'Polynomial',
     'Radial',
-    'Spline',
+    'SoftplusLowerCholeskyTransform',
     'SoftplusTransform',
+    'Spline',
     'SplineAutoregressive',
     'SplineCoupling',
-    'StableLowerCholeskyTransform',
     'Sylvester',
     'affine_autoregressive',
     'affine_coupling',
