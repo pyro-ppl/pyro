@@ -468,7 +468,7 @@ def test_empty_model_error():
 
 def test_unpack_latent():
     def model():
-        return pyro.sample('x', dist.LKJCorrCholesky(2, torch.tensor(1.)))
+        return pyro.sample('x', dist.LKJCholesky(2, torch.tensor(1.)))
 
     guide = AutoDiagonalNormal(model)
     assert guide()['x'].shape == model().shape

@@ -8,7 +8,7 @@ import torch
 from torch.distributions import AffineTransform, Beta, TransformedDistribution, biject_to, transform_to
 
 from pyro.distributions import constraints, transforms
-from pyro.distributions.lkj import LKJCorrCholesky
+from pyro.distributions.torch import LKJCholesky
 from tests.common import assert_equal, assert_tensors_equal
 
 
@@ -83,7 +83,7 @@ def test_corr_cholesky_transform(x_shape, mapping):
 
 @pytest.mark.parametrize("d", [2, 3, 4, 10])
 def test_log_prob_eta1(d):
-    dist = LKJCorrCholesky(d, torch.tensor([1.]))
+    dist = LKJCholesky(d, torch.tensor([1.]))
 
     a_sample = dist.sample(torch.Size([100]))
     lp = dist.log_prob(a_sample)
@@ -100,7 +100,7 @@ def test_log_prob_eta1(d):
 
 @pytest.mark.parametrize("eta", [.1, .5, 1., 2., 5.])
 def test_log_prob_d2(eta):
-    dist = LKJCorrCholesky(2, torch.tensor([eta]))
+    dist = LKJCholesky(2, torch.tensor([eta]))
     test_dist = TransformedDistribution(Beta(eta, eta), AffineTransform(loc=-1., scale=2.0))
 
     samples = dist.sample(torch.Size([100]))
@@ -113,7 +113,7 @@ def test_log_prob_d2(eta):
 
 def test_sample_batch():
     # Regression test for https://github.com/pyro-ppl/pyro/issues/2615
-    dist = LKJCorrCholesky(d=3, eta=torch.ones(())).expand([12])
+    dist = LKJCholesky(d=3, eta=torch.ones(())).expand([12])
     # batch shape and event shape are as you'd expect
     assert dist.batch_shape == torch.Size([12])
     assert dist.event_shape == torch.Size([3, 3])

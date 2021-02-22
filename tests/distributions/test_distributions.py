@@ -105,7 +105,7 @@ def test_support_is_not_discrete(continuous_dist):
 
 def test_gof(continuous_dist):
     Dist = continuous_dist.pyro_dist
-    if Dist in [dist.LKJ, dist.LKJCorrCholesky]:
+    if Dist in [dist.LKJ, dist.LKJCholesky]:
         pytest.xfail(reason="incorrect submanifold scaling")
 
     num_samples = 50000
@@ -285,8 +285,8 @@ def test_expand_error(dist, initial_shape, proposed_shape, default):
             with xfail_if_not_implemented():
                 large = small.expand(torch.Size(initial_shape) + small.batch_shape)
         proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-        if dist.get_test_distribution_name() == 'LKJCorrCholesky':
-            pytest.skip('LKJCorrCholesky can expand to a shape not' +
+        if dist.get_test_distribution_name() == 'LKJCholesky':
+            pytest.skip('LKJCholesky can expand to a shape not' +
                         'broadcastable with its original batch_shape.')
         with pytest.raises((RuntimeError, ValueError)):
             large.expand(proposed_batch_shape)

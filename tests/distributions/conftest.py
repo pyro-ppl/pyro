@@ -277,7 +277,7 @@ continuous_dists = [
                      [[1.0000, -0.8800, -0.9493], [-0.8800,  1.0000,  0.9088], [-0.9493,  0.9088,  1.0000]],
                      [[1.0000,  0.2284, -0.1283], [0.2284,   1.0000,  0.0146], [-0.1283,  0.0146,  1.0000]]]},
                 ]),
-    Fixture(pyro_dist=dist.LKJCorrCholesky,
+    Fixture(pyro_dist=dist.LKJCholesky,
             examples=[
                 {
                     'd': 3,
