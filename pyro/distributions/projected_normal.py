@@ -47,6 +47,12 @@ class ProjectedNormal(TorchDistribution):
         event_shape = concentration.shape[-1:]
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
+    @staticmethod
+    def infer_shapes(concentration):
+        batch_shape = concentration[:-1]
+        event_shape = concentration[-1:]
+        return batch_shape, event_shape
+
     def expand(self, batch_shape, _instance=None):
         batch_shape = torch.Size(batch_shape)
         new = self._get_checked_instance(ProjectedNormal, _instance)
