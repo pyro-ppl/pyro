@@ -5,7 +5,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.transforms import AffineTransform
 
-from pyro.distributions.torch import Beta, TransformedDistribution
+from .torch import Beta, TransformedDistribution
 
 
 class AffineBeta(TransformedDistribution):

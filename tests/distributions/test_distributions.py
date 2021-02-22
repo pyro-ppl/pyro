@@ -20,7 +20,18 @@ def _log_prob_shape(dist, x_size=torch.Size()):
         expected_shape = expected_shape[:-event_dims]
     return expected_shape
 
+
 # Distribution tests - all distributions
+
+def test_support_shape(dist):
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        d = dist.pyro_dist(**dist_params)
+        assert d.support.event_dim == d.event_dim
+        x = dist.get_test_data(idx)
+        ok = d.support.check(x)
+        assert ok.shape == broadcast_shape(d.batch_shape, x.shape[:x.dim() - d.event_dim])
+        assert ok.all()
 
 
 def test_batch_log_prob(dist):
@@ -85,6 +96,13 @@ def test_score_errors_non_broadcastable_data_shape(dist):
 
 # Distributions tests - continuous distributions
 
+def test_support_is_not_discrete(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        assert not d.support.is_discrete
+
+
 def test_gof(continuous_dist):
     Dist = continuous_dist.pyro_dist
     if Dist in [dist.LKJ, dist.LKJCorrCholesky]:
@@ -113,6 +131,13 @@ def test_gof(continuous_dist):
 
 
 # Distributions tests - discrete distributions
+
+def test_support_is_discrete(discrete_dist):
+    Dist = discrete_dist.pyro_dist
+    for i in range(discrete_dist.get_num_test_data()):
+        d = Dist(**discrete_dist.get_dist_params(i))
+        assert d.support.is_discrete
+
 
 def test_enumerate_support(discrete_dist):
     expected_support = discrete_dist.expected_support

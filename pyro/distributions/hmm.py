@@ -2,16 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal
-from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import broadcast_shape, torch_jit_script_if_tracing
 from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
                                      matrix_and_mvn_to_gamma_gaussian)
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
 from pyro.ops.special import safe_log
 from pyro.ops.tensor_utils import cholesky, cholesky_solve
+
+from . import constraints
+from .torch import Categorical, Gamma, Independent, MultivariateNormal
+from .torch_distribution import TorchDistribution
+from .util import broadcast_shape, torch_jit_script_if_tracing
 
 
 @torch_jit_script_if_tracing
@@ -309,9 +310,9 @@ class DiscreteHMM(HiddenMarkovModel):
         self.observation_dist = observation_dist
         super().__init__(duration, batch_shape, event_shape, validate_args=validate_args)
 
-    @property
+    @constraints.dependent_property(event_dim=2)
     def support(self):
-        return self.observation_dist.support
+        return constraints.independent(self.observation_dist.support, 1)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(DiscreteHMM, _instance)
@@ -436,7 +437,7 @@ class GaussianHMM(HiddenMarkovModel):
     """
     has_rsample = True
     arg_constraints = {}
-    support = constraints.real
+    support = constraints.independent(constraints.real, 2)
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None, duration=None):
@@ -717,7 +718,7 @@ class GammaGaussianHMM(HiddenMarkovModel):
         are not expanded along the time axis.
     """
     arg_constraints = {}
-    support = constraints.real
+    support = constraints.independent(constraints.real, 2)
 
     def __init__(self, scale_dist, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None, duration=None):
@@ -886,7 +887,7 @@ class LinearHMM(HiddenMarkovModel):
         are not expanded along the time axis.
     """
     arg_constraints = {}
-    support = constraints.real
+    support = constraints.independent(constraints.real, 2)
     has_rsample = True
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
@@ -953,9 +954,9 @@ class LinearHMM(HiddenMarkovModel):
         self.observation_dist = observation_dist
         self.transforms = transforms
 
-    @property
+    @constraints.dependent_property(event_dim=2)
     def support(self):
-        return self.observation_dist.support
+        return constraints.independent(self.observation_dist.support, 1)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(LinearHMM, _instance)
@@ -1017,7 +1018,7 @@ class IndependentHMM(TorchDistribution):
         super().__init__(batch_shape, event_shape)
         self.base_dist = base_dist
 
-    @constraints.dependent_property
+    @constraints.dependent_property(event_dim=2)
     def support(self):
         return self.base_dist.support
 
@@ -1107,6 +1108,11 @@ class GaussianMRF(TorchDistribution):
         self._init = mvn_to_gaussian(initial_dist)
         self._trans = mvn_to_gaussian(transition_dist)
         self._obs = mvn_to_gaussian(observation_dist)
+        self._support = constraints.independent(observation_dist.support, 1)
+
+    @constraints.dependent_property(event_dim=2)
+    def support(self):
+        return self._support
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianMRF, _instance)
@@ -1119,6 +1125,7 @@ class GaussianMRF(TorchDistribution):
         new._init = self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs
+        new._support = self._support
         super(GaussianMRF, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new

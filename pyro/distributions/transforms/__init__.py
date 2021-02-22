@@ -3,11 +3,10 @@
 
 from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
-from torch.distributions.transforms import __all__ as torch_transforms
 from torch.distributions.transforms import ComposeTransform, ExpTransform, LowerCholeskyTransform
+from torch.distributions.transforms import __all__ as torch_transforms
 
-from ..constraints import (IndependentConstraint, corr_cholesky_constraint, corr_matrix,
-                           ordered_vector, positive_definite, positive_ordered_vector, sphere)
+from .. import constraints
 from ..torch_transform import ComposeTransformModule
 from .affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive, affine_autoregressive,
                                     conditional_affine_autoregressive)
@@ -26,12 +25,12 @@ from .matrix_exponential import (ConditionalMatrixExponential, MatrixExponential
                                  matrix_exponential)
 from .neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
                                     conditional_neural_autoregressive, neural_autoregressive)
+from .normalize import Normalize
 from .ordered import OrderedTransform
 from .permute import Permute, permute
 from .planar import ConditionalPlanar, Planar, conditional_planar, planar
 from .polynomial import Polynomial, polynomial
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
-from .normalize import Normalize
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
                                     conditional_spline_autoregressive, spline_autoregressive)
@@ -41,41 +40,38 @@ from .sylvester import Sylvester, sylvester
 ########################################
 # register transforms
 
-biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint))
-transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
 
-
-@transform_to.register(sphere)
+@transform_to.register(constraints.sphere)
 def _transform_to_sphere(constraint):
     return Normalize()
 
 
-@biject_to.register(corr_cholesky_constraint)
-@transform_to.register(corr_cholesky_constraint)
+@biject_to.register(constraints.corr_cholesky)
+@transform_to.register(constraints.corr_cholesky)
 def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
 
 
-@biject_to.register(corr_matrix)
-@transform_to.register(corr_matrix)
+@biject_to.register(constraints.corr_matrix)
+@transform_to.register(constraints.corr_matrix)
 def _transform_to_corr_matrix(constraint):
     return ComposeTransform([CorrLCholeskyTransform(), CorrMatrixCholeskyTransform().inv])
 
 
-@biject_to.register(ordered_vector)
-@transform_to.register(ordered_vector)
+@biject_to.register(constraints.ordered_vector)
+@transform_to.register(constraints.ordered_vector)
 def _transform_to_ordered_vector(constraint):
     return OrderedTransform()
 
 
-@biject_to.register(positive_ordered_vector)
-@transform_to.register(positive_ordered_vector)
+@biject_to.register(constraints.positive_ordered_vector)
+@transform_to.register(constraints.positive_ordered_vector)
 def _transform_to_positive_ordered_vector(constraint):
     return ComposeTransform([OrderedTransform(), ExpTransform()])
 
 
 # TODO: register biject_to when LowerCholeskyTransform is bijective
-@transform_to.register(positive_definite)
+@transform_to.register(constraints.positive_definite)
 def _transform_to_positive_definite(constraint):
     return ComposeTransform([LowerCholeskyTransform(), CholeskyTransform().inv])
 

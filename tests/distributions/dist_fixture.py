@@ -38,6 +38,9 @@ class Fixture:
         self.test_data_indices = test_data_indices
         self.batch_data_indices = batch_data_indices
 
+    def __repr__(self):
+        return f"Fixture({self.pyro_dist.__name__}, ...)"
+
     def get_batch_data_indices(self):
         if not self.batch_data_indices:
             return BATCH_TEST_DATA_IDX

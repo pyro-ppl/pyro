@@ -4,12 +4,12 @@
 import math
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions.constraints import corr_cholesky_constraint, corr_matrix
 from pyro.distributions.torch import Beta, TransformedDistribution
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.transforms.cholesky import CorrMatrixCholeskyTransform, _vector_to_l_cholesky
+
+from . import constraints
 
 
 # TODO: Modify class to support more than one eta value at a time?
@@ -39,7 +39,7 @@ class LKJCorrCholesky(TorchDistribution):
     :param torch.Tensor eta: A single positive number parameterizing the distribution.
     """
     arg_constraints = {"eta": constraints.positive}
-    support = corr_cholesky_constraint
+    support = constraints.corr_cholesky
     has_rsample = False
 
     def __init__(self, d, eta, validate_args=None):
@@ -139,7 +139,7 @@ class LKJ(TransformedDistribution):
     Daniel Lewandowski, Dorota Kurowicka, Harry Joe
     """
     arg_constraints = {'concentration': constraints.positive}
-    support = corr_matrix
+    support = constraints.corr_matrix
 
     def __init__(self, dim, concentration=1., validate_args=None):
         # TODO: use upstream LKJCholesky distribution

@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.util import copy_docs_from
+from pyro.distributions import constraints
+
+from ..util import copy_docs_from
 
 
 @copy_docs_from(Transform)
@@ -42,8 +43,6 @@ class Permute(Transform):
     :type dim: int
 
     """
-
-    codomain = constraints.real_vector
     bijective = True
     volume_preserving = True
 
@@ -55,7 +54,14 @@ class Permute(Transform):
 
         self.permutation = permutation
         self.dim = dim
-        self.event_dim = -dim
+
+    @constraints.dependent_property(is_discrete=False)
+    def domain(self):
+        return constraints.independent(constraints.real, -self.dim)
+
+    @constraints.dependent_property(is_discrete=False)
+    def codomain(self):
+        return constraints.independent(constraints.real, -self.dim)
 
     @lazy_property
     def inv_permutation(self):

@@ -5,13 +5,14 @@ import warnings
 from collections import OrderedDict
 
 import torch
-from torch.distributions import constraints
 from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
-from pyro.distributions.distribution import Distribution
-from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import broadcast_shape, scale_and_mask
+
+from . import constraints
+from .distribution import Distribution
+from .score_parts import ScoreParts
+from .util import broadcast_shape, scale_and_mask
 
 
 class TorchDistributionMixin(Distribution):

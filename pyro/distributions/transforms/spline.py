@@ -17,10 +17,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Transform, constraints
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
+
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
 
 
 def _searchsorted(sorted_sequence, values):
@@ -269,7 +270,6 @@ class ConditionedSpline(Transform):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    event_dim = 0
 
     def __init__(self, params, bound=3.0, order='linear'):
         super().__init__(cache_size=1)
@@ -367,7 +367,6 @@ class Spline(ConditionedSpline, TransformModule):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    event_dim = 0
 
     def __init__(self, input_dim, count_bins=8, bound=3., order='linear'):
         super(Spline, self).__init__(self._params)
@@ -467,7 +466,6 @@ class ConditionalSpline(ConditionalTransformModule):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    event_dim = 0
 
     def __init__(self, nn, input_dim, count_bins, bound=3.0, order='linear'):
         super().__init__()

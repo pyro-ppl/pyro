@@ -4,6 +4,7 @@ run_outputs*
 data
 .data
 results
+*.csv
 examples/*/processed
 examples/*/results
 examples/*/raw

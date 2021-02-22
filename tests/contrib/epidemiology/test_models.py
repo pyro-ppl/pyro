@@ -52,7 +52,7 @@ def test_simple_sir_smoke(duration, forecast, options, algo):
     # Generate data.
     model = SimpleSIRModel(population, recovery_time, [None] * duration)
     assert model.full_mass == [("R0", "rho")]
-    for attempt in range(100):
+    for attempt in range(500):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
             break
