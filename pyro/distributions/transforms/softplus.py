@@ -7,7 +7,7 @@ from torch.nn.functional import softplus
 
 
 def softplus_inv(y):
-    return y.expm1().log()  # FIXME stabilize
+    return y + y.neg().expm1().neg().log()
 
 
 # Backport of https://github.com/pytorch/pytorch/pull/52300
@@ -30,7 +30,7 @@ class SoftplusTransform(Transform):
         return softplus_inv(y)
 
     def log_abs_det_jacobian(self, x, y):
-        return -(-x).exp().log1p()  # FIXME stabilize
+        return -softplus(-x)
 
 
 class SoftplusLowerCholeskyTransform(Transform):
