@@ -16,11 +16,11 @@ from tests.common import assert_equal, xfail_param
 # put all funsor-related imports here, so test collection works without funsor
 try:
     import funsor
-    from pyroapi import distributions as dist
-    from pyroapi import handlers, infer, pyro
 
     import pyro.contrib.funsor
     funsor.set_backend("torch")
+    from pyroapi import distributions as dist
+    from pyroapi import handlers, infer, pyro
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 

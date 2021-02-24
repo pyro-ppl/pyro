@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from pyroapi import pyro_backend
-from pyroapi.tests import *  # noqa F401
 
 try:
     # triggers backend registration
@@ -13,6 +11,9 @@ try:
     funsor.set_backend("torch")
 except ImportError:
     pytestmark = pytest.mark.skip()
+
+from pyroapi import pyro_backend
+from pyroapi.tests import *  # noqa F401
 
 
 @pytest.fixture(params=["contrib.funsor"])

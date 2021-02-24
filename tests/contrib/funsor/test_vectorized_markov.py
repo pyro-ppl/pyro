@@ -12,13 +12,12 @@ from pyro.ops.indexing import Vindex
 try:
     import funsor
     from funsor.testing import assert_close
-    from pyroapi import distributions as dist
 
     import pyro.contrib.funsor
-    funsor.set_backend("torch")
-    from pyroapi import handlers, infer, pyro
-
     from pyro.contrib.funsor.infer.traceenum_elbo import terms_from_trace
+    funsor.set_backend("torch")
+    from pyroapi import distributions as dist
+    from pyroapi import handlers, infer, pyro
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
