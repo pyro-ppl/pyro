@@ -72,14 +72,30 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
+    :param ~torch.Tensor obs_mask: EXPERIMENTAL Optional boolean tensor mask.
+        If provided, values with mask=True will be conditioned on ``obs`` and
+        remaining values will be imputed by sampling. This introduces a latent
+        sample site named ``name + "_unobserved"`` which should be used by
+        guides (this site name may change in a future version).
+    :type obs_mask: bool or ~torch.Tensor
     :param dict infer: Optional dictionary of inference parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
     """
+    # Transform obs_mask into multiple sample statements.
     obs = kwargs.pop("obs", None)
-    infer = kwargs.pop("infer", {}).copy()
-    # check if stack is empty
+    obs_mask = kwargs.pop("obs_mask", None)
+    if obs_mask is not None:
+        with poutine.mask(mask=obs_mask):
+            observed = sample(f"{name}_observed", fn, *args, **kwargs, obs=obs)
+        with poutine.mask(mask=~obs_mask):
+            unobserved = sample(f"{name}_unobserved", fn, *args, **kwargs)
+        value = observed.where(obs_mask, unobserved)
+        return deterministic(name, value)
+
+    # Check if stack is empty.
     # if stack empty, default behavior (defined here)
+    infer = kwargs.pop("infer", {}).copy()
     if not am_i_wrapped():
         if obs is not None and not infer.get("_deterministic"):
             warnings.warn("trying to observe a value outside of inference at " + name,

@@ -2181,6 +2181,41 @@ def test_reparam_mask_plate_ok(Elbo, mask):
     assert_ok(model, guide, Elbo())
 
 
+@pytest.mark.parametrize("mask", [
+    torch.tensor(True),
+    torch.tensor(False),
+    torch.tensor([True]),
+    torch.tensor([False]),
+    torch.tensor([False, True, False]),
+])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+])
+def test_obs_mask_ok(Elbo, mask):
+    data = torch.tensor([7., 7., 7.])
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with pyro.plate("plate", len(data)):
+            y = pyro.sample("y", dist.Normal(x, 1.),
+                            obs=data, obs_mask=mask)
+            assert ((y == data) == mask).all()
+
+    def guide():
+        loc = pyro.param("loc", torch.zeros(()))
+        scale = pyro.param("scale", torch.ones(()),
+                           constraint=constraints.positive)
+        x = pyro.sample("x", dist.Normal(loc, scale))
+        with pyro.plate("plate", len(data)):
+            with poutine.mask(mask=mask ^ True):
+                pyro.sample("y_unobserved", dist.Normal(x, 1.))
+
+    assert_ok(model, guide, Elbo(strict_enumeration_warning=False))
+
+
 @pytest.mark.parametrize("scale", [1, 0.1, torch.tensor(0.5)])
 @pytest.mark.parametrize("Elbo", [
     Trace_ELBO,
