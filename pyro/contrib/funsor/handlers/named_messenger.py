@@ -4,9 +4,13 @@
 from collections import OrderedDict
 from contextlib import ExitStack
 
+from pyro.contrib.funsor.handlers.runtime import (
+    _DIM_STACK,
+    DimRequest,
+    DimType,
+    StackFrame,
+)
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
-
-from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, StackFrame
 
 
 class NamedMessenger(ReentrantMessenger):

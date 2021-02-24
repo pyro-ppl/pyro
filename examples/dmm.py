@@ -30,7 +30,14 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import affine_autoregressive
-from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+    config_enumerate,
+)
 from pyro.optim import ClippedAdam
 
 

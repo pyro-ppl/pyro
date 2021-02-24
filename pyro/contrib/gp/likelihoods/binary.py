@@ -5,7 +5,6 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-
 from pyro.contrib.gp.likelihoods.likelihood import Likelihood
 
 

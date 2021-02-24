@@ -8,13 +8,18 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
+from pyro.contrib.gp.kernels import RBF, Cosine, Matern32, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
-from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
-                                    VariationalGP, VariationalSparseGP)
+from pyro.contrib.gp.models import (
+    GPLVM,
+    GPRegression,
+    SparseGPRegression,
+    VariationalGP,
+    VariationalSparseGP,
+)
 from pyro.contrib.gp.util import train
-from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc.hmc import HMC
 from pyro.nn.module import PyroSample
 from tests.common import assert_equal
 

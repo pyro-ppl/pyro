@@ -7,7 +7,10 @@ import torch
 
 from pyro.distributions.torch import Beta, TransformedDistribution
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.transforms.cholesky import CorrMatrixCholeskyTransform, _vector_to_l_cholesky
+from pyro.distributions.transforms.cholesky import (
+    CorrMatrixCholeskyTransform,
+    _vector_to_l_cholesky,
+)
 
 from . import constraints
 

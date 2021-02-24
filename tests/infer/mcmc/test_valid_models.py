@@ -13,7 +13,11 @@ import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC
-from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator, initialize_model
+from pyro.infer.mcmc.util import (
+    TraceEinsumEvaluator,
+    TraceTreeEvaluator,
+    initialize_model,
+)
 from pyro.infer.reparam import LatentStableReparam
 from pyro.poutine.subsample_messenger import _Subsample
 from tests.common import assert_close, assert_equal, xfail_param

@@ -16,13 +16,30 @@ import pyro.optim as optim
 from pyro import poutine
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer import (SVI, EnergyDistance, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO,
-                        ReweightedWakeSleep, Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO,
-                        TraceMeanField_ELBO, TraceTailAdaptive_ELBO)
+from pyro.infer import (
+    SVI,
+    EnergyDistance,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    JitTraceGraph_ELBO,
+    RenyiELBO,
+    ReweightedWakeSleep,
+    Trace_ELBO,
+    Trace_MMD,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+    TraceTailAdaptive_ELBO,
+)
 from pyro.infer.autoguide import AutoDelta
 from pyro.infer.reparam import LatentStableReparam
 from pyro.infer.util import torch_item
-from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
+from tests.common import (
+    assert_close,
+    assert_equal,
+    xfail_if_not_implemented,
+    xfail_param,
+)
 
 logger = logging.getLogger(__name__)
 

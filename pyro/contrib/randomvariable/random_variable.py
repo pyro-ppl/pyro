@@ -4,16 +4,17 @@
 from typing import Union
 
 from torch import Tensor
+
 from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import (
-    Transform,
-    AffineTransform,
     AbsTransform,
-    PowerTransform,
+    AffineTransform,
     ExpTransform,
-    TanhTransform,
+    PowerTransform,
+    SigmoidTransform,
     SoftmaxTransform,
-    SigmoidTransform
+    TanhTransform,
+    Transform,
 )
 
 

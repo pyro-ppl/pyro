@@ -14,8 +14,18 @@ import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import scale_and_mask
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
-                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, infer_discrete)
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    JitTraceGraph_ELBO,
+    JitTraceMeanField_ELBO,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+    infer_discrete,
+)
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import ignore_jit_warnings

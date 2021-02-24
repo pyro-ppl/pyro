@@ -5,7 +5,10 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.contrib.epidemiology.distributions import set_approx_log_prob_tol, set_approx_sample_thresh
+from pyro.contrib.epidemiology.distributions import (
+    set_approx_log_prob_tol,
+    set_approx_sample_thresh,
+)
 from tests.common import assert_close
 
 

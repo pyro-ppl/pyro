@@ -13,8 +13,16 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, EnergyDistance, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
-                        TraceTailAdaptive_ELBO, config_enumerate)
+from pyro.infer import (
+    SVI,
+    EnergyDistance,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+    TraceTailAdaptive_ELBO,
+    config_enumerate,
+)
 from pyro.infer.reparam import LatentStableReparam
 from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import torch_item
