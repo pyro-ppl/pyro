@@ -8,7 +8,12 @@ from pyro.distributions.transforms.cholesky import CorrMatrixCholeskyTransform
 
 from . import constraints
 
-LKJCorrCholesky = LKJCholesky  # DEPRECATED
+
+class LKJCorrCholesky(LKJCholesky):  # DEPRECATED
+    def __init__(self, d, eta, validate_args=None):
+        raise FutureWarning('class LKJCorrCholesky(d, eta, validate_args=None) is deprecated ' +
+                            'in favor of LKJCholesky(dim, concentration, validate_args=None).')
+        super().__init__(d, concentration=eta, validate_args=validate_args)
 
 
 class LKJ(TransformedDistribution):
@@ -37,7 +42,7 @@ class LKJ(TransformedDistribution):
 
     def __init__(self, dim, concentration=1., validate_args=None):
         base_dist = LKJCholesky(dim, concentration)
-        self.dim, self.concentration = base_dist._d, base_dist.eta
+        self.dim, self.concentration = base_dist.dim, base_dist.concentration
         super(LKJ, self).__init__(base_dist, CorrMatrixCholeskyTransform().inv,
                                   validate_args=validate_args)
 

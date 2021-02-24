@@ -270,7 +270,7 @@ continuous_dists = [
             scipy_arg_fn=lambda loc, concentration: ((), {"loc": np.array(loc), "kappa": np.array(concentration)})),
     Fixture(pyro_dist=dist.LKJ,
             examples=[
-                {'dim': 3, 'concentration': [1.], 'test_data':
+                {'dim': 3, 'concentration': 1., 'test_data':
                     [[[1.0000, -0.8221,  0.7655], [-0.8221,  1.0000, -0.5293], [0.7655,  -0.5293,  1.0000]],
                      [[1.0000, -0.5345, -0.5459], [-0.5345,  1.0000, -0.0333], [-0.5459, -0.0333,  1.0000]],
                      [[1.0000, -0.3758, -0.2409], [-0.3758,  1.0000,  0.4653], [-0.2409,  0.4653,  1.0000]],
@@ -280,8 +280,8 @@ continuous_dists = [
     Fixture(pyro_dist=dist.LKJCholesky,
             examples=[
                 {
-                    'd': 3,
-                    'eta': [1.],
+                    'dim': 3,
+                    'concentration': 1.,
                     'test_data': [
                         [[1.0, 0.0, 0.0],
                          [-0.17332135, 0.98486533, 0.0],
