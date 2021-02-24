@@ -87,6 +87,8 @@ def test_score_errors_non_broadcastable_data_shape(dist):
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)
+        if dist.get_test_distribution_name() == 'LKJCholesky':
+            pytest.skip('https://github.com/pytorch/pytorch/issues/52724')
         shape = d.shape()
         non_broadcastable_shape = (shape[0] + 1,) + shape[1:]
         test_data_non_broadcastable = torch.ones(non_broadcastable_shape)
@@ -285,9 +287,6 @@ def test_expand_error(dist, initial_shape, proposed_shape, default):
             with xfail_if_not_implemented():
                 large = small.expand(torch.Size(initial_shape) + small.batch_shape)
         proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-        if dist.get_test_distribution_name() == 'LKJCholesky':
-            pytest.skip('LKJCholesky can expand to a shape not' +
-                        'broadcastable with its original batch_shape.')
         with pytest.raises((RuntimeError, ValueError)):
             large.expand(proposed_batch_shape)
 
