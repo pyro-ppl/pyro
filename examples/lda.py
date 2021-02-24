@@ -114,7 +114,6 @@ def main(args):
     logging.info('Generating data')
     pyro.set_rng_seed(0)
     pyro.clear_param_store()
-    pyro.enable_validation(__debug__)
 
     # We can generate synthetic data directly by calling the model.
     true_topic_weights, true_topic_words, data = model(args=args)
@@ -138,7 +137,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.1')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="Amortized Latent Dirichlet Allocation")
     parser.add_argument("-t", "--num-topics", default=8, type=int)
     parser.add_argument("-w", "--num-words", default=1024, type=int)

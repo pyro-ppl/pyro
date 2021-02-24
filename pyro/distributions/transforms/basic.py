@@ -5,8 +5,9 @@ import math
 
 import torch
 import torch.nn.functional as F
-from torch.distributions import constraints
 from torch.distributions.transforms import TanhTransform, Transform
+
+from .. import constraints
 
 # TODO: Move upstream
 

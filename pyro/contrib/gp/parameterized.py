@@ -15,7 +15,7 @@ from pyro.nn.module import PyroModule, PyroParam, PyroSample, pyro_method
 
 
 def _is_real_support(support):
-    if isinstance(support, pyro.distributions.constraints.IndependentConstraint):
+    if isinstance(support, pyro.distributions.constraints.independent):
         return _is_real_support(support.base_constraint)
     else:
         return support in [constraints.real, constraints.real_vector]

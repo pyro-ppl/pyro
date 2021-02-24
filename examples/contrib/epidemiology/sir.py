@@ -274,7 +274,6 @@ def predict(args, model, truth):
 
 
 def main(args):
-    pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
     # Generate data.
@@ -295,7 +294,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.1')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=float)

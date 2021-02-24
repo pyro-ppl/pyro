@@ -116,7 +116,6 @@ class Model(ForecastingModel):
 
 
 def main(args):
-    pyro.enable_validation(__debug__)
     data, covariates = preprocess(args)
 
     # We will model positive count data by log1p-transforming it into real
@@ -156,7 +155,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.1')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="Bart Ridership Forecasting Example")
     parser.add_argument("--train-window", default=2160, type=int)
     parser.add_argument("--test-window", default=336, type=int)

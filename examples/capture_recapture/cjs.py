@@ -227,7 +227,6 @@ models = {name[len('model_'):]: model
 def main(args):
     pyro.set_rng_seed(0)
     pyro.clear_param_store()
-    pyro.enable_validation(__debug__)
 
     # load data
     if args.dataset == "dipper":

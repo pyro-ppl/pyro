@@ -250,7 +250,6 @@ def main(args):
     # Fix random number seed
     pyro.util.set_rng_seed(args.seed)
     # Enable optional validation warnings
-    pyro.enable_validation(True)
 
     # Load and pre-process data
     dataloader, num_genes, l_mean, l_scale, anndata = get_data(dataset=args.dataset, batch_size=args.batch_size,
@@ -351,7 +350,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.1')
+    assert pyro.__version__.startswith('1.5.2')
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="single-cell ANnotation using Variational Inference")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')

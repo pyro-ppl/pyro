@@ -2344,6 +2344,7 @@ def test_collapse_normal_plate_normal(num_particles):
     assert_ok(model, guide, elbo)
 
 
+@pytest.mark.xfail(reason="missing pattern")
 @pytest.mark.stage("funsor")
 @pytest.mark.parametrize("num_particles", [1, 2])
 def test_collapse_beta_bernoulli(num_particles):
@@ -2365,6 +2366,7 @@ def test_collapse_beta_bernoulli(num_particles):
     assert_ok(model, guide, elbo)
 
 
+@pytest.mark.xfail(reason="missing pattern")
 @pytest.mark.stage("funsor")
 @pytest.mark.parametrize("num_particles", [1, 2])
 def test_collapse_beta_binomial(num_particles):

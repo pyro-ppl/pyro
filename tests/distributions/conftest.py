@@ -15,8 +15,18 @@ from tests.distributions.dist_fixture import Fixture
 
 
 class FoldedNormal(dist.FoldedDistribution):
+    arg_constraints = dist.Normal.arg_constraints
+
     def __init__(self, loc, scale):
         super().__init__(dist.Normal(loc, scale))
+
+    @property
+    def loc(self):
+        return self.base_dist.loc
+
+    @property
+    def scale(self):
+        return self.base_dist.scale
 
 
 continuous_dists = [
@@ -131,6 +141,20 @@ continuous_dists = [
                  'test_data': [[5.5], [6.4]]}
             ],
             scipy_arg_fn=lambda loc, scale: ((np.array(scale),), {"scale": np.exp(np.array(loc))})),
+    Fixture(pyro_dist=dist.AffineBeta,
+            scipy_dist=sp.beta,
+            examples=[
+                {'concentration1': [2.4], 'concentration0': [3.6], 'loc': [-1.0], 'scale': [2.0],
+                 'test_data': [-0.4]},
+                {'concentration1': [[2.4, 2.4], [3.6, 3.6]], 'concentration0': [[2.5, 2.5], [2.5, 2.5]],
+                 'loc': [[-1.0, -1.0], [2.0, 2.0]], 'scale': [[2.0, 2.0], [1.0, 1.0]],
+                 'test_data': [[[-0.4, 0.4], [2.5, 2.6]]]},
+                {'concentration1': [[2.4], [3.7]], 'concentration0': [[3.6], [2.5]],
+                 'loc': [[-1.0], [2.0]], 'scale': [[2.0], [2.0]],
+                 'test_data': [[0.0], [3.0]]}
+            ],
+            scipy_arg_fn=lambda concentration1, concentration0, loc, scale:
+            ((np.array(concentration1), np.array(concentration0), np.array(loc), np.array(scale)), {})),
     Fixture(pyro_dist=dist.Normal,
             scipy_dist=sp.norm,
             examples=[
@@ -228,7 +252,7 @@ continuous_dists = [
                 {'scale': [1.2],
                  'test_data': [1.0]},
                 {'scale': [1.2, 1.2],
-                 'test_data': [[1.0, -1.0], [1.0, -1.0]]},
+                 'test_data': [[1.0, 2.0], [1.0, 2.0]]},
                 {'scale': [[1.2], [1.0]],
                  'test_data': [[0.54], [0.35]]}
             ],
@@ -244,15 +268,30 @@ continuous_dists = [
                  'test_data': [[1.0], [2.0]]}
             ],
             scipy_arg_fn=lambda loc, concentration: ((), {"loc": np.array(loc), "kappa": np.array(concentration)})),
+    Fixture(pyro_dist=dist.LKJ,
+            examples=[
+                {'dim': 3, 'concentration': [1.], 'test_data':
+                    [[[1.0000, -0.8221,  0.7655], [-0.8221,  1.0000, -0.5293], [0.7655,  -0.5293,  1.0000]],
+                     [[1.0000, -0.5345, -0.5459], [-0.5345,  1.0000, -0.0333], [-0.5459, -0.0333,  1.0000]],
+                     [[1.0000, -0.3758, -0.2409], [-0.3758,  1.0000,  0.4653], [-0.2409,  0.4653,  1.0000]],
+                     [[1.0000, -0.8800, -0.9493], [-0.8800,  1.0000,  0.9088], [-0.9493,  0.9088,  1.0000]],
+                     [[1.0000,  0.2284, -0.1283], [0.2284,   1.0000,  0.0146], [-0.1283,  0.0146,  1.0000]]]},
+                ]),
     Fixture(pyro_dist=dist.LKJCorrCholesky,
             examples=[
-                {'d': 3, 'eta': [1.], 'test_data':
-                    [[[1.0000,  0.0000,  0.0000], [-0.8221,  0.5693,  0.0000], [0.7655,  0.1756,  0.6190]],
-                     [[1.0000,  0.0000,  0.0000], [-0.5345,  0.8451,  0.0000], [-0.5459, -0.3847,  0.7444]],
-                     [[1.0000,  0.0000,  0.0000], [-0.3758,  0.9267,  0.0000], [-0.2409,  0.4044,  0.8823]],
-                     [[1.0000,  0.0000,  0.0000], [-0.8800,  0.4750,  0.0000], [-0.9493,  0.1546,  0.2737]],
-                     [[1.0000,  0.0000,  0.0000], [0.2284,  0.9736,  0.0000], [-0.1283,  0.0451,  0.9907]]]},
-                ]),
+                {
+                    'd': 3,
+                    'eta': [1.],
+                    'test_data': [
+                        [[1.0, 0.0, 0.0],
+                         [-0.17332135, 0.98486533, 0.0],
+                         [0.43106407, -0.54767312, 0.71710384]],
+                        [[1.0, 0.0, 0.0],
+                         [-0.31391555, 0.94945091, 0.0],
+                         [-0.31391296, -0.29767500, 0.90158097]],
+                    ],
+                },
+            ]),
     Fixture(pyro_dist=dist.Stable,
             examples=[
                 {'stability': [1.5], 'skew': 0.1, 'test_data': [-10.]},
@@ -262,6 +301,13 @@ continuous_dists = [
             examples=[
                 {'df': 1.5, 'loc': [0.2, 0.3], 'scale_tril': [[0.8, 0.0], [1.3, 0.4]],
                  'test_data': [-3., 2]},
+                ]),
+    Fixture(pyro_dist=dist.ProjectedNormal,
+            examples=[
+                {'concentration': [0., 0.], 'test_data': [1., 0.]},
+                {'concentration': [2., 3.], 'test_data': [0., 1.]},
+                {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
+                {'concentration': [-1., 2., 3.], 'test_data': [0., 0., 1.]},
                 ]),
 ]
 
@@ -501,6 +547,13 @@ discrete_dists = [
                 params=continuous_dists + discrete_dists,
                 ids=lambda x: x.get_test_distribution_name())
 def all_distributions(request):
+    return request.param
+
+
+@pytest.fixture(name='continuous_dist',
+                params=continuous_dists,
+                ids=lambda x: x.get_test_distribution_name())
+def continuous_distributions(request):
     return request.param
 
 

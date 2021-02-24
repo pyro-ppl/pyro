@@ -137,8 +137,8 @@ def deterministic(name, value, event_dim=None):
     we want to record values which are completely determined by their parents.
     For example::
 
-        x = sample("x", dist.Normal(0, 1))
-        x2 = deterministic("x2", x ** 2)
+        x = pyro.sample("x", dist.Normal(0, 1))
+        x2 = pyro.deterministic("x2", x ** 2)
 
     .. note:: The site does not affect the model density. This currently converts
         to a :func:`sample` statement, but may change in the future.
@@ -204,7 +204,7 @@ class plate(PlateMessenger):
     rather than a function, and users must guarantee that all computation
     within an :class:`plate` context is conditionally independent::
 
-        with plate("name", size) as ind:
+        with pyro.plate("name", size) as ind:
             # ...do conditionally independent stuff with ind...
 
     Additionally, :class:`plate` can take advantage of the conditional
@@ -212,7 +212,7 @@ class plate(PlateMessenger):
     algorithms to scale various computed values. This is typically used to
     subsample minibatches of data::
 
-        with plate("data", len(data), subsample_size=100) as ind:
+        with pyro.plate("data", len(data), subsample_size=100) as ind:
             batch = data[ind]
             assert len(batch) == 100
 
@@ -257,34 +257,35 @@ class plate(PlateMessenger):
            >>> z = dist.Bernoulli(0.5).sample((100,))
 
         >>> # This version declares sequential independence and subsamples data:
-        >>> for i in plate('data', 100, subsample_size=10):
+        >>> for i in pyro.plate('data', 100, subsample_size=10):
         ...     if z[i]:  # Control flow in this example prevents vectorization.
-        ...         obs = sample('obs_{}'.format(i), dist.Normal(loc, scale), obs=data[i])
+        ...         obs = pyro.sample(f'obs_{i}', dist.Normal(loc, scale),
+        ...                           obs=data[i])
 
         >>> # This version declares vectorized independence:
-        >>> with plate('data'):
-        ...     obs = sample('obs', dist.Normal(loc, scale), obs=data)
+        >>> with pyro.plate('data'):
+        ...     obs = pyro.sample('obs', dist.Normal(loc, scale), obs=data)
 
         >>> # This version subsamples data in vectorized way:
-        >>> with plate('data', 100, subsample_size=10) as ind:
-        ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
+        >>> with pyro.plate('data', 100, subsample_size=10) as ind:
+        ...     obs = pyro.sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = torch.randint(0, 100, (10,)).long() # custom subsample
-        >>> with plate('data', 100, subsample=ind):
-        ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
+        >>> with pyro.plate('data', 100, subsample=ind):
+        ...     obs = pyro.sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This reuses two different independence contexts.
-        >>> x_axis = plate('outer', 320, dim=-1)
-        >>> y_axis = plate('inner', 200, dim=-2)
+        >>> x_axis = pyro.plate('outer', 320, dim=-1)
+        >>> y_axis = pyro.plate('inner', 200, dim=-2)
         >>> with x_axis:
-        ...     x_noise = sample("x_noise", dist.Normal(loc, scale))
+        ...     x_noise = pyro.sample("x_noise", dist.Normal(loc, scale))
         ...     assert x_noise.shape == (320,)
         >>> with y_axis:
-        ...     y_noise = sample("y_noise", dist.Normal(loc, scale))
+        ...     y_noise = pyro.sample("y_noise", dist.Normal(loc, scale))
         ...     assert y_noise.shape == (200, 1)
         >>> with x_axis, y_axis:
-        ...     xy_noise = sample("xy_noise", dist.Normal(loc, scale))
+        ...     xy_noise = pyro.sample("xy_noise", dist.Normal(loc, scale))
         ...     assert xy_noise.shape == (200, 320)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
@@ -319,7 +320,7 @@ def plate_stack(prefix, sizes, rightmost_dim=-1):
     assert rightmost_dim < 0
     with ExitStack() as stack:
         for i, size in enumerate(reversed(sizes)):
-            plate_i = plate("{}_{}".format(prefix, i), size, dim=rightmost_dim - i)
+            plate_i = plate(f"{prefix}_{i}", size, dim=rightmost_dim - i)
             stack.enter_context(plate_i)
         yield
 
@@ -359,9 +360,10 @@ def module(name, nn_module, update_module_params=False):
 
             if param_value._cdata != returned_param._cdata:
                 target_state_dict[param_name] = returned_param
-        else:
-            warnings.warn("{} was not registered in the param store because".format(param_name) +
-                          " requires_grad=False")
+        elif nn_module.training:
+            warnings.warn(f"{param_name} was not registered in the param store "
+                          "because requires_grad=False. You can silence this "
+                          "warning by calling my_module.train(False)")
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
@@ -433,9 +435,19 @@ def enable_validation(is_validate=True):
     """
     Enable or disable validation checks in Pyro. Validation checks provide
     useful warnings and errors, e.g. NaN checks, validating distribution
-    arguments and support values, etc. which is useful for debugging.
-    Since some of these checks may be expensive, we recommend turning
-    this off for mature models.
+    arguments and support values, detecting incorrect use of ELBO and MCMC.
+    Since some of these checks may be expensive, you may want to disable
+    validation of mature models to speed up inference.
+
+    The default behavior mimics Python's ``assert`` statement: validation is on
+    by default, but is disabled if Python is run in optimized mode (via
+    ``python -O``). Equivalently, the default behavior depends on Python's
+    global ``__debug__`` value via ``pyro.enable_validation(__debug__)``.
+
+    Validation is temporarily disabled during jit compilation, for all
+    inference algorithms that support the PyTorch jit. We recommend developing
+    models with non-jitted inference algorithms to ease debugging, then
+    optionally moving to jitted inference once a model is correct.
 
     :param bool is_validate: (optional; defaults to True) whether to
         enable validation checks.

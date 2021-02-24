@@ -21,19 +21,20 @@ def model(data):
     y = data[:, 0]
     sigma = data[:, 1]
 
-    eta = pyro.sample('eta', dist.Normal(torch.zeros(J), torch.ones(J)))
-    mu = pyro.sample('mu', dist.Normal(torch.zeros(1), 10 * torch.ones(1)))
-    tau = pyro.sample('tau', dist.HalfCauchy(scale=25 * torch.ones(1)))
+    with pyro.plate("data", J):
+        eta = pyro.sample('eta', dist.Normal(torch.zeros(J), torch.ones(J)))
+        mu = pyro.sample('mu', dist.Normal(torch.zeros(1), 10 * torch.ones(1)))
+        tau = pyro.sample('tau', dist.HalfCauchy(scale=25 * torch.ones(1)))
 
-    theta = mu + tau * eta
+        theta = mu + tau * eta
 
-    pyro.sample("obs", dist.Normal(theta, sigma), obs=y)
+        pyro.sample("obs", dist.Normal(theta, sigma), obs=y)
 
 
 def guide(data):
-    loc_eta = torch.randn(J, 1)
+    loc_eta = torch.randn(J)
     # note that we initialize our scales to be pretty narrow
-    scale_eta = 0.1 * torch.rand(J, 1)
+    scale_eta = 0.1 * torch.rand(J)
     loc_mu = torch.randn(1)
     scale_mu = 0.1 * torch.rand(1)
     loc_logtau = torch.randn(1)
@@ -53,9 +54,10 @@ def guide(data):
     dist_tau = dist.TransformedDistribution(dist.Normal(m_logtau_param, s_logtau_param),
                                             transforms=transforms.ExpTransform())
 
-    pyro.sample('eta', dist_eta)
-    pyro.sample('mu', dist_mu)
-    pyro.sample('tau', dist_tau)
+    with pyro.plate("data", J):
+        pyro.sample('eta', dist_eta)
+        pyro.sample('mu', dist_mu)
+        pyro.sample('tau', dist_tau)
 
 
 def main(args):
@@ -75,7 +77,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.1')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description='Eight Schools SVI')
     parser.add_argument('--lr', type=float, default=0.01,
                         help='learning rate (default: 0.01)')

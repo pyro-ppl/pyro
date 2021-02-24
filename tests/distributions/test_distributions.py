@@ -8,8 +8,9 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions import TorchDistribution
+from pyro.distributions.testing.gof import auto_goodness_of_fit
 from pyro.distributions.util import broadcast_shape
-from tests.common import assert_equal, xfail_if_not_implemented
+from tests.common import TEST_FAILURE_RATE, assert_equal, xfail_if_not_implemented
 
 
 def _log_prob_shape(dist, x_size=torch.Size()):
@@ -19,7 +20,31 @@ def _log_prob_shape(dist, x_size=torch.Size()):
         expected_shape = expected_shape[:-event_dims]
     return expected_shape
 
+
 # Distribution tests - all distributions
+
+def test_support_shape(dist):
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        d = dist.pyro_dist(**dist_params)
+        assert d.support.event_dim == d.event_dim
+        x = dist.get_test_data(idx)
+        ok = d.support.check(x)
+        assert ok.shape == broadcast_shape(d.batch_shape, x.shape[:x.dim() - d.event_dim])
+        assert ok.all()
+
+
+def test_infer_shapes(dist):
+    if "LKJ" in dist.pyro_dist.__name__:
+        pytest.xfail(reason="cannot statically compute shape")
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else ()
+                      for k, v in dist_params.items()}
+        batch_shape, event_shape = dist.pyro_dist.infer_shapes(**arg_shapes)
+        d = dist.pyro_dist(**dist_params)
+        assert d.batch_shape == batch_shape
+        assert d.event_shape == event_shape
 
 
 def test_batch_log_prob(dist):
@@ -82,7 +107,50 @@ def test_score_errors_non_broadcastable_data_shape(dist):
             d.log_prob(test_data_non_broadcastable)
 
 
+# Distributions tests - continuous distributions
+
+def test_support_is_not_discrete(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        assert not d.support.is_discrete
+
+
+def test_gof(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    if Dist in [dist.LKJ, dist.LKJCorrCholesky]:
+        pytest.xfail(reason="incorrect submanifold scaling")
+
+    num_samples = 50000
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        samples = d.sample(torch.Size([num_samples]))
+        with xfail_if_not_implemented():
+            probs = d.log_prob(samples).exp()
+
+        dim = None
+        if "ProjectedNormal" in Dist.__name__:
+            dim = samples.size(-1) - 1
+
+        # Test each batch independently.
+        probs = probs.reshape(num_samples, -1)
+        samples = samples.reshape(probs.shape + d.event_shape)
+        if "Dirichlet" in Dist.__name__:
+            # The Dirichlet density is over all but one of the probs.
+            samples = samples[..., :-1]
+        for b in range(probs.size(-1)):
+            gof = auto_goodness_of_fit(samples[:, b], probs[:, b], dim=dim)
+            assert gof > TEST_FAILURE_RATE
+
+
 # Distributions tests - discrete distributions
+
+def test_support_is_discrete(discrete_dist):
+    Dist = discrete_dist.pyro_dist
+    for i in range(discrete_dist.get_num_test_data()):
+        d = Dist(**discrete_dist.get_dist_params(i))
+        assert d.support.is_discrete
+
 
 def test_enumerate_support(discrete_dist):
     expected_support = discrete_dist.expected_support
