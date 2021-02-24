@@ -2211,7 +2211,7 @@ def test_obs_mask_ok(Elbo, mask, num_particles):
                            constraint=constraints.positive)
         x = pyro.sample("x", dist.Normal(loc, scale))
         with pyro.plate("plate", len(data)):
-            with poutine.mask(mask=mask ^ True):
+            with poutine.mask(mask=~mask):
                 pyro.sample("y_unobserved", dist.Normal(x, 1.))
 
     elbo = Elbo(num_particles=num_particles, vectorize_particles=True,

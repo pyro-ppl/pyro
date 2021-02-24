@@ -72,11 +72,10 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
-    :param ~torch.Tensor obs_mask: EXPERIMENTAL Optional boolean tensor mask.
-        If provided, values with mask=True will be conditioned on ``obs`` and
-        remaining values will be imputed by sampling. This introduces a latent
-        sample site named ``name + "_unobserved"`` which should be used by
-        guides (this site name may change in a future version).
+    :param ~torch.Tensor obs_mask: Optional boolean tensor mask.  If provided,
+        values with mask=True will be conditioned on ``obs`` and remaining
+        values will be imputed by sampling. This introduces a latent sample
+        site named ``name + "_unobserved"`` which should be used by guides.
     :type obs_mask: bool or ~torch.Tensor
     :param dict infer: Optional dictionary of inference parameters specified
         in kwargs. See inference documentation for details.
