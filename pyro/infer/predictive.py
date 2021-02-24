@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from functools import reduce
+from typing import Callable, Dict
 import warnings
 
 import torch
@@ -31,15 +32,19 @@ def _guess_max_plate_nesting(model, args, kwargs):
 
 
 def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
-                           num_samples, return_site_shapes, return_trace=False):
+                           num_samples, return_site_shapes, return_trace=False,
+                           collect_fn=None):
     collected = []
+    if collect_fn is None:
+        def collect_fn(msg):
+            return msg["value"]
     samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
     for i in range(num_samples):
         trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs)
         if return_trace:
             collected.append(trace)
         else:
-            collected.append({site: trace.nodes[site]['value'] for site in return_site_shapes})
+            collected.append({site: collect_fn(trace.nodes[site]) for site in return_site_shapes})
 
     if return_trace:
         return collected
@@ -108,6 +113,34 @@ def _predictive(model, posterior_samples, num_samples, return_sites=(),
     return predictions
 
 
+def _validate_predictive_inputs(posterior_samples, num_samples, guide, return_sites):
+    if posterior_samples is None:
+        if num_samples is None:
+            raise ValueError("Either posterior_samples or num_samples must be specified.")
+        posterior_samples = {}
+
+    for name, sample in posterior_samples.items():
+        batch_size = sample.shape[0]
+        if num_samples is None:
+            num_samples = batch_size
+        elif num_samples != batch_size:
+            warnings.warn("Sample's leading dimension size {} is different from the "
+                          "provided {} num_samples argument. Defaulting to {}."
+                          .format(batch_size, num_samples, batch_size), UserWarning)
+            num_samples = batch_size
+
+    if num_samples is None:
+        raise ValueError("No sample sites in posterior samples to infer `num_samples`.")
+
+    if guide is not None and posterior_samples:
+        raise ValueError("`posterior_samples` cannot be provided with the `guide` argument.")
+
+    if return_sites is not None:
+        assert isinstance(return_sites, (list, tuple, set))
+
+    return posterior_samples, num_samples
+
+
 class Predictive(torch.nn.Module):
     """
     EXPERIMENTAL class used to construct predictive distribution. The predictive
@@ -136,29 +169,8 @@ class Predictive(torch.nn.Module):
     def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
                  return_sites=(), parallel=False):
         super().__init__()
-        if posterior_samples is None:
-            if num_samples is None:
-                raise ValueError("Either posterior_samples or num_samples must be specified.")
-            posterior_samples = {}
-
-        for name, sample in posterior_samples.items():
-            batch_size = sample.shape[0]
-            if num_samples is None:
-                num_samples = batch_size
-            elif num_samples != batch_size:
-                warnings.warn("Sample's leading dimension size {} is different from the "
-                              "provided {} num_samples argument. Defaulting to {}."
-                              .format(batch_size, num_samples, batch_size), UserWarning)
-                num_samples = batch_size
-
-        if num_samples is None:
-            raise ValueError("No sample sites in posterior samples to infer `num_samples`.")
-
-        if guide is not None and posterior_samples:
-            raise ValueError("`posterior_samples` cannot be provided with the `guide` argument.")
-
-        if return_sites is not None:
-            assert isinstance(return_sites, (list, tuple, set))
+        posterior_samples, num_samples = _validate_predictive_inputs(
+            posterior_samples, num_samples, guide, return_sites)
 
         self.model = model
         self.posterior_samples = {} if posterior_samples is None else posterior_samples
@@ -224,3 +236,91 @@ class Predictive(torch.nn.Module):
                                             parallel=self.parallel, model_args=args, model_kwargs=kwargs)
         return _predictive(self.model, posterior_samples, self.num_samples,
                            return_trace=True, model_args=args, model_kwargs=kwargs)
+
+
+def log_likelihood(
+    model: Callable,
+    posterior_samples: Dict[str, torch.Tensor] = None,
+    guide: Callable = None,
+    num_samples: int = None,
+    parallel: bool = True,
+    obs_shapes: Dict[str, torch.Size] = None,
+) -> Callable:
+    """EXPERIMENTAL utility to calculate the log likelihood of the data for a
+    model with observed sites, given posterior samples (or a guide that can
+    generate them).
+
+    :param model: Model function containing pyro primitives. Must have observed
+        sites conditioned on data.
+    :type model: Callable
+    :param posterior_samples: Dictionary of posterior samples, defaults to None
+    :type posterior_samples: Dict[str, torch.Tensor], optional
+    :param guide: Guide function, defaults to None
+    :type guide: Callable, optional
+    :param num_samples: Number of posterior samples to evaluate, defaults to None
+    :type num_samples: int, optional
+    :param parallel: Whether to use vectorization, defaults to True
+    :type parallel: bool, optional
+    :param obs_shapes: A dictionary mapping the observed site names to the
+        expected batch size of the returned tensor. If this is not supplied, it
+        will be automatically generated by running an extra trace of the model.
+    :type obs_shapes: Dict[str, torch.Size], optional
+    :rtype: Callable
+
+    The API parallels that of the :class:`Predictive` interface (assume `model`
+    and `guide` have already been defined elsewhere in the below example):
+
+    ```
+    x = torch.randn(10)
+    y = x + 0.05 * torch.randn(10)
+    cond_model = pyro.condition(model, data={"y": y})
+    ll_vals = log_likelihood(cond_model, guide=guide, num_samples)(x)
+    ```
+    """
+
+    posterior_samples, num_samples = _validate_predictive_inputs(
+        posterior_samples, num_samples, guide, return_sites=None)
+
+    # define the function to return the likelihood values
+    def log_like_helper(*args, **kwargs) -> torch.Tensor:
+        if obs_shapes is None:
+            # trace model once to get observed nodes
+            trace = pyro.poutine.trace(model).get_trace(*args, **kwargs)
+            observed = {
+                name: site["fn"].batch_shape
+                for name, site in trace.nodes.items()
+                if site["type"] == "sample" and site["is_observed"]
+            }
+        else:
+            observed = obs_shapes.copy()
+        if len(observed) == 0:
+            raise RuntimeError("No observed sites in the model")
+        # use vectorized trace if parallelizable
+        if parallel:
+            log_like = dict()
+            # now trace it and extract the likelihood from observed sites
+            predictive = Predictive(
+                model, posterior_samples, guide, num_samples, (), parallel)
+            trace = predictive.get_vectorized_trace(*args, **kwargs)
+            for obs_name in observed.keys():
+                site = trace.nodes[obs_name]
+                log_like[obs_name] = site["fn"].log_prob(site["value"])
+            return log_like
+        # iterate over samples from posterior if model can't be vectorized
+        else:
+            # use guide to get posterior samples if provided
+            if guide is not None:
+                _posterior_samples = _predictive(
+                    guide, {}, num_samples, model_args=args,
+                    model_kwargs=kwargs, parallel=False)
+            else:
+                _posterior_samples = posterior_samples
+            # use _predictive_sequential to collect log likelihood values
+            site_shapes = {
+                name: (num_samples,) + shape for name, shape in observed.items()
+            }
+            log_like = _predictive_sequential(
+                model, _posterior_samples, args, kwargs, num_samples, site_shapes,
+                collect_fn=lambda msg: msg["fn"].log_prob(msg["value"]))
+            return log_like
+    return log_like_helper
