@@ -2181,6 +2181,7 @@ def test_reparam_mask_plate_ok(Elbo, mask):
     assert_ok(model, guide, Elbo())
 
 
+@pytest.mark.parametrize("num_particles", [1, 2])
 @pytest.mark.parametrize("mask", [
     torch.tensor(True),
     torch.tensor(False),
@@ -2194,7 +2195,7 @@ def test_reparam_mask_plate_ok(Elbo, mask):
     TraceGraph_ELBO,
     TraceMeanField_ELBO,
 ])
-def test_obs_mask_ok(Elbo, mask):
+def test_obs_mask_ok(Elbo, mask, num_particles):
     data = torch.tensor([7., 7., 7.])
 
     def model():
@@ -2213,7 +2214,9 @@ def test_obs_mask_ok(Elbo, mask):
             with poutine.mask(mask=mask ^ True):
                 pyro.sample("y_unobserved", dist.Normal(x, 1.))
 
-    assert_ok(model, guide, Elbo(strict_enumeration_warning=False))
+    elbo = Elbo(num_particles=num_particles, vectorize_particles=True,
+                strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)
 
 
 @pytest.mark.parametrize("scale", [1, 0.1, torch.tensor(0.5)])
