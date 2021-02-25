@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
+
 import torch
 
 from pyro.distributions.torch import LKJCholesky, TransformedDistribution
@@ -11,8 +13,11 @@ from . import constraints
 
 class LKJCorrCholesky(LKJCholesky):  # DEPRECATED
     def __init__(self, d, eta, validate_args=None):
-        raise FutureWarning('class LKJCorrCholesky(d, eta, validate_args=None) is deprecated ' +
-                            'in favor of LKJCholesky(dim, concentration, validate_args=None).')
+        warnings.warn(
+            'class LKJCorrCholesky(d, eta, validate_args=None) is deprecated '
+            'in favor of LKJCholesky(dim, concentration, validate_args=None).',
+            FutureWarning,
+        )
         super().__init__(d, concentration=eta, validate_args=validate_args)
 
 
