@@ -89,3 +89,9 @@ def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
     assert test_lp < 0.
     assert train_perplex > 0.
     assert test_perplex > 0.
+
+    # Embedding.
+    z_locs, z_scales = model.embed(dataset, dataset)
+    assert z_locs.shape == (len(dataset)*2, z_dim)
+    assert z_scales.shape == (len(dataset)*2, z_dim)
+    assert torch.all(z_scales > 0.)

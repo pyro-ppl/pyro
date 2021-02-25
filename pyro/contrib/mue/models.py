@@ -161,16 +161,18 @@ class ProfileHMM(nn.Module):
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
                 loss = svi.step(seq_data, L_data,
-                                torch.tensor(dataset.data_size/L_data.shape[0]))
+                                torch.tensor(len(dataset)/L_data.shape[0]))
                 losses.append(loss)
                 scheduler.step()
             print(epoch, loss, ' ', datetime.datetime.now() - t0)
         return losses
 
-    def evaluate(self, dataset_train, dataset_test, jit=False):
+    def evaluate(self, dataset_train, dataset_test=None, jit=False):
         """Evaluate performance on train and test datasets."""
         dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
-        dataload_test = DataLoader(dataset_test, batch_size=1, shuffle=False)
+        if dataset_test is not None:
+            dataload_test = DataLoader(dataset_test, batch_size=1,
+                                       shuffle=False)
         self.guide(None, None, None)
         if jit:
             Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
@@ -181,9 +183,12 @@ class ProfileHMM(nn.Module):
         # Compute elbo and perplexity.
         train_lp, train_perplex = self._evaluate_elbo(
                 svi, dataload_train, dataset_train.data_size, self.length_model)
-        test_lp, test_perplex = self._evaluate_elbo(
-                svi, dataload_test, dataset_test.data_size, self.length_model)
-        return train_lp, test_lp, train_perplex, test_perplex
+        if dataset_test is not None:
+            test_lp, test_perplex = self._evaluate_elbo(
+                    svi, dataload_test, dataset_test.data_size, self.length_model)
+            return train_lp, test_lp, train_perplex, test_perplex
+        else:
+            return train_lp, None, train_perplex, None
 
     def _evaluate_elbo(self, svi, dataload, data_size, length_model):
         """Evaluate elbo and average per residue perplexity."""
@@ -511,24 +516,46 @@ class FactorMuE(nn.Module):
             for seq_data, L_data in dataload:
                 loss = svi.step(
                     seq_data, L_data,
-                    torch.tensor(dataset.data_size/L_data.shape[0]),
-                    self._beta_anneal(step_i, batch_size, dataset.data_size,
+                    torch.tensor(len(dataset)/L_data.shape[0]),
+                    self._beta_anneal(step_i, batch_size, len(dataset),
                                       anneal_length))
                 losses.append(loss)
                 scheduler.step()
                 step_i += 1
             print(epoch, loss, ' ', datetime.datetime.now() - t0)
+
+        """for seq_data, L_data in dataload:
+            conditioned_model = poutine.condition(self.model, data={
+                    "obs_L": L_data, "obs_seq": seq_data})
+            args = (seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
+            guide_tr = poutine.trace(self.guide).get_trace(*args)
+            model_tr = poutine.trace(poutine.replay(
+                    conditioned_model, trace=guide_tr)).get_trace(*args)
+            model_tr.compute_log_prob()
+            for ke in list(model_tr.nodes.keys()):
+                if ke[0] != '_':
+                    try:
+                        print(ke, model_tr.nodes[ke]['log_prob'])
+                    except:
+                        print('no log prob for ', ke)
+            pdb.set_trace()
+            print('here')"""
+
         return losses
 
     def _beta_anneal(self, step, batch_size, data_size, anneal_length):
         """Annealing schedule for prior KL term (beta annealing)."""
+        if np.allclose(anneal_length, 0.):
+            return torch.tensor(1.)
         anneal_frac = step*batch_size/(anneal_length*data_size)
         return torch.tensor(min([anneal_frac, 1.]))
 
-    def evaluate(self, dataset_train, dataset_test, jit=False):
+    def evaluate(self, dataset_train, dataset_test=None, jit=False):
         """Evaluate performance on train and test datasets."""
         dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
-        dataload_test = DataLoader(dataset_test, batch_size=1, shuffle=False)
+        if dataset_test is not None:
+            dataload_test = DataLoader(dataset_test, batch_size=1,
+                                       shuffle=False)
         # Initialize guide.
         for seq_data, L_data in dataload_train:
             self.guide(seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
@@ -541,23 +568,62 @@ class FactorMuE(nn.Module):
         svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
 
         # Compute elbo and perplexity.
-        train_lp, train_perplex = self._evaluate_elbo(
-                svi, dataload_train, dataset_train.data_size, self.length_model)
-        test_lp, test_perplex = self._evaluate_elbo(
-                svi, dataload_test, dataset_test.data_size, self.length_model)
-        return train_lp, test_lp, train_perplex, test_perplex
+        train_lp, train_perplex = self._evaluate_local_elbo(
+                svi, dataload_train, len(dataset_train), self.length_model)
+        if dataset_test is not None:
+            test_lp, test_perplex = self._evaluate_local_elbo(
+                    svi, dataload_test, len(dataset_test),
+                    self.length_model)
+            return train_lp, test_lp, train_perplex, test_perplex
+        else:
+            return train_lp, None, train_perplex, None
 
-    def _evaluate_elbo(self, svi, dataload, data_size, length_model):
+    def _local_variables(self, name, site):
+        """Return per datapoint random variables in model."""
+        return name in ['latent', 'obs_L', 'obs_seq']
+
+    def _evaluate_local_elbo(self, svi, dataload, data_size, length_model):
         """Evaluate elbo and average per residue perplexity."""
         lp, perplex = 0., 0.
-        for seq_data, L_data in dataload:
-            lp_i = svi.evaluate_loss(
-                seq_data, L_data, torch.tensor(data_size),
-                torch.tensor(1.)) / data_size
-            lp += -lp_i
-            perplex += lp_i / (L_data[0].numpy() + int(self.length_model))
+        with torch.no_grad():
+            for seq_data, L_data in dataload:
+                conditioned_model = poutine.condition(self.model, data={
+                        "obs_L": L_data, "obs_seq": seq_data})
+                args = (seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
+                guide_tr = poutine.trace(self.guide).get_trace(*args)
+                model_tr = poutine.trace(poutine.replay(
+                        conditioned_model, trace=guide_tr)).get_trace(*args)
+                local_elbo = (model_tr.log_prob_sum(self._local_variables)
+                              - guide_tr.log_prob_sum(self._local_variables)
+                              ).numpy()
+                lp += local_elbo
+                perplex += -local_elbo / (L_data[0].numpy() +
+                                          int(self.length_model))
         perplex = np.exp(perplex / data_size)
         return lp, perplex
+
+    def embed(self, dataset_train, dataset_test=None, batch_size=None):
+        """Get latent space embedding."""
+        if batch_size is None:
+            batch_size = self.batch_size
+        dataload_train = DataLoader(dataset_train, batch_size=batch_size,
+                                    shuffle=False)
+
+        z_locs, z_scales = [], []
+        for seq_data, L_data in dataload_train:
+            z_loc, z_scale = self.encoder(seq_data)
+            z_locs.append(z_loc.detach())
+            z_scales.append(z_scale.detach())
+
+        if dataset_test is not None:
+            dataload_test = DataLoader(dataset_test, batch_size=batch_size,
+                                       shuffle=False)
+            for seq_data, L_data in dataload_test:
+                z_loc, z_scale = self.encoder(seq_data)
+                z_locs.append(z_loc.detach())
+                z_scales.append(z_scale.detach())
+
+        return torch.cat(z_locs), torch.cat(z_scales)
 
     def reconstruct_precursor_seq(self, data, ind, param):
         # Encode seq.

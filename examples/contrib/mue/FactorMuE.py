@@ -8,6 +8,7 @@ A PCA model with a MuE emission (FactorMuE).
 import argparse
 import datetime
 import json
+import numpy as np
 import os
 
 import matplotlib.pyplot as plt
@@ -18,6 +19,8 @@ import pyro
 from pyro.contrib.mue.dataloaders import BiosequenceDataset
 from pyro.contrib.mue.models import FactorMuE
 from pyro.optim import MultiStepLR
+
+import pdb
 
 
 def generate_data(small_test):
@@ -35,17 +38,26 @@ def generate_data(small_test):
 
 def main(args):
 
-    pyro.set_rng_seed(args.rng_seed)
-
     # Load dataset.
     if args.test:
         dataset = generate_data(args.small)
     else:
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
     args.batch_size = min([dataset.data_size, args.batch_size])
+    if args.split is not None:
+        pyro.set_rng_seed(args.rng_data_seed)
+        heldout_num = int(np.ceil(args.split*len(dataset)))
+        dataset_train, dataset_test = torch.utils.data.random_split(
+            dataset, [dataset.data_size - heldout_num, heldout_num])
+    else:
+        dataset_test = dataset
+
+    # Random sampler.
+    pyro.set_rng_seed(args.rng_seed)
 
     # Construct model.
-    model = FactorMuE(dataset.max_length, dataset.alphabet_length, args.z_dim,
+    model = FactorMuE(dataset.max_length, dataset.alphabet_length,
+                      args.z_dim,
                       batch_size=args.batch_size,
                       latent_seq_length=args.latent_seq_length,
                       indel_factor_dependence=args.indel_factor,
@@ -70,7 +82,17 @@ def main(args):
         n_epochs = 100
     else:
         n_epochs = args.n_epochs
-    losses = model.fit_svi(dataset, n_epochs, args.batch_size, scheduler)
+    losses = model.fit_svi(dataset_train, n_epochs, args.anneal,
+                           args.batch_size, scheduler, args.jit)
+
+    # Evaluate.
+    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(
+                dataset_train, dataset_test, args.jit)
+    print('train logp: {} perplex: {}'.format(train_lp, train_perplex))
+    print('test logp: {} perplex: {}'.format(test_lp, test_perplex))
+
+    # Embed.
+    z_locs, z_scales = model.embed(dataset_train, dataset_test)
 
     # Plot and save.
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -85,8 +107,7 @@ def main(args):
                  'FactorMuE_plot.loss_{}.pdf'.format(time_stamp)))
 
         plt.figure(figsize=(6, 6))
-        latent = model.encoder(dataset.seq_data)[0].detach()
-        plt.scatter(latent[:, 0], latent[:, 1])
+        plt.scatter(z_locs[:, 0], z_locs[:, 1])
         plt.xlabel('z_1')
         plt.ylabel('z_2')
         if args.save:
@@ -121,6 +142,23 @@ def main(args):
                 'FactorMuE_results.params_{}.out'.format(time_stamp)))
         with open(os.path.join(
                 args.out_folder,
+                'FactorMuE_results.evaluation_{}.txt'.format(time_stamp)),
+                'w') as ow:
+            ow.write('train_lp,test_lp,train_perplex,test_perplex\n')
+            ow.write('{},{},{},{}\n'.format(train_lp, test_lp, train_perplex,
+                                            test_perplex))
+        np.savetxt(os.path.join(
+                        args.out_folder,
+                        'FactorMuE_results.embed_loc_{}.txt'.format(
+                                                                time_stamp)),
+                   z_locs.numpy())
+        np.savetxt(os.path.join(
+                        args.out_folder,
+                        'FactorMuE_results.embed_scale_{}.txt'.format(
+                                                                time_stamp)),
+                   z_scales.numpy())
+        with open(os.path.join(
+                args.out_folder,
                 'FactorMuE_results.input_{}.txt'.format(time_stamp)),
                 'w') as ow:
             ow.write('[args]\n')
@@ -135,6 +173,7 @@ if __name__ == '__main__':
     parser.add_argument("--small", action='store_true', default=False,
                         help='Run with small example dataset.')
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
+    parser.add_argument("--rng-data-seed", default=0, type=int)
     parser.add_argument("-f", "--file", default=None, type=str,
                         help='Input file (fasta format).')
     parser.add_argument("-a", "--alphabet", default='amino-acid',
@@ -178,12 +217,19 @@ if __name__ == '__main__':
                         help='Gamma parameter for multistage learning rate.')
     parser.add_argument("-e", "--n-epochs", default=10, type=int,
                         help='Number of epochs of training.')
+    parser.add_argument("--anneal", default=0., type=float,
+                        help='Number of epochs to anneal beta over.')
     parser.add_argument("-p", "--plots", default=True, type=bool,
                         help='Make plots.')
     parser.add_argument("-s", "--save", default=True, type=bool,
                         help='Save plots and results.')
     parser.add_argument("-outf", "--out-folder", default='.',
                         help='Folder to save plots.')
+    parser.add_argument("--split", default=0.2, type=float,
+                        help=('Fraction of dataset to holdout for testing' +
+                              '(float or None).'))
+    parser.add_argument("--jit", default=False, type=bool,
+                        help='JIT compile the ELBO.')
     args = parser.parse_args()
 
     torch.set_default_dtype(torch.float64)
