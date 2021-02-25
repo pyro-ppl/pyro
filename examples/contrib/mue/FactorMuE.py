@@ -71,17 +71,15 @@ def main(args):
                       substitution_matrix=args.substitution_matrix,
                       substitution_prior_scale=args.substitution_prior_scale,
                       latent_alphabet_length=args.latent_alphabet,
-                      length_model=args.length_model)
+                      length_model=args.length_model,
+                      cuda=args.cuda)
 
     # Infer.
     scheduler = MultiStepLR({'optimizer': Adam,
                              'optim_args': {'lr': args.learning_rate},
                              'milestones': json.loads(args.milestones),
                              'gamma': args.learning_gamma})
-    if args.test and not args.small:
-        n_epochs = 100
-    else:
-        n_epochs = args.n_epochs
+    n_epochs = args.n_epochs
     losses = model.fit_svi(dataset_train, n_epochs, args.anneal,
                            args.batch_size, scheduler, args.jit)
 
@@ -230,8 +228,12 @@ if __name__ == '__main__':
                               '(float or None).'))
     parser.add_argument("--jit", default=False, type=bool,
                         help='JIT compile the ELBO.')
+    parser.add_argument("--cuda", default=False, type=bool, help='Use GPU.')
     args = parser.parse_args()
 
-    torch.set_default_dtype(torch.float64)
+    if args.cuda:
+        torch.set_default_tensor_type(torch.cuda.DoubleTensor)
+    else:
+        torch.set_default_dtype(torch.float64)
 
     main(args)

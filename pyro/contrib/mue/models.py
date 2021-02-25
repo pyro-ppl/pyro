@@ -236,8 +236,11 @@ class FactorMuE(nn.Module):
                  substitution_prior_scale=10.,
                  latent_alphabet_length=None,
                  length_model=False,
+                 cuda=False,
                  epsilon=1e-32):
         super().__init__()
+        assert isinstance(cuda, bool)
+        self.cuda = cuda
 
         # Constants.
         assert isinstance(data_length, int) and data_length > 0
@@ -514,6 +517,8 @@ class FactorMuE(nn.Module):
         t0 = datetime.datetime.now()
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
+                if self.cuda:
+                    seq_data, L_data = seq_data.cuda(), L_data.cuda()
                 loss = svi.step(
                     seq_data, L_data,
                     torch.tensor(len(dataset)/L_data.shape[0]),
@@ -523,23 +528,6 @@ class FactorMuE(nn.Module):
                 scheduler.step()
                 step_i += 1
             print(epoch, loss, ' ', datetime.datetime.now() - t0)
-
-        """for seq_data, L_data in dataload:
-            conditioned_model = poutine.condition(self.model, data={
-                    "obs_L": L_data, "obs_seq": seq_data})
-            args = (seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
-            guide_tr = poutine.trace(self.guide).get_trace(*args)
-            model_tr = poutine.trace(poutine.replay(
-                    conditioned_model, trace=guide_tr)).get_trace(*args)
-            model_tr.compute_log_prob()
-            for ke in list(model_tr.nodes.keys()):
-                if ke[0] != '_':
-                    try:
-                        print(ke, model_tr.nodes[ke]['log_prob'])
-                    except:
-                        print('no log prob for ', ke)
-            pdb.set_trace()
-            print('here')"""
 
         return losses
 
@@ -558,6 +546,8 @@ class FactorMuE(nn.Module):
                                        shuffle=False)
         # Initialize guide.
         for seq_data, L_data in dataload_train:
+            if self.cuda:
+                seq_data, L_data = seq_data.cuda(), L_data.cuda()
             self.guide(seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
             break
         if jit:
@@ -587,6 +577,8 @@ class FactorMuE(nn.Module):
         lp, perplex = 0., 0.
         with torch.no_grad():
             for seq_data, L_data in dataload:
+                if self.cuda:
+                    seq_data, L_data = seq_data.cuda(), L_data.cuda()
                 conditioned_model = poutine.condition(self.model, data={
                         "obs_L": L_data, "obs_seq": seq_data})
                 args = (seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
@@ -608,27 +600,32 @@ class FactorMuE(nn.Module):
             batch_size = self.batch_size
         dataload_train = DataLoader(dataset_train, batch_size=batch_size,
                                     shuffle=False)
-
-        z_locs, z_scales = [], []
-        for seq_data, L_data in dataload_train:
-            z_loc, z_scale = self.encoder(seq_data)
-            z_locs.append(z_loc.detach())
-            z_scales.append(z_scale.detach())
-
-        if dataset_test is not None:
-            dataload_test = DataLoader(dataset_test, batch_size=batch_size,
-                                       shuffle=False)
-            for seq_data, L_data in dataload_test:
+        with torch.no_grad():
+            z_locs, z_scales = [], []
+            for seq_data, L_data in dataload_train:
+                if self.cuda:
+                    seq_data, L_data = seq_data.cuda(), L_data.cuda()
                 z_loc, z_scale = self.encoder(seq_data)
-                z_locs.append(z_loc.detach())
-                z_scales.append(z_scale.detach())
+                z_locs.append(z_loc)
+                z_scales.append(z_scale)
+
+            if dataset_test is not None:
+                dataload_test = DataLoader(dataset_test, batch_size=batch_size,
+                                           shuffle=False)
+                for seq_data, L_data in dataload_test:
+                    if self.cuda:
+                        seq_data, L_data = seq_data.cuda(), L_data.cuda()
+                    z_loc, z_scale = self.encoder(seq_data)
+                    z_locs.append(z_loc)
+                    z_scales.append(z_scale)
 
         return torch.cat(z_locs), torch.cat(z_scales)
 
     def reconstruct_precursor_seq(self, data, ind, param):
-        # Encode seq.
-        z_loc = self.encoder(data[ind][0])[0]
-        # Reconstruct
-        decoded = self.decoder(z_loc, param("W_q_mn"), param("B_q_mn"),
-                               param("inverse_temp_q_mn"))
-        return torch.exp(decoded['precursor_seq_logits']).detach()
+        with torch.no_grad():
+            # Encode seq.
+            z_loc = self.encoder(data[ind][0])[0]
+            # Reconstruct
+            decoded = self.decoder(z_loc, param("W_q_mn"), param("B_q_mn"),
+                                   param("inverse_temp_q_mn"))
+            return torch.exp(decoded['precursor_seq_logits'])
