@@ -25,8 +25,8 @@ def model(y):
     # Vector of variances for each of the d variables
     theta = pyro.sample("theta", dist.HalfCauchy(torch.ones(d, **options)))
     # Lower cholesky factor of a correlation matrix
-    eta = torch.ones(1, **options)  # Implies a uniform distribution over correlation matrices
-    L_omega = pyro.sample("L_omega", dist.LKJCorrCholesky(d, eta))
+    concentration = torch.ones((), **options)  # Implies a uniform distribution over correlation matrices
+    L_omega = pyro.sample("L_omega", dist.LKJCholesky(d, concentration))
     # Lower cholesky factor of the covariance matrix
     L_Omega = torch.mm(torch.diag(theta.sqrt()), L_omega)
     # For inference with SVI, one might prefer to use torch.bmm(theta.sqrt().diag_embed(), L_omega)
