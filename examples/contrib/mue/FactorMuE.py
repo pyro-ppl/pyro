@@ -72,7 +72,8 @@ def main(args):
                       substitution_prior_scale=args.substitution_prior_scale,
                       latent_alphabet_length=args.latent_alphabet,
                       length_model=args.length_model,
-                      cuda=args.cuda)
+                      cuda=args.cuda,
+                      pin_memory=args.pin_mem)
 
     # Infer.
     scheduler = MultiStepLR({'optimizer': Adam,
@@ -229,6 +230,8 @@ if __name__ == '__main__':
     parser.add_argument("--jit", default=False, type=bool,
                         help='JIT compile the ELBO.')
     parser.add_argument("--cuda", default=False, type=bool, help='Use GPU.')
+    parser.add_argument("--pin-mem", default=False, type=bool,
+                        help='Use pin_memory for faster GPU transfer.')
     args = parser.parse_args()
 
     if args.cuda:

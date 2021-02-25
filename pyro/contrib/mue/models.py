@@ -237,10 +237,13 @@ class FactorMuE(nn.Module):
                  latent_alphabet_length=None,
                  length_model=False,
                  cuda=False,
+                 pin_memory=False,
                  epsilon=1e-32):
         super().__init__()
         assert isinstance(cuda, bool)
         self.cuda = cuda
+        assert isinstance(pin_memory, bool)
+        self.pin_memory = pin_memory
 
         # Constants.
         assert isinstance(data_length, int) and data_length > 0
@@ -499,7 +502,8 @@ class FactorMuE(nn.Module):
                                      'optim_args': {'lr': 0.01},
                                      'milestones': [],
                                      'gamma': 0.5})
-        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True,
+                              pin_memory=self.pin_memory)
         # Initialize guide.
         for seq_data, L_data in dataload:
             self.guide(seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
