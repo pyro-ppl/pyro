@@ -72,7 +72,8 @@ class BiosequenceDataset(Dataset):
         oh = torch.tensor((np.array(list(seq))[:, None] == alphabet[None, :]
                            ).astype(np.float64), device=self.device)
         # Pad.
-        x = torch.cat([oh, torch.zeros([length - len(seq), len(alphabet)])])
+        x = torch.cat([oh, torch.zeros([length - len(seq), len(alphabet)],
+                                       device=self.device)])
 
         return x
 
