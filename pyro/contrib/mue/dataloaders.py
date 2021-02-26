@@ -17,10 +17,10 @@ class BiosequenceDataset(Dataset):
     """Load biological sequence data."""
 
     def __init__(self, source, source_type='list', alphabet='amino-acid',
-                 max_length=None, device=torch.device('cpu')):
+                 max_length=None):  # , device=torch.device('cpu')):
 
         super().__init__()
-        self.device = device
+        # self.device = device
 
         # Get sequences.
         if source_type == 'list':
@@ -29,8 +29,8 @@ class BiosequenceDataset(Dataset):
             seqs = self._load_fasta(source)
 
         # Get lengths.
-        self.L_data = torch.tensor([float(len(seq)) for seq in seqs],
-                                   device=device)
+        self.L_data = torch.tensor([float(len(seq)) for seq in seqs])
+                        # , device=device)
         if max_length is None:
             self.max_length = int(torch.max(self.L_data))
         else:
@@ -70,10 +70,10 @@ class BiosequenceDataset(Dataset):
         """One hot encode and pad with zeros to max length."""
         # One hot encode.
         oh = torch.tensor((np.array(list(seq))[:, None] == alphabet[None, :]
-                           ).astype(np.float64), device=self.device)
+                           ).astype(np.float64))  # , device=self.device)
         # Pad.
-        x = torch.cat([oh, torch.zeros([length - len(seq), len(alphabet)],
-                                       device=self.device)])
+        x = torch.cat([oh, torch.zeros([length - len(seq), len(alphabet)])]) #,
+                                       # device=self.device)])
 
         return x
 
