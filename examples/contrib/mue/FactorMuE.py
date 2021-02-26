@@ -54,10 +54,10 @@ def main(args):
         dataset_train, dataset_test = torch.utils.data.random_split(
             dataset, torch.tensor([dataset.data_size - heldout_num,
                                    heldout_num]),
-            generator=torch.Generator(device=device).manual_seed(
+            generator=torch.Generator().manual_seed(
                     args.rng_data_seed))
     else:
-        dataset_test = dataset
+        dataset_train = dataset
 
     # Random sampler.
     pyro.set_rng_seed(args.rng_seed)
