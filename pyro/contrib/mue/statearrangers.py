@@ -106,9 +106,8 @@ class Profile(nn.Module):
                         elif m + 1 - g < mp and gp == 0:
                             self.r_transf[m+1-g, g, 0, k, kp] = 1
                             self.u_transf[m+1-g, g, 1, k, kp] = 1
-                            for mpp in range(m+2-g, mp):
-                                self.r_transf[mpp, 2, 0, k, kp] = 1
-                                self.u_transf[mpp, 2, 1, k, kp] = 1
+                            self.r_transf[(m+2-g):mp, 2, 0, k, kp] = 1
+                            self.u_transf[(m+2-g):mp, 2, 1, k, kp] = 1
                             self.r_transf[mp, 2, 0, k, kp] = 1
                             self.u_transf[mp, 2, 0, k, kp] = 1
 
@@ -119,9 +118,8 @@ class Profile(nn.Module):
                         elif m + 1 - g < mp and gp == 1:
                             self.r_transf[m+1-g, g, 0, k, kp] = 1
                             self.u_transf[m+1-g, g, 1, k, kp] = 1
-                            for mpp in range(m+2-g, mp):
-                                self.r_transf[mpp, 2, 0, k, kp] = 1
-                                self.u_transf[mpp, 2, 1, k, kp] = 1
+                            self.r_transf[(m+2-g):mp, 2, 0, k, kp] = 1
+                            self.u_transf[(m+2-g):mp, 2, 1, k, kp] = 1
                             if mp < M:
                                 self.r_transf[mp, 2, 1, k, kp] = 1
 
