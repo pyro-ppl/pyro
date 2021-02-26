@@ -45,10 +45,15 @@ def main(args):
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split is not None:
-        pyro.set_rng_seed(args.rng_data_seed)
         heldout_num = int(np.ceil(args.split*len(dataset)))
+        if args.cuda:
+            device = 'cuda'
+        else:
+            device = 'cpu'
         dataset_train, dataset_test = torch.utils.data.random_split(
-            dataset, [dataset.data_size - heldout_num, heldout_num])
+            dataset, [dataset.data_size - heldout_num, heldout_num],
+            generator=torch.Generator(device=device).manual_seed(
+                    args.rng_data_seed))
     else:
         dataset_test = dataset
 
