@@ -23,7 +23,7 @@ from pyro.optim import MultiStepLR
 import pdb
 
 
-def generate_data(small_test):  # , device=torch.device('cpu')):
+def generate_data(small_test):
     """Generate example dataset."""
     if small_test:
         mult_dat = 1
@@ -31,7 +31,7 @@ def generate_data(small_test):  # , device=torch.device('cpu')):
         mult_dat = 10
 
     seqs = ['BABBA']*mult_dat + ['BAAB']*mult_dat + ['BABBB']*mult_dat
-    dataset = BiosequenceDataset(seqs, 'list', ['A', 'B'])  # , device=device)
+    dataset = BiosequenceDataset(seqs, 'list', ['A', 'B'])
 
     return dataset
 
@@ -39,15 +39,10 @@ def generate_data(small_test):  # , device=torch.device('cpu')):
 def main(args):
 
     # Load dataset.
-    if args.cuda:
-        device = torch.device('cuda:0')
-    else:
-        device = torch.device('cpu')
     if args.test:
-        dataset = generate_data(args.small)  # , device=device)
+        dataset = generate_data(args.small)
     else:
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
-        # , device=device)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
         heldout_num = int(np.ceil(args.split*len(dataset)))
@@ -58,8 +53,6 @@ def main(args):
             torch.utils.data.Subset(dataset, indices[(offset - length):offset])
             for offset, length in zip(torch._utils._accumulate(data_lengths),
                                       data_lengths)]
-        """dataset_train, dataset_test = torch.utils.data.random_split(
-            dataset, torch.tensor())"""
     else:
         dataset_train = dataset
         dataset_test = None
