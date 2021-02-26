@@ -23,7 +23,7 @@ from pyro.optim import MultiStepLR
 import pdb
 
 
-def generate_data(small_test, device=torch.device('cpu')):
+def generate_data(small_test):  # , device=torch.device('cpu')):
     """Generate example dataset."""
     if small_test:
         mult_dat = 1
@@ -31,7 +31,7 @@ def generate_data(small_test, device=torch.device('cpu')):
         mult_dat = 10
 
     seqs = ['BABBA']*mult_dat + ['BAAB']*mult_dat + ['BABBB']*mult_dat
-    dataset = BiosequenceDataset(seqs, 'list', ['A', 'B'], device=device)
+    dataset = BiosequenceDataset(seqs, 'list', ['A', 'B'])  # , device=device)
 
     return dataset
 
@@ -44,16 +44,16 @@ def main(args):
     else:
         device = torch.device('cpu')
     if args.test:
-        dataset = generate_data(args.small, device=device)
+        dataset = generate_data(args.small)  # , device=device)
     else:
-        dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet,
-                                     device=device)
+        dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
+        # , device=device)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
         heldout_num = int(np.ceil(args.split*len(dataset)))
         dataset_train, dataset_test = torch.utils.data.random_split(
             dataset, [dataset.data_size - heldout_num, heldout_num],
-            generator=torch.Generator(device=device).manual_seed(
+            generator=torch.Generator().manual_seed(
                     args.rng_data_seed))
     else:
         dataset_test = dataset
