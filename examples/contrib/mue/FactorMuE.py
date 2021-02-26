@@ -40,7 +40,7 @@ def main(args):
 
     # Load dataset.
     if args.cuda:
-        device = torch.device('cuda')
+        device = torch.device('cuda:0')
     else:
         device = torch.device('cpu')
     if args.test:
@@ -49,7 +49,7 @@ def main(args):
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet,
                                      device=device)
     args.batch_size = min([dataset.data_size, args.batch_size])
-    if args.split is not None:
+    if args.split > 0.:
         heldout_num = int(np.ceil(args.split*len(dataset)))
         dataset_train, dataset_test = torch.utils.data.random_split(
             dataset, [dataset.data_size - heldout_num, heldout_num],
@@ -231,8 +231,7 @@ if __name__ == '__main__':
     parser.add_argument("-outf", "--out-folder", default='.',
                         help='Folder to save plots.')
     parser.add_argument("--split", default=0.2, type=float,
-                        help=('Fraction of dataset to holdout for testing' +
-                              '(float or None).'))
+                        help=('Fraction of dataset to holdout for testing'))
     parser.add_argument("--jit", default=False, type=bool,
                         help='JIT compile the ELBO.')
     parser.add_argument("--cuda", default=False, type=bool, help='Use GPU.')
