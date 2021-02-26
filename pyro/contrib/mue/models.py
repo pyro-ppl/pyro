@@ -595,7 +595,7 @@ class FactorMuE(nn.Module):
                               - guide_tr.log_prob_sum(self._local_variables)
                               ).cpu().numpy()
                 lp += local_elbo
-                perplex += -local_elbo / (L_data[0].numpy() +
+                perplex += -local_elbo / (L_data[0].cpu().numpy() +
                                           int(self.length_model))
         perplex = np.exp(perplex / data_size)
         return lp, perplex
