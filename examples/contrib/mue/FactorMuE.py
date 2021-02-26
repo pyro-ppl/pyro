@@ -47,7 +47,7 @@ def main(args):
     if args.split is not None:
         heldout_num = int(np.ceil(args.split*len(dataset)))
         if args.cuda:
-            device = 'cuda'
+            device = 'cuda:0'
         else:
             device = 'cpu'
         dataset_train, dataset_test = torch.utils.data.random_split(
