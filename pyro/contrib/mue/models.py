@@ -593,7 +593,7 @@ class FactorMuE(nn.Module):
                         conditioned_model, trace=guide_tr)).get_trace(*args)
                 local_elbo = (model_tr.log_prob_sum(self._local_variables)
                               - guide_tr.log_prob_sum(self._local_variables)
-                              ).numpy()
+                              ).cpu().numpy()
                 lp += local_elbo
                 perplex += -local_elbo / (L_data[0].numpy() +
                                           int(self.length_model))
@@ -612,8 +612,8 @@ class FactorMuE(nn.Module):
                 if self.cuda:
                     seq_data, L_data = seq_data.cuda(), L_data.cuda()
                 z_loc, z_scale = self.encoder(seq_data)
-                z_locs.append(z_loc)
-                z_scales.append(z_scale)
+                z_locs.append(z_loc.cpu())
+                z_scales.append(z_scale.cpu())
 
             if dataset_test is not None:
                 dataload_test = DataLoader(dataset_test, batch_size=batch_size,
@@ -622,8 +622,8 @@ class FactorMuE(nn.Module):
                     if self.cuda:
                         seq_data, L_data = seq_data.cuda(), L_data.cuda()
                     z_loc, z_scale = self.encoder(seq_data)
-                    z_locs.append(z_loc)
-                    z_scales.append(z_scale)
+                    z_locs.append(z_loc.cpu())
+                    z_scales.append(z_scale.cpu())
 
         return torch.cat(z_locs), torch.cat(z_scales)
 
