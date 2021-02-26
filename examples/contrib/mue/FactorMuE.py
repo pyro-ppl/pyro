@@ -51,10 +51,15 @@ def main(args):
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
         heldout_num = int(np.ceil(args.split*len(dataset)))
+        data_lengths = [len(dataset) - heldout_num, heldout_num]
         pyro.set_rng_seed(args.rng_data_seed)
-        dataset_train, dataset_test = torch.utils.data.random_split(
-            dataset, torch.tensor([dataset.data_size - heldout_num,
-                                   heldout_num]))
+        indices = torch.randperm(sum(data_lengths)).tolist()
+        dataset_train, dataset_test = [
+            torch.utils.data.Subset(dataset, indices[(offset - length):offset])
+            for offset, length in zip(torch._utils._accumulate(data_lengths),
+                                      data_lengths)]
+        """dataset_train, dataset_test = torch.utils.data.random_split(
+            dataset, torch.tensor())"""
     else:
         dataset_train = dataset
         dataset_test = None
