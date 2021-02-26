@@ -52,7 +52,8 @@ def main(args):
     if args.split > 0.:
         heldout_num = int(np.ceil(args.split*len(dataset)))
         dataset_train, dataset_test = torch.utils.data.random_split(
-            dataset, [dataset.data_size - heldout_num, heldout_num],
+            dataset, torch.tensor([dataset.data_size - heldout_num,
+                                   heldout_num]),
             generator=torch.Generator(device=device).manual_seed(
                     args.rng_data_seed))
     else:
