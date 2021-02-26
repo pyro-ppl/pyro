@@ -506,6 +506,8 @@ class FactorMuE(nn.Module):
                               pin_memory=self.pin_memory)
         # Initialize guide.
         for seq_data, L_data in dataload:
+            if self.cuda:
+                seq_data, L_data = seq_data.cuda(), L_data.cuda()
             self.guide(seq_data, L_data, torch.tensor(1.), torch.tensor(1.))
             break
         # Setup stochastic variational inference.
