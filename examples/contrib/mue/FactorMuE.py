@@ -118,7 +118,7 @@ def main(args):
             plt.figure(figsize=(6, 6))
             insert = pyro.param("insert_q_mn").detach()
             insert_expect = torch.exp(insert - insert.logsumexp(-1, True))
-            plt.plot(insert_expect[:, :, 1].numpy())
+            plt.plot(insert_expect[:, :, 1].cpu().numpy())
             plt.xlabel('position')
             plt.ylabel('probability of insert')
             if args.save:
@@ -128,7 +128,7 @@ def main(args):
             plt.figure(figsize=(6, 6))
             delete = pyro.param("delete_q_mn").detach()
             delete_expect = torch.exp(delete - delete.logsumexp(-1, True))
-            plt.plot(delete_expect[:, :, 1].numpy())
+            plt.plot(delete_expect[:, :, 1].cpu().numpy())
             plt.xlabel('position')
             plt.ylabel('probability of delete')
             if args.save:
@@ -150,12 +150,12 @@ def main(args):
                         args.out_folder,
                         'FactorMuE_results.embed_loc_{}.txt'.format(
                                                                 time_stamp)),
-                   z_locs.numpy())
+                   z_locs.cpu().numpy())
         np.savetxt(os.path.join(
                         args.out_folder,
                         'FactorMuE_results.embed_scale_{}.txt'.format(
                                                                 time_stamp)),
-                   z_scales.numpy())
+                   z_scales.cpu().numpy())
         with open(os.path.join(
                 args.out_folder,
                 'FactorMuE_results.input_{}.txt'.format(time_stamp)),
