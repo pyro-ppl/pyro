@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+from functools import reduce
 
 import funsor
 
@@ -91,19 +92,20 @@ class TraceMarkovEnum_ELBO(ELBO):
             costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
 
             # finally, integrate out guide variables in the elbo and all plates
-            plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
             elbo = to_funsor(0, output=funsor.Real)
-            for cost in costs:
-                # compute the expected cost term E_q[logp] or E_q[-logq]
+            if guide_terms["log_measures"]:
                 markov_dims = frozenset({
                     plate for plate, step in guide_terms["plate_to_step"].items() if step})
-                elbo_term = funsor.sum_product.compute_expectation(
+                elbo_terms = funsor.sum_product.compute_expectations(
                     guide_terms["log_measures"],
-                    cost,
+                    costs,
                     plate_to_step=guide_terms["plate_to_step"],
-                    eliminate=(plate_vars | guide_terms["measure_vars"] | markov_dims)
+                    eliminate=(guide_terms["plate_vars"] | guide_terms["measure_vars"] | markov_dims)
                 )
-                elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
+            else:
+                elbo_terms = costs
+            elbo_terms = [term.reduce(funsor.ops.add) for term in elbo_terms]
+            elbo = reduce(funsor.ops.add, elbo_terms)
 
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.memoize.memoize():
