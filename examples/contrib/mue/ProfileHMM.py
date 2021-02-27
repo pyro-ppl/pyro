@@ -29,7 +29,7 @@ def generate_data(small_test):
         mult_dat = 10
 
     seqs = ['BABBA']*mult_dat + ['BAAB']*mult_dat + ['BABBB']*mult_dat
-    dataset = BiosequenceDataset(seqs, 'list', ['A', 'B'])
+    dataset = BiosequenceDataset(seqs, 'list', 'AB')
 
     return dataset
 
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     parser.add_argument("-f", "--file", default=None, type=str,
                         help='Input file (fasta format).')
     parser.add_argument("-a", "--alphabet", default='amino-acid',
-                        help='Alphabet (amino-acid OR dna).')
+                        help='Alphabet (amino-acid OR dna OR ATGC ...).')
     parser.add_argument("-b", "--batch-size", default=10, type=int,
                         help='Batch size.')
     parser.add_argument("-M", "--latent-seq-length", default=None, type=int,

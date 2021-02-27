@@ -8,17 +8,17 @@ from pyro.contrib.mue.dataloaders import BiosequenceDataset, alphabets
 
 
 @pytest.mark.parametrize('source_type', ['list', 'fasta'])
-@pytest.mark.parametrize('alphabet', ['amino-acid', 'dna', ['A', 'T', 'C']])
+@pytest.mark.parametrize('alphabet', ['amino-acid', 'dna', 'ATC'])
 def test_biosequencedataset(source_type, alphabet):
 
     # Define dataset.
     seqs = ['AATC', 'CA', 'T']
 
     # Encode dataset, alternate approach.
-    if type(alphabet) is list:
-        alphabet_list = alphabet
-    elif alphabet in alphabets:
+    if alphabet in alphabets:
         alphabet_list = list(alphabets[alphabet])
+    else:
+        alphabet_list = list(alphabet)
     L_data_check = [len(seq) for seq in seqs]
     max_length_check = max(L_data_check)
     data_size_check = len(seqs)

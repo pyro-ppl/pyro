@@ -36,12 +36,10 @@ class BiosequenceDataset(Dataset):
         self.data_size = len(self.L_data)
 
         # Get alphabet.
-        if type(alphabet) is list:
-            alphabet = np.array(alphabet)
-        elif alphabet in alphabets:
+        if alphabet in alphabets:
             alphabet = alphabets[alphabet]
         else:
-            assert 'Alphabet unavailable, please provide a list of letters.'
+            alphabet = np.array(list(alphabet))
         self.alphabet_length = len(alphabet)
 
         # Build dataset.

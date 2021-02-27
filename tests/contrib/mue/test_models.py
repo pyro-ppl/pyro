@@ -17,7 +17,7 @@ from pyro.optim import MultiStepLR
 def test_ProfileHMM_smoke(length_model, jit):
     # Setup dataset.
     seqs = ['BABBA', 'BAAB', 'BABBB']
-    alph = ['A', 'B']
+    alph = 'AB'
     dataset = BiosequenceDataset(seqs, 'list', alph)
 
     # Infer.
@@ -25,7 +25,7 @@ def test_ProfileHMM_smoke(length_model, jit):
                              'optim_args': {'lr': 0.1},
                              'milestones': [20, 100, 1000, 2000],
                              'gamma': 0.5})
-    model = ProfileHMM(dataset.max_length, dataset.alphabet_length,
+    model = ProfileHMM(int(dataset.max_length*1.1), dataset.alphabet_length,
                        length_model)
     n_epochs = 5
     batch_size = 2
@@ -52,7 +52,7 @@ def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
                          ARD_prior, substitution_matrix, length_model, jit):
     # Setup dataset.
     seqs = ['BABBA', 'BAAB', 'BABBB']
-    alph = ['A', 'B']
+    alph = 'AB'
     dataset = BiosequenceDataset(seqs, 'list', alph)
 
     # Infer.
@@ -91,7 +91,7 @@ def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
     assert test_perplex > 0.
 
     # Embedding.
-    z_locs, z_scales = model.embed(dataset, dataset)
-    assert z_locs.shape == (len(dataset)*2, z_dim)
-    assert z_scales.shape == (len(dataset)*2, z_dim)
+    z_locs, z_scales = model.embed(dataset)
+    assert z_locs.shape == (len(dataset), z_dim)
+    assert z_scales.shape == (len(dataset), z_dim)
     assert torch.all(z_scales > 0.)
