@@ -8,6 +8,7 @@ A standard profile HMM model.
 import argparse
 import datetime
 import json
+import numpy as np
 import os
 
 import matplotlib.pyplot as plt
@@ -43,26 +44,44 @@ def main(args):
     else:
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
     args.batch_size = min([dataset.data_size, args.batch_size])
+    if args.split > 0.:
+        heldout_num = int(np.ceil(args.split*len(dataset)))
+        data_lengths = [len(dataset) - heldout_num, heldout_num]
+        pyro.set_rng_seed(args.rng_data_seed)
+        indices = torch.randperm(sum(data_lengths)).tolist()
+        dataset_train, dataset_test = [
+            torch.utils.data.Subset(dataset, indices[(offset - length):offset])
+            for offset, length in zip(torch._utils._accumulate(data_lengths),
+                                      data_lengths)]
+    else:
+        dataset_train = dataset
+        dataset_test = None
 
     # Construct model.
     latent_seq_length = args.latent_seq_length
-    if args.latent_seq_length is None:
-        latent_seq_length = dataset.max_length
+    if latent_seq_length is None:
+        latent_seq_length = int(dataset.max_length * 1.1)
     model = ProfileHMM(latent_seq_length, dataset.alphabet_length,
                        length_model=args.length_model,
                        prior_scale=args.prior_scale,
-                       indel_prior_bias=args.indel_prior_bias)
+                       indel_prior_bias=args.indel_prior_bias,
+                       cuda=args.cuda,
+                       pin_memory=args.pin_mem)
 
     # Infer.
     scheduler = MultiStepLR({'optimizer': Adam,
                              'optim_args': {'lr': args.learning_rate},
                              'milestones': json.loads(args.milestones),
                              'gamma': args.learning_gamma})
-    if args.test and not args.small:
-        n_epochs = 100
-    else:
-        n_epochs = args.n_epochs
-    losses = model.fit_svi(dataset, n_epochs, args.batch_size, scheduler)
+    n_epochs = args.n_epochs
+    losses = model.fit_svi(dataset, n_epochs, args.batch_size, scheduler,
+                           args.jit)
+
+    # Evaluate.
+    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(
+                dataset_train, dataset_test, args.jit)
+    print('train logp: {} perplex: {}'.format(train_lp, train_perplex))
+    print('test logp: {} perplex: {}'.format(test_lp, test_perplex))
 
     # Plots.
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -116,6 +135,13 @@ def main(args):
                 'ProfileHMM_results.params_{}.out'.format(time_stamp)))
         with open(os.path.join(
                 args.out_folder,
+                'FactorMuE_results.evaluation_{}.txt'.format(time_stamp)),
+                'w') as ow:
+            ow.write('train_lp,test_lp,train_perplex,test_perplex\n')
+            ow.write('{},{},{},{}\n'.format(train_lp, test_lp, train_perplex,
+                                            test_perplex))
+        with open(os.path.join(
+                args.out_folder,
                 'ProfileHMM_results.input_{}.txt'.format(time_stamp)),
                 'w') as ow:
             ow.write('[args]\n')
@@ -130,6 +156,7 @@ if __name__ == '__main__':
     parser.add_argument("--small", action='store_true', default=False,
                         help='Run with small example dataset.')
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
+    parser.add_argument("--rng-data-seed", default=0, type=int)
     parser.add_argument("-f", "--file", default=None, type=str,
                         help='Input file (fasta format).')
     parser.add_argument("-a", "--alphabet", default='amino-acid',
@@ -158,6 +185,13 @@ if __name__ == '__main__':
                         help='Save plots and results.')
     parser.add_argument("-outf", "--out-folder", default='.',
                         help='Folder to save plots.')
+    parser.add_argument("--split", default=0.2, type=float,
+                        help=('Fraction of dataset to holdout for testing'))
+    parser.add_argument("--jit", default=False, type=bool,
+                        help='JIT compile the ELBO.')
+    parser.add_argument("--cuda", default=False, type=bool, help='Use GPU.')
+    parser.add_argument("--pin-mem", default=False, type=bool,
+                        help='Use pin_memory for faster GPU transfer.')
     args = parser.parse_args()
 
     torch.set_default_dtype(torch.float64)

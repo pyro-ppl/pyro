@@ -45,8 +45,10 @@ def main(args):
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
+        # Train test split.
         heldout_num = int(np.ceil(args.split*len(dataset)))
         data_lengths = [len(dataset) - heldout_num, heldout_num]
+        # Specific data split seed.
         pyro.set_rng_seed(args.rng_data_seed)
         indices = torch.randperm(sum(data_lengths)).tolist()
         dataset_train, dataset_test = [
@@ -57,7 +59,7 @@ def main(args):
         dataset_train = dataset
         dataset_test = None
 
-    # Random sampler.
+    # Training seed.
     pyro.set_rng_seed(args.rng_seed)
 
     # Construct model.
