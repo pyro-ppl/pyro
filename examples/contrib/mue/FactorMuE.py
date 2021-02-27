@@ -96,7 +96,7 @@ def main(args):
     print('test logp: {} perplex: {}'.format(test_lp, test_perplex))
 
     # Embed.
-    z_locs, z_scales = model.embed(dataset_train, dataset_test)
+    z_locs, z_scales = model.embed(dataset)
 
     # Plot and save.
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

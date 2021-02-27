@@ -600,30 +600,19 @@ class FactorMuE(nn.Module):
         perplex = np.exp(perplex / data_size)
         return lp, perplex
 
-    def embed(self, dataset_train, dataset_test=None, batch_size=None):
+    def embed(self, dataset, batch_size=None):
         """Get latent space embedding."""
         if batch_size is None:
             batch_size = self.batch_size
-        dataload_train = DataLoader(dataset_train, batch_size=batch_size,
-                                    shuffle=False)
+        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=False)
         with torch.no_grad():
             z_locs, z_scales = [], []
-            for seq_data, L_data in dataload_train:
+            for seq_data, L_data in dataload:
                 if self.cuda:
                     seq_data, L_data = seq_data.cuda(), L_data.cuda()
                 z_loc, z_scale = self.encoder(seq_data)
                 z_locs.append(z_loc.cpu())
                 z_scales.append(z_scale.cpu())
-
-            if dataset_test is not None:
-                dataload_test = DataLoader(dataset_test, batch_size=batch_size,
-                                           shuffle=False)
-                for seq_data, L_data in dataload_test:
-                    if self.cuda:
-                        seq_data, L_data = seq_data.cuda(), L_data.cuda()
-                    z_loc, z_scale = self.encoder(seq_data)
-                    z_locs.append(z_loc.cpu())
-                    z_scales.append(z_scale.cpu())
 
         return torch.cat(z_locs), torch.cat(z_scales)
 
