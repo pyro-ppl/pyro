@@ -194,6 +194,9 @@ if __name__ == '__main__':
                         help='Use pin_memory for faster GPU transfer.')
     args = parser.parse_args()
 
-    torch.set_default_dtype(torch.float64)
+    if args.cuda:
+        torch.set_default_tensor_type(torch.cuda.DoubleTensor)
+    else:
+        torch.set_default_dtype(torch.float64)
 
     main(args)
