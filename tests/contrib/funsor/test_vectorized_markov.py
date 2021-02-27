@@ -17,6 +17,7 @@ try:
     from pyroapi import distributions as dist
     funsor.set_backend("torch")
     from pyroapi import handlers, pyro, infer
+    from pyro.contrib.funsor.infer.traceenum_elbo import terms_from_trace
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
@@ -325,11 +326,19 @@ def test_enumeration(model, data, var, history, use_replay):
         actual_step = vectorized_trace.nodes["time"]["value"]
         # expected step: assume that all but the last var is markov
         expected_step = frozenset()
+        expected_measure_vars = frozenset()
         for v in var[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
                      + tuple("{}_{}".format(v, slice(j, data.shape[-2]-history+j)) for j in range(history+1))
             expected_step |= frozenset({v_step})
+            # grab measure_vars, found only at sites that are not replayed
+            if not use_replay:
+                expected_measure_vars |= frozenset(v_step)
         assert actual_step == expected_step
+
+        # check measure_vars
+        actual_measure_vars = terms_from_trace(vectorized_trace)["measure_vars"]
+        assert actual_measure_vars == expected_measure_vars
 
 
 #     x[i-1] --> x[i] --> x[i+1]
@@ -447,6 +456,7 @@ def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, 
 
         # assert correct step
 
+        expected_measure_vars = frozenset()
         actual_weeks_step = vectorized_trace.nodes["weeks"]["value"]
         # expected step: assume that all but the last var is markov
         expected_weeks_step = frozenset()
@@ -454,6 +464,9 @@ def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, 
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
                      + tuple("{}_{}".format(v, slice(j, len(weeks_data)-history+j)) for j in range(history+1))
             expected_weeks_step |= frozenset({v_step})
+            # grab measure_vars, found only at sites that are not replayed
+            if not use_replay:
+                expected_measure_vars |= frozenset(v_step)
 
         actual_days_step = vectorized_trace.nodes["days"]["value"]
         # expected step: assume that all but the last var is markov
@@ -462,9 +475,16 @@ def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, 
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) \
                      + tuple("{}_{}".format(v, slice(j, len(days_data)-history+j)) for j in range(history+1))
             expected_days_step |= frozenset({v_step})
+            # grab measure_vars, found only at sites that are not replayed
+            if not use_replay:
+                expected_measure_vars |= frozenset(v_step)
 
         assert actual_weeks_step == expected_weeks_step
         assert actual_days_step == expected_days_step
+
+        # check measure_vars
+        actual_measure_vars = terms_from_trace(vectorized_trace)["measure_vars"]
+        assert actual_measure_vars == expected_measure_vars
 
 
 def guide_empty(data, history, vectorized):

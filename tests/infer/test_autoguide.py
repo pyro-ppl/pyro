@@ -15,12 +15,12 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, Predictive
+from pyro.infer import SVI, Predictive, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
                                   AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                  AutoNormal, AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
+                                  AutoMultivariateNormal, AutoNormal, init_to_feasible, init_to_mean, init_to_median,
                                   init_to_sample)
+from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
 from pyro.poutine.util import prune_subsample_sites
@@ -332,6 +332,9 @@ def test_quantiles(auto_class, Elbo):
     quantiles = guide.quantiles([0.1, 0.5, 0.9])
     median = guide.median()
     for name in ["x", "y", "z"]:
+        assert not median[name].requires_grad
+        for q in quantiles[name]:
+            assert not q.requires_grad
         assert_equal(median[name], quantiles[name][1])
     quantiles = {name: [v.item() for v in value] for name, value in quantiles.items()}
 
@@ -465,7 +468,7 @@ def test_empty_model_error():
 
 def test_unpack_latent():
     def model():
-        return pyro.sample('x', dist.LKJCorrCholesky(2, torch.tensor(1.)))
+        return pyro.sample('x', dist.LKJCholesky(2, torch.tensor(1.)))
 
     guide = AutoDiagonalNormal(model)
     assert guide()['x'].shape == model().shape
@@ -809,3 +812,102 @@ def test_subsample_guide_2(auto_class, independent):
     data = torch.randn(10, 10)
     for step in range(2):
         svi.step(data)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_discrete_helpful_error(auto_class, init_loc_fn):
+
+    def model():
+        p = pyro.sample("p", dist.Beta(2., 2.))
+        x = pyro.sample("x", dist.Bernoulli(p))
+        pyro.sample("obs", p * x + (1 - p) * (1 - x),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    with pytest.raises(ValueError, match=".*enumeration.html.*"):
+        guide()
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_helpful_error(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([2]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    with pytest.raises(ValueError, match=".*ProjectedNormalReparam.*"):
+        guide()
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_reparam_ok(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([3]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    model = poutine.reparam(model, {"y": ProjectedNormalReparam()})
+    guide = auto_class(model)
+    poutine.trace(guide).get_trace().compute_log_prob()
+
+
+@pytest.mark.parametrize("auto_class", [AutoDelta])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_raw_ok(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([3]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    poutine.trace(guide).get_trace().compute_log_prob()

@@ -127,14 +127,18 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param scale: a positive scale
     :type scale: torch.Tensor or number
     :param mask: an optional packed tensor mask
-    :type mask: torch.BoolTensor or None
+    :type mask: torch.BoolTensor, bool, or None
     """
     if isinstance(scale, torch.Tensor) and scale.dim():
         raise NotImplementedError('non-scalar scale is not supported')
-    if mask is None:
+    if mask is None or mask is True:
         if is_identically_one(scale):
             return tensor
         result = tensor * scale
+        result._pyro_dims = tensor._pyro_dims
+        return result
+    if mask is False:
+        result = torch.zeros_like(tensor)
         result._pyro_dims = tensor._pyro_dims
         return result
     tensor, mask = broadcast_all(tensor, mask)

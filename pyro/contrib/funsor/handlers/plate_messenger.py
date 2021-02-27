@@ -6,17 +6,15 @@ from numbers import Number
 
 import funsor
 
+from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger, NamedMessenger
+from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.distributions.util import copy_docs_from
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import effectful
 from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
 from pyro.util import ignore_jit_warnings
-
-from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
-from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger, \
-        NamedMessenger
-from pyro.poutine.runtime import effectful
 
 funsor.set_backend("torch")
 
@@ -27,7 +25,6 @@ class IndepMessenger(GlobalNamedMessenger):
     :class:`~pyro.poutine.runtime._DimAllocator`.
     """
     def __init__(self, name=None, size=None, dim=None, indices=None):
-        assert size > 1
         assert dim is None or dim < 0
         super().__init__()
         # without a name or dim, treat as a "vectorize" effect and allocate a non-visible dim
@@ -50,7 +47,7 @@ class IndepMessenger(GlobalNamedMessenger):
         name_to_dim = OrderedDict([(self.name, DimRequest(self.dim, self.dim_type))])
         indices = to_data(self._indices, name_to_dim=name_to_dim)
         # extract the dimension allocated by to_data to match plate's current behavior
-        self.dim, self.indices = -indices.dim(), indices.squeeze()
+        self.dim, self.indices = -indices.dim(), indices.reshape(-1)
         return self
 
     def _pyro_sample(self, msg):

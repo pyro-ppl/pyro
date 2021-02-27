@@ -3,6 +3,7 @@
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 
 from .reparam import Reparam
 
@@ -83,7 +84,10 @@ class ConjugateReparam(Reparam):
         #                        = normalizer integral p(x|z) dz
         # Hence in the exact case, downstream probability does not depend on the sampled z,
         # permitting this reparameterizer to be used in HMC.
-        log_density = log_normalizer - guide_dist.log_prob(value)  # By Eqn 1.
+        if poutine.get_mask() is False:
+            log_density = 0.0
+        else:
+            log_density = log_normalizer - guide_dist.log_prob(value)  # By Eqn 1.
 
         # Return an importance-weighted point estimate.
         new_fn = dist.Delta(value, log_density=log_density, event_dim=fn.event_dim)

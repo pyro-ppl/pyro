@@ -27,29 +27,32 @@ def get_moments(x):
     return torch.stack([m1, m2, m3, m4])
 
 
-@pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
-def test_log_normal(shape):
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("event_shape", [(), (5,)], ids=str)
+def test_log_normal(batch_shape, event_shape):
+    shape = batch_shape + event_shape
     loc = torch.empty(shape).uniform_(-1, 1)
     scale = torch.empty(shape).uniform_(0.5, 1.5)
 
     def model():
-        with pyro.plate_stack("plates", shape):
+        fn = dist.TransformedDistribution(
+            dist.Normal(torch.zeros_like(loc), torch.ones_like(scale)),
+            [AffineTransform(loc, scale), ExpTransform()])
+        if event_shape:
+            fn = fn.to_event(len(event_shape))
+        with pyro.plate_stack("plates", batch_shape):
             with pyro.plate("particles", 200000):
-                return pyro.sample("x",
-                                   dist.TransformedDistribution(
-                                       dist.Normal(torch.zeros_like(loc),
-                                                   torch.ones_like(scale)),
-                                       [AffineTransform(loc, scale),
-                                        ExpTransform()]))
+                return pyro.sample("x", fn)
 
     with poutine.trace() as tr:
         value = model()
-    assert isinstance(tr.trace.nodes["x"]["fn"], dist.TransformedDistribution)
+    assert isinstance(tr.trace.nodes["x"]["fn"],
+                      (dist.TransformedDistribution, dist.Independent))
     expected_moments = get_moments(value)
 
     with poutine.reparam(config={"x": TransformReparam()}):
         with poutine.trace() as tr:
             value = model()
-    assert isinstance(tr.trace.nodes["x"]["fn"], dist.Delta)
+    assert isinstance(tr.trace.nodes["x"]["fn"], (dist.Delta, dist.MaskedDistribution))
     actual_moments = get_moments(value)
     assert_close(actual_moments, expected_moments, atol=0.05)

@@ -60,6 +60,12 @@ class MultivariateStudentT(TorchDistribution):
         return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
             self._batch_shape + self._event_shape + self._event_shape)
 
+    @staticmethod
+    def infer_shapes(df, loc, scale_tril):
+        event_shape = loc[-1:]
+        batch_shape = broadcast_shape(df, loc[:-1], scale_tril[:-2])
+        return batch_shape, event_shape
+
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MultivariateStudentT, _instance)
         batch_shape = torch.Size(batch_shape)

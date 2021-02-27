@@ -66,14 +66,14 @@ class Model(ForecastingModel):
         trans_scale = pyro.sample("trans_scale",
                                   dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         trans_corr = pyro.sample("trans_corr",
-                                 dist.LKJCorrCholesky(dim, torch.ones(())))
+                                 dist.LKJCholesky(dim, torch.ones(())))
         trans_scale_tril = trans_scale.unsqueeze(-1) * trans_corr
         assert trans_scale_tril.shape[-2:] == (dim, dim)
 
         obs_scale = pyro.sample("obs_scale",
                                 dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         obs_corr = pyro.sample("obs_corr",
-                               dist.LKJCorrCholesky(dim, torch.ones(())))
+                               dist.LKJCholesky(dim, torch.ones(())))
         obs_scale_tril = obs_scale.unsqueeze(-1) * obs_corr
         assert obs_scale_tril.shape[-2:] == (dim, dim)
 
@@ -155,7 +155,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.1')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="Bart Ridership Forecasting Example")
     parser.add_argument("--train-window", default=2160, type=int)
     parser.add_argument("--test-window", default=336, type=int)

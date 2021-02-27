@@ -43,7 +43,7 @@ class ZeroInflatedDistribution(TorchDistribution):
 
         super().__init__(batch_shape, event_shape, validate_args)
 
-    @property
+    @constraints.dependent_property
     def support(self):
         return self.base_dist.support
 

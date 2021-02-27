@@ -3,65 +3,77 @@
 
 from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
+from torch.distributions.transforms import ComposeTransform, ExpTransform, LowerCholeskyTransform
 from torch.distributions.transforms import __all__ as torch_transforms
 
-from pyro.distributions.constraints import (
-                                            IndependentConstraint,
-                                            corr_cholesky_constraint,
-                                            ordered_vector)
-from pyro.distributions.torch_transform import ComposeTransformModule
-from pyro.distributions.transforms.affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive,
-                                                                 affine_autoregressive,
-                                                                 conditional_affine_autoregressive)
-from pyro.distributions.transforms.affine_coupling import (AffineCoupling, ConditionalAffineCoupling, affine_coupling,
-                                                           conditional_affine_coupling)
-from pyro.distributions.transforms.basic import ELUTransform, LeakyReLUTransform, elu, leaky_relu
-from pyro.distributions.transforms.batchnorm import BatchNorm, batchnorm
-from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive, block_autoregressive
-from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
-from pyro.distributions.transforms.discrete_cosine import DiscreteCosineTransform
-from pyro.distributions.transforms.generalized_channel_permute import (ConditionalGeneralizedChannelPermute,
-                                                                       GeneralizedChannelPermute,
-                                                                       conditional_generalized_channel_permute,
-                                                                       generalized_channel_permute)
-from pyro.distributions.transforms.haar import HaarTransform
-from pyro.distributions.transforms.householder import (ConditionalHouseholder, Householder, conditional_householder,
-                                                       householder)
-from pyro.distributions.transforms.lower_cholesky_affine import LowerCholeskyAffine
-from pyro.distributions.transforms.matrix_exponential import (ConditionalMatrixExponential, MatrixExponential,
-                                                              conditional_matrix_exponential, matrix_exponential)
-from pyro.distributions.transforms.neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
-                                                                 conditional_neural_autoregressive,
-                                                                 neural_autoregressive)
-from pyro.distributions.transforms.ordered import OrderedTransform
-from pyro.distributions.transforms.permute import Permute, permute
-from pyro.distributions.transforms.planar import ConditionalPlanar, Planar, conditional_planar, planar
-from pyro.distributions.transforms.polynomial import Polynomial, polynomial
-from pyro.distributions.transforms.radial import ConditionalRadial, Radial, conditional_radial, radial
-from pyro.distributions.transforms.spline import ConditionalSpline, Spline, conditional_spline, spline
-from pyro.distributions.transforms.spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
-                                                                 conditional_spline_autoregressive,
-                                                                 spline_autoregressive)
-from pyro.distributions.transforms.spline_coupling import SplineCoupling, spline_coupling
-from pyro.distributions.transforms.sylvester import Sylvester, sylvester
+from .. import constraints
+from ..torch_transform import ComposeTransformModule
+from .affine_autoregressive import (AffineAutoregressive, ConditionalAffineAutoregressive, affine_autoregressive,
+                                    conditional_affine_autoregressive)
+from .affine_coupling import AffineCoupling, ConditionalAffineCoupling, affine_coupling, conditional_affine_coupling
+from .basic import ELUTransform, LeakyReLUTransform, elu, leaky_relu
+from .batchnorm import BatchNorm, batchnorm
+from .block_autoregressive import BlockAutoregressive, block_autoregressive
+from .cholesky import CholeskyTransform, CorrLCholeskyTransform, CorrMatrixCholeskyTransform
+from .discrete_cosine import DiscreteCosineTransform
+from .generalized_channel_permute import (ConditionalGeneralizedChannelPermute, GeneralizedChannelPermute,
+                                          conditional_generalized_channel_permute, generalized_channel_permute)
+from .haar import HaarTransform
+from .householder import ConditionalHouseholder, Householder, conditional_householder, householder
+from .lower_cholesky_affine import LowerCholeskyAffine
+from .matrix_exponential import (ConditionalMatrixExponential, MatrixExponential, conditional_matrix_exponential,
+                                 matrix_exponential)
+from .neural_autoregressive import (ConditionalNeuralAutoregressive, NeuralAutoregressive,
+                                    conditional_neural_autoregressive, neural_autoregressive)
+from .normalize import Normalize
+from .ordered import OrderedTransform
+from .permute import Permute, permute
+from .planar import ConditionalPlanar, Planar, conditional_planar, planar
+from .polynomial import Polynomial, polynomial
+from .radial import ConditionalRadial, Radial, conditional_radial, radial
+from .spline import ConditionalSpline, Spline, conditional_spline, spline
+from .spline_autoregressive import (ConditionalSplineAutoregressive, SplineAutoregressive,
+                                    conditional_spline_autoregressive, spline_autoregressive)
+from .spline_coupling import SplineCoupling, spline_coupling
+from .sylvester import Sylvester, sylvester
 
 ########################################
 # register transforms
 
-biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint))
-transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
+
+@transform_to.register(constraints.sphere)
+def _transform_to_sphere(constraint):
+    return Normalize()
 
 
-@biject_to.register(corr_cholesky_constraint)
-@transform_to.register(corr_cholesky_constraint)
+@biject_to.register(constraints.corr_cholesky)
+@transform_to.register(constraints.corr_cholesky)
 def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
 
 
-@biject_to.register(ordered_vector)
-@transform_to.register(ordered_vector)
+@biject_to.register(constraints.corr_matrix)
+@transform_to.register(constraints.corr_matrix)
+def _transform_to_corr_matrix(constraint):
+    return ComposeTransform([CorrLCholeskyTransform(), CorrMatrixCholeskyTransform().inv])
+
+
+@biject_to.register(constraints.ordered_vector)
+@transform_to.register(constraints.ordered_vector)
 def _transform_to_ordered_vector(constraint):
     return OrderedTransform()
+
+
+@biject_to.register(constraints.positive_ordered_vector)
+@transform_to.register(constraints.positive_ordered_vector)
+def _transform_to_positive_ordered_vector(constraint):
+    return ComposeTransform([OrderedTransform(), ExpTransform()])
+
+
+# TODO: register biject_to when LowerCholeskyTransform is bijective
+@transform_to.register(constraints.positive_definite)
+def _transform_to_positive_definite(constraint):
+    return ComposeTransform([LowerCholeskyTransform(), CholeskyTransform().inv])
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
@@ -85,6 +97,7 @@ __all__ = [
     'AffineCoupling',
     'BatchNorm',
     'BlockAutoregressive',
+    'CholeskyTransform',
     'ComposeTransformModule',
     'ConditionalAffineAutoregressive',
     'ConditionalAffineCoupling',
@@ -97,6 +110,7 @@ __all__ = [
     'ConditionalSpline',
     'ConditionalSplineAutoregressive',
     'CorrLCholeskyTransform',
+    'CorrMatrixCholeskyTransform',
     'DiscreteCosineTransform',
     'ELUTransform',
     'GeneralizedChannelPermute',
@@ -106,6 +120,7 @@ __all__ = [
     'LowerCholeskyAffine',
     'MatrixExponential',
     'NeuralAutoregressive',
+    'Normalize',
     'OrderedTransform',
     'Permute',
     'Planar',
