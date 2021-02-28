@@ -551,28 +551,6 @@ def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, histor
             assert_close(actual_grad, expected_grad)
 
 
-def model_9(data, history, vectorized):
-    theta_dim, m_dim = 3, 2
-    theta_init = pyro.param("theta_init", lambda: torch.rand(theta_dim), constraint=constraints.simplex)
-    theta_trans = pyro.param("theta_trans", lambda: torch.rand((theta_dim, theta_dim)), constraint=constraints.simplex)
-    m_prior = pyro.param("m_prior", lambda: torch.rand((theta_dim, m_dim)), constraint=constraints.simplex)
-    locs = pyro.param("locs", lambda: torch.rand(m_dim))
-
-    with pyro.plate("targets", size=data.shape[-2], dim=-2) as targets:
-        targets = targets[:, None]
-        theta_prev = None
-        markov_loop = \
-            pyro.vectorized_markov(name="frames", size=data.shape[-1], dim=-1) if vectorized \
-            else pyro.markov(range(data.shape[-1]))
-        for i in markov_loop:
-            theta_curr = pyro.sample(
-                "theta_{}".format(i), dist.Categorical(
-                    theta_init if isinstance(i, int) and i < 1 else theta_trans[theta_prev]))
-            m = pyro.sample("m_{}".format(i), dist.Categorical(m_prior[theta_curr]))
-            pyro.sample("y_{}".format(i), dist.Normal(Vindex(locs)[..., m], 1.), obs=Vindex(data)[targets, i])
-            theta_prev = theta_curr
-
-
 def model_10(data, history, vectorized):
     init_probs = torch.tensor([0.5, 0.5])
     transition_probs = pyro.param("transition_probs",
@@ -600,13 +578,15 @@ def model_10(data, history, vectorized):
     (model_5, _guide_from_model(model_5), torch.ones((5, 4), dtype=torch.long), 2),
     (model_6, _guide_from_model(model_6), torch.rand(5, 4), 1),
     (model_7, _guide_from_model(model_7), torch.ones((5, 4), dtype=torch.long), 1),
-    (model_9, _guide_from_model(model_9), torch.rand(5, 5), 1),
     (model_10, _guide_from_model(model_10), torch.ones(5), 1),
 ])
 def test_guide_enumerated_elbo(model, guide, data, history):
     pyro.clear_param_store()
 
-    with pyro_backend("contrib.funsor"):
+    with pyro_backend("contrib.funsor"), \
+        pytest.raises(
+            NotImplementedError,
+            match="TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"):
 
         if history > 1:
             pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
