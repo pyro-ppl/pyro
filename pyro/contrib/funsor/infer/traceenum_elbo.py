@@ -5,6 +5,8 @@ import contextlib
 from functools import reduce
 
 import funsor
+import pulp
+import numpy as np
 
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
@@ -12,6 +14,7 @@ from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 from pyro.contrib.funsor.infer.elbo import ELBO, Jit_ELBO
+from funsor.adjoint import AdjointTape
 
 
 def terms_from_trace(tr):
@@ -70,7 +73,7 @@ class TraceMarkovEnum_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
 
         # build up a lazy expression for the elbo
-        with funsor.interpreter.interpretation(funsor.terms.eager):
+        with funsor.interpreter.interpretation(funsor.terms.lazy):
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
@@ -92,25 +95,40 @@ class TraceMarkovEnum_ELBO(ELBO):
             costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
 
             # finally, integrate out guide variables in the elbo and all plates
+            plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
             elbo = to_funsor(0, output=funsor.Real)
-            if guide_terms["log_measures"]:
-                markov_dims = frozenset({
-                    plate for plate, step in guide_terms["plate_to_step"].items() if step})
-                elbo_terms = funsor.sum_product.compute_expectations(
+            for cost in costs:
+                # compute the marginal logq in the guide corresponding to this cost term
+                log_prob = funsor.sum_product.sum_product(
+                    funsor.ops.logaddexp, funsor.ops.add,
                     guide_terms["log_measures"],
-                    costs,
-                    plate_to_step=guide_terms["plate_to_step"],
-                    eliminate=(guide_terms["plate_vars"] | guide_terms["measure_vars"] | markov_dims)
+                    plates=plate_vars,
+                    eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs)
                 )
-            else:
-                elbo_terms = costs
-            elbo_terms = [term.reduce(funsor.ops.add) for term in elbo_terms]
-            elbo = reduce(funsor.ops.add, elbo_terms)
+                # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
+                elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
+                elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.memoize.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
 
+def find_cover_measure(cost, measures, var):
+    cost_vars = set(cost.inputs) & var
+    # check easy solution first
+    result = [measure for measure in measures if cost_vars == set(measure.inputs) & var]
+    if len(result) == 1:
+        return result
+    # solve the hard way
+    model = pulp.LpProblem("coverMeasure", pulp.LpMinimize)
+    x = pulp.LpVariable.dicts("x", np.arange(len(measures)), lowBound=0, upBound=1, cat="Integer")
+    c = np.array([len(set(m.inputs)) for m in measures])
+    model += pulp.lpSum([x[i] * c[i] for i in x.keys()])
+    for v in cost_vars:
+        model += pulp.lpSum([x[i] * int(v in measures[i].inputs) for i in x.keys()]) >= 1
+    model.solve()
+    result = [measures[i] for i in x.keys() if int(x[i].value()) == 1]
+    return result
 
 @copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceEnum_ELBO(ELBO):
@@ -149,16 +167,22 @@ class TraceEnum_ELBO(ELBO):
             # finally, integrate out guide variables in the elbo and all plates
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
             elbo = to_funsor(0, output=funsor.Real)
-            for cost in costs:
-                # compute the marginal logq in the guide corresponding to this cost term
-                log_prob = funsor.sum_product.sum_product(
+            with AdjointTape() as tape:
+                logZ = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp, funsor.ops.add,
                     guide_terms["log_measures"],
                     plates=plate_vars,
-                    eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs)
+                    eliminate=(plate_vars | guide_terms["measure_vars"])
                 )
-                # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
-                elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
+            result = tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logZ, guide_terms["log_measures"])
+            for cost in costs:
+                cost_measures = find_cover_measure(cost, guide_terms["log_measures"], guide_terms["measure_vars"])
+                if cost_measures:
+                    # TODO check that cost_measures are disjoint
+                    log_prob = reduce(funsor.ops.add, [measure + result[measure] - logZ for measure in cost_measures])
+                    elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(log_prob.inputs))
+                else:
+                    elbo_term = cost
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible

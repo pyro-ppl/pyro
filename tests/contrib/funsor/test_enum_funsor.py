@@ -1457,6 +1457,6 @@ def test_elbo_enumerate_plate_9():
 
     elbo = infer.TraceEnum_ELBO(max_plate_nesting=0)
     expected_loss = elbo.differentiable_loss(model_iplate, guide_iplate)
-    elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=1)
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
     actual_loss = elbo.differentiable_loss(model_plate, guide_plate)
     _check_loss_and_grads(expected_loss, actual_loss)
