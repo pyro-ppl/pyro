@@ -85,7 +85,7 @@ class AutoGaussianChain(GaussianChain):
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
 @pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_diagonal_gaussians(auto_class, Elbo):
-    n_steps = 3501 if auto_class == AutoDiagonalNormal else 6001
+    n_steps = 3001
 
     def model():
         pyro.sample("x", dist.Normal(-0.2, 1.2))
@@ -95,7 +95,8 @@ def test_auto_diagonal_gaussians(auto_class, Elbo):
         guide = auto_class(model, rank=1)
     else:
         guide = auto_class(model)
-    adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
+    adam = optim.ClippedAdam({"lr": .01, "betas": (0.95, 0.999),
+                              "lrd": 0.1 ** (1 / n_steps)})
     svi = SVI(model, guide, adam, loss=Elbo())
 
     for k in range(n_steps):

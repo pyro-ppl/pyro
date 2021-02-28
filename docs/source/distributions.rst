@@ -459,6 +459,20 @@ Permute
     :undoc-members:
     :show-inheritance:
 
+SoftplusLowerCholeskyTransform
+------------------------------
+.. autoclass:: pyro.distributions.transforms.SoftplusLowerCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SoftplusTransform
+-----------------
+.. autoclass:: pyro.distributions.transforms.SoftplusTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TransformModules
 ~~~~~~~~~~~~~~~~
 

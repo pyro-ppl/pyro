@@ -68,6 +68,7 @@ from .permute import Permute, permute
 from .planar import ConditionalPlanar, Planar, conditional_planar, planar
 from .polynomial import Polynomial, polynomial
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
+from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (
     ConditionalSplineAutoregressive,
@@ -115,6 +116,17 @@ def _transform_to_positive_ordered_vector(constraint):
 @transform_to.register(constraints.positive_definite)
 def _transform_to_positive_definite(constraint):
     return ComposeTransform([LowerCholeskyTransform(), CholeskyTransform().inv])
+
+
+@biject_to.register(constraints.softplus_positive)
+@transform_to.register(constraints.softplus_positive)
+def _transform_to_softplus_positive(constraint):
+    return SoftplusTransform()
+
+
+@transform_to.register(constraints.softplus_lower_cholesky)
+def _transform_to_softplus_lower_cholesky(constraint):
+    return SoftplusLowerCholeskyTransform()
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
@@ -167,6 +179,8 @@ __all__ = [
     'Planar',
     'Polynomial',
     'Radial',
+    'SoftplusLowerCholeskyTransform',
+    'SoftplusTransform',
     'Spline',
     'SplineAutoregressive',
     'SplineCoupling',

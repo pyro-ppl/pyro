@@ -9,7 +9,7 @@ For example to generate a mean field Gaussian guide::
     def model():
         ...
 
-    guide = AutoDiagonalNormal(model)  # a mean field guide
+    guide = AutoNormal(model)  # a mean field guide
     svi = SVI(model, guide, Adam({'lr': 1e-3}), Trace_ELBO())
 
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
@@ -23,11 +23,12 @@ from contextlib import ExitStack  # python 3
 
 import torch
 from torch import nn
-from torch.distributions import biject_to, constraints
+from torch.distributions import biject_to
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions import constraints
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import (
@@ -431,6 +432,9 @@ class AutoNormal(AutoGuide):
         or iterable of plates. Plates not returned will be created
         automatically as usual. This is useful for data subsampling.
     """
+
+    scale_constraint = constraints.softplus_positive
+
     def __init__(self, model, *,
                  init_loc_fn=init_to_feasible,
                  init_scale=0.1,
@@ -472,7 +476,8 @@ class AutoNormal(AutoGuide):
             init_scale = torch.full_like(init_loc, self._init_scale)
 
             _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
-            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive, event_dim))
+            _deep_setattr(self.scales, name,
+                          PyroParam(init_scale, self.scale_constraint, event_dim))
 
     def _get_loc_and_scale(self, name):
         site_loc = _deep_getattr(self.locs, name)
@@ -813,6 +818,8 @@ class AutoMultivariateNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
+    scale_tril_constraint = constraints.softplus_lower_cholesky
+
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -824,7 +831,7 @@ class AutoMultivariateNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         self.scale_tril = PyroParam(eye_like(self.loc, self.latent_dim) * self._init_scale,
-                                    constraints.lower_cholesky)
+                                    self.scale_tril_constraint)
 
     def get_base_dist(self):
         return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
@@ -863,6 +870,8 @@ class AutoDiagonalNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
+    scale_constraint = constraints.softplus_positive
+
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -874,7 +883,7 @@ class AutoDiagonalNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         self.scale = PyroParam(self.loc.new_full((self.latent_dim,), self._init_scale),
-                               constraints.positive)
+                               self.scale_constraint)
 
     def get_base_dist(self):
         return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
@@ -918,6 +927,8 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         deviation of each (unconstrained transformed) latent variable.
     """
 
+    scale_constraint = constraints.softplus_positive
+
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1, rank=None):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -935,7 +946,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
             self.rank = int(round(self.latent_dim ** 0.5))
         self.scale = PyroParam(
             self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
-            constraint=constraints.positive)
+            constraint=self.scale_constraint)
         self.cov_factor = nn.Parameter(
             self.loc.new_empty(self.latent_dim, self.rank).normal_(0, 1 / self.rank ** 0.5))
 
