@@ -4,6 +4,7 @@
 from abc import ABCMeta, abstractmethod
 
 import torch
+
 from pyro.distributions.util import eye_like
 
 

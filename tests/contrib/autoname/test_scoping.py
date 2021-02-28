@@ -8,7 +8,7 @@ import torch
 import pyro
 import pyro.distributions.torch as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoname import scope, name_count
+from pyro.contrib.autoname import name_count, scope
 
 logger = logging.getLogger(__name__)
 

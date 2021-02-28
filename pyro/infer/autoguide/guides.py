@@ -31,7 +31,11 @@ import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_feasible, init_to_median
+from pyro.infer.autoguide.initialization import (
+    InitMessenger,
+    init_to_feasible,
+    init_to_median,
+)
 from pyro.infer.enum import config_enumerate
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian

@@ -148,6 +148,12 @@ class DirichletMultinomial(TorchDistribution):
     def concentration(self):
         return self._dirichlet.concentration
 
+    @staticmethod
+    def infer_shapes(concentration, total_count=()):
+        batch_shape = broadcast_shape(concentration[:-1], total_count)
+        event_shape = concentration[-1:]
+        return batch_shape, event_shape
+
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(DirichletMultinomial, _instance)
         batch_shape = torch.Size(batch_shape)

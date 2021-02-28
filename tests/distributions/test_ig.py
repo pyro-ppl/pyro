@@ -3,9 +3,9 @@
 
 import math
 
+import pytest
 import torch
 
-import pytest
 from pyro.distributions import Gamma, InverseGamma
 from tests.common import assert_equal
 

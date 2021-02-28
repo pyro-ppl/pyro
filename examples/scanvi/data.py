@@ -8,11 +8,11 @@ https://github.com/YosefLab/scvi-tutorials/blob/50dd3269abfe0c375ec47114f2c20725
 """
 
 import math
-import numpy as np
-from scipy import sparse
 
+import numpy as np
 import torch
 import torch.nn as nn
+from scipy import sparse
 
 
 class BatchDataLoader(object):
@@ -122,8 +122,8 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
 
         return BatchDataLoader(X, Y, batch_size), num_genes, 2.0, 1.0, None
 
-    import scvi
     import scanpy as sc
+    import scvi
     adata = scvi.data.purified_pbmc_dataset(subset_datasets=["regulatory_t", "naive_t",
                                                              "memory_t", "naive_cytotoxic"])
 

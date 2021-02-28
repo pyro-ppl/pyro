@@ -6,7 +6,7 @@ import math
 import torch
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.ops.special import log_binomial
 
 from . import constraints
@@ -122,6 +122,12 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
 
+    @staticmethod
+    def infer_shapes(concentration):
+        batch_shape = concentration[:-1]
+        event_shape = concentration[-1:]
+        return batch_shape, event_shape
+
     def conjugate_update(self, other):
         """
         EXPERIMENTAL.
@@ -177,11 +183,52 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
         return super(torch.distributions.LogNormal, self).expand(batch_shape, _instance=new)
 
 
+class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal, TorchDistributionMixin):
+    @staticmethod
+    def infer_shapes(loc, cov_factor, cov_diag):
+        event_shape = loc[-1:]
+        batch_shape = broadcast_shape(loc[:-1], cov_factor[:-2], cov_diag[:-1])
+        return batch_shape, event_shape
+
+
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    @staticmethod
+    def infer_shapes(loc, covariance_matrix=None, precision_matrix=None, scale_tril=None):
+        batch_shape, event_shape = loc[:-1], loc[-1:]
+        for matrix in [covariance_matrix, precision_matrix, scale_tril]:
+            if matrix is not None:
+                batch_shape = broadcast_shape(batch_shape, matrix[:-2])
+        return batch_shape, event_shape
+
+
+class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
+    def infer_shapes(total_count=None, probs=None, logits=None):
+        tensor = probs if logits is None else logits
+        batch_shape, event_shape = tensor[:-1], tensor[-1:]
+        if isinstance(total_count, tuple):
+            batch_shape = broadcast_shape(batch_shape, total_count)
+        return batch_shape, event_shape
+
+
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
     pass
 
 
+class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistributionMixin):
+    @staticmethod
+    def infer_shapes(probs=None, logits=None):
+        tensor = probs if logits is None else logits
+        event_shape = tensor[-1:]
+        batch_shape = tensor[:-1]
+        return batch_shape, event_shape
+
+
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
+
+    @staticmethod
+    def infer_shapes(**kwargs):
+        raise NotImplementedError
+
     @property
     def _validate_args(self):
         return self.base_dist._validate_args

@@ -13,8 +13,16 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, EnergyDistance, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
-                        TraceTailAdaptive_ELBO, config_enumerate)
+from pyro.infer import (
+    SVI,
+    EnergyDistance,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+    TraceTailAdaptive_ELBO,
+    config_enumerate,
+)
 from pyro.infer.reparam import LatentStableReparam
 from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import torch_item
@@ -2179,6 +2187,110 @@ def test_reparam_mask_plate_ok(Elbo, mask):
         pyro.sample("c", dist.LogNormal(loc, scale).to_event(1))
 
     assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("num_particles", [1, 2])
+@pytest.mark.parametrize("mask", [
+    torch.tensor(True),
+    torch.tensor(False),
+    torch.tensor([True]),
+    torch.tensor([False]),
+    torch.tensor([False, True, False]),
+])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+])
+def test_obs_mask_ok(Elbo, mask, num_particles):
+    data = torch.tensor([7., 7., 7.])
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with pyro.plate("plate", len(data)):
+            y = pyro.sample("y", dist.Normal(x, 1.),
+                            obs=data, obs_mask=mask)
+            assert ((y == data) == mask).all()
+
+    def guide():
+        loc = pyro.param("loc", torch.zeros(()))
+        scale = pyro.param("scale", torch.ones(()),
+                           constraint=constraints.positive)
+        x = pyro.sample("x", dist.Normal(loc, scale))
+        with pyro.plate("plate", len(data)):
+            with poutine.mask(mask=~mask):
+                pyro.sample("y_unobserved", dist.Normal(x, 1.))
+
+    elbo = Elbo(num_particles=num_particles, vectorize_particles=True,
+                strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)
+
+
+@pytest.mark.parametrize("num_particles", [1, 2])
+@pytest.mark.parametrize("mask", [
+    torch.tensor(True),
+    torch.tensor(False),
+    torch.tensor([True]),
+    torch.tensor([False]),
+    torch.tensor([False, True, True, False]),
+])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+])
+def test_obs_mask_multivariate_ok(Elbo, mask, num_particles):
+    data = torch.full((4, 3), 7.0)
+
+    def model():
+        x = pyro.sample("x", dist.MultivariateNormal(torch.zeros(3), torch.eye(3)))
+        with pyro.plate("plate", len(data)):
+            y = pyro.sample("y", dist.MultivariateNormal(x, torch.eye(3)),
+                            obs=data, obs_mask=mask)
+            assert ((y == data).all(-1) == mask).all()
+
+    def guide():
+        loc = pyro.param("loc", torch.zeros(3))
+        cov = pyro.param("cov", torch.eye(3),
+                         constraint=constraints.positive_definite)
+        x = pyro.sample("x", dist.MultivariateNormal(loc, cov))
+        with pyro.plate("plate", len(data)):
+            with poutine.mask(mask=~mask):
+                pyro.sample("y_unobserved", dist.MultivariateNormal(x, torch.eye(3)))
+
+    elbo = Elbo(num_particles=num_particles, vectorize_particles=True,
+                strict_enumeration_warning=False)
+    assert_ok(model, guide, elbo)
+
+
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+])
+def test_obs_mask_multivariate_error(Elbo):
+    data = torch.full((3, 2), 7.0)
+    # This mask is invalid because it includes event shape.
+    mask = torch.tensor([[False, False], [False, True], [True, False]])
+
+    def model():
+        x = pyro.sample("x", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
+        with pyro.plate("plate", len(data)):
+            pyro.sample("y", dist.MultivariateNormal(x, torch.eye(2)),
+                        obs=data, obs_mask=mask)
+
+    def guide():
+        loc = pyro.param("loc", torch.zeros(2))
+        x = pyro.sample("x", dist.MultivariateNormal(loc, torch.eye(2)))
+        with pyro.plate("plate", len(data)):
+            with poutine.mask(mask=~mask):
+                pyro.sample("y_unobserved", dist.MultivariateNormal(x, torch.eye(2)))
+
+    elbo = Elbo(strict_enumeration_warning=False)
+    assert_error(model, guide, elbo, match="Invalid obs_mask shape")
 
 
 @pytest.mark.parametrize("scale", [1, 0.1, torch.tensor(0.5)])

@@ -3,7 +3,6 @@
 
 import logging
 
-
 default_format = '%(levelname)s \t %(message)s'
 log = logging.getLogger("pyro")
 log.setLevel(logging.INFO)

@@ -9,10 +9,20 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.epidemiology.models import (HeterogeneousRegionalSIRModel, HeterogeneousSIRModel,
-                                              OverdispersedSEIRModel, OverdispersedSIRModel, RegionalSIRModel,
-                                              SimpleSEIRDModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel,
-                                              SuperspreadingSEIRModel, SuperspreadingSIRModel, UnknownStartSIRModel)
+from pyro.contrib.epidemiology.models import (
+    HeterogeneousRegionalSIRModel,
+    HeterogeneousSIRModel,
+    OverdispersedSEIRModel,
+    OverdispersedSIRModel,
+    RegionalSIRModel,
+    SimpleSEIRDModel,
+    SimpleSEIRModel,
+    SimpleSIRModel,
+    SparseSIRModel,
+    SuperspreadingSEIRModel,
+    SuperspreadingSIRModel,
+    UnknownStartSIRModel,
+)
 from tests.common import xfail_param
 
 logger = logging.getLogger(__name__)

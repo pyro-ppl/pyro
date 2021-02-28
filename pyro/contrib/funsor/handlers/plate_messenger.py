@@ -6,14 +6,21 @@ from numbers import Number
 
 import funsor
 
-from pyro.contrib.funsor.handlers.named_messenger import DimRequest, DimType, GlobalNamedMessenger, NamedMessenger
+from pyro.contrib.funsor.handlers.named_messenger import (
+    DimRequest,
+    DimType,
+    GlobalNamedMessenger,
+    NamedMessenger,
+)
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.distributions.util import copy_docs_from
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import effectful
-from pyro.poutine.subsample_messenger import SubsampleMessenger as OrigSubsampleMessenger
+from pyro.poutine.subsample_messenger import (
+    SubsampleMessenger as OrigSubsampleMessenger,
+)
 from pyro.util import ignore_jit_warnings
 
 funsor.set_backend("torch")

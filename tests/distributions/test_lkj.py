@@ -5,10 +5,16 @@ import math
 
 import pytest
 import torch
-from torch.distributions import AffineTransform, Beta, TransformedDistribution, biject_to, transform_to
+from torch.distributions import (
+    AffineTransform,
+    Beta,
+    TransformedDistribution,
+    biject_to,
+    transform_to,
+)
 
 from pyro.distributions import constraints, transforms
-from pyro.distributions.lkj import LKJCorrCholesky
+from pyro.distributions.torch import LKJCholesky
 from tests.common import assert_equal, assert_tensors_equal
 
 
@@ -81,39 +87,40 @@ def test_corr_cholesky_transform(x_shape, mapping):
     assert log_det.shape == x_shape[:-1]
 
 
-@pytest.mark.parametrize("d", [2, 3, 4, 10])
-def test_log_prob_eta1(d):
-    dist = LKJCorrCholesky(d, torch.tensor([1.]))
+@pytest.mark.parametrize("dim", [2, 3, 4, 10])
+def test_log_prob_conc1(dim):
+    dist = LKJCholesky(dim, torch.tensor([1.]))
 
     a_sample = dist.sample(torch.Size([100]))
     lp = dist.log_prob(a_sample)
 
-    if d == 2:
+    if dim == 2:
         assert_equal(lp, lp.new_full(lp.size(), -math.log(2)))
     else:
         ladj = a_sample.diagonal(dim1=-2, dim2=-1).log().mul(
-            torch.linspace(start=d-1, end=0, steps=d, device=a_sample.device, dtype=a_sample.dtype)
+            torch.linspace(start=dim-1, end=0, steps=dim, device=a_sample.device, dtype=a_sample.dtype)
         ).sum(-1)
         lps_less_ladj = lp - ladj
         assert (lps_less_ladj - lps_less_ladj.min()).abs().sum() < 1e-4
 
 
-@pytest.mark.parametrize("eta", [.1, .5, 1., 2., 5.])
-def test_log_prob_d2(eta):
-    dist = LKJCorrCholesky(2, torch.tensor([eta]))
-    test_dist = TransformedDistribution(Beta(eta, eta), AffineTransform(loc=-1., scale=2.0))
+@pytest.mark.parametrize("concentration", [.1, .5, 1., 2., 5.])
+def test_log_prob_d2(concentration):
+    dist = LKJCholesky(2, torch.tensor([concentration]))
+    test_dist = TransformedDistribution(Beta(concentration, concentration), AffineTransform(loc=-1., scale=2.0))
 
     samples = dist.sample(torch.Size([100]))
     lp = dist.log_prob(samples)
     x = samples[..., 1, 0]
     tst = test_dist.log_prob(x)
-
-    assert_tensors_equal(lp, tst, prec=1e-6)
+    # LKJ prevents inf values in log_prob
+    lp[tst == math.inf] = math.inf  # substitute inf for comparison
+    assert_tensors_equal(lp, tst, prec=1e-3)
 
 
 def test_sample_batch():
     # Regression test for https://github.com/pyro-ppl/pyro/issues/2615
-    dist = LKJCorrCholesky(d=3, eta=torch.ones(())).expand([12])
+    dist = LKJCholesky(3, concentration=torch.ones(())).expand([12])
     # batch shape and event shape are as you'd expect
     assert dist.batch_shape == torch.Size([12])
     assert dist.event_shape == torch.Size([3, 3])

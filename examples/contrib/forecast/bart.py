@@ -66,14 +66,14 @@ class Model(ForecastingModel):
         trans_scale = pyro.sample("trans_scale",
                                   dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         trans_corr = pyro.sample("trans_corr",
-                                 dist.LKJCorrCholesky(dim, torch.ones(())))
+                                 dist.LKJCholesky(dim, torch.ones(())))
         trans_scale_tril = trans_scale.unsqueeze(-1) * trans_corr
         assert trans_scale_tril.shape[-2:] == (dim, dim)
 
         obs_scale = pyro.sample("obs_scale",
                                 dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         obs_corr = pyro.sample("obs_corr",
-                               dist.LKJCorrCholesky(dim, torch.ones(())))
+                               dist.LKJCholesky(dim, torch.ones(())))
         obs_scale_tril = obs_scale.unsqueeze(-1) * obs_corr
         assert obs_scale_tril.shape[-2:] == (dim, dim)
 

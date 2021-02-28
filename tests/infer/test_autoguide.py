@@ -16,10 +16,23 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Predictive, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
-from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
-                                  AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                  AutoMultivariateNormal, AutoNormal, init_to_feasible, init_to_mean, init_to_median,
-                                  init_to_sample)
+from pyro.infer.autoguide import (
+    AutoCallable,
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoDiscreteParallel,
+    AutoGuide,
+    AutoGuideList,
+    AutoIAFNormal,
+    AutoLaplaceApproximation,
+    AutoLowRankMultivariateNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+)
 from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
@@ -468,7 +481,7 @@ def test_empty_model_error():
 
 def test_unpack_latent():
     def model():
-        return pyro.sample('x', dist.LKJCorrCholesky(2, torch.tensor(1.)))
+        return pyro.sample('x', dist.LKJCholesky(2, torch.tensor(1.)))
 
     guide = AutoDiagonalNormal(model)
     assert guide()['x'].shape == model().shape

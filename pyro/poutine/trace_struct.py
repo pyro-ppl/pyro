@@ -1,8 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import OrderedDict
 import sys
+from collections import OrderedDict
 
 import opt_einsum
 

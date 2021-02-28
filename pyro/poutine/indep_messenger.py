@@ -7,6 +7,7 @@ from collections import namedtuple
 import torch
 
 from pyro.util import ignore_jit_warnings
+
 from .messenger import Messenger
 from .runtime import _DIM_ALLOCATOR
 

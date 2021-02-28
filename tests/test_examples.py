@@ -9,7 +9,13 @@ from subprocess import check_call
 import pytest
 import torch
 
-from tests.common import EXAMPLES_DIR, requires_cuda, requires_funsor, requires_horovod, xfail_param
+from tests.common import (
+    EXAMPLES_DIR,
+    requires_cuda,
+    requires_funsor,
+    requires_horovod,
+    xfail_param,
+)
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
