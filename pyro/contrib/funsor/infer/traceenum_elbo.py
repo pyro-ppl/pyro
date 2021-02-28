@@ -57,6 +57,24 @@ def terms_from_trace(tr):
     return terms
 
 
+def find_cover_measure(cost, measures, var):
+    cost_vars = set(cost.inputs) & var
+    # check easy solution first
+    result = [measure for measure in measures if cost_vars == set(measure.inputs) & var]
+    if len(result) == 1:
+        return result
+    # solve the hard way
+    model = pulp.LpProblem("coverMeasure", pulp.LpMinimize)
+    x = pulp.LpVariable.dicts("x", np.arange(len(measures)), lowBound=0, upBound=1, cat="Integer")
+    c = np.array([len(set(m.inputs)) for m in measures])
+    model += pulp.lpSum([x[i] * c[i] for i in x.keys()])
+    for v in cost_vars:
+        model += pulp.lpSum([x[i] * int(v in measures[i].inputs) for i in x.keys()]) >= 1
+    model.solve()
+    result = [measures[i] for i in x.keys() if int(x[i].value()) == 1]
+    return result
+
+
 @copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceMarkovEnum_ELBO(ELBO):
 
@@ -113,22 +131,6 @@ class TraceMarkovEnum_ELBO(ELBO):
         with funsor.memoize.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
 
-def find_cover_measure(cost, measures, var):
-    cost_vars = set(cost.inputs) & var
-    # check easy solution first
-    result = [measure for measure in measures if cost_vars == set(measure.inputs) & var]
-    if len(result) == 1:
-        return result
-    # solve the hard way
-    model = pulp.LpProblem("coverMeasure", pulp.LpMinimize)
-    x = pulp.LpVariable.dicts("x", np.arange(len(measures)), lowBound=0, upBound=1, cat="Integer")
-    c = np.array([len(set(m.inputs)) for m in measures])
-    model += pulp.lpSum([x[i] * c[i] for i in x.keys()])
-    for v in cost_vars:
-        model += pulp.lpSum([x[i] * int(v in measures[i].inputs) for i in x.keys()]) >= 1
-    model.solve()
-    result = [measures[i] for i in x.keys() if int(x[i].value()) == 1]
-    return result
 
 @copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceEnum_ELBO(ELBO):
@@ -166,7 +168,6 @@ class TraceEnum_ELBO(ELBO):
 
             # finally, integrate out guide variables in the elbo and all plates
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
-            elbo = to_funsor(0, output=funsor.Real)
             with AdjointTape() as tape:
                 logZ = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp, funsor.ops.add,
@@ -175,7 +176,9 @@ class TraceEnum_ELBO(ELBO):
                     eliminate=(plate_vars | guide_terms["measure_vars"])
                 )
             result = tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logZ, guide_terms["log_measures"])
+            elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
+                # compute the marginal logq in the guide corresponding to this cost term
                 cost_measures = find_cover_measure(cost, guide_terms["log_measures"], guide_terms["measure_vars"])
                 if cost_measures:
                     # TODO check that cost_measures are disjoint
