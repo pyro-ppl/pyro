@@ -90,6 +90,10 @@ class TraceMarkovEnum_ELBO(ELBO):
         guide_terms = terms_from_trace(guide_tr)
         model_terms = terms_from_trace(model_tr)
 
+        # guide side enumeration is not supported
+        if any(guide_terms["plate_to_step"].values()):
+            raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration")
+
         # build up a lazy expression for the elbo
         with funsor.interpreter.interpretation(funsor.terms.lazy):
             # identify and contract out auxiliary variables in the model with partial_sum_product
