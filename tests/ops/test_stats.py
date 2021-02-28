@@ -6,9 +6,21 @@ import warnings
 import pytest
 import torch
 
-from pyro.ops.stats import (_cummin, autocorrelation, autocovariance, crps_empirical, effective_sample_size,
-                            fit_generalized_pareto, gelman_rubin, hpdi, pi, quantile, resample, split_gelman_rubin,
-                            waic)
+from pyro.ops.stats import (
+    _cummin,
+    autocorrelation,
+    autocovariance,
+    crps_empirical,
+    effective_sample_size,
+    fit_generalized_pareto,
+    gelman_rubin,
+    hpdi,
+    pi,
+    quantile,
+    resample,
+    split_gelman_rubin,
+    waic,
+)
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 

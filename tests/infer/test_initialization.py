@@ -5,7 +5,11 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_generated, init_to_value
+from pyro.infer.autoguide.initialization import (
+    InitMessenger,
+    init_to_generated,
+    init_to_value,
+)
 
 
 def test_init_to_generated():

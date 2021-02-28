@@ -1,17 +1,19 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
 from pathlib import Path
-from pyro.infer import Predictive, Trace_ELBO
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import torch
+from baseline import MaskedBCELoss
+from mnist import get_data
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
-from baseline import MaskedBCELoss
-from mnist import get_data
+
+from pyro.infer import Predictive, Trace_ELBO
 
 
 def imshow(inp, image_path=None):

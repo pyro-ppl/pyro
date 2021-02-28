@@ -9,7 +9,6 @@ import torch
 
 import pyro
 
-
 torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 

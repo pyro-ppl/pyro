@@ -14,7 +14,13 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.params import param_with_module_name
 from pyro.poutine.plate_messenger import PlateMessenger
-from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful
+from pyro.poutine.runtime import (
+    _MODULE_NAMESPACE_DIVIDER,
+    _PYRO_PARAM_STORE,
+    am_i_wrapped,
+    apply_stack,
+    effectful,
+)
 from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 

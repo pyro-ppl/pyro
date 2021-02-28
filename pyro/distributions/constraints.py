@@ -1,8 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
 from torch.distributions.constraints import *  # noqa F403
+
+# isort: split
+
+import torch
 from torch.distributions.constraints import Constraint
 from torch.distributions.constraints import __all__ as torch_constraints
 from torch.distributions.constraints import independent, positive, positive_definite

@@ -9,7 +9,10 @@ from torch.distributions.transforms import SigmoidTransform
 
 import pyro.distributions as dist
 from pyro.contrib.epidemiology import beta_binomial_dist, binomial_dist, infection_dist
-from pyro.contrib.epidemiology.distributions import _RELAX_MIN_VARIANCE, set_relaxed_distributions
+from pyro.contrib.epidemiology.distributions import (
+    _RELAX_MIN_VARIANCE,
+    set_relaxed_distributions,
+)
 from tests.common import assert_close
 
 

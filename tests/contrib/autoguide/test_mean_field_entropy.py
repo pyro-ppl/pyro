@@ -1,9 +1,9 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
-import scipy.special as sc
 import pytest
+import scipy.special as sc
+import torch
 
 import pyro
 import pyro.distributions as dist

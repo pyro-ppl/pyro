@@ -6,8 +6,15 @@ import math
 import pytest
 import torch
 
-from pyro.distributions import (Delta, NegativeBinomial, Normal, Poisson, ZeroInflatedDistribution,
-                                ZeroInflatedNegativeBinomial, ZeroInflatedPoisson)
+from pyro.distributions import (
+    Delta,
+    NegativeBinomial,
+    Normal,
+    Poisson,
+    ZeroInflatedDistribution,
+    ZeroInflatedNegativeBinomial,
+    ZeroInflatedPoisson,
+)
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_close
 

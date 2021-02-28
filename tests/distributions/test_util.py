@@ -8,7 +8,13 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions.util import broadcast_shape, detach, sum_leftmost, sum_rightmost, weakmethod
+from pyro.distributions.util import (
+    broadcast_shape,
+    detach,
+    sum_leftmost,
+    sum_rightmost,
+    weakmethod,
+)
 from tests.common import assert_equal
 
 INF = float('inf')
