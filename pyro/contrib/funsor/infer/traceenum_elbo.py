@@ -4,14 +4,13 @@
 import contextlib
 
 import funsor
-
-from pyro.distributions.util import copy_docs_from
-from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
+from funsor.adjoint import AdjointTape
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 from pyro.contrib.funsor.infer.elbo import ELBO, Jit_ELBO
-from funsor.adjoint import AdjointTape
+from pyro.distributions.util import copy_docs_from
+from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
 
 
 def terms_from_trace(tr):
@@ -74,7 +73,7 @@ class TraceMarkovEnum_ELBO(ELBO):
             raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration")
 
         # build up a lazy expression for the elbo
-        with funsor.interpreter.interpretation(funsor.terms.eager):
+        with funsor.interpreter.interpretation(funsor.terms.lazy):
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
