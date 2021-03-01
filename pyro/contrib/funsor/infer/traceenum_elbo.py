@@ -152,12 +152,12 @@ class TraceEnum_ELBO(ELBO):
             # compute the marginal logq in the guide corresponding to each cost term
             targets = dict()
             for cost in costs:
-                input_vars = frozenset(cost.inputs.keys())
+                input_vars = frozenset(cost.inputs)
                 if input_vars not in targets:
                     targets[input_vars] = funsor.Tensor(
                         funsor.ops.new_zeros(
-                            funsor.tensor.get_default_prototype(), ()
-                        ).expand(tuple(v.size for v in cost.inputs.values())),
+                            funsor.tensor.get_default_prototype(), tuple(v.size for v in cost.inputs.values())
+                        ),
                         cost.inputs,
                         cost.dtype,
                     )
@@ -172,8 +172,9 @@ class TraceEnum_ELBO(ELBO):
             # finally, integrate out guide variables in the elbo and all plates
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
-                target = targets[frozenset(cost.inputs.keys())]
-                log_prob = marginals[target] - logzq
+                target = targets[frozenset(cost.inputs)]
+                logzq_local = marginals[target].reduce(funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars)
+                log_prob = marginals[target] - logzq_local
                 elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(log_prob.inputs))
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
