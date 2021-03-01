@@ -154,21 +154,26 @@ class TraceEnum_ELBO(ELBO):
             for cost in costs:
                 input_vars = frozenset(cost.inputs.keys())
                 if input_vars not in targets:
-                    targets[input_vars] = funsor.Tensor(funsor.ops.new_zeros(funsor.tensor.get_default_prototype(), ()).expand(
-                        tuple(v.size for v in cost.inputs.values())), cost.inputs, cost.dtype)
+                    targets[input_vars] = funsor.Tensor(
+                        funsor.ops.new_zeros(
+                            funsor.tensor.get_default_prototype(), ()
+                        ).expand(tuple(v.size for v in cost.inputs.values())),
+                        cost.inputs,
+                        cost.dtype,
+                    )
             with AdjointTape() as tape:
-                logZq = funsor.sum_product.sum_product(
+                logzq = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp, funsor.ops.add,
                     guide_terms["log_measures"] + list(targets.values()),
                     plates=plate_vars,
                     eliminate=(plate_vars | guide_terms["measure_vars"])
                 )
-            marginals = tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logZq, tuple(targets.values()))
+            marginals = tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values()))
             # finally, integrate out guide variables in the elbo and all plates
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[frozenset(cost.inputs.keys())]
-                log_prob = marginals[target] - logZq
+                log_prob = marginals[target] - logzq
                 elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(log_prob.inputs))
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
