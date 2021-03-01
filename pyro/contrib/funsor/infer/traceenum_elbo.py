@@ -156,7 +156,8 @@ class TraceEnum_ELBO(ELBO):
                 if input_vars not in targets:
                     targets[input_vars] = funsor.Tensor(
                         funsor.ops.new_zeros(
-                            funsor.tensor.get_default_prototype(), tuple(v.size for v in cost.inputs.values())
+                            funsor.tensor.get_default_prototype(),
+                            tuple(v.size for v in cost.inputs.values()),
                         ),
                         cost.inputs,
                         cost.dtype,
