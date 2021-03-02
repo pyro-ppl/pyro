@@ -1465,7 +1465,7 @@ def test_elbo_enumerate_plate_9():
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_10():
     # Model
-    # a -> [ [ bij -> cij ]]
+    # a -> [ [ bij -> cij ] ]
     # Guide
     # a -> [ [ bij ] ]
     pyro.param("model_probs_a",
@@ -1537,9 +1537,9 @@ def test_elbo_enumerate_plate_10():
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_11():
     # Model
-    # [ai -> [ bij -> cij ]]
+    # [ ai -> [ bij -> cij ] ]
     # Guide
-    # [ai -> [ bij ] ]
+    # [ ai -> [ bij ] ]
     pyro.param("model_probs_a",
                torch.tensor([0.45, 0.55]),
                constraint=constraints.simplex)

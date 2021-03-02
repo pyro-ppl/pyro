@@ -145,9 +145,14 @@ class TraceEnum_ELBO(ELBO):
                 plates=model_terms["plate_vars"], eliminate=model_terms["measure_vars"]
             )]
 
+            # accumulate costs from model (logp) and guide (-logq)
             costs = contracted_costs + uncontracted_factors  # model costs: logp
             costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
 
+            # compute expected cost
+            # Cf. pyro.infer.util.Dice.compute_expectation()
+            # https://github.com/pyro-ppl/pyro/blob/0.3.0/pyro/infer/util.py#L212
+            # TODO Replace this with funsor.Expectation
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
             # compute the marginal logq in the guide corresponding to each cost term
             targets = dict()
