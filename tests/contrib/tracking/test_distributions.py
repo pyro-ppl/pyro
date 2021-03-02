@@ -1,12 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
 import torch
 
 from pyro.contrib.tracking.distributions import EKFDistribution
 from pyro.contrib.tracking.dynamic_models import NcpContinuous, NcvContinuous
-
-import pytest
 
 
 @pytest.mark.parametrize('Model', [NcpContinuous, NcvContinuous])

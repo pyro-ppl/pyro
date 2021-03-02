@@ -20,9 +20,22 @@ import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import HaarTransform
-from pyro.infer import MCMC, NUTS, SVI, JitTrace_ELBO, SMCFilter, Trace_ELBO, infer_discrete
-from pyro.infer.autoguide import (AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoNormal, init_to_generated,
-                                  init_to_value)
+from pyro.infer import (
+    MCMC,
+    NUTS,
+    SVI,
+    JitTrace_ELBO,
+    SMCFilter,
+    Trace_ELBO,
+    infer_discrete,
+)
+from pyro.infer.autoguide import (
+    AutoLowRankMultivariateNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    init_to_generated,
+    init_to_value,
+)
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
@@ -31,7 +44,11 @@ from pyro.optim import ClippedAdam
 from pyro.poutine.util import site_is_factor, site_is_subsample
 from pyro.util import warn_if_nan
 
-from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
+from .distributions import (
+    set_approx_log_prob_tol,
+    set_approx_sample_thresh,
+    set_relaxed_distributions,
+)
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)

@@ -4,8 +4,8 @@
 import torch
 from torch.autograd import grad
 
+from pyro.ops.linalg import eig_3d, rinverse
 from pyro.util import warn_if_nan
-from pyro.ops.linalg import rinverse, eig_3d
 
 
 def newton_step(loss, x, trust_radius=None):

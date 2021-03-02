@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-import numpy as np
 from pathlib import Path
-from tqdm import tqdm
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 
 
 class BaselineNet(nn.Module):

@@ -12,10 +12,15 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.distributions.transforms import iterated, block_autoregressive
-from pyro.infer.autoguide import (AutoDiagonalNormal, AutoIAFNormal, AutoLaplaceApproximation,
-                                  AutoLowRankMultivariateNormal, AutoMultivariateNormal)
+from pyro.distributions.transforms import block_autoregressive, iterated
 from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO
+from pyro.infer.autoguide import (
+    AutoDiagonalNormal,
+    AutoIAFNormal,
+    AutoLaplaceApproximation,
+    AutoLowRankMultivariateNormal,
+    AutoMultivariateNormal,
+)
 from pyro.infer.autoguide.guides import AutoNormalizingFlow
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
@@ -80,7 +85,7 @@ class AutoGaussianChain(GaussianChain):
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
 @pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_diagonal_gaussians(auto_class, Elbo):
-    n_steps = 3501 if auto_class == AutoDiagonalNormal else 6001
+    n_steps = 3001
 
     def model():
         pyro.sample("x", dist.Normal(-0.2, 1.2))
@@ -90,7 +95,8 @@ def test_auto_diagonal_gaussians(auto_class, Elbo):
         guide = auto_class(model, rank=1)
     else:
         guide = auto_class(model)
-    adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
+    adam = optim.ClippedAdam({"lr": .01, "betas": (0.95, 0.999),
+                              "lrd": 0.1 ** (1 / n_steps)})
     svi = SVI(model, guide, adam, loss=Elbo())
 
     for k in range(n_steps):

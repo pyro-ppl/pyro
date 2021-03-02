@@ -4,7 +4,6 @@
 import math
 
 import pytest
-
 import torch
 from torch.distributions import Gamma, MultivariateNormal, StudentT
 

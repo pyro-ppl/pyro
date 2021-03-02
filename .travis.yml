@@ -47,7 +47,7 @@ jobs:
         - stage: lint
           name: lint
           python: 3.6
-          before_install: pip install flake8 nbstripout nbformat
+          before_install: pip install flake8 isort>=5.0 nbstripout nbformat
           install:
           script:
               - make lint

@@ -7,8 +7,12 @@ from torch.autograd import grad
 
 from pyro.distributions import Exponential, Gamma
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
-from pyro.distributions.testing.rejection_gamma import (RejectionGamma, RejectionStandardGamma, ShapeAugmentedBeta,
-                                                        ShapeAugmentedGamma)
+from pyro.distributions.testing.rejection_gamma import (
+    RejectionGamma,
+    RejectionStandardGamma,
+    ShapeAugmentedBeta,
+    ShapeAugmentedGamma,
+)
 from tests.common import assert_equal
 
 SIZES = list(map(torch.Size, [[], [1], [2], [3], [1, 1], [1, 2], [2, 3, 4]]))

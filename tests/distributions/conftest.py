@@ -10,7 +10,11 @@ import scipy.stats as sp
 import pyro.distributions as dist
 from pyro.distributions.testing.naive_dirichlet import NaiveBeta, NaiveDirichlet
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
-from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
+from pyro.distributions.testing.rejection_gamma import (
+    ShapeAugmentedBeta,
+    ShapeAugmentedDirichlet,
+    ShapeAugmentedGamma,
+)
 from tests.distributions.dist_fixture import Fixture
 
 

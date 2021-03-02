@@ -1,15 +1,19 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
+
 import pytest
 import torch
 from torch.autograd import grad
 
-import logging
-
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.tracking.assignment import MarginalAssignment, MarginalAssignmentPersistent, MarginalAssignmentSparse
+from pyro.contrib.tracking.assignment import (
+    MarginalAssignment,
+    MarginalAssignmentPersistent,
+    MarginalAssignmentSparse,
+)
 from tests.common import assert_equal
 
 INF = float('inf')

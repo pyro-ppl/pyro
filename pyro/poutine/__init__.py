@@ -1,8 +1,26 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from .handlers import (block, broadcast, collapse, condition, do, enum, escape, infer_config, lift, markov, mask, queue,
-                       reparam, replay, scale, seed, trace, uncondition)
+from .handlers import (
+    block,
+    broadcast,
+    collapse,
+    condition,
+    do,
+    enum,
+    escape,
+    infer_config,
+    lift,
+    markov,
+    mask,
+    queue,
+    reparam,
+    replay,
+    scale,
+    seed,
+    trace,
+    uncondition,
+)
 from .runtime import NonlocalExit, get_mask
 from .trace_struct import Trace
 from .util import enable_validation, is_validation_enabled

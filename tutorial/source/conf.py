@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sphinx_rtd_theme
+
 from pyro import __version__
 
 # -*- coding: utf-8 -*-
