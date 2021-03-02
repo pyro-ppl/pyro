@@ -9,8 +9,12 @@ import torch
 
 import pyro
 from pyro.distributions import CoalescentTimes, CoalescentTimesWithRate
-from pyro.distributions.coalescent import (CoalescentRateLikelihood, CoalescentTimesConstraint,
-                                           _sample_coalescent_times, bio_phylo_to_times)
+from pyro.distributions.coalescent import (
+    CoalescentRateLikelihood,
+    CoalescentTimesConstraint,
+    _sample_coalescent_times,
+    bio_phylo_to_times,
+)
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_close
 

@@ -11,16 +11,31 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.hmm import (_sequential_gamma_gaussian_tensordot, _sequential_gaussian_filter_sample,
-                                    _sequential_gaussian_tensordot, _sequential_logmatmulexp)
+from pyro.distributions.hmm import (
+    _sequential_gamma_gaussian_tensordot,
+    _sequential_gaussian_filter_sample,
+    _sequential_gaussian_tensordot,
+    _sequential_logmatmulexp,
+)
 from pyro.distributions.util import broadcast_shape
 from pyro.infer import TraceEnum_ELBO, config_enumerate
-from pyro.ops.gamma_gaussian import (gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
-                                     matrix_and_mvn_to_gamma_gaussian)
-from pyro.ops.gaussian import gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
+from pyro.ops.gamma_gaussian import (
+    gamma_and_mvn_to_gamma_gaussian,
+    gamma_gaussian_tensordot,
+    matrix_and_mvn_to_gamma_gaussian,
+)
+from pyro.ops.gaussian import (
+    gaussian_tensordot,
+    matrix_and_mvn_to_gaussian,
+    mvn_to_gaussian,
+)
 from pyro.ops.indexing import Vindex
 from tests.common import assert_close
-from tests.ops.gamma_gaussian import assert_close_gamma_gaussian, random_gamma, random_gamma_gaussian
+from tests.ops.gamma_gaussian import (
+    assert_close_gamma_gaussian,
+    random_gamma,
+    random_gamma_gaussian,
+)
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
 
 logger = logging.getLogger(__name__)

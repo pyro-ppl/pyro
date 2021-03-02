@@ -7,9 +7,15 @@ from collections import namedtuple
 import torch
 
 import pyro
-from pyro.ops.arrowhead import SymmArrowhead, sqrt, triu_gram, triu_inverse, triu_matvecmul
+from pyro.ops.arrowhead import (
+    SymmArrowhead,
+    sqrt,
+    triu_gram,
+    triu_inverse,
+    triu_matvecmul,
+)
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.welford import WelfordCovariance, WelfordArrowheadCovariance
+from pyro.ops.welford import WelfordArrowheadCovariance, WelfordCovariance
 
 adapt_window = namedtuple("adapt_window", ["start", "end"])
 

@@ -1,11 +1,19 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
 from torch.distributions.constraints import *  # noqa F403
+
+# isort: split
+
+import torch
 from torch.distributions.constraints import Constraint
 from torch.distributions.constraints import __all__ as torch_constraints
-from torch.distributions.constraints import independent, positive, positive_definite
+from torch.distributions.constraints import (
+    independent,
+    lower_cholesky,
+    positive,
+    positive_definite,
+)
 
 
 # TODO move this upstream to torch.distributions
@@ -78,11 +86,22 @@ class _PositiveOrderedVector(Constraint):
         return ordered_vector.check(value) & independent(positive, 1).check(value)
 
 
+class _SoftplusPositive(type(positive)):
+    def __init__(self):
+        super().__init__(lower_bound=0.0)
+
+
+class _SoftplusLowerCholesky(type(lower_cholesky)):
+    pass
+
+
 corr_matrix = _CorrMatrix()
 integer = _Integer()
 ordered_vector = _OrderedVector()
 positive_ordered_vector = _PositiveOrderedVector()
 sphere = _Sphere()
+softplus_positive = _SoftplusPositive()
+softplus_lower_cholesky = _SoftplusLowerCholesky()
 corr_cholesky_constraint = corr_cholesky  # noqa: F405 DEPRECATED
 
 __all__ = [
@@ -91,6 +110,8 @@ __all__ = [
     'integer',
     'ordered_vector',
     'positive_ordered_vector',
+    'softplus_lower_cholesky',
+    'softplus_positive',
     'sphere',
 ]
 

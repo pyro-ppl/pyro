@@ -5,7 +5,13 @@ import math
 
 import pytest
 import torch
-from torch.distributions import AffineTransform, Beta, TransformedDistribution, biject_to, transform_to
+from torch.distributions import (
+    AffineTransform,
+    Beta,
+    TransformedDistribution,
+    biject_to,
+    transform_to,
+)
 
 from pyro.distributions import constraints, transforms
 from pyro.distributions.torch import LKJCholesky

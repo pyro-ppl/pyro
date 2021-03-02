@@ -16,10 +16,23 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Predictive, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
-from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
-                                  AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                  AutoMultivariateNormal, AutoNormal, init_to_feasible, init_to_mean, init_to_median,
-                                  init_to_sample)
+from pyro.infer.autoguide import (
+    AutoCallable,
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoDiscreteParallel,
+    AutoGuide,
+    AutoGuideList,
+    AutoIAFNormal,
+    AutoLaplaceApproximation,
+    AutoLowRankMultivariateNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+)
 from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
@@ -227,7 +240,7 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    optim = Adam({'lr': 0.02, 'betas': (0.8, 0.99)})
     elbo = Elbo(strict_enumeration_warning=False,
                 num_particles=100, vectorize_particles=True)
     infer = SVI(model, guide, optim, elbo)

@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from pyro.distributions.empirical import Empirical
-from tests.common import assert_equal, assert_close
+from tests.common import assert_close, assert_equal
 
 
 @pytest.mark.parametrize("size", [[], [1], [2, 3]])

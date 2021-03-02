@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions.utils import lazy_property
 import torch.nn.functional as F
+from torch.distributions.utils import lazy_property
 
 from pyro.contrib.bnn.utils import adjoin_ones_vector
 from pyro.distributions.torch_distribution import TorchDistribution

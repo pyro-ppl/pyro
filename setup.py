@@ -103,7 +103,7 @@ setup(
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
             'flake8',
-            'isort',
+            'isort>=5.0',
             'nbformat',
             'nbsphinx>=0.3.2',
             'nbstripout',

@@ -9,9 +9,19 @@ import scipy.fftpack as fftpack
 import torch
 
 import pyro
-from pyro.ops.tensor_utils import (block_diag_embed, block_diagonal, convolve, dct, idct, next_fast_len,
-                                   periodic_cumsum, periodic_features, periodic_repeat, precision_to_scale_tril,
-                                   repeated_matmul)
+from pyro.ops.tensor_utils import (
+    block_diag_embed,
+    block_diagonal,
+    convolve,
+    dct,
+    idct,
+    next_fast_len,
+    periodic_cumsum,
+    periodic_features,
+    periodic_repeat,
+    precision_to_scale_tril,
+    repeated_matmul,
+)
 from tests.common import assert_close, assert_equal
 
 pytestmark = pytest.mark.stage('unit')

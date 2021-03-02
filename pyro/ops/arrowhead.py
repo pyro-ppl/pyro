@@ -5,7 +5,6 @@ from collections import namedtuple
 
 import torch
 
-
 SymmArrowhead = namedtuple("SymmArrowhead", ["top", "bottom_diag"])
 TriuArrowhead = namedtuple("TriuArrowhead", ["top", "bottom_diag"])
 

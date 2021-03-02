@@ -5,16 +5,23 @@ import argparse
 
 import torch
 import torch.nn as nn
+from utils.custom_mlp import MLP, Exp
+from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
+from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log
-from pyro.infer import SVI, JitTrace_ELBO, JitTraceEnum_ELBO, Trace_ELBO, TraceEnum_ELBO, config_enumerate
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    config_enumerate,
+)
 from pyro.optim import Adam
-from utils.custom_mlp import MLP, Exp
-from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
-from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 
 
 class SSVAE(nn.Module):

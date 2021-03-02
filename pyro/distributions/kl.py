@@ -3,7 +3,13 @@
 
 import math
 
-from torch.distributions import Independent, MultivariateNormal, Normal, kl_divergence, register_kl
+from torch.distributions import (
+    Independent,
+    MultivariateNormal,
+    Normal,
+    kl_divergence,
+    register_kl,
+)
 
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution
