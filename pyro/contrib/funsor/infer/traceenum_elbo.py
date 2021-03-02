@@ -73,7 +73,7 @@ class TraceMarkovEnum_ELBO(ELBO):
             raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration")
 
         # build up a lazy expression for the elbo
-        with funsor.interpreter.interpretation(funsor.terms.lazy):
+        with funsor.terms.lazy:
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
@@ -110,7 +110,7 @@ class TraceMarkovEnum_ELBO(ELBO):
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
-        with funsor.memoize.memoize():
+        with funsor.interpretations.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
 
 
@@ -130,7 +130,7 @@ class TraceEnum_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
 
         # build up a lazy expression for the elbo
-        with funsor.interpreter.interpretation(funsor.terms.lazy):
+        with funsor.terms.lazy:
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
@@ -180,7 +180,7 @@ class TraceEnum_ELBO(ELBO):
                 elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
-        with funsor.memoize.memoize():
+        with funsor.interpretations.memoize():
             return -to_data(funsor.optimizer.apply_optimizer(elbo))
 
 

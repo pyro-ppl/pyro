@@ -32,7 +32,7 @@ class TraceTMC_ELBO(ELBO):
         plate_vars = model_terms["plate_vars"] | guide_terms["plate_vars"]
         measure_vars = model_terms["measure_vars"] | guide_terms["measure_vars"]
 
-        with funsor.interpreter.interpretation(funsor.terms.lazy):
+        with funsor.terms.lazy:
             elbo = funsor.sum_product.sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
                 log_measures + log_factors,
