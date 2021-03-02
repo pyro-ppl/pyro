@@ -548,7 +548,6 @@ def predict(args, data, samples, truth=None):
 # python sir_hmc.py -p 10000 -d 60 -f 30 --plot
 
 def main(args):
-    pyro.enable_validation(__debug__)
     pyro.set_rng_seed(args.rng_seed)
 
     dataset = generate_data(args)
@@ -573,7 +572,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)

@@ -1,5 +1,5 @@
-Distributed training via Horovod
-================================
+Example: distributed training via Horovod
+=========================================
 
 Unlike other examples, this example must be run under horovodrun_, for example
 

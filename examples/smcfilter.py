@@ -82,7 +82,6 @@ def generate_data(args):
 
 def main(args):
     pyro.set_rng_seed(args.seed)
-    pyro.enable_validation(__debug__)
 
     model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
     guide = SimpleHarmonicModel_Guide(model)

@@ -4,12 +4,12 @@
 import math
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions.constraints import IndependentConstraint
 from pyro.distributions.torch_distribution import TorchDistributionMixin
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.ops.special import log_binomial
+
+from . import constraints
 
 
 def _clamp_by_zero(x):
@@ -94,6 +94,8 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
 # and merely reshape the self.logits tensor. This is especially important for
 # Pyro models that use enumeration.
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+    arg_constraints = {"probs": constraints.simplex,
+                       "logits": constraints.real_vector}
 
     def log_prob(self, value):
         if getattr(value, '_pyro_categorical_support', None) == id(self):
@@ -119,6 +121,13 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
+
+    @staticmethod
+    def infer_shapes(concentration):
+        batch_shape = concentration[:-1]
+        event_shape = concentration[-1:]
+        return batch_shape, event_shape
+
     def conjugate_update(self, other):
         """
         EXPERIMENTAL.
@@ -174,18 +183,51 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
         return super(torch.distributions.LogNormal, self).expand(batch_shape, _instance=new)
 
 
+class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal, TorchDistributionMixin):
+    @staticmethod
+    def infer_shapes(loc, cov_factor, cov_diag):
+        event_shape = loc[-1:]
+        batch_shape = broadcast_shape(loc[:-1], cov_factor[:-2], cov_diag[:-1])
+        return batch_shape, event_shape
+
+
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
-    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
+    @staticmethod
+    def infer_shapes(loc, covariance_matrix=None, precision_matrix=None, scale_tril=None):
+        batch_shape, event_shape = loc[:-1], loc[-1:]
+        for matrix in [covariance_matrix, precision_matrix, scale_tril]:
+            if matrix is not None:
+                batch_shape = broadcast_shape(batch_shape, matrix[:-2])
+        return batch_shape, event_shape
+
+
+class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
+    def infer_shapes(total_count=None, probs=None, logits=None):
+        tensor = probs if logits is None else logits
+        batch_shape, event_shape = tensor[:-1], tensor[-1:]
+        if isinstance(total_count, tuple):
+            batch_shape = broadcast_shape(batch_shape, total_count)
+        return batch_shape, event_shape
 
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
     pass
 
 
+class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistributionMixin):
+    @staticmethod
+    def infer_shapes(probs=None, logits=None):
+        tensor = probs if logits is None else logits
+        event_shape = tensor[-1:]
+        batch_shape = tensor[:-1]
+        return batch_shape, event_shape
+
+
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
-    @constraints.dependent_property
-    def support(self):
-        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
+
+    @staticmethod
+    def infer_shapes(**kwargs):
+        raise NotImplementedError
 
     @property
     def _validate_args(self):
@@ -219,7 +261,7 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         new._unbroadcasted_high = self._unbroadcasted_high
         return new
 
-    @constraints.dependent_property
+    @constraints.dependent_property(is_discrete=False, event_dim=0)
     def support(self):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 

@@ -156,9 +156,10 @@ def model_generic(config):
 
                     # zero-inflation with MaskedMixture
                     step_zi = Vindex(step_zi_param)[..., y, :]
-                    step_zi_mask = pyro.sample("step_zi_{}".format(t),
-                                               dist.Categorical(logits=step_zi),
-                                               obs=(config["observations"]["step"][..., t] == MISSING))
+                    step_zi_mask = config["observations"]["step"][..., t] == MISSING
+                    pyro.sample("step_zi_{}".format(t),
+                                dist.Categorical(logits=step_zi),
+                                obs=step_zi_mask.long())
                     step_zi_zero_dist = dist.Delta(v=torch.tensor(MISSING))
                     step_zi_dist = dist.MaskedMixture(step_zi_mask, step_dist, step_zi_zero_dist)
 
@@ -183,10 +184,10 @@ def model_generic(config):
 
                     # zero-inflation with MaskedMixture
                     omega_zi = Vindex(omega_zi_param)[..., y, :]
-                    omega_zi_mask = pyro.sample(
-                        "omega_zi_{}".format(t),
-                        dist.Categorical(logits=omega_zi),
-                        obs=(config["observations"]["omega"][..., t] == MISSING))
+                    omega_zi_mask = config["observations"]["omega"][..., t] == MISSING
+                    pyro.sample("omega_zi_{}".format(t),
+                                dist.Categorical(logits=omega_zi),
+                                obs=omega_zi_mask.long())
 
                     omega_zi_zero_dist = dist.Delta(v=torch.tensor(MISSING))
                     omega_zi_dist = dist.MaskedMixture(omega_zi_mask, omega_dist, omega_zi_zero_dist)

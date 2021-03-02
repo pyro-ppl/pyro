@@ -1,5 +1,5 @@
-Latent Dirichlet Allocation
-===========================
+Example: Amortized Latent Dirichlet Allocation
+==============================================
 
 `View lda.py on github`__
 

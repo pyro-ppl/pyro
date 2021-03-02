@@ -8,6 +8,8 @@ from .haar import HaarReparam
 from .hmm import LinearHMMReparam
 from .loc_scale import LocScaleReparam
 from .neutra import NeuTraReparam
+from .projected_normal import ProjectedNormalReparam
+from .softmax import GumbelSoftmaxReparam
 from .split import SplitReparam
 from .stable import LatentStableReparam, StableReparam, SymmetricStableReparam
 from .studentt import StudentTReparam
@@ -17,11 +19,13 @@ from .unit_jacobian import UnitJacobianReparam
 __all__ = [
     "ConjugateReparam",
     "DiscreteCosineReparam",
+    "GumbelSoftmaxReparam",
     "HaarReparam",
     "LatentStableReparam",
     "LinearHMMReparam",
     "LocScaleReparam",
     "NeuTraReparam",
+    "ProjectedNormalReparam",
     "SplitReparam",
     "StableReparam",
     "StudentTReparam",

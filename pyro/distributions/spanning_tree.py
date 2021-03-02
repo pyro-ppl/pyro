@@ -112,16 +112,21 @@ class SpanningTree(TorchDistribution):
         # use a Cholesky decomposition to compute the log determinant.
         # See https://en.wikipedia.org/wiki/Kirchhoff%27s_theorem
         V = self.num_vertices
-        grid = make_complete_graph(V)
-        shift = self.edge_logits.max()
-        edge_probs = (self.edge_logits - shift).exp()
-        adjacency = torch.zeros(V, V, dtype=edge_probs.dtype)
-        adjacency[grid[0], grid[1]] = edge_probs
-        adjacency[grid[1], grid[0]] = edge_probs
-        laplacian = adjacency.sum(-1).diag() - adjacency
+        v1, v2 = make_complete_graph(V).unbind(0)
+        logits = self.edge_logits.new_full((V, V), -math.inf)
+        logits[v1, v2] = self.edge_logits
+        logits[v2, v1] = self.edge_logits
+        log_diag = logits.logsumexp(-1)
+        # Numerically stabilize so that laplacian has 1's on the diagonal.
+        shift = 0.5 * log_diag
+        laplacian = torch.eye(V) - (logits - shift - shift[:, None]).exp()
         truncated = laplacian[:-1, :-1]
-        log_det = torch.cholesky(truncated).diag().log().sum() * 2
-        return log_det + shift * (V - 1)
+        try:
+            import gpytorch
+            log_det = gpytorch.lazy.NonLazyTensor(truncated).logdet()
+        except ImportError:
+            log_det = torch.cholesky(truncated).diag().log().sum() * 2
+        return log_det + log_diag[:-1].sum()
 
     def log_prob(self, edges):
         if self._validate_args:
@@ -165,6 +170,39 @@ class SpanningTree(TorchDistribution):
         trees = enumerate_spanning_trees(self.num_vertices)
         return torch.tensor(trees, dtype=torch.long)
 
+    @property
+    def mode(self):
+        """
+        :returns: The maximum weight spanning tree.
+        :rtype: Tensor
+        """
+        backend = self.sampler_options.get("backend", "python")
+        return find_best_tree(self.edge_logits, backend=backend)
+
+    @property
+    def edge_mean(self):
+        """
+        Computes marginal probabilities of each edge being active.
+
+        .. note:: This is similar to other distributions' ``.mean()``
+            method, but with a different shape because this distribution's
+            values are not encoded as binary matrices.
+
+        :returns: A symmetric square ``(V,V)``-shaped matrix with values
+            in ``[0,1]`` denoting the marginal probability of each edge
+            being in a sampled value.
+        :rtype: Tensor
+        """
+        V = self.num_vertices
+        v1, v2 = make_complete_graph(V).unbind(0)
+        logits = self.edge_logits - self.edge_logits.max()
+        w = self.edge_logits.new_zeros(V, V)
+        w[v1, v2] = w[v2, v1] = logits.exp()
+        laplacian = w.sum(-1).diag_embed() - w
+        inv = (laplacian + 1 / V).pinverse()
+        resistance = inv.diag() + inv.diag()[..., None] - 2 * inv
+        return resistance * w
+
 
 ################################################################################
 # Sampler implementation.
@@ -180,6 +218,7 @@ def _get_cpp_module():
     global _cpp_module
     if _cpp_module is None:
         import os
+
         from torch.utils.cpp_extension import load
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spanning_tree.cpp")
         _cpp_module = load(name="cpp_spanning_tree",
@@ -385,7 +424,7 @@ def _sample_tree_approx(edge_logits):
         mask = (c1 != c2)
         valid_logits = edge_logits[mask]
         probs = (valid_logits - valid_logits.max()).exp()
-        k = mask.nonzero()[torch.multinomial(probs, 1)[0]]
+        k = mask.nonzero(as_tuple=False)[torch.multinomial(probs, 1)[0]]
         components[grid[:, k]] = 1
         edge_ids[e] = k
 
@@ -425,6 +464,62 @@ def sample_tree(edge_logits, init_edges=None, mcmc_steps=1, backend="python"):
     for step in range(mcmc_steps):
         edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
     return edges
+
+
+@torch.no_grad()
+def _find_best_tree(edge_logits):
+    K = len(edge_logits)
+    V = int(round(0.5 + (0.25 + 2 * K)**0.5))
+    assert K == V * (V - 1) // 2
+    E = V - 1
+    grid = make_complete_graph(V)
+
+    # Each of E edges in the tree is stored as an id k in [0, K) indexing into
+    # the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
+    edge_ids = torch.empty((E,), dtype=torch.long)
+    # This maps each vertex to whether it is a member of the cumulative tree.
+    components = torch.zeros(V, dtype=torch.bool)
+
+    # Find the first edge.
+    k = edge_logits.argmax(0).item()
+    components[grid[:, k]] = 1
+    edge_ids[0] = k
+
+    # Find edges connecting the cumulative tree to a new leaf.
+    for e in range(1, E):
+        c1, c2 = components[grid]
+        mask = (c1 != c2)
+        valid_logits = edge_logits[mask]
+        k = valid_logits.argmax(0).item()
+        k = mask.nonzero(as_tuple=False)[k]
+        components[grid[:, k]] = 1
+        edge_ids[e] = k
+
+    # Convert edge ids to a canonical list of pairs.
+    edge_ids = edge_ids.sort()[0]
+    edges = torch.empty((E, 2), dtype=torch.long)
+    edges[:, 0] = grid[0, edge_ids]
+    edges[:, 1] = grid[1, edge_ids]
+    return edges
+
+
+def find_best_tree(edge_logits, backend="python"):
+    """
+    Find the maximum weight spanning tree of a dense weighted graph.
+
+    :param torch.Tensor edge_logits: A length-K array of nonnormalized log
+        probabilities.
+    :returns: An E x 2 tensor of edges in the form of (vertex,vertex) pairs.
+        Each edge should be sorted and the entire tensor should be
+        lexicographically sorted.
+    :rtype: torch.Tensor
+    """
+    if backend == "python":
+        return _find_best_tree(edge_logits)
+    elif backend == "cpp":
+        return _get_cpp_module().find_best_tree(edge_logits)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
 
 
 ################################################################################

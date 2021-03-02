@@ -10,13 +10,13 @@ import torch
 import torch.nn as nn
 from torch.nn import functional
 from torchvision.utils import save_image
+from utils.mnist_cached import DATA_DIR, RESULTS_DIR
 
 import pyro
 from pyro.contrib.examples import util
 from pyro.distributions import Bernoulli, Normal
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
-from utils.mnist_cached import DATA_DIR, RESULTS_DIR
 
 """
 Comparison of VAE implementation in PyTorch and Pyro. This example can be
@@ -186,7 +186,7 @@ class PyroVAEImpl(VAE):
             z = pyro.sample('latent', Normal(z_mean, z_std).to_event(1))
             img = decoder.forward(z)
             pyro.sample('obs',
-                        Bernoulli(img).to_event(1),
+                        Bernoulli(img, validate_args=False).to_event(1),
                         obs=data.reshape(-1, 784))
 
     def guide(self, data):
@@ -246,7 +246,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description='VAE using MNIST dataset')
     parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
     parser.add_argument('--batch_size', nargs='?', default=128, type=int)

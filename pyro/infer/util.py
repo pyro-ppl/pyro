@@ -16,7 +16,7 @@ from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MarginalRing
 from pyro.poutine.util import site_is_subsample
 
-_VALIDATION_ENABLED = False
+_VALIDATION_ENABLED = __debug__
 LAST_CACHE_SIZE = [Counter()]  # for profiling
 
 
@@ -152,7 +152,7 @@ class MultiFrameTensor(dict):
             while value.shape and value.shape[0] == 1:
                 value = value.squeeze(0)
             total = value if total is None else total + value
-        return total
+        return 0. if total is None else total
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ",\n\t".join([

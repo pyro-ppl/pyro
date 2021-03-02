@@ -5,7 +5,12 @@ import pytest
 import torch
 from torch.autograd import grad
 
-from tests.common import assert_equal, requires_cuda, tensors_default_to, xfail_if_not_implemented
+from tests.common import (
+    assert_equal,
+    requires_cuda,
+    tensors_default_to,
+    xfail_if_not_implemented,
+)
 
 
 @requires_cuda

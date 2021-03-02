@@ -22,8 +22,12 @@ Pyro is a flexible, scalable deep probabilistic programming library built on PyT
 - **Minimal**: Pyro is agile and maintainable. It is implemented with a small core of powerful, composable abstractions.
 - **Flexible**: Pyro aims for automation when you want it, control when you need it. This is accomplished through high-level abstractions to express generative and inference models, while allowing experts easy-access to customize inference.
 
-Pyro is developed and maintained by [Uber AI Labs](http://uber.ai) and community contributors.
-For more information, check out our [blog post](http://eng.uber.com/pyro).
+Pyro was originally developed at Uber AI and is now actively maintained by community contributors, including a dedicated team at the [Broad Institute](https://www.broadinstitute.org/).
+In 2019, Pyro [became](https://www.linuxfoundation.org/press-release/2019/02/pyro-probabilistic-programming-language-becomes-newest-lf-deep-learning-project/) a project of the Linux Foundation, a neutral space for collaboration on open source software, open standards, open data, and open hardware.
+
+For more information about the high level motivation for Pyro, check out our [launch blog post](http://eng.uber.com/pyro).
+For additional blog posts, check out work on [experimental design](https://eng.uber.com/oed-pyro-release/) and
+[time-to-event modeling](https://eng.uber.com/modeling-censored-time-to-event-data-using-pyro/) in Pyro.
 
 ## Installing
 
@@ -31,7 +35,7 @@ For more information, check out our [blog post](http://eng.uber.com/pyro).
 
 **Install using pip:**
 
-Pyro supports Python 3.4+.
+Pyro supports Python 3.6+.
 
 ```sh
 pip install pyro-ppl
@@ -56,19 +60,26 @@ Make sure that the models come from the same release version of the [Pyro source
 ### Installing Pyro dev branch
 
 For recent features you can install Pyro from source.
+Pyro's dev branch requires PyTorch [nightly builds](https://pytorch.org/get-started/locally/).
 
-**Install using pip:**
+**Install PyTorch nightly:**
+
+```sh
+pip install numpy
+pip install --pre torch==1.8.0.dev20210210 torchvision==0.9.0.dev20210210 -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+```
+
+**Install Pyro using pip:**
 
 ```sh
 pip install git+https://github.com/pyro-ppl/pyro.git
 ```
-
 or, with the `extras` dependency to run the probabilistic models included in the `examples`/`tutorials` directories:
 ```sh
 pip install git+https://github.com/pyro-ppl/pyro.git#egg=project[extras]
 ```
 
-**Install from source:**
+**Install Pyro from source:**
 
 ```sh
 git clone https://github.com/pyro-ppl/pyro

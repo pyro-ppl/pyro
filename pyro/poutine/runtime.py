@@ -3,7 +3,10 @@
 
 import functools
 
-from pyro.params.param_store import _MODULE_NAMESPACE_DIVIDER, ParamStoreDict  # noqa: F401
+from pyro.params.param_store import (  # noqa: F401
+    _MODULE_NAMESPACE_DIVIDER,
+    ParamStoreDict,
+)
 
 # the global pyro stack
 _PYRO_STACK = []
@@ -264,3 +267,53 @@ def effectful(fn=None, type=None):
             return msg["value"]
     _fn._is_effectful = True
     return _fn
+
+
+def _inspect():
+    """
+    EXPERIMENTAL Inspect the Pyro stack.
+
+    .. warning:: The format of the returned message may change at any time and
+        does not guarantee backwards compatibility.
+
+    :returns: A message with all effects applied.
+    :rtype: dict
+    """
+    msg = {
+        "type": "inspect",
+        "name": "_pyro_inspect",
+        "fn": lambda: True,
+        "is_observed": False,
+        "args": (),
+        "kwargs": {},
+        "value": None,
+        "infer": {"_do_not_trace": True},
+        "scale": 1.0,
+        "mask": None,
+        "cond_indep_stack": (),
+        "done": False,
+        "stop": False,
+        "continuation": None,
+    }
+    apply_stack(msg)
+    return msg
+
+
+def get_mask():
+    """
+    Records the effects of enclosing ``poutine.mask`` handlers.
+
+    This is useful for avoiding expensive ``pyro.factor()`` computations during
+    prediction, when the log density need not be computed, e.g.::
+
+        def model():
+            # ...
+            if poutine.get_mask() is not False:
+                log_density = my_expensive_computation()
+                pyro.factor("foo", log_density)
+            # ...
+
+    :returns: The mask.
+    :rtype: None, bool, or torch.Tensor
+    """
+    return _inspect()["mask"]

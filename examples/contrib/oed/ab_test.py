@@ -3,20 +3,22 @@
 
 import argparse
 from functools import partial
-import torch
-from torch.distributions import constraints
+
 import numpy as np
+import torch
+from gp_bayes_opt import GPBayesOptimizer
+from torch.distributions import constraints
 
 import pyro
-from pyro import optim
-from pyro.infer import TraceEnum_ELBO
-from pyro.contrib.oed.eig import vi_eig
 import pyro.contrib.gp as gp
+from pyro import optim
+from pyro.contrib.oed.eig import vi_eig
 from pyro.contrib.oed.glmm import (
-    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
+    analytic_posterior_cov,
+    group_assignment_matrix,
+    zero_mean_unit_obs_sd_lm,
 )
-
-from gp_bayes_opt import GPBayesOptimizer
+from pyro.infer import TraceEnum_ELBO
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
@@ -115,7 +117,7 @@ def main(num_vi_steps, num_bo_steps, seed):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)

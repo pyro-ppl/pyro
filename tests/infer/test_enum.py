@@ -2890,7 +2890,7 @@ def test_elbo_zip(gate, rate):
         gate = pyro.param("gate")
         rate = pyro.param("rate")
         with pyro.plate("data", len(data)):
-            pyro.sample("obs", dist.ZeroInflatedPoisson(gate, rate), obs=data)
+            pyro.sample("obs", dist.ZeroInflatedPoisson(rate, gate=gate), obs=data)
 
     def composite_model(data):
         gate = pyro.param("gate")
@@ -3072,6 +3072,22 @@ def test_compute_marginals_hmm(size):
         d2 = marginals["x_{}".format(i + 1)]
         assert d1.probs[0] > d2.probs[0]
         assert d1.probs[1] < d2.probs[1]
+
+
+@pytest.mark.parametrize("observed", ["", "a", "b", "ab"])
+def test_marginals_2678(observed):
+
+    @config_enumerate
+    def model(a=None, b=None):
+        a = pyro.sample("a", dist.Bernoulli(0.75), obs=a)
+        pyro.sample("b", dist.Bernoulli(1 - 0.25 * a), obs=b)
+
+    def guide(a=None, b=None):
+        pass
+
+    kwargs = {name: torch.tensor(1.) for name in observed}
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
+    elbo.compute_marginals(model, guide, **kwargs)
 
 
 @pytest.mark.parametrize("data", [

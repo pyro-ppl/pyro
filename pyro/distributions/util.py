@@ -15,7 +15,8 @@ from torch.distributions.utils import broadcast_all
 
 from pyro.util import ignore_jit_warnings
 
-_VALIDATION_ENABLED = False
+_VALIDATION_ENABLED = __debug__
+torch_dist.Distribution.set_default_validate_args(__debug__)
 
 log_sum_exp = logsumexp  # DEPRECATED
 
@@ -120,6 +121,18 @@ def detach(obj):
     """
     memo = _DetachMemo()
     return copy.deepcopy(obj, memo)
+
+
+# Import a lazy jit.script decorator only if available.
+torch_jit_script_if_tracing = getattr(
+    torch.jit,
+    "script_if_tracing",
+    getattr(
+        torch.jit,
+        "_script_if_tracing",
+        torch.jit.script
+    ),
+)
 
 
 def is_identically_zero(x):
@@ -251,12 +264,14 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param scale: a positive scale
     :type scale: torch.Tensor or number
     :param mask: an optional masking tensor
-    :type mask: torch.BoolTensor or None
+    :type mask: torch.BoolTensor, bool, or None
     """
     if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
         return tensor
-    if mask is None:
+    if mask is None or mask is True:
         return tensor * scale
+    if mask is False:
+        return torch.zeros_like(tensor)
     return torch.where(mask, tensor * scale, tensor.new_zeros(()))
 
 

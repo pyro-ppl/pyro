@@ -1,18 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import argparse
+from os.path import exists
+from urllib.request import urlopen
+
 import numpy as np
 import torch
 
 import pyro
 from pyro.contrib.timeseries import IndependentMaternGP, LinearlyCoupledMaternGP
-
-import argparse
-from os.path import exists
-from urllib.request import urlopen
-
-
-pyro.enable_validation(__debug__)
 
 
 # download dataset from UCI archive
@@ -149,7 +146,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="contrib.timeseries example usage")
     parser.add_argument("-n", "--num-steps", default=300, type=int)
     parser.add_argument("-s", "--seed", default=0, type=int)

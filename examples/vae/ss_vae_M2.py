@@ -5,16 +5,23 @@ import argparse
 
 import torch
 import torch.nn as nn
+from utils.custom_mlp import MLP, Exp
+from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
+from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log
-from pyro.infer import SVI, JitTrace_ELBO, JitTraceEnum_ELBO, Trace_ELBO, TraceEnum_ELBO, config_enumerate
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    config_enumerate,
+)
 from pyro.optim import Adam
-from utils.custom_mlp import MLP, Exp
-from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
-from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 
 
 class SSVAE(nn.Module):
@@ -118,12 +125,14 @@ class SSVAE(nn.Module):
             alpha_prior = torch.ones(batch_size, self.output_size, **options) / (1.0 * self.output_size)
             ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
 
-            # finally, score the image (x) using the handwriting style (z) and
+            # Finally, score the image (x) using the handwriting style (z) and
             # the class label y (which digit to write) against the
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
-            # where `decoder` is a neural network
+            # where `decoder` is a neural network. We disable validation
+            # since the decoder output is a relaxed Bernoulli value.
             loc = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.Bernoulli(loc).to_event(1), obs=xs)
+            pyro.sample("x", dist.Bernoulli(loc, validate_args=False).to_event(1),
+                        obs=xs)
             # return the loc so we can visualize it later
             return loc
 
@@ -303,7 +312,8 @@ def main(args):
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = config_enumerate(ss_vae.guide, args.enum_discrete, expand=True)
-    elbo = (JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO)(max_plate_nesting=1)
+    Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
+    elbo = Elbo(max_plate_nesting=1, strict_enumeration_warning=False)
     loss_basic = SVI(ss_vae.model, guide, optimizer, loss=elbo)
 
     # build a list of all losses considered
@@ -383,7 +393,7 @@ EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -n 2 --aux-loss 
               "-sup 3000 -zd 50 -hl 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 

@@ -32,6 +32,15 @@ Loc-Scale Decentering
     :special-members: __call__
     :show-inheritance:
 
+Gumbel-Softmax
+--------------
+.. automodule:: pyro.infer.reparam.softmax
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Transformed Distributions
 -------------------------
 .. automodule:: pyro.infer.reparam.transform
@@ -80,6 +89,15 @@ StudentT Distributions
 Stable Distributions
 --------------------
 .. automodule:: pyro.infer.reparam.stable
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
+Projected Normal Distributions
+------------------------------
+.. automodule:: pyro.infer.reparam.projected_normal
     :members:
     :undoc-members:
     :member-order: bysource

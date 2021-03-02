@@ -9,7 +9,12 @@ from pyro.infer.elbo import ELBO
 from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_if_enumerated, check_model_guide_match, check_site_shape, warn_if_nan
+from pyro.util import (
+    check_if_enumerated,
+    check_model_guide_match,
+    check_site_shape,
+    warn_if_nan,
+)
 
 
 class DetachReplayMessenger(ReplayMessenger):

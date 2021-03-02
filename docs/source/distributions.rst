@@ -50,6 +50,13 @@ TorchDistribution
     :show-inheritance:
     :member-order: bysource
 
+AffineBeta
+---------------------
+.. autoclass:: pyro.distributions.AffineBeta
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 AVFMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.AVFMultivariateNormal
@@ -204,6 +211,13 @@ LinearHMM
     :undoc-members:
     :show-inheritance:
 
+LKJ
+---
+.. autoclass:: pyro.distributions.LKJ
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LKJCorrCholesky
 ---------------
 .. autoclass:: pyro.distributions.LKJCorrCholesky
@@ -249,6 +263,34 @@ MultivariateStudentT
 OMTMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.OMTMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OneOneMatching
+--------------
+.. autoclass:: pyro.distributions.OneOneMatching
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OneTwoMatching
+--------------
+.. autoclass:: pyro.distributions.OneTwoMatching
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OrderedLogistic
+-------------------------------
+.. autoclass:: pyro.distributions.OrderedLogistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ProjectedNormal
+---------------
+.. autoclass:: pyro.distributions.ProjectedNormal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -309,9 +351,9 @@ VonMises3D
     :undoc-members:
     :show-inheritance:
 
-ZeroInflatedPoisson
--------------------
-.. autoclass:: pyro.distributions.ZeroInflatedPoisson
+ZeroInflatedDistribution
+------------------------
+.. autoclass:: pyro.distributions.ZeroInflatedDistribution
     :members:
     :undoc-members:
     :show-inheritance:
@@ -323,9 +365,9 @@ ZeroInflatedNegativeBinomial
     :undoc-members:
     :show-inheritance:
 
-ZeroInflatedDistribution
-------------------------
-.. autoclass:: pyro.distributions.ZeroInflatedDistribution
+ZeroInflatedPoisson
+-------------------
+.. autoclass:: pyro.distributions.ZeroInflatedPoisson
     :members:
     :undoc-members:
     :show-inheritance:
@@ -340,9 +382,30 @@ ConditionalTransform
     :undoc-members:
     :show-inheritance:
 
+CholeskyTransform
+-----------------
+.. autoclass:: pyro.distributions.transforms.CholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 CorrLCholeskyTransform
 ----------------------
 .. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+CorrMatrixCholeskyTransform
+---------------------------
+.. autoclass:: pyro.distributions.transforms.CorrMatrixCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+DiscreteCosineTransform
+-----------------------
+.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -375,6 +438,20 @@ LowerCholeskyAffine
     :undoc-members:
     :show-inheritance:
 
+Normalize
+---------
+.. autoclass:: pyro.distributions.transforms.Normalize
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OrderedTransform
+----------------
+.. autoclass:: pyro.distributions.transforms.OrderedTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
@@ -382,9 +459,16 @@ Permute
     :undoc-members:
     :show-inheritance:
 
-DiscreteCosineTransform
------------------------
-.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
+SoftplusLowerCholeskyTransform
+------------------------------
+.. autoclass:: pyro.distributions.transforms.SoftplusLowerCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SoftplusTransform
+-----------------
+.. autoclass:: pyro.distributions.transforms.SoftplusTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -709,3 +793,8 @@ spline_coupling
 sylvester
 ---------
 .. autofunction:: pyro.distributions.transforms.sylvester
+
+
+Constraints
+~~~~~~~~~~~
+.. automodule:: pyro.distributions.constraints

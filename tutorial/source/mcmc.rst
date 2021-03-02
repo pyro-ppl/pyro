@@ -1,5 +1,5 @@
-Markov Chain Monte Carlo
-========================
+Example: Inference with Markov Chain Monte Carlo
+================================================
 
 `View hmm.py on github`__
 

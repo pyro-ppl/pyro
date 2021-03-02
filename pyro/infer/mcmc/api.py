@@ -24,7 +24,12 @@ import torch.multiprocessing as mp
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.logger import DIAGNOSTIC_MSG, ProgressBar, TqdmHandler, initialize_logger
+from pyro.infer.mcmc.logger import (
+    DIAGNOSTIC_MSG,
+    ProgressBar,
+    TqdmHandler,
+    initialize_logger,
+)
 from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.util import diagnostics, print_summary
 from pyro.util import optional
@@ -85,9 +90,6 @@ class _Worker:
     def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
-        # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
-        # at https://github.com/pytorch/pytorch/issues/10375
-        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in args]
         kwargs = kwargs
         logger = logging.getLogger("pyro.infer.mcmc")
         logger_id = "CHAIN:{}".format(self.chain_id)
@@ -377,6 +379,11 @@ class MCMC:
         z_flat_acc = [[] for _ in range(self.num_chains)]
         with optional(pyro.validation_enabled(not self.disable_validation),
                       self.disable_validation is not None):
+            # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
+            # at https://github.com/pytorch/pytorch/issues/10375
+            # This also resolves "RuntimeError: Cowardly refusing to serialize non-leaf tensor which
+            # requires_grad", which happens with `jit_compile` under PyTorch 1.7
+            args = [arg.detach() if torch.is_tensor(arg) else arg for arg in args]
             for x, chain_id in self.sampler.run(*args, **kwargs):
                 if num_samples[chain_id] == 0:
                     num_samples[chain_id] += 1

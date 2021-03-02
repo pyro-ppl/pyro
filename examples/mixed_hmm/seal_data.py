@@ -5,9 +5,7 @@ import os
 from urllib.request import urlopen
 
 import pandas as pd
-
 import torch
-
 
 MISSING = 1e-6
 

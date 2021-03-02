@@ -3,8 +3,12 @@
 
 import torch
 
-from pyro.contrib.tracking.dynamic_models import (NcpContinuous, NcvContinuous,
-                                                  NcvDiscrete, NcpDiscrete)
+from pyro.contrib.tracking.dynamic_models import (
+    NcpContinuous,
+    NcpDiscrete,
+    NcvContinuous,
+    NcvDiscrete,
+)
 from tests.common import assert_equal, assert_not_equal
 
 

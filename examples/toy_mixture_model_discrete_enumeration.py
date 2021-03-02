@@ -84,7 +84,6 @@ def guide(prior, obs, num_obs):
 
 
 def train(prior, data, num_steps, num_obs):
-    pyro.enable_validation(True)
     pyro.clear_param_store()
     # max_plate_nesting = 1 because there is a single plate in the model
     loss_func = pyro.infer.TraceEnum_ELBO(max_plate_nesting=1)
@@ -127,7 +126,7 @@ def get_true_pred_CPDs(CPD, posterior_param):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="Toy mixture model")
     parser.add_argument("-n", "--num-steps", default=4000, type=int)
     parser.add_argument("-o", "--num-obs", default=10000, type=int)

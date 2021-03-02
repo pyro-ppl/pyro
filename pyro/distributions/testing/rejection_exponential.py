@@ -4,6 +4,7 @@
 import torch
 from torch.distributions.utils import broadcast_all
 
+import pyro.distributions.constraints as constraints
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.torch import Exponential
 from pyro.distributions.util import copy_docs_from, weakmethod
@@ -11,6 +12,10 @@ from pyro.distributions.util import copy_docs_from, weakmethod
 
 @copy_docs_from(Exponential)
 class RejectionExponential(Rejector):
+    arg_constraints = {"rate": constraints.positive,
+                       "factor": constraints.positive}
+    support = constraints.positive
+
     def __init__(self, rate, factor):
         assert (factor <= 1).all()
         self.rate, self.factor = broadcast_all(rate, factor)

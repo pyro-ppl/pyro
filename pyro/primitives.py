@@ -4,15 +4,23 @@
 import copy
 import warnings
 from collections import OrderedDict
-from contextlib import contextmanager, ExitStack
+from contextlib import ExitStack, contextmanager
 from inspect import isclass
+
+import torch
 
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.params import param_with_module_name
 from pyro.poutine.plate_messenger import PlateMessenger
-from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful
+from pyro.poutine.runtime import (
+    _MODULE_NAMESPACE_DIVIDER,
+    _PYRO_PARAM_STORE,
+    am_i_wrapped,
+    apply_stack,
+    effectful,
+)
 from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
@@ -61,6 +69,30 @@ def param(name, *args, **kwargs):
     return _param(name, *args, **kwargs)
 
 
+def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
+    # Split into two auxiliary sample sites.
+    with poutine.mask(mask=obs_mask):
+        observed = sample(f"{name}_observed", fn, *args, **kwargs, obs=obs)
+    with poutine.mask(mask=~obs_mask):
+        unobserved = sample(f"{name}_unobserved", fn, *args, **kwargs)
+
+    # Interleave observed and unobserved events.
+    shape = obs_mask.shape + (1,) * fn.event_dim
+    batch_mask = obs_mask.reshape(shape)
+    try:
+        value = torch.where(batch_mask, observed, unobserved)
+    except RuntimeError as e:
+        if "must match the size of tensor" in str(e):
+            shape = torch.broadcast_shapes(observed.shape, unobserved.shape)
+            batch_shape = shape[:len(shape) - fn.event_dim]
+            raise ValueError(
+                f"Invalid obs_mask shape {tuple(obs_mask.shape)}; should be "
+                f"broadcastable to batch_shape = {tuple(batch_shape)}"
+            ) from e
+        raise
+    return deterministic(name, value)
+
+
 def sample(name, fn, *args, **kwargs):
     """
     Calls the stochastic function `fn` with additional side-effects depending
@@ -72,14 +104,25 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
+    :param ~torch.Tensor obs_mask: Optional boolean tensor mask of shape
+        broadcastable with ``fn.batch_shape``. If provided, events with
+        mask=True will be conditioned on ``obs`` and remaining events will be
+        imputed by sampling. This introduces a latent sample site named ``name
+        + "_unobserved"`` which should be used by guides.
+    :type obs_mask: bool or ~torch.Tensor
     :param dict infer: Optional dictionary of inference parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
     """
+    # Transform obs_mask into multiple sample statements.
     obs = kwargs.pop("obs", None)
-    infer = kwargs.pop("infer", {}).copy()
-    # check if stack is empty
+    obs_mask = kwargs.pop("obs_mask", None)
+    if obs_mask is not None:
+        return _masked_observe(name, fn, obs, obs_mask, *args, **kwargs)
+
+    # Check if stack is empty.
     # if stack empty, default behavior (defined here)
+    infer = kwargs.pop("infer", {}).copy()
     if not am_i_wrapped():
         if obs is not None and not infer.get("_deterministic"):
             warnings.warn("trying to observe a value outside of inference at " + name,
@@ -124,7 +167,7 @@ def factor(name, log_factor):
     """
     unit_dist = dist.Unit(log_factor)
     unit_value = unit_dist.sample()
-    sample(name, unit_dist, obs=unit_value)
+    sample(name, unit_dist, obs=unit_value, infer={"is_auxiliary": True})
 
 
 def deterministic(name, value, event_dim=None):
@@ -134,8 +177,8 @@ def deterministic(name, value, event_dim=None):
     we want to record values which are completely determined by their parents.
     For example::
 
-        x = sample("x", dist.Normal(0, 1))
-        x2 = deterministic("x2", x ** 2)
+        x = pyro.sample("x", dist.Normal(0, 1))
+        x2 = pyro.deterministic("x2", x ** 2)
 
     .. note:: The site does not affect the model density. This currently converts
         to a :func:`sample` statement, but may change in the future.
@@ -160,13 +203,13 @@ def subsample(data, event_dim):
     either the ``subsample`` or ``subsample_size`` kwarg. For example the
     following are equivalent::
 
-        # Version 1. using pyro.subsample()
+        # Version 1. using indexing
         def model(data):
             with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()) as ind:
                 data = data[ind]
                 # ...
 
-        # Version 2. using indexing
+        # Version 2. using pyro.subsample()
         def model(data):
             with pyro.plate("data", len(data), subsample_size=10, dim=-data.dim()):
                 data = pyro.subsample(data, event_dim=0)
@@ -201,7 +244,7 @@ class plate(PlateMessenger):
     rather than a function, and users must guarantee that all computation
     within an :class:`plate` context is conditionally independent::
 
-        with plate("name", size) as ind:
+        with pyro.plate("name", size) as ind:
             # ...do conditionally independent stuff with ind...
 
     Additionally, :class:`plate` can take advantage of the conditional
@@ -209,7 +252,7 @@ class plate(PlateMessenger):
     algorithms to scale various computed values. This is typically used to
     subsample minibatches of data::
 
-        with plate("data", len(data), subsample_size=100) as ind:
+        with pyro.plate("data", len(data), subsample_size=100) as ind:
             batch = data[ind]
             assert len(batch) == 100
 
@@ -254,34 +297,35 @@ class plate(PlateMessenger):
            >>> z = dist.Bernoulli(0.5).sample((100,))
 
         >>> # This version declares sequential independence and subsamples data:
-        >>> for i in plate('data', 100, subsample_size=10):
+        >>> for i in pyro.plate('data', 100, subsample_size=10):
         ...     if z[i]:  # Control flow in this example prevents vectorization.
-        ...         obs = sample('obs_{}'.format(i), dist.Normal(loc, scale), obs=data[i])
+        ...         obs = pyro.sample(f'obs_{i}', dist.Normal(loc, scale),
+        ...                           obs=data[i])
 
         >>> # This version declares vectorized independence:
-        >>> with plate('data'):
-        ...     obs = sample('obs', dist.Normal(loc, scale), obs=data)
+        >>> with pyro.plate('data'):
+        ...     obs = pyro.sample('obs', dist.Normal(loc, scale), obs=data)
 
         >>> # This version subsamples data in vectorized way:
-        >>> with plate('data', 100, subsample_size=10) as ind:
-        ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
+        >>> with pyro.plate('data', 100, subsample_size=10) as ind:
+        ...     obs = pyro.sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = torch.randint(0, 100, (10,)).long() # custom subsample
-        >>> with plate('data', 100, subsample=ind):
-        ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
+        >>> with pyro.plate('data', 100, subsample=ind):
+        ...     obs = pyro.sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This reuses two different independence contexts.
-        >>> x_axis = plate('outer', 320, dim=-1)
-        >>> y_axis = plate('inner', 200, dim=-2)
+        >>> x_axis = pyro.plate('outer', 320, dim=-1)
+        >>> y_axis = pyro.plate('inner', 200, dim=-2)
         >>> with x_axis:
-        ...     x_noise = sample("x_noise", dist.Normal(loc, scale))
+        ...     x_noise = pyro.sample("x_noise", dist.Normal(loc, scale))
         ...     assert x_noise.shape == (320,)
         >>> with y_axis:
-        ...     y_noise = sample("y_noise", dist.Normal(loc, scale))
+        ...     y_noise = pyro.sample("y_noise", dist.Normal(loc, scale))
         ...     assert y_noise.shape == (200, 1)
         >>> with x_axis, y_axis:
-        ...     xy_noise = sample("xy_noise", dist.Normal(loc, scale))
+        ...     xy_noise = pyro.sample("xy_noise", dist.Normal(loc, scale))
         ...     assert xy_noise.shape == (200, 320)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
@@ -316,7 +360,7 @@ def plate_stack(prefix, sizes, rightmost_dim=-1):
     assert rightmost_dim < 0
     with ExitStack() as stack:
         for i, size in enumerate(reversed(sizes)):
-            plate_i = plate("{}_{}".format(prefix, i), size, dim=rightmost_dim - i)
+            plate_i = plate(f"{prefix}_{i}", size, dim=rightmost_dim - i)
             stack.enter_context(plate_i)
         yield
 
@@ -356,9 +400,10 @@ def module(name, nn_module, update_module_params=False):
 
             if param_value._cdata != returned_param._cdata:
                 target_state_dict[param_name] = returned_param
-        else:
-            warnings.warn("{} was not registered in the param store because".format(param_name) +
-                          " requires_grad=False")
+        elif nn_module.training:
+            warnings.warn(f"{param_name} was not registered in the param store "
+                          "because requires_grad=False. You can silence this "
+                          "warning by calling my_module.train(False)")
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
@@ -416,13 +461,33 @@ def random_module(name, nn_module, prior, *args, **kwargs):
     return _fn
 
 
+@effectful(type="barrier")
+def barrier(data):
+    """
+    EXPERIMENTAL Ensures all values in ``data`` are ground, rather than lazy
+    funsor values. This is useful in combination with
+    :func:`pyro.poutine.collapse`.
+    """
+    return data
+
+
 def enable_validation(is_validate=True):
     """
     Enable or disable validation checks in Pyro. Validation checks provide
     useful warnings and errors, e.g. NaN checks, validating distribution
-    arguments and support values, etc. which is useful for debugging.
-    Since some of these checks may be expensive, we recommend turning
-    this off for mature models.
+    arguments and support values, detecting incorrect use of ELBO and MCMC.
+    Since some of these checks may be expensive, you may want to disable
+    validation of mature models to speed up inference.
+
+    The default behavior mimics Python's ``assert`` statement: validation is on
+    by default, but is disabled if Python is run in optimized mode (via
+    ``python -O``). Equivalently, the default behavior depends on Python's
+    global ``__debug__`` value via ``pyro.enable_validation(__debug__)``.
+
+    Validation is temporarily disabled during jit compilation, for all
+    inference algorithms that support the PyTorch jit. We recommend developing
+    models with non-jitted inference algorithms to ease debugging, then
+    optionally moving to jitted inference once a model is correct.
 
     :param bool is_validate: (optional; defaults to True) whether to
         enable validation checks.

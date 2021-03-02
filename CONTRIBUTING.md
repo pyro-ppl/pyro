@@ -4,6 +4,7 @@ Please follow our established coding style including variable names, module impo
 The Pyro codebase follows the [PEP8 style guide](https://www.python.org/dev/peps/pep-0008/)
 (which you can check with `make lint`) and follows
 [`isort`](https://github.com/timothycrosley/isort) import order (which you can enforce with `make format`).
+When creating new files please add a license header; this can be done automatically via `make license`.
 
 # Setup
 

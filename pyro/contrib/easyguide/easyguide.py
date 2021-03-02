@@ -14,8 +14,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
 from pyro.distributions.util import broadcast_shape, sum_rightmost
-from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.infer.autoguide.guides import prototype_hide_fn
+from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.nn.module import PyroModule, PyroParam
 
 
@@ -90,6 +90,9 @@ class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
     def forward(self, *args, **kwargs):
         """
         Runs the guide. This is typically used by inference algorithms.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__`.
         """
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)

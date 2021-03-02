@@ -7,7 +7,12 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.reparam import LinearHMMReparam, StableReparam, StudentTReparam, SymmetricStableReparam
+from pyro.infer.reparam import (
+    LinearHMMReparam,
+    StableReparam,
+    StudentTReparam,
+    SymmetricStableReparam,
+)
 from tests.common import assert_close
 from tests.ops.gaussian import random_mvn
 

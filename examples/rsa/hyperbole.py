@@ -7,16 +7,15 @@ Interpreting hyperbole with RSA models of pragmatics.
 Taken from: https://gscontras.github.io/probLang/chapters/03-nonliteral.html
 """
 
-import torch
-
-import collections
 import argparse
+import collections
+
+import torch
+from search_inference import HashingMarginal, Search, memoize
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-
-from search_inference import HashingMarginal, memoize, Search
 
 torch.set_default_dtype(torch.float64)  # double precision for numerical stability
 
@@ -154,7 +153,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=10, type=int)
     parser.add_argument('--price', default=10000, type=int)

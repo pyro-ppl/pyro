@@ -4,6 +4,7 @@
 import contextlib
 import numbers
 import os
+import re
 import shutil
 import tempfile
 import warnings
@@ -26,11 +27,22 @@ Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = os.path.join(TESTS_DIR, 'resources')
 EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
+TEST_FAILURE_RATE = 2e-5  # For all goodness-of-fit tests.
 
 
 def xfail_param(*args, **kwargs):
     kwargs.setdefault("reason", "unknown")
     return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
+
+
+def str_erase_pointers(x):
+    """
+    Print a string representation of ``x`` but remove pointers from function
+    names, since the pointers have different values on different pytest xdist
+    workers and break test collection. This is useful as the ``ids`` arg to
+    ``@pytest.mark.parametrize``.
+    """
+    return re.sub(" at 0x[a-f0-9]+", "", str(x))
 
 
 def skipif_param(*args, **kwargs):
@@ -66,6 +78,13 @@ except ImportError:
     horovod = None
 requires_horovod = pytest.mark.skipif(horovod is None,
                                       reason="horovod is not available")
+
+try:
+    import funsor
+except ImportError:
+    funsor = None
+requires_funsor = pytest.mark.skipif(funsor is None,
+                                     reason="funsor is not available")
 
 
 def get_cpu_type(t):

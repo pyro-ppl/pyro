@@ -15,12 +15,25 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, Predictive
-from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
-                                  AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                  AutoNormal, AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
-                                  init_to_sample)
+from pyro.infer import SVI, Predictive, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer.autoguide import (
+    AutoCallable,
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoDiscreteParallel,
+    AutoGuide,
+    AutoGuideList,
+    AutoIAFNormal,
+    AutoLaplaceApproximation,
+    AutoLowRankMultivariateNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+)
+from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
 from pyro.poutine.util import prune_subsample_sites
@@ -227,7 +240,7 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    optim = Adam({'lr': 0.02, 'betas': (0.8, 0.99)})
     elbo = Elbo(strict_enumeration_warning=False,
                 num_particles=100, vectorize_particles=True)
     infer = SVI(model, guide, optim, elbo)
@@ -332,6 +345,9 @@ def test_quantiles(auto_class, Elbo):
     quantiles = guide.quantiles([0.1, 0.5, 0.9])
     median = guide.median()
     for name in ["x", "y", "z"]:
+        assert not median[name].requires_grad
+        for q in quantiles[name]:
+            assert not q.requires_grad
         assert_equal(median[name], quantiles[name][1])
     quantiles = {name: [v.item() for v in value] for name, value in quantiles.items()}
 
@@ -465,7 +481,7 @@ def test_empty_model_error():
 
 def test_unpack_latent():
     def model():
-        return pyro.sample('x', dist.LKJCorrCholesky(2, torch.tensor(1.)))
+        return pyro.sample('x', dist.LKJCholesky(2, torch.tensor(1.)))
 
     guide = AutoDiagonalNormal(model)
     assert guide()['x'].shape == model().shape
@@ -697,6 +713,37 @@ def test_predictive(auto_class):
     assert len(samples) == len(samples_deser)
 
 
+@pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal])
+def test_subsample_model(auto_class):
+
+    def model(x, y=None, batch_size=None):
+        loc = pyro.param("loc", lambda: torch.tensor(0.))
+        scale = pyro.param("scale", lambda: torch.tensor(1.),
+                           constraint=constraints.positive)
+        with pyro.plate("batch", len(x), subsample_size=batch_size):
+            batch_x = pyro.subsample(x, event_dim=0)
+            batch_y = pyro.subsample(y, event_dim=0) if y is not None else None
+            mean = loc + scale * batch_x
+            sigma = pyro.sample("sigma", dist.LogNormal(0., 1.))
+            return pyro.sample("obs", dist.Normal(mean, sigma), obs=batch_y)
+
+    guide = auto_class(model)
+
+    full_size = 50
+    batch_size = 20
+    pyro.set_rng_seed(123456789)
+    x = torch.randn(full_size)
+    with torch.no_grad():
+        y = model(x)
+    assert y.shape == x.shape
+
+    pyro.get_param_store().clear()
+    pyro.set_rng_seed(123456789)
+    svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
+    for step in range(5):
+        svi.step(x, y, batch_size=batch_size)
+
+
 @pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
 @pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal, AutoGuideList])
 def test_subsample_guide(auto_class, init_fn):
@@ -706,9 +753,9 @@ def test_subsample_guide(auto_class, init_fn):
         num_time_steps = len(batch)
         result = [None] * num_time_steps
         drift = pyro.sample("drift", dist.LogNormal(-1, 0.5))
-        plate = pyro.plate("data", full_size, subsample=subsample)
-        assert plate.size == 50
-        with plate:
+        data_plate = pyro.plate("data", full_size, subsample=subsample)
+        assert data_plate.size == 50
+        with data_plate:
             z = 0.
             for t in range(num_time_steps):
                 z = pyro.sample("state_{}".format(t), dist.Normal(z, drift))
@@ -778,3 +825,102 @@ def test_subsample_guide_2(auto_class, independent):
     data = torch.randn(10, 10)
     for step in range(2):
         svi.step(data)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_discrete_helpful_error(auto_class, init_loc_fn):
+
+    def model():
+        p = pyro.sample("p", dist.Beta(2., 2.))
+        x = pyro.sample("x", dist.Bernoulli(p))
+        pyro.sample("obs", p * x + (1 - p) * (1 - x),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    with pytest.raises(ValueError, match=".*enumeration.html.*"):
+        guide()
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_helpful_error(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([2]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    with pytest.raises(ValueError, match=".*ProjectedNormalReparam.*"):
+        guide()
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_reparam_ok(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([3]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    model = poutine.reparam(model, {"y": ProjectedNormalReparam()})
+    guide = auto_class(model)
+    poutine.trace(guide).get_trace().compute_log_prob()
+
+
+@pytest.mark.parametrize("auto_class", [AutoDelta])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
+def test_sphere_raw_ok(auto_class, init_loc_fn):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).expand([3]).to_event(1))
+        y = pyro.sample("y", dist.ProjectedNormal(x))
+        pyro.sample("obs", dist.Normal(y, 1),
+                    obs=torch.tensor([1., 0.]))
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    poutine.trace(guide).get_trace().compute_log_prob()

@@ -200,7 +200,7 @@ class EnumMessenger(Messenger):
         value = msg["value"]
         if value is None:
             return
-        shape = value.shape[:value.dim() - msg["fn"].event_dim]
+        shape = value.data.shape[:value.dim() - msg["fn"].event_dim]
         dim_to_id = msg["infer"].setdefault("_dim_to_id", {})
         dim_to_id.update(self._param_dims.get(msg["name"], {}))
         with ignore_jit_warnings():

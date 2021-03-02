@@ -2,20 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import math
 
 import numpy as np
 import torch
-import math
+from torch.optim import Adam
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide import AutoDelta
 from pyro.infer import Trace_ELBO
-from pyro.infer.autoguide import init_to_median
-
-from torch.optim import Adam
-
+from pyro.infer.autoguide import AutoDelta, init_to_median
 
 """
 We demonstrate how to do sparse linear regression using a variant of the
@@ -44,7 +41,6 @@ References
 """
 
 
-pyro.enable_validation(True)
 torch.set_default_tensor_type('torch.FloatTensor')
 
 
@@ -128,7 +124,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
 
     # select active dimensions (those that are non-zero with sufficient statistical significance)
     active_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)).bool()
-    active_dims = active_dims.nonzero().squeeze(-1)
+    active_dims = active_dims.nonzero(as_tuple=False).squeeze(-1)
 
     print("Identified the following active dimensions:", active_dims.data.numpy().flatten())
     print("Mean estimate for active singleton weights:\n", mu[active_dims].data.numpy())
@@ -139,7 +135,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
         return active_dims.data.numpy(), []
 
     # prep for computation of posterior statistics for quadratic weights
-    left_dims, right_dims = torch.ones(M, M).triu(1).nonzero().t()
+    left_dims, right_dims = torch.ones(M, M).triu(1).nonzero(as_tuple=False).t()
     left_dims, right_dims = active_dims[left_dims], active_dims[right_dims]
 
     probe = torch.zeros(left_dims.size(0), 4, P, dtype=X.dtype, device=X.device)
@@ -166,7 +162,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
     std = ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1)).sum(-2).clamp(min=0.0).sqrt()
 
     active_quad_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)) & (mu.abs() > 1.0e-4).bool()
-    active_quad_dims = active_quad_dims.nonzero()
+    active_quad_dims = active_quad_dims.nonzero(as_tuple=False)
 
     active_quadratic_dims = np.stack([left_dims[active_quad_dims].data.numpy().flatten(),
                                       right_dims[active_quad_dims].data.numpy().flatten()], axis=1)
@@ -311,7 +307,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     parser = argparse.ArgumentParser(description='Krylov KIT')
     parser.add_argument('--num-data', type=int, default=750)
     parser.add_argument('--num-steps', type=int, default=1000)

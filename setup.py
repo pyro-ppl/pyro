@@ -60,13 +60,16 @@ EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'graphviz>=0.8',
     'matplotlib>=1.3',
-    'torchvision>=0.6.0',
+    'torchvision>=0.9.0.dev20210210',
     'visdom>=0.1.4',
-    # 'biopython>=1.54',  # requires Python 3.6
     'pandas',
     'scikit-learn',
     'seaborn',
     'wget',
+    'lap',
+    # 'biopython>=1.54',  # Requires Python 3.6
+    # 'scanpy>=1.4',  # Requires HDF5
+    # 'scvi>=0.6',  # Requires loopy and other fragile packages
 ]
 
 setup(
@@ -77,9 +80,8 @@ setup(
     long_description_content_type='text/markdown',
     packages=find_packages(include=['pyro', 'pyro.*']),
     package_data={"pyro.distributions": ["*.cpp"]},
+    author="Uber AI Labs",
     url='http://pyro.ai',
-    author='Uber AI Labs',
-    author_email='pyro@uber.com',
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
@@ -87,7 +89,7 @@ setup(
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'pyro-api>=0.1.1',
-        'torch>=1.5.0',
+        'torch>=1.8.0.dev20210210',
         'tqdm>=4.36',
     ],
     extras_require={
@@ -101,7 +103,7 @@ setup(
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
             'flake8',
-            'isort',
+            'isort>=5.0',
             'nbformat',
             'nbsphinx>=0.3.2',
             'nbstripout',
@@ -117,20 +119,21 @@ setup(
         ],
         'horovod': ['horovod[pytorch]>=0.19'],
         'funsor': [
-            # TODO update to release branch (currently using a recent commit on master)
-            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@c7390318cd6c3f77798aee01638aff08e9582c96',
+            # This must be a released version when Pyro is released.
+            # 'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@c685dde1746a8234b44a3aa0d6ab4e3a4d619c41',
+            'funsor[torch]==0.4.0',
         ],
     },
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='Apache 2.0',
     classifiers=[
         'Intended Audience :: Developers',
         'Intended Audience :: Education',
         'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],

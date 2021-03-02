@@ -1,12 +1,28 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 from abc import ABCMeta, abstractmethod
 
 from pyro.distributions.score_parts import ScoreParts
 
+COERCIONS = []
 
-class Distribution(object, metaclass=ABCMeta):
+
+class DistributionMeta(ABCMeta):
+    def __call__(cls, *args, **kwargs):
+        for coerce_ in COERCIONS:
+            result = coerce_(cls, args, kwargs)
+            if result is not None:
+                return result
+        return super().__call__(*args, **kwargs)
+
+    @property
+    def __wrapped__(cls):
+        return functools.partial(cls.__init__, None)
+
+
+class Distribution(metaclass=DistributionMeta):
     """
     Base class for parameterized probability distributions.
 

@@ -18,8 +18,7 @@ class ScaleMessenger(Messenger):
 
         >>> def model(x):
         ...     s = pyro.param("s", torch.tensor(0.5))
-        ...     z = pyro.sample("z", dist.Normal(x, s), obs=1.0)
-        ...     return z ** 2
+        ...     pyro.sample("z", dist.Normal(x, s), obs=torch.tensor(1.0))
 
     ``scale`` multiplicatively scales the log-probabilities of sample sites:
 

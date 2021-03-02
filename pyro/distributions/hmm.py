@@ -2,19 +2,29 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions.torch import Categorical, Gamma, Independent, MultivariateNormal
-from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import broadcast_shape
-from pyro.ops.gamma_gaussian import (GammaGaussian, gamma_and_mvn_to_gamma_gaussian, gamma_gaussian_tensordot,
-                                     matrix_and_mvn_to_gamma_gaussian)
-from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
+from pyro.ops.gamma_gaussian import (
+    GammaGaussian,
+    gamma_and_mvn_to_gamma_gaussian,
+    gamma_gaussian_tensordot,
+    matrix_and_mvn_to_gamma_gaussian,
+)
+from pyro.ops.gaussian import (
+    Gaussian,
+    gaussian_tensordot,
+    matrix_and_mvn_to_gaussian,
+    mvn_to_gaussian,
+)
 from pyro.ops.special import safe_log
 from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
+from . import constraints
+from .torch import Categorical, Gamma, Independent, MultivariateNormal
+from .torch_distribution import TorchDistribution
+from .util import broadcast_shape, torch_jit_script_if_tracing
 
-@torch.jit.script
+
+@torch_jit_script_if_tracing
 def _linear_integrate(init, trans, shift):
     """
     Integrate the inhomogeneous linear shifterence equation::
@@ -39,15 +49,15 @@ def _logmatmulexp(x, y):
     Numerically stable version of ``(x.log() @ y.log()).exp()``.
     """
     finfo = torch.finfo(x.dtype)  # avoid nan due to -inf - -inf
-    x_shift = x.max(-1, keepdim=True).values.clamp(min=finfo.min)
-    y_shift = y.max(-2, keepdim=True).values.clamp(min=finfo.min)
+    x_shift = x.detach().max(-1, keepdim=True).values.clamp_(min=finfo.min)
+    y_shift = y.detach().max(-2, keepdim=True).values.clamp_(min=finfo.min)
     xy = safe_log(torch.matmul((x - x_shift).exp(), (y - y_shift).exp()))
     return xy + x_shift + y_shift
 
 
 # TODO re-enable jitting once _SafeLog is supported by the jit.
 # See https://discuss.pytorch.org/t/does-torch-jit-script-support-custom-operators/65759/4
-# @torch.jit.script
+# @torch_jit_script_if_tracing
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::
@@ -309,9 +319,9 @@ class DiscreteHMM(HiddenMarkovModel):
         self.observation_dist = observation_dist
         super().__init__(duration, batch_shape, event_shape, validate_args=validate_args)
 
-    @property
+    @constraints.dependent_property(event_dim=2)
     def support(self):
-        return self.observation_dist.support
+        return constraints.independent(self.observation_dist.support, 1)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(DiscreteHMM, _instance)
@@ -436,7 +446,7 @@ class GaussianHMM(HiddenMarkovModel):
     """
     has_rsample = True
     arg_constraints = {}
-    support = constraints.real
+    support = constraints.independent(constraints.real, 2)
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None, duration=None):
@@ -717,7 +727,7 @@ class GammaGaussianHMM(HiddenMarkovModel):
         are not expanded along the time axis.
     """
     arg_constraints = {}
-    support = constraints.real
+    support = constraints.independent(constraints.real, 2)
 
     def __init__(self, scale_dist, initial_dist, transition_matrix, transition_dist,
                  observation_matrix, observation_dist, validate_args=None, duration=None):
@@ -886,7 +896,7 @@ class LinearHMM(HiddenMarkovModel):
         are not expanded along the time axis.
     """
     arg_constraints = {}
-    support = constraints.real
+    support = constraints.independent(constraints.real, 2)
     has_rsample = True
 
     def __init__(self, initial_dist, transition_matrix, transition_dist,
@@ -953,9 +963,9 @@ class LinearHMM(HiddenMarkovModel):
         self.observation_dist = observation_dist
         self.transforms = transforms
 
-    @property
+    @constraints.dependent_property(event_dim=2)
     def support(self):
-        return self.observation_dist.support
+        return constraints.independent(self.observation_dist.support, 1)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(LinearHMM, _instance)
@@ -1017,7 +1027,7 @@ class IndependentHMM(TorchDistribution):
         super().__init__(batch_shape, event_shape)
         self.base_dist = base_dist
 
-    @constraints.dependent_property
+    @constraints.dependent_property(event_dim=2)
     def support(self):
         return self.base_dist.support
 
@@ -1107,6 +1117,11 @@ class GaussianMRF(TorchDistribution):
         self._init = mvn_to_gaussian(initial_dist)
         self._trans = mvn_to_gaussian(transition_dist)
         self._obs = mvn_to_gaussian(observation_dist)
+        self._support = constraints.independent(observation_dist.support, 1)
+
+    @constraints.dependent_property(event_dim=2)
+    def support(self):
+        return self._support
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianMRF, _instance)
@@ -1119,6 +1134,7 @@ class GaussianMRF(TorchDistribution):
         new._init = self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs
+        new._support = self._support
         super(GaussianMRF, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get('_validate_args')
         return new

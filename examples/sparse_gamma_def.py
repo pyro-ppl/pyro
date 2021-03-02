@@ -20,22 +20,18 @@ import os
 
 import numpy as np
 import torch
+import wget
 from torch.nn.functional import softplus
 
 import pyro
 import pyro.optim as optim
-import wget
-
-from pyro.contrib.examples.util import get_data_directory
-from pyro.distributions import Gamma, Poisson, Normal
-from pyro.infer import SVI, TraceMeanField_ELBO
-from pyro.infer.autoguide import AutoDiagonalNormal
-from pyro.infer.autoguide import init_to_feasible
 from pyro.contrib.easyguide import EasyGuide
-
+from pyro.contrib.examples.util import get_data_directory
+from pyro.distributions import Gamma, Normal, Poisson
+from pyro.infer import SVI, TraceMeanField_ELBO
+from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
 
 torch.set_default_tensor_type('torch.FloatTensor')
-pyro.enable_validation(__debug__)
 pyro.util.set_rng_seed(0)
 
 
@@ -234,7 +230,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.4.0')
+    assert pyro.__version__.startswith('1.5.2')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1500, type=int, help='number of training epochs')

@@ -1,5 +1,5 @@
-Toy Mixture Model With Discrete Enumeration
-===========================================
+Example: Toy Mixture Model With Discrete Enumeration
+====================================================
 
 `View toy_mixture_model_discrete_enumeration.py on github`__
 

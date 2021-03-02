@@ -19,10 +19,17 @@ tutorial: FORCE
 
 lint: FORCE
 	flake8
+	isort --check .
 	python scripts/update_headers.py --check
 
 license: FORCE
 	python scripts/update_headers.py
+
+format: license FORCE
+	isort .
+
+version: FORCE
+	python scripts/update_version.py
 
 scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
@@ -30,9 +37,6 @@ scrub: FORCE
 
 doctest: FORCE
 	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
-
-format: FORCE
-	isort --recursive *.py pyro/ examples/ tests/ profiler/*.py docs/source/conf.py
 
 perf-test: FORCE
 	bash scripts/perf_test.sh ${ref}
