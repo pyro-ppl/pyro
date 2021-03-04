@@ -433,7 +433,9 @@ class AutoNormal(AutoGuide):
         automatically as usual. This is useful for data subsampling.
     """
 
-    scale_constraint = constraints.softplus_positive
+    # TODO consider switching to constraints.softplus_positive
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_constraint = constraints.positive
 
     def __init__(self, model, *,
                  init_loc_fn=init_to_feasible,
@@ -818,7 +820,9 @@ class AutoMultivariateNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    scale_tril_constraint = constraints.softplus_lower_cholesky
+    # TODO consider switching to constraints.softplus_lower_cholesky
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_tril_constraint = constraints.lower_cholesky
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -870,7 +874,9 @@ class AutoDiagonalNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    scale_constraint = constraints.softplus_positive
+    # TODO consider switching to constraints.softplus_positive
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_constraint = constraints.positive
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -927,7 +933,9 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         deviation of each (unconstrained transformed) latent variable.
     """
 
-    scale_constraint = constraints.softplus_positive
+    # TODO consider switching to constraints.softplus_positive
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_constraint = constraints.positive
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1, rank=None):
         if not isinstance(init_scale, float) or not (init_scale > 0):
