@@ -4,17 +4,12 @@
 import os
 import sys
 
-import torchvision
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.datasets import MNIST
-
-from pyro.distributions.torch_patch import patch_dependency
 
 
-@patch_dependency('torchvision.datasets.MNIST', torchvision)
-class _MNIST(getattr(MNIST, '_pyro_unpatched', MNIST)):
+class MNIST(datasets.MNIST):
     # For older torchvision.
     urls = [
         "https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/train-images-idx3-ubyte.gz",
@@ -40,7 +35,10 @@ def get_data_loader(dataset_name,
     if not dataset_transforms:
         dataset_transforms = []
     trans = transforms.Compose([transforms.ToTensor()] + dataset_transforms)
-    dataset = getattr(datasets, dataset_name)
+    if dataset_name == "MNIST":
+        dataset = MNIST
+    else:
+        dataset = getattr(datasets, dataset_name)
     print("downloading data")
     dset = dataset(root=data_dir,
                    train=is_training_set,
