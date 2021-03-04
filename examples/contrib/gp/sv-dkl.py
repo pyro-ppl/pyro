@@ -39,7 +39,7 @@ from torchvision import transforms
 import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
-from pyro.contrib.examples.util import get_data_loader, get_data_directory
+from pyro.contrib.examples.util import get_data_directory, get_data_loader
 
 
 class CNN(nn.Module):
@@ -165,7 +165,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
     parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')

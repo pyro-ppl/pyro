@@ -8,6 +8,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.autoguide.guides import AutoContinuous
+
 from .reparam import Reparam
 
 
@@ -59,7 +60,8 @@ class NeuTraReparam(Reparam):
         if name not in self.guide.prototype_trace.nodes:
             return fn, obs
         assert obs is None, "NeuTraReparam does not support observe statements"
-        log_density = 0.
+        log_density = 0.0
+        compute_density = (poutine.get_mask() is not False)
         if not self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
             try:
@@ -74,7 +76,8 @@ class NeuTraReparam(Reparam):
 
             # Differentiably transform.
             x_unconstrained = self.transform(z_unconstrained)
-            log_density = self.transform.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
+            if compute_density:
+                log_density = self.transform.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
             self.x_unconstrained = list(reversed(list(self.guide._unpack_latent(x_unconstrained))))
 
         # Extract a single site's value from the shared latent.
@@ -82,9 +85,10 @@ class NeuTraReparam(Reparam):
         assert name == site["name"], "model structure changed"
         transform = biject_to(fn.support)
         value = transform(unconstrained_value)
-        logdet = transform.log_abs_det_jacobian(unconstrained_value, value)
-        logdet = sum_rightmost(logdet, logdet.dim() - value.dim() + fn.event_dim)
-        log_density = log_density + fn.log_prob(value) + logdet
+        if compute_density:
+            logdet = transform.log_abs_det_jacobian(unconstrained_value, value)
+            logdet = sum_rightmost(logdet, logdet.dim() - value.dim() + fn.event_dim)
+            log_density = log_density + fn.log_prob(value) + logdet
         new_fn = dist.Delta(value, log_density, event_dim=fn.event_dim)
         return new_fn, value
 

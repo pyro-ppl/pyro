@@ -8,8 +8,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
+from pyro.infer import SVI, Predictive, Trace_ELBO
 from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
-from pyro.infer import Predictive, SVI, Trace_ELBO
 from tests.common import assert_close
 
 
@@ -150,3 +150,45 @@ def test_deterministic(with_plate, event_shape):
     assert actual["x3"].shape == (1000,) + x3_batch_shape + event_shape
     assert_close(actual["x2"].mean(), y, rtol=0.1)
     assert_close(actual["x3"].mean(), y, rtol=0.1)
+
+
+def test_get_mask_optimization():
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        pyro.sample("y", dist.Normal(x, 1), obs=torch.tensor(0.))
+        called.add("model-always")
+        if poutine.get_mask() is not False:
+            called.add("model-sometimes")
+            pyro.factor("f", x + 1)
+
+    def guide():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        called.add("guide-always")
+        if poutine.get_mask() is not False:
+            called.add("guide-sometimes")
+            pyro.factor("g", 2 - x)
+
+    called = set()
+    trace = poutine.trace(guide).get_trace()
+    poutine.replay(model, trace)()
+    assert "model-always" in called
+    assert "guide-always" in called
+    assert "model-sometimes" in called
+    assert "guide-sometimes" in called
+
+    called = set()
+    with poutine.mask(mask=False):
+        trace = poutine.trace(guide).get_trace()
+        poutine.replay(model, trace)()
+    assert "model-always" in called
+    assert "guide-always" in called
+    assert "model-sometimes" not in called
+    assert "guide-sometimes" not in called
+
+    called = set()
+    Predictive(model, guide=guide, num_samples=2, parallel=True)()
+    assert "model-always" in called
+    assert "guide-always" in called
+    assert "model-sometimes" not in called
+    assert "guide-sometimes" not in called

@@ -11,7 +11,14 @@ import torch
 
 import pyro.ops.jit
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import _partition_terms, contract_tensor_tree, contract_to_tensor, einsum, naive_ubersum, ubersum
+from pyro.ops.contract import (
+    _partition_terms,
+    contract_tensor_tree,
+    contract_to_tensor,
+    einsum,
+    naive_ubersum,
+    ubersum,
+)
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import LogRing
 from pyro.poutine.indep_messenger import CondIndepStackFrame

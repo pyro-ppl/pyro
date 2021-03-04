@@ -4,17 +4,21 @@
 from collections import OrderedDict
 from contextlib import ExitStack
 
+from pyro.contrib.funsor.handlers.runtime import (
+    _DIM_STACK,
+    DimRequest,
+    DimType,
+    StackFrame,
+)
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
-
-from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, DimRequest, DimType, StackFrame
 
 
 class NamedMessenger(ReentrantMessenger):
     """
-    Base effect handler class for the :func:~`pyro.contrib.funsor.to_funsor`
-    and :func:~`pyro.contrib.funsor.to_data` primitives.
+    Base effect handler class for the :func:`~pyro.contrib.funsor.to_funsor`
+    and :func:`~pyro.contrib.funsor.to_data` primitives.
     Any effect handlers that invoke these primitives internally or wrap
-    code that does should inherit from ``NamedMessenger``.
+    code that does should inherit from :class:`~NamedMessenger`.
 
     This design ensures that the global name-dim mapping is reset upon handler exit
     rather than potentially persisting until the entire program terminates.
@@ -158,11 +162,11 @@ class MarkovMessenger(NamedMessenger):
 class GlobalNamedMessenger(NamedMessenger):
     """
     Base class for any new effect handlers that use the
-    :func:~`pyro.contrib.funsor.to_funsor` and :func:~`pyro.contrib.funsor.to_data` primitives
-    to allocate `DimType.GLOBAL` or `DimType.VISIBLE` dimensions.
+    :func:`~pyro.contrib.funsor.to_funsor` and :func:`~pyro.contrib.funsor.to_data` primitives
+    to allocate ``DimType.GLOBAL`` or ``DimType.VISIBLE`` dimensions.
 
-    Serves as a manual "scope" for dimensions that should not be recycled by :class:~`MarkovMessenger`:
-    global dimensions will be considered active until the innermost ``GlobalNamedMessenger``
+    Serves as a manual "scope" for dimensions that should not be recycled by :class:`~MarkovMessenger`:
+    global dimensions will be considered active until the innermost :class:`~GlobalNamedMessenger`
     under which they were initially allocated exits.
     """
     def __init__(self, first_available_dim=None):

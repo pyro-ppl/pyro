@@ -5,14 +5,15 @@ import operator
 from functools import partial, reduce
 
 import torch
-from torch.distributions import constraints
 from torch.distributions.utils import _sum_rightmost
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms.utils import clamp_preserve_gradients
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import ConditionalDenseNN, DenseNN
+
+from .. import constraints
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..transforms.utils import clamp_preserve_gradients
+from ..util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
@@ -85,8 +86,6 @@ class AffineCoupling(TransformModule):
 
     """
 
-    domain = constraints.real_vector
-    codomain = constraints.real_vector
     bijective = True
 
     def __init__(self, split_dim, hypernet, *, dim=-1, log_scale_min_clip=-5., log_scale_max_clip=3.):
@@ -97,10 +96,17 @@ class AffineCoupling(TransformModule):
         self.split_dim = split_dim
         self.nn = hypernet
         self.dim = dim
-        self.event_dim = -dim
         self._cached_log_scale = None
         self.log_scale_min_clip = log_scale_min_clip
         self.log_scale_max_clip = log_scale_max_clip
+
+    @constraints.dependent_property(is_discrete=False)
+    def domain(self):
+        return constraints.independent(constraints.real, -self.dim)
+
+    @constraints.dependent_property(is_discrete=False)
+    def codomain(self):
+        return constraints.independent(constraints.real, -self.dim)
 
     def _call(self, x):
         """
@@ -114,9 +120,9 @@ class AffineCoupling(TransformModule):
         x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
 
         # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
-        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim] + (-1,)))
-        mean = mean.reshape(mean.shape[:-1] + x2.shape[-self.event_dim:])
-        log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[-self.event_dim:])
+        mean, log_scale = self.nn(x1.reshape(x1.shape[:self.dim] + (-1,)))
+        mean = mean.reshape(mean.shape[:-1] + x2.shape[self.dim:])
+        log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[self.dim:])
 
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
@@ -137,9 +143,9 @@ class AffineCoupling(TransformModule):
         x1 = y1
 
         # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
-        mean, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim] + (-1,)))
-        mean = mean.reshape(mean.shape[:-1] + y2.shape[-self.event_dim:])
-        log_scale = log_scale.reshape(log_scale.shape[:-1] + y2.shape[-self.event_dim:])
+        mean, log_scale = self.nn(x1.reshape(x1.shape[:self.dim] + (-1,)))
+        mean = mean.reshape(mean.shape[:-1] + y2.shape[self.dim:])
+        log_scale = log_scale.reshape(log_scale.shape[:-1] + y2.shape[self.dim:])
 
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
@@ -156,8 +162,8 @@ class AffineCoupling(TransformModule):
             log_scale = self._cached_log_scale
         else:
             x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
-            _, log_scale = self.nn(x1.reshape(x1.shape[:-self.event_dim] + (-1,)))
-            log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[-self.event_dim:])
+            _, log_scale = self.nn(x1.reshape(x1.shape[:self.dim] + (-1,)))
+            log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[self.dim:])
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         return _sum_rightmost(log_scale, self.event_dim)
 
@@ -240,7 +246,6 @@ class ConditionalAffineCoupling(ConditionalTransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, split_dim, hypernet, **kwargs):
         super().__init__()

@@ -313,7 +313,7 @@ def gamma_and_mvn_to_gamma_gaussian(gamma, mvn):
 
         p(x | s) ~ Gaussian(s * info_vec, s * precision)
         p(s) ~ Gamma(alpha, beta)
-        p(x, s) ~ GammaGaussian(info_vec, precison, alpha, beta)
+        p(x, s) ~ GammaGaussian(info_vec, precision, alpha, beta)
 
     :param ~pyro.distributions.Gamma gamma: the mixing distribution
     :param ~pyro.distributions.MultivariateNormal mvn: the conditional distribution

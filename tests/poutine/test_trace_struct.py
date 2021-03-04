@@ -8,7 +8,6 @@ import pytest
 from pyro.poutine import Trace
 from tests.common import assert_equal
 
-
 EDGE_SETS = [
     #   1
     #  / \

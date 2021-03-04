@@ -13,12 +13,6 @@ from pyro.poutine.plate_messenger import block_plate
 from .reparam import Reparam
 
 
-# TODO Replace with .with_cache() once the following is released:
-# https://github.com/probtorch/pytorch/pull/153
-def _with_cache(t):
-    return t.with_cache() if hasattr(t, "with_cache") else t
-
-
 class UnitJacobianReparam(Reparam):
     """
     Reparameterizer for :class:`~torch.distributions.transforms.Transform`
@@ -27,10 +21,13 @@ class UnitJacobianReparam(Reparam):
     :param transform: A transform whose Jacobian has determinant 1.
     :type transform: ~torch.distributions.transforms.Transform
     :param str suffix: A suffix to append to the transformed site.
+    :param bool experimental_allow_batch: EXPERIMENTAL allow coupling across a
+        batch dimension. The targeted batch dimension and all batch dimensions
+        to the right will be converted to event dimensions. Defaults to False.
     """
     def __init__(self, transform, suffix="transformed", *,
                  experimental_allow_batch=False):
-        self.transform = _with_cache(transform)
+        self.transform = transform.with_cache()
         self.suffix = suffix
         self.experimental_allow_batch = experimental_allow_batch
 
@@ -41,12 +38,16 @@ class UnitJacobianReparam(Reparam):
         with ExitStack() as stack:
             shift = max(0, transform.event_dim - event_dim)
             if shift:
-                assert self.experimental_allow_batch, (
-                    "Cannot transform along batch dimension; "
-                    "try converting a batch dimension to an event dimension")
+                if not self.experimental_allow_batch:
+                    raise ValueError("Cannot transform along batch dimension; try either"
+                                     "converting a batch dimension to an event dimension, or "
+                                     "setting experimental_allow_batch=True.")
 
                 # Reshape and mute plates using block_plate.
-                from pyro.contrib.forecast.util import reshape_batch, reshape_transform_batch
+                from pyro.contrib.forecast.util import (
+                    reshape_batch,
+                    reshape_transform_batch,
+                )
                 old_shape = fn.batch_shape
                 new_shape = old_shape[:-shift] + (1,) * shift + old_shape[-shift:]
                 fn = reshape_batch(fn, new_shape).to_event(shift)
@@ -54,10 +55,10 @@ class UnitJacobianReparam(Reparam):
                                                     old_shape + fn.event_shape,
                                                     new_shape + fn.event_shape)
                 for dim in range(-shift, 0):
-                    stack.enter_context(block_plate(dim=dim))
+                    stack.enter_context(block_plate(dim=dim, strict=False))
 
             # Draw noise from the base distribution.
-            transform = ComposeTransform([_with_cache(biject_to(fn.support).inv),
+            transform = ComposeTransform([biject_to(fn.support).inv.with_cache(),
                                           self.transform])
             x_trans = pyro.sample("{}_{}".format(name, self.suffix),
                                   dist.TransformedDistribution(fn, transform))

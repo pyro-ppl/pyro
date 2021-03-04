@@ -95,6 +95,15 @@ Stable Distributions
     :special-members: __call__
     :show-inheritance:
 
+Projected Normal Distributions
+------------------------------
+.. automodule:: pyro.infer.reparam.projected_normal
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Hidden Markov Models
 --------------------
 .. automodule:: pyro.infer.reparam.hmm

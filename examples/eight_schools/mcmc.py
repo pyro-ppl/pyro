@@ -4,16 +4,15 @@
 import argparse
 import logging
 
+import data
 import torch
 
-import data
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import MCMC, NUTS
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-pyro.enable_validation(__debug__)
 pyro.set_rng_seed(0)
 
 
@@ -42,7 +41,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description='Eight Schools MCMC')
     parser.add_argument('--num-samples', type=int, default=1000,
                         help='number of MCMC samples (default: 1000)')

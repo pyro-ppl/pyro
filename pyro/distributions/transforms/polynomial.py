@@ -5,11 +5,12 @@ import math
 
 import torch
 import torch.nn as nn
-from torch.distributions import constraints
 
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN
+
+from .. import constraints
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
@@ -70,7 +71,6 @@ class Polynomial(TransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
     autoregressive = True
 
     def __init__(self, autoregressive_nn, input_dim, count_degree, count_sum):

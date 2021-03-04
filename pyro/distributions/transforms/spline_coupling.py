@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms.spline import ConditionalSpline, Spline
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
+
+from .. import constraints
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
+from .spline import ConditionalSpline, Spline
 
 
 @copy_docs_from(TransformModule)
@@ -76,7 +77,6 @@ class SplineCoupling(TransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, input_dim, split_dim, hypernet, count_bins=8, bound=3., order='linear', identity=False):
         super(SplineCoupling, self).__init__(cache_size=1)

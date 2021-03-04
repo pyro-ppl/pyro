@@ -53,7 +53,6 @@ def local_guide(latent, k):
 
 def main(args):
     pyro.set_rng_seed(0)
-    pyro.enable_validation(__debug__)
 
     optim = Adam({"lr": 0.1})
     elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
@@ -75,7 +74,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=200, type=int)
     parser.add_argument('--jit', action='store_true')

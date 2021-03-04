@@ -13,7 +13,11 @@ import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC
-from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator, initialize_model
+from pyro.infer.mcmc.util import (
+    TraceEinsumEvaluator,
+    TraceTreeEvaluator,
+    initialize_model,
+)
 from pyro.infer.reparam import LatentStableReparam
 from pyro.poutine.subsample_messenger import _Subsample
 from tests.common import assert_close, assert_equal, xfail_param
@@ -412,3 +416,28 @@ def test_potential_fn_initial_params(Kernel):
 
     mcmc.run()
     mcmc.get_samples()['points']
+
+
+@pytest.mark.parametrize("mask", [
+    torch.tensor(True),
+    torch.tensor(False),
+    torch.tensor([True]),
+    torch.tensor([False]),
+    torch.tensor([False, True, False]),
+])
+@pytest.mark.parametrize("Kernel, options", [
+    (HMC, {"adapt_step_size": True, "num_steps": 3}),
+    (NUTS, {"adapt_step_size": True, "max_tree_depth": 3}),
+])
+def test_obs_mask_ok(Kernel, options, mask):
+    data = torch.tensor([7., 7., 7.])
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with pyro.plate("plate", len(data)):
+            y = pyro.sample("y", dist.Normal(x, 1.),
+                            obs=data, obs_mask=mask)
+            assert ((y == data) == mask).all()
+
+    mcmc_kernel = Kernel(model, max_plate_nesting=0, **options)
+    assert_ok(mcmc_kernel)

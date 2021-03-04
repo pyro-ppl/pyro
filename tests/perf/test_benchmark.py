@@ -16,8 +16,8 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.infer import SVI, Trace_ELBO, TraceGraph_ELBO
-from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 
 Model = namedtuple('TestModel', ['model', 'model_args', 'model_id'])

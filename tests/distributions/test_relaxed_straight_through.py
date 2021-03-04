@@ -8,8 +8,13 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.optim as optim
-from pyro.distributions import (OneHotCategorical, RelaxedBernoulli, RelaxedBernoulliStraightThrough,
-                                RelaxedOneHotCategorical, RelaxedOneHotCategoricalStraightThrough)
+from pyro.distributions import (
+    OneHotCategorical,
+    RelaxedBernoulli,
+    RelaxedBernoulliStraightThrough,
+    RelaxedOneHotCategorical,
+    RelaxedOneHotCategoricalStraightThrough,
+)
 from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 

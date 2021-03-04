@@ -12,7 +12,11 @@ from pyro import poutine
 from pyro.distributions.torch_distribution import MaskedDistribution
 from pyro.infer import Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
-from pyro.infer.reparam import LatentStableReparam, StableReparam, SymmetricStableReparam
+from pyro.infer.reparam import (
+    LatentStableReparam,
+    StableReparam,
+    SymmetricStableReparam,
+)
 from tests.common import assert_close
 
 

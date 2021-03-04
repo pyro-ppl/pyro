@@ -1,8 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import reduce
 import warnings
+from functools import reduce
 
 import torch
 
@@ -50,6 +50,7 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
 
 def _predictive(model, posterior_samples, num_samples, return_sites=(),
                 return_trace=False, parallel=False, model_args=(), model_kwargs={}):
+    model = torch.no_grad()(poutine.mask(model, mask=False))
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
     vectorize = pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1)
     model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*model_args, **model_kwargs))

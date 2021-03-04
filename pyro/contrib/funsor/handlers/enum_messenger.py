@@ -9,18 +9,17 @@ import functools
 import math
 from collections import OrderedDict
 
-import torch
 import funsor
+import torch
 
 import pyro.poutine.runtime
 import pyro.poutine.util
-from pyro.poutine.escape_messenger import EscapeMessenger
-from pyro.poutine.subsample_messenger import _Subsample
-
-from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
+from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.replay_messenger import ReplayMessenger
 from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
+from pyro.poutine.escape_messenger import EscapeMessenger
+from pyro.poutine.subsample_messenger import _Subsample
 
 funsor.set_backend("torch")
 
@@ -140,8 +139,8 @@ def enumerate_site(dist, msg):
 
 class EnumMessenger(NamedMessenger):
     """
-    This version of EnumMessenger uses to_data to allocate a fresh enumeration dim
-    for each discrete sample site.
+    This version of :class:`~EnumMessenger` uses :func:`~pyro.contrib.funsor.to_data`
+    to allocate a fresh enumeration dim for each discrete sample site.
     """
     def _pyro_sample(self, msg):
         if msg["done"] or msg["is_observed"] or \

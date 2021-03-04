@@ -3,12 +3,12 @@
 
 import math
 
+import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-import pytest
 from pyro.infer.importance import psis_diagnostic
 from pyro.infer.util import MultiFrameTensor
 from tests.common import assert_equal

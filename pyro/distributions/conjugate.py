@@ -4,12 +4,14 @@
 import numbers
 
 import torch
-from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.torch import Beta, Binomial, Dirichlet, Gamma, Multinomial, Poisson
-from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.ops.special import log_beta, log_binomial
+
+from . import constraints
+from .torch import Beta, Binomial, Dirichlet, Gamma, Multinomial, Poisson
+from .torch_distribution import TorchDistribution
+from .util import broadcast_shape
 
 
 def _log_beta_1(alpha, value, is_sparse):
@@ -124,24 +126,33 @@ class DirichletMultinomial(TorchDistribution):
     :param bool is_sparse: Whether to assume value is mostly zero when computing
         :meth:`log_prob`, which can speed up computation when data is sparse.
     """
-    arg_constraints = {'concentration': constraints.positive, 'total_count': constraints.nonnegative_integer}
+    arg_constraints = {'concentration': constraints.independent(constraints.positive, 1),
+                       'total_count': constraints.nonnegative_integer}
     support = Multinomial.support
 
     def __init__(self, concentration, total_count=1, is_sparse=False, validate_args=None):
+        batch_shape = concentration.shape[:-1]
+        event_shape = concentration.shape[-1:]
         if isinstance(total_count, numbers.Number):
-            total_count = torch.tensor(total_count, dtype=concentration.dtype, device=concentration.device)
-        total_count_1 = total_count.unsqueeze(-1)
-        concentration, total_count = torch.broadcast_tensors(concentration, total_count_1)
-        total_count = total_count_1.squeeze(-1)
+            total_count = concentration.new_tensor(total_count)
+        else:
+            batch_shape = broadcast_shape(batch_shape, total_count.shape)
+            concentration = concentration.expand(batch_shape + (-1,))
+            total_count = total_count.expand(batch_shape)
         self._dirichlet = Dirichlet(concentration)
         self.total_count = total_count
         self.is_sparse = is_sparse
-        super().__init__(
-            self._dirichlet._batch_shape, self._dirichlet.event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @property
     def concentration(self):
         return self._dirichlet.concentration
+
+    @staticmethod
+    def infer_shapes(concentration, total_count=()):
+        batch_shape = broadcast_shape(concentration[:-1], total_count)
+        event_shape = concentration[-1:]
+        return batch_shape, event_shape
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(DirichletMultinomial, _instance)

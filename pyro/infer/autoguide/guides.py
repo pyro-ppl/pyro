@@ -9,7 +9,7 @@ For example to generate a mean field Gaussian guide::
     def model():
         ...
 
-    guide = AutoDiagonalNormal(model)  # a mean field guide
+    guide = AutoNormal(model)  # a mean field guide
     svi = SVI(model, guide, Adam({'lr': 1e-3}), Trace_ELBO())
 
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
@@ -23,20 +23,26 @@ from contextlib import ExitStack  # python 3
 
 import torch
 from torch import nn
-from torch.distributions import biject_to, constraints
+from torch.distributions import biject_to
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions import constraints
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_feasible, init_to_median
-from pyro.infer.autoguide.utils import _product
+from pyro.infer.autoguide.initialization import (
+    InitMessenger,
+    init_to_feasible,
+    init_to_median,
+)
 from pyro.infer.enum import config_enumerate
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
+
+from .utils import _product, helpful_support_errors
 
 
 def _deep_setattr(obj, key, val):
@@ -355,7 +361,8 @@ class AutoDelta(AutoGuide):
                     value = periodic_repeat(value, full_size, dim).contiguous()
 
             value = PyroParam(value, site["fn"].support, event_dim)
-            _deep_setattr(self, name, value)
+            with helpful_support_errors(site):
+                _deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
         """
@@ -383,6 +390,7 @@ class AutoDelta(AutoGuide):
                                                             event_dim=site["fn"].event_dim))
         return result
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -390,7 +398,8 @@ class AutoDelta(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        return self(*args, **kwargs)
+        result = self(*args, **kwargs)
+        return {k: v.detach() for k, v in result.items()}
 
 
 class AutoNormal(AutoGuide):
@@ -423,6 +432,11 @@ class AutoNormal(AutoGuide):
         or iterable of plates. Plates not returned will be created
         automatically as usual. This is useful for data subsampling.
     """
+
+    # TODO consider switching to constraints.softplus_positive
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_constraint = constraints.positive
+
     def __init__(self, model, *,
                  init_loc_fn=init_to_feasible,
                  init_scale=0.1,
@@ -447,7 +461,8 @@ class AutoNormal(AutoGuide):
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect unconstrained event_dims, which may differ from constrained event_dims.
-            init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
+            with helpful_support_errors(site):
+                init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
             event_dim = site["fn"].event_dim + init_loc.dim() - site["value"].dim()
             self._event_dims[name] = event_dim
 
@@ -463,7 +478,8 @@ class AutoNormal(AutoGuide):
             init_scale = torch.full_like(init_loc, self._init_scale)
 
             _deep_setattr(self.locs, name, PyroParam(init_loc, constraints.real, event_dim))
-            _deep_setattr(self.scales, name, PyroParam(init_scale, constraints.positive, event_dim))
+            _deep_setattr(self.scales, name,
+                          PyroParam(init_scale, self.scale_constraint, event_dim))
 
     def _get_loc_and_scale(self, name):
         site_loc = _deep_getattr(self.locs, name)
@@ -504,15 +520,28 @@ class AutoNormal(AutoGuide):
                 )
 
                 value = transform(unconstrained_latent)
-                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_latent)
-                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-                delta_dist = dist.Delta(value, log_density=log_density,
-                                        event_dim=site["fn"].event_dim)
+                if poutine.get_mask() is False:
+                    log_density = 0.0
+                else:
+                    log_density = transform.inv.log_abs_det_jacobian(
+                        value,
+                        unconstrained_latent,
+                    )
+                    log_density = sum_rightmost(
+                        log_density,
+                        log_density.dim() - value.dim() + site["fn"].event_dim,
+                    )
+                delta_dist = dist.Delta(
+                    value,
+                    log_density=log_density,
+                    event_dim=site["fn"].event_dim,
+                )
 
                 result[name] = pyro.sample(name, delta_dist)
 
         return result
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -530,6 +559,7 @@ class AutoNormal(AutoGuide):
 
         return medians
 
+    @torch.no_grad()
     def quantiles(self, quantiles, *args, **kwargs):
         """
         Returns posterior quantiles each latent variable. Example::
@@ -591,7 +621,8 @@ class AutoContinuous(AutoGuide):
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect the shapes of unconstrained values.
             # These may differ from the shapes of constrained values.
-            self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
+            with helpful_support_errors(site):
+                self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
 
             # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
@@ -701,9 +732,22 @@ class AutoContinuous(AutoGuide):
             name = site["name"]
             transform = biject_to(site["fn"].support)
             value = transform(unconstrained_value)
-            log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
-            log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-            delta_dist = dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim)
+            if poutine.get_mask() is False:
+                log_density = 0.0
+            else:
+                log_density = transform.inv.log_abs_det_jacobian(
+                    value,
+                    unconstrained_value,
+                )
+                log_density = sum_rightmost(
+                    log_density,
+                    log_density.dim() - value.dim() + site["fn"].event_dim,
+                )
+            delta_dist = dist.Delta(
+                value,
+                log_density=log_density,
+                event_dim=site["fn"].event_dim,
+            )
 
             with ExitStack() as stack:
                 for frame in self._cond_indep_stacks[name]:
@@ -719,6 +763,7 @@ class AutoContinuous(AutoGuide):
         """
         raise NotImplementedError
 
+    @torch.no_grad()
     def median(self, *args, **kwargs):
         """
         Returns the posterior median value of each latent variable.
@@ -727,9 +772,11 @@ class AutoContinuous(AutoGuide):
         :rtype: dict
         """
         loc, _ = self._loc_scale(*args, **kwargs)
+        loc = loc.detach()
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self._unpack_latent(loc)}
 
+    @torch.no_grad()
     def quantiles(self, quantiles, *args, **kwargs):
         """
         Returns posterior quantiles each latent variable. Example::
@@ -773,6 +820,10 @@ class AutoMultivariateNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
+    # TODO consider switching to constraints.softplus_lower_cholesky
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_tril_constraint = constraints.lower_cholesky
+
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -784,7 +835,7 @@ class AutoMultivariateNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         self.scale_tril = PyroParam(eye_like(self.loc, self.latent_dim) * self._init_scale,
-                                    constraints.lower_cholesky)
+                                    self.scale_tril_constraint)
 
     def get_base_dist(self):
         return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
@@ -823,6 +874,10 @@ class AutoDiagonalNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
+    # TODO consider switching to constraints.softplus_positive
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_constraint = constraints.positive
+
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -834,7 +889,7 @@ class AutoDiagonalNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         self.scale = PyroParam(self.loc.new_full((self.latent_dim,), self._init_scale),
-                               constraints.positive)
+                               self.scale_constraint)
 
     def get_base_dist(self):
         return dist.Normal(torch.zeros_like(self.loc), torch.zeros_like(self.loc)).to_event(1)
@@ -878,6 +933,10 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         deviation of each (unconstrained transformed) latent variable.
     """
 
+    # TODO consider switching to constraints.softplus_positive
+    # See https://github.com/pyro-ppl/numpyro/issues/855
+    scale_constraint = constraints.positive
+
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1, rank=None):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -895,7 +954,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
             self.rank = int(round(self.latent_dim ** 0.5))
         self.scale = PyroParam(
             self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
-            constraint=constraints.positive)
+            constraint=self.scale_constraint)
         self.cov_factor = nn.Parameter(
             self.loc.new_empty(self.latent_dim, self.rank).normal_(0, 1 / self.rank ** 0.5))
 

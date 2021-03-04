@@ -13,8 +13,18 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
-                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate)
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    JitTraceGraph_ELBO,
+    JitTraceMeanField_ELBO,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+    config_enumerate,
+)
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
 
@@ -241,6 +251,7 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
+@pytest.mark.xfail(reason="missing pattern")
 @pytest.mark.stage("funsor")
 def test_collapse_beta_binomial():
     pytest.importorskip("funsor")

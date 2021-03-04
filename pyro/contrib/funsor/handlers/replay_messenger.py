@@ -1,14 +1,14 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 from pyro.contrib.funsor.handlers.primitives import to_data
+from pyro.poutine.replay_messenger import ReplayMessenger as OrigReplayMessenger
 
 
 class ReplayMessenger(OrigReplayMessenger):
     """
-    This version of ReplayMessenger is almost identical to the original version,
-    except that it calls to_data on the replayed funsor values.
+    This version of :class:`~ReplayMessenger` is almost identical to the original version,
+    except that it calls :func:`~pyro.contrib.funsor.to_data` on the replayed funsor values.
     This may result in different unpacked shapes, but should produce correct allocations.
     """
     def _pyro_sample(self, msg):

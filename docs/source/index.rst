@@ -22,6 +22,7 @@ Pyro Documentation
    optimization
    poutine
    ops
+   testing
 
 .. toctree::
    :glob:
