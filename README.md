@@ -60,14 +60,6 @@ Make sure that the models come from the same release version of the [Pyro source
 ### Installing Pyro dev branch
 
 For recent features you can install Pyro from source.
-Pyro's dev branch currently requires PyTorch [test builds](https://pytorch.org/get-started/locally/).
-
-**Install PyTorch test:**
-
-```sh
-pip install numpy
-pip install torch==1.8.0 torchvision==0.9.0 -f https://download.pytorch.org/whl/test/cpu/torch_test.html
-```
 
 **Install Pyro using pip:**
 
