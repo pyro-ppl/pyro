@@ -44,7 +44,10 @@ class UnitJacobianReparam(Reparam):
                                      "setting experimental_allow_batch=True.")
 
                 # Reshape and mute plates using block_plate.
-                from pyro.contrib.forecast.util import reshape_batch, reshape_transform_batch
+                from pyro.contrib.forecast.util import (
+                    reshape_batch,
+                    reshape_transform_batch,
+                )
                 old_shape = fn.batch_shape
                 new_shape = old_shape[:-shift] + (1,) * shift + old_shape[-shift:]
                 fn = reshape_batch(fn, new_shape).to_event(shift)

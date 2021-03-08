@@ -5,16 +5,23 @@ import argparse
 
 import torch
 import torch.nn as nn
+from utils.custom_mlp import MLP, Exp
+from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
+from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log
-from pyro.infer import SVI, JitTrace_ELBO, JitTraceEnum_ELBO, Trace_ELBO, TraceEnum_ELBO, config_enumerate
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    config_enumerate,
+)
 from pyro.optim import Adam
-from utils.custom_mlp import MLP, Exp
-from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
-from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 
 
 class SSVAE(nn.Module):
@@ -386,7 +393,7 @@ EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -n 2 --aux-loss 
               "-sup 3000 -zd 50 -hl 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 

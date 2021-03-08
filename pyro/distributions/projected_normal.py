@@ -5,9 +5,10 @@ import math
 
 import torch
 
+from pyro.ops.tensor_utils import safe_normalize
+
 from . import constraints
 from .torch_distribution import TorchDistribution
-from pyro.ops.tensor_utils import safe_normalize
 
 
 class ProjectedNormal(TorchDistribution):
@@ -46,6 +47,12 @@ class ProjectedNormal(TorchDistribution):
         batch_shape = concentration.shape[:-1]
         event_shape = concentration.shape[-1:]
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
+
+    @staticmethod
+    def infer_shapes(concentration):
+        batch_shape = concentration[:-1]
+        event_shape = concentration[-1:]
+        return batch_shape, event_shape
 
     def expand(self, batch_shape, _instance=None):
         batch_shape = torch.Size(batch_shape)

@@ -1,34 +1,19 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
 from torch.distributions.constraints import *  # noqa F403
+
+# isort: split
+
+import torch
 from torch.distributions.constraints import Constraint
 from torch.distributions.constraints import __all__ as torch_constraints
-from torch.distributions.constraints import lower_cholesky, positive, positive_definite
-
-
-# TODO move this upstream to torch.distributions
-class IndependentConstraint(Constraint):
-    """
-    Wraps a constraint by aggregating over ``reinterpreted_batch_ndims``-many
-    dims in :meth:`check`, so that an event is valid only if all its
-    independent entries are valid.
-
-    :param torch.distributions.constraints.Constraint base_constraint: A base
-        constraint whose entries are incidentally independent.
-    :param int reinterpreted_batch_ndims: The number of extra event dimensions that will
-        be considered dependent.
-    """
-    def __init__(self, base_constraint, reinterpreted_batch_ndims):
-        self.base_constraint = base_constraint
-        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
-
-    def check(self, value):
-        result = self.base_constraint.check(value)
-        result = result.reshape(result.shape[:result.dim() - self.reinterpreted_batch_ndims] + (-1,))
-        result = result.min(-1)[0]
-        return result
+from torch.distributions.constraints import (
+    independent,
+    lower_cholesky,
+    positive,
+    positive_definite,
+)
 
 
 # TODO move this upstream to torch.distributions
@@ -36,6 +21,8 @@ class _Integer(Constraint):
     """
     Constrain to integers.
     """
+    is_discrete = True
+
     def check(self, value):
         return value % 1 == 0
 
@@ -47,6 +34,7 @@ class _Sphere(Constraint):
     """
     Constrain to the Euclidean sphere of any dimension.
     """
+    event_dim = 1
     reltol = 10.  # Relative to finfo.eps.
 
     def check(self, value):
@@ -59,22 +47,11 @@ class _Sphere(Constraint):
         return self.__class__.__name__[1:]
 
 
-class _CorrCholesky(Constraint):
-    """
-    Constrains to lower-triangular square matrices with positive diagonals and
-    Euclidean norm of each row is 1, such that `torch.mm(omega, omega.t())` will
-    have unit diagonal.
-    """
-
-    def check(self, value):
-        unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-4).min(-1)[0]
-        return lower_cholesky.check(value) & unit_norm_row
-
-
 class _CorrMatrix(Constraint):
     """
     Constrains to a correlation matrix.
     """
+    event_dim = 2
 
     def check(self, value):
         # check for diagonal equal to 1
@@ -88,6 +65,7 @@ class _OrderedVector(Constraint):
     Constrains to a real-valued tensor where the elements are monotonically
     increasing along the `event_shape` dimension.
     """
+    event_dim = 1
 
     def check(self, value):
         if value.ndim == 0:
@@ -108,22 +86,32 @@ class _PositiveOrderedVector(Constraint):
         return ordered_vector.check(value) & independent(positive, 1).check(value)
 
 
-corr_cholesky_constraint = _CorrCholesky()
+class _SoftplusPositive(type(positive)):
+    def __init__(self):
+        super().__init__(lower_bound=0.0)
+
+
+class _SoftplusLowerCholesky(type(lower_cholesky)):
+    pass
+
+
 corr_matrix = _CorrMatrix()
-independent = IndependentConstraint
 integer = _Integer()
 ordered_vector = _OrderedVector()
 positive_ordered_vector = _PositiveOrderedVector()
 sphere = _Sphere()
+softplus_positive = _SoftplusPositive()
+softplus_lower_cholesky = _SoftplusLowerCholesky()
+corr_cholesky_constraint = corr_cholesky  # noqa: F405 DEPRECATED
 
 __all__ = [
-    'IndependentConstraint',
     'corr_cholesky_constraint',
     'corr_matrix',
-    'independent',
     'integer',
     'ordered_vector',
     'positive_ordered_vector',
+    'softplus_lower_cholesky',
+    'softplus_positive',
     'sphere',
 ]
 

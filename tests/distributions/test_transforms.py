@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import operator
+from functools import partial, reduce
 from unittest import TestCase
 
 import pytest
@@ -8,10 +10,8 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
+from pyro.distributions import constraints
 from tests.common import assert_close
-
-from functools import partial, reduce
-import operator
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -20,26 +20,36 @@ class Flatten(dist.TransformModule):
     """
     Used to handle transforms with `event_dim > 1` until we have a Reshape transform in PyTorch
     """
-    event_dim = 1
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
 
     def __init__(self, transform, input_shape):
         super().__init__(cache_size=1)
-        assert(transform.event_dim == len(input_shape))
+        assert transform.domain.event_dim == len(input_shape)
+        output_shape = transform.forward_shape(input_shape)
+        assert len(output_shape) >= transform.codomain.event_dim
+        output_shape = output_shape[len(output_shape) - transform.codomain.event_dim:]
 
         self.transform = transform
         self.input_shape = input_shape
-
-    def _unflatten(self, x):
-        return x.view(x.shape[:-1] + self.input_shape)
+        self.output_shape = output_shape
 
     def _call(self, x):
-        return self.transform._call(self._unflatten(x)).view_as(x)
+        x = x.reshape(x.shape[:-1] + self.input_shape)
+        y = self.transform._call(x)
+        y = y.reshape(y.shape[:y.dim() - len(self.output_shape)] + (-1,))
+        return y
 
-    def _inverse(self, x):
-        return self.transform._inverse(self._unflatten(x)).view_as(x)
+    def _inverse(self, y):
+        y = y.reshape(y.shape[:-1] + self.output_shape)
+        x = self.transform._inverse(y)
+        x = x.reshape(x.shape[:x.dim() - len(self.input_shape)] + (-1,))
+        return x
 
     def log_abs_det_jacobian(self, x, y):
-        return self.transform.log_abs_det_jacobian(self._unflatten(x), self._unflatten(y))
+        x = x.reshape(x.shape[:-1] + self.input_shape)
+        y = y.reshape(y.shape[:-1] + self.output_shape)
+        return self.transform.log_abs_det_jacobian(x, y)
 
     def parameters(self):
         return self.transform.parameters()
@@ -122,6 +132,15 @@ class TransformTests(TestCase):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
         sample = dist.TransformedDistribution(base_dist, [transform]).sample()
         assert sample.shape == base_shape
+
+        batch_shape = base_shape[:len(base_shape) - transform.domain.event_dim]
+        input_event_shape = base_shape[len(base_shape) - transform.domain.event_dim:]
+        output_event_shape = base_shape[len(base_shape) - transform.codomain.event_dim:]
+        output_shape = batch_shape + output_event_shape
+        assert transform.forward_shape(input_event_shape) == output_event_shape
+        assert transform.forward_shape(base_shape) == output_shape
+        assert transform.inverse_shape(output_event_shape) == input_event_shape
+        assert transform.inverse_shape(output_shape) == base_shape
 
     def _test_autodiff(self, input_dim, transform, inverse=False):
         """
@@ -326,13 +345,18 @@ class TransformTests(TestCase):
         self._test(T.sylvester, inverse=False)
 
     def test_normalize_transform(self):
-        for p in [1., 2.]:
-            self._test(lambda p: T.Normalize(p=p), autodiff=False)
+        self._test(lambda p: T.Normalize(p=p), autodiff=False)
+
+    def test_softplus(self):
+        self._test(lambda _: T.SoftplusTransform(), autodiff=False)
 
 
 @pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
 @pytest.mark.parametrize('dim', [2, 3, 5])
-@pytest.mark.parametrize('transform', [T.CholeskyTransform(), T.CorrMatrixCholeskyTransform()])
+@pytest.mark.parametrize('transform', [
+    T.CholeskyTransform(),
+    T.CorrMatrixCholeskyTransform(),
+], ids=lambda t: type(t).__name__)
 def test_cholesky_transform(batch_shape, dim, transform):
     arange = torch.arange(dim)
     domain = transform.domain
@@ -366,3 +390,21 @@ def test_cholesky_transform(batch_shape, dim, transform):
     assert log_det.shape == batch_shape
     assert_close(y, x_mat.cholesky())
     assert_close(transform.inv(y), x_mat)
+
+
+@pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
+@pytest.mark.parametrize('dim', [2, 3, 5])
+@pytest.mark.parametrize('transform', [
+    T.LowerCholeskyTransform(),
+    T.SoftplusLowerCholeskyTransform(),
+], ids=lambda t: type(t).__name__)
+def test_lower_cholesky_transform(transform, batch_shape, dim):
+    shape = batch_shape + (dim, dim)
+    x = torch.randn(shape)
+    y = transform(x)
+    assert y.shape == shape
+    x2 = transform.inv(y)
+    assert x2.shape == shape
+    y2 = transform(x2)
+    assert y2.shape == shape
+    assert_close(y, y2)

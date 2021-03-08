@@ -6,11 +6,9 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-
-from pyro.infer import SVGD, RBFSteinKernel, IMQSteinKernel
-from pyro.optim import Adam
+from pyro.infer import SVGD, IMQSteinKernel, RBFSteinKernel
 from pyro.infer.autoguide.utils import _product
-
+from pyro.optim import Adam
 from tests.common import assert_equal
 
 

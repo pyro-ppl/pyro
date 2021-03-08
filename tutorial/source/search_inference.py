@@ -7,18 +7,17 @@ Inference algorithms and utilities used in the RSA example models.
 Adapted from: http://dippl.org/chapters/03-enumeration.html
 """
 
+import collections
+import functools
+import queue
+
 import torch
 
 import pyro.distributions as dist
 import pyro.poutine as poutine
-
 from pyro.distributions.util import logsumexp
 from pyro.infer.abstract_infer import TracePosterior
 from pyro.poutine.runtime import NonlocalExit
-
-import queue
-import collections
-import functools
 
 
 def memoize(fn=None, **kwargs):

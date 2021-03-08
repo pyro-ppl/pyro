@@ -6,10 +6,26 @@ from collections import namedtuple
 import pytest
 import torch
 
-from pyro.contrib.gp.kernels import (RBF, Brownian, Constant, Coregionalize, Cosine, Exponent,
-                                     Exponential, Linear, Matern32, Matern52, Periodic,
-                                     Polynomial, Product, RationalQuadratic, Sum,
-                                     VerticalScaling, Warping, WhiteNoise)
+from pyro.contrib.gp.kernels import (
+    RBF,
+    Brownian,
+    Constant,
+    Coregionalize,
+    Cosine,
+    Exponent,
+    Exponential,
+    Linear,
+    Matern32,
+    Matern52,
+    Periodic,
+    Polynomial,
+    Product,
+    RationalQuadratic,
+    Sum,
+    VerticalScaling,
+    Warping,
+    WhiteNoise,
+)
 from tests.common import assert_equal
 
 T = namedtuple("TestGPKernel", ["kernel", "X", "Z", "K_sum"])

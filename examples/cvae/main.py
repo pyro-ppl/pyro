@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
-import pandas as pd
-import pyro
-import torch
+
 import baseline
 import cvae
-from util import get_data, visualize, generate_table
+import pandas as pd
+import torch
+from util import generate_table, get_data, visualize
+
+import pyro
 
 
 def main(args):
@@ -82,7 +84,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-nq', '--num-quadrant-inputs', metavar='N', type=int,

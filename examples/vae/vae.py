@@ -7,14 +7,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import visdom
+from utils.mnist_cached import MNISTCached as MNIST
+from utils.mnist_cached import setup_data_loaders
+from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
-from utils.mnist_cached import MNISTCached as MNIST
-from utils.mnist_cached import setup_data_loaders
-from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 
 
 # define the PyTorch module that parameterizes the
@@ -204,7 +204,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')

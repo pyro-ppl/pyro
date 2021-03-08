@@ -5,11 +5,11 @@ import argparse
 import logging
 
 import torch
+from data import J, sigma, y
 from torch.distributions import constraints, transforms
 
 import pyro
 import pyro.distributions as dist
-from data import J, sigma, y
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 
@@ -77,7 +77,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description='Eight Schools SVI')
     parser.add_argument('--lr', type=float, default=0.01,
                         help='learning rate (default: 0.01)')

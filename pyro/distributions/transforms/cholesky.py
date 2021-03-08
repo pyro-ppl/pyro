@@ -4,10 +4,9 @@
 import math
 
 import torch
-from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
-from pyro.distributions.constraints import corr_cholesky_constraint, corr_matrix
+from .. import constraints
 
 
 def _vector_to_l_cholesky(z):
@@ -44,10 +43,8 @@ class CorrLCholeskyTransform(Transform):
 
     """
     domain = constraints.real_vector
-    codomain = corr_cholesky_constraint
+    codomain = constraints.corr_cholesky
     bijective = True
-    sign = +1
-    event_dim = 1
 
     def __eq__(self, other):
         return isinstance(other, CorrLCholeskyTransform)
@@ -87,8 +84,6 @@ class CholeskyTransform(Transform):
     positive definite matrix.
     """
     bijective = True
-    sign = +1
-    event_dim = 2
     domain = constraints.positive_definite
     codomain = constraints.lower_cholesky
 
@@ -114,11 +109,9 @@ class CorrMatrixCholeskyTransform(CholeskyTransform):
     correlation matrix.
     """
     bijective = True
-    sign = +1
-    event_dim = 2
-    domain = corr_matrix
+    domain = constraints.corr_matrix
     # TODO: change corr_cholesky_constraint to corr_cholesky when the latter is availabler
-    codomain = corr_cholesky_constraint
+    codomain = constraints.corr_cholesky_constraint
 
     def __eq__(self, other):
         return isinstance(other, CorrMatrixCholeskyTransform)

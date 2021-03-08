@@ -2,13 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
-
 from functools import reduce
 
 import pyro.distributions as dist
 import pyro.ops.einsum.torch_log
 from pyro.ops import packed
-from pyro.ops.einsum.adjoint import Backward, einsum_backward_sample, transpose, unflatten
+from pyro.ops.einsum.adjoint import (
+    Backward,
+    einsum_backward_sample,
+    transpose,
+    unflatten,
+)
 from pyro.ops.einsum.util import Tensordot
 from pyro.util import jit_iter
 

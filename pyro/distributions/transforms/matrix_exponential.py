@@ -8,10 +8,11 @@ import torch
 import torch.nn as nn
 from torch.distributions import Transform, constraints
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
+
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
 
 
 @copy_docs_from(Transform)
@@ -19,7 +20,6 @@ class ConditionedMatrixExponential(Transform):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, weights=None, iterations=8, normalization='none', bound=None):
         super().__init__(cache_size=1)
@@ -147,10 +147,9 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, input_dim, iterations=8, normalization='none', bound=None):
         super().__init__(iterations=iterations, normalization=normalization, bound=bound)
@@ -230,7 +229,6 @@ class ConditionalMatrixExponential(ConditionalTransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, input_dim, nn, iterations=8, normalization='none', bound=None):
         super().__init__()

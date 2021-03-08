@@ -8,9 +8,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import scalar_like
 from pyro.distributions.testing.fakes import NonreparameterizedNormal
-
+from pyro.distributions.util import scalar_like
 from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel

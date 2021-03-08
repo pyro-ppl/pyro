@@ -17,7 +17,6 @@ class Normalize(Transform):
     """
     domain = constraints.real_vector
     codomain = constraints.sphere
-    event_dim = 1
     bijective = False
 
     def __init__(self, p=2, cache_size=0):

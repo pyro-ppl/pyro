@@ -4,13 +4,28 @@
 import pyro.poutine as poutine
 from pyro.logger import log
 from pyro.poutine import condition, do, markov
-from pyro.primitives import (barrier, clear_param_store, deterministic, enable_validation, factor, get_param_store,
-                             iarange, irange, module, param, plate, plate_stack, random_module, sample, subsample,
-                             validation_enabled)
+from pyro.primitives import (
+    barrier,
+    clear_param_store,
+    deterministic,
+    enable_validation,
+    factor,
+    get_param_store,
+    iarange,
+    irange,
+    module,
+    param,
+    plate,
+    plate_stack,
+    random_module,
+    sample,
+    subsample,
+    validation_enabled,
+)
 from pyro.util import set_rng_seed
 
 # After changing this, run scripts/update_version.py
-version_prefix = '1.5.2'
+version_prefix = '1.6.0'
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:

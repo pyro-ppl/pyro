@@ -61,18 +61,17 @@ Make sure that the models come from the same release version of the [Pyro source
 
 For recent features you can install Pyro from source.
 
-**Install using pip:**
+**Install Pyro using pip:**
 
 ```sh
 pip install git+https://github.com/pyro-ppl/pyro.git
 ```
-
 or, with the `extras` dependency to run the probabilistic models included in the `examples`/`tutorials` directories:
 ```sh
 pip install git+https://github.com/pyro-ppl/pyro.git#egg=project[extras]
 ```
 
-**Install from source:**
+**Install Pyro from source:**
 
 ```sh
 git clone https://github.com/pyro-ppl/pyro

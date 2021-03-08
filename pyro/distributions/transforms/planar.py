@@ -9,10 +9,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Transform, constraints
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
+
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
 
 
 @copy_docs_from(Transform)
@@ -20,7 +21,6 @@ class ConditionedPlanar(Transform):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, params):
         super().__init__(cache_size=1)
@@ -123,7 +123,6 @@ class Planar(ConditionedPlanar, TransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, input_dim):
         super().__init__(self._params)
@@ -196,7 +195,6 @@ class ConditionalPlanar(ConditionalTransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, nn):
         super().__init__()
