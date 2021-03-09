@@ -81,6 +81,7 @@ List of Tutorials
    svi_part_i
    svi_part_ii
    svi_part_iii
+   svi_part_iv
 
 .. toctree::
    :maxdepth: 1
