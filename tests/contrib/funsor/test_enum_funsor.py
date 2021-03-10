@@ -1390,3 +1390,395 @@ def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, out
             elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
             actual_loss = elbo.differentiable_loss(model_iplate_iplate, guide_iplate)
     _check_loss_and_grads(expected_loss, actual_loss)
+
+
+@pyroapi.pyro_backend(_PYRO_BACKEND)
+def test_elbo_enumerate_plate_9():
+    #        Model   Guide
+    #          a
+    #  +-------|-------+
+    #  | M=2   V       |
+    #  |       b -> c  |
+    #  +---------------+
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([[0.3, 0.7], [0.6, 0.4]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([[0.3, 0.7], [0.8, 0.2]]),
+               constraint=constraints.simplex)
+    data = torch.tensor([1, 2])
+
+    @infer.config_enumerate
+    def model_plate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("b_axis", 2):
+            b = pyro.sample("b", dist.Categorical(probs_b[a]))
+            pyro.sample("c", dist.Categorical(probs_c[b]),
+                        obs=data)
+
+    @infer.config_enumerate
+    def guide_plate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("b_axis", 2):
+            pyro.sample("b", dist.Categorical(probs_b[a]))
+
+    @infer.config_enumerate
+    def model_iplate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("b_axis", 2):
+            b = pyro.sample(f"b_{i}", dist.Categorical(probs_b[a]))
+            pyro.sample(f"c_{i}", dist.Categorical(probs_c[b]),
+                        obs=data[i])
+
+    @infer.config_enumerate
+    def guide_iplate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("b_axis", 2):
+            pyro.sample(f"b_{i}", dist.Categorical(probs_b[a]))
+
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_iplate, guide_iplate)
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=1)
+    actual_loss = elbo.differentiable_loss(model_plate, guide_plate)
+    _check_loss_and_grads(expected_loss, actual_loss)
+
+
+@pyroapi.pyro_backend(_PYRO_BACKEND)
+def test_elbo_enumerate_plate_10():
+    # Model
+    # a -> [ [ bij -> cij ] ]
+    # Guide
+    # a -> [ [ bij ] ]
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([[0.3, 0.7], [0.6, 0.4]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([[0.3, 0.7], [0.8, 0.2]]),
+               constraint=constraints.simplex)
+    data = torch.tensor([[0, 1, 2], [1, 2, 2]])
+
+    @infer.config_enumerate
+    def model_plate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("i", 2, dim=-2):
+            with pyro.plate("j", 3, dim=-1):
+                b = pyro.sample("b", dist.Categorical(probs_b[a]))
+                pyro.sample("c", dist.Categorical(probs_c[b]),
+                            obs=data)
+
+    @infer.config_enumerate
+    def guide_plate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("i", 2, dim=-2):
+            with pyro.plate("j", 3, dim=-1):
+                pyro.sample("b", dist.Categorical(probs_b[a]))
+
+    @infer.config_enumerate
+    def model_iplate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("i", 2):
+            for j in pyro.plate("j", 3):
+                b = pyro.sample(f"b_{i}_{j}", dist.Categorical(probs_b[a]))
+                pyro.sample(f"c_{i}_{j}", dist.Categorical(probs_c[b]),
+                            obs=data[i, j])
+
+    @infer.config_enumerate
+    def guide_iplate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("i", 2):
+            for j in pyro.plate("j", 3):
+                pyro.sample(f"b_{i}_{j}", dist.Categorical(probs_b[a]))
+
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_iplate, guide_iplate)
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=2)
+    actual_loss = elbo.differentiable_loss(model_plate, guide_plate)
+    _check_loss_and_grads(expected_loss, actual_loss)
+
+
+@pyroapi.pyro_backend(_PYRO_BACKEND)
+def test_elbo_enumerate_plate_11():
+    # Model
+    # [ ai -> [ bij -> cij ] ]
+    # Guide
+    # [ ai -> [ bij ] ]
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([[0.3, 0.7], [0.6, 0.4]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([[0.3, 0.7], [0.8, 0.2]]),
+               constraint=constraints.simplex)
+    data = torch.tensor([[0, 1, 2], [1, 2, 2]])
+
+    @infer.config_enumerate
+    def model_plate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        with pyro.plate("i", 2, dim=-2):
+            a = pyro.sample("a", dist.Categorical(probs_a))
+            with pyro.plate("j", 3, dim=-1):
+                b = pyro.sample("b", dist.Categorical(probs_b[a]))
+                pyro.sample("c", dist.Categorical(probs_c[b]),
+                            obs=data)
+
+    @infer.config_enumerate
+    def guide_plate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        with pyro.plate("i", 2, dim=-2):
+            a = pyro.sample("a", dist.Categorical(probs_a))
+            with pyro.plate("j", 3, dim=-1):
+                pyro.sample("b", dist.Categorical(probs_b[a]))
+
+    @infer.config_enumerate
+    def model_iplate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        for i in pyro.plate("i", 2):
+            a = pyro.sample(f"a_{i}", dist.Categorical(probs_a))
+            for j in pyro.plate("j", 3):
+                b = pyro.sample(f"b_{i}_{j}", dist.Categorical(probs_b[a]))
+                pyro.sample(f"c_{i}_{j}", dist.Categorical(probs_c[b]),
+                            obs=data[i, j])
+
+    @infer.config_enumerate
+    def guide_iplate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        for i in pyro.plate("i", 2):
+            a = pyro.sample(f"a_{i}", dist.Categorical(probs_a))
+            for j in pyro.plate("j", 3):
+                pyro.sample(f"b_{i}_{j}", dist.Categorical(probs_b[a]))
+
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_iplate, guide_iplate)
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=2)
+    actual_loss = elbo.differentiable_loss(model_plate, guide_plate)
+    _check_loss_and_grads(expected_loss, actual_loss)
+
+
+@pyroapi.pyro_backend(_PYRO_BACKEND)
+def test_elbo_enumerate_plate_12():
+    # Model
+    # a -> [ bi -> [ cij -> dij ] ]
+    # Guide
+    # a -> [ bi -> [ cij ] ]
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([[0.3, 0.7], [0.6, 0.4]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_d",
+               torch.tensor([[0.1, 0.6, 0.3], [0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([[0.3, 0.7], [0.8, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_c",
+               torch.tensor([[0.3, 0.3, 0.4], [0.2, 0.4, 0.4]]),
+               constraint=constraints.simplex)
+    data = torch.tensor([[0, 1, 2], [1, 2, 2]])
+
+    @infer.config_enumerate
+    def model_plate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        probs_d = pyro.param("model_probs_d")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("i", 2, dim=-2):
+            b = pyro.sample("b", dist.Categorical(probs_b[a]))
+            with pyro.plate("j", 3, dim=-1):
+                c = pyro.sample("c", dist.Categorical(probs_c[b]))
+                pyro.sample("d", dist.Categorical(probs_d[c]),
+                            obs=data)
+
+    @infer.config_enumerate
+    def guide_plate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        probs_c = pyro.param("guide_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("i", 2, dim=-2):
+            b = pyro.sample("b", dist.Categorical(probs_b[a]))
+            with pyro.plate("j", 3, dim=-1):
+                pyro.sample("c", dist.Categorical(probs_c[b]))
+
+    @infer.config_enumerate
+    def model_iplate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        probs_d = pyro.param("model_probs_d")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("i", 2):
+            b = pyro.sample(f"b_{i}", dist.Categorical(probs_b[a]))
+            for j in pyro.plate("j", 3):
+                c = pyro.sample(f"c_{i}_{j}", dist.Categorical(probs_c[b]))
+                pyro.sample(f"d_{i}_{j}", dist.Categorical(probs_d[c]),
+                            obs=data[i, j])
+
+    @infer.config_enumerate
+    def guide_iplate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        probs_c = pyro.param("guide_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("i", 2):
+            b = pyro.sample(f"b_{i}", dist.Categorical(probs_b[a]))
+            for j in pyro.plate("j", 3):
+                pyro.sample(f"c_{i}_{j}", dist.Categorical(probs_c[b]))
+
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_iplate, guide_iplate)
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=2)
+    actual_loss = elbo.differentiable_loss(model_plate, guide_plate)
+    _check_loss_and_grads(expected_loss, actual_loss)
+
+
+@pyroapi.pyro_backend(_PYRO_BACKEND)
+def test_elbo_enumerate_plate_13():
+    # Model
+    # a -> [ cj -> [ dij ] ]
+    # |
+    # v
+    # [ bi ]
+    # Guide
+    # a -> [ cj ]
+    # |
+    # v
+    # [ bi ]
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([[0.3, 0.7], [0.6, 0.4]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[0.3, 0.7], [0.4, 0.6]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_d",
+               torch.tensor([[0.1, 0.6, 0.3], [0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([[0.3, 0.7], [0.8, 0.2]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_c",
+               torch.tensor([[0.2, 0.8], [0.9, 0.1]]),
+               constraint=constraints.simplex)
+    data = torch.tensor([[0, 1, 2], [1, 2, 2]])
+
+    @infer.config_enumerate
+    def model_plate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        probs_d = pyro.param("model_probs_d")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("i", 2, dim=-2):
+            pyro.sample("b", dist.Categorical(probs_b[a]))
+            with pyro.plate("j", 3, dim=-1):
+                c = pyro.sample("c", dist.Categorical(probs_c[a]))
+                pyro.sample("d", dist.Categorical(probs_d[c]),
+                            obs=data)
+
+    @infer.config_enumerate
+    def guide_plate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        probs_c = pyro.param("guide_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("i", 2, dim=-2):
+            pyro.sample("b", dist.Categorical(probs_b[a]))
+            with pyro.plate("j", 3, dim=-1):
+                pyro.sample("c", dist.Categorical(probs_c[a]))
+
+    @infer.config_enumerate
+    def model_iplate():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        probs_d = pyro.param("model_probs_d")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("i", 2):
+            pyro.sample(f"b_{i}", dist.Categorical(probs_b[a]))
+            for j in pyro.plate("j", 3):
+                c = pyro.sample(f"c_{i}_{j}", dist.Categorical(probs_c[a]))
+                pyro.sample(f"d_{i}_{j}", dist.Categorical(probs_d[c]),
+                            obs=data[i, j])
+
+    @infer.config_enumerate
+    def guide_iplate():
+        probs_a = pyro.param("guide_probs_a")
+        probs_b = pyro.param("guide_probs_b")
+        probs_c = pyro.param("guide_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.plate("i", 2):
+            pyro.sample(f"b_{i}", dist.Categorical(probs_b[a]))
+            for j in pyro.plate("j", 3):
+                pyro.sample(f"c_{i}_{j}", dist.Categorical(probs_c[a]))
+
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_iplate, guide_iplate)
+    elbo = infer.TraceEnum_ELBO(max_plate_nesting=2)
+    actual_loss = elbo.differentiable_loss(model_plate, guide_plate)
+    _check_loss_and_grads(expected_loss, actual_loss)
