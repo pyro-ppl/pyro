@@ -11,6 +11,7 @@ from torch.autograd import grad
 from torch.distributions import constraints
 
 from pyro.ops.indexing import Vindex
+from pyro.util import torch_isnan
 from tests.common import assert_equal, xfail_param
 
 # put all funsor-related imports here, so test collection works without funsor
@@ -45,11 +46,54 @@ def _check_loss_and_grads(expected_loss, actual_loss):
     for name, actual_grad, expected_grad in zip(names, actual_grads, expected_grads):
         if actual_grad is None or expected_grad is None:
             continue
+        assert not torch_isnan(actual_grad)
+        assert not torch_isnan(expected_grad)
         assert_equal(actual_grad, expected_grad,
                      msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
                                                                  expected_grad.detach().cpu().numpy(),
                                                                  actual_grad.detach().cpu().numpy()))
 
+@pyroapi.pyro_backend(_PYRO_BACKEND)
+def test_bug():
+    q = torch.tensor([0.75, 0.25], requires_grad=True)
+    logq = funsor.Tensor(q.log())["w"]
+    p = 0.2693204236205713  # for which kl(Categorical(q), Categorical(p)) = 0.5
+    p = torch.tensor([p, 1-p])
+    logp = funsor.Tensor(p.log())["w"]
+    with funsor.terms.lazy:
+        costs = [logp, -logq]
+        targets = dict()
+        for cost in costs:
+            input_vars = frozenset(cost.inputs)
+            if input_vars not in targets:
+                targets[input_vars] = funsor.Tensor(
+                    funsor.ops.new_zeros(
+                        funsor.tensor.get_default_prototype(),
+                        tuple(v.size for v in cost.inputs.values()),
+                    ),
+                    cost.inputs,
+                    cost.dtype,
+                )
+        with funsor.adjoint.AdjointTape() as tape:
+            logzq = funsor.sum_product.sum_product(
+                funsor.ops.logaddexp, funsor.ops.add,
+                [logq] + list(targets.values()),
+                plates=frozenset(),
+                eliminate=frozenset({"w"})
+            )
+        marginals = tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values()))
+        elbo = funsor.terms.Number(0.0)
+        for cost in costs:
+            # compute the marginal logq in the guide corresponding to this cost term
+            target = targets[frozenset(cost.inputs)]
+            logzq_local = marginals[target].reduce(funsor.ops.logaddexp, frozenset(cost.inputs))
+            log_prob = marginals[target] - logzq_local
+            # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
+            elbo_term = funsor.Integrate(log_prob, cost, frozenset({"w"}))
+            elbo += elbo_term
+    breakpoint()
+    actual_loss = -funsor.to_data(funsor.optimizer.apply_optimizer(elbo))
+    actual_grad = grad(actual_loss, [q])[0]
 
 @pytest.mark.parametrize("inner_dim", [2])
 @pytest.mark.parametrize("outer_dim", [2])
@@ -62,31 +106,32 @@ def test_elbo_plate_plate(outer_dim, inner_dim):
 
     def model():
         d = dist.Categorical(p)
-        context1 = pyro.plate("outer", outer_dim, dim=-1)
-        context2 = pyro.plate("inner", inner_dim, dim=-2)
+        #  context1 = pyro.plate("outer", outer_dim, dim=-1)
+        #  context2 = pyro.plate("inner", inner_dim, dim=-2)
         pyro.sample("w", d)
-        with context1:
-            pyro.sample("x", d)
-        with context2:
-            pyro.sample("y", d)
-        with context1, context2:
-            pyro.sample("z", d)
+        #  with context1:
+        #      pyro.sample("x", d)
+        #  with context2:
+        #      pyro.sample("y", d)
+        #  with context1, context2:
+        #      pyro.sample("z", d)
 
     def guide():
         d = dist.Categorical(pyro.param("q"))
-        context1 = pyro.plate("outer", outer_dim, dim=-1)
-        context2 = pyro.plate("inner", inner_dim, dim=-2)
+        #  context1 = pyro.plate("outer", outer_dim, dim=-1)
+        #  context2 = pyro.plate("inner", inner_dim, dim=-2)
         pyro.sample("w", d, infer={"enumerate": "parallel"})
-        with context1:
-            pyro.sample("x", d, infer={"enumerate": "parallel"})
-        with context2:
-            pyro.sample("y", d, infer={"enumerate": "parallel"})
-        with context1, context2:
-            pyro.sample("z", d, infer={"enumerate": "parallel"})
+        #  with context1:
+        #      pyro.sample("x", d, infer={"enumerate": "parallel"})
+        #  with context2:
+        #      pyro.sample("y", d, infer={"enumerate": "parallel"})
+        #  with context1, context2:
+        #      pyro.sample("z", d, infer={"enumerate": "parallel"})
 
     kl_node = torch.distributions.kl.kl_divergence(
         torch.distributions.Categorical(q), torch.distributions.Categorical(p))
-    kl = (1 + outer_dim + inner_dim + outer_dim * inner_dim) * kl_node
+    kl = kl_node
+    # kl = (1 + outer_dim + inner_dim + outer_dim * inner_dim) * kl_node
     expected_loss = kl
     expected_grad = grad(kl, [q.unconstrained()])[0]
 
@@ -94,6 +139,7 @@ def test_elbo_plate_plate(outer_dim, inner_dim):
     actual_loss = elbo.differentiable_loss(model, guide)
     actual_grad = grad(actual_loss, [q.unconstrained()])[0]
 
+    breakpoint()
     assert_equal(actual_loss, expected_loss, prec=1e-5)
     assert_equal(actual_grad, expected_grad, prec=1e-5)
 
