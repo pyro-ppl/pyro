@@ -16,7 +16,7 @@ class Profile(nn.Module):
     [1] E. N. Weinstein, D. S. Marks (2020)
     "Generative probabilistic biological sequence models that account for
     mutational variability"
-    https://www.biorxiv.org/content/10.1101/2020.07.31.231381v1.full.pdf
+    https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.full.pdf
     [2] R. Durbin, S. R. Eddy, A. Krogh, and G. Mitchison (1998)
     "Biological sequence analysis: probabilistic models of proteins and nucleic
     acids"

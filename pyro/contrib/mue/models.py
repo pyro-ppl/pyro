@@ -26,15 +26,34 @@ import pdb
 
 
 class ProfileHMM(nn.Module):
-    """Model: Constant + MuE. """
+    """Profile HMM.
+
+    This model consists of a constant distribution (a delta function) over the
+    regressor sequence, plus a MuE observation distribution. The priors
+    are all Normal distributions, and are pushed through a softmax function
+    onto the simplex.
+
+    :param int latent_seq_length: Length of the latent regressor sequence M.
+        Must be greater than or equal to 1.
+    :param int alphabet_length: Length of the sequence alphabet (e.g. 20 for
+        amino acids).
+    :param bool length_model: Model the length of the sequence with a Poisson
+        distribution. (Default: False.)
+    :param float prior_scale: Standard deviation of the prior distribution.
+        (Default: 1.0.)
+    :param float indel_prior_bias: Offset of the mean of the prior distribution
+        over the indel probability. Higher values lead to lower probability
+        of indels. (Default: 10.0.)
+    :param bool cuda: Transfer data onto the GPU for training. (Default: False.)
+    :param bool pin_memory: Pin memory for faster GPU transfer.
+        (Default: False.)
+    """
     def __init__(self, latent_seq_length, alphabet_length,
                  length_model=False, prior_scale=1., indel_prior_bias=10.,
-                 cuda=False, pin_memory=False):
+                 cuda=False):
         super().__init__()
         assert isinstance(cuda, bool)
         self.cuda = cuda
-        assert isinstance(pin_memory, bool)
-        self.pin_memory = pin_memory
 
         assert isinstance(latent_seq_length, int) and latent_seq_length > 0
         self.latent_seq_length = latent_seq_length
@@ -142,7 +161,20 @@ class ProfileHMM(nn.Module):
 
     def fit_svi(self, dataset, epochs=1, batch_size=1, scheduler=None,
                 jit=False):
-        """Infer model parameters with stochastic variational inference."""
+        """
+        Infer approximate posterior with stochastic variational inference.
+
+        This runs :class:`~pyro.infer.svi.SVI`. It is an approximate inference
+        method useful for quickly iterating on probabilistic models.
+
+        :param torch.utils.data.Dataset dataset: The training dataset.
+        :param int epochs: Number of epochs of training. (Default: 1.)
+        :param int batch_size: Minibatch size (number of sequences).
+            (Default: 1.)
+        :param pyro.optim.MultiStepLR scheduler: Learning rate scheduler.
+            (Default: Adam optimizer, 0.01 constant learning rate.)
+        :param bool jit: Whether to use a jit compiled ELBO.
+        """
 
         # Setup.
         if batch_size is not None:
@@ -154,7 +186,8 @@ class ProfileHMM(nn.Module):
                                      'gamma': 0.5})
         # Initialize guide.
         self.guide(None, None, None)
-        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True,
+                              pin_memory=self.pin_memory)
         # Setup stochastic variational inference.
         if jit:
             Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
@@ -177,7 +210,14 @@ class ProfileHMM(nn.Module):
         return losses
 
     def evaluate(self, dataset_train, dataset_test=None, jit=False):
-        """Evaluate performance on train and test datasets."""
+        """
+        Evaluate performance on train and test datasets.
+
+        :param torch.utils.data.Dataset dataset: The training dataset.
+        :param torch.utils.data.Dataset dataset: The testing dataset.
+            (Default: None.)
+        :param bool jit: Whether to use a jit compiled ELBO.
+        """
         dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
         if dataset_test is not None:
             dataload_test = DataLoader(dataset_test, batch_size=1,

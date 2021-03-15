@@ -20,8 +20,6 @@ from pyro.contrib.mue.dataloaders import BiosequenceDataset
 from pyro.contrib.mue.models import FactorMuE
 from pyro.optim import MultiStepLR
 
-import pdb
-
 
 def generate_data(small_test):
     """Generate example dataset."""
