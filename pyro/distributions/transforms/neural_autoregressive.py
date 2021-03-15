@@ -6,14 +6,15 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import constraints
 from torch.distributions.transforms import SigmoidTransform, TanhTransform
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms.basic import ELUTransform, LeakyReLUTransform
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
+
+from .. import constraints
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
+from .basic import ELUTransform, LeakyReLUTransform
 
 eps = 1e-8
 
@@ -61,7 +62,6 @@ class NeuralAutoregressive(TransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
     eps = 1e-8
     autoregressive = True
 
@@ -185,7 +185,6 @@ class ConditionalNeuralAutoregressive(ConditionalTransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, autoregressive_nn, **kwargs):
         super().__init__()

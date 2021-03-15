@@ -3,11 +3,11 @@
 
 import torch
 import torch.nn as nn
-from torch.distributions import constraints
 
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms.householder import Householder
-from pyro.distributions.util import copy_docs_from
+from .. import constraints
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
+from .householder import Householder
 
 
 @copy_docs_from(TransformModule)
@@ -56,7 +56,6 @@ class Sylvester(Householder):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, input_dim, count_transforms=1):
         super().__init__(input_dim, count_transforms)

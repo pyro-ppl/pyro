@@ -7,12 +7,20 @@ from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from inspect import isclass
 
+import torch
+
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.params import param_with_module_name
 from pyro.poutine.plate_messenger import PlateMessenger
-from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful
+from pyro.poutine.runtime import (
+    _MODULE_NAMESPACE_DIVIDER,
+    _PYRO_PARAM_STORE,
+    am_i_wrapped,
+    apply_stack,
+    effectful,
+)
 from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
@@ -61,6 +69,30 @@ def param(name, *args, **kwargs):
     return _param(name, *args, **kwargs)
 
 
+def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
+    # Split into two auxiliary sample sites.
+    with poutine.mask(mask=obs_mask):
+        observed = sample(f"{name}_observed", fn, *args, **kwargs, obs=obs)
+    with poutine.mask(mask=~obs_mask):
+        unobserved = sample(f"{name}_unobserved", fn, *args, **kwargs)
+
+    # Interleave observed and unobserved events.
+    shape = obs_mask.shape + (1,) * fn.event_dim
+    batch_mask = obs_mask.reshape(shape)
+    try:
+        value = torch.where(batch_mask, observed, unobserved)
+    except RuntimeError as e:
+        if "must match the size of tensor" in str(e):
+            shape = torch.broadcast_shapes(observed.shape, unobserved.shape)
+            batch_shape = shape[:len(shape) - fn.event_dim]
+            raise ValueError(
+                f"Invalid obs_mask shape {tuple(obs_mask.shape)}; should be "
+                f"broadcastable to batch_shape = {tuple(batch_shape)}"
+            ) from e
+        raise
+    return deterministic(name, value)
+
+
 def sample(name, fn, *args, **kwargs):
     """
     Calls the stochastic function `fn` with additional side-effects depending
@@ -72,14 +104,25 @@ def sample(name, fn, *args, **kwargs):
     :param fn: distribution class or function
     :param obs: observed datum (optional; should only be used in context of
         inference) optionally specified in kwargs
+    :param ~torch.Tensor obs_mask: Optional boolean tensor mask of shape
+        broadcastable with ``fn.batch_shape``. If provided, events with
+        mask=True will be conditioned on ``obs`` and remaining events will be
+        imputed by sampling. This introduces a latent sample site named ``name
+        + "_unobserved"`` which should be used by guides.
+    :type obs_mask: bool or ~torch.Tensor
     :param dict infer: Optional dictionary of inference parameters specified
         in kwargs. See inference documentation for details.
     :returns: sample
     """
+    # Transform obs_mask into multiple sample statements.
     obs = kwargs.pop("obs", None)
-    infer = kwargs.pop("infer", {}).copy()
-    # check if stack is empty
+    obs_mask = kwargs.pop("obs_mask", None)
+    if obs_mask is not None:
+        return _masked_observe(name, fn, obs, obs_mask, *args, **kwargs)
+
+    # Check if stack is empty.
     # if stack empty, default behavior (defined here)
+    infer = kwargs.pop("infer", {}).copy()
     if not am_i_wrapped():
         if obs is not None and not infer.get("_deterministic"):
             warnings.warn("trying to observe a value outside of inference at " + name,

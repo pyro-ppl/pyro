@@ -9,7 +9,13 @@ from subprocess import check_call
 import pytest
 import torch
 
-from tests.common import EXAMPLES_DIR, requires_cuda, requires_funsor, requires_horovod, xfail_param
+from tests.common import (
+    EXAMPLES_DIR,
+    requires_cuda,
+    requires_funsor,
+    requires_horovod,
+    xfail_param,
+)
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -227,7 +233,7 @@ JIT_EXAMPLES = [
     'minipyro.py --jit',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -m=1 --enum --jit',
     'sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential --jit',
-    'sir_hmc.py -t=2 -w=2 -n=4 -p=10000 --jit',
+    xfail_jit('sir_hmc.py -t=2 -w=2 -n=4 -p=10000 --jit'),
     xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit'),
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --jit',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --jit',

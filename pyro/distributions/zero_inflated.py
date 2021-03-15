@@ -3,7 +3,12 @@
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all, lazy_property, logits_to_probs, probs_to_logits
+from torch.distributions.utils import (
+    broadcast_all,
+    lazy_property,
+    logits_to_probs,
+    probs_to_logits,
+)
 from torch.nn.functional import softplus
 
 from pyro.distributions import NegativeBinomial, Poisson, TorchDistribution
@@ -43,7 +48,7 @@ class ZeroInflatedDistribution(TorchDistribution):
 
         super().__init__(batch_shape, event_shape, validate_args)
 
-    @property
+    @constraints.dependent_property
     def support(self):
         return self.base_dist.support
 

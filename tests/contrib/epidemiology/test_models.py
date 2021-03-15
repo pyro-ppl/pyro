@@ -9,10 +9,20 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.epidemiology.models import (HeterogeneousRegionalSIRModel, HeterogeneousSIRModel,
-                                              OverdispersedSEIRModel, OverdispersedSIRModel, RegionalSIRModel,
-                                              SimpleSEIRDModel, SimpleSEIRModel, SimpleSIRModel, SparseSIRModel,
-                                              SuperspreadingSEIRModel, SuperspreadingSIRModel, UnknownStartSIRModel)
+from pyro.contrib.epidemiology.models import (
+    HeterogeneousRegionalSIRModel,
+    HeterogeneousSIRModel,
+    OverdispersedSEIRModel,
+    OverdispersedSIRModel,
+    RegionalSIRModel,
+    SimpleSEIRDModel,
+    SimpleSEIRModel,
+    SimpleSIRModel,
+    SparseSIRModel,
+    SuperspreadingSEIRModel,
+    SuperspreadingSIRModel,
+    UnknownStartSIRModel,
+)
 from tests.common import xfail_param
 
 logger = logging.getLogger(__name__)
@@ -52,7 +62,7 @@ def test_simple_sir_smoke(duration, forecast, options, algo):
     # Generate data.
     model = SimpleSIRModel(population, recovery_time, [None] * duration)
     assert model.full_mass == [("R0", "rho")]
-    for attempt in range(100):
+    for attempt in range(500):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
         if data.sum():
             break

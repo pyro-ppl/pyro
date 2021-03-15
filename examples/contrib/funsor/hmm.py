@@ -64,7 +64,6 @@ except ImportError:
 from pyroapi import distributions as dist
 from pyroapi import handlers, infer, optim, pyro, pyro_backend
 
-
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.DEBUG)
 
 # Add another handler for logging debugging events (e.g. for profiling)
@@ -619,7 +618,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))

@@ -19,25 +19,22 @@ References:
 
 import argparse
 
+import matplotlib.pyplot as plt
 import numpy as np
-
 import torch
 import torch.nn as nn
+from data import get_data
+from matplotlib.patches import Patch
 from torch.distributions import constraints
-from torch.nn.functional import softplus, softmax
+from torch.nn.functional import softmax, softplus
 from torch.optim import Adam
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape
+from pyro.infer import SVI, TraceEnum_ELBO, config_enumerate
 from pyro.optim import MultiStepLR
-from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
-
-import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
-
-from data import get_data
 
 
 # Helper for making fully-connected neural networks
@@ -300,6 +297,7 @@ def main(args):
     # Now that we're done training we'll inspect the latent representations we've learned
     if args.plot and args.dataset == 'pbmc':
         import scanpy as sc
+
         # Compute latent representation (z2_loc) for each cell in the dataset
         latent_rep = scanvi.z2l_encoder(dataloader.data_x)[0]
 
@@ -350,7 +348,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="single-cell ANnotation using Variational Inference")
     parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')

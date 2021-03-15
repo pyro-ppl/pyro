@@ -5,7 +5,8 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.transforms import AffineTransform
 
-from pyro.distributions.torch import Beta, TransformedDistribution
+from .torch import Beta, TransformedDistribution
+from .util import broadcast_shape
 
 
 class AffineBeta(TransformedDistribution):
@@ -42,6 +43,12 @@ class AffineBeta(TransformedDistribution):
             AffineTransform(loc=loc, scale=scale),
             validate_args=validate_args,
         )
+
+    @staticmethod
+    def infer_shapes(concentration1, concentration0, loc, scale):
+        batch_shape = broadcast_shape(concentration1, concentration0, loc, scale)
+        event_shape = torch.Size()
+        return batch_shape, event_shape
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(AffineBeta, _instance)

@@ -30,7 +30,14 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import affine_autoregressive
-from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceTMC_ELBO,
+    config_enumerate,
+)
 from pyro.optim import ClippedAdam
 
 
@@ -453,7 +460,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)

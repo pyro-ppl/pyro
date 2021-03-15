@@ -6,7 +6,12 @@ import torch
 from torch.distributions import transform_to
 
 import pyro.distributions as dist
-from pyro.contrib.forecast.util import UNIVARIATE_DISTS, UNIVARIATE_TRANSFORMS, prefix_condition, reshape_batch
+from pyro.contrib.forecast.util import (
+    UNIVARIATE_DISTS,
+    UNIVARIATE_TRANSFORMS,
+    prefix_condition,
+    reshape_batch,
+)
 from tests.ops.gaussian import random_mvn
 
 DISTS = [

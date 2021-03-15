@@ -43,7 +43,7 @@ def helpful_support_errors(site):
         yield
     except NotImplementedError as e:
         support_name = repr(site["fn"].support).lower()
-        if "integer" in support_name or "boolean" in support_name:
+        if site["fn"].support.is_discrete:
             name = site["name"]
             raise ValueError(
                 f"Continuous inference cannot handle discrete sample site '{name}'. "

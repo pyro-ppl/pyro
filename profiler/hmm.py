@@ -8,12 +8,11 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from os.path import join, abspath
+from os.path import abspath, join
 
 from numpy import median
 
 from pyro.util import timed
-
 
 EXAMPLES_DIR = join(abspath(__file__), os.pardir, os.pardir, "examples")
 

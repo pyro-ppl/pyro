@@ -13,9 +13,15 @@ import torch
 from torch.distributions import biject_to, constraints
 
 import pyro
-from pyro.contrib.epidemiology.models import (HeterogeneousSIRModel, OverdispersedSEIRModel, OverdispersedSIRModel,
-                                              SimpleSEIRModel, SimpleSIRModel, SuperspreadingSEIRModel,
-                                              SuperspreadingSIRModel)
+from pyro.contrib.epidemiology.models import (
+    HeterogeneousSIRModel,
+    OverdispersedSEIRModel,
+    OverdispersedSIRModel,
+    SimpleSEIRModel,
+    SimpleSIRModel,
+    SuperspreadingSEIRModel,
+    SuperspreadingSIRModel,
+)
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -294,7 +300,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=float)

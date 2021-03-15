@@ -6,7 +6,6 @@ import sys
 
 import sphinx_rtd_theme
 
-
 # import pkg_resources
 
 # -*- coding: utf-8 -*-
@@ -213,5 +212,6 @@ def setup(app):
 # @jpchen's hack to get rtd builder to install latest pytorch
 # See similar line in the install section of .travis.yml
 if 'READTHEDOCS' in os.environ:
-    os.system('pip install torch==1.7.0+cpu torchvision==0.8.1+cpu '
+    os.system('pip install numpy')
+    os.system('pip install torch==1.8.0+cpu torchvision==0.9.0+cpu '
               '-f https://download.pytorch.org/whl/torch_stable.html')

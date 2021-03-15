@@ -2,11 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections import OrderedDict
+
 import pytest
 import torch
 
 from pyro.contrib.util import (
-    get_indices, tensor_to_dict, rmv, rvv, lexpand, rexpand, rdiag, rtril
+    get_indices,
+    lexpand,
+    rdiag,
+    rexpand,
+    rmv,
+    rtril,
+    rvv,
+    tensor_to_dict,
 )
 from tests.common import assert_equal
 

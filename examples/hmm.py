@@ -47,8 +47,8 @@ import pyro
 import pyro.contrib.examples.polyphonic_data_loader as poly
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, TraceTMC_ELBO
+from pyro.infer.autoguide import AutoDelta
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
@@ -637,7 +637,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))

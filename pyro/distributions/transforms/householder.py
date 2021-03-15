@@ -9,17 +9,17 @@ import torch
 import torch.nn as nn
 from torch.distributions import Transform, constraints
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import DenseNN
+
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
 
 
 class ConditionedHouseholder(Transform):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
     volume_preserving = True
 
     def __init__(self, u_unnormed=None):
@@ -124,7 +124,6 @@ class Householder(ConditionedHouseholder, TransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
     volume_preserving = True
 
     def __init__(self, input_dim, count_transforms=1):
@@ -205,7 +204,6 @@ class ConditionalHouseholder(ConditionalTransformModule):
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, input_dim, nn, count_transforms=1):
         super().__init__()

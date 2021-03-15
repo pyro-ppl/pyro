@@ -2,20 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import math
 
 import numpy as np
 import torch
-import math
+from torch.optim import Adam
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide import AutoDelta
 from pyro.infer import Trace_ELBO
-from pyro.infer.autoguide import init_to_median
-
-from torch.optim import Adam
-
+from pyro.infer.autoguide import AutoDelta, init_to_median
 
 """
 We demonstrate how to do sparse linear regression using a variant of the
@@ -310,7 +307,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description='Krylov KIT')
     parser.add_argument('--num-data', type=int, default=750)
     parser.add_argument('--num-steps', type=int, default=1000)

@@ -10,13 +10,27 @@ import scipy.stats as sp
 import pyro.distributions as dist
 from pyro.distributions.testing.naive_dirichlet import NaiveBeta, NaiveDirichlet
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
-from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
+from pyro.distributions.testing.rejection_gamma import (
+    ShapeAugmentedBeta,
+    ShapeAugmentedDirichlet,
+    ShapeAugmentedGamma,
+)
 from tests.distributions.dist_fixture import Fixture
 
 
 class FoldedNormal(dist.FoldedDistribution):
+    arg_constraints = dist.Normal.arg_constraints
+
     def __init__(self, loc, scale):
         super().__init__(dist.Normal(loc, scale))
+
+    @property
+    def loc(self):
+        return self.base_dist.loc
+
+    @property
+    def scale(self):
+        return self.base_dist.scale
 
 
 continuous_dists = [
@@ -242,7 +256,7 @@ continuous_dists = [
                 {'scale': [1.2],
                  'test_data': [1.0]},
                 {'scale': [1.2, 1.2],
-                 'test_data': [[1.0, -1.0], [1.0, -1.0]]},
+                 'test_data': [[1.0, 2.0], [1.0, 2.0]]},
                 {'scale': [[1.2], [1.0]],
                  'test_data': [[0.54], [0.35]]}
             ],
@@ -260,22 +274,28 @@ continuous_dists = [
             scipy_arg_fn=lambda loc, concentration: ((), {"loc": np.array(loc), "kappa": np.array(concentration)})),
     Fixture(pyro_dist=dist.LKJ,
             examples=[
-                {'dim': 3, 'concentration': [1.], 'test_data':
+                {'dim': 3, 'concentration': 1., 'test_data':
                     [[[1.0000, -0.8221,  0.7655], [-0.8221,  1.0000, -0.5293], [0.7655,  -0.5293,  1.0000]],
-                     [[1.0000, -0.5345, -0.5459], [-0.5345,  0.9999, -0.0333], [-0.5459, -0.0333,  1.0001]],
+                     [[1.0000, -0.5345, -0.5459], [-0.5345,  1.0000, -0.0333], [-0.5459, -0.0333,  1.0000]],
                      [[1.0000, -0.3758, -0.2409], [-0.3758,  1.0000,  0.4653], [-0.2409,  0.4653,  1.0000]],
                      [[1.0000, -0.8800, -0.9493], [-0.8800,  1.0000,  0.9088], [-0.9493,  0.9088,  1.0000]],
-                     [[1.0000,  0.2284, -0.1283], [0.2284,   1.0001,  0.0146], [-0.1283,  0.0146,  1.0000]]]},
+                     [[1.0000,  0.2284, -0.1283], [0.2284,   1.0000,  0.0146], [-0.1283,  0.0146,  1.0000]]]},
                 ]),
-    Fixture(pyro_dist=dist.LKJCorrCholesky,
+    Fixture(pyro_dist=dist.LKJCholesky,
             examples=[
-                {'d': 3, 'eta': [1.], 'test_data':
-                    [[[1.0000,  0.0000,  0.0000], [-0.8221,  0.5693,  0.0000], [0.7655,   0.1756,  0.6190]],
-                     [[1.0000,  0.0000,  0.0000], [-0.5345,  0.8451,  0.0000], [-0.5459, -0.3847,  0.7444]],
-                     [[1.0000,  0.0000,  0.0000], [-0.3758,  0.9267,  0.0000], [-0.2409,  0.4044,  0.8823]],
-                     [[1.0000,  0.0000,  0.0000], [-0.8800,  0.4750,  0.0000], [-0.9493,  0.1546,  0.2737]],
-                     [[1.0000,  0.0000,  0.0000], [0.2284,   0.9736,  0.0000], [-0.1283,  0.0451,  0.9907]]]},
-                ]),
+                {
+                    'dim': 3,
+                    'concentration': 1.,
+                    'test_data': [
+                        [[1.0, 0.0, 0.0],
+                         [-0.17332135, 0.98486533, 0.0],
+                         [0.43106407, -0.54767312, 0.71710384]],
+                        [[1.0, 0.0, 0.0],
+                         [-0.31391555, 0.94945091, 0.0],
+                         [-0.31391296, -0.29767500, 0.90158097]],
+                    ],
+                },
+            ]),
     Fixture(pyro_dist=dist.Stable,
             examples=[
                 {'stability': [1.5], 'skew': 0.1, 'test_data': [-10.]},

@@ -7,10 +7,13 @@ import warnings
 import torch
 
 import pyro.poutine as poutine
-
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
+from pyro.infer.enum import (
+    get_importance_trace,
+    iter_discrete_escape,
+    iter_discrete_extend,
+)
 from pyro.infer.util import compute_site_dice_factor, is_validation_enabled, torch_item
 from pyro.ops import packed
 from pyro.ops.contract import einsum

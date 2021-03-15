@@ -17,8 +17,15 @@ from pyro.infer.predictive import _guess_max_plate_nesting
 from pyro.nn.module import PyroModule
 from pyro.optim import DCTAdam
 
-from .util import (MarkDCTParamMessenger, PrefixConditionMessenger, PrefixReplayMessenger, PrefixWarmStartMessenger,
-                   reshape_batch, time_reparam_dct, time_reparam_haar)
+from .util import (
+    MarkDCTParamMessenger,
+    PrefixConditionMessenger,
+    PrefixReplayMessenger,
+    PrefixWarmStartMessenger,
+    reshape_batch,
+    time_reparam_dct,
+    time_reparam_haar,
+)
 
 logger = logging.getLogger(__name__)
 

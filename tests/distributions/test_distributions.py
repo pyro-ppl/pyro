@@ -20,7 +20,31 @@ def _log_prob_shape(dist, x_size=torch.Size()):
         expected_shape = expected_shape[:-event_dims]
     return expected_shape
 
+
 # Distribution tests - all distributions
+
+def test_support_shape(dist):
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        d = dist.pyro_dist(**dist_params)
+        assert d.support.event_dim == d.event_dim
+        x = dist.get_test_data(idx)
+        ok = d.support.check(x)
+        assert ok.shape == broadcast_shape(d.batch_shape, x.shape[:x.dim() - d.event_dim])
+        assert ok.all()
+
+
+def test_infer_shapes(dist):
+    if "LKJ" in dist.pyro_dist.__name__:
+        pytest.xfail(reason="cannot statically compute shape")
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else ()
+                      for k, v in dist_params.items()}
+        batch_shape, event_shape = dist.pyro_dist.infer_shapes(**arg_shapes)
+        d = dist.pyro_dist(**dist_params)
+        assert d.batch_shape == batch_shape
+        assert d.event_shape == event_shape
 
 
 def test_batch_log_prob(dist):
@@ -76,6 +100,8 @@ def test_score_errors_non_broadcastable_data_shape(dist):
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)
+        if dist.get_test_distribution_name() == 'LKJCholesky':
+            pytest.skip('https://github.com/pytorch/pytorch/issues/52724')
         shape = d.shape()
         non_broadcastable_shape = (shape[0] + 1,) + shape[1:]
         test_data_non_broadcastable = torch.ones(non_broadcastable_shape)
@@ -85,9 +111,16 @@ def test_score_errors_non_broadcastable_data_shape(dist):
 
 # Distributions tests - continuous distributions
 
+def test_support_is_not_discrete(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        assert not d.support.is_discrete
+
+
 def test_gof(continuous_dist):
     Dist = continuous_dist.pyro_dist
-    if Dist in [dist.LKJ, dist.LKJCorrCholesky]:
+    if Dist in [dist.LKJ, dist.LKJCholesky]:
         pytest.xfail(reason="incorrect submanifold scaling")
 
     num_samples = 50000
@@ -113,6 +146,13 @@ def test_gof(continuous_dist):
 
 
 # Distributions tests - discrete distributions
+
+def test_support_is_discrete(discrete_dist):
+    Dist = discrete_dist.pyro_dist
+    for i in range(discrete_dist.get_num_test_data()):
+        d = Dist(**discrete_dist.get_dist_params(i))
+        assert d.support.is_discrete
+
 
 def test_enumerate_support(discrete_dist):
     expected_support = discrete_dist.expected_support
@@ -260,9 +300,6 @@ def test_expand_error(dist, initial_shape, proposed_shape, default):
             with xfail_if_not_implemented():
                 large = small.expand(torch.Size(initial_shape) + small.batch_shape)
         proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-        if dist.get_test_distribution_name() == 'LKJCorrCholesky':
-            pytest.skip('LKJCorrCholesky can expand to a shape not' +
-                        'broadcastable with its original batch_shape.')
         with pytest.raises((RuntimeError, ValueError)):
             large.expand(proposed_batch_shape)
 

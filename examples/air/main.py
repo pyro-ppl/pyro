@@ -19,15 +19,15 @@ from functools import partial
 import numpy as np
 import torch
 import visdom
+from air import AIR, latents_to_tensor
+from viz import draw_many, tensor_to_objs
 
 import pyro
 import pyro.contrib.examples.multi_mnist as multi_mnist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from air import AIR, latents_to_tensor
 from pyro.contrib.examples.util import get_data_directory
 from pyro.infer import SVI, JitTraceGraph_ELBO, TraceGraph_ELBO
-from viz import draw_many, tensor_to_objs
 
 
 def count_accuracy(X, true_counts, air, batch_size):
@@ -248,7 +248,7 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.2')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
     parser.add_argument('-n', '--num-steps', type=int, default=int(1e8),
                         help='number of optimization steps to take')
