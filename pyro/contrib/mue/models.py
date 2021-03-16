@@ -15,8 +15,8 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 import pyro
-from pyro import poutine
 import pyro.distributions as dist
+from pyro import poutine
 from pyro.contrib.mue.missingdatahmm import MissingDataDiscreteHMM
 from pyro.contrib.mue.statearrangers import Profile
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO

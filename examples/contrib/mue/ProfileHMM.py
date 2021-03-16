@@ -35,10 +35,10 @@ https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.full.pdf
 import argparse
 import datetime
 import json
-import numpy as np
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from torch.optim import Adam
 
