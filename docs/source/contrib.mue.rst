@@ -12,7 +12,7 @@ preprocessing.
 
 Reference:
 MuE models were described in Weinstein and Marks (2020),
-https://www.biorxiv.org/content/10.1101/2020.07.31.231381v1.
+https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.
 
 Example MuE Models
 ------------------

@@ -74,7 +74,7 @@ def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
                            scheduler, jit)
 
     # Reconstruct.
-    recon = model.reconstruct_precursor_seq(dataset, 1, pyro.param)
+    recon = model._reconstruct_regressor_seq(dataset, 1, pyro.param)
 
     assert not np.isnan(losses[-1])
     assert recon.shape == (1, max([len(seq) for seq in seqs]), len(alph))

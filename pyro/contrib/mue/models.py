@@ -38,15 +38,13 @@ class ProfileHMM(nn.Module):
     :param int alphabet_length: Length of the sequence alphabet (e.g. 20 for
         amino acids).
     :param bool length_model: Model the length of the sequence with a Poisson
-        distribution. (Default: False.)
+        distribution.
     :param float prior_scale: Standard deviation of the prior distribution.
-        (Default: 1.0.)
-    :param float indel_prior_bias: Offset of the mean of the prior distribution
-        over the indel probability. Higher values lead to lower probability
-        of indels. (Default: 10.0.)
-    :param bool cuda: Transfer data onto the GPU for training. (Default: False.)
+    :param float indel_prior_bias: Mean of the prior distribution over the
+        log probability of an indel not occurring. Higher values lead to lower
+        probability of indels.
+    :param bool cuda: Transfer data onto the GPU for training.
     :param bool pin_memory: Pin memory for faster GPU transfer.
-        (Default: False.)
     """
     def __init__(self, latent_seq_length, alphabet_length,
                  length_model=False, prior_scale=1., indel_prior_bias=10.,
@@ -159,7 +157,7 @@ class ProfileHMM(nn.Module):
             pyro.sample("length", dist.Normal(
                     length_q_mn, softplus(length_q_sd)))
 
-    def fit_svi(self, dataset, epochs=1, batch_size=1, scheduler=None,
+    def fit_svi(self, dataset, epochs=2, batch_size=1, scheduler=None,
                 jit=False):
         """
         Infer approximate posterior with stochastic variational inference.
@@ -167,12 +165,13 @@ class ProfileHMM(nn.Module):
         This runs :class:`~pyro.infer.svi.SVI`. It is an approximate inference
         method useful for quickly iterating on probabilistic models.
 
-        :param torch.utils.data.Dataset dataset: The training dataset.
-        :param int epochs: Number of epochs of training. (Default: 1.)
+        :param dataset: The training dataset, with type
+            :class:`~torch.utils.data.Dataset`.
+        :param int epochs: Number of epochs of training.
         :param int batch_size: Minibatch size (number of sequences).
-            (Default: 1.)
-        :param pyro.optim.MultiStepLR scheduler: Learning rate scheduler.
-            (Default: Adam optimizer, 0.01 constant learning rate.)
+        :param scheduler: Learning rate scheduler, with type
+            :class:`~pyro.optim.MultiStepLR`. (Default: Adam optimizer,
+            0.01 constant learning rate.)
         :param bool jit: Whether to use a jit compiled ELBO.
         """
 
@@ -211,11 +210,13 @@ class ProfileHMM(nn.Module):
 
     def evaluate(self, dataset_train, dataset_test=None, jit=False):
         """
-        Evaluate performance on train and test datasets.
+        Evaluate performance (log probability and per residue perplexity) on
+        train and test datasets.
 
-        :param torch.utils.data.Dataset dataset: The training dataset.
-        :param torch.utils.data.Dataset dataset: The testing dataset.
-            (Default: None.)
+        :param dataset: The training dataset, with type
+            :class:`~torch.utils.data.Dataset`.
+        :param torch.utils.data.Dataset dataset: The testing dataset, with type
+            :class:`~torch.utils.data.Dataset` or None. (Default: None.)
         :param bool jit: Whether to use a jit compiled ELBO.
         """
         dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
@@ -288,7 +289,49 @@ class Encoder(nn.Module):
 
 
 class FactorMuE(nn.Module):
-    """Model: pPCA + MuE."""
+    """FactorMuE
+
+    This model consists of probabilistic PCA plus a MuE output distribution.
+
+    The priors are all Normal distributions, and where relevant pushed through
+    a softmax to produce a prior over the simplex.
+
+    :param int data_length: Length of the input sequence matrix, including
+        zero padding at the end.
+    :param int z_dim: Number of dimensions of the z space.
+    :param int batch_size: Minibatch size.
+    :param int latent_seq_length: Length of the latent regressor sequence (M).
+        Must be greater than or equal to 1. (Default: 1.1 x data_length.)
+    :param bool indel_factor_dependence: Indel probabilities depend on the
+        latent variable z.
+    :param float indel_prior_scale: Standard deviation of the prior
+        distribution on indel parameters.
+    :param float indel_prior_bias: Mean of the prior distribution over the
+        log probability of an indel not occurring. Higher values lead to lower
+        probability of indels.
+    :param float inverse_temp_prior: Mean of the prior distribution over the
+        inverse temperature parameter.
+    :param float weights_prior_scale: Standard deviation of the prior
+        distribution over the factors.
+    :param float offset_prior_scale: Standard deviation of the prior
+        distribution over the offset (constant) pPCA model.
+    :param str z_prior_distribution: Prior distribution over the latent
+        variable z. Either 'Normal' (pPCA model) or 'Laplace' (an ICA model).
+    :param bool ARD_prior: Use automatic relevance determination prior on
+        factors.
+    :param bool substitution_matrix: Use a learnable substitution matrix (l)
+        rather than the identity matrix.
+    :param float substitution_prior_scale: Standard deviation of the prior
+        distribution over substitution matrix parameters (when
+        substitution_matrix is True).
+    :param int latent_alphabet_length: Length of the alphabet in the latent
+        regressor sequence.
+    :param bool length_model: Model the length of the sequence with a Poisson
+        distribution.
+    :param bool cuda: Transfer data onto the GPU for training.
+    :param bool pin_memory: Pin memory for faster GPU transfer.
+    :epsilon float epsilon: A small value for numerical stability.
+    """
     def __init__(self, data_length, alphabet_length, z_dim,
                  batch_size=10,
                  latent_seq_length=None,
@@ -558,9 +601,26 @@ class FactorMuE(nn.Module):
                     pyro.sample("latent",
                                 dist.Laplace(z_loc, z_scale).to_event(1))
 
-    def fit_svi(self, dataset, epochs=2, anneal_length=1, batch_size=None,
+    def fit_svi(self, dataset, epochs=2, anneal_length=1., batch_size=None,
                 scheduler=None, jit=False):
-        """Infer model parameters with stochastic variational inference."""
+        """
+        Infer approximate posterior with stochastic variational inference.
+
+        This runs :class:`~pyro.infer.svi.SVI`. It is an approximate inference
+        method useful for quickly iterating on probabilistic models.
+
+        :param dataset: The training dataset, with type
+            :class:`~torch.utils.data.Dataset`.
+        :param int epochs: Number of epochs of training.
+        :param float anneal_length: Number of epochs over which to linearly
+            anneal the prior KL divergence weight from 0 to 1, for improved
+            convergence.
+        :param int batch_size: Minibatch size (number of sequences).
+        :param scheduler: Learning rate scheduler, with type
+            :class:`~pyro.optim.MultiStepLR`. (Default: Adam optimizer,
+            0.01 constant learning rate.)
+        :param bool jit: Whether to use a jit compiled ELBO.
+        """
 
         # Setup.
         if batch_size is not None:
@@ -613,7 +673,16 @@ class FactorMuE(nn.Module):
         return torch.tensor(min([anneal_frac, 1.]))
 
     def evaluate(self, dataset_train, dataset_test=None, jit=False):
-        """Evaluate performance on train and test datasets."""
+        """
+        Evaluate performance (log probability and per residue perplexity) on
+        train and test datasets.
+
+        :param dataset: The training dataset, with type
+            :class:`~torch.utils.data.Dataset`.
+        :param torch.utils.data.Dataset dataset: The testing dataset, with type
+            :class:`~torch.utils.data.Dataset` or None. (Default: None.)
+        :param bool jit: Whether to use a jit compiled ELBO.
+        """
         dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
         if dataset_test is not None:
             dataload_test = DataLoader(dataset_test, batch_size=1,
@@ -670,7 +739,14 @@ class FactorMuE(nn.Module):
         return lp, perplex
 
     def embed(self, dataset, batch_size=None):
-        """Get latent space embedding."""
+        """
+        Get the latent space embedding (mean posterior value of z).
+
+        :param dataset: The dataset to embed, with type
+            :class:`~torch.utils.data.Dataset`.
+        :param int batch_size: Minibatch size (number of sequences). (Defaults
+            to batch_size of the model object.)
+        """
         if batch_size is None:
             batch_size = self.batch_size
         dataload = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -685,7 +761,8 @@ class FactorMuE(nn.Module):
 
         return torch.cat(z_locs), torch.cat(z_scales)
 
-    def reconstruct_precursor_seq(self, data, ind, param):
+    def _reconstruct_regressor_seq(self, data, ind, param):
+        "Reconstruct the latent regressor sequence given data."
         with torch.no_grad():
             # Encode seq.
             z_loc = self.encoder(data[ind][0])[0]
