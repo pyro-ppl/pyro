@@ -16,7 +16,7 @@ https://github.com/debbiemarkslab/MuE/blob/master/models/examples/ve6_full.fasta
 
 Example run:
 python ProfileHMM.py -f PATH/ve6_full.fasta -b 10 -M 174 --indel-prior-bias 10.
-    -e 15 -lr 0.01 --jit True --cuda True
+    -e 15 -lr 0.01 --jit --cuda
 This should take about 9 minutes to run on a GPU. The perplexity should be
 around 5.8.
 
@@ -115,12 +115,12 @@ def main(args):
 
     # Plots.
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    if args.plots:
+    if not args.no_plots:
         plt.figure(figsize=(6, 6))
         plt.plot(losses)
         plt.xlabel('step')
         plt.ylabel('loss')
-        if args.save:
+        if not args.no_save:
             plt.savefig(os.path.join(
                  args.out_folder,
                  'ProfileHMM_plot.loss_{}.pdf'.format(time_stamp)))
@@ -132,7 +132,7 @@ def main(args):
         plt.xlabel('position')
         plt.ylabel('probability of insert')
         plt.legend([r'$r_0$', r'$r_1$', r'$r_2$'])
-        if args.save:
+        if not args.no_save:
             plt.savefig(os.path.join(
                  args.out_folder,
                  'ProfileHMM_plot.insert_prob_{}.pdf'.format(time_stamp)))
@@ -143,12 +143,12 @@ def main(args):
         plt.xlabel('position')
         plt.ylabel('probability of delete')
         plt.legend([r'$u_0$', r'$u_1$', r'$u_2$'])
-        if args.save:
+        if not args.no_save:
             plt.savefig(os.path.join(
                  args.out_folder,
                  'ProfileHMM_plot.delete_prob_{}.pdf'.format(time_stamp)))
 
-    if args.save:
+    if not args.no_save:
         pyro.get_param_store().save(os.path.join(
                 args.out_folder,
                 'ProfileHMM_results.params_{}.out'.format(time_stamp)))
@@ -185,7 +185,8 @@ if __name__ == '__main__':
                         help='Batch size.')
     parser.add_argument("-M", "--latent-seq-length", default=None, type=int,
                         help='Latent sequence length.')
-    parser.add_argument("-L", "--length-model", default=False, type=bool,
+    parser.add_argument("-L", "--length-model", default=False,
+                        action='store_true',
                         help='Model sequence length.')
     parser.add_argument("--prior-scale", default=1., type=float,
                         help='Prior scale parameter (all parameters).')
@@ -199,18 +200,19 @@ if __name__ == '__main__':
                         help='Gamma parameter for multistage learning rate.')
     parser.add_argument("-e", "--n-epochs", default=10, type=int,
                         help='Number of epochs of training.')
-    parser.add_argument("-p", "--plots", default=True, type=bool,
+    parser.add_argument("--no-plots", default=False, action='store_true',
                         help='Make plots.')
-    parser.add_argument("-s", "--save", default=True, type=bool,
-                        help='Save plots and results.')
+    parser.add_argument("--no-save", default=False, action='store_true',
+                        help='Do not save plots and results.')
     parser.add_argument("-outf", "--out-folder", default='.',
                         help='Folder to save plots.')
     parser.add_argument("--split", default=0.2, type=float,
                         help=('Fraction of dataset to holdout for testing'))
-    parser.add_argument("--jit", default=False, type=bool,
+    parser.add_argument("--jit", default=False, action='store_true',
                         help='JIT compile the ELBO.')
-    parser.add_argument("--cuda", default=False, type=bool, help='Use GPU.')
-    parser.add_argument("--pin-mem", default=False, type=bool,
+    parser.add_argument("--cuda", default=False, action='store_true',
+                        help='Use GPU.')
+    parser.add_argument("--pin-mem", default=False, action='store_true',
                         help='Use pin_memory for faster GPU transfer.')
     args = parser.parse_args()
 

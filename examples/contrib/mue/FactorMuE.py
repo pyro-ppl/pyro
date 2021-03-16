@@ -17,7 +17,7 @@ https://github.com/debbiemarkslab/MuE/blob/master/models/examples/ve6_full.fasta
 Example run:
 python FactorMuE.py -f PATH/ve6_full.fasta --z-dim 2 -b 10 -M 174 -D 25
     --indel-prior-bias 10. --anneal 5 -e 15 -lr 0.01 --z-prior Laplace
-    --jit True --cuda True
+    --jit --cuda
 This should take about 8 minutes to run on a GPU. The latent space should show
 multiple small clusters, and the perplexity should be around 4.0.
 
@@ -97,7 +97,7 @@ def main(args):
                       offset_prior_scale=args.offset_prior_scale,
                       z_prior_distribution=args.z_prior,
                       ARD_prior=args.ARD_prior,
-                      substitution_matrix=args.substitution_matrix,
+                      substitution_matrix=(not args.no_substitution_matrix),
                       substitution_prior_scale=args.substitution_prior_scale,
                       latent_alphabet_length=args.latent_alphabet,
                       length_model=args.length_model,
@@ -124,12 +124,12 @@ def main(args):
 
     # Plot and save.
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    if args.plots:
+    if not args.no_plots:
         plt.figure(figsize=(6, 6))
         plt.plot(losses)
         plt.xlabel('step')
         plt.ylabel('loss')
-        if args.save:
+        if not args.no_save:
             plt.savefig(os.path.join(
                  args.out_folder,
                  'FactorMuE_plot.loss_{}.pdf'.format(time_stamp)))
@@ -138,7 +138,7 @@ def main(args):
         plt.scatter(z_locs[:, 0], z_locs[:, 1])
         plt.xlabel(r'$z_1$')
         plt.ylabel(r'$z_2$')
-        if args.save:
+        if not args.no_save:
             plt.savefig(os.path.join(
                  args.out_folder,
                  'FactorMuE_plot.latent_{}.pdf'.format(time_stamp)))
@@ -153,7 +153,7 @@ def main(args):
             plt.xlabel('position')
             plt.ylabel('probability of insert')
             plt.legend([r'$r_0$', r'$r_1$', r'$r_2$'])
-            if args.save:
+            if not args.no_save:
                 plt.savefig(os.path.join(
                      args.out_folder,
                      'FactorMuE_plot.insert_prob_{}.pdf'.format(time_stamp)))
@@ -164,11 +164,12 @@ def main(args):
             plt.xlabel('position')
             plt.ylabel('probability of delete')
             plt.legend([r'$u_0$', r'$u_1$', r'$u_2$'])
-            if args.save:
+            if not args.no_save:
                 plt.savefig(os.path.join(
                      args.out_folder,
                      'FactorMuE_plot.delete_prob_{}.pdf'.format(time_stamp)))
-    if args.save:
+
+    if not args.no_save:
         pyro.get_param_store().save(os.path.join(
                 args.out_folder,
                 'FactorMuE_results.params_{}.out'.format(time_stamp)))
@@ -217,17 +218,21 @@ if __name__ == '__main__':
                         help='Batch size.')
     parser.add_argument("-M", "--latent-seq-length", default=None, type=int,
                         help='Latent sequence length.')
-    parser.add_argument("-idfac", "--indel-factor", default=False, type=bool,
+    parser.add_argument("-idfac", "--indel-factor", default=False,
+                        action='store_true',
                         help='Indel parameters depend on latent variable.')
     parser.add_argument("-zdist", "--z-prior", default='Normal',
                         help='Latent prior distribution (normal or Laplace).')
-    parser.add_argument("-ard", "--ARD-prior", default=False, type=bool,
+    parser.add_argument("-ard", "--ARD-prior", default=False,
+                        action='store_true',
                         help='Use automatic relevance detection prior.')
-    parser.add_argument("-sub", "--substitution-matrix", default=True, type=bool,
-                        help='Use substitution matrix.')
+    parser.add_argument("--no-substitution-matrix", default=False,
+                        action='store_true',
+                        help='Do not use substitution matrix.')
     parser.add_argument("-D", "--latent-alphabet", default=None, type=int,
                         help='Latent alphabet length.')
-    parser.add_argument("-L", "--length-model", default=False, type=bool,
+    parser.add_argument("-L", "--length-model", default=False,
+                        action='store_true',
                         help='Model sequence length.')
     parser.add_argument("--indel-prior-scale", default=1., type=float,
                         help=('Indel prior scale parameter ' +
@@ -252,18 +257,19 @@ if __name__ == '__main__':
                         help='Number of epochs of training.')
     parser.add_argument("--anneal", default=0., type=float,
                         help='Number of epochs to anneal beta over.')
-    parser.add_argument("-p", "--plots", default=True, type=bool,
+    parser.add_argument("--no-plots", default=False, action='store_true',
                         help='Make plots.')
-    parser.add_argument("-s", "--save", default=True, type=bool,
-                        help='Save plots and results.')
+    parser.add_argument("--no-save", default=False, action='store_true',
+                        help='Do not save plots and results.')
     parser.add_argument("-outf", "--out-folder", default='.',
                         help='Folder to save plots.')
     parser.add_argument("--split", default=0.2, type=float,
                         help=('Fraction of dataset to holdout for testing'))
-    parser.add_argument("--jit", default=False, type=bool,
+    parser.add_argument("--jit", default=False, action='store_true',
                         help='JIT compile the ELBO.')
-    parser.add_argument("--cuda", default=False, type=bool, help='Use GPU.')
-    parser.add_argument("--pin-mem", default=False, type=bool,
+    parser.add_argument("--cuda", default=False, action='store_true',
+                        help='Use GPU.')
+    parser.add_argument("--pin-mem", default=False, action='store_true',
                         help='Use pin_memory for faster GPU transfer.')
     args = parser.parse_args()
 
