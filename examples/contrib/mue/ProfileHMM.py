@@ -2,7 +2,28 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-A standard profile HMM model.
+A standard profile HMM model [1], which corresponds to a constant (delta
+function) distribution with a MuE observation [2]. This is a standard
+generative model of variable-length biological sequences (e.g. proteins) which
+does not require preprocessing the data by building a multiple sequence
+alignment. It can be compared to a more complex MuE model in this package,
+the FactorMuE.
+
+An example dataset consisting of proteins similar to the human papillomavirus E6
+protein, collected from a non-redundant sequence dataset using jackhmmer, can
+be found at
+https://github.com/debbiemarkslab/MuE/blob/master/models/examples/ve6_full.fasta
+
+References:
+[1] R. Durbin, S. R. Eddy, A. Krogh, and G. Mitchison (1998)
+"Biological sequence analysis: probabilistic models of proteins and nucleic
+acids"
+Cambridge university press
+
+[2] E. N. Weinstein, D. S. Marks (2021)
+"Generative probabilistic biological sequence models that account for
+mutational variability"
+https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.full.pdf
 """
 
 import argparse
@@ -22,7 +43,7 @@ from pyro.optim import MultiStepLR
 
 
 def generate_data(small_test):
-    """Generate example dataset."""
+    """Generate mini example dataset."""
     if small_test:
         mult_dat = 1
     else:
@@ -45,8 +66,11 @@ def main(args):
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
+        # Train test split.
         heldout_num = int(np.ceil(args.split*len(dataset)))
         data_lengths = [len(dataset) - heldout_num, heldout_num]
+        # Specific data split seed, for comparability across models and
+        # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
         indices = torch.randperm(sum(data_lengths)).tolist()
         dataset_train, dataset_test = [
@@ -68,7 +92,7 @@ def main(args):
                        cuda=args.cuda,
                        pin_memory=args.pin_mem)
 
-    # Infer.
+    # Infer with SVI.
     scheduler = MultiStepLR({'optimizer': Adam,
                              'optim_args': {'lr': args.learning_rate},
                              'milestones': json.loads(args.milestones),
@@ -114,6 +138,7 @@ def main(args):
         plt.plot(insert_expect[:, :, 1].cpu().numpy())
         plt.xlabel('position')
         plt.ylabel('probability of insert')
+        plt.legend([r'$r_0$', r'$r_1$', r'$r_2$'])
         if args.save:
             plt.savefig(os.path.join(
                  args.out_folder,
@@ -124,6 +149,7 @@ def main(args):
         plt.plot(delete_expect[:, :, 1].cpu().numpy())
         plt.xlabel('position')
         plt.ylabel('probability of delete')
+        plt.legend([r'$u_0$', r'$u_1$', r'$u_2$'])
         if args.save:
             plt.savefig(os.path.join(
                  args.out_folder,
@@ -150,7 +176,8 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Factor MuE model.")
+    # Parse command line arguments.
+    parser = argparse.ArgumentParser(description="Profile HMM model.")
     parser.add_argument("--test", action='store_true', default=False,
                         help='Run with generated example dataset.')
     parser.add_argument("--small", action='store_true', default=False,

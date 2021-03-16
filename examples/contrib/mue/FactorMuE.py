@@ -2,7 +2,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-A PCA model with a MuE emission (FactorMuE).
+A probabilistic PCA model with a MuE observation, called a 'FactorMuE' model
+[1]. This is a generative model of variable-length biological sequences (e.g.
+proteins) which does not require preprocessing the data by building a
+multiple sequence alignment. It can be used to infer a latent representation
+of sequences and the principal components of sequence variation, while
+accounting for alignment uncertainty.
+
+An example dataset consisting of proteins similar to the human papillomavirus E6
+protein, collected from a non-redundant sequence dataset using jackhmmer, can
+be found at
+https://github.com/debbiemarkslab/MuE/blob/master/models/examples/ve6_full.fasta
+
+Reference:
+[1] E. N. Weinstein, D. S. Marks (2021)
+"Generative probabilistic biological sequence models that account for
+mutational variability"
+https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.full.pdf
 """
 
 import argparse
@@ -22,7 +38,7 @@ from pyro.optim import MultiStepLR
 
 
 def generate_data(small_test):
-    """Generate example dataset."""
+    """Generate mini example dataset."""
     if small_test:
         mult_dat = 1
     else:
@@ -46,7 +62,8 @@ def main(args):
         # Train test split.
         heldout_num = int(np.ceil(args.split*len(dataset)))
         data_lengths = [len(dataset) - heldout_num, heldout_num]
-        # Specific data split seed.
+        # Specific data split seed, for comparability across models and
+        # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
         indices = torch.randperm(sum(data_lengths)).tolist()
         dataset_train, dataset_test = [
@@ -80,7 +97,7 @@ def main(args):
                       cuda=args.cuda,
                       pin_memory=args.pin_mem)
 
-    # Infer.
+    # Infer with SVI.
     scheduler = MultiStepLR({'optimizer': Adam,
                              'optim_args': {'lr': args.learning_rate},
                              'milestones': json.loads(args.milestones),
@@ -95,7 +112,7 @@ def main(args):
     print('train logp: {} perplex: {}'.format(train_lp, train_perplex))
     print('test logp: {} perplex: {}'.format(test_lp, test_perplex))
 
-    # Embed.
+    # Get latent space embedding.
     z_locs, z_scales = model.embed(dataset)
 
     # Plot and save.
@@ -112,20 +129,23 @@ def main(args):
 
         plt.figure(figsize=(6, 6))
         plt.scatter(z_locs[:, 0], z_locs[:, 1])
-        plt.xlabel('z_1')
-        plt.ylabel('z_2')
+        plt.xlabel(r'$z_1$')
+        plt.ylabel(r'$z_2$')
         if args.save:
             plt.savefig(os.path.join(
                  args.out_folder,
                  'FactorMuE_plot.latent_{}.pdf'.format(time_stamp)))
 
         if not args.indel_factor:
+            # Plot indel parameters. See statearrangers.py for details on the
+            # r and u parameters.
             plt.figure(figsize=(6, 6))
             insert = pyro.param("insert_q_mn").detach()
             insert_expect = torch.exp(insert - insert.logsumexp(-1, True))
             plt.plot(insert_expect[:, :, 1].cpu().numpy())
             plt.xlabel('position')
             plt.ylabel('probability of insert')
+            plt.legend([r'$r_0$', r'$r_1$', r'$r_2$'])
             if args.save:
                 plt.savefig(os.path.join(
                      args.out_folder,
@@ -136,6 +156,7 @@ def main(args):
             plt.plot(delete_expect[:, :, 1].cpu().numpy())
             plt.xlabel('position')
             plt.ylabel('probability of delete')
+            plt.legend([r'$u_0$', r'$u_1$', r'$u_2$'])
             if args.save:
                 plt.savefig(os.path.join(
                      args.out_folder,
@@ -171,6 +192,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    # Parse command line arguments.
     parser = argparse.ArgumentParser(description="Factor MuE model.")
     parser.add_argument("--test", action='store_true', default=False,
                         help='Run with generated example dataset.')
