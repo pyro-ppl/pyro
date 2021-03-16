@@ -7,7 +7,7 @@ MuE
 
 ``pyro.contrib.mue`` provides modeling tools for working with biological
 sequence data. In particular it implements MuE distributions, which are used as
-a fully probabilistic alternative to multiple sequence alignment-based
+a fully generative alternative to multiple sequence alignment-based
 preprocessing.
 
 Reference:
