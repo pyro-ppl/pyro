@@ -14,6 +14,13 @@ protein, collected from a non-redundant sequence dataset using jackhmmer, can
 be found at
 https://github.com/debbiemarkslab/MuE/blob/master/models/examples/ve6_full.fasta
 
+Example run:
+python FactorMuE.py -f PATH/ve6_full.fasta --z-dim 2 -b 10 -M 174 -D 25
+    --indel-prior-bias 10. --anneal 5 -e 15 -lr 0.01 --z-prior Laplace
+    --jit True --cuda True
+This should take about 8 minutes to run on a GPU. The latent space should show
+multiple small clusters, and the perplexity should be around 4.0.
+
 Reference:
 [1] E. N. Weinstein, D. S. Marks (2021)
 "Generative probabilistic biological sequence models that account for

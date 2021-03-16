@@ -14,6 +14,12 @@ protein, collected from a non-redundant sequence dataset using jackhmmer, can
 be found at
 https://github.com/debbiemarkslab/MuE/blob/master/models/examples/ve6_full.fasta
 
+Example run:
+python ProfileHMM.py -f PATH/ve6_full.fasta -b 10 -M 174 --indel-prior-bias 10.
+    -e 15 -lr 0.01 --jit True --cuda True
+This should take about 9 minutes to run on a GPU. The perplexity should be
+around 5.8.
+
 References:
 [1] R. Durbin, S. R. Eddy, A. Krogh, and G. Mitchison (1998)
 "Biological sequence analysis: probabilistic models of proteins and nucleic
@@ -120,19 +126,6 @@ def main(args):
                  'ProfileHMM_plot.loss_{}.pdf'.format(time_stamp)))
 
         plt.figure(figsize=(6, 6))
-        precursor_seq = pyro.param("precursor_seq_q_mn").detach()
-        precursor_seq_expect = torch.exp(precursor_seq -
-                                         precursor_seq.logsumexp(-1, True))
-        plt.plot(precursor_seq_expect[:, 1].cpu().numpy())
-        plt.xlabel('position')
-        plt.ylabel('probability of character 1')
-        if args.save:
-            plt.savefig(os.path.join(
-                 args.out_folder,
-                 'ProfileHMM_plot.precursor_seq_prob_{}.pdf'.format(
-                                                                time_stamp)))
-
-        plt.figure(figsize=(6, 6))
         insert = pyro.param("insert_q_mn").detach()
         insert_expect = torch.exp(insert - insert.logsumexp(-1, True))
         plt.plot(insert_expect[:, :, 1].cpu().numpy())
@@ -161,7 +154,7 @@ def main(args):
                 'ProfileHMM_results.params_{}.out'.format(time_stamp)))
         with open(os.path.join(
                 args.out_folder,
-                'FactorMuE_results.evaluation_{}.txt'.format(time_stamp)),
+                'ProfileHMM_results.evaluation_{}.txt'.format(time_stamp)),
                 'w') as ow:
             ow.write('train_lp,test_lp,train_perplex,test_perplex\n')
             ow.write('{},{},{},{}\n'.format(train_lp, test_lp, train_perplex,
