@@ -14,7 +14,19 @@ alphabets = {'amino-acid': np.array(
 
 
 class BiosequenceDataset(Dataset):
-    """Load biological sequence data."""
+    """
+    Load biological sequence data, either from a fasta file or a python list.
+
+    :param source: Either the input fasta file path (str) or the input list
+        of sequences (list of str).
+    :param str source_type: Type of input, either 'list' or 'fasta'.
+    :param str alphabet: Alphabet to use. Alphabets 'amino-acid' and 'dna' are
+        preset; any other input will be interpreted as the alphabet itself,
+        i.e. you can use 'ACGU' for RNA.
+    :param int max_length: Total length of the one-hot representation of the
+        sequences, including zero padding. Defaults to the maximum sequence
+        length in the dataset.
+    """
 
     def __init__(self, source, source_type='list', alphabet='amino-acid',
                  max_length=None):

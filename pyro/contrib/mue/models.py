@@ -22,8 +22,6 @@ from pyro.contrib.mue.statearrangers import Profile
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import MultiStepLR
 
-import pdb
-
 
 class ProfileHMM(nn.Module):
     """Profile HMM.
@@ -43,15 +41,17 @@ class ProfileHMM(nn.Module):
     :param float indel_prior_bias: Mean of the prior distribution over the
         log probability of an indel not occurring. Higher values lead to lower
         probability of indels.
-    :param bool cuda: Transfer data onto the GPU for training.
+    :param bool cuda: Transfer data onto the GPU during training.
     :param bool pin_memory: Pin memory for faster GPU transfer.
     """
     def __init__(self, latent_seq_length, alphabet_length,
                  length_model=False, prior_scale=1., indel_prior_bias=10.,
-                 cuda=False):
+                 cuda=False, pin_memory=False):
         super().__init__()
         assert isinstance(cuda, bool)
         self.cuda = cuda
+        assert isinstance(pin_memory, bool)
+        self.pin_memory = pin_memory
 
         assert isinstance(latent_seq_length, int) and latent_seq_length > 0
         self.latent_seq_length = latent_seq_length
@@ -165,13 +165,11 @@ class ProfileHMM(nn.Module):
         This runs :class:`~pyro.infer.svi.SVI`. It is an approximate inference
         method useful for quickly iterating on probabilistic models.
 
-        :param dataset: The training dataset, with type
-            :class:`~torch.utils.data.Dataset`.
+        :param ~torch.utils.data.Dataset dataset: The training dataset.
         :param int epochs: Number of epochs of training.
         :param int batch_size: Minibatch size (number of sequences).
-        :param scheduler: Learning rate scheduler, with type
-            :class:`~pyro.optim.MultiStepLR`. (Default: Adam optimizer,
-            0.01 constant learning rate.)
+        :param pyro.optim.MultiStepLR scheduler: Optimization scheduler.
+            (Default: Adam optimizer, 0.01 constant learning rate.)
         :param bool jit: Whether to use a jit compiled ELBO.
         """
 
@@ -213,10 +211,8 @@ class ProfileHMM(nn.Module):
         Evaluate performance (log probability and per residue perplexity) on
         train and test datasets.
 
-        :param dataset: The training dataset, with type
-            :class:`~torch.utils.data.Dataset`.
-        :param torch.utils.data.Dataset dataset: The testing dataset, with type
-            :class:`~torch.utils.data.Dataset` or None. (Default: None.)
+        :param ~torch.utils.data.Dataset dataset: The training dataset.
+        :param ~torch.utils.data.Dataset dataset: The testing dataset.
         :param bool jit: Whether to use a jit compiled ELBO.
         """
         dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
@@ -294,10 +290,12 @@ class FactorMuE(nn.Module):
     This model consists of probabilistic PCA plus a MuE output distribution.
 
     The priors are all Normal distributions, and where relevant pushed through
-    a softmax to produce a prior over the simplex.
+    a softmax onto the simplex.
 
     :param int data_length: Length of the input sequence matrix, including
         zero padding at the end.
+    :param int alphabet_length: Length of the sequence alphabet (e.g. 20 for
+        amino acids).
     :param int z_dim: Number of dimensions of the z space.
     :param int batch_size: Minibatch size.
     :param int latent_seq_length: Length of the latent regressor sequence (M).
@@ -314,12 +312,12 @@ class FactorMuE(nn.Module):
     :param float weights_prior_scale: Standard deviation of the prior
         distribution over the factors.
     :param float offset_prior_scale: Standard deviation of the prior
-        distribution over the offset (constant) pPCA model.
+        distribution over the offset (constant) in the pPCA model.
     :param str z_prior_distribution: Prior distribution over the latent
         variable z. Either 'Normal' (pPCA model) or 'Laplace' (an ICA model).
     :param bool ARD_prior: Use automatic relevance determination prior on
         factors.
-    :param bool substitution_matrix: Use a learnable substitution matrix (l)
+    :param bool substitution_matrix: Use a learnable substitution matrix
         rather than the identity matrix.
     :param float substitution_prior_scale: Standard deviation of the prior
         distribution over substitution matrix parameters (when
@@ -327,10 +325,10 @@ class FactorMuE(nn.Module):
     :param int latent_alphabet_length: Length of the alphabet in the latent
         regressor sequence.
     :param bool length_model: Model the length of the sequence with a Poisson
-        distribution.
-    :param bool cuda: Transfer data onto the GPU for training.
+        distribution, with mean dependent on the latent pPCA model.
+    :param bool cuda: Transfer data onto the GPU during training.
     :param bool pin_memory: Pin memory for faster GPU transfer.
-    :epsilon float epsilon: A small value for numerical stability.
+    :param float epsilon: A small value for numerical stability.
     """
     def __init__(self, data_length, alphabet_length, z_dim,
                  batch_size=10,
@@ -609,16 +607,14 @@ class FactorMuE(nn.Module):
         This runs :class:`~pyro.infer.svi.SVI`. It is an approximate inference
         method useful for quickly iterating on probabilistic models.
 
-        :param dataset: The training dataset, with type
-            :class:`~torch.utils.data.Dataset`.
+        :param ~torch.utils.data.Dataset dataset: The training dataset.
         :param int epochs: Number of epochs of training.
         :param float anneal_length: Number of epochs over which to linearly
             anneal the prior KL divergence weight from 0 to 1, for improved
-            convergence.
+            training.
         :param int batch_size: Minibatch size (number of sequences).
-        :param scheduler: Learning rate scheduler, with type
-            :class:`~pyro.optim.MultiStepLR`. (Default: Adam optimizer,
-            0.01 constant learning rate.)
+        :param pyro.optim.MultiStepLR scheduler: Optimization scheduler.
+            (Default: Adam optimizer, 0.01 constant learning rate.)
         :param bool jit: Whether to use a jit compiled ELBO.
         """
 
@@ -677,10 +673,9 @@ class FactorMuE(nn.Module):
         Evaluate performance (log probability and per residue perplexity) on
         train and test datasets.
 
-        :param dataset: The training dataset, with type
-            :class:`~torch.utils.data.Dataset`.
-        :param torch.utils.data.Dataset dataset: The testing dataset, with type
-            :class:`~torch.utils.data.Dataset` or None. (Default: None.)
+        :param ~torch.utils.data.Dataset dataset: The training dataset.
+        :param ~torch.utils.data.Dataset dataset: The testing dataset
+            (optional).
         :param bool jit: Whether to use a jit compiled ELBO.
         """
         dataload_train = DataLoader(dataset_train, batch_size=1, shuffle=False)
@@ -742,8 +737,7 @@ class FactorMuE(nn.Module):
         """
         Get the latent space embedding (mean posterior value of z).
 
-        :param dataset: The dataset to embed, with type
-            :class:`~torch.utils.data.Dataset`.
+        :param ~torch.utils.data.Dataset dataset: The dataset to embed.
         :param int batch_size: Minibatch size (number of sequences). (Defaults
             to batch_size of the model object.)
         """

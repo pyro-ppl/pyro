@@ -13,18 +13,19 @@ class Profile(nn.Module):
 
     **References**
 
-    [1] E. N. Weinstein, D. S. Marks (2020)
+    [1] E. N. Weinstein, D. S. Marks (2021)
     "Generative probabilistic biological sequence models that account for
     mutational variability"
     https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.full.pdf
+
     [2] R. Durbin, S. R. Eddy, A. Krogh, and G. Mitchison (1998)
     "Biological sequence analysis: probabilistic models of proteins and nucleic
     acids"
     Cambridge university press
 
-    :param M: Length of precursor (ancestral) sequence.
+    :param M: Length of regressor sequence.
     :type M: int
-    :param epsilon: Small value for approximate zeros in log space.
+    :param epsilon: A small value for numerical stability.
     :type epsilon: float
     """
     def __init__(self, M, epsilon=1e-32):
@@ -143,7 +144,7 @@ class Profile(nn.Module):
         """
         Assemble HMM parameters given profile parameters.
 
-        :param ~torch.Tensor precursor_seq_logits: Initial (relaxed) sequence
+        :param ~torch.Tensor precursor_seq_logits: Regressor sequence
             *log(x)*. Should have rightmost dimension ``(M, D)`` and be
             broadcastable to ``(batch_size, M, D)``, where
             D is the latent alphabet size. Should be normalized to one along the

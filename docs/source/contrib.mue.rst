@@ -11,7 +11,7 @@ a fully probabilistic alternative to multiple sequence alignment-based
 preprocessing.
 
 Reference:
-MuE models were described in Weinstein and Marks (2020),
+MuE models were described in Weinstein and Marks (2021),
 https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.
 
 Example MuE Models
@@ -28,9 +28,17 @@ State Arrangers for Parameterizing MuEs
     :show-inheritance:
     :member-order: bysource
 
-Missing Variable Length Data HMM
---------------------------------
+Missing or Variable Length Data HMM
+-----------------------------------
 .. automodule:: pyro.contrib.mue.missingdatahmm
+    :members:
+    :show-inheritance:
+    :member-order: bysource
+
+
+Biosequence Dataset Loading
+---------------------------
+.. automodule:: pyro.contrib.mue.dataloaders
     :members:
     :show-inheritance:
     :member-order: bysource

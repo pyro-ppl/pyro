@@ -15,8 +15,8 @@ class MissingDataDiscreteHMM(TorchDistribution):
     missing data or variable length sequences. Observations are assumed
     to be one hot encoded; rows with all zeros indicate missing data.
 
-    .. warning:: Unlike in pyro's DiscreteHMM, which computes the
-        probability of the first state as
+    .. warning:: Unlike in pyro's pyro.distributions.DiscreteHMM, which
+        computes the probability of the first state as
         initial.T @ transition @ emission
         this distribution uses the standard HMM convention,
         initial.T @ emission
