@@ -179,7 +179,6 @@ class ProfileHMM(nn.Module):
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
                 if self.cuda:
-                    print(seq_data.device)
                     seq_data = seq_data.cuda()
                 loss = svi.step(seq_data,
                                 torch.tensor(len(dataset)/seq_data.shape[0]))

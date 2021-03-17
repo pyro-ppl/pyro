@@ -28,7 +28,7 @@ class BiosequenceDataset(Dataset):
         length in the dataset.
     :param bool include_stop: Append stop symbol to the end of each sequence
         and add the stop symbol to the alphabet.
-    :param ~torch.device device: Device on which data should be stored in
+    :param torch.device device: Device on which data should be stored in
         memory.
     """
 
