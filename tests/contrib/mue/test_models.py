@@ -12,9 +12,8 @@ from pyro.contrib.mue.models import FactorMuE, ProfileHMM
 from pyro.optim import MultiStepLR
 
 
-@pytest.mark.parametrize('length_model', [False, True])
 @pytest.mark.parametrize('jit', [False, True])
-def test_ProfileHMM_smoke(length_model, jit):
+def test_ProfileHMM_smoke(jit):
     # Setup dataset.
     seqs = ['BABBA', 'BAAB', 'BABBB']
     alph = 'AB'
@@ -25,8 +24,7 @@ def test_ProfileHMM_smoke(length_model, jit):
                              'optim_args': {'lr': 0.1},
                              'milestones': [20, 100, 1000, 2000],
                              'gamma': 0.5})
-    model = ProfileHMM(int(dataset.max_length*1.1), dataset.alphabet_length,
-                       length_model)
+    model = ProfileHMM(int(dataset.max_length*1.1), dataset.alphabet_length)
     n_epochs = 5
     batch_size = 2
     losses = model.fit_svi(dataset, n_epochs, batch_size, scheduler, jit)
@@ -46,10 +44,9 @@ def test_ProfileHMM_smoke(length_model, jit):
 @pytest.mark.parametrize('z_prior_distribution', ['Normal', 'Laplace'])
 @pytest.mark.parametrize('ARD_prior', [False, True])
 @pytest.mark.parametrize('substitution_matrix', [False, True])
-@pytest.mark.parametrize('length_model', [False, True])
 @pytest.mark.parametrize('jit', [False, True])
 def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
-                         ARD_prior, substitution_matrix, length_model, jit):
+                         ARD_prior, substitution_matrix, jit):
     # Setup dataset.
     seqs = ['BABBA', 'BAAB', 'BABBB']
     alph = 'AB'
@@ -65,8 +62,7 @@ def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
                       indel_factor_dependence=indel_factor_dependence,
                       z_prior_distribution=z_prior_distribution,
                       ARD_prior=ARD_prior,
-                      substitution_matrix=substitution_matrix,
-                      length_model=length_model)
+                      substitution_matrix=substitution_matrix)
     n_epochs = 5
     anneal_length = 2
     batch_size = 2

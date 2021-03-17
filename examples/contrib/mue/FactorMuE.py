@@ -19,7 +19,7 @@ python FactorMuE.py -f PATH/ve6_full.fasta --z-dim 2 -b 10 -M 174 -D 25
     --indel-prior-bias 10. --anneal 5 -e 15 -lr 0.01 --z-prior Laplace
     --jit --cuda
 This should take about 8 minutes to run on a GPU. The latent space should show
-multiple small clusters, and the perplexity should be around 4.0.
+multiple small clusters, and the perplexity should be around 4.
 
 Reference:
 [1] E. N. Weinstein, D. S. Marks (2021)
@@ -101,7 +101,6 @@ def main(args):
                       substitution_matrix=(not args.no_substitution_matrix),
                       substitution_prior_scale=args.substitution_prior_scale,
                       latent_alphabet_length=args.latent_alphabet,
-                      length_model=args.length_model,
                       cuda=args.cuda,
                       pin_memory=args.pin_mem)
 
@@ -232,11 +231,8 @@ if __name__ == '__main__':
                         help='Do not use substitution matrix.')
     parser.add_argument("-D", "--latent-alphabet", default=None, type=int,
                         help='Latent alphabet length.')
-    parser.add_argument("-L", "--length-model", default=False,
-                        action='store_true',
-                        help='Model sequence length.')
     parser.add_argument("--include-stop", default=False, action='store_true',
-                        help='Model sequence length.')
+                        help='Include stop codon symbol.')
     parser.add_argument("--indel-prior-scale", default=1., type=float,
                         help=('Indel prior scale parameter ' +
                               '(when indel-factor=False).'))

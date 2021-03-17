@@ -64,3 +64,6 @@ T
                                      seq_data_check[2, None, :, :]]))
     assert torch.allclose(dataset[ind][1], torch.tensor([4. + include_stop,
                                                          1. + include_stop]))
+    dataload = torch.utils.data.DataLoader(dataset, batch_size=2)
+    for seq_data, L_data in dataload:
+        assert seq_data.shape[0] == L_data.shape[0]

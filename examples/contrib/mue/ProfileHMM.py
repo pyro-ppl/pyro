@@ -18,7 +18,7 @@ Example run:
 python ProfileHMM.py -f PATH/ve6_full.fasta -b 10 -M 174 --indel-prior-bias 10.
     -e 15 -lr 0.01 --jit --cuda
 This should take about 9 minutes to run on a GPU. The perplexity should be
-around 5.8.
+around 6.
 
 References:
 [1] R. Durbin, S. R. Eddy, A. Krogh, and G. Mitchison (1998)
@@ -48,7 +48,7 @@ from pyro.contrib.mue.models import ProfileHMM
 from pyro.optim import MultiStepLR
 
 
-def generate_data(small_test):
+def generate_data(small_test, include_stop):
     """Generate mini example dataset."""
     if small_test:
         mult_dat = 1
@@ -56,7 +56,7 @@ def generate_data(small_test):
         mult_dat = 10
 
     seqs = ['BABBA']*mult_dat + ['BAAB']*mult_dat + ['BABBB']*mult_dat
-    dataset = BiosequenceDataset(seqs, 'list', 'AB')
+    dataset = BiosequenceDataset(seqs, 'list', 'AB', include_stop=include_stop)
 
     return dataset
 
@@ -67,9 +67,10 @@ def main(args):
 
     # Load dataset.
     if args.test:
-        dataset = generate_data(args.small)
+        dataset = generate_data(args.small, args.include_stop)
     else:
-        dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
+        dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet,
+                                     include_stop=args.include_stop)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
         # Train test split.
@@ -92,7 +93,6 @@ def main(args):
     if latent_seq_length is None:
         latent_seq_length = int(dataset.max_length * 1.1)
     model = ProfileHMM(latent_seq_length, dataset.alphabet_length,
-                       length_model=args.length_model,
                        prior_scale=args.prior_scale,
                        indel_prior_bias=args.indel_prior_bias,
                        cuda=args.cuda,
@@ -185,9 +185,8 @@ if __name__ == '__main__':
                         help='Batch size.')
     parser.add_argument("-M", "--latent-seq-length", default=None, type=int,
                         help='Latent sequence length.')
-    parser.add_argument("-L", "--length-model", default=False,
-                        action='store_true',
-                        help='Model sequence length.')
+    parser.add_argument("--include-stop", default=False, action='store_true',
+                        help='Include stop codon symbol.')
     parser.add_argument("--prior-scale", default=1., type=float,
                         help='Prior scale parameter (all parameters).')
     parser.add_argument("--indel-prior-bias", default=10., type=float,
