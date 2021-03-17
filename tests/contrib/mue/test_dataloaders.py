@@ -9,23 +9,24 @@ from pyro.contrib.mue.dataloaders import BiosequenceDataset, alphabets
 
 @pytest.mark.parametrize('source_type', ['list', 'fasta'])
 @pytest.mark.parametrize('alphabet', ['amino-acid', 'dna', 'ATC'])
-def test_biosequencedataset(source_type, alphabet):
+@pytest.mark.parametrize('include_stop', [False, True])
+def test_biosequencedataset(source_type, alphabet, include_stop):
 
     # Define dataset.
     seqs = ['AATC', 'CA', 'T']
 
     # Encode dataset, alternate approach.
     if alphabet in alphabets:
-        alphabet_list = list(alphabets[alphabet])
+        alphabet_list = list(alphabets[alphabet]) + include_stop*['*']
     else:
-        alphabet_list = list(alphabet)
-    L_data_check = [len(seq) for seq in seqs]
+        alphabet_list = list(alphabet) + include_stop*['*']
+    L_data_check = [len(seq) + include_stop for seq in seqs]
     max_length_check = max(L_data_check)
     data_size_check = len(seqs)
     seq_data_check = torch.zeros([len(seqs), max_length_check,
                                   len(alphabet_list)])
     for i in range(len(seqs)):
-        for j, s in enumerate(seqs[i]):
+        for j, s in enumerate(seqs[i] + include_stop*'*'):
             seq_data_check[i, j, list(alphabet_list).index(s)] = 1
 
     # Setup data source.
@@ -46,7 +47,8 @@ T
         source = seqs
 
     # Load dataset.
-    dataset = BiosequenceDataset(source, source_type, alphabet)
+    dataset = BiosequenceDataset(source, source_type, alphabet,
+                                 include_stop=include_stop)
 
     # Check.
     assert torch.allclose(dataset.L_data,
@@ -60,4 +62,5 @@ T
     assert torch.allclose(dataset[ind][0],
                           torch.cat([seq_data_check[0, None, :, :],
                                      seq_data_check[2, None, :, :]]))
-    assert torch.allclose(dataset[ind][1], torch.tensor([4., 1.]))
+    assert torch.allclose(dataset[ind][1], torch.tensor([4. + include_stop,
+                                                         1. + include_stop]))

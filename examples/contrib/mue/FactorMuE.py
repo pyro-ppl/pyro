@@ -44,7 +44,7 @@ from pyro.contrib.mue.models import FactorMuE
 from pyro.optim import MultiStepLR
 
 
-def generate_data(small_test):
+def generate_data(small_test, include_stop):
     """Generate mini example dataset."""
     if small_test:
         mult_dat = 1
@@ -52,7 +52,7 @@ def generate_data(small_test):
         mult_dat = 10
 
     seqs = ['BABBA']*mult_dat + ['BAAB']*mult_dat + ['BABBB']*mult_dat
-    dataset = BiosequenceDataset(seqs, 'list', 'AB')
+    dataset = BiosequenceDataset(seqs, 'list', 'AB', include_stop=include_stop)
 
     return dataset
 
@@ -61,9 +61,10 @@ def main(args):
 
     # Load dataset.
     if args.test:
-        dataset = generate_data(args.small)
+        dataset = generate_data(args.small, args.include_stop)
     else:
-        dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet)
+        dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet,
+                                     include_stop=args.include_stop)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
         # Train test split.
@@ -233,6 +234,8 @@ if __name__ == '__main__':
                         help='Latent alphabet length.')
     parser.add_argument("-L", "--length-model", default=False,
                         action='store_true',
+                        help='Model sequence length.')
+    parser.add_argument("--include-stop", default=False, action='store_true',
                         help='Model sequence length.')
     parser.add_argument("--indel-prior-scale", default=1., type=float,
                         help=('Indel prior scale parameter ' +

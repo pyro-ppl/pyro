@@ -29,13 +29,14 @@ class BiosequenceDataset(Dataset):
     """
 
     def __init__(self, source, source_type='list', alphabet='amino-acid',
-                 max_length=None):
+                 max_length=None, include_stop=False):
 
         super().__init__()
 
         # Get sequences.
+        self.include_stop = include_stop
         if source_type == 'list':
-            seqs = source
+            seqs = [seq + include_stop*'*' for seq in source]
         elif source_type == 'fasta':
             seqs = self._load_fasta(source)
 
@@ -52,6 +53,9 @@ class BiosequenceDataset(Dataset):
             alphabet = alphabets[alphabet]
         else:
             alphabet = np.array(list(alphabet))
+        if self.include_stop:
+            alphabet = np.array(list(alphabet) + ['*'])
+        self.alphabet = alphabet
         self.alphabet_length = len(alphabet)
 
         # Build dataset.
@@ -66,11 +70,15 @@ class BiosequenceDataset(Dataset):
             for line in fr:
                 if line[0] == '>':
                     if seq != '':
+                        if self.include_stop:
+                            seq += '*'
                         seqs.append(seq)
                         seq = ''
                 else:
                     seq += line.strip('\n')
         if seq != '':
+            if self.include_stop:
+                seq += '*'
             seqs.append(seq)
         return seqs
 
