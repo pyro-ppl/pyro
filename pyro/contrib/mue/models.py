@@ -179,6 +179,7 @@ class ProfileHMM(nn.Module):
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
                 if self.cuda:
+                    print(seq_data.device)
                     seq_data = seq_data.cuda()
                 loss = svi.step(seq_data,
                                 torch.tensor(len(dataset)/seq_data.shape[0]))
@@ -599,7 +600,6 @@ class FactorMuE(nn.Module):
         # Initialize guide.
         for seq_data, L_data in dataload:
             if self.cuda:
-                print(seq_data.device)
                 seq_data = seq_data.cuda()
             self.guide(seq_data, torch.tensor(1.), torch.tensor(1.))
             break

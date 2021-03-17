@@ -48,7 +48,7 @@ from pyro.contrib.mue.models import ProfileHMM
 from pyro.optim import MultiStepLR
 
 
-def generate_data(small_test, include_stop):
+def generate_data(small_test, include_stop, device):
     """Generate mini example dataset."""
     if small_test:
         mult_dat = 1
@@ -56,7 +56,8 @@ def generate_data(small_test, include_stop):
         mult_dat = 10
 
     seqs = ['BABBA']*mult_dat + ['BAAB']*mult_dat + ['BABBB']*mult_dat
-    dataset = BiosequenceDataset(seqs, 'list', 'AB', include_stop=include_stop)
+    dataset = BiosequenceDataset(seqs, 'list', 'AB', include_stop=include_stop,
+                                 device=device)
 
     return dataset
 
@@ -66,11 +67,16 @@ def main(args):
     pyro.set_rng_seed(args.rng_seed)
 
     # Load dataset.
+    if args.cpu_data and args.cuda:
+        device = torch.device('cpu')
+    else:
+        device = None
     if args.test:
-        dataset = generate_data(args.small, args.include_stop)
+        dataset = generate_data(args.small, args.include_stop, device)
     else:
         dataset = BiosequenceDataset(args.file, 'fasta', args.alphabet,
-                                     include_stop=args.include_stop)
+                                     include_stop=args.include_stop,
+                                     device=device)
     args.batch_size = min([dataset.data_size, args.batch_size])
     if args.split > 0.:
         # Train test split.
@@ -211,6 +217,8 @@ if __name__ == '__main__':
                         help='JIT compile the ELBO.')
     parser.add_argument("--cuda", default=False, action='store_true',
                         help='Use GPU.')
+    parser.add_argument("--cpu-data", default=False, action='store_true',
+                        help='Keep data on CPU (for large datasets).')
     parser.add_argument("--pin-mem", default=False, action='store_true',
                         help='Use pin_memory for faster GPU transfer.')
     args = parser.parse_args()
