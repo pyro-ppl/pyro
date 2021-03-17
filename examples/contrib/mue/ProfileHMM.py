@@ -186,7 +186,7 @@ if __name__ == '__main__':
     parser.add_argument("-M", "--latent-seq-length", default=None, type=int,
                         help='Latent sequence length.')
     parser.add_argument("--include-stop", default=False, action='store_true',
-                        help='Include stop codon symbol.')
+                        help='Include stop symbol at the end of each sequence.')
     parser.add_argument("--prior-scale", default=1., type=float,
                         help='Prior scale parameter (all parameters).')
     parser.add_argument("--indel-prior-bias", default=10., type=float,

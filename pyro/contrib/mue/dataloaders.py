@@ -26,12 +26,21 @@ class BiosequenceDataset(Dataset):
     :param int max_length: Total length of the one-hot representation of the
         sequences, including zero padding. Defaults to the maximum sequence
         length in the dataset.
+    :param bool include_stop: Append stop symbol to the end of each sequence
+        and add the stop symbol to the alphabet.
     """
 
     def __init__(self, source, source_type='list', alphabet='amino-acid',
-                 max_length=None, include_stop=False):
+                 max_length=None, include_stop=False, device=None):
 
         super().__init__()
+
+        # Determine device
+        if device is None:
+            device = torch.tensor(0.).device
+        elif type(device) == str:
+            device = torch.device(device)
+        self.device = device
 
         # Get sequences.
         self.include_stop = include_stop
@@ -41,7 +50,8 @@ class BiosequenceDataset(Dataset):
             seqs = self._load_fasta(source)
 
         # Get lengths.
-        self.L_data = torch.tensor([float(len(seq)) for seq in seqs])
+        self.L_data = torch.tensor([float(len(seq)) for seq in seqs],
+                                   device=device)
         if max_length is None:
             self.max_length = int(torch.max(self.L_data))
         else:
@@ -86,9 +96,10 @@ class BiosequenceDataset(Dataset):
         """One hot encode and pad with zeros to max length."""
         # One hot encode.
         oh = torch.tensor((np.array(list(seq))[:, None] == alphabet[None, :]
-                           ).astype(np.float64))
+                           ).astype(np.float64), device=self.device)
         # Pad.
-        x = torch.cat([oh, torch.zeros([length - len(seq), len(alphabet)])])
+        x = torch.cat([oh, torch.zeros([length - len(seq), len(alphabet)],
+                                       device=self.device)])
 
         return x
 
