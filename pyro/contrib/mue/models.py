@@ -599,6 +599,7 @@ class FactorMuE(nn.Module):
         # Initialize guide.
         for seq_data, L_data in dataload:
             if self.cuda:
+                print(seq_data.device)
                 seq_data = seq_data.cuda()
             self.guide(seq_data, torch.tensor(1.), torch.tensor(1.))
             break
