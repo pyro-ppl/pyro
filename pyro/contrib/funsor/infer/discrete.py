@@ -15,6 +15,7 @@ from pyro.poutine.util import site_is_subsample
 def _sample_posterior(model, first_available_dim, *args, **kwargs):
 
     with block(), enum(first_available_dim=first_available_dim):
+        # XXX replay against an empty Trace to ensure densities are not double-counted
         model_tr = trace(replay(model, trace=Trace())).get_trace(*args, **kwargs)
 
     terms = terms_from_trace(model_tr)
@@ -36,11 +37,19 @@ def _sample_posterior(model, first_available_dim, *args, **kwargs):
 
     # construct a result trace to replay against the model
     sample_tr = model_tr.copy()
+    sample_subs = {}
     for name, node in sample_tr.nodes.items():
-        if node["type"] != "sample" or node["is_observed"] or site_is_subsample(node):
+        if node["type"] != "sample" or site_is_subsample(node):
             continue
-        node["funsor"]["log_measure"] = map_factors[node["funsor"]["log_measure"]]
-        node["funsor"]["value"] = _get_support_value(node["funsor"]["log_measure"], name)
+        if node["is_observed"]:
+            # "observed" values may be collapsed samples that depend on enumerated
+            # values, so we have to slice them down
+            # TODO this should really be handled entirely under the hood by adjoint
+            node["funsor"] = {"value": node["funsor"]["value"](**sample_subs)}
+        else:
+            node["funsor"]["log_measure"] = map_factors[node["funsor"]["log_measure"]]
+            node["funsor"]["value"] = _get_support_value(node["funsor"]["log_measure"], name)
+            sample_subs[name] = node["funsor"]["value"]
 
     with replay(trace=sample_tr):
         return model(*args, **kwargs)

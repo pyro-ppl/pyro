@@ -232,12 +232,28 @@ def model_zzxx():
         pyro.sample("x2", dist.Normal(loc[z2], scale), obs=data[1])
 
 
+def model2():
+
+    data = [torch.tensor([-1., -1., 0.]), torch.tensor([-1., 1.])]
+    p = pyro.param("p", torch.tensor([0.25, 0.75]))
+    loc = pyro.sample("loc", dist.Normal(0, 1).expand([2]).to_event(1))
+    # FIXME results in infinite loop in transformeddist_to_funsor.
+    # scale = pyro.sample("scale", dist.LogNormal(0, 1))
+    z1 = pyro.sample("z1", dist.Categorical(p))
+    scale = pyro.sample("scale", dist.Normal(torch.tensor([0., 1.])[z1], 1)).exp()
+    with pyro.plate("data[0]", 3):
+        pyro.sample("x1", dist.Normal(loc[z1], scale), obs=data[0])
+    with pyro.plate("data[1]", 2):
+        z2 = pyro.sample("z2", dist.Categorical(p))
+        pyro.sample("x2", dist.Normal(loc[z2], scale), obs=data[1])
+
+
 @pyroapi.pyro_backend(_PYRO_BACKEND)
-@pytest.mark.parametrize("model", [model_zzxx])
+@pytest.mark.parametrize("model", [model_zzxx, model2])
 def test_svi_model_side_enumeration(model):
     # Perform fake inference.
     # This has the wrong distribution but the right type for tests.
-    guide = AutoNormal(handlers.block(model, expose=["loc", "scale"]))
+    guide = AutoNormal(handlers.block(handlers.enum(infer.config_enumerate(model)), expose=["loc", "scale"]))
     guide()  # Initialize but don't bother to train.
     guide_trace = handlers.trace(guide).get_trace()
     guide_data = {
@@ -257,15 +273,21 @@ def test_svi_model_side_enumeration(model):
     # Check site names and shapes.
     expected_trace = handlers.trace(model).get_trace()
     assert set(actual_trace.nodes) == set(expected_trace.nodes)
+    assert "z1" not in actual_trace.nodes["scale"]["funsor"]["value"].inputs
 
 
 @pyroapi.pyro_backend(_PYRO_BACKEND)
-@pytest.mark.parametrize("model", [model_zzxx])
+@pytest.mark.parametrize("model", [model_zzxx, model2])
 def test_mcmc_model_side_enumeration(model):
     # Perform fake inference.
     # Draw from prior rather than trying to sample from mcmc posterior.
     # This has the wrong distribution but the right type for tests.
-    mcmc_trace = handlers.trace(handlers.block(model, expose=["loc", "scale"])).get_trace()
+    mcmc_trace = handlers.trace(
+        handlers.block(
+            handlers.enum(infer.config_enumerate(model)),
+            expose=["loc", "scale"]
+        )
+    ).get_trace()
     mcmc_data = {
         name: site["value"]
         for name, site in mcmc_trace.nodes.items() if site["type"] == "sample"
@@ -283,3 +305,4 @@ def test_mcmc_model_side_enumeration(model):
     # Check site names and shapes.
     expected_trace = handlers.trace(model).get_trace()
     assert set(actual_trace.nodes) == set(expected_trace.nodes)
+    assert "z1" not in actual_trace.nodes["scale"]["funsor"]["value"].inputs
