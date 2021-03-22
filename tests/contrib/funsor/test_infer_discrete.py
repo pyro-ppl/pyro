@@ -253,7 +253,7 @@ def model2():
 def test_svi_model_side_enumeration(model):
     # Perform fake inference.
     # This has the wrong distribution but the right type for tests.
-    guide = AutoNormal(handlers.block(handlers.enum(infer.config_enumerate(model)), expose=["loc", "scale"]))
+    guide = AutoNormal(handlers.enum(handlers.block(infer.config_enumerate(model), expose=["loc", "scale"])))
     guide()  # Initialize but don't bother to train.
     guide_trace = handlers.trace(guide).get_trace()
     guide_data = {
