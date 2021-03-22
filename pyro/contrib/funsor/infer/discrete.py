@@ -18,11 +18,14 @@ def _sample_posterior(model, first_available_dim, *args, **kwargs):
         model_tr = trace(model).get_trace(*args, **kwargs)
 
     terms = terms_from_trace(model_tr)
+    # terms["log_factors"] = [log p(x) for each observed or latent sample site x]
+    # terms["log_measures"] = [log p(z) or other Dice factor
+    #                          for each latent sample site z]
 
     with funsor.interpretations.lazy:
         log_prob = funsor.sum_product.sum_product(
             funsor.ops.max, funsor.ops.add,
-            terms["log_measures"] + terms["log_factors"],
+            terms["observed_log_factors"] + terms["log_measures"],
             eliminate=terms["measure_vars"] | terms["plate_vars"],
             plates=terms["plate_vars"]
         )
