@@ -8,14 +8,14 @@ import funsor
 from pyro.contrib.funsor.handlers import enum, replay, trace
 from pyro.contrib.funsor.handlers.enum_messenger import _get_support_value
 from pyro.contrib.funsor.infer.traceenum_elbo import terms_from_trace
-from pyro.poutine import block
+from pyro.poutine import Trace, block
 from pyro.poutine.util import site_is_subsample
 
 
 def _sample_posterior(model, first_available_dim, *args, **kwargs):
 
     with block(), enum(first_available_dim=first_available_dim):
-        model_tr = trace(model).get_trace(*args, **kwargs)
+        model_tr = trace(replay(model, trace=Trace())).get_trace(*args, **kwargs)
 
     terms = terms_from_trace(model_tr)
     # terms["log_factors"] = [log p(x) for each observed or latent sample site x]
@@ -25,7 +25,7 @@ def _sample_posterior(model, first_available_dim, *args, **kwargs):
     with funsor.interpretations.lazy:
         log_prob = funsor.sum_product.sum_product(
             funsor.ops.max, funsor.ops.add,
-            terms["observed_log_factors"] + terms["log_measures"],
+            terms["log_factors"] + terms["log_measures"],
             eliminate=terms["measure_vars"] | terms["plate_vars"],
             plates=terms["plate_vars"]
         )

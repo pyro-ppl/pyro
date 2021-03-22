@@ -17,15 +17,8 @@ def terms_from_trace(tr):
     """Helper function to extract elbo components from execution traces."""
     # data structure containing densities, measures, scales, and identification
     # of free variables as either product (plate) variables or sum (measure) variables
-    terms = {
-        "observed_log_factors": [],
-        "latent_log_factors": [],
-        "log_measures": [],
-        "scale": to_funsor(1.),
-        "plate_vars": frozenset(),
-        "measure_vars": frozenset(),
-        "plate_to_step": dict(),
-    }
+    terms = {"log_factors": [], "log_measures": [], "scale": to_funsor(1.),
+             "plate_vars": frozenset(), "measure_vars": frozenset(), "plate_to_step": dict()}
     for name, node in tr.nodes.items():
         # add markov dimensions to the plate_to_step dictionary
         if node["type"] == "markov_chain":
@@ -53,13 +46,10 @@ def terms_from_trace(tr):
         else:  # otherwise: default scale behavior
             node["funsor"]["log_prob"] = node["funsor"]["log_prob"] * node["funsor"]["scale"]
         # grab the log-density, found at all sites except those that are not replayed
-        if node["is_observed"]:
-            terms["observed_log_factors"].append(node["funsor"]["log_prob"])
-        elif not node.get("replay_skipped", False):
-            terms["latent_log_factors"].append(node["funsor"]["log_prob"])
+        if node["is_observed"] or not node.get("replay_skipped", False):
+            terms["log_factors"].append(node["funsor"]["log_prob"])
     # add plate dimensions to the plate_to_step dictionary
     terms["plate_to_step"].update({plate: terms["plate_to_step"].get(plate, {}) for plate in terms["plate_vars"]})
-    terms["log_factors"] = terms["observed_log_factors"] + terms["latent_log_factors"]
     return terms
 
 
