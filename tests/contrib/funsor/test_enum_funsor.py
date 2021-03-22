@@ -11,6 +11,7 @@ from torch.autograd import grad
 from torch.distributions import constraints
 
 from pyro.ops.indexing import Vindex
+from pyro.util import torch_isnan
 from tests.common import assert_equal, xfail_param
 
 # put all funsor-related imports here, so test collection works without funsor
@@ -45,6 +46,8 @@ def _check_loss_and_grads(expected_loss, actual_loss):
     for name, actual_grad, expected_grad in zip(names, actual_grads, expected_grads):
         if actual_grad is None or expected_grad is None:
             continue
+        assert not torch_isnan(actual_grad)
+        assert not torch_isnan(expected_grad)
         assert_equal(actual_grad, expected_grad,
                      msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
                                                                  expected_grad.detach().cpu().numpy(),
