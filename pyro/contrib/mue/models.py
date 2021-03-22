@@ -48,7 +48,7 @@ class ProfileHMM(nn.Module):
                  cuda=False, pin_memory=False):
         super().__init__()
         assert isinstance(cuda, bool)
-        self.cuda = cuda
+        self.is_cuda = cuda
         assert isinstance(pin_memory, bool)
         self.pin_memory = pin_memory
 
@@ -168,17 +168,17 @@ class ProfileHMM(nn.Module):
                               pin_memory=self.pin_memory)
         # Setup stochastic variational inference.
         if jit:
-            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+            elbo = JitTrace_ELBO(ignore_jit_warnings=True)
         else:
-            Elbo = Trace_ELBO()
-        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
+            elbo = Trace_ELBO()
+        svi = SVI(self.model, self.guide, scheduler, loss=elbo)
 
         # Run inference.
         losses = []
         t0 = datetime.datetime.now()
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
-                if self.cuda:
+                if self.is_cuda:
                     seq_data = seq_data.cuda()
                 loss = svi.step(seq_data,
                                 torch.tensor(len(dataset)/seq_data.shape[0]))
@@ -203,12 +203,12 @@ class ProfileHMM(nn.Module):
         # Initialize guide.
         self.guide(None, None)
         if jit:
-            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+            elbo = JitTrace_ELBO(ignore_jit_warnings=True)
         else:
-            Elbo = Trace_ELBO()
+            elbo = Trace_ELBO()
         scheduler = MultiStepLR({'optimizer': Adam, 'optim_args': {'lr': 0.01}})
         # Setup stochastic variational inference.
-        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
+        svi = SVI(self.model, self.guide, scheduler, loss=elbo)
 
         # Compute elbo and perplexity.
         train_lp, train_perplex = self._evaluate_local_elbo(
@@ -229,7 +229,7 @@ class ProfileHMM(nn.Module):
         lp, perplex = 0., 0.
         with torch.no_grad():
             for seq_data, L_data in dataload:
-                if self.cuda:
+                if self.is_cuda:
                     seq_data, L_data = seq_data.cuda(), L_data.cuda()
                 conditioned_model = poutine.condition(self.model, data={
                         "obs_seq": seq_data})
@@ -327,7 +327,7 @@ class FactorMuE(nn.Module):
                  epsilon=1e-32):
         super().__init__()
         assert isinstance(cuda, bool)
-        self.cuda = cuda
+        self.is_cuda = cuda
         assert isinstance(pin_memory, bool)
         self.pin_memory = pin_memory
 
@@ -598,16 +598,16 @@ class FactorMuE(nn.Module):
                               pin_memory=self.pin_memory)
         # Initialize guide.
         for seq_data, L_data in dataload:
-            if self.cuda:
+            if self.is_cuda:
                 seq_data = seq_data.cuda()
             self.guide(seq_data, torch.tensor(1.), torch.tensor(1.))
             break
         # Setup stochastic variational inference.
         if jit:
-            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+            elbo = JitTrace_ELBO(ignore_jit_warnings=True)
         else:
-            Elbo = Trace_ELBO()
-        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
+            elbo = Trace_ELBO()
+        svi = SVI(self.model, self.guide, scheduler, loss=elbo)
 
         # Run inference.
         losses = []
@@ -615,7 +615,7 @@ class FactorMuE(nn.Module):
         t0 = datetime.datetime.now()
         for epoch in range(epochs):
             for seq_data, L_data in dataload:
-                if self.cuda:
+                if self.is_cuda:
                     seq_data = seq_data.cuda()
                 loss = svi.step(
                     seq_data, torch.tensor(len(dataset)/seq_data.shape[0]),
@@ -651,17 +651,17 @@ class FactorMuE(nn.Module):
                                        shuffle=False)
         # Initialize guide.
         for seq_data, L_data in dataload_train:
-            if self.cuda:
+            if self.is_cuda:
                 seq_data = seq_data.cuda()
             self.guide(seq_data, torch.tensor(1.), torch.tensor(1.))
             break
         if jit:
-            Elbo = JitTrace_ELBO(ignore_jit_warnings=True)
+            elbo = JitTrace_ELBO(ignore_jit_warnings=True)
         else:
-            Elbo = Trace_ELBO()
+            elbo = Trace_ELBO()
         scheduler = MultiStepLR({'optimizer': Adam, 'optim_args': {'lr': 0.01}})
         # Setup stochastic variational inference.
-        svi = SVI(self.model, self.guide, scheduler, loss=Elbo)
+        svi = SVI(self.model, self.guide, scheduler, loss=elbo)
 
         # Compute elbo and perplexity.
         train_lp, train_perplex = self._evaluate_local_elbo(
@@ -682,7 +682,7 @@ class FactorMuE(nn.Module):
         lp, perplex = 0., 0.
         with torch.no_grad():
             for seq_data, L_data in dataload:
-                if self.cuda:
+                if self.is_cuda:
                     seq_data, L_data = seq_data.cuda(), L_data.cuda()
                 conditioned_model = poutine.condition(self.model, data={
                         "obs_seq": seq_data})
@@ -712,7 +712,7 @@ class FactorMuE(nn.Module):
         with torch.no_grad():
             z_locs, z_scales = [], []
             for seq_data, L_data in dataload:
-                if self.cuda:
+                if self.is_cuda:
                     seq_data = seq_data.cuda()
                 z_loc, z_scale = self.encoder(seq_data)
                 z_locs.append(z_loc.cpu())

@@ -83,22 +83,8 @@ class MissingDataDiscreteHMM(TorchDistribution):
             Variable length observation sequences can be handled by padding
             the sequence with zeros at the end.
         """
-        # observation_logits:
-        # batch_shape (option) x state_dim x observation_dim
-        # value:
-        # batch_shape (option) x num_steps x observation_dim
-        # value_logits
-        # batch_shape (option) x num_steps x state_dim (new)
-        # transition_logits:
-        # batch_shape (option) x state_dim (old) x state_dim (new)
-        # result 1
-        # batch_shape (option) x num_steps-1 x state_dim (old) x state_dim (new)
-        # result 2
-        # batch_shape (option) x state_dim (old) x state_dim (new)
-        # initial_logits
-        # batch_shape (option) x state_dim
-        # result 3
-        # batch_shape (option)
+
+        assert value.shape[-1] == self.event_shape[1]
 
         # Combine observation and transition factors.
         value_logits = torch.matmul(

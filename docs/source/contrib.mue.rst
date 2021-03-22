@@ -1,5 +1,5 @@
-MuE
-===
+Biological Sequence Models with MuE
+===================================
 .. automodule:: pyro.contrib.mue
 
 .. warning:: Code in ``pyro.contrib.mue`` is under development.

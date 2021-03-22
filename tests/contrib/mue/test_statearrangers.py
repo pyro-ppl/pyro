@@ -223,7 +223,6 @@ def test_profile_trivial_cases(M):
     a0ln, aln, eln = pf_arranger.forward(sln, cln, rln, uln, lln)
 
     # --- Compute expected value per step. ---
-    # TODO: replace with VariableLengthDiscreteHMM function once implemented.
     Eyln = torch.zeros([batch_size, M, B])
     ai = a0ln
     for j in range(M):
