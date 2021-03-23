@@ -13,6 +13,17 @@ from pyro.distributions.util import copy_docs_from
 from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
 
 
+# Work around a bug in unfold_contraction_generic_tuple interacting with
+# Approximate introduced in https://github.com/pyro-ppl/funsor/pull/488 .
+# Once fixed, this can be replaced by funsor.optimizer.apply_optimizer().
+def apply_optimizer(x):
+    with funsor.interpretations.normalize:
+        expr = funsor.interpreter.reinterpret(x)
+
+    with funsor.optimizer.optimize_base:
+        return funsor.interpreter.reinterpret(expr)
+
+
 def terms_from_trace(tr):
     """Helper function to extract elbo components from execution traces."""
     # data structure containing densities, measures, scales, and identification
@@ -111,7 +122,7 @@ class TraceMarkovEnum_ELBO(ELBO):
 
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.interpretations.memoize():
-            return -to_data(funsor.optimizer.apply_optimizer(elbo))
+            return -to_data(apply_optimizer(elbo))
 
 
 @copy_docs_from(_OrigTraceEnum_ELBO)
@@ -186,7 +197,7 @@ class TraceEnum_ELBO(ELBO):
 
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.interpretations.memoize():
-            return -to_data(funsor.optimizer.apply_optimizer(elbo))
+            return -to_data(apply_optimizer(elbo))
 
 
 class JitTraceEnum_ELBO(Jit_ELBO, TraceEnum_ELBO):
