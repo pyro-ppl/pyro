@@ -12,7 +12,16 @@ from pyro.poutine import Trace, block
 from pyro.poutine.util import site_is_subsample
 
 
-def _sample_posterior(model, first_available_dim, *args, **kwargs):
+def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
+
+    if temperature == 0:
+        sum_op, prod_op = funsor.ops.max, funsor.ops.add
+        approx = funsor.approximations.argmax_approximate
+    elif temperature == 1:
+        sum_op, prod_op = funsor.ops.logaddexp, funsor.ops.add
+        approx = funsor.montecarlo.MonteCarlo()
+    else:
+        raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
 
     with block(), enum(first_available_dim=first_available_dim):
         # XXX replay against an empty Trace to ensure densities are not double-counted
@@ -25,15 +34,15 @@ def _sample_posterior(model, first_available_dim, *args, **kwargs):
 
     with funsor.interpretations.lazy:
         log_prob = funsor.sum_product.sum_product(
-            funsor.ops.max, funsor.ops.add,
+            sum_op, prod_op,
             terms["log_factors"] + terms["log_measures"],
             eliminate=terms["measure_vars"] | terms["plate_vars"],
             plates=terms["plate_vars"]
         )
         log_prob = funsor.optimizer.apply_optimizer(log_prob)
 
-    with funsor.approximations.argmax_approximate:
-        map_factors = funsor.adjoint.adjoint(funsor.ops.max, funsor.ops.add, log_prob)
+    with approx:
+        approx_factors = funsor.adjoint.adjoint(sum_op, prod_op, log_prob)
 
     # construct a result trace to replay against the model
     sample_tr = model_tr.copy()
@@ -47,7 +56,7 @@ def _sample_posterior(model, first_available_dim, *args, **kwargs):
             # TODO this should really be handled entirely under the hood by adjoint
             node["funsor"] = {"value": node["funsor"]["value"](**sample_subs)}
         else:
-            node["funsor"]["log_measure"] = map_factors[node["funsor"]["log_measure"]]
+            node["funsor"]["log_measure"] = approx_factors[node["funsor"]["log_measure"]]
             node["funsor"]["value"] = _get_support_value(node["funsor"]["log_measure"], name)
             sample_subs[name] = node["funsor"]["value"]
 
@@ -55,5 +64,5 @@ def _sample_posterior(model, first_available_dim, *args, **kwargs):
         return model(*args, **kwargs)
 
 
-def infer_discrete(model, first_available_dim=None):
-    return functools.partial(_sample_posterior, model, first_available_dim)
+def infer_discrete(model, first_available_dim=None, temperature=1):
+    return functools.partial(_sample_posterior, model, first_available_dim, temperature)
