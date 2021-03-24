@@ -171,3 +171,48 @@ def test_DiscreteHMM_comparison(batch_initial, batch_transition,
         assert lp_vldhmm.shape == (batch_size,)
     # Values.
     assert torch.allclose(lp_vldhmm, lp_dhmm)
+
+
+@pytest.mark.parametrize('batch_data', [False, True])
+def test_samples(batch_data):
+    initial_logits = torch.tensor([-100, 0, -100, -100], dtype=torch.float64)
+    transition_logits = torch.tensor([[-100, -100, 0, -100],
+                                      [-100, -100, -100, 0],
+                                      [0, -100, -100, -100],
+                                      [-100, 0, -100, -100]],
+                                     dtype=torch.float64)
+    obs_logits = torch.tensor([[0, -100, -100],
+                               [-100, 0, -100],
+                               [-100, -100, 0],
+                               [-100, -100, 0]], dtype=torch.float64)
+    if batch_data:
+        initial_logits = torch.tensor([[-100, 0, -100, -100],
+                                       [0, -100, -100, -100]],
+                                      dtype=torch.float64)
+        transition_logits = transition_logits * torch.ones(
+                [2] + list(transition_logits.shape))
+        obs_logits = obs_logits * torch.ones(
+                [2] + list(obs_logits.shape))
+
+    model = MissingDataDiscreteHMM(initial_logits, transition_logits,
+                                   obs_logits)
+
+    if not batch_data:
+        sample = model.sample(torch.Size([3]))
+        print(sample)
+        assert torch.allclose(sample,
+                              torch.tensor([[0., 1., 0.],
+                                            [0., 0., 1.],
+                                            [0., 1., 0.]]))
+    else:
+        sample = model.sample(torch.Size([2, 3]))
+        print(sample[0, :, :])
+        assert torch.allclose(sample[0, :, :],
+                              torch.tensor([[0., 1., 0.],
+                                            [0., 0., 1.],
+                                            [0., 1., 0.]]))
+        print(sample[1, :, :])
+        assert torch.allclose(sample[1, :, :],
+                              torch.tensor([[1., 0., 0.],
+                                            [0., 0., 1.],
+                                            [1., 0., 0.]]))

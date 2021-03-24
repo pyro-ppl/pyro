@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
+from torch.distributions import OneHotCategorical
 
 from pyro.distributions import constraints
 from pyro.distributions.hmm import _sequential_logmatmulexp
@@ -102,3 +103,30 @@ class MissingDataDiscreteHMM(TorchDistribution):
         # Marginalize out final state.
         result = result.logsumexp(-1)
         return result
+
+    def sample(self, sample_shape=torch.Size([])):
+        """
+        :param ~torch.Size sample_shape: Sample shape, last dimension must be
+            ``num_steps`` and must be broadcastable to
+            ``(batch_size, num_steps)``. batch_size must be int not tuple.
+        """
+        # shape: batch_size x num_steps x categorical_size
+        shape = broadcast_shape(torch.Size(list(sample_shape) + [1]),
+                                torch.Size((1, 1, self.event_shape[-1])))
+        # state: batch_size x state_dim
+        state = OneHotCategorical(logits=self.initial_logits).sample()
+        # sample: batch_size x num_steps x categorical_size
+        sample = torch.zeros(shape)
+        for i in range(shape[-2]):
+            # batch_size x 1 x state_dim @
+            # batch_size x state_dim x categorical_size
+            obs_logits = torch.matmul(state.unsqueeze(-2),
+                                      self.observation_logits).squeeze(-2)
+            sample[:, i, :] = OneHotCategorical(logits=obs_logits).sample()
+            # batch_size x 1 x state_dim @
+            # batch_size x state_dim x state_dim
+            trans_logits = torch.matmul(state.unsqueeze(-2),
+                                        self.transition_logits).squeeze(-2)
+            state = OneHotCategorical(logits=trans_logits).sample()
+
+        return sample
