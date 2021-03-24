@@ -14,15 +14,13 @@ class ReplayMessenger(OrigReplayMessenger):
     def _pyro_sample(self, msg):
         name = msg["name"]
         msg["replay_active"] = True  # indicate replaying so importance weights can be scaled
-        if self.trace is None or msg["is_observed"]:
+        if self.trace is None:
             return
 
         if name in self.trace:
             guide_msg = self.trace.nodes[name]
-            if msg["is_observed"]:
-                return None
             msg["funsor"] = {} if "funsor" not in msg else msg["funsor"]
-            if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
+            if guide_msg["type"] != "sample":
                 raise RuntimeError("site {} must be sample in trace".format(name))
             # TODO make this work with sequential enumeration
             if guide_msg.get("funsor", {}).get("value", None) is not None:
