@@ -174,6 +174,14 @@ List of Tutorials
 
 .. toctree::
    :maxdepth: 1
+   :caption: Application: Biological sequences
+   :name: biological-sequences
+
+   mue_profile
+   mue_factor
+
+.. toctree::
+   :maxdepth: 1
    :caption: Application: Experimental Design
    :name: optimal-experiment-design
 

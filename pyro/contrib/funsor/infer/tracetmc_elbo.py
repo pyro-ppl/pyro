@@ -8,7 +8,7 @@ import funsor
 from pyro.contrib.funsor import to_data
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
 from pyro.contrib.funsor.infer.elbo import ELBO, Jit_ELBO
-from pyro.contrib.funsor.infer.traceenum_elbo import terms_from_trace
+from pyro.contrib.funsor.infer.traceenum_elbo import apply_optimizer, terms_from_trace
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import TraceTMC_ELBO as _OrigTraceTMC_ELBO
 
@@ -38,7 +38,7 @@ class TraceTMC_ELBO(ELBO):
                 plates=plate_vars
             )
 
-        return -to_data(funsor.optimizer.apply_optimizer(elbo))
+        return -to_data(apply_optimizer(elbo))
 
 
 class JitTraceTMC_ELBO(Jit_ELBO, TraceTMC_ELBO):
