@@ -1,3 +1,5 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
 
 import math
 
@@ -8,7 +10,7 @@ from torch.distributions.utils import broadcast_all
 from .torch_distribution import TorchDistribution
 
 
-class SmoothLaplace(TorchDistribution):
+class SoftLaplace(TorchDistribution):
     """
     Smooth distribution with Laplace-like tail behavior.
 
@@ -35,11 +37,11 @@ class SmoothLaplace(TorchDistribution):
         super().__init__(self.loc.shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(SmoothLaplace, _instance)
+        new = self._get_checked_instance(SoftLaplace, _instance)
         batch_shape = torch.Size(batch_shape)
         new.loc = self.loc.expand(batch_shape)
         new.scale = self.scale.expand(batch_shape)
-        super(SmoothLaplace, new).__init__(batch_shape, validate_args=False)
+        super(SoftLaplace, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 

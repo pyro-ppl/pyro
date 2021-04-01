@@ -316,9 +316,9 @@ Rejector
     :undoc-members:
     :show-inheritance:
 
-SmoothLaplace
+SoftLaplace
 -------------
-.. autoclass:: pyro.distributions.SmoothLaplace
+.. autoclass:: pyro.distributions.SoftLaplace
     :members:
     :undoc-members:
     :show-inheritance:

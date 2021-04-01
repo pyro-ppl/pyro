@@ -58,7 +58,7 @@ from pyro.distributions.relaxed_straight_through import (
     RelaxedBernoulliStraightThrough,
     RelaxedOneHotCategoricalStraightThrough,
 )
-from pyro.distributions.smoothlaplace import SmoothLaplace
+from pyro.distributions.softlaplace import SoftLaplace
 from pyro.distributions.spanning_tree import SpanningTree
 from pyro.distributions.stable import Stable
 from pyro.distributions.torch import __all__ as torch_dists
@@ -128,7 +128,7 @@ __all__ = [
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
-    "SmoothLaplace",
+    "SoftLaplace",
     "SpanningTree",
     "Stable",
     "TorchDistribution",
