@@ -313,6 +313,17 @@ continuous_dists = [
                 {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
                 {'concentration': [-1., 2., 3.], 'test_data': [0., 0., 1.]},
                 ]),
+    Fixture(pyro_dist=dist.SmoothLaplace,
+            examples=[
+                {'loc': [2.0], 'scale': [4.0],
+                 'test_data': [2.0]},
+                {'loc': [[2.0]], 'scale': [[4.0]],
+                 'test_data': [[2.0]]},
+                {'loc': [[[2.0]]], 'scale': [[[4.0]]],
+                 'test_data': [[[2.0]]]},
+                {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
+                 'test_data': [[2.0, 50.0], [2.0, 50.0]]},
+                ]),
 ]
 
 discrete_dists = [
