@@ -145,6 +145,19 @@ def test_gof(continuous_dist):
             assert gof > TEST_FAILURE_RATE
 
 
+def test_cdf_icdf(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        if d.event_shape.numel() != 1:
+            continue  # only valid for univariate distributions
+        u = torch.empty((100,) + d.shape()).uniform_()
+        with xfail_if_not_implemented():
+            x = d.icdf(u)
+            u2 = d.cdf(x)
+        assert_equal(u, u2)
+
+
 # Distributions tests - discrete distributions
 
 def test_support_is_discrete(discrete_dist):
