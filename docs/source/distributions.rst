@@ -316,6 +316,13 @@ Rejector
     :undoc-members:
     :show-inheritance:
 
+SoftLaplace
+-------------
+.. autoclass:: pyro.distributions.SoftLaplace
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SpanningTree
 ------------
 .. autoclass:: pyro.distributions.SpanningTree
