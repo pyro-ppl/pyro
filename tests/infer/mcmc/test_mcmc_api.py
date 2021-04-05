@@ -270,3 +270,5 @@ def test_save_params(save_params, Kernel, options):
     diagnostics = mcmc.diagnostics()
     diagnostics = {k: v for k, v in diagnostics.items() if k in "xy"}
     assert set(diagnostics.keys()) == set(save_params)
+
+    mcmc.summary()  # smoke test
