@@ -301,7 +301,8 @@ class MCMC:
     :param dict transforms: dictionary that specifies a transform for a sample site
         with constrained support to unconstrained space.
     :param List[str] save_params: Optional list of a subset of parameter names to
-        save during sampling and diagnostics. Defaults to saving all params.
+        save during sampling and diagnostics. This is useful in models with
+        large nuisance variables. Defaults to None, saving all params.
     """
     def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
                  num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False,
