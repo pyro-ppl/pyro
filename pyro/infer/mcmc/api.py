@@ -436,7 +436,8 @@ class MCMC:
 
         # transform samples back to constrained space
         for name, z in z_acc.items():
-            z_acc[name] = self.transforms[name].inv(z)
+            if name in self.transforms:
+                z_acc[name] = self.transforms[name].inv(z)
         self._samples = z_acc
 
         # terminate the sampler (shut down worker processes)
