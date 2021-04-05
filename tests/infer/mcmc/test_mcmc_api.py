@@ -157,7 +157,7 @@ def _hook(iters, kernel, samples, stage, i):
 ])
 @pytest.mark.filterwarnings("ignore:num_chains")
 def test_null_model_with_hook(kernel, model, jit, num_chains):
-    num_warmup, num_samples = 10, 10
+    warmup_steps, num_samples = 10, 10
     initial_params, potential_fn, transforms, _ = initialize_model(model,
                                                                    num_chains=num_chains)
 
@@ -167,13 +167,13 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
     mp_context = "spawn" if "CUDA_TEST" in os.environ else None
 
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
-    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
+    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=warmup_steps,
                 num_chains=num_chains, initial_params=initial_params, hook_fn=hook, mp_context=mp_context)
     mcmc.run()
     samples = mcmc.get_samples()
     assert samples == {}
     if num_chains == 1:
-        expected = [("Warmup", i) for i in range(num_warmup)] + [("Sample", i) for i in range(num_samples)]
+        expected = [("Warmup", i) for i in range(warmup_steps)] + [("Sample", i) for i in range(num_samples)]
         assert iters == expected
 
 
@@ -244,3 +244,29 @@ def test_model_with_potential_fn():
         warmup_steps=10,
         initial_params=init_params)
     mcmc.run()
+
+
+@pytest.mark.parametrize("save_params", ["xy", "x", "y", "xy"])
+@pytest.mark.parametrize("Kernel,options", [
+    (HMC, {}),
+    (NUTS, {"max_tree_depth": 2}),
+])
+def test_save_params(save_params, Kernel, options):
+    save_params = list(save_params)
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        with pyro.plate("plate", 2):
+            y = pyro.sample("y", dist.Normal(x, 1))
+            pyro.sample("obs", dist.Normal(y, 1), obs=torch.zeros(2))
+
+    kernel = Kernel(model, **options)
+    mcmc = MCMC(kernel, warmup_steps=2, num_samples=4, save_params=save_params)
+    mcmc.run()
+
+    samples = mcmc.get_samples()
+    assert set(samples.keys()) == set(save_params)
+
+    diagnostics = mcmc.diagnostics()
+    diagnostics = {k: v for k, v in diagnostics.items() if k in "xy"}
+    assert set(diagnostics.keys()) == set(save_params)
