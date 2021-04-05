@@ -157,7 +157,7 @@ def _hook(iters, kernel, samples, stage, i):
 ])
 @pytest.mark.filterwarnings("ignore:num_chains")
 def test_null_model_with_hook(kernel, model, jit, num_chains):
-    warmup_steps, num_samples = 10, 10
+    num_warmup, num_samples = 10, 10
     initial_params, potential_fn, transforms, _ = initialize_model(model,
                                                                    num_chains=num_chains)
 
@@ -167,13 +167,13 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
     mp_context = "spawn" if "CUDA_TEST" in os.environ else None
 
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
-    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=warmup_steps,
+    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
                 num_chains=num_chains, initial_params=initial_params, hook_fn=hook, mp_context=mp_context)
     mcmc.run()
     samples = mcmc.get_samples()
     assert samples == {}
     if num_chains == 1:
-        expected = [("Warmup", i) for i in range(warmup_steps)] + [("Sample", i) for i in range(num_samples)]
+        expected = [("Warmup", i) for i in range(num_warmup)] + [("Sample", i) for i in range(num_samples)]
         assert iters == expected
 
 
