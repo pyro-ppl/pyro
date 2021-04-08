@@ -175,7 +175,7 @@ def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         pass
 
     elbo = Elbo(strict_enumeration_warning=strict_enumeration_warning)
-    if strict_enumeration_warning and Elbo in (TraceEnum_ELBO, TraceTMC_ELBO):
+    if strict_enumeration_warning and Elbo in (TraceEnum_ELBO, JitTraceEnum_ELBO, TraceTMC_ELBO):
         assert_warning(model, guide, elbo)
     else:
         assert_ok(model, guide, elbo)
@@ -254,7 +254,14 @@ def test_model_guide_shape_mismatch_error(Elbo):
                  match='Model and guide shapes disagree')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    JitTrace_ELBO,
+    JitTraceGraph_ELBO,
+    JitTraceEnum_ELBO,
+])
 def test_variable_clash_in_guide_error(Elbo):
 
     def model():
