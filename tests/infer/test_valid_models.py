@@ -16,15 +16,15 @@ from pyro.distributions.testing import fakes
 from pyro.infer import (
     SVI,
     EnergyDistance,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    JitTraceGraph_ELBO,
+    JitTraceMeanField_ELBO,
     Trace_ELBO,
     TraceEnum_ELBO,
     TraceGraph_ELBO,
     TraceMeanField_ELBO,
     TraceTailAdaptive_ELBO,
-    JitTrace_ELBO,
-    JitTraceEnum_ELBO,
-    JitTraceGraph_ELBO,
-    JitTraceMeanField_ELBO,
     config_enumerate,
 )
 from pyro.infer.reparam import LatentStableReparam
