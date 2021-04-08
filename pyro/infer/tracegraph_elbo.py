@@ -338,6 +338,6 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
 
         surrogate_loss.backward(retain_graph=self.retain_graph)  # triggers jit compilation
 
-        loss = loss.item()
+        loss = -loss.item()
         warn_if_nan(loss, "loss")
         return loss
