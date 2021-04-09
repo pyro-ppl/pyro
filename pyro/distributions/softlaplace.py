@@ -64,3 +64,11 @@ class SoftLaplace(TorchDistribution):
 
     def icdf(self, value):
         return value.mul(math.pi / 2).tan().log().mul(self.scale).add(self.loc)
+
+    @property
+    def mean(self):
+        return self.loc
+
+    @property
+    def variance(self):
+        return (math.pi / 2 * self.scale) ** 2
