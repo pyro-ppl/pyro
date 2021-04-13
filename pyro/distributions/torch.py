@@ -223,6 +223,30 @@ class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistribution
         return batch_shape, event_shape
 
 
+class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
+    def __init__(self, rate, *, is_sparse=False, validate_args=None):
+        self.is_sparse = is_sparse
+        super().__init__(rate, validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(Poisson, _instance)
+        new = super().expand(batch_shape, _instance=new)
+        new.is_sparse = self.is_sparse
+        return new
+
+    def log_prob(self, value):
+        if not self.is_sparse:
+            return super().log_prob(value)
+        if self._validate_args:
+            self._validate_sample(value)
+        rate, value, nonzero = torch.broadcast_tensors(self.rate, value, value > 0)
+        sparse_rate = rate[nonzero]
+        sparse_value = value[nonzero]
+        return torch.zeros_like(rate).masked_scatter(
+            nonzero, (sparse_rate.log() * sparse_value) - (sparse_value + 1).lgamma()
+        ) - rate
+
+
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
 
     @staticmethod
