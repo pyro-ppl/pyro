@@ -21,7 +21,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from contextlib import ExitStack  # python 3
-from typing import Dict
+from typing import Dict, Union
 
 import torch
 from torch import nn
@@ -1216,8 +1216,11 @@ class AutoStructured(AutoGuide):
         name to a string in ("delta", "normal", or "mvn"), for all latent
         sites.
     :param dependencies: Dict mapping each site name to a dict of its upstream
-        dependencies; each inner dict maps upstream site name to the string
-        "linear" (only linear dependencies are currently supported).
+        dependencies; each inner dict maps upstream site name to either the
+        string "linear" or a :class:`torch.nn.Module` instance that maps
+        *flattened* upstream perturbations to *flattened* downstream
+        perturbations. The string "linear" is equivalent to
+        ``nn.Linear(upstream.numel(), downstream.numel(), bias=False)``.
         Dependencies must not contain cycles or self-loops.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
@@ -1237,7 +1240,7 @@ class AutoStructured(AutoGuide):
         model,
         *,
         conditionals: Dict[str, str] = "normal",
-        dependencies: Dict[str, Dict[str, str]] = "linear",
+        dependencies: Dict[str, Dict[str, Union[str, torch.nn.Module]]] = "linear",
         init_loc_fn=init_to_feasible,
         init_scale=0.01,
         create_plates=None,
@@ -1259,10 +1262,10 @@ class AutoStructured(AutoGuide):
         self.locs = PyroModule()
         self.scales = PyroModule()
         self.scale_trils = PyroModule()
-        self.weights = PyroModule()
+        self.deps = PyroModule()
         self._unconstrained_shapes = {}
 
-        # Initialize guide params
+        # Initialize guide params.
         children = defaultdict(list)
         num_pending = defaultdict(int)
         numels = {name: site["value"].numel()
@@ -1274,7 +1277,11 @@ class AutoStructured(AutoGuide):
             self._unconstrained_shapes[name] = init_loc.shape
             init_loc = init_loc.reshape(-1)
             conditional = self.conditionals[name]
-            assert conditional in ("delta", "normal", "mvn")
+            if conditional not in ("delta", "normal", "mvn"):
+                raise ValueError(
+                    "Unsupported conditional distribution type: {repr(conditional)}"
+                )
+
             _deep_setattr(self.locs, name, PyroParam(init_loc))
             if conditional in ("normal", "mvn"):
                 init_scale = torch.full_like(init_loc, self._init_scale)
@@ -1285,16 +1292,21 @@ class AutoStructured(AutoGuide):
                 _deep_setattr(self.scale_trils, name,
                               PyroParam(init_scale_tril, self.scale_tril_constraint))
 
-            # Initialize parameters of dependencies on upstream variables.
-            weights = PyroModule()
-            setattr(self.weights, name, weights)
-            for upstream, dependency in self.dependencies.get(name, {}).items():
+            # Initialize dependencies on upstream variables.
+            deps = PyroModule()
+            setattr(self.deps, name, deps)
+            for upstream, dep in self.dependencies.get(name, {}).items():
                 assert upstream in self.prototype_trace.nodes
-                assert dependency == "linear"
                 num_pending[name] += 1
                 children[upstream].append(name)
-                init_weight = init_loc.new_zeros(numels[upstream], init_loc.numel())
-                setattr(weights, upstream, PyroParam(init_weight))
+                if isinstance(dep, str) and dep == "linear":
+                    dep = torch.nn.Linear(numels[upstream], init_loc.numel(), bias=False)
+                    dep.weight.zero_()
+                elif not isinstance(dep, torch.nn.Module):
+                    raise ValueError(
+                        f"Expected either the string 'linear' or a torch.nn.Module, but got {dep}"
+                    )
+                setattr(deps, upstream, dep)
 
         # Topologically sort sites.
         self._sorted_sites = []
@@ -1314,12 +1326,10 @@ class AutoStructured(AutoGuide):
         deltas = {}
         result = {}
         for name, site in self._sorted_sites:
-            transform = biject_to(site["fn"].support)
-            conditional = self.conditionals[name]
-
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
             loc = _deep_getattr(self.locs, name)
             zero = torch.zeros_like(loc)
+            conditional = self.conditionals[name]
             if conditional == "delta":
                 delta = zero
             elif conditional == "normal":
@@ -1340,20 +1350,25 @@ class AutoStructured(AutoGuide):
                     dist.MultivariateNormal(zero, scale_tril=scale_tril),
                     infer={"is_auxiliary": True},
                 )
+            else:
+                raise ValueError(
+                    "Unsupported conditional distribution type: {repr(conditional)}"
+                )
             deltas[name] = delta
 
-            # Shift by mean and shear by upstream dependencies.
+            # Shift by mean and upstream dependencies.
             unconstrained = delta + loc
-            weights = getattr(self.weights, name)
-            for upstream, dependency in self.dependencies.get(name, {}).items():
-                weight = getattr(weights, upstream)
-                upstream = upstream + deltas[upstream] @ weight
+            deps = getattr(self.deps, name)
+            for upstream in self.dependencies.get(name, {}):
+                dep = getattr(deps, upstream)
+                unconstrained = unconstrained + dep(deltas[upstream])
 
-            # Transform to constrained space.
+            # Reshape and transform to constrained space.
             shape = self._unconstrained_shapes[name]
             if unconstrained.shape != shape:
-                shape = unconstrained.shape[:unconstrained.dim() - len(shape)] + shape
-                unconstrained = unconstrained.reshape(shape)
+                sample_shape = unconstrained.shape[:unconstrained.dim() - len(shape)]
+                unconstrained = unconstrained.reshape(sample_shape + shape)
+            transform = biject_to(site["fn"].support)
             value = transform(unconstrained)
 
             # Sample from a Delta distribution.
