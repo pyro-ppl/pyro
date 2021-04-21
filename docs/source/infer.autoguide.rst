@@ -109,6 +109,14 @@ AutoDiscreteParallel
     :special-members: __call__
     :show-inheritance:
 
+AutoStructured
+--------------------
+.. autoclass:: pyro.infer.autoguide.AutoStructured
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+
 .. _autoguide-initialization:
 
 Initialization

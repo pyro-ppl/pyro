@@ -19,7 +19,9 @@ import functools
 import operator
 import warnings
 import weakref
+from collections import defaultdict
 from contextlib import ExitStack  # python 3
+from typing import Dict
 
 import torch
 from torch import nn
@@ -454,7 +456,6 @@ class AutoNormal(AutoGuide):
         super()._setup_prototype(*args, **kwargs)
 
         self._event_dims = {}
-        self._cond_indep_stacks = {}
         self.locs = PyroModule()
         self.scales = PyroModule()
 
@@ -465,9 +466,6 @@ class AutoNormal(AutoGuide):
                 init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
             event_dim = site["fn"].event_dim + init_loc.dim() - site["value"].dim()
             self._event_dims[name] = event_dim
-
-            # Collect independence contexts.
-            self._cond_indep_stacks[name] = site["cond_indep_stack"]
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
@@ -1189,4 +1187,204 @@ class AutoDiscreteParallel(AutoGuide):
                     stack.enter_context(plates[frame.name])
                 result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
 
+        return result
+
+
+class AutoStructured(AutoGuide):
+    """
+    Structured guide whose conditional distributions are either Delta, Normal,
+    or MultivariateNormal, and whose latent variables can depend on each other
+    linearly (in unconstrained space).
+
+    Usage::
+
+        def model(data):
+            x = pyro.sample("x", dist.LogNormal(0, 1))
+            with pyro.plate("plate", len(data)):
+                y = pyro.sample("y", dist.Normal(0, 1))
+                pyro.sample("z", dist.Normal(y, x), obs=data)
+
+        guide = AutoStructuredNormal(
+            model=model,
+            conditionals={"x": "normal", "y": "normal"},
+            dependencies={"x": {"y": "linear"}},
+        )
+
+    :param callable model: A Pyro model.
+    :param conditionals: Family of distribution with which to model each latent
+        variable's conditional posterior. This should be a dict mapping site
+        name to a string in ("delta", "normal", or "mvn"), for all latent
+        sites.
+    :param dependencies: Dict mapping each site name to a dict of its upstream
+        dependencies; each inner dict maps upstream site name to the string
+        "linear" (only linear dependencies are currently supported).
+        Dependencies must not contain cycles or self-loops.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
+    """
+
+    scale_constraint = constraints.softplus_positive
+    scale_tril_constraint = constraints.softplus_lower_cholesky
+
+    def __init__(
+        self,
+        model,
+        *,
+        conditionals: Dict[str, str] = "normal",
+        dependencies: Dict[str, Dict[str, str]] = "linear",
+        init_loc_fn=init_to_feasible,
+        init_scale=0.01,
+        create_plates=None,
+    ):
+        assert isinstance(conditionals, dict)
+        assert isinstance(dependencies, dict)
+        self.conditionals = conditionals
+        self.dependencies = dependencies
+
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
+        model = InitMessenger(init_loc_fn)(model)
+        super().__init__(model, create_plates=create_plates)
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+
+        self.locs = PyroModule()
+        self.scales = PyroModule()
+        self.scale_trils = PyroModule()
+        self.weights = PyroModule()
+        self._unconstrained_shapes = {}
+
+        # Initialize guide params
+        children = defaultdict(list)
+        num_pending = defaultdict(int)
+        numels = {name: site["value"].numel()
+                  for name, site in self.prototype_trace.iter_stochastic_nodes()}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            # Initialize parameters of conditional distributions.
+            with helpful_support_errors(site):
+                init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
+            self._unconstrained_shapes[name] = init_loc.shape
+            init_loc = init_loc.reshape(-1)
+            conditional = self.conditionals[name]
+            assert conditional in ("delta", "normal", "mvn")
+            _deep_setattr(self.locs, name, PyroParam(init_loc))
+            if conditional in ("normal", "mvn"):
+                init_scale = torch.full_like(init_loc, self._init_scale)
+                _deep_setattr(self.scales, name,
+                              PyroParam(init_scale, self.scale_constraint))
+            if conditional == "mvn":
+                init_scale_tril = eye_like(init_loc, init_loc.numel())
+                _deep_setattr(self.scale_trils, name,
+                              PyroParam(init_scale_tril, self.scale_tril_constraint))
+
+            # Initialize parameters of dependencies on upstream variables.
+            weights = PyroModule()
+            setattr(self.weights, name, weights)
+            for upstream, dependency in self.dependencies.get(name, {}).items():
+                assert upstream in self.prototype_trace.nodes
+                assert dependency == "linear"
+                num_pending[name] += 1
+                children[upstream].append(name)
+                init_weight = init_loc.new_zeros(numels[upstream], init_loc.numel())
+                setattr(weights, upstream, PyroParam(init_weight))
+
+        # Topologically sort sites.
+        self._sorted_sites = []
+        while num_pending:
+            name, count = min(num_pending.items(), key=lambda kv: (kv[1], kv[0]))
+            assert count == 0, f"cyclic dependency: {name}"
+            del num_pending[name]
+            for child in children[name]:
+                num_pending[child] -= 1
+            self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
+
+    def forward(self, *args, **kwargs):
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        plates = self._create_plates(*args, **kwargs)
+        deltas = {}
+        result = {}
+        for name, site in self._sorted_sites:
+            transform = biject_to(site["fn"].support)
+            conditional = self.conditionals[name]
+
+            # Sample zero-mean blockwise independent Delta/Normal/MVN.
+            loc = _deep_getattr(self.locs, name)
+            zero = torch.zeros_like(loc)
+            if conditional == "delta":
+                delta = zero
+            elif conditional == "normal":
+                scale = _deep_getattr(self.scales, name)
+                delta = pyro.sample(
+                    name + "_aux",
+                    dist.Normal(zero, scale).to_event(1),
+                    infer={"is_auxiliary": True},
+                )
+            elif conditional == "mvn":
+                # This overparametrizes by learning (scale,scale_tril),
+                # enabling faster learning of the more-global scale parameter.
+                scale = _deep_getattr(self.scales, name)
+                scale_tril = _deep_getattr(self.scale_trils, name)
+                scale_tril = scale[..., None] * scale_tril
+                delta = pyro.sample(
+                    name + "_aux",
+                    dist.MultivariateNormal(zero, scale_tril=scale_tril),
+                    infer={"is_auxiliary": True},
+                )
+            deltas[name] = delta
+
+            # Shift by mean and shear by upstream dependencies.
+            unconstrained = delta + loc
+            weights = getattr(self.weights, name)
+            for upstream, dependency in self.dependencies.get(name, {}).items():
+                weight = getattr(weights, upstream)
+                upstream = upstream + deltas[upstream] @ weight
+
+            # Transform to constrained space.
+            shape = self._unconstrained_shapes[name]
+            if unconstrained.shape != shape:
+                shape = unconstrained.shape[:unconstrained.dim() - len(shape)] + shape
+                unconstrained = unconstrained.reshape(shape)
+            value = transform(unconstrained)
+
+            # Sample from a Delta distribution.
+            if poutine.get_mask() is False:
+                log_density = 0.0
+            else:
+                log_density = transform.inv.log_abs_det_jacobian(
+                    value, unconstrained
+                )
+                log_density = sum_rightmost(
+                    log_density, log_density.dim() - value.dim() + site["fn"].event_dim
+                )
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(plates[frame.name])
+                delta_dist = dist.Delta(
+                    value, log_density=log_density, event_dim=site["fn"].event_dim
+                )
+                result[name] = pyro.sample(name, delta_dist)
+
+        return result
+
+    @torch.no_grad()
+    def median(self, *args, **kwargs):
+        result = {}
+        for name, site in self._sorted_sites:
+            loc = _deep_getattr(self.locs, name).detach()
+            shape = self._loc_shapes[name]
+            if loc.shape != shape:
+                shape = loc.shape[:loc.dim() - len(shape)] + shape
+                loc = loc.reshape(shape)
+            result["name"] = biject_to(site["fn"].support)(loc)
         return result
