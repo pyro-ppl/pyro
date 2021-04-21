@@ -20,7 +20,7 @@ import operator
 import warnings
 import weakref
 from collections import defaultdict
-from contextlib import ExitStack  # python 3
+from contextlib import ExitStack
 from typing import Dict, Union
 
 import torch
@@ -1267,7 +1267,7 @@ class AutoStructured(AutoGuide):
 
         # Initialize guide params.
         children = defaultdict(list)
-        num_pending = defaultdict(int)
+        num_pending = {}
         numels = {name: site["value"].numel()
                   for name, site in self.prototype_trace.iter_stochastic_nodes()}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
@@ -1293,15 +1293,16 @@ class AutoStructured(AutoGuide):
                               PyroParam(init_scale_tril, self.scale_tril_constraint))
 
             # Initialize dependencies on upstream variables.
+            num_pending[name] = 0
             deps = PyroModule()
             setattr(self.deps, name, deps)
             for upstream, dep in self.dependencies.get(name, {}).items():
                 assert upstream in self.prototype_trace.nodes
-                num_pending[name] += 1
                 children[upstream].append(name)
+                num_pending[name] += 1
                 if isinstance(dep, str) and dep == "linear":
                     dep = torch.nn.Linear(numels[upstream], init_loc.numel(), bias=False)
-                    dep.weight.zero_()
+                    dep.weight.data.zero_()
                 elif not isinstance(dep, torch.nn.Module):
                     raise ValueError(
                         f"Expected either the string 'linear' or a torch.nn.Module, but got {dep}"
@@ -1397,9 +1398,9 @@ class AutoStructured(AutoGuide):
         result = {}
         for name, site in self._sorted_sites:
             loc = _deep_getattr(self.locs, name).detach()
-            shape = self._loc_shapes[name]
+            shape = self._unconstrained_shapes[name]
             if loc.shape != shape:
-                shape = loc.shape[:loc.dim() - len(shape)] + shape
-                loc = loc.reshape(shape)
-            result["name"] = biject_to(site["fn"].support)(loc)
+                sample_shape = loc.shape[:loc.dim() - len(shape)]
+                loc = loc.reshape(sample_shape + shape)
+            result[name] = biject_to(site["fn"].support)(loc)
         return result
