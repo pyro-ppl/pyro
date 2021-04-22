@@ -1210,6 +1210,22 @@ class AutoStructured(AutoGuide):
             dependencies={"x": {"y": "linear"}},
         )
 
+    Once trained, this guide can be used with
+    :class:`~pyro.infer.reparam.structured.StructuredReparam` to precondition a
+    model for use in HMC and NUTS inference.
+
+    .. note:: If you declare a dependency of a high-dimensional downstream
+        variable on a low-dimensional upstream variable, you may want to use
+        a lower learning rate for that weight, e.g.::
+
+            def optim_config(param_name):
+                config = {"lr": 0.01}
+                if "deps.my_downstream.my_upstream" in param_name:
+                    config["lr"] *= 0.1
+                return config
+
+            adam = pyro.optim.Adam(optim_config)
+
     :param callable model: A Pyro model.
     :param conditionals: Family of distribution with which to model each latent
         variable's conditional posterior. This should be a dict mapping site
@@ -1217,8 +1233,8 @@ class AutoStructured(AutoGuide):
         sites.
     :param dependencies: Dict mapping each site name to a dict of its upstream
         dependencies; each inner dict maps upstream site name to either the
-        string "linear" or a :class:`torch.nn.Module` instance that linearly
-        maps *flattened* upstream perturbations to *flattened* downstream
+        string "linear" or a :class:`torch.nn.Module` instance that maps
+        *flattened* upstream perturbations to *flattened* downstream
         perturbations. The string "linear" is equivalent to
         ``nn.Linear(upstream.numel(), downstream.numel(), bias=False)``.
         Dependencies must not contain cycles or self-loops.
@@ -1247,11 +1263,22 @@ class AutoStructured(AutoGuide):
     ):
         assert isinstance(conditionals, dict)
         assert isinstance(dependencies, dict)
+        for downstream, deps in dependencies.items():
+            assert downstream in conditionals
+            assert isinstance(deps, dict)
+            for upstream in deps:
+                assert upstream in conditionals
+                assert upstream != downstream
+                if conditionals[upstream] == "delta":
+                    raise ValueError(
+                        f"Site {repr(downstream)} cannot depend on "
+                        f"upstream point-estimated site {repr(upstream)}"
+                    )
         self.conditionals = conditionals
         self.dependencies = dependencies
 
         if not isinstance(init_scale, float) or not (init_scale > 0):
-            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+            raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
         self._init_scale = init_scale
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, create_plates=create_plates)
@@ -1278,19 +1305,17 @@ class AutoStructured(AutoGuide):
             init_loc = init_loc.reshape(-1)
             conditional = self.conditionals[name]
             if conditional not in ("delta", "normal", "mvn"):
-                raise ValueError(
-                    "Unsupported conditional distribution type: {repr(conditional)}"
-                )
+                raise ValueError(f"Unsupported conditional type: {repr(conditional)}")
 
-            _deep_setattr(self.locs, name, PyroParam(init_loc))
+            setattr(self.locs, name, PyroParam(init_loc))
             if conditional in ("normal", "mvn"):
                 init_scale = torch.full_like(init_loc, self._init_scale)
-                _deep_setattr(self.scales, name,
-                              PyroParam(init_scale, self.scale_constraint))
+                setattr(self.scales, name,
+                        PyroParam(init_scale, self.scale_constraint))
             if conditional == "mvn":
                 init_scale_tril = eye_like(init_loc, init_loc.numel())
-                _deep_setattr(self.scale_trils, name,
-                              PyroParam(init_scale_tril, self.scale_tril_constraint))
+                setattr(self.scale_trils, name,
+                        PyroParam(init_scale_tril, self.scale_tril_constraint))
 
             # Initialize dependencies on upstream variables.
             num_pending[name] = 0
@@ -1324,13 +1349,13 @@ class AutoStructured(AutoGuide):
         aux_values = {}
         for name, site in self._sorted_sites:
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
-            loc = _deep_getattr(self.locs, name)
+            loc = getattr(self.locs, name)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
             if conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
-                scale = _deep_getattr(self.scales, name)
+                scale = getattr(self.scales, name)
                 aux_value = pyro.sample(
                     name + "_aux",
                     dist.Normal(zero, scale).to_event(1),
@@ -1339,8 +1364,8 @@ class AutoStructured(AutoGuide):
             elif conditional == "mvn":
                 # This overparametrizes by learning (scale,scale_tril),
                 # enabling faster learning of the more-global scale parameter.
-                scale = _deep_getattr(self.scales, name)
-                scale_tril = _deep_getattr(self.scale_trils, name)
+                scale = getattr(self.scales, name)
+                scale_tril = getattr(self.scale_trils, name)
                 scale_tril = scale[..., None] * scale_tril
                 aux_value = pyro.sample(
                     name + "_aux",
@@ -1348,19 +1373,19 @@ class AutoStructured(AutoGuide):
                     infer={"is_auxiliary": True},
                 )
             else:
-                raise ValueError(
-                    "Unsupported conditional distribution type: {repr(conditional)}"
-                )
-            aux_values[name] = aux_value
+                raise ValueError("Unsupported conditional type: {repr(conditional)}")
 
-            # Shift by mean and upstream dependencies.
-            unconstrained = aux_value + loc
+            # Accumulate upstream dependencies. These shear transforms have no
+            # effect on the Jacobian determinant, and can therefore be excluded
+            # from the log_density computation below, even for nonlinear dep().
             deps = getattr(self.deps, name)
             for upstream in self.dependencies.get(name, {}):
                 dep = getattr(deps, upstream)
-                unconstrained = unconstrained + dep(aux_values[upstream])
+                aux_value = aux_value + dep(aux_values[upstream])
+            aux_values[name] = aux_value
 
-            # Reshape and transform to constrained space.
+            # Shift by loc, reshape, and transform to constrained space.
+            unconstrained = aux_value + loc
             shape = self._unconstrained_shapes[name]
             if unconstrained.shape != shape:
                 sample_shape = unconstrained.shape[:unconstrained.dim() - len(shape)]
@@ -1369,18 +1394,14 @@ class AutoStructured(AutoGuide):
             value = transform(unconstrained)
 
             # Create a Delta distribution.
-            if poutine.get_mask() is False:
+            if conditional == "delta" or poutine.get_mask() is False:
                 log_density = 0.0
             else:
-                log_density = transform.inv.log_abs_det_jacobian(
-                    value, unconstrained
-                )
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained)
                 log_density = sum_rightmost(
                     log_density, log_density.dim() - value.dim() + site["fn"].event_dim
                 )
-            deltas[name] = dist.Delta(
-                value, log_density=log_density, event_dim=site["fn"].event_dim
-            )
+            deltas[name] = dist.Delta(value, log_density, site["fn"].event_dim)
 
         return deltas
 
@@ -1404,7 +1425,7 @@ class AutoStructured(AutoGuide):
     def median(self, *args, **kwargs):
         result = {}
         for name, site in self._sorted_sites:
-            loc = _deep_getattr(self.locs, name).detach()
+            loc = getattr(self.locs, name).detach()
             shape = self._unconstrained_shapes[name]
             if loc.shape != shape:
                 sample_shape = loc.shape[:loc.dim() - len(shape)]
