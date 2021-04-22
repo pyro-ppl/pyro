@@ -49,7 +49,7 @@ class OptimTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             pyro.sample("loc_latent", Normal(loc_q, sig_q))
 
-        def optim_params(module_name, param_name):
+        def optim_params(param_name):
             if param_name == fixed_param:
                 return {'lr': 0.00}
             elif param_name == free_param:
