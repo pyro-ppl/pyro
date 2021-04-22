@@ -284,6 +284,5 @@ def test_name_preserved_by_to_pyro_module():
     param_names.clear()
     pyro.clear_param_store()
 
-    print(expected_param_names)
-    print(actual_param_names)
+    assert actual_param_names == {"scale", "loc.weight", "loc.bias"}
     assert actual_param_names == expected_param_names
