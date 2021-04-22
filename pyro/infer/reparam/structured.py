@@ -64,5 +64,5 @@ class StructuredReparam(Reparam):
         if not self.deltas:  # On first sample site.
             self.deltas = self.guide.get_deltas()
         new_fn = self.deltas.pop(name)
-        value = new_fn.value
+        value = new_fn.v
         return new_fn, value

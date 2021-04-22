@@ -1295,8 +1295,8 @@ class AutoStructured(AutoGuide):
         # Initialize guide params.
         children = defaultdict(list)
         num_pending = {}
-        numels = {name: site["value"].numel()
-                  for name, site in self.prototype_trace.iter_stochastic_nodes()}
+        numel = {name: site["value"].numel()
+                 for name, site in self.prototype_trace.iter_stochastic_nodes()}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Initialize parameters of conditional distributions.
             with helpful_support_errors(site):
@@ -1326,7 +1326,7 @@ class AutoStructured(AutoGuide):
                 children[upstream].append(name)
                 num_pending[name] += 1
                 if isinstance(dep, str) and dep == "linear":
-                    dep = torch.nn.Linear(numels[upstream], init_loc.numel(), bias=False)
+                    dep = torch.nn.Linear(numel[upstream], init_loc.numel(), bias=False)
                     dep.weight.data.zero_()
                 elif not isinstance(dep, torch.nn.Module):
                     raise ValueError(
