@@ -1217,8 +1217,8 @@ class AutoStructured(AutoGuide):
         sites.
     :param dependencies: Dict mapping each site name to a dict of its upstream
         dependencies; each inner dict maps upstream site name to either the
-        string "linear" or a :class:`torch.nn.Module` instance that maps
-        *flattened* upstream perturbations to *flattened* downstream
+        string "linear" or a :class:`torch.nn.Module` instance that linearly
+        maps *flattened* upstream perturbations to *flattened* downstream
         perturbations. The string "linear" is equivalent to
         ``nn.Linear(upstream.numel(), downstream.numel(), bias=False)``.
         Dependencies must not contain cycles or self-loops.
@@ -1319,23 +1319,19 @@ class AutoStructured(AutoGuide):
                 num_pending[child] -= 1
             self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
 
-    def forward(self, *args, **kwargs):
-        if self.prototype_trace is None:
-            self._setup_prototype(*args, **kwargs)
-
-        plates = self._create_plates(*args, **kwargs)
+    def get_deltas(self):
         deltas = {}
-        result = {}
+        aux_values = {}
         for name, site in self._sorted_sites:
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
             loc = _deep_getattr(self.locs, name)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
             if conditional == "delta":
-                delta = zero
+                aux_value = zero
             elif conditional == "normal":
                 scale = _deep_getattr(self.scales, name)
-                delta = pyro.sample(
+                aux_value = pyro.sample(
                     name + "_aux",
                     dist.Normal(zero, scale).to_event(1),
                     infer={"is_auxiliary": True},
@@ -1346,7 +1342,7 @@ class AutoStructured(AutoGuide):
                 scale = _deep_getattr(self.scales, name)
                 scale_tril = _deep_getattr(self.scale_trils, name)
                 scale_tril = scale[..., None] * scale_tril
-                delta = pyro.sample(
+                aux_value = pyro.sample(
                     name + "_aux",
                     dist.MultivariateNormal(zero, scale_tril=scale_tril),
                     infer={"is_auxiliary": True},
@@ -1355,14 +1351,14 @@ class AutoStructured(AutoGuide):
                 raise ValueError(
                     "Unsupported conditional distribution type: {repr(conditional)}"
                 )
-            deltas[name] = delta
+            aux_values[name] = aux_value
 
             # Shift by mean and upstream dependencies.
-            unconstrained = delta + loc
+            unconstrained = aux_value + loc
             deps = getattr(self.deps, name)
             for upstream in self.dependencies.get(name, {}):
                 dep = getattr(deps, upstream)
-                unconstrained = unconstrained + dep(deltas[upstream])
+                unconstrained = unconstrained + dep(aux_values[upstream])
 
             # Reshape and transform to constrained space.
             shape = self._unconstrained_shapes[name]
@@ -1372,7 +1368,7 @@ class AutoStructured(AutoGuide):
             transform = biject_to(site["fn"].support)
             value = transform(unconstrained)
 
-            # Sample from a Delta distribution.
+            # Create a Delta distribution.
             if poutine.get_mask() is False:
                 log_density = 0.0
             else:
@@ -1382,14 +1378,25 @@ class AutoStructured(AutoGuide):
                 log_density = sum_rightmost(
                     log_density, log_density.dim() - value.dim() + site["fn"].event_dim
                 )
+            deltas[name] = dist.Delta(
+                value, log_density=log_density, event_dim=site["fn"].event_dim
+            )
+
+        return deltas
+
+    def forward(self, *args, **kwargs):
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        deltas = self.get_deltas()
+        plates = self._create_plates(*args, **kwargs)
+        result = {}
+        for name, site in self._sorted_sites:
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
-                delta_dist = dist.Delta(
-                    value, log_density=log_density, event_dim=site["fn"].event_dim
-                )
-                result[name] = pyro.sample(name, delta_dist)
+                result[name] = pyro.sample(name, deltas[name])
 
         return result
 
