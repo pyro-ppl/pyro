@@ -8,9 +8,12 @@ import torch
 from torch.distributions import constraints
 
 import pyro
+import pyro.distributions as dist
 import pyro.optim as optim
+from pyro import poutine
 from pyro.distributions import Normal, Uniform
 from pyro.infer import SVI, TraceGraph_ELBO
+from pyro.nn.module import PyroModule, PyroParam, to_pyro_module_
 from tests.common import assert_equal
 
 
@@ -49,7 +52,7 @@ class OptimTests(TestCase):
             sig_q = torch.exp(log_sig_q)
             pyro.sample("loc_latent", Normal(loc_q, sig_q))
 
-        def optim_params(module_name, param_name):
+        def optim_params(param_name):
             if param_name == fixed_param:
                 return {'lr': 0.00}
             elif param_name == free_param:
@@ -231,3 +234,55 @@ def test_dctadam_param_subsample():
         optimizer({param})
 
     assert_equal(param, param.new_zeros(param.shape), prec=1e-2)
+
+
+def test_name_preserved_by_to_pyro_module():
+    features = torch.randn(4)
+    data = torch.randn(3)
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.scale = PyroParam(torch.ones(3), constraints.positive)
+            self.loc = torch.nn.Linear(4, 3)
+
+        def forward(self, features, data):
+            loc = self.loc(features)
+            scale = self.scale
+            with pyro.plate("data", len(data)):
+                pyro.sample("obs", dist.Normal(loc, scale),
+                            obs=data)
+
+    model = Model()
+    params = list(model.parameters())
+    param_names = set()
+
+    def optim_config(param_name):
+        param_names.add(param_name)
+        return {"lr": 0.0}
+
+    # Record while model.loc is an nn.Module.
+    loss = poutine.trace(model).get_trace(features, data).log_prob_sum()
+    loss.backward()
+    adam = optim.Adam(optim_config)
+    adam(params)
+    assert param_names
+    expected_param_names = param_names.copy()
+    del adam, loss
+    param_names.clear()
+    pyro.clear_param_store()
+
+    # Record while model.loc is a PyroModule.
+    to_pyro_module_(model.loc)
+    loss = poutine.trace(model).get_trace(features, data).log_prob_sum()
+    loss.backward()
+    adam = optim.Adam(optim_config)
+    adam(params)
+    assert param_names
+    actual_param_names = param_names.copy()
+    del adam, loss
+    param_names.clear()
+    pyro.clear_param_store()
+
+    assert actual_param_names == {"scale", "loc.weight", "loc.bias"}
+    assert actual_param_names == expected_param_names

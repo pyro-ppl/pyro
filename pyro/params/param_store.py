@@ -305,3 +305,7 @@ def user_param_name(param_name):
     if _MODULE_NAMESPACE_DIVIDER in param_name:
         return param_name.split(_MODULE_NAMESPACE_DIVIDER)[1]
     return param_name
+
+
+def normalize_param_name(name):
+    return name.replace(_MODULE_NAMESPACE_DIVIDER, ".")
