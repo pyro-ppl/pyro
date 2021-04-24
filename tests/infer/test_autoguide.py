@@ -127,6 +127,12 @@ class AutoStructured_shapes(AutoStructured):
             def forward(self):
                 return self.z6_aux
 
+        def dependency_z6_z5(z5):
+            weight = pyro.param("z6_z5_weight", torch.zeros(2))
+            return weight * z5
+
+        dependency_z6_z3 = torch.nn.Linear(3, 2)
+
         super().__init__(
             model,
             conditionals={
@@ -140,7 +146,7 @@ class AutoStructured_shapes(AutoStructured):
             dependencies={
                 "z3": {"z2": "linear"},
                 "z4": {"z3": "linear", "z2": "linear"},
-                "z6": {"z3": "linear", "z5": "linear"},
+                "z6": {"z3": dependency_z6_z3, "z5": dependency_z6_z5},
             },
             init_loc_fn=init_loc_fn,
         )
