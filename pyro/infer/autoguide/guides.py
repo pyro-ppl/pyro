@@ -1192,9 +1192,10 @@ class AutoDiscreteParallel(AutoGuide):
 
 class AutoStructured(AutoGuide):
     """
-    Structured guide whose conditional distributions are either Delta, Normal,
-    or MultivariateNormal, and whose latent variables can depend on each other
-    linearly (in unconstrained space).
+    Structured guide whose conditional distributions are Delta, Normal,
+    MultivariateNormal, or by an ``nn.Module``, and whose latent variables can
+    depend on each other either linearly (in unconstrained space) or via
+    shearing by an ``nn.Module``.
 
     Usage::
 
@@ -1204,7 +1205,7 @@ class AutoStructured(AutoGuide):
                 y = pyro.sample("y", dist.Normal(0, 1))
                 pyro.sample("z", dist.Normal(y, x), obs=data)
 
-        guide = AutoStructuredNormal(
+        guide = AutoStructured(
             model=model,
             conditionals={"x": "normal", "y": "normal"},
             dependencies={"x": {"y": "linear"}},
@@ -1390,9 +1391,15 @@ class AutoStructured(AutoGuide):
             else:
                 raise ValueError(f"Unsupported conditional type: {conditional}")
 
-            # Accumulate upstream dependencies. These shear transforms have no
-            # effect on the Jacobian determinant, and can therefore be excluded
-            # from the log_density computation below, even for nonlinear dep().
+            # Accumulate upstream dependencies.
+            # Note: by accumulating upstream dependencies before updating the
+            # aux_values dict, we encode a block-sparse structure of the
+            # precision matrix; if we had instead accumulated after updating
+            # aux_values, we would encode a block-sparse structure of the
+            # covariance matrix.
+            # Note: these shear transforms have no effect on the Jacobian
+            # determinant, and can therefore be excluded from the log_density
+            # computation below, even for nonlinear dep().
             deps = _deep_getattr(self.deps, name)
             for upstream in self.dependencies.get(name, {}):
                 dep = _deep_getattr(deps, upstream)
