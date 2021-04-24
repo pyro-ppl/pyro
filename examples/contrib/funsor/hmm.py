@@ -539,7 +539,7 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
         for t in pyro.vectorized_markov(name="time", size=int(max_length if args.jit else lengths.max()), dim=-2):
             with handlers.mask(mask=(t < lengths.unsqueeze(-1)).unsqueeze(-1)):
                 x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
-                                infer={"enumerate": "parallel"})
+                                     infer={"enumerate": "parallel"})
                 with tones_plate:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
                                 obs=Vindex(sequences)[batch, t])
