@@ -202,3 +202,7 @@ class TraceEnum_ELBO(ELBO):
 
 class JitTraceEnum_ELBO(Jit_ELBO, TraceEnum_ELBO):
     pass
+
+
+class JitTraceMarkovEnum_ELBO(Jit_ELBO, TraceMarkovEnum_ELBO):
+    pass
