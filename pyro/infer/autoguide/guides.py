@@ -21,7 +21,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from contextlib import ExitStack
-from typing import Dict, Union
+from typing import Callable, Dict, Union
 
 import torch
 from torch import nn
@@ -1190,12 +1190,16 @@ class AutoDiscreteParallel(AutoGuide):
         return result
 
 
+def _config_auxiliary(msg):
+    return {"is_auxiliary": True}
+
+
 class AutoStructured(AutoGuide):
     """
     Structured guide whose conditional distributions are Delta, Normal,
-    MultivariateNormal, or by an ``nn.Module``, and whose latent variables can
-    depend on each other either linearly (in unconstrained space) or via
-    shearing by an ``nn.Module``.
+    MultivariateNormal, or by a callable, and whose latent variables can depend
+    on each other either linearly (in unconstrained space) or via shearing by a
+    callable.
 
     Usage::
 
@@ -1231,16 +1235,16 @@ class AutoStructured(AutoGuide):
     :param conditionals: Family of distribution with which to model each latent
         variable's conditional posterior. This should be a dict mapping each
         latent variable name to either a string in ("delta", "normal", or
-        "mvn") or to a :class:`torch.nn.Module` that returns a sample from a
-        zero mean (or approximately centered) noise distribution (such modules
-        typically call ``pyro.sample()`` inside their ``.forward()`` methods).
+        "mvn") or to a callable that returns a sample from a zero mean (or
+        approximately centered) noise distribution (such callables typically
+        call ``pyro.param()`` and ``pyro.sample()`` internally).
     :param dependencies: Dict mapping each site name to a dict of its upstream
         dependencies; each inner dict maps upstream site name to either the
-        string "linear" or a :class:`torch.nn.Module` instance that maps
-        *flattened* upstream perturbations to *flattened* downstream
-        perturbations. The string "linear" is equivalent to
-        ``nn.Linear(upstream.numel(), downstream.numel(), bias=False)``.
-        Dependencies must not contain cycles or self-loops.
+        string "linear" or a callable that maps a *flattened* upstream
+        perturbation to *flattened* downstream perturbation. The string
+        "linear" is equivalent to ``nn.Linear(upstream.numel(),
+        downstream.numel(), bias=False)``.  Dependencies must not contain
+        cycles or self-loops.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
@@ -1258,8 +1262,8 @@ class AutoStructured(AutoGuide):
         self,
         model,
         *,
-        conditionals: Dict[str, Union[str, torch.nn.Module]] = "normal",
-        dependencies: Dict[str, Dict[str, Union[str, torch.nn.Module]]] = "linear",
+        conditionals: Dict[str, Union[str, Callable]] = "normal",
+        dependencies: Dict[str, Dict[str, Union[str, Callable]]] = "linear",
         init_loc_fn=init_to_feasible,
         init_scale=0.01,
         create_plates=None,
@@ -1267,14 +1271,15 @@ class AutoStructured(AutoGuide):
         assert isinstance(conditionals, dict)
         for name, fn in conditionals.items():
             assert isinstance(name, str)
-            assert isinstance(fn, (str, torch.nn.Module))
+            assert isinstance(fn, str) or callable(fn)
         assert isinstance(dependencies, dict)
         for downstream, deps in dependencies.items():
             assert downstream in conditionals
             assert isinstance(deps, dict)
-            for upstream in deps:
+            for upstream, dep in deps.items():
                 assert upstream in conditionals
                 assert upstream != downstream
+                assert isinstance(dep, str) or callable(dep)
                 if conditionals[upstream] == "delta":
                     raise ValueError(
                         f"Site {repr(downstream)} cannot depend on "
@@ -1313,15 +1318,17 @@ class AutoStructured(AutoGuide):
         children = defaultdict(list)
         num_pending = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
+            # Initialize location parameters.
+            init_loc = init_locs[name]
+            _deep_setattr(self.locs, name, PyroParam(init_loc))
+
             # Initialize parameters of conditional distributions.
             conditional = self.conditionals[name]
-            if isinstance(conditional, torch.nn.Module):
+            if callable(conditional):
                 _deep_setattr(self.conds, name, conditional)
             else:
                 if conditional not in ("delta", "normal", "mvn"):
                     raise ValueError(f"Unsupported conditional type: {conditional}")
-                init_loc = init_locs[name]
-                _deep_setattr(self.locs, name, PyroParam(init_loc))
                 if conditional in ("normal", "mvn"):
                     init_scale = torch.full_like(init_loc, self._init_scale)
                     _deep_setattr(self.scales, name,
@@ -1342,9 +1349,9 @@ class AutoStructured(AutoGuide):
                 if isinstance(dep, str) and dep == "linear":
                     dep = torch.nn.Linear(numel[upstream], numel[name], bias=False)
                     dep.weight.data.zero_()
-                elif not isinstance(dep, torch.nn.Module):
+                elif not callable(dep):
                     raise ValueError(
-                        f"Expected either the string 'linear' or a torch.nn.Module, but got {dep}"
+                        f"Expected either the string 'linear' or a callable, but got {dep}"
                     )
                 _deep_setattr(deps, upstream, dep)
 
@@ -1358,6 +1365,7 @@ class AutoStructured(AutoGuide):
                 num_pending[child] -= 1
             self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
 
+    @poutine.infer_config(config_fn=_config_auxiliary)
     def get_deltas(self, save_params=None):
         deltas = {}
         aux_values = {}
@@ -1369,7 +1377,7 @@ class AutoStructured(AutoGuide):
             loc = _deep_getattr(self.locs, name)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
-            if isinstance(conditional, torch.nn.Module):
+            if callable(conditional):
                 aux_value = _deep_getattr(self.conds, name)()
             elif conditional == "delta":
                 aux_value = zero

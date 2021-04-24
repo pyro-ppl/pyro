@@ -105,15 +105,37 @@ def test_factor(auto_class, Elbo):
 # helper for test_shapes()
 class AutoStructured_shapes(AutoStructured):
     def __init__(self, model, *, init_loc_fn):
+
+        def conditional_z4():
+            return pyro.param("z4_aux", torch.tensor(0.0))
+
+        class ConditionalZ5(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.log_scale = torch.nn.Parameter(torch.zeros(2))
+
+            def forward(self):
+                scale = self.log_scale.exp()
+                return pyro.sample("z5_aux", dist.Normal(0, scale).to_event(1))
+
+        class ConditionalZ6(PyroModule):
+            def __init__(self):
+                super().__init__()
+                self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
+                self.z6_aux = PyroSample(lambda s: dist.Normal(0, s.scale).to_event(1))
+
+            def forward(self):
+                return self.z6_aux
+
         super().__init__(
             model,
             conditionals={
                 "z1": "delta",
                 "z2": "normal",
                 "z3": "mvn",
-                "z4": "delta",
-                "z5": "normal",
-                "z6": "mvn",
+                "z4": conditional_z4,
+                "z5": ConditionalZ5(),
+                "z6": ConditionalZ6(),
             },
             dependencies={
                 "z3": {"z2": "linear"},
