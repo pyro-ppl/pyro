@@ -33,6 +33,11 @@ class FoldedNormal(dist.FoldedDistribution):
         return self.base_dist.scale
 
 
+class SparsePoisson(dist.Poisson):
+    def __init__(self, rate, *, validate_args=None):
+        super().__init__(rate, is_sparse=True, validate_args=validate_args)
+
+
 continuous_dists = [
     Fixture(pyro_dist=dist.Uniform,
             scipy_dist=sp.uniform,
@@ -313,6 +318,17 @@ continuous_dists = [
                 {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
                 {'concentration': [-1., 2., 3.], 'test_data': [0., 0., 1.]},
                 ]),
+    Fixture(pyro_dist=dist.SoftLaplace,
+            examples=[
+                {'loc': [2.0], 'scale': [4.0],
+                 'test_data': [2.0]},
+                {'loc': [[2.0]], 'scale': [[4.0]],
+                 'test_data': [[2.0]]},
+                {'loc': [[[2.0]]], 'scale': [[[4.0]]],
+                 'test_data': [[[2.0]]]},
+                {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
+                 'test_data': [[2.0, 50.0], [2.0, 50.0]]},
+                ]),
 ]
 
 discrete_dists = [
@@ -511,6 +527,23 @@ discrete_dists = [
             min_samples=10000,
             is_discrete=True),
     Fixture(pyro_dist=dist.Poisson,
+            scipy_dist=sp.poisson,
+            examples=[
+                {'rate': [2.0],
+                 'test_data': [0.]},
+                {'rate': [3.0],
+                 'test_data': [1.]},
+                {'rate': [6.0],
+                 'test_data': [4.]},
+                {'rate': [2.0, 3.0, 6.0],
+                 'test_data': [[0., 1., 4.], [0., 1., 4.]]},
+                {'rate': [[2.0], [3.0], [6.0]],
+                 'test_data': [[0.], [1.], [4.]]}
+            ],
+            scipy_arg_fn=lambda rate: ((np.array(rate),), {}),
+            prec=0.08,
+            is_discrete=True),
+    Fixture(pyro_dist=SparsePoisson,
             scipy_dist=sp.poisson,
             examples=[
                 {'rate': [2.0],

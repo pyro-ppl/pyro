@@ -234,7 +234,7 @@ class TestFixedModelGuide(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.Gamma(alpha_q, beta_q))
 
-        def per_param_args(module_name, param_name):
+        def per_param_args(param_name):
             if 'model' in fixed_parts and 'p_' in param_name:
                 return {'lr': 0.0}
             if 'guide' in fixed_parts and 'q_' in param_name:

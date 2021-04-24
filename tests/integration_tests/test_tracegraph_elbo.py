@@ -463,8 +463,8 @@ class RaoBlackwellizationTests(TestCase):
                                             infer=dict(baseline=dict(baseline_value=baseline_value)))
                         assert z_i_k.shape == (4 - i,)
 
-        def per_param_callable(module_name, param_name):
-            if 'baseline' in param_name or 'baseline' in module_name:
+        def per_param_callable(param_name):
+            if 'baseline' in param_name:
                 return {"lr": 0.010, "betas": (0.95, 0.999)}
             else:
                 return {"lr": lr, "betas": (0.95, 0.999)}
