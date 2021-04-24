@@ -1298,24 +1298,28 @@ class AutoStructured(AutoGuide):
         self.deps = PyroModule()
         self._unconstrained_shapes = {}
 
-        # Initialize guide params.
-        children = defaultdict(list)
-        num_pending = {}
-        numel = {name: site["value"].numel()
-                 for name, site in self.prototype_trace.iter_stochastic_nodes()}
+        # Collect unconstrained shapes.
+        init_locs = {}
+        numel = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            # Initialize parameters of conditional distributions.
             with helpful_support_errors(site):
                 init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
             self._unconstrained_shapes[name] = init_loc.shape
-            init_loc = init_loc.reshape(-1)
+            numel[name] = init_loc.numel()
+            init_locs[name] = init_loc.reshape(-1)
+
+        # Initialize guide params.
+        children = defaultdict(list)
+        num_pending = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            # Initialize parameters of conditional distributions.
             conditional = self.conditionals[name]
             if isinstance(conditional, torch.nn.Module):
                 setattr(self.conds, name, conditional)
             else:
                 if conditional not in ("delta", "normal", "mvn"):
                     raise ValueError(f"Unsupported conditional type: {conditional}")
-
+                init_loc = init_locs[name]
                 setattr(self.locs, name, PyroParam(init_loc))
                 if conditional in ("normal", "mvn"):
                     init_scale = torch.full_like(init_loc, self._init_scale)
@@ -1335,7 +1339,7 @@ class AutoStructured(AutoGuide):
                 children[upstream].append(name)
                 num_pending[name] += 1
                 if isinstance(dep, str) and dep == "linear":
-                    dep = torch.nn.Linear(numel[upstream], init_loc.numel(), bias=False)
+                    dep = torch.nn.Linear(numel[upstream], numel[name], bias=False)
                     dep.weight.data.zero_()
                 elif not isinstance(dep, torch.nn.Module):
                     raise ValueError(
