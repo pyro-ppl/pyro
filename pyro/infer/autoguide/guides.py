@@ -1403,7 +1403,7 @@ class AutoStructured(AutoGuide):
             unconstrained = aux_value + loc
             shape = self._unconstrained_shapes[name]
             if unconstrained.shape != shape:
-                sample_shape = unconstrained.shape[:unconstrained.dim() - len(shape)]
+                sample_shape = unconstrained.shape[:-1]
                 unconstrained = unconstrained.reshape(sample_shape + shape)
             transform = biject_to(site["fn"].support)
             value = transform(unconstrained)
@@ -1443,7 +1443,7 @@ class AutoStructured(AutoGuide):
             loc = getattr(self.locs, name).detach()
             shape = self._unconstrained_shapes[name]
             if loc.shape != shape:
-                sample_shape = loc.shape[:loc.dim() - len(shape)]
+                sample_shape = loc.shape[:-1]
                 loc = loc.reshape(sample_shape + shape)
             result[name] = biject_to(site["fn"].support)(loc)
         return result

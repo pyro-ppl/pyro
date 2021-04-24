@@ -240,6 +240,22 @@ def nested_auto_guide_callable(model):
     return guide
 
 
+class AutoStructured_median(AutoStructured):
+    def __init__(self, model):
+        super().__init__(
+            model,
+            conditionals={
+                "x": "delta",
+                "y": "normal",
+                "z": "mvn",
+            },
+            dependencies={
+                "x": {"z": "linear", "y": "linear"},
+                "y": {"z": "linear"},
+            },
+        )
+
+
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
@@ -254,6 +270,7 @@ def nested_auto_guide_callable(model):
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+    AutoStructured_median,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(auto_class, Elbo):
@@ -266,7 +283,7 @@ def test_median(auto_class, Elbo):
     guide = auto_class(model)
     optim = Adam({'lr': 0.02, 'betas': (0.8, 0.99)})
     elbo = Elbo(strict_enumeration_warning=False,
-                num_particles=100, vectorize_particles=True)
+                num_particles=500, vectorize_particles=True)
     infer = SVI(model, guide, optim, elbo)
     for _ in range(100):
         infer.step()
@@ -297,6 +314,7 @@ def test_median(auto_class, Elbo):
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+    AutoStructured_median,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_autoguide_serialization(auto_class, Elbo):
