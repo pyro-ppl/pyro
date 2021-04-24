@@ -28,6 +28,7 @@ from pyro.infer.autoguide import (
     AutoLowRankMultivariateNormal,
     AutoMultivariateNormal,
     AutoNormal,
+    AutoStructured,
     init_to_feasible,
     init_to_mean,
     init_to_median,
@@ -101,6 +102,28 @@ def test_factor(auto_class, Elbo):
     assert_close(loss_5 - loss_4, -1 - 3)
 
 
+# helper for test_shapes()
+class AutoStructured_shapes(AutoStructured):
+    def __init__(self, model, *, init_loc_fn):
+        super().__init__(
+            model,
+            conditionals={
+                "z1": "delta",
+                "z2": "normal",
+                "z3": "mvn",
+                "z4": "delta",
+                "z5": "normal",
+                "z6": "mvn",
+            },
+            dependencies={
+                "z3": {"z2": "linear"},
+                "z4": {"z3": "linear", "z2": "linear"},
+                "z6": {"z3": "linear", "z5": "linear"},
+            },
+            init_loc_fn=init_loc_fn,
+        )
+
+
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 @pytest.mark.parametrize("init_loc_fn", [
     init_to_feasible,
@@ -116,6 +139,7 @@ def test_factor(auto_class, Elbo):
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
+    AutoStructured_shapes,
 ])
 @pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_shapes(auto_class, init_loc_fn, Elbo):

@@ -1228,9 +1228,11 @@ class AutoStructured(AutoGuide):
 
     :param callable model: A Pyro model.
     :param conditionals: Family of distribution with which to model each latent
-        variable's conditional posterior. This should be a dict mapping site
-        name to a string in ("delta", "normal", or "mvn"), for all latent
-        sites.
+        variable's conditional posterior. This should be a dict mapping each
+        latent variable name to either a string in ("delta", "normal", or
+        "mvn") or to a :class:`torch.nn.Module` that returns a sample from a
+        zero mean (or approximately centered) noise distribution (such modules
+        typically call ``pyro.sample()`` inside their ``.forward()`` methods).
     :param dependencies: Dict mapping each site name to a dict of its upstream
         dependencies; each inner dict maps upstream site name to either the
         string "linear" or a :class:`torch.nn.Module` instance that maps
@@ -1255,13 +1257,16 @@ class AutoStructured(AutoGuide):
         self,
         model,
         *,
-        conditionals: Dict[str, str] = "normal",
+        conditionals: Dict[str, Union[str, torch.nn.Module]] = "normal",
         dependencies: Dict[str, Dict[str, Union[str, torch.nn.Module]]] = "linear",
         init_loc_fn=init_to_feasible,
         init_scale=0.01,
         create_plates=None,
     ):
         assert isinstance(conditionals, dict)
+        for name, fn in conditionals.items():
+            assert isinstance(name, str)
+            assert isinstance(fn, (str, torch.nn.Module))
         assert isinstance(dependencies, dict)
         for downstream, deps in dependencies.items():
             assert downstream in conditionals
@@ -1289,6 +1294,7 @@ class AutoStructured(AutoGuide):
         self.locs = PyroModule()
         self.scales = PyroModule()
         self.scale_trils = PyroModule()
+        self.conds = PyroModule()
         self.deps = PyroModule()
         self._unconstrained_shapes = {}
 
@@ -1304,18 +1310,21 @@ class AutoStructured(AutoGuide):
             self._unconstrained_shapes[name] = init_loc.shape
             init_loc = init_loc.reshape(-1)
             conditional = self.conditionals[name]
-            if conditional not in ("delta", "normal", "mvn"):
-                raise ValueError(f"Unsupported conditional type: {repr(conditional)}")
+            if isinstance(conditional, torch.nn.Module):
+                setattr(self.conds, name, conditional)
+            else:
+                if conditional not in ("delta", "normal", "mvn"):
+                    raise ValueError(f"Unsupported conditional type: {conditional}")
 
-            setattr(self.locs, name, PyroParam(init_loc))
-            if conditional in ("normal", "mvn"):
-                init_scale = torch.full_like(init_loc, self._init_scale)
-                setattr(self.scales, name,
-                        PyroParam(init_scale, self.scale_constraint))
-            if conditional == "mvn":
-                init_scale_tril = eye_like(init_loc, init_loc.numel())
-                setattr(self.scale_trils, name,
-                        PyroParam(init_scale_tril, self.scale_tril_constraint))
+                setattr(self.locs, name, PyroParam(init_loc))
+                if conditional in ("normal", "mvn"):
+                    init_scale = torch.full_like(init_loc, self._init_scale)
+                    setattr(self.scales, name,
+                            PyroParam(init_scale, self.scale_constraint))
+                if conditional == "mvn":
+                    init_scale_tril = eye_like(init_loc, init_loc.numel())
+                    setattr(self.scale_trils, name,
+                            PyroParam(init_scale_tril, self.scale_tril_constraint))
 
             # Initialize dependencies on upstream variables.
             num_pending[name] = 0
@@ -1352,7 +1361,9 @@ class AutoStructured(AutoGuide):
             loc = getattr(self.locs, name)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
-            if conditional == "delta":
+            if isinstance(conditional, torch.nn.Module):
+                aux_value = getattr(self.conds, name)()
+            elif conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
                 scale = getattr(self.scales, name)
@@ -1373,7 +1384,7 @@ class AutoStructured(AutoGuide):
                     infer={"is_auxiliary": True},
                 )
             else:
-                raise ValueError("Unsupported conditional type: {repr(conditional)}")
+                raise ValueError(f"Unsupported conditional type: {conditional}")
 
             # Accumulate upstream dependencies. These shear transforms have no
             # effect on the Jacobian determinant, and can therefore be excluded
