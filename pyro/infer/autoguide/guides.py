@@ -1358,10 +1358,13 @@ class AutoStructured(AutoGuide):
                 num_pending[child] -= 1
             self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
 
-    def get_deltas(self):
+    def get_deltas(self, save_params=None):
         deltas = {}
         aux_values = {}
         for name, site in self._sorted_sites:
+            if save_params is not None and name not in save_params:
+                continue
+
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
             loc = _deep_getattr(self.locs, name)
             zero = torch.zeros_like(loc)
@@ -1409,7 +1412,7 @@ class AutoStructured(AutoGuide):
             # Shift by loc, reshape, and transform to constrained space.
             unconstrained = aux_value + loc
             shape = self._unconstrained_shapes[name]
-            if unconstrained.shape != shape:
+            if torch._C._get_tracing_state() or unconstrained.shape != shape:
                 sample_shape = unconstrained.shape[:-1]
                 unconstrained = unconstrained.reshape(sample_shape + shape)
             transform = biject_to(site["fn"].support)

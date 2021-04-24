@@ -47,9 +47,7 @@ class StructuredReparam(Reparam):
             raise TypeError(
                 f"StructuredReparam expected an AutoStructured guide, but got {type(guide)}"
             )
-        for p in guide.parameters():
-            p.detach_()
-        self.guide = guide
+        self.guide = guide.requires_grad_(False)
         self.deltas = {}
 
     def _reparam_config(self, site):
@@ -66,3 +64,21 @@ class StructuredReparam(Reparam):
         new_fn = self.deltas.pop(name)
         value = new_fn.v
         return new_fn, value
+
+    def transform_samples(self, aux_samples, save_params=None):
+        """
+        Given latent samples from the warped posterior (with a possible batch dimension),
+        return a `dict` of samples from the latent sites in the model.
+
+        :param dict aux_samples: Dict site name to tensor value for each latent
+            auxiliary site (or if ``save_params`` is specifiec, then for only
+            those latent auxiliary sites needed to compute requested params).
+        :param list save_params: An optional list of site names to save. This
+            is useful in models with large nuisance variables. Defaults to
+            None, saving all params.
+        :return: a `dict` of samples keyed by latent sites in the model.
+        :rtype: dict
+        """
+        with poutine.condition(data=aux_samples), poutine.mask(mask=False):
+            deltas = self.guide.get_deltas(save_params)
+        return {name: delta.v for name, delta in deltas.items()}
