@@ -1315,25 +1315,25 @@ class AutoStructured(AutoGuide):
             # Initialize parameters of conditional distributions.
             conditional = self.conditionals[name]
             if isinstance(conditional, torch.nn.Module):
-                setattr(self.conds, name, conditional)
+                _deep_setattr(self.conds, name, conditional)
             else:
                 if conditional not in ("delta", "normal", "mvn"):
                     raise ValueError(f"Unsupported conditional type: {conditional}")
                 init_loc = init_locs[name]
-                setattr(self.locs, name, PyroParam(init_loc))
+                _deep_setattr(self.locs, name, PyroParam(init_loc))
                 if conditional in ("normal", "mvn"):
                     init_scale = torch.full_like(init_loc, self._init_scale)
-                    setattr(self.scales, name,
-                            PyroParam(init_scale, self.scale_constraint))
+                    _deep_setattr(self.scales, name,
+                                  PyroParam(init_scale, self.scale_constraint))
                 if conditional == "mvn":
                     init_scale_tril = eye_like(init_loc, init_loc.numel())
-                    setattr(self.scale_trils, name,
-                            PyroParam(init_scale_tril, self.scale_tril_constraint))
+                    _deep_setattr(self.scale_trils, name,
+                                  PyroParam(init_scale_tril, self.scale_tril_constraint))
 
             # Initialize dependencies on upstream variables.
             num_pending[name] = 0
             deps = PyroModule()
-            setattr(self.deps, name, deps)
+            _deep_setattr(self.deps, name, deps)
             for upstream, dep in self.dependencies.get(name, {}).items():
                 assert upstream in self.prototype_trace.nodes
                 children[upstream].append(name)
@@ -1345,7 +1345,7 @@ class AutoStructured(AutoGuide):
                     raise ValueError(
                         f"Expected either the string 'linear' or a torch.nn.Module, but got {dep}"
                     )
-                setattr(deps, upstream, dep)
+                _deep_setattr(deps, upstream, dep)
 
         # Topologically sort sites.
         self._sorted_sites = []
@@ -1362,15 +1362,15 @@ class AutoStructured(AutoGuide):
         aux_values = {}
         for name, site in self._sorted_sites:
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
-            loc = getattr(self.locs, name)
+            loc = _deep_getattr(self.locs, name)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
             if isinstance(conditional, torch.nn.Module):
-                aux_value = getattr(self.conds, name)()
+                aux_value = _deep_getattr(self.conds, name)()
             elif conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
-                scale = getattr(self.scales, name)
+                scale = _deep_getattr(self.scales, name)
                 aux_value = pyro.sample(
                     name + "_aux",
                     dist.Normal(zero, scale).to_event(1),
@@ -1379,8 +1379,8 @@ class AutoStructured(AutoGuide):
             elif conditional == "mvn":
                 # This overparametrizes by learning (scale,scale_tril),
                 # enabling faster learning of the more-global scale parameter.
-                scale = getattr(self.scales, name)
-                scale_tril = getattr(self.scale_trils, name)
+                scale = _deep_getattr(self.scales, name)
+                scale_tril = _deep_getattr(self.scale_trils, name)
                 scale_tril = scale[..., None] * scale_tril
                 aux_value = pyro.sample(
                     name + "_aux",
@@ -1393,9 +1393,9 @@ class AutoStructured(AutoGuide):
             # Accumulate upstream dependencies. These shear transforms have no
             # effect on the Jacobian determinant, and can therefore be excluded
             # from the log_density computation below, even for nonlinear dep().
-            deps = getattr(self.deps, name)
+            deps = _deep_getattr(self.deps, name)
             for upstream in self.dependencies.get(name, {}):
-                dep = getattr(deps, upstream)
+                dep = _deep_getattr(deps, upstream)
                 aux_value = aux_value + dep(aux_values[upstream])
             aux_values[name] = aux_value
 
@@ -1440,7 +1440,7 @@ class AutoStructured(AutoGuide):
     def median(self, *args, **kwargs):
         result = {}
         for name, site in self._sorted_sites:
-            loc = getattr(self.locs, name).detach()
+            loc = _deep_getattr(self.locs, name).detach()
             shape = self._unconstrained_shapes[name]
             if loc.shape != shape:
                 sample_shape = loc.shape[:-1]

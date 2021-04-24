@@ -699,6 +699,21 @@ def test_linear_regression_smoke(auto_class, Elbo):
     infer.step(x, y)
 
 
+class AutoStructured_predictive(AutoStructured):
+    def __init__(self, model):
+        super().__init__(
+            model,
+            conditionals={
+                "linear.weight": "mvn",
+                "linear.bias": "normal",
+                "sigma": "delta",
+            },
+            dependencies={
+                "linear.bias": {"linear.weight": "linear"},
+            },
+        )
+
+
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
@@ -708,6 +723,7 @@ def test_linear_regression_smoke(auto_class, Elbo):
     AutoLaplaceApproximation,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+    AutoStructured_predictive,
 ])
 def test_predictive(auto_class):
     N, D = 3, 2
