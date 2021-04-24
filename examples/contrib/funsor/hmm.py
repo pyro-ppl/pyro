@@ -511,7 +511,8 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
 
 # Let's go back to our initial model and make it even faster: we'll support
 # vectorized time dimension and use TraceMarkovEnum_ELBO that efficiently eliminates
-# vectorized time dimension using the parallel scan algorithm.
+# vectorized time dimension using the parallel scan algorithm. Note that TraceMarkovEnum_ELBO
+# is only supported by funsor backend.
 def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
     with ignore_jit_warnings():
         num_sequences, max_length, data_dim = map(int, sequences.shape)
@@ -532,19 +533,18 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
         lengths = lengths[batch]
         batch = batch[:, None]
         x_prev = 0
-        # To vectorize time dimenstion we use pyro.vectorized_markov(name=...).
-        # With the help of Vindex and additional unsqueezes we can make sure that
-        # dimension line up properly.
+        # To vectorize time dimension we use pyro.vectorized_markov(name=...).
+        # With the help of Vindex and additional unsqueezes we can ensure that
+        # dimensions line up properly.
         for t in pyro.vectorized_markov(name="time", size=int(max_length if args.jit else lengths.max()), dim=-2):
-            breakpoint()
             with handlers.mask(mask=(t < lengths.unsqueeze(-1)).unsqueeze(-1)):
                 x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
                                 infer={"enumerate": "parallel"})
                 with tones_plate:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
                                 obs=Vindex(sequences)[batch, t])
-# Let's see how vectorizing time dimenstion changes the shapes of sample sites:
-# $ python examples/hmm.py -m 7 -n 1 --batch-size=10 --print-shapes
+# Let's see how vectorizing time dimension changes the shapes of sample sites:
+# $ python examples/hmm.py -m 7 --funsor -n 1 --batch-size=10 --print-shapes
 # ...
 #              Sample Sites:
 #               probs_x dist                   | 16 16
