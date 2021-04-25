@@ -1369,11 +1369,13 @@ class AutoStructured(AutoGuide):
     def get_deltas(self, save_params=None):
         deltas = {}
         aux_values = {}
+        compute_density = poutine.get_mask() is not False
         for name, site in self._sorted_sites:
             if save_params is not None and name not in save_params:
                 continue
 
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
+            log_density = 0.0
             loc = _deep_getattr(self.locs, name)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
@@ -1389,6 +1391,8 @@ class AutoStructured(AutoGuide):
                 )
                 scale = _deep_getattr(self.scales, name)
                 aux_value = aux_value * scale
+                if compute_density:
+                    log_density = log_density - scale.log().sum(-1)
             elif conditional == "mvn":
                 # This overparametrizes by learning (scale,scale_tril),
                 # enabling faster learning of the more-global scale parameter.
@@ -1400,6 +1404,11 @@ class AutoStructured(AutoGuide):
                 scale = _deep_getattr(self.scales, name)
                 scale_tril = _deep_getattr(self.scale_trils, name)
                 aux_value = aux_value @ scale_tril.T * scale
+                if compute_density:
+                    log_density = (
+                        log_density - scale.log().sum(-1)
+                        - scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+                    )
             else:
                 raise ValueError(f"Unsupported conditional type: {conditional}")
 
@@ -1428,13 +1437,10 @@ class AutoStructured(AutoGuide):
             value = transform(unconstrained)
 
             # Create a Delta distribution.
-            if conditional == "delta" or poutine.get_mask() is False:
-                log_density = 0.0
-            else:
-                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained)
-                log_density = sum_rightmost(
-                    log_density, log_density.dim() - value.dim() + site["fn"].event_dim
-                )
+            if compute_density and conditional != "delta":
+                ldj = transform.inv.log_abs_det_jacobian(value, unconstrained)
+                ldj = sum_rightmost(ldj, ldj.dim() - value.dim() + site["fn"].event_dim)
+                log_density = log_density + ldj
             deltas[name] = dist.Delta(value, log_density, site["fn"].event_dim)
 
         return deltas
