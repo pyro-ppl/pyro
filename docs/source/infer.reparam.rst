@@ -130,3 +130,12 @@ Neural Transport
     :member-order: bysource
     :special-members: __call__
     :show-inheritance:
+
+Structured Preconditioning
+--------------------------
+.. automodule:: pyro.infer.reparam.structured
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
