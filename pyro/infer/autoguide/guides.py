@@ -1265,7 +1265,7 @@ class AutoStructured(AutoGuide):
         conditionals: Dict[str, Union[str, Callable]] = "normal",
         dependencies: Dict[str, Dict[str, Union[str, Callable]]] = "linear",
         init_loc_fn=init_to_feasible,
-        init_scale=0.01,
+        init_scale=0.1,
         create_plates=None,
     ):
         assert isinstance(conditionals, dict)
@@ -1382,23 +1382,24 @@ class AutoStructured(AutoGuide):
             elif conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
-                scale = _deep_getattr(self.scales, name)
                 aux_value = pyro.sample(
                     name + "_aux",
-                    dist.Normal(zero, scale).to_event(1),
+                    dist.Normal(zero, 1).to_event(1),
                     infer={"is_auxiliary": True},
                 )
+                scale = _deep_getattr(self.scales, name)
+                aux_value = aux_value * scale
             elif conditional == "mvn":
                 # This overparametrizes by learning (scale,scale_tril),
                 # enabling faster learning of the more-global scale parameter.
-                scale = _deep_getattr(self.scales, name)
-                scale_tril = _deep_getattr(self.scale_trils, name)
-                scale_tril = scale[..., None] * scale_tril
                 aux_value = pyro.sample(
                     name + "_aux",
-                    dist.MultivariateNormal(zero, scale_tril=scale_tril),
+                    dist.Normal(zero, 1).to_event(1),
                     infer={"is_auxiliary": True},
                 )
+                scale = _deep_getattr(self.scales, name)
+                scale_tril = _deep_getattr(self.scale_trils, name)
+                aux_value = aux_value @ scale_tril.T * scale
             else:
                 raise ValueError(f"Unsupported conditional type: {conditional}")
 
