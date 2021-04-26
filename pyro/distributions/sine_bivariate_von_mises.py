@@ -24,7 +24,8 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     r""" Compute first n log modified bessel function of first kind
     .. math ::
 
-        \log(I_v(z)) = v*\log(z/2) + \log(\sum_{k=0}^\inf \exp\left[2*k*\log(z/2) - \sum_kk^k log(kk) - \lgamma(v + k + 1)\right])
+        \log(I_v(z)) = v*\log(z/2) + \log(\sum_{k=0}^\inf \exp\left[2*k*\log(z/2) - \sum_kk^k log(kk)
+        - \lgamma(v + k + 1)\right])
 
     :param orders: orders of the log modified bessel function.
     :param value: values to compute modified bessel function for
