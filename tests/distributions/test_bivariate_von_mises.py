@@ -9,7 +9,7 @@ from torch.distributions import Beta, HalfNormal, VonMises
 
 import pyro
 from pyro.distributions import Geometric, constraints
-from pyro.distributions.bivariate_von_mises import SineBivariateVonMises, log_I1
+from pyro.distributions.sine_bivariate_von_mises import SineBivariateVonMises, log_I1
 from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 
@@ -20,7 +20,7 @@ def _unnorm_log_prob(value, locs, conc, corr):
 
 @pytest.mark.parametrize('n', [0, 1, 10, 20])
 def test_log_binomial(n):
-    comp = SineBivariateVonMises._lbinoms(n)
+    comp = SineBivariateVonMises._lbinoms(tensor(n))
     act = tensor([binom(2 * i, i) for i in range(n)]).log()
     assert_equal(act, comp)
 

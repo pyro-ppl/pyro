@@ -11,7 +11,9 @@ from torch.autograd import grad
 from torch.distributions import VonMises
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions import TorchDistribution, constraints
+from pyro.distributions import constraints
+from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import broadcast_shape
 
 
 def _flat_dim(size):
@@ -19,13 +21,15 @@ def _flat_dim(size):
 
 
 def log_I1(orders: int, value: torch.Tensor, terms=250):
-    """ Compute first n log modified bessel function of first kind
-        log(I_v(z)) = v*log(z/2) + log(sum_{k=0}^inf exp[2*k*log(z/2) - sum_kk^k log(kk) - lgamma(v + k + 1)])
+    r""" Compute first n log modified bessel function of first kind
+    .. math ::
 
-        :param orders: orders of the log modified bessel function.
-        :param value: values to compute modified bessel function for
-        :param terms: truncation of summation
-        :return: 0 to orders modified bessel function [shape:(orders, value.squeeze().shape)]
+        \log(I_v(z)) = v*\log(z/2) + \log(\sum_{k=0}^\inf \exp\left[2*k*\log(z/2) - \sum_kk^k log(kk) - \lgamma(v + k + 1)\right])
+
+    :param orders: orders of the log modified bessel function.
+    :param value: values to compute modified bessel function for
+    :param terms: truncation of summation
+    :return: 0 to orders modified bessel function
     """
     orders = orders + 1
     if len(value.size()) == 0:
@@ -34,8 +38,8 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
         vshape = copy(value.shape)
     value = value.reshape(-1, 1)
 
-    k = torch.arange(terms)
-    lgammas_all = torch.lgamma(torch.arange(1, terms + orders + 1))
+    k = torch.arange(terms, device=value.device)
+    lgammas_all = torch.lgamma(torch.arange(1, terms + orders + 1, device=value.device))
     assert lgammas_all.shape == (orders + terms,)  # lgamma(0) = inf => start from 1
 
     lvalues = torch.log(value / 2) * k.view(1, -1)
@@ -59,40 +63,54 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
 
 
 class SineBivariateVonMises(TorchDistribution):
-    """ Distribution of two dependent angles on the 2-torus (S^1 ⨂ S^1) given by
-    .. math::
-      C^{-1}\\exp(\\kappa_1\\cos(x-\\mu_1) + \\kappa_2\\cos(x_2 -\\mu_2) + \\rho\\sin(x_1 - \\mu_1)\\sin(x_2 - \\mu_2))
-    and
-    .. math::
-      C = (2\\pi)^2 \\sum_{i=0} {2i \\choose i}
-        \\left(\\frac{\\rho^2}{4\\kappa_1\\kappa_2}\\right)^2 I_i(\\kappa_1)I_i(\\kappa_2),
-    where I_i(\\cdot) is the modified bessel function of first kind, \\mu 's are the locations of the distribution,
-    \\kappa 's are the concentration and \\rho correlation between angles x_1 and x_2.
+    r""" Unimodal distribution of two dependent angles on the 2-torus (S^1 ⨂ S^1) given by
 
-    Note: Sample efficiency drops as
     .. math::
-        \\frac{\\rho}{\\kappa_1\\kappa_2} \\rightarrow 1
-    and the distribution becomes bimodal.
+
+        C^{-1}\exp(\kappa_1\cos(x-\mu_1) + \kappa_2\cos(x_2 -\mu_2) + \rho\sin(x_1 - \mu_1)\sin(x_2 - \mu_2))
+
+    and
+
+    .. math::
+
+        C = (2\pi)^2 \sum_{i=0} {2i \choose i}
+        \left(\frac{\rho^2}{4\kappa_1\kappa_2}\right)^i I_i(\kappa_1)I_i(\kappa_2),
+
+    where I_i(\cdot) is the modified bessel function of first kind, mu's are the locations of the distribution,
+    kappa's are the concentration and rho gives the correlation between angles x_1 and x_2.
+
+    This distribution is helpful for modeling coupled angles such as torsion angles in peptide chains.
+    To infer parameters, use :class:`~pyro.infer.NUTS` or :class:`~pyro.infer.HMC` with priors that
+    avoid parameterizations where the distribution becomes bimodal; see note below.
+
+    .. note:: Sample efficiency drops as
+
+        .. math::
+
+            \frac{\rho}{\kappa_1\kappa_2} \rightarrow 1
+
+        because the distribution becomes increasingly bimodal.
+
+    .. note:: The correlation and weighted_correlation params are mutually exclusive.
+
+    .. note:: This distribution does not work with :class:`~pyro.infer.svi.SVI`.
 
     ** References: **
-      1. Probabilistic model for two dependent circular variables
-         Singh, H., Hnizdo, V., and Demchuck, E. (2002)
+      1. Probabilistic model for two dependent circular variables Singh, H., Hnizdo, V., and Demchuck, E. (2002)
 
     :param torch.Tensor phi_loc: location of first angle
     :param torch.Tensor psi_loc: location of second angle
     :param torch.Tensor phi_concentration: concentration of first angle
     :param torch.Tensor psi_concentration: concentration of second angle
     :param torch.Tensor correlation: correlation between the two angles
-    :param torch.Tensor weighted_correlation: set correlation to
-    .. math:
-        w_\\rho\\sqrt{\\kappa_1\\kappa_2},
-    to avoid bimodality (see note).
+    :param torch.Tensor weighted_correlation: set correlation to weigthed_corr * sqrt(phi_conc*psi_conc)
+        to avoid bimodality (see note).
     """
 
     arg_constraints = {'phi_loc': constraints.real, 'psi_loc': constraints.real,
                        'phi_concentration': constraints.positive, 'psi_concentration': constraints.positive,
                        'correlation': constraints.real}
-    support = constraints.real
+    support = constraints.independent(constraints.real, 1)
     max_sample_iter = 1000
 
     def __init__(self, phi_loc, psi_loc, phi_concentration, psi_concentration, correlation=None,
@@ -127,7 +145,7 @@ class SineBivariateVonMises(TorchDistribution):
         if hasattr(self, '_norm_const') and self._norm_const is None:
             corr = self.correlation + 1e-8
             conc = torch.hstack((self.phi_concentration, self.psi_concentration))
-            m = torch.arange(50)
+            m = torch.arange(50, device=self.phi_loc.device)
             fs = SineBivariateVonMises._lbinoms(m.max() + 1) + 2 * m * torch.log(corr) - m * torch.log(
                 4 * torch.prod(conc, dim=0))
             fs += torch.sum(log_I1(m.max(), conc), dim=-1)
@@ -138,16 +156,21 @@ class SineBivariateVonMises(TorchDistribution):
     def log_prob(self, value):
         if len(value.size()) == 1:
             value = value[None, :]
+        if self._validate_args:
+            self._validate_sample(value)
+        # assert value.shape[-1] == self.event_shape
         indv = self.phi_concentration * torch.cos(value[..., 0] - self.phi_loc) + self.psi_concentration * torch.cos(
             value[..., 1] - self.psi_loc)
         corr = self.correlation * torch.sin(value[..., 0] - self.phi_loc) * torch.sin(value[..., 1] - self.psi_loc)
         return indv + corr - self.norm_const
 
     def sample(self, sample_shape=torch.Size()):
-        """ ** References: **
-              1. A New Unified Approach for the Simulation of aWide Class of Directional Distributions
-                John T. Kent, Asaad M. Ganeiber & Kanti V. Mardia (2018)
         """
+        ** References: **
+            1. A New Unified Approach for the Simulation of aWide Class of Directional Distributions
+               John T. Kent, Asaad M. Ganeiber & Kanti V. Mardia (2018)
+        """
+        assert not torch._C._get_tracing_state(), "jit not supported"
 
         corr = self.correlation
         conc = torch.stack((self.phi_concentration, self.psi_concentration))
@@ -160,9 +183,10 @@ class SineBivariateVonMises(TorchDistribution):
         b0 = self._bfind(eig)
 
         total = int(torch.prod(torch.tensor(sample_shape)))
-        missing = total * torch.ones(reduce(lambda a, b: a * b, self.batch_shape, 1), dtype=torch.int)
-        start = torch.zeros_like(missing)
-        phi = torch.empty((2, *missing.shape, total), dtype=corr.dtype)
+        missing = total * torch.ones(reduce(lambda a, b: a * b, self.batch_shape, 1), dtype=torch.int,
+                                     device=conc.device)
+        start = torch.zeros_like(missing, device=conc.device)
+        phi = torch.empty((2, *missing.shape, total), dtype=corr.dtype, device=conc.device)
 
         max_iter = SineBivariateVonMises.max_sample_iter
 
@@ -173,6 +197,7 @@ class SineBivariateVonMises(TorchDistribution):
         eig = eig.view(2, -1)
         b0 = b0.view(-1)
         phi_den = log_I1(0, conc[1]).view(-1, 1)
+        lengths = torch.arange(total, device=conc.device).view(1, -1)
 
         while torch.any(missing > 0) and max_iter:
             curr_conc = conc[:, missing > 0, :]
@@ -192,12 +217,12 @@ class SineBivariateVonMises(TorchDistribution):
                 curr_b0.view(-1, 1) / 2 + (curr_eig.view(2, -1, 1) * x ** 2).sum(0))
             assert lg_inv.shape == lf.shape
 
-            accepted = torch.distributions.Uniform(0., 1.).sample(lf.shape) < (lf + lg_inv).exp()
+            accepted = torch.distributions.Uniform(0., torch.ones((), device=conc.device)).sample(lf.shape) < (
+                    lf + lg_inv).exp()
 
-            phi_mask = torch.zeros((*missing.shape, total), dtype=torch.bool)
-            phi_mask[missing > 0] = torch.logical_and(
-                torch.arange(total).view(1, -1) < (start[missing > 0] + accepted.sum(-1)).view(-1, 1),
-                torch.arange(total).view(1, -1) >= start[missing > 0].view(-1, 1))
+            phi_mask = torch.zeros((*missing.shape, total), dtype=torch.bool, device=conc.device)
+            phi_mask[missing > 0] = torch.logical_and(lengths < (start[missing > 0] + accepted.sum(-1)).view(-1, 1),
+                                                      lengths >= start[missing > 0].view(-1, 1))
 
             phi[:, phi_mask] = x[:, accepted]
 
@@ -206,7 +231,8 @@ class SineBivariateVonMises(TorchDistribution):
             max_iter -= 1
 
         if max_iter == 0 or torch.any(missing > 0):
-            raise Exception("sample error")  # FIXME: what would be an appropriate exception?
+            raise ValueError("maximum number of iterations exceeded; "
+                             "try increasing `SineBivariateVonMises.max_sample_iter`")
 
         phi = torch.atan2(phi[1], phi[0])
 
@@ -225,6 +251,11 @@ class SineBivariateVonMises(TorchDistribution):
     def mean(self):
         return torch.stack((self.phi_loc, self.psi_loc))
 
+    @classmethod
+    def infer_shapes(cls, **arg_shapes):
+        batch_shape = torch.Size(broadcast_shape(*arg_shapes.values()))
+        return batch_shape,  torch.Size([2])
+
     def expand(self, batch_shape, _instance=None):
         try:
             return super(SineBivariateVonMises, self).expand(batch_shape)
@@ -240,7 +271,7 @@ class SineBivariateVonMises(TorchDistribution):
 
     def _bfind(self, eig):
         eig = eig.view(2, -1)
-        b = eig.shape[0] / 2 * torch.ones(self.batch_shape, requires_grad=True, dtype=torch.float)
+        b = eig.shape[0] / 2 * torch.ones(self.batch_shape, requires_grad=True, dtype=torch.float, device=eig.device)
         b = b.ravel()
         for i in torch.arange(b.shape[0])[eig.norm(0) != 0].T:
             curr_eig = eig[:, i]  # make indexed a non-leaf
@@ -252,6 +283,7 @@ class SineBivariateVonMises(TorchDistribution):
 
     @staticmethod
     def _lbinoms(n):
-        num = torch.lgamma(2 * torch.arange(n) + 1)
-        den = torch.lgamma(torch.arange(n) + 1)
+        ns = torch.arange(n, device=n.device)
+        num = torch.lgamma(2 * ns + 1)
+        den = torch.lgamma(ns + 1)
         return num - 2 * den
