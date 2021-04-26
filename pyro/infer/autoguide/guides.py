@@ -1332,13 +1332,12 @@ class AutoStructured(AutoGuide):
         if not isinstance(self.conditionals, dict):
             self.conditionals = {name: self.conditionals for name in init_locs}
         if not isinstance(self.dependencies, dict):
-            model_dependencies = poutine.block(get_dependencies)(
+            dependencies = poutine.block(get_dependencies)(
                 self._original_model[0], args, kwargs,
             )
-            guide_dependencies = model_dependencies  # FIXME
             self.dependencies = {
                 downstream: {upstream: self.dependencies for upstream in upstreams}
-                for downstream, upstreams in guide_dependencies.items()
+                for downstream, upstreams in dependencies.items()
             }
 
         # Initialize guide params.
