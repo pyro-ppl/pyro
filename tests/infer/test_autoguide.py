@@ -167,6 +167,7 @@ class AutoStructured_shapes(AutoStructured):
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
+    AutoStructured,
     AutoStructured_shapes,
 ])
 @pytest.mark.filterwarnings("ignore::FutureWarning")
@@ -298,6 +299,7 @@ class AutoStructured_median(AutoStructured):
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+    AutoStructured,
     AutoStructured_median,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -342,6 +344,7 @@ def test_median(auto_class, Elbo):
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+    AutoStructured,
     AutoStructured_median,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -751,6 +754,7 @@ class AutoStructured_predictive(AutoStructured):
     AutoLaplaceApproximation,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+    AutoStructured,
     AutoStructured_predictive,
 ])
 def test_predictive(auto_class):

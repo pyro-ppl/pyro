@@ -21,7 +21,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from contextlib import ExitStack
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, Optional, Union
 
 import torch
 from torch import nn
@@ -39,6 +39,7 @@ from pyro.infer.autoguide.initialization import (
     init_to_median,
 )
 from pyro.infer.enum import config_enumerate
+from pyro.infer.inspect import get_dependencies
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
@@ -1209,9 +1210,18 @@ class AutoStructured(AutoGuide):
                 y = pyro.sample("y", dist.Normal(0, 1))
                 pyro.sample("z", dist.Normal(y, x), obs=data)
 
+        # Either fully automatic...
+        guide = AutoStructured(model)
+
+        # ...or with specified conditional and dependency types...
+        guide = AutoStructured(
+            model, conditionals="normal", dependencies="linear"
+        )
+
+        # ...or with custom dependency structure and distribution types.
         guide = AutoStructured(
             model=model,
-            conditionals={"x": "normal", "y": "normal"},
+            conditionals={"x": "normal", "y": "delta"},
             dependencies={"x": {"y": "linear"}},
         )
 
@@ -1232,19 +1242,20 @@ class AutoStructured(AutoGuide):
             adam = pyro.optim.Adam(optim_config)
 
     :param callable model: A Pyro model.
-    :param conditionals: Family of distribution with which to model each latent
-        variable's conditional posterior. This should be a dict mapping each
-        latent variable name to either a string in ("delta", "normal", or
-        "mvn") or to a callable that returns a sample from a zero mean (or
-        approximately centered) noise distribution (such callables typically
-        call ``pyro.param()`` and ``pyro.sample()`` internally).
-    :param dependencies: Dict mapping each site name to a dict of its upstream
-        dependencies; each inner dict maps upstream site name to either the
-        string "linear" or a callable that maps a *flattened* upstream
-        perturbation to *flattened* downstream perturbation. The string
-        "linear" is equivalent to ``nn.Linear(upstream.numel(),
-        downstream.numel(), bias=False)``.  Dependencies must not contain
-        cycles or self-loops.
+    :param conditionals: Either a single distribution type or a dict mapping
+        each latent variable name to a distribution type. A distribution type
+        is either a string in {"delta", "normal", "mvn"} or a callable that
+        returns a sample from a zero mean (or approximately centered) noise
+        distribution (such callables typically call ``pyro.param()`` and
+        ``pyro.sample()`` internally).
+    :param dependencies: Dependency type, or a dict mapping each site name to a
+        dict mapping its upstream dependencies to dependency types. Only a
+        dependecy type is provided, dependency structure will be inferred. A
+        dependency type is either the string "linear" or a callable that maps a
+        *flattened* upstream perturbation to *flattened* downstream
+        perturbation. The string "linear" is equivalent to
+        ``nn.Linear(upstream.numel(), downstream.numel(), bias=False)``.
+        Dependencies must not contain cycles or self-loops.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
@@ -1262,35 +1273,38 @@ class AutoStructured(AutoGuide):
         self,
         model,
         *,
-        conditionals: Dict[str, Union[str, Callable]] = "normal",
-        dependencies: Dict[str, Dict[str, Union[str, Callable]]] = "linear",
-        init_loc_fn=init_to_feasible,
-        init_scale=0.1,
-        create_plates=None,
+        conditionals: Union[str, Dict[str, Union[str, Callable]]] = "mvn",
+        dependencies: Union[str, Dict[str, Dict[str, Union[str, Callable]]]] = "linear",
+        init_loc_fn: Callable = init_to_feasible,
+        init_scale: float = 0.1,
+        create_plates: Optional[Callable] = None,
     ):
-        assert isinstance(conditionals, dict)
-        for name, fn in conditionals.items():
-            assert isinstance(name, str)
-            assert isinstance(fn, str) or callable(fn)
-        assert isinstance(dependencies, dict)
-        for downstream, deps in dependencies.items():
-            assert downstream in conditionals
-            assert isinstance(deps, dict)
-            for upstream, dep in deps.items():
-                assert upstream in conditionals
-                assert upstream != downstream
-                assert isinstance(dep, str) or callable(dep)
-                if conditionals[upstream] == "delta":
-                    raise ValueError(
-                        f"Site {repr(downstream)} cannot depend on "
-                        f"upstream point-estimated site {repr(upstream)}"
-                    )
+        assert isinstance(conditionals, (dict, str))
+        if isinstance(conditionals, dict):
+            for name, fn in conditionals.items():
+                assert isinstance(name, str)
+                assert isinstance(fn, str) or callable(fn)
+        assert isinstance(dependencies, (dict, str))
+        if isinstance(dependencies, dict):
+            for downstream, deps in dependencies.items():
+                assert downstream in conditionals
+                assert isinstance(deps, dict)
+                for upstream, dep in deps.items():
+                    assert upstream in conditionals
+                    assert upstream != downstream
+                    assert isinstance(dep, str) or callable(dep)
+                    if conditionals[upstream] == "delta":
+                        raise ValueError(
+                            f"Site {repr(downstream)} cannot depend on "
+                            f"upstream point-estimated site {repr(upstream)}"
+                        )
         self.conditionals = conditionals
         self.dependencies = dependencies
 
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
         self._init_scale = init_scale
+        self._original_model = model,
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, create_plates=create_plates)
 
@@ -1313,6 +1327,19 @@ class AutoStructured(AutoGuide):
             self._unconstrained_shapes[name] = init_loc.shape
             numel[name] = init_loc.numel()
             init_locs[name] = init_loc.reshape(-1)
+
+        # Instantiate conditionals and dependencies as dictionaries.
+        if not isinstance(self.conditionals, dict):
+            self.conditionals = {name: self.conditionals for name in init_locs}
+        if not isinstance(self.dependencies, dict):
+            model_dependencies = poutine.block(get_dependencies)(
+                self._original_model[0], args, kwargs,
+            )
+            guide_dependencies = model_dependencies  # FIXME
+            self.dependencies = {
+                downstream: {upstream: self.dependencies for upstream in upstreams}
+                for downstream, upstreams in guide_dependencies.items()
+            }
 
         # Initialize guide params.
         children = defaultdict(list)
