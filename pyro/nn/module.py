@@ -467,10 +467,15 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             if self._pyro_context.active:
                 pyro.param(self._pyro_get_fullname(name), result)
 
-        # Regular nn.Modules trigger pyro.module statements.
-        if isinstance(result, torch.nn.Module) and not isinstance(result, PyroModule):
-            if self._pyro_context.active:
-                pyro.module(self._pyro_get_fullname(name), result)
+        if isinstance(result, torch.nn.Module):
+            if isinstance(result, PyroModule):
+                if not result._pyro_name:
+                    # Update sub-PyroModules that were converted from nn.Modules in-place.
+                    result._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
+            else:
+                # Regular nn.Modules trigger pyro.module statements.
+                if self._pyro_context.active:
+                    pyro.module(self._pyro_get_fullname(name), result)
 
         return result
 

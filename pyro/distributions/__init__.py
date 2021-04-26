@@ -59,6 +59,7 @@ from pyro.distributions.relaxed_straight_through import (
     RelaxedOneHotCategoricalStraightThrough,
 )
 from pyro.distributions.sine_bivariate_von_mises import SineBivariateVonMises
+from pyro.distributions.softlaplace import SoftLaplace
 from pyro.distributions.spanning_tree import SpanningTree
 from pyro.distributions.stable import Stable
 from pyro.distributions.torch import __all__ as torch_dists
@@ -129,6 +130,7 @@ __all__ = [
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
     "SineBivariateVonMises",
+    "SoftLaplace",
     "SpanningTree",
     "Stable",
     "TorchDistribution",

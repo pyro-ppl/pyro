@@ -28,6 +28,7 @@ from pyro.infer.autoguide import (
     AutoLowRankMultivariateNormal,
     AutoMultivariateNormal,
     AutoNormal,
+    AutoStructured,
     init_to_feasible,
     init_to_mean,
     init_to_median,
@@ -101,6 +102,56 @@ def test_factor(auto_class, Elbo):
     assert_close(loss_5 - loss_4, -1 - 3)
 
 
+# helper for test_shapes()
+class AutoStructured_shapes(AutoStructured):
+    def __init__(self, model, *, init_loc_fn):
+
+        def conditional_z4():
+            return pyro.param("z4_aux", torch.tensor(0.0))
+
+        class ConditionalZ5(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.log_scale = torch.nn.Parameter(torch.zeros(2))
+
+            def forward(self):
+                scale = self.log_scale.exp()
+                return pyro.sample("z5_aux", dist.Normal(0, scale).to_event(1))
+
+        class ConditionalZ6(PyroModule):
+            def __init__(self):
+                super().__init__()
+                self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
+                self.z6_aux = PyroSample(lambda s: dist.Normal(0, s.scale).to_event(1))
+
+            def forward(self):
+                return self.z6_aux
+
+        def dependency_z6_z5(z5):
+            weight = pyro.param("z6_z5_weight", torch.zeros(2))
+            return weight * z5
+
+        dependency_z6_z3 = torch.nn.Linear(3, 2)
+
+        super().__init__(
+            model,
+            conditionals={
+                "z1": "delta",
+                "z2": "normal",
+                "z3": "mvn",
+                "z4": conditional_z4,
+                "z5": ConditionalZ5(),
+                "z6": ConditionalZ6(),
+            },
+            dependencies={
+                "z3": {"z2": "linear"},
+                "z4": {"z3": "linear", "z2": "linear"},
+                "z6": {"z3": dependency_z6_z3, "z5": dependency_z6_z5},
+            },
+            init_loc_fn=init_loc_fn,
+        )
+
+
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 @pytest.mark.parametrize("init_loc_fn", [
     init_to_feasible,
@@ -116,6 +167,7 @@ def test_factor(auto_class, Elbo):
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
     AutoLaplaceApproximation,
+    AutoStructured_shapes,
 ])
 @pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_shapes(auto_class, init_loc_fn, Elbo):
@@ -216,6 +268,22 @@ def nested_auto_guide_callable(model):
     return guide
 
 
+class AutoStructured_median(AutoStructured):
+    def __init__(self, model):
+        super().__init__(
+            model,
+            conditionals={
+                "x": "delta",
+                "y": "normal",
+                "z": "mvn",
+            },
+            dependencies={
+                "x": {"z": "linear", "y": "linear"},
+                "y": {"z": "linear"},
+            },
+        )
+
+
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
@@ -230,6 +298,7 @@ def nested_auto_guide_callable(model):
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+    AutoStructured_median,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(auto_class, Elbo):
@@ -242,7 +311,7 @@ def test_median(auto_class, Elbo):
     guide = auto_class(model)
     optim = Adam({'lr': 0.02, 'betas': (0.8, 0.99)})
     elbo = Elbo(strict_enumeration_warning=False,
-                num_particles=100, vectorize_particles=True)
+                num_particles=500, vectorize_particles=True)
     infer = SVI(model, guide, optim, elbo)
     for _ in range(100):
         infer.step()
@@ -273,6 +342,7 @@ def test_median(auto_class, Elbo):
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+    AutoStructured_median,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_autoguide_serialization(auto_class, Elbo):
@@ -657,6 +727,21 @@ def test_linear_regression_smoke(auto_class, Elbo):
     infer.step(x, y)
 
 
+class AutoStructured_predictive(AutoStructured):
+    def __init__(self, model):
+        super().__init__(
+            model,
+            conditionals={
+                "linear.weight": "mvn",
+                "linear.bias": "normal",
+                "sigma": "delta",
+            },
+            dependencies={
+                "linear.bias": {"linear.weight": "linear"},
+            },
+        )
+
+
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
@@ -666,6 +751,7 @@ def test_linear_regression_smoke(auto_class, Elbo):
     AutoLaplaceApproximation,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+    AutoStructured_predictive,
 ])
 def test_predictive(auto_class):
     N, D = 3, 2

@@ -4,7 +4,7 @@ Please follow our established coding style including variable names, module impo
 The Pyro codebase follows the [PEP8 style guide](https://www.python.org/dev/peps/pep-0008/)
 (which you can check with `make lint`) and follows
 [`isort`](https://github.com/timothycrosley/isort) import order (which you can enforce with `make format`).
-When creating new files please add a license header; this can be done automatically via `make license`.
+When creating new files please add a license header; this can be done automatically via `make license` or simply `make format`.
 
 # Setup
 
@@ -45,6 +45,11 @@ To run a single test from the command line
 pytest -vs {path_to_test}::{test_name}
 # or in cuda mode
 CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vs {path_to_test}::{test_name}
+```
+
+To ensure documentation builds correctly, run
+```sh
+make docs
 ```
 
 ## Testing Tutorials
@@ -111,13 +116,12 @@ For larger changes, please open an issue for discussion before submitting a pull
 For relevant design questions to consider, see past
 [design documents](https://github.com/pyro-ppl/pyro/wiki/Design-Docs).
 
-In your PR, please include:
-- Changes made
+In your pull request description on github, please note:
+- Proposed changes
 - Links to related issues/PRs
-- Tests
-- Dependencies
+- New and existing tests
 
-If you add new files, please run `make license` to automatically add copyright headers.
+Before submitting, please run `make format`, `make lint`, and running tests as described above.
 
 For speculative changes meant for early-stage review, include `[WIP]` in the PR's title. 
 (One of the maintainers will add the `WIP` tag.)

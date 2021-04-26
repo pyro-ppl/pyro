@@ -12,6 +12,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from itertools import zip_longest
 
+import numpy as np
 import torch
 
 from pyro.poutine.util import site_is_subsample
@@ -25,21 +26,11 @@ def set_rng_seed(rng_seed):
     """
     torch.manual_seed(rng_seed)
     random.seed(rng_seed)
-    try:
-        import numpy as np
-        np.random.seed(rng_seed)
-    except ImportError:
-        pass
+    np.random.seed(rng_seed)
 
 
 def get_rng_state():
-    state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
-    try:
-        import numpy as np
-        state['numpy'] = np.random.get_state()
-    except ImportError:
-        pass
-    return state
+    return {'torch': torch.get_rng_state(), 'random': random.getstate(), 'numpy': np.random.get_state()}
 
 
 def set_rng_state(state):

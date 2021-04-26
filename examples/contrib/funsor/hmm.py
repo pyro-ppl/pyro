@@ -509,6 +509,71 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
                                 obs=sequences[batch, t])
 
 
+# Let's go back to our initial model and make it even faster: we'll support
+# vectorized time dimension and use TraceMarkovEnum_ELBO that efficiently eliminates
+# vectorized time dimension using the parallel scan algorithm. Note that TraceMarkovEnum_ELBO
+# is only supported by funsor backend.
+def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
+    with ignore_jit_warnings():
+        num_sequences, max_length, data_dim = map(int, sequences.shape)
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+    with handlers.mask(mask=include_prior):
+        probs_x = pyro.sample("probs_x",
+                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
+                                  .to_event(1))
+        probs_y = pyro.sample("probs_y",
+                              dist.Beta(0.1, 0.9)
+                                  .expand([args.hidden_dim, data_dim])
+                                  .to_event(2))
+    tones_plate = pyro.plate("tones", data_dim, dim=-1)
+    # Note that since we're using dim=-2 for the time dimension, we need
+    # to batch sequences over a different dimension, here dim=-3.
+    with pyro.plate("sequences", num_sequences, batch_size, dim=-3) as batch:
+        lengths = lengths[batch]
+        batch = batch[:, None]
+        x_prev = 0
+        # To vectorize time dimension we use pyro.vectorized_markov(name=...).
+        # With the help of Vindex and additional unsqueezes we can ensure that
+        # dimensions line up properly.
+        for t in pyro.vectorized_markov(name="time", size=int(max_length if args.jit else lengths.max()), dim=-2):
+            with handlers.mask(mask=(t < lengths.unsqueeze(-1)).unsqueeze(-1)):
+                x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
+                                     infer={"enumerate": "parallel"})
+                with tones_plate:
+                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
+                                obs=Vindex(sequences)[batch, t])
+# Let's see how vectorizing time dimension changes the shapes of sample sites:
+# $ python examples/hmm.py -m 7 --funsor -n 1 --batch-size=10 --print-shapes
+# ...
+#              Sample Sites:
+#               probs_x dist                   | 16 16
+#                      value                   | 16 16
+#               probs_y dist                   | 16 51
+#                      value                   | 16 51
+#                 tones dist                   |
+#                      value                51 |
+#             sequences dist                   |
+#                      value                10 |
+#                   x_0 dist          10  1  1 |
+#                      value       16  1  1  1 |
+#                   y_0 dist       16 10  1 51 |
+#                      value          10  1 51 |
+#  x_slice(0, 71, None) dist          10 71  1 |
+#                      value    16  1  1  1  1 |
+#  y_slice(0, 71, None) dist    16  1 10 71 51 |
+#                      value          10 71 51 |
+#  x_slice(1, 72, None) dist          10 71  1 |
+#                      value 16  1  1  1  1  1 |
+#  y_slice(1, 72, None) dist 16  1  1 10 71 51 |
+#                      value          10 71 51 |
+#
+# Notice that we're now using dim=-2 for the time dimension.
+# pyro.vectorized_markov loops three times: first it produces
+# t = 0, then vectorized t_prev (torch.arange(0, 71)), and
+# finally vectorized t_curr (torch.arange(1, 72)).
+
+
 models = {name[len('model_'):]: model
           for name, model in globals().items()
           if name.startswith('model_')}
@@ -550,7 +615,12 @@ def main(args):
     # distribution, value, and log_prob tensor. Note this information is
     # automatically printed on most errors inside SVI.
     if args.print_shapes:
-        first_available_dim = -2 if model is model_0 else -3
+        if args.model == "0":
+            first_available_dim = -2
+        elif args.model == "7":
+            first_available_dim = -4
+        else:
+            first_available_dim = -3
         guide_trace = handlers.trace(guide).get_trace(
             sequences, lengths, args=args, batch_size=args.batch_size)
         model_trace = handlers.trace(
@@ -575,8 +645,18 @@ def main(args):
             lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
         svi = infer.SVI(tmc_model, guide, optimizer, elbo)
     else:
-        Elbo = infer.JitTraceEnum_ELBO if args.jit else infer.TraceEnum_ELBO
-        elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
+        if args.model == "7":
+            assert args.funsor
+            Elbo = infer.JitTraceMarkovEnum_ELBO if args.jit else infer.TraceMarkovEnum_ELBO
+        else:
+            Elbo = infer.JitTraceEnum_ELBO if args.jit else infer.TraceEnum_ELBO
+        if args.model == "0":
+            max_plate_nesting = 1
+        elif args.model == "7":
+            max_plate_nesting = 3
+        else:
+            max_plate_nesting = 2
+        elbo = Elbo(max_plate_nesting=max_plate_nesting,
                     strict_enumeration_warning=True,
                     jit_options={"time_compilation": args.time_compilation})
         svi = infer.SVI(model, guide, optimizer, elbo)

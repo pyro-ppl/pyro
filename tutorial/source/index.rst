@@ -81,6 +81,7 @@ List of Tutorials
    svi_part_i
    svi_part_ii
    svi_part_iii
+   svi_part_iv
 
 .. toctree::
    :maxdepth: 1
@@ -170,6 +171,14 @@ List of Tutorials
    epi_sir
    epi_regional
    sir_hmc
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Application: Biological sequences
+   :name: biological-sequences
+
+   mue_profile
+   mue_factor
 
 .. toctree::
    :maxdepth: 1

@@ -19,6 +19,7 @@ import warnings
 import weakref
 from collections import OrderedDict
 
+import numpy as np
 import torch
 
 from pyro.distributions import validation_enabled
@@ -119,15 +120,12 @@ class seed(Messenger):
         super().__init__(fn)
 
     def __enter__(self):
-        self.old_state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
+        self.old_state = {
+            'torch': torch.get_rng_state(), 'random': random.getstate(), 'numpy': np.random.get_state()
+        }
         torch.manual_seed(self.rng_seed)
         random.seed(self.rng_seed)
-        try:
-            import numpy as np
-            np.random.seed(self.rng_seed)
-            self.old_state['numpy'] = np.random.get_state()
-        except ImportError:
-            pass
+        np.random.seed(self.rng_seed)
 
     def __exit__(self, type, value, traceback):
         torch.set_rng_state(self.old_state['torch'])

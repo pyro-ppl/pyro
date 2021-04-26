@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
+
 import torch
 from torch.nn.utils import clip_grad_norm_, clip_grad_value_
 
@@ -8,7 +10,11 @@ import pyro
 from pyro.optim.adagrad_rmsprop import AdagradRMSProp as pt_AdagradRMSProp
 from pyro.optim.clipped_adam import ClippedAdam as pt_ClippedAdam
 from pyro.optim.dct_adam import DCTAdam as pt_DCTAdam
-from pyro.params import module_from_param_with_module_name, user_param_name
+from pyro.params.param_store import (
+    module_from_param_with_module_name,
+    normalize_param_name,
+    user_param_name,
+)
 
 
 class PyroOptim:
@@ -37,6 +43,8 @@ class PyroOptim:
 
         # hold our args to be called/used
         self.pt_optim_args = optim_args
+        if callable(optim_args):
+            self.pt_optim_args_argc = len(inspect.signature(optim_args).parameters)
         self.pt_clip_args = clip_args
 
         # holds the torch optimizer objects
@@ -121,17 +129,19 @@ class PyroOptim:
 
     # helper to fetch the optim args if callable (only used internally)
     def _get_optim_args(self, param):
-        # if we were passed a fct, we call fct with param info
-        # arguments are (module name, param name) e.g. ('mymodule', 'bias')
+        # If we were passed a function, we call function with a
+        # fully qualified name e.g. 'mymodule.mysubmodule.bias'.
         if callable(self.pt_optim_args):
-
-            # get param name
             param_name = pyro.get_param_store().param_name(param)
-            module_name = module_from_param_with_module_name(param_name)
-            stripped_param_name = user_param_name(param_name)
-
-            # invoke the user-provided callable
-            opt_dict = self.pt_optim_args(module_name, stripped_param_name)
+            if self.pt_optim_args_argc == 1:
+                # Normalize to the format of nn.Module.named_parameters().
+                normal_name = normalize_param_name(param_name)
+                opt_dict = self.pt_optim_args(normal_name)
+            else:
+                # DEPRECATED Split param name in to pieces.
+                module_name = module_from_param_with_module_name(param_name)
+                stripped_param_name = user_param_name(param_name)
+                opt_dict = self.pt_optim_args(module_name, stripped_param_name)
 
             # must be dictionary
             assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
