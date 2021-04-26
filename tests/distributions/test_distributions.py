@@ -155,7 +155,7 @@ def test_gof(continuous_dist):
 
 def test_mean(continuous_dist):
     Dist = continuous_dist.pyro_dist
-    if Dist.__name__ in ["Cauchy", "HalfCauchy", "VonMises", "ProjectedNormal"]:
+    if Dist.__name__ in ["Cauchy", "HalfCauchy", "SineBivariateVonMises", "VonMises", "ProjectedNormal"]:
         pytest.xfail(reason="Euclidean mean is not defined")
     for i in range(continuous_dist.get_num_test_data()):
         d = Dist(**continuous_dist.get_dist_params(i))
