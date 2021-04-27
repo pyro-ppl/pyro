@@ -1412,7 +1412,7 @@ class AutoStructured(AutoGuide):
         aux_values = {}
         compute_density = poutine.get_mask() is not False
         for name, site in self._sorted_sites:
-            if save_params is not None and name not in self.save_params:
+            if save_params is not None and name not in save_params:
                 continue
 
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
