@@ -60,6 +60,35 @@ def test_get_dependencies():
     assert actual == expected
 
 
+def test_docstring_example():
+
+    def model(data):
+        a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.Normal(a, 1))
+        c = pyro.sample("c", dist.Normal(b, 1))
+        with pyro.plate("data", len(data)):
+            d = pyro.sample("d", dist.Normal(c, 1))
+            pyro.sample("e", dist.Normal(d, 1),
+                        obs=data)
+
+    data = torch.randn(3)
+    assert get_dependencies(model, (data,)) == {
+        "prior_dependencies": {
+            "a": {"a": set()},
+            "b": {"a": set(), "b": set()},
+            "c": {"b": set(), "c": set()},
+            "d": {"c": set(), "d": {"data"}},
+            "e": {"d": {"data"}, "e": {"data"}},
+        },
+        "posterior_dependencies": {
+            "a": {"a": set(), "b": set()},
+            "b": {"b": set(), "c": set()},
+            "c": {"c": set(), "d": set()},
+            "d": {"d": {"data"}, "e": {"data"}},
+        },
+    }
+
+
 def test_plate_coupling():
     # x  x
     #  ||

@@ -50,11 +50,46 @@ def get_dependencies(
     model_kwargs: Optional[dict] = None,
 ) -> Dict[str, List[str]]:
     r"""
-    Infers posterior dependencies among latent variables in a conditioned
-    model.
+    Infers metadata about a conditioned model. Metadata includes
 
-    The resulting dependency graph can be treated as undirected, but is
-    returned as a directed graph using the variable ordering in the model.
+    -   `prior_dependencies` is a dict mapping downstream latent and observed
+        sites to the dictionaries mapping upstream latent sites on which the
+        depend to sets of plates over which dependencies are independent.
+        Dependencies follow the original model order.
+    -   `posterior_dependencies` is a similar dict, but mapping latent sites to
+        the latent or observed sits on which they depend in the posterior.
+        Posterior dependencies are reversed from the model order.
+
+    Dependencies elide ``pyro.deterministic`` sites and ``pyro.sample(...,
+    Delta(...))`` sites.
+
+    Example::
+
+        def model(data):
+            a = pyro.sample("a", dist.Normal(0, 1))
+            b = pyro.sample("b", dist.Normal(a, 1))
+            c = pyro.sample("c", dist.Normal(b, 1))
+            with pyro.plate("data", len(data)):
+                d = pyro.sample("d", dist.Normal(c, 1))
+                pyro.sample("e", dist.Normal(d, 1),
+                            obs=data)
+
+        data = torch.randn(3)
+        assert get_dependencies(model, (data,)) == {
+            "prior_dependencies": {
+                "a": {"a": set()},
+                "b": {"a": set(), "b": set()},
+                "c": {"b": set(), "c": set()},
+                "d": {"c": set(), "d": {"data"}},
+                "e": {"d": {"data"}, "e": {"data"}},
+            },
+            "posterior_dependencies": {
+                "a": {"a": set(), "b": set()},
+                "b": {"b": set(), "c": set()},
+                "c": {"c": set(), "d": set()},
+                "d": {"d": {"data"}, "e": {"data"}},
+            },
+        }
 
     .. warning:: This currently relies on autograd and therefore works only for
         continuous latent variables with differentiable dependencies. Discrete
@@ -70,9 +105,7 @@ def get_dependencies(
     :param callable model: A model.
     :param tuple model_args: Optional tuple of model args.
     :param dict model_kwargs: Optional tuple of model args.
-    :returns: A dictionary whose keys are names of downstream latent sites
-        and whose values are lists of names of upstream latent sites on which
-        those downstream sites depend.
+    :returns: A dictionary of metadata (see above).
     :rtype: dict
     """
     if model_args is None:

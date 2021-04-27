@@ -19,9 +19,9 @@ import functools
 import operator
 import warnings
 import weakref
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, Optional, Union
 
 import torch
 from torch import nn
@@ -1278,7 +1278,6 @@ class AutoStructured(AutoGuide):
         init_loc_fn: Callable = init_to_feasible,
         init_scale: float = 0.1,
         create_plates: Optional[Callable] = None,
-        save_params: List[str] = None,
     ):
         assert isinstance(conditionals, (dict, str))
         if isinstance(conditionals, dict):
@@ -1302,13 +1301,37 @@ class AutoStructured(AutoGuide):
         self.conditionals = conditionals
         self.dependencies = dependencies
 
-        self.save_params = save_params
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
         self._init_scale = init_scale
         self._original_model = model,
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, create_plates=create_plates)
+
+    def _auto_config(self, sample_sites, args, kwargs):
+        # Instantiate conditionals as dictionaries.
+        if not isinstance(self.conditionals, dict):
+            self.conditionals = {
+                name: self.conditionals for name, site in sample_sites.items()
+            }
+
+        # Instantiate dependencies as dictionaries.
+        if not isinstance(self.dependencies, dict):
+            model = self._original_model[0]
+            meta = poutine.block(get_dependencies)(model, args, kwargs)
+            # Use posterior dependency edges but with prior ordering. This
+            # allows sampling of globals before locals on which they depend.
+            prior_order = {name: i for i, name in enumerate(sample_sites)}
+            dependencies = defaultdict(dict)
+            for d, upstreams in meta["posterior_dependencies"].items():
+                assert d in sample_sites
+                for u in upstreams:
+                    if u in sample_sites:
+                        if prior_order[u] > prior_order[d]:
+                            dependencies[u][d] = self.dependencies
+                        elif prior_order[d] > prior_order[u]:
+                            dependencies[d][u] = self.dependencies
+            self.dependencies = dict(dependencies)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -1319,33 +1342,23 @@ class AutoStructured(AutoGuide):
         self.conds = PyroModule()
         self.deps = PyroModule()
         self._unconstrained_shapes = {}
+        sample_sites = OrderedDict(self.prototype_trace.iter_stochastic_nodes())
+        self._auto_config(sample_sites, args, kwargs)
 
         # Collect unconstrained shapes.
         init_locs = {}
         numel = {}
-        for name, site in self.prototype_trace.iter_stochastic_nodes():
+        for name, site in sample_sites.items():
             with helpful_support_errors(site):
                 init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
             self._unconstrained_shapes[name] = init_loc.shape
             numel[name] = init_loc.numel()
             init_locs[name] = init_loc.reshape(-1)
 
-        # Instantiate conditionals and dependencies as dictionaries.
-        if not isinstance(self.conditionals, dict):
-            self.conditionals = {name: self.conditionals for name in init_locs}
-        if not isinstance(self.dependencies, dict):
-            dependencies = poutine.block(get_dependencies)(
-                self._original_model[0], args, kwargs,
-            )
-            self.dependencies = {
-                downstream: {upstream: self.dependencies for upstream in upstreams}
-                for downstream, upstreams in dependencies.items()
-            }
-
         # Initialize guide params.
         children = defaultdict(list)
         num_pending = {}
-        for name, site in self.prototype_trace.iter_stochastic_nodes():
+        for name, site in sample_sites.items():
             # Initialize location parameters.
             init_loc = init_locs[name]
             _deep_setattr(self.locs, name, PyroParam(init_loc))
@@ -1371,7 +1384,7 @@ class AutoStructured(AutoGuide):
             deps = PyroModule()
             _deep_setattr(self.deps, name, deps)
             for upstream, dep in self.dependencies.get(name, {}).items():
-                assert upstream in self.prototype_trace.nodes
+                assert upstream in sample_sites
                 children[upstream].append(name)
                 num_pending[name] += 1
                 if isinstance(dep, str) and dep == "linear":
@@ -1391,15 +1404,15 @@ class AutoStructured(AutoGuide):
             del num_pending[name]
             for child in children[name]:
                 num_pending[child] -= 1
-            self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
+            self._sorted_sites.append((name, sample_sites[name]))
 
     @poutine.infer_config(config_fn=_config_auxiliary)
-    def get_deltas(self, *args, **kwargs):
+    def get_deltas(self, save_params=None):
         deltas = {}
         aux_values = {}
         compute_density = poutine.get_mask() is not False
         for name, site in self._sorted_sites:
-            if self.save_params is not None and name not in self.save_params:
+            if save_params is not None and name not in self.save_params:
                 continue
 
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
@@ -1408,7 +1421,7 @@ class AutoStructured(AutoGuide):
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
             if callable(conditional):
-                aux_value = _deep_getattr(self.conds, name)(*args, **kwargs)
+                aux_value = _deep_getattr(self.conds, name)()
             elif conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
@@ -1477,7 +1490,7 @@ class AutoStructured(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        deltas = self.get_deltas(*args, **kwargs)
+        deltas = self.get_deltas()
         plates = self._create_plates(*args, **kwargs)
         result = {}
         for name, site in self._sorted_sites:
