@@ -88,11 +88,14 @@ def get_dependencies(
 
     # Collect observations.
     sample_sites = get_sample_sites()
-    order = {msg["name"]: i for i, msg in enumerate(sample_sites)}
     observed = {msg["name"] for msg in sample_sites if msg["is_observed"]}
+    plates = {
+        msg["name"]: {f.name for f in msg["cond_indep_stack"] if f.vectorized}
+        for msg in sample_sites
+    }
 
     # First find transitive dependencies among latent and observed sites
-    prior_dependencies = {msg["name"]: set() for msg in sample_sites}
+    prior_dependencies = {n: {n: p} for n, p in plates.items()}  # no deps yet
     for i, downstream in enumerate(sample_sites):
         upstreams = [u for u in sample_sites[:i] if not u["is_observed"]]
         if not upstreams:
@@ -104,7 +107,9 @@ def get_dependencies(
         )
         for upstream, grad in zip(upstreams, grads):
             if grad is not None:
-                prior_dependencies[downstream["name"]].add(upstream["name"])
+                d = downstream["name"]
+                u = upstream["name"]
+                prior_dependencies[d][u] = plates[d] & plates[u]
 
     # Then refine to direct dependencies among latent and observed sites.
     for i, downstream in enumerate(sample_sites):
@@ -121,30 +126,31 @@ def get_dependencies(
                 allow_unused=True,
             )[0]
             if grad is None:
-                prior_dependencies[d["name"]].remove(u["name"])
+                prior_dependencies[d["name"]].pop(u["name"])
 
-    # Next restrict to dependencies among latent variables.
-    posterior_dependencies = {
-        d: {u for u in upstreams if u not in observed}
-        for d, upstreams in prior_dependencies.items()
-        if d not in observed
-    }
-
-    # Finally add dependencies among latent variables in each Markov blanket.
-    # This assumes all latents are eventually observed, at least indirectly.
+    # Next reverse dependencies and restrict downstream nodes to latent sites.
+    posterior_dependencies = {d: {} for d in prior_dependencies if d not in observed}
     for d, upstreams in prior_dependencies.items():
-        upstreams = {u for u in upstreams if u not in observed}
-        for u1 in upstreams:
-            for u2 in upstreams:
-                if order[u1] < order[u2]:
-                    posterior_dependencies[u2].add(u1)
+        for u, p in upstreams.items():
+            if u not in observed:
+                # Note the folowing reverses:
+                # u is henceforth downstream and d is henceforth upstream.
+                posterior_dependencies[u][d] = p
 
-    # Convert to a dict : str -> list.
-    posterior_dependencies = {
-        downstream: sorted(upstreams, key=order.__getitem__)
-        for downstream, upstreams in posterior_dependencies.items()
+    # Moralize: add dependencies among latent variables in each Markov blanket.
+    # This assumes all latents are eventually observed, at least indirectly.
+    order = {msg["name"]: i for i, msg in enumerate(reversed(sample_sites))}
+    for d, upstreams in prior_dependencies.items():
+        upstreams = {u: p for u, p in upstreams.items() if u not in observed}
+        for u1, p1 in upstreams.items():
+            for u2, p2 in upstreams.items():
+                if order[u1] <= order[u2]:
+                    posterior_dependencies[u2][u1] = p1 & p2
+
+    return {
+        "prior_dependencies": prior_dependencies,
+        "posterior_dependencies": posterior_dependencies,
     }
-    return posterior_dependencies
 
 
 __all__ = [

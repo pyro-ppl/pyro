@@ -21,7 +21,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from contextlib import ExitStack
-from typing import Callable, Dict, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 import torch
 from torch import nn
@@ -1278,6 +1278,7 @@ class AutoStructured(AutoGuide):
         init_loc_fn: Callable = init_to_feasible,
         init_scale: float = 0.1,
         create_plates: Optional[Callable] = None,
+        save_params: List[str] = None,
     ):
         assert isinstance(conditionals, (dict, str))
         if isinstance(conditionals, dict):
@@ -1301,6 +1302,7 @@ class AutoStructured(AutoGuide):
         self.conditionals = conditionals
         self.dependencies = dependencies
 
+        self.save_params = save_params
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
         self._init_scale = init_scale
@@ -1392,12 +1394,12 @@ class AutoStructured(AutoGuide):
             self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
 
     @poutine.infer_config(config_fn=_config_auxiliary)
-    def get_deltas(self, save_params=None):
+    def get_deltas(self, *args, **kwargs):
         deltas = {}
         aux_values = {}
         compute_density = poutine.get_mask() is not False
         for name, site in self._sorted_sites:
-            if save_params is not None and name not in save_params:
+            if self.save_params is not None and name not in self.save_params:
                 continue
 
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
@@ -1406,7 +1408,7 @@ class AutoStructured(AutoGuide):
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
             if callable(conditional):
-                aux_value = _deep_getattr(self.conds, name)()
+                aux_value = _deep_getattr(self.conds, name)(*args, **kwargs)
             elif conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
@@ -1475,7 +1477,7 @@ class AutoStructured(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        deltas = self.get_deltas()
+        deltas = self.get_deltas(*args, **kwargs)
         plates = self._create_plates(*args, **kwargs)
         result = {}
         for name, site in self._sorted_sites:
