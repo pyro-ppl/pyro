@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from math import pi
 
 import numpy as np
 import pytest
@@ -15,7 +16,7 @@ from pyro.distributions.testing.rejection_gamma import (
     ShapeAugmentedDirichlet,
     ShapeAugmentedGamma,
 )
-from tests.distributions.dist_fixture import Fixture
+from tests.distributions.dist_fixture import Fixture, tensor_wrap
 
 
 class FoldedNormal(dist.FoldedDistribution):
@@ -329,6 +330,11 @@ continuous_dists = [
                 {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
                  'test_data': [[2.0, 50.0], [2.0, 50.0]]},
                 ]),
+    Fixture(pyro_dist=dist.SineSkewed,
+            examples=[{
+                'base_density': dist.Uniform(*tensor_wrap([-pi, -pi], [pi, pi])).to_event(1),
+                'skewness': [-pi/4, 0.], 'test_data': [pi/2, -2*pi/3]
+            }])
 ]
 
 discrete_dists = [

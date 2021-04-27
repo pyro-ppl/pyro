@@ -78,6 +78,7 @@ from pyro.distributions.zero_inflated import (
     ZeroInflatedNegativeBinomial,
     ZeroInflatedPoisson,
 )
+
 from . import constraints, kl, transforms
 
 # isort: split

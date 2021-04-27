@@ -4,9 +4,9 @@ import pytest
 import torch
 
 import pyro
-from pyro.distributions import Uniform, Normal
+from pyro.distributions import Normal, Uniform
 from pyro.distributions.sine_skewed import SineSkewed
-from pyro.infer import Trace_ELBO, SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoDelta
 from pyro.optim import Adam
 from tests.common import assert_equal
