@@ -159,7 +159,6 @@ class SineBivariateVonMises(TorchDistribution):
             value = value[None, :]
         if self._validate_args:
             self._validate_sample(value)
-        # assert value.shape[-1] == self.event_shape
         indv = self.phi_concentration * torch.cos(value[..., 0] - self.phi_loc) + self.psi_concentration * torch.cos(
             value[..., 1] - self.psi_loc)
         corr = self.correlation * torch.sin(value[..., 0] - self.phi_loc) * torch.sin(value[..., 1] - self.psi_loc)
