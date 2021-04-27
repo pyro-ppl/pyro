@@ -3,16 +3,16 @@ language: python
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
-        - CXX="g++-8"
-        - CC="gcc-8"
+        - CXX="g++-9"
+        - CC="gcc-9"
 
 addons:
     apt:
         sources:
             - sourceline: "ppa:ubuntu-toolchain-r/test"
         packages:
-            - gcc-8
-            - g++-8
+            - gcc-9
+            - g++-9
             - ninja-build
             - graphviz  # for sphinx docs
 
