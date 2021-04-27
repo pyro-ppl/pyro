@@ -46,10 +46,10 @@ def test_infer_shapes(dist):
         dist_params = dist.get_dist_params(idx)
         if 'SineSkewed' == dist.pyro_dist.__name__:
             arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else v.batch_shape
-                            for k, v in dist_params.items()}
+                          for k, v in dist_params.items()}
         else:
             arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else ()
-                            for k, v in dist_params.items()}
+                          for k, v in dist_params.items()}
         batch_shape, event_shape = dist.pyro_dist.infer_shapes(**arg_shapes)
         d = dist.pyro_dist(**dist_params)
         assert d.batch_shape == batch_shape
