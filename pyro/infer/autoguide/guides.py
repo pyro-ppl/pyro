@@ -1397,6 +1397,7 @@ class AutoStructured(AutoGuide):
                 _deep_setattr(deps, upstream, dep)
 
         # Topologically sort sites.
+        # TODO should we choose a more optimal structure?
         self._sorted_sites = []
         while num_pending:
             name, count = min(num_pending.items(), key=lambda kv: (kv[1], kv[0]))

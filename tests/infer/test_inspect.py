@@ -44,8 +44,8 @@ def test_get_dependencies():
             "e": {"e": _},
             "f": {"f": _},
             "g": {"g": _, "e": _, "f": _},
-            "h": {"h": {"p"}, "c": _},  # [sic]
-            "k": {"k": {"p"}, "a": _, "h": {"p"}},
+            "h": {"h": _, "c": _},  # [sic]
+            "k": {"k": _, "a": _, "h": _},
         },
         "posterior_dependencies": {
             "a": {"a": _, "b": _, "c": _, "d": _, "h": _, "k": _},
@@ -54,7 +54,7 @@ def test_get_dependencies():
             "d": {"d": _},
             "e": {"e": _, "g": _, "f": _},
             "f": {"f": _, "g": _},
-            "h": {"h": {"p"}, "k": {"p"}},
+            "h": {"h": _, "k": _},
         },
     }
     assert actual == expected
@@ -77,28 +77,28 @@ def test_docstring_example():
             "a": {"a": set()},
             "b": {"a": set(), "b": set()},
             "c": {"b": set(), "c": set()},
-            "d": {"c": set(), "d": {"data"}},
-            "e": {"d": {"data"}, "e": {"data"}},
+            "d": {"c": set(), "d": set()},
+            "e": {"d": set(), "e": set()},
         },
         "posterior_dependencies": {
             "a": {"a": set(), "b": set()},
             "b": {"b": set(), "c": set()},
             "c": {"c": set(), "d": set()},
-            "d": {"d": {"data"}, "e": {"data"}},
+            "d": {"d": set(), "e": set()},
         },
     }
 
 
 def test_plate_coupling():
-    # x  x
-    #  ||
-    #  y
+    #   x  x
+    #    ||
+    #    y
     #
     # This results in posterior dependency structure:
     #
-    #   x  x  y
-    # x ?  ?  ?
-    # x ?  ?  ?
+    #     x x y
+    #   x ? ? ?
+    #   x ? ? ?
 
     def model(data):
         with pyro.plate("p", len(data)):
@@ -110,28 +110,105 @@ def test_plate_coupling():
     actual = get_dependencies(model, (data,))
     expected = {
         "prior_dependencies": {
-            "x": {"x": {"p"}},
+            "x": {"x": set()},
             "y": {"y": set(), "x": set()},
         },
         "posterior_dependencies": {
-            "x": {"x": set(), "y": set()},
+            "x": {"x": {"p"}, "y": set()},
+        },
+    }
+    assert actual == expected
+
+
+def test_plate_coupling_2():
+    #   x x     
+    #     \\   y y
+    #      \\ //
+    #        z
+    #
+    # This results in posterior dependency structure:
+    #
+    #     x x y y z
+    #   x ? ? ? ? ?
+    #   x ? ? ? ? ?
+    #   y     ? ? ?
+    #   y     ? ? ?
+
+    def model(data):
+        with pyro.plate("p", len(data)):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            y = pyro.sample("y", dist.Normal(0, 1))
+        pyro.sample("z", dist.Normal(x.sum(), y.sum().exp()),
+                    obs=data.sum())
+
+    data = torch.randn(2)
+    actual = get_dependencies(model, (data,))
+    expected = {
+        "prior_dependencies": {
+            "x": {"x": set()},
+            "y": {"y": set()},
+            "z": {"z": set(), "x": set(), "y": set()},
+        },
+        "posterior_dependencies": {
+            "x": {"x": {"p"}, "y": {"p"}, "z": set()},
+            "y": {"y": {"p"}, "z": set()},
+        },
+    }
+    assert actual == expected
+
+
+def test_plate_coupling_3():
+    #    x x x x    
+    #     // \\ 
+    #   y y   z z
+    #
+    # This results in posterior dependency structure:
+    #
+    #     x x y y z
+    #   x ? ? ? ? ?
+    #   x ? ? ? ? ?
+    #   y     ? ? ?
+    #   y     ? ? ?
+
+    def model(data):
+        i_plate = pyro.plate("i", data.shape[0], dim=-2)
+        j_plate = pyro.plate("j", data.shape[1], dim=-1)
+        with i_plate, j_plate:
+            x = pyro.sample("x", dist.Normal(0, 1))
+        with i_plate:
+            pyro.sample("y", dist.Normal(x.sum(-1, True), 1),
+                        obs=data.sum(-1, True))
+        with j_plate:
+            pyro.sample("z", dist.Normal(x.sum(-2, True), 1),
+                        obs=data.sum(-2, True))
+
+    data = torch.randn(3, 2)
+    actual = get_dependencies(model, (data,))
+    expected = {
+        "prior_dependencies": {
+            "x": {"x": set()},
+            "y": {"y": set(), "x": set()},
+            "z": {"z": set(), "x": set()},
+        },
+        "posterior_dependencies": {
+            "x": {"x": {"i", "j"}, "y": set(), "z": set()},
         },
     }
     assert actual == expected
 
 
 def test_plate_collider():
-    # x x    y y
-    #   \\  //
-    #    zzzz
-    #
+    #   x x    y y
+    #     \\  //
+    #      zzzz
+    #   
     # This results in posterior dependency structure:
     #
-    #   x x y y z z z z
-    # x ?   ? ? ? ?
-    # x   ? ? ?     ? ?
-    # y     ?   ?   ?
-    # y       ?   ?   ?
+    #     x x y y z z z z
+    #   x ?   ? ? ? ?
+    #   x   ? ? ?     ? ?
+    #   y     ?   ?   ?
+    #   y       ?   ?   ?
 
     def model(data):
         i_plate = pyro.plate("i", data.shape[0], dim=-2)
@@ -147,35 +224,36 @@ def test_plate_collider():
 
     data = torch.randn(3, 2)
     actual = get_dependencies(model, (data,))
+    _ = set()
     expected = {
         "prior_dependencies": {
-            "x": {"x": {"i"}},
-            "y": {"y": {"j"}},
-            "z": {"x": {"i"}, "y": {"j"}, "z": {"i", "j"}},
+            "x": {"x": _},
+            "y": {"y": _},
+            "z": {"x": _, "y": _, "z": _},
         },
         "posterior_dependencies": {
-            "x": {"x": {"i"}, "y": set(), "z": {"i"}},
-            "y": {"y": {"j"}, "z": {"j"}},
+            "x": {"x": _, "y": _, "z": _},
+            "y": {"y": _, "z": _},
         }
     }
     assert actual == expected
 
 
 def test_plate_dependency():
-    #    w                              w
-    #      \  x1 x2      unroll    x1  / \  x2
-    #       \  || y1 y2  =====>  y1 | /   \ | y2
-    #        \ || //               \|/     \|/
-    #         z1 z2                z1       z2
-    #
+    #   w                              w
+    #     \  x1 x2      unroll    x1  / \  x2
+    #      \  || y1 y2  =====>  y1 | /   \ | y2
+    #       \ || //               \|/     \|/
+    #        z1 z2                z1       z2
+    #   
     # This allows posterior dependency structure:
     #
-    #    w x x y y z z
-    #  w ? ? ? ? ? ? ?
-    #  x   ?   ?   ?
-    #  x     ?   ?   ?
-    #  y       ?   ?
-    #  y         ?   ?
+    #     w x x y y z z
+    #   w ? ? ? ? ? ? ?
+    #   x   ?   ?   ?
+    #   x     ?   ?   ?
+    #   y       ?   ?
+    #   y         ?   ?
 
     def model(data):
         w = pyro.sample("w", dist.Normal(0, 1))
@@ -186,18 +264,19 @@ def test_plate_dependency():
                         obs=data)
 
     data = torch.rand(2)
-    acutal = get_dependencies(model, (data,))
+    actual = get_dependencies(model, (data,))
+    _ = set()
     expected = {
         "prior_dependencies": {
-            "w": {"w": set()},
+            "w": {"w": _},
             "x": {"x": {"p"}},
             "y": {"y": {"p"}},
-            "z": {"w": set(), "x": {"p"}, "y": {"p"}, "z": {"p"}},
+            "z": {"w": _, "x": _, "y": _, "z": _},
         },
         "posterior_dependencies": {
-            "w": {"w": set(), "x": set(), "y": set(), "z": set()},
-            "x": {"x": {"p"}, "y": {"p"}, "z": {"p"}},
-            "y": {"y": {"p"}, "z": {"p"}},
+            "w": {"w": _, "x": _, "y": _, "z": _},
+            "x": {"x": _, "y": _, "z": _},
+            "y": {"y": _, "z": _},
         },
     }
-    assert acutal == expected
+    assert actual == expected

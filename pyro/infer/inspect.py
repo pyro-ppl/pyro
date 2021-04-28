@@ -48,7 +48,7 @@ def get_dependencies(
     model: Callable,
     model_args: Optional[tuple] = None,
     model_kwargs: Optional[dict] = None,
-) -> Dict[str, List[str]]:
+) -> Dict[str, object]:
     r"""
     Infers metadata about a conditioned model. Metadata includes
 
@@ -128,7 +128,7 @@ def get_dependencies(
     }
 
     # First find transitive dependencies among latent and observed sites
-    prior_dependencies = {n: {n: p} for n, p in plates.items()}  # no deps yet
+    prior_dependencies = {n: {n: set()} for n in plates}  # no deps yet
     for i, downstream in enumerate(sample_sites):
         upstreams = [u for u in sample_sites[:i] if not u["is_observed"]]
         if not upstreams:
@@ -142,7 +142,7 @@ def get_dependencies(
             if grad is not None:
                 d = downstream["name"]
                 u = upstream["name"]
-                prior_dependencies[d][u] = plates[d] & plates[u]
+                prior_dependencies[d][u] = set()
 
     # Then refine to direct dependencies among latent and observed sites.
     for i, downstream in enumerate(sample_sites):
@@ -162,13 +162,13 @@ def get_dependencies(
                 prior_dependencies[d["name"]].pop(u["name"])
 
     # Next reverse dependencies and restrict downstream nodes to latent sites.
-    posterior_dependencies = {d: {} for d in prior_dependencies if d not in observed}
+    posterior_dependencies = {n: {} for n in plates if n not in observed}
     for d, upstreams in prior_dependencies.items():
         for u, p in upstreams.items():
             if u not in observed:
                 # Note the folowing reverses:
                 # u is henceforth downstream and d is henceforth upstream.
-                posterior_dependencies[u][d] = p
+                posterior_dependencies[u][d] = set()
 
     # Moralize: add dependencies among latent variables in each Markov blanket.
     # This assumes all latents are eventually observed, at least indirectly.
@@ -178,7 +178,8 @@ def get_dependencies(
         for u1, p1 in upstreams.items():
             for u2, p2 in upstreams.items():
                 if order[u1] <= order[u2]:
-                    posterior_dependencies[u2][u1] = p1 & p2
+                    p12 = posterior_dependencies[u2].setdefault(u1, set())
+                    p12 |= p1 & p2 - plates[d]
 
     return {
         "prior_dependencies": prior_dependencies,
