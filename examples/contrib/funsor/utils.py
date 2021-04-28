@@ -1,3 +1,5 @@
+import sys
+import logging
 import torch
 
 
@@ -15,3 +17,35 @@ def get_mb_indices(N_data, mini_batch_size):
     mb_indices = [shuffled_indices[k * mini_batch_size: (k+1) * mini_batch_size] for k in range(N_mb)]
 
     return mb_indices, masks
+
+
+def get_logger(log_dir, log_file):
+
+    formatter = logging.Formatter('%(message)s')
+
+    def setup_logger(name, log_file, level=logging.DEBUG):
+        handler = logging.FileHandler(log_file)
+        handler.setFormatter(formatter)
+
+        logger = logging.getLogger(name)
+        logger.setLevel(level)
+        logger.addHandler(handler)
+        return logger
+
+    if log_dir[-1] != '/':
+        log_dir += '/'
+
+    try:
+        nfs_logger = setup_logger('nfs_logger', log_dir + log_file)
+    except Exception as e:
+        print("ERROR!!! Probably missing expected log directory: {}".format(log_dir))
+        print(e)
+
+    def log(s):
+        if log_dir != '':
+            nfs_logger.info(s)
+        print(s)
+        sys.stdout.flush()
+
+    return log
+
