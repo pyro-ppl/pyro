@@ -9,7 +9,31 @@ from .torch_distribution import TorchDistribution
 
 
 class SineSkewed(TorchDistribution):
-    """ Distribution for breaking pointwise-symmetry on distributions over the d-dimensional torus.
+    """The Sine Skewed distribution is a distribution for breaking pointwise-symmetry on a base-distributions over
+    the d-dimensional torus.
+
+    This distribution requires a base distribution on the torus. The parameter skewness can be inferred using
+    :class:`~pyro.infer.HMC` or :class:`~pyro.infer.NUTS`. The following will produce a uniform prior
+    over skewness,::
+
+        def model(data, batch_shape, event_shape):
+            n = torch.prod(torch.tensor(event_shape), -1, dtype=torch.int)
+            skewness = torch.empty((*batch_shape, n)).view(-1, n)
+            tots = torch.zeros(batch_shape).view(-1)
+            for i in range(n):
+                skewness[..., i] = pyro.sample(f'skew{i}', Uniform(0., 1 - tots))
+                tots += skewness[..., i]
+            sign = pyro.sample('sign', Uniform(0., torch.ones(skewness.shape)).to_event(len(skewness.shape)))
+            skewness = torch.where(sign < .5, -skewness, skewness)
+
+            if (*batch_shape, *event_shape) == tuple():
+                skewness = skewness.reshape((*batch_shape, *event_shape))
+            else:
+                skewness = skewness.view(*batch_shape, *event_shape)
+
+    .. note:: The base-distribution must be over a arbitrary dim torus.
+
+    .. note:: ``skewness.abs().sum() <= 1.`` and ``(skewness.abs() <= 1).all()``.
 
     ** References: **
       1. Sine-skewed toroidal distributions and their application in protein bioinformatics
