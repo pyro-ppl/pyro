@@ -44,10 +44,9 @@ class model1(nn.Module):
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
             handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
-            lengths = lengths[mb]
             x_prev = 0
             for t in pyro.vectorized_markov(name="time", size=max_length, dim=-2):
-                with handlers.mask(mask=(t < lengths.unsqueeze(-1)).unsqueeze(-1)):
+                with handlers.mask(mask=(t < lengths[mb].unsqueeze(-1)).unsqueeze(-1)):
                     x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
                                          infer={"enumerate": "parallel"})
                     with tones_plate:
@@ -63,6 +62,7 @@ models = {name[len('model'):]: model
 def main(args):
     if args.cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        torch.set_default_tensor_type('torch.cuda.DoubleTensor')
 
     N_train = {'jsb': 229, 'piano': 87, 'nottingham': 694, 'muse': 524}[args.dataset]
     if args.dataset == 'jsb':
@@ -97,7 +97,11 @@ def main(args):
     log = get_logger('./logs/', log_tag + '.' + uid + '.log')
     log(args)
 
-    data = poly.load_data(poly.JSB_CHORALES)
+    data = {"jsb": poly.JSB_CHORALES,
+            "piano": poly.PIANO_MIDI,
+            "muse": poly.MUSE_DATA,
+            "nottingham": poly.NOTTINGHAM}[args.dataset]
+    data = poly.load_data(data)
     train_sequences = data['train']['sequences'].float()
     train_lengths = data['train']['sequence_lengths'].long()
     test_sequences = data['test']['sequences'].float()
@@ -115,6 +119,7 @@ def main(args):
         pass
 
     N_train_obs = float(train_lengths.sum())
+    log("N_train_obs: {}".format(N_train_obs))
     N_obs_mb = N_train_obs * args.batch_size / train_sequences.size(0)
     N_test_obs = float(test_lengths.sum())
 
@@ -126,14 +131,14 @@ def main(args):
     optim = ClippedAdam({'lr': args.learning_rate, 'betas': (0.90, 0.999),
                          'lrd': args.learning_rate_decay, 'clip_norm': 20.0})
 
-    Elbo = infer.JitTraceMarkovEnum_ELBO
     max_plate_nesting = 3
-    elbo = Elbo(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
-    elbo_eval = Elbo(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
+    elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
+    elbo_eval = infer.TraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
+    #elbo_eval = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     svi = infer.SVI(model_train, guide, optim, elbo)
 
     @torch.no_grad()
-    def evaluate(sequences, lengths, evaluate_batch_size=8):
+    def evaluate(sequences, lengths, evaluate_batch_size=16):
         mb_indices, masks = get_mb_indices(sequences.size(0), evaluate_batch_size)
         return sum([elbo_eval.differentiable_loss(model_eval, guide, sequences, lengths, mb, mask)
                     for mb, mask in zip(mb_indices, masks)])
@@ -182,9 +187,7 @@ if __name__ == '__main__':
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.03, type=float)
     parser.add_argument("--scale", default=1.0, type=float)
-    parser.add_argument("-lrd", "--learning-rate-decay", default=3.0e-5, type=float)
-    parser.add_argument("-t", "--truncate", type=int)
-    parser.add_argument("-p", "--print-shapes", action="store_true")
+    parser.add_argument("-lrd", "--learning-rate-decay", default=1.0e-1, type=float)
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument('--scale-loss', action='store_true')
     parser.add_argument('--cuda', action='store_true')
