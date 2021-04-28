@@ -254,7 +254,7 @@ class SineBivariateVonMises(TorchDistribution):
     @classmethod
     def infer_shapes(cls, **arg_shapes):
         batch_shape = torch.Size(broadcast_shape(*arg_shapes.values()))
-        return batch_shape,  torch.Size([2])
+        return batch_shape, torch.Size([2])
 
     def expand(self, batch_shape, _instance=None):
         try:

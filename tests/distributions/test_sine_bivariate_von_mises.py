@@ -14,8 +14,18 @@ from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 
 
-def _unnorm_log_prob(value, locs, conc, corr):
-    return conc @ torch.cos(value - locs) + corr * torch.prod(torch.sin(value - locs), dim=-1)
+# def _unnorm_log_prob(value, locs, conc, corr):
+#     return conc @ torch.cos(value - locs) + corr * torch.prod(torch.sin(value - locs), dim=-1)
+
+def _unnorm_log_prob(value, loc1, loc2, conc1, conc2, corr):
+    if len(value.shape) == 1:
+        phi_val = value[0]
+        psi_val = value[1]
+    else:
+        phi_val = value[..., 0]
+        psi_val = value[..., 1]
+    return (conc1 * torch.cos(phi_val - loc1) + conc2 * torch.cos(psi_val - loc2) + \
+            corr * torch.sin(phi_val - loc1) * torch.sin(psi_val - loc2))
 
 
 @pytest.mark.parametrize('n', [0, 1, 10, 20])
@@ -40,20 +50,22 @@ def test_log_I1(order):
     assert_equal(actual, expected)
 
 
-def test_bvm_unnorm_log_prob():
+@pytest.mark.parametrize('batch_dim', [tuple(), (1,), (10,), (2, 1), (2, 1, 2)])
+def test_bvm_unnorm_log_prob(batch_dim):
     vm = VonMises(tensor(0.), tensor(1.))
     hn = HalfNormal(tensor(1.))
     b = Beta(tensor(2.), tensor(2.))
-    for _ in range(100):
-        phi_psi = vm.sample((2,))
-        locs = vm.sample((2,))
-        conc = hn.sample((2,))
-        corr = b.sample((1,))
-        if torch.prod(conc, dim=0) < corr ** 2:
-            continue
 
-        bmv = SineBivariateVonMises(locs[0], locs[1], conc[0], conc[1], corr)
-        assert_equal(_unnorm_log_prob(phi_psi, locs, conc, corr), bmv.log_prob(phi_psi) + bmv.norm_const)
+    while True:
+        phi_psi = vm.sample((*batch_dim, 2))
+        locs = vm.sample((2, *batch_dim))
+        conc = hn.sample((2, *batch_dim))
+        corr = b.sample((*batch_dim,))
+        if torch.all(torch.prod(conc, dim=0) > corr ** 2):
+            break
+    bmv = SineBivariateVonMises(locs[0], locs[1], conc[0], conc[1], corr)
+    assert_equal(_unnorm_log_prob(phi_psi, locs[0], locs[1], conc[0], conc[1], corr),
+                 bmv.log_prob(phi_psi) + bmv.norm_const)
 
 
 def test_bvm_multidim():
