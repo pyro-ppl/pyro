@@ -248,7 +248,7 @@ class SineBivariateVonMises(TorchDistribution):
 
     @property
     def mean(self):
-        return torch.stack((self.phi_loc, self.psi_loc))
+        return torch.stack((self.phi_loc, self.psi_loc), dim=-1)
 
     @classmethod
     def infer_shapes(cls, **arg_shapes):
