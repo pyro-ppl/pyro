@@ -49,8 +49,8 @@ class SineSkewed(TorchDistribution):
 
     def __init__(self, base_density: TorchDistribution, skewness, validate_args=None):
         assert torch.all(skewness.abs() <= 1)
-        assert torch.Size(base_density.event_shape) == skewness.shape
         assert base_density.event_shape[-1] == 2
+        assert skewness.shape[-1] == 2
         self.base_density = base_density
         self.skewness = skewness
         super().__init__(base_density.batch_shape, base_density.event_shape, validate_args=validate_args)
