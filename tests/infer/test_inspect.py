@@ -121,7 +121,7 @@ def test_plate_coupling():
 
 
 def test_plate_coupling_2():
-    #   x x     
+    #   x x
     #     \\   y y
     #      \\ //
     #        z
@@ -158,8 +158,8 @@ def test_plate_coupling_2():
 
 
 def test_plate_coupling_3():
-    #    x x x x    
-    #     // \\ 
+    #    x x x x
+    #     // \\
     #   y y   z z
     #
     # This results in posterior dependency structure:
@@ -201,7 +201,7 @@ def test_plate_collider():
     #   x x    y y
     #     \\  //
     #      zzzz
-    #   
+    #
     # This results in posterior dependency structure:
     #
     #     x x y y z z z z
@@ -245,7 +245,7 @@ def test_plate_dependency():
     #      \  || y1 y2  =====>  y1 | /   \ | y2
     #       \ || //               \|/     \|/
     #        z1 z2                z1       z2
-    #   
+    #
     # This allows posterior dependency structure:
     #
     #     w x x y y z z
