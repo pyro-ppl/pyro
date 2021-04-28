@@ -144,19 +144,18 @@ class SineBivariateVonMises(TorchDistribution):
     @property
     def norm_const(self):
         if hasattr(self, '_norm_const') and self._norm_const is None:
-            corr = self.correlation + 1e-8
-            conc = torch.hstack((self.phi_concentration, self.psi_concentration))
-            m = torch.arange(50, device=self.phi_loc.device)
-            fs = SineBivariateVonMises._lbinoms(m.max() + 1) + 2 * m * torch.log(corr) - m * torch.log(
-                4 * torch.prod(conc, dim=0))
-            fs += torch.sum(log_I1(m.max(), conc), dim=-1)
+            corr = self.correlation.view(1, -1) + 1e-8
+            conc = torch.stack((self.phi_concentration, self.psi_concentration)).view(-1, 2)
+            m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
+            fs = SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1) + 2 * m * torch.log(corr) - m * torch.log(
+                4 * torch.prod(conc, dim=-1))
+            fs += log_I1(m.max(), conc).sum(-1)
             mfs = fs.max()
-            self._norm_const = 2 * torch.log(torch.tensor(2 * pi)) + mfs + (fs - mfs).logsumexp(-1)
+            norm_const = 2 * torch.log(torch.tensor(2 * pi)) + mfs + (fs - mfs).logsumexp(0)
+            self._norm_const = norm_const.reshape(self.phi_loc.shape)
         return self._norm_const
 
     def log_prob(self, value):
-        if len(value.size()) == 1:
-            value = value[None, :]
         if self._validate_args:
             self._validate_sample(value)
         indv = self.phi_concentration * torch.cos(value[..., 0] - self.phi_loc) + self.psi_concentration * torch.cos(

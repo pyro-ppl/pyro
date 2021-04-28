@@ -24,7 +24,7 @@ def _unnorm_log_prob(value, loc1, loc2, conc1, conc2, corr):
     else:
         phi_val = value[..., 0]
         psi_val = value[..., 1]
-    return (conc1 * torch.cos(phi_val - loc1) + conc2 * torch.cos(psi_val - loc2) + \
+    return (conc1 * torch.cos(phi_val - loc1) + conc2 * torch.cos(psi_val - loc2) +
             corr * torch.sin(phi_val - loc1) * torch.sin(psi_val - loc2))
 
 
