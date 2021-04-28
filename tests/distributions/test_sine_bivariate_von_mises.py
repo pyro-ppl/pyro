@@ -13,7 +13,6 @@ from pyro.distributions.sine_bivariate_von_mises import SineBivariateVonMises, l
 from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 
-
 # def _unnorm_log_prob(value, locs, conc, corr):
 #     return conc @ torch.cos(value - locs) + corr * torch.prod(torch.sin(value - locs), dim=-1)
 
