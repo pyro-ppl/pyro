@@ -1420,12 +1420,12 @@ class AutoStructured(AutoGuide):
             aux_values[name] = aux_value
 
             # Shift by loc and reshape.
-            unconstrained = aux_value + loc
             batch_shape = torch.broadcast_shapes(
-                unconstrained.shape[:-1], self._batch_shapes[name]
+                aux_value.shape[:-1], self._batch_shapes[name]
             )
-            shape = batch_shape + self._unconstrained_event_shapes[name]
-            unconstrained = unconstrained.reshape(shape)
+            unconstrained = (aux_value + loc).reshape(
+                batch_shape + self._unconstrained_event_shapes[name]
+            )
             if not is_identically_zero(log_density):
                 log_density = log_density.reshape(batch_shape + (-1,)).sum(-1)
 
@@ -1463,9 +1463,7 @@ class AutoStructured(AutoGuide):
         result = {}
         for name, site in self._sorted_sites:
             loc = _deep_getattr(self.locs, name).detach()
-            shape = self._unconstrained_shapes[name]
-            if loc.shape != shape:
-                sample_shape = loc.shape[:-1]
-                loc = loc.reshape(sample_shape + shape)
+            shape = self._batch_shapes[name] + self._unconstrained_event_shapes[name]
+            loc = loc.reshape(shape)
             result[name] = biject_to(site["fn"].support)(loc)
         return result
