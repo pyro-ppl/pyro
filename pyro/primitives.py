@@ -162,6 +162,13 @@ def factor(name, log_factor):
     Factor statement to add arbitrary log probability factor to a
     probabilisitic model.
 
+    .. warning:: Beware using factor statements in guides. Factor statements
+        assume ``log_factor`` is computed from non-reparametrized statements
+        such as observation statements ``pyro.sample(..., obs=...)``. If
+        instead ``log_factor`` is computed from e.g. the Jacobian determinant
+        of a transformation of a reparametrized variable, factor statements
+        in the guide will result in incorrect results.
+
     :param str name: Name of the trivial sample
     :param torch.Tensor log_factor: A possibly batched log probability factor.
     """
