@@ -7,7 +7,6 @@ from functools import reduce
 from math import pi
 
 import torch
-from torch.autograd import grad
 from torch.distributions import VonMises
 from torch.distributions.utils import broadcast_all
 
