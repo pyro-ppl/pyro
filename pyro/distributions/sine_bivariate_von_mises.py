@@ -178,7 +178,6 @@ class SineBivariateVonMises(TorchDistribution):
         eig = torch.stack((torch.zeros_like(eig), eig))
         eigmin = torch.where(eig[1] < 0, eig[1], torch.zeros_like(eig[1], dtype=eig.dtype))
         eig = eig - eigmin
-        eig.requires_grad = True
         b0 = self._bfind(eig)
 
         total = int(torch.prod(torch.tensor(sample_shape)))
