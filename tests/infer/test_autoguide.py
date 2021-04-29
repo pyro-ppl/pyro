@@ -15,14 +15,7 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import (
-    SVI,
-    JitTrace_ELBO,
-    Predictive,
-    Trace_ELBO,
-    TraceEnum_ELBO,
-    TraceGraph_ELBO,
-)
+from pyro.infer import SVI, Predictive, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.infer.autoguide import (
     AutoCallable,
     AutoDelta,
@@ -1019,7 +1012,7 @@ def test_sphere_raw_ok(auto_class, init_loc_fn):
     poutine.trace(guide).get_trace().compute_log_prob()
 
 
-class AutoStructured_exact(AutoStructured):
+class AutoStructured_exact_normal(AutoStructured):
     def __init__(self, model):
         super().__init__(
             model,
@@ -1028,11 +1021,21 @@ class AutoStructured_exact(AutoStructured):
         )
 
 
+class AutoStructured_exact_mvn(AutoStructured):
+    def __init__(self, model):
+        super().__init__(
+            model,
+            conditionals={"loc": "mvn"},
+            dependencies={},
+        )
+
+
 @pytest.mark.parametrize("Guide", [
     AutoNormal,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
-    AutoStructured_exact,
+    AutoStructured_exact_normal,
+    AutoStructured_exact_mvn,
 ])
 def test_exact(Guide):
 
@@ -1051,7 +1054,7 @@ def test_exact(Guide):
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, elbo)
     for step in range(500):
-        loss = svi.step(data)
+        svi.step(data)
 
     guide.requires_grad_(False)
     with torch.no_grad():
@@ -1068,7 +1071,8 @@ def test_exact(Guide):
     AutoNormal,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
-    AutoStructured_exact,
+    AutoStructured_exact_normal,
+    AutoStructured_exact_mvn,
 ])
 def test_exact_batch(Guide):
 
@@ -1087,7 +1091,7 @@ def test_exact_batch(Guide):
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, elbo)
     for step in range(500):
-        loss = svi.step(data)
+        svi.step(data)
 
     guide.requires_grad_(False)
     with torch.no_grad():
