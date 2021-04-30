@@ -25,21 +25,47 @@ from utils import get_mb_indices, get_logger
 import uuid
 
 
+class model0(nn.Module):
+    def __init__(self, args, data_dim):
+        super(model0, self).__init__()
+
+    def model(self, args, sequences, lengths, mb, mask):
+        num_sequences, max_length, data_dim = sequences.shape
+        hidden_dim = args.hidden_dim
+        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim),
+                             constraint=constraints.simplex)
+        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, data_dim),
+                             constraint=constraints.unit_interval)
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+        with pyro.plate("sequences", mb.size(0), dim=-2), handlers.scale(scale=torch.tensor(args.scale)), \
+            handlers.mask(mask=mask.unsqueeze(-1)):
+            lengths = lengths[mb]
+            x = 0
+            for t in pyro.markov(range(lengths.max())):
+                with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
+                    x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
+                                    infer={"enumerate": "parallel"})
+                    with tones_plate:
+                        pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
+                                obs=sequences[mb, t])
+
 # HMM
 class model1(nn.Module):
     def __init__(self, args, data_dim):
         super(model1, self).__init__()
 
     @ignore_jit_warnings()
-    def model(self, args, sequences, lengths, mb, mask):
+    def model(self, args, sequences, lengths, mb, mask, px, py):
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
         hidden_dim = args.hidden_dim
-        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim),
-                             constraint=constraints.simplex)
-        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, data_dim),
+        probs_x = pyro.param("probs_x", px, #lambda: torch.rand(hidden_dim, hidden_dim),
+                            constraint=constraints.simplex)
+        probs_y = pyro.param("probs_y", py, # lambda: torch.rand(hidden_dim, data_dim),
                              constraint=constraints.unit_interval)
+        print("x", probs_x[0, :2].data.cpu().numpy())
+        print("y", probs_y[0, :2].data.cpu().numpy())
 
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
@@ -60,14 +86,29 @@ models = {name[len('model'):]: model
 
 
 def main(args):
+    hidden_dim = args.hidden_dim
+    torch.set_default_tensor_type('torch.FloatTensor')
+    torch.manual_seed(0)
+
+    probs_x_init = torch.rand(hidden_dim, hidden_dim)
+    probs_y_init = torch.rand(hidden_dim, 88)
+
+    print("probs_x_init",probs_x_init[0,:2])
+    print("probs_y_init",probs_y_init[0,:2])
+
     if args.cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-        torch.set_default_tensor_type('torch.cuda.DoubleTensor')
+        probs_x_init = probs_x_init.cuda()
+        probs_y_init = probs_y_init.cuda()
+        #torch.set_default_tensor_type('torch.cuda.DoubleTensor')
+    else:
+        torch.set_default_tensor_type('torch.FloatTensor')
+    #torch.set_default_tensor_type('torch.DoubleTensor')
 
     N_train = {'jsb': 229, 'piano': 87, 'nottingham': 694, 'muse': 524}[args.dataset]
     if args.dataset == 'jsb':
         args.batch_size = 20
-        args.num_steps = 300 # 400
+        args.num_steps = 1 #300 # 400
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
     elif args.dataset == 'piano':
@@ -132,7 +173,10 @@ def main(args):
                          'lrd': args.learning_rate_decay, 'clip_norm': 20.0})
 
     max_plate_nesting = 3
-    elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
+    if args.model == "0":
+        elbo = infer.TraceEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
+    elif args.model == "1":
+        elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     elbo_eval = infer.TraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     #elbo_eval = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     svi = infer.SVI(model_train, guide, optim, elbo)
@@ -151,7 +195,8 @@ def main(args):
         mb_indices, masks = get_mb_indices(train_sequences.size(0), args.batch_size)
 
         for mb, mask in zip(mb_indices, masks):
-            epoch_loss += svi.step(train_sequences, train_lengths, mb, mask)
+            epoch_loss += svi.step(train_sequences, train_lengths, mb, mask, probs_x_init, probs_y_init)
+            print("loss", epoch_loss)
 
         ts.append(time.time())
         log('[epoch %03d]  running train loss: %.4f\t\t (epoch dt: %.2f)' % (epoch, epoch_loss,
@@ -185,7 +230,7 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--hidden-dim", default=36, type=int)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
-    parser.add_argument("-lr", "--learning-rate", default=0.03, type=float)
+    parser.add_argument("-lr", "--learning-rate", default=0.00, type=float)
     parser.add_argument("--scale", default=1.0, type=float)
     parser.add_argument("-lrd", "--learning-rate-decay", default=1.0e-1, type=float)
     parser.add_argument("--seed", default=0, type=int)
