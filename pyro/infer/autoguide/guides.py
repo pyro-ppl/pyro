@@ -1433,6 +1433,7 @@ class AutoStructured(AutoGuide):
             transform = biject_to(site["fn"].support)
             value = transform(unconstrained)
             if compute_density and conditional != "delta":
+                assert transform.codomain.event_dim == site["fn"].event_dim
                 log_density = log_density + transform.inv.log_abs_det_jacobian(
                     value, unconstrained
                 )

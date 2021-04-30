@@ -142,16 +142,19 @@ class AutoStructured_shapes(AutoStructured):
                 "z4": conditional_z4,
                 "z5": ConditionalZ5(),
                 "z6": ConditionalZ6(),
+                "z7": "mvn",
             },
             dependencies={
                 "z3": {"z2": "linear"},
                 "z4": {"z3": "linear", "z2": "linear"},
                 "z6": {"z3": dependency_z6_z3, "z5": dependency_z6_z5},
+                "z7": {"z6": "linear"},
             },
             init_loc_fn=init_loc_fn,
         )
 
 
+@pytest.mark.parametrize("num_particles", [1, 10])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 @pytest.mark.parametrize("init_loc_fn", [
     init_to_feasible,
@@ -170,7 +173,7 @@ class AutoStructured_shapes(AutoStructured):
     AutoStructured_shapes,
 ])
 @pytest.mark.filterwarnings("ignore::FutureWarning")
-def test_shapes(auto_class, init_loc_fn, Elbo):
+def test_shapes(auto_class, init_loc_fn, Elbo, num_particles):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
@@ -180,9 +183,11 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
         pyro.sample("z4", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
         pyro.sample("z5", dist.Dirichlet(torch.ones(3)))
         pyro.sample("z6", dist.Normal(0, 1).expand((2,)).mask(torch.arange(2) > 0).to_event(1))
+        pyro.sample("z7", dist.LKJCholesky(2, torch.tensor(1.)))
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
-    elbo = Elbo(strict_enumeration_warning=False)
+    elbo = Elbo(num_particles=num_particles, vectorize_particles=True,
+                strict_enumeration_warning=False)
     loss = elbo.loss(model, guide)
     assert np.isfinite(loss), loss
 
