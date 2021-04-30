@@ -37,7 +37,9 @@ def test_neals_funnel_smoke(jit):
     mcmc = MCMC(nuts, num_samples=50, warmup_steps=50)
     mcmc.run(dim)
     samples = mcmc.get_samples()
-
+    # XXX: `MCMC.get_samples` adds a leftmost batch dim to all sites,
+    # not uniformly at -max_plate_nesting-1; hence the unsqueeze.
+    samples = {k: v.unsqueeze(1) for k, v in samples.items()}
     transformed_samples = rep.transform_samples(samples)
     assert isinstance(transformed_samples, dict)
     assert set(transformed_samples) == {"x", "y"}
