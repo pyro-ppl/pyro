@@ -40,16 +40,12 @@ def test_support_shape(dist):
 
 
 def test_infer_shapes(dist):
-    if "LKJ" in dist.pyro_dist.__name__:
+    if "LKJ" in dist.pyro_dist.__name__ or "SineSkewed" == dist.pyro_dist.__name__:
         pytest.xfail(reason="cannot statically compute shape")
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)
-        if 'SineSkewed' == dist.pyro_dist.__name__:
-            arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else v.batch_shape
-                          for k, v in dist_params.items()}
-        else:
-            arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else ()
-                          for k, v in dist_params.items()}
+        arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else ()
+                      for k, v in dist_params.items()}
         batch_shape, event_shape = dist.pyro_dist.infer_shapes(**arg_shapes)
         d = dist.pyro_dist(**dist_params)
         assert d.batch_shape == batch_shape

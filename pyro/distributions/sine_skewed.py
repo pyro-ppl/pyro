@@ -77,7 +77,3 @@ class SineSkewed(TorchDistribution):
             self._validate_sample(value)
         bd = self.base_density
         return bd.log_prob(value) + torch.log(1 + (self.skewness * torch.sin((value - bd.mean) % (2 * pi))).sum(-1))
-
-    @classmethod
-    def infer_shapes(cls, **arg_shapes):
-        return arg_shapes['base_density'], arg_shapes['skewness']
