@@ -59,8 +59,8 @@ class SineSkewed(TorchDistribution):
         param_names = [k for k, _ in self.arg_constraints.items() if k in self.__dict__]
 
         args_string = ', '.join(['{}: {}'.format(p, self.__dict__[p]
-                                if self.__dict__[p].numel() == 1
-                                else self.__dict__[p].size()) for p in param_names])
+        if self.__dict__[p].numel() == 1
+        else self.__dict__[p].size()) for p in param_names])
         return self.__class__.__name__ + '(' + f'base_density: {self.base_density.__repr__()}, ' + args_string + ')'
 
     def sample(self, sample_shape=torch.Size()):
@@ -77,3 +77,14 @@ class SineSkewed(TorchDistribution):
             self._validate_sample(value)
         bd = self.base_density
         return bd.log_prob(value) + torch.log(1 + (self.skewness * torch.sin((value - bd.mean) % (2 * pi))).sum(-1))
+
+    def expand(self, batch_shape, _instance=None):
+        batch_shape = torch.Size(batch_shape)
+        new = self._get_checked_instance(SineSkewed, _instance)
+        for name in self.arg_constraints:
+            setattr(new, name, getattr(self, name).expand(batch_shape))
+        base_dist = self.base_density.expand(batch_shape, None)
+        new.base_density = base_dist
+        super(SineSkewed, new).__init__(batch_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
