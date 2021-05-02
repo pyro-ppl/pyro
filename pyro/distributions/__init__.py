@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.distributions.torch_patch  # noqa F403
-from pyro.distributions.torch import *
+from pyro.distributions.torch import *  # noqa F403
 
 # isort: split
 
