@@ -7,7 +7,6 @@ from functools import reduce
 from math import pi
 
 import torch
-from torch.autograd import grad
 from torch.distributions import VonMises
 from torch.distributions.utils import broadcast_all
 
@@ -268,16 +267,10 @@ class SineBivariateVonMises(TorchDistribution):
             return type(self)(phi_loc, psi_loc, phi_conc, psi_conc, corr, validate_args=validate_args)
 
     def _bfind(self, eig):
-        eig = eig.view(2, -1)
-        b = eig.shape[0] / 2 * torch.ones(self.batch_shape, requires_grad=True, dtype=torch.float, device=eig.device)
-        b = b.ravel()
-        for i in torch.arange(b.shape[0])[eig.norm(0) != 0].T:
-            curr_eig = eig[:, i]  # make indexed a non-leaf
-            curr_b = b[i]  # make indexed a non-leaf
-            g1 = grad(1 - torch.sum(1 / (curr_b + 2 * curr_eig)), curr_b, create_graph=True)[0]
-            g2 = grad(g1, curr_b)[0]
-            b[i] -= (1 / g2) * g1
-        return b.view(self.batch_shape)
+        b = eig.shape[0] / 2 * torch.ones(self.batch_shape, dtype=eig.dtype, device=eig.device)
+        g1 = torch.sum(1 / (b + 2 * eig) ** 2, dim=0)
+        g2 = torch.sum(-2 / (b + 2 * eig) ** 3, dim=0)
+        return torch.where(eig.norm(0) != 0, b - g1 / g2, b)
 
     @staticmethod
     def _lbinoms(n):
