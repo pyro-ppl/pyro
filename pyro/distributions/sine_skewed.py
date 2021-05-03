@@ -51,6 +51,11 @@ class SineSkewed(TorchDistribution):
         assert torch.all(skewness.abs() <= 1)
         assert base_density.event_shape[-1] == 2
         assert skewness.shape[-1] == 2
+
+        if base_density.mean.device != skewness.device:
+            raise ValueError(f"base_density: {base_density.__class__.__name__} and {self.__class__.__name__} "
+                             f"must be on same device.")
+
         self.base_density = base_density
         self.skewness = skewness
         super().__init__(base_density.batch_shape, base_density.event_shape, validate_args=validate_args)
@@ -66,7 +71,7 @@ class SineSkewed(TorchDistribution):
     def sample(self, sample_shape=torch.Size()):
         bd = self.base_density
         ys = bd.sample(sample_shape)
-        u = Uniform(0, 1.).sample(sample_shape + self.batch_shape)
+        u = Uniform(0., torch.ones(torch.Size([]), device=self.skewness.device)).sample(sample_shape + self.batch_shape)
 
         mask = u < 1. + (self.skewness * torch.sin((ys - bd.mean) % (2 * pi))).view(*(sample_shape + self.batch_shape),
                                                                                     -1).sum(-1)
@@ -77,7 +82,7 @@ class SineSkewed(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        flat_event = torch.tensor(self.event_shape).prod()
+        flat_event = torch.tensor(self.event_shape, device=value.device).prod()
         bd = self.base_density
         bd_prob = bd.log_prob(value)
         sine_prob = torch.log(

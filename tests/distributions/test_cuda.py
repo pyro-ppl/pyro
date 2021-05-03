@@ -15,6 +15,8 @@ from tests.common import (
 
 @requires_cuda
 def test_sample(dist):
+    if dist.pyro_dist.__name__ == 'SineSkewed':
+        pytest.xfail(reason="Fixture with distribution param not handled.")
     for idx in range(len(dist.dist_params)):
 
         # Compute CPU value.
@@ -77,6 +79,8 @@ def test_rsample(dist):
 
 @requires_cuda
 def test_log_prob(dist):
+    if dist.pyro_dist.__name__ == 'SineSkewed':
+        pytest.xfail(reason="Fixture with distribution param not handled.")
     for idx in range(len(dist.dist_params)):
 
         # Compute CPU value.
