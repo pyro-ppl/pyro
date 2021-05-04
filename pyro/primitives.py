@@ -74,7 +74,13 @@ def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
     :rtype: torch.Tensor
     """
     # Note effectful(-) requires the double passing of name below.
-    return _param(name, init_tensor, constraint, event_dim, name=name)
+    return _param(
+        name,
+        init_tensor,
+        constraint=constraint,
+        event_dim=event_dim,
+        name=name,
+    )
 
 
 def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
