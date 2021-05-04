@@ -73,8 +73,13 @@ def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
         ``.unconstrained`` is a weakref attribute.
     :rtype: torch.Tensor
     """
+    # Note effectful(-) requires the double passing of name below.
     return _param(
-        name, init_tensor=init_tensor, constraint=constraint, event_dim=event_dim
+        name,
+        name=name,
+        init_tensor=init_tensor,
+        constraint=constraint,
+        event_dim=event_dim,
     )
 
 
