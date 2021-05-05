@@ -50,16 +50,14 @@ class SineSkewed(TorchDistribution):
         super().__init__(base_density.batch_shape, base_density.event_shape, validate_args=validate_args)
 
         if self._validate_args and base_density.mean.device != skewness.device:
-            raise ValueError(f"base_density: {base_density.__class__.__name__} and {self.__class__.__name__} "
+            raise ValueError(f"base_density: {base_density.__class__.__name__} and SineSkewed "
                              f"must be on same device.")
 
     def __repr__(self):
-        param_names = [k for k, _ in self.arg_constraints.items() if k in self.__dict__]
-
-        args_string = ', '.join(['{}: {}'.format(p, self.__dict__[p]
-        if self.__dict__[p].numel() == 1
-        else self.__dict__[p].size()) for p in param_names])
-        return self.__class__.__name__ + '(' + f'base_density: {self.base_density.__repr__()}, ' + args_string + ')'
+        args_string = ', '.join(['{}: {}'.format(p, getattr(self, p)
+                                if getattr(self, p).numel() == 1
+                                else getattr(self, p).size()) for p in self.arg_constraints.keys()])
+        return self.__class__.__name__ + '(' + f'base_density: {str(self.base_density)}, ' + args_string + ')'
 
     def sample(self, sample_shape=torch.Size()):
         bd = self.base_density
