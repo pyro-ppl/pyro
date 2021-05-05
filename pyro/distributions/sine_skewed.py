@@ -13,20 +13,20 @@ class SineSkewed(TorchDistribution):
     the d-dimensional torus.
 
     This distribution requires the base distribution on a torus. The parameter skewness can be inferred using
-    :class:`~pyro.infer.HMC` or :class:`~pyro.infer.NUTS`. The following will produce a uniform prior
+    :class:`~pyro.infer.HMC` or :class:`~pyro.infer.NUTS`. For example, the following will produce a uniform prior
     over skewness for the 1-torus,::
 
         def model(...):
             ...
-            skewness_phi = pyro.sample(f'skewness_phi}', Uniform(skewness.abs().sum(), 1 - tots))
+            skewness_phi = pyro.sample(f'skewness_phi', Uniform(skewness.abs().sum(), 1 - tots))
             psi_bound = 1 - skewness_phi.abs()
-            skewness_psi = pyro.sample(f'skewness_psi}', Uniform(-psi_bound, psi_bound)
+            skewness_psi = pyro.sample(f'skewness_psi', Uniform(-psi_bound, psi_bound)
             skewness = torch.stack((skewness_phi, skewness_psi), dim=0)
             ...
 
-    .. note:: An event in the base-distribution must be on a d-torus so the event_shape must be (d,2) or (2,).
+    .. note:: An event in the base distribution must be on a d-torus, so the event_shape must be (d, 2) or (2,).
 
-    .. note:: For the skewness parameter it must hold that the sum of the absolute value of its weights for an event
+    .. note:: For the skewness parameter, it must hold that the sum of the absolute value of its weights for an event
         must be less than or equal to one. See eq. 2.1 in [1].
 
     ** References: **
@@ -36,7 +36,8 @@ class SineSkewed(TorchDistribution):
     :param base_density: base density on a d-dimensional torus.
     :param skewness: skewness of the distribution.
     """
-    arg_constraints = {'skewness': constraints.interval(-1., 1.)}
+    arg_constraints = {'skewness': constraints.independent(constraints.interval(-1., 1.), 1)}
+
     support = constraints.independent(constraints.real, 1)
 
     def __init__(self, base_density: TorchDistribution, skewness, validate_args=None):
@@ -56,8 +57,8 @@ class SineSkewed(TorchDistribution):
         param_names = [k for k, _ in self.arg_constraints.items() if k in self.__dict__]
 
         args_string = ', '.join(['{}: {}'.format(p, self.__dict__[p]
-                                if self.__dict__[p].numel() == 1
-                                else self.__dict__[p].size()) for p in param_names])
+        if self.__dict__[p].numel() == 1
+        else self.__dict__[p].size()) for p in param_names])
         return self.__class__.__name__ + '(' + f'base_density: {self.base_density.__repr__()}, ' + args_string + ')'
 
     def sample(self, sample_shape=torch.Size()):
