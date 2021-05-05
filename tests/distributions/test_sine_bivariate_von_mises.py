@@ -15,12 +15,8 @@ from tests.common import assert_equal
 
 
 def _unnorm_log_prob(value, loc1, loc2, conc1, conc2, corr):
-    if len(value.shape) == 1:
-        phi_val = value[0]
-        psi_val = value[1]
-    else:
-        phi_val = value[..., 0]
-        psi_val = value[..., 1]
+    phi_val = value[..., 0]
+    psi_val = value[..., 1]
     return (conc1 * torch.cos(phi_val - loc1) + conc2 * torch.cos(psi_val - loc2) +
             corr * torch.sin(phi_val - loc1) * torch.sin(psi_val - loc2))
 
@@ -70,7 +66,7 @@ def test_bvm_multidim():
         assert_equal(bmv.sample(sample_dim).shape, torch.Size((*sample_dim, *batch_dim, 2)))
 
 
-def test_mle_bvm():
+def test_mle_bvm():  # FIXME
     vm = VonMises(tensor(0.), tensor(1.))
     hn = HalfNormal(tensor(.8))
     b = Beta(tensor(2.), tensor(5.))
@@ -107,6 +103,7 @@ def test_mle_bvm():
 
     expected = {'phi_loc': locs[0], 'psi_loc': locs[1], 'phi_conc': conc[0], 'psi_conc': conc[1], 'corr': corr}
     actuals = {k: v for k, v in pyro.get_param_store().items()}
+
     for k in expected.keys():
         if k in actuals:
             actual = actuals[k]

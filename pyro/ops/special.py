@@ -4,11 +4,8 @@
 import functools
 import math
 import operator
-from copy import copy
 
 import torch
-
-from pyro.distributions.sine_bivariate_von_mises import _flat_dim
 
 
 class _SafeLog(torch.autograd.Function):
@@ -120,7 +117,7 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     if len(value.size()) == 0:
         vshape = torch.Size([1])
     else:
-        vshape = copy(value.shape)
+        vshape = value.shape
     value = value.reshape(-1, 1)
 
     k = torch.arange(terms, device=value.device)
@@ -128,7 +125,7 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     assert lgammas_all.shape == (orders + terms,)  # lgamma(0) = inf => start from 1
 
     lvalues = torch.log(value / 2) * k.view(1, -1)
-    assert lvalues.shape == (_flat_dim(vshape), terms)
+    assert lvalues.shape == (vshape.numel(), terms)
 
     lfactorials = lgammas_all[:terms]
     assert lfactorials.shape == (terms,)
@@ -140,8 +137,8 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     assert indices.shape == (orders, terms)
 
     seqs = (2 * lvalues[None, :, :] - lfactorials[None, None, :] - lgammas.gather(1, indices)[:, None, :]).logsumexp(-1)
-    assert seqs.shape == (orders, _flat_dim(vshape))
+    assert seqs.shape == (orders, vshape.numel())
 
     i1s = lvalues[..., :orders].T + seqs
-    assert i1s.shape == (orders, _flat_dim(vshape))
+    assert i1s.shape == (orders, vshape.numel())
     return i1s.view(-1, *vshape)

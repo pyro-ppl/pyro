@@ -108,10 +108,7 @@ def test_score_errors_non_broadcastable_data_shape(dist):
         if dist.get_test_distribution_name() == 'LKJCholesky':
             pytest.skip('https://github.com/pytorch/pytorch/issues/52724')
         shape = d.shape()
-        if dist.get_test_distribution_name() == 'SineBivariateVonMises':
-            non_broadcastable_shape = (shape[0] + 1,) + (shape[1] + 1,)
-        else:
-            non_broadcastable_shape = (shape[0] + 1,) + shape[1:]
+        non_broadcastable_shape = (shape[0] + 1,) + shape[1:]
         test_data_non_broadcastable = torch.ones(non_broadcastable_shape)
         with pytest.raises((ValueError, RuntimeError)):
             d.log_prob(test_data_non_broadcastable)

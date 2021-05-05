@@ -7,16 +7,12 @@ from math import pi
 
 import torch
 from torch.distributions import VonMises
-from torch.distributions.utils import broadcast_all
+from torch.distributions.utils import broadcast_all, lazy_property
 
 from pyro.distributions import constraints
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.special import log_I1
-
-
-def _flat_dim(size):
-    return torch.prod(torch.tensor(size), dim=0)
 
 
 class SineBivariateVonMises(TorchDistribution):
@@ -78,11 +74,6 @@ class SineBivariateVonMises(TorchDistribution):
         if weighted_correlation is not None:
             correlation = weighted_correlation * (phi_concentration * psi_concentration).sqrt() + 1e-8
 
-        if torch.any(phi_concentration * psi_concentration <= correlation ** 2):
-            warnings.warn(
-                f'{self.__class__.__name__} bimodal due to concentration-correlation relation, '
-                f'sampling will likely fail.', UserWarning)
-
         phi_loc, psi_loc, phi_concentration, psi_concentration, correlation = broadcast_all(phi_loc, psi_loc,
                                                                                             phi_concentration,
                                                                                             psi_concentration,
@@ -92,24 +83,27 @@ class SineBivariateVonMises(TorchDistribution):
         self.phi_concentration = phi_concentration
         self.psi_concentration = psi_concentration
         self.correlation = correlation
-        self._norm_const = None
         event_shape = torch.Size([2])
         batch_shape = phi_loc.shape
-        super(SineBivariateVonMises, self).__init__(batch_shape, event_shape, validate_args)
 
-    @property
+        super().__init__(batch_shape, event_shape, validate_args)
+
+        if self._validate_args and torch.any(phi_concentration * psi_concentration <= correlation ** 2):
+            warnings.warn(
+                f'{self.__class__.__name__} bimodal due to concentration-correlation relation, '
+                f'sampling will likely fail.', UserWarning)
+
+    @lazy_property
     def norm_const(self):
-        if hasattr(self, '_norm_const') and self._norm_const is None:
-            corr = self.correlation.view(1, -1) + 1e-8
-            conc = torch.stack((self.phi_concentration, self.psi_concentration)).view(-1, 2)
-            m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
-            fs = SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1) + 2 * m * torch.log(corr) - m * torch.log(
-                4 * torch.prod(conc, dim=-1))
-            fs += log_I1(m.max(), conc).sum(-1)
-            mfs = fs.max()
-            norm_const = 2 * torch.log(torch.tensor(2 * pi)) + mfs + (fs - mfs).logsumexp(0)
-            self._norm_const = norm_const.reshape(self.phi_loc.shape)
-        return self._norm_const
+        corr = self.correlation.view(1, -1) + 1e-8
+        conc = torch.stack((self.phi_concentration, self.psi_concentration)).view(-1, 2)
+        m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
+        fs = SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1) + 2 * m * torch.log(corr) - m * torch.log(
+            4 * torch.prod(conc, dim=-1))
+        fs += log_I1(m.max(), conc).sum(-1)
+        mfs = fs.max()
+        norm_const = 2 * torch.log(torch.tensor(2 * pi)) + mfs + (fs - mfs).logsumexp(0)
+        return norm_const.reshape(self.phi_loc.shape)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -211,17 +205,13 @@ class SineBivariateVonMises(TorchDistribution):
         return batch_shape, torch.Size([2])
 
     def expand(self, batch_shape, _instance=None):
-        try:
-            return super(SineBivariateVonMises, self).expand(batch_shape)
-        except NotImplementedError:
-            validate_args = self.__dict__.get('_validate_args')
-            phi_loc = self.phi_loc.expand(batch_shape)
-            psi_loc = self.psi_loc.expand(batch_shape)
-            phi_conc = self.phi_concentration.expand(batch_shape)
-            psi_conc = self.psi_concentration.expand(batch_shape)
-            corr = self.correlation.expand(batch_shape)
-
-            return type(self)(phi_loc, psi_loc, phi_conc, psi_conc, corr, validate_args=validate_args)
+        new = self._get_checked_instance(SineBivariateVonMises, _instance)
+        batch_shape = torch.Size(batch_shape)
+        for k in SineBivariateVonMises.arg_constraints.keys():
+            setattr(new, k, getattr(self, k).expand(batch_shape))
+        super(SineBivariateVonMises, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     def _bfind(self, eig):
         b = eig.shape[0] / 2 * torch.ones(self.batch_shape, dtype=eig.dtype, device=eig.device)
