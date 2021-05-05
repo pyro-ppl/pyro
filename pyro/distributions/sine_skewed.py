@@ -3,7 +3,7 @@ from math import pi
 import torch
 from torch.distributions import Uniform
 
-from pyro.distributions import constraints
+from pyro.distributions import constraints, sum_rightmost
 
 from .torch_distribution import TorchDistribution
 
@@ -33,40 +33,45 @@ class SineSkewed(TorchDistribution):
       1. Sine-skewed toroidal distributions and their application in protein bioinformatics
          Ameijeiras-Alonso, J., Ley, C. (2019)
 
-    :param base_density: base density on a d-dimensional torus.
+    :param base_dist: base density on a d-dimensional torus.
     :param skewness: skewness of the distribution.
     """
     arg_constraints = {'skewness': constraints.independent(constraints.interval(-1., 1.), 1)}
 
     support = constraints.independent(constraints.real, 1)
 
-    def __init__(self, base_density: TorchDistribution, skewness, validate_args=None):
-        assert base_density.event_shape[-1] == 2 and len(base_density.event_shape) <= 2
-        assert base_density.shape()[len(base_density.shape()) - len(skewness.shape):] == skewness.shape
+    def __init__(self, base_dist: TorchDistribution, skewness, validate_args=None):
+        assert base_dist.event_shape[-1] == 2 and len(base_dist.event_shape) <= 2
         assert (skewness.abs().sum(-1 if len(skewness.shape) == 1 else (-2, -1)) <= 1).all()
 
-        self.base_density = base_density
-        self.skewness = skewness.broadcast_to(base_density.shape())
-        super().__init__(base_density.batch_shape, base_density.event_shape, validate_args=validate_args)
+        self.base_density = base_dist
+        self.skewness = skewness.broadcast_to(base_dist.shape())
+        super().__init__(base_dist.batch_shape, base_dist.event_shape, validate_args=validate_args)
 
-        if self._validate_args and base_density.mean.device != skewness.device:
-            raise ValueError(f"base_density: {base_density.__class__.__name__} and SineSkewed "
+        if self._validate_args and base_dist.mean.device != skewness.device:
+            raise ValueError(f"base_density: {base_dist.__class__.__name__} and SineSkewed "
                              f"must be on same device.")
 
     def __repr__(self):
         args_string = ', '.join(['{}: {}'.format(p, getattr(self, p)
-                                if getattr(self, p).numel() == 1
-                                else getattr(self, p).size()) for p in self.arg_constraints.keys()])
+        if getattr(self, p).numel() == 1
+        else getattr(self, p).size()) for p in self.arg_constraints.keys()])
         return self.__class__.__name__ + '(' + f'base_density: {str(self.base_density)}, ' + args_string + ')'
 
     def sample(self, sample_shape=torch.Size()):
+        """ Sampling method described in section 2.3 of [1].
+
+        ** References: **
+          1. Sine-skewed toroidal distributions and their application in protein bioinformatics
+             Ameijeiras-Alonso, J., Ley, C. (2019)
+        """
         bd = self.base_density
         ys = bd.sample(sample_shape)
         u = Uniform(0., torch.ones(torch.Size([]), device=self.skewness.device)).sample(sample_shape + self.batch_shape)
 
-        mask = u < 1. + (self.skewness * torch.sin((ys - bd.mean) % (2 * pi))).view(*(sample_shape + self.batch_shape),
-                                                                                    -1).sum(-1)
-        mask = mask.view(*sample_shape, *self.batch_shape, *(1 for _ in bd.event_shape))
+        # Equation in step 3
+        mask = u < 1. + sum_rightmost(self.skewness * torch.sin((ys - bd.mean) % (2 * pi)), self.event_shape)
+        mask = mask.view(*sample_shape, *self.batch_shape, *(1 for _ in self.event_shape))
         samples = (torch.where(mask, ys, -ys + 2 * bd.mean) + pi) % (2 * pi) - pi
         return samples
 
@@ -76,8 +81,7 @@ class SineSkewed(TorchDistribution):
         bd = self.base_density
         bd_prob = bd.log_prob(value)
         sine_prob = torch.log(
-            1 + (self.skewness * torch.sin((value - bd.mean) % (2 * pi))).reshape((-1, self.event_shape.numel())).sum(
-                -1))
+            1 + sum_rightmost(self.skewness * torch.sin((value - bd.mean) % (2 * pi)), self.event_shape))
         return (bd_prob.view((-1)) + sine_prob).view(bd_prob.shape)
 
     def expand(self, batch_shape, _instance=None):
