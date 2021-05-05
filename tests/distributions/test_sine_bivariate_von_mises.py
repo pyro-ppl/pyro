@@ -66,7 +66,7 @@ def test_bvm_multidim():
         assert_equal(bmv.sample(sample_dim).shape, torch.Size((*sample_dim, *batch_dim, 2)))
 
 
-def test_mle_bvm():  # FIXME
+def test_mle_bvm():
     vm = VonMises(tensor(0.), tensor(1.))
     hn = HalfNormal(tensor(.8))
     b = Beta(tensor(2.), tensor(5.))

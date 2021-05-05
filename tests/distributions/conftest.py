@@ -320,10 +320,15 @@ continuous_dists = [
             ]),
     Fixture(pyro_dist=dist.SineBivariateVonMises,
             examples=[
-                {'phi_loc': [0.], 'psi_loc': [0.], 'phi_concentration': [5.], 'psi_concentration': [6.],
-                 'correlation': [2.], 'test_data': [[1., 0.]]},
-                {'phi_loc': [0.], 'psi_loc': [0.], 'phi_concentration': [5.], 'psi_concentration': [6.],
-                 'weighted_correlation': [.5], 'test_data': [[1., 0.]]}
+                {'phi_loc': [math.pi - .2, 1.], 'psi_loc': [0., 1.],
+                 'phi_concentration': [5., 5.], 'psi_concentration': [7., .5],
+                 'weighted_correlation': [.5, .1], 'test_data': [[[1., -3.], [1., 59.]]]},
+                {'phi_loc': 0., 'psi_loc': 0., 'phi_concentration': 5., 'psi_concentration': 6.,
+                 'correlation': 2., 'test_data': [1., 0.]},
+                {'phi_loc': [3.003], 'psi_loc': [-1.343], 'phi_concentration': [5.], 'psi_concentration': [6.],
+                 'correlation': [2.], 'test_data': [[0., 1.]]},
+                {'phi_loc': -math.pi / 3, 'psi_loc': -1., 'phi_concentration': .5, 'psi_concentration': 10.,
+                 'correlation': .1, 'test_data': [1., 0.555]},
             ]),
     Fixture(pyro_dist=dist.SoftLaplace,
             examples=[

@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 import warnings
 from functools import reduce
 from math import pi
@@ -72,7 +73,8 @@ class SineBivariateVonMises(TorchDistribution):
         assert (correlation is None) != (weighted_correlation is None)
 
         if weighted_correlation is not None:
-            correlation = weighted_correlation * (phi_concentration * psi_concentration).sqrt() + 1e-8
+            sqrt_ = torch.sqrt if isinstance(phi_concentration, torch.Tensor) else math.sqrt
+            correlation = weighted_correlation * sqrt_(phi_concentration * psi_concentration) + 1e-8
 
         phi_loc, psi_loc, phi_concentration, psi_concentration, correlation = broadcast_all(phi_loc, psi_loc,
                                                                                             phi_concentration,
@@ -96,7 +98,7 @@ class SineBivariateVonMises(TorchDistribution):
     @lazy_property
     def norm_const(self):
         corr = self.correlation.view(1, -1) + 1e-8
-        conc = torch.stack((self.phi_concentration, self.psi_concentration)).view(-1, 2)
+        conc = torch.stack((self.phi_concentration, self.psi_concentration), dim=-1).view(-1, 2)
         m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
         fs = SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1) + 2 * m * torch.log(corr) - m * torch.log(
             4 * torch.prod(conc, dim=-1))
@@ -141,7 +143,7 @@ class SineBivariateVonMises(TorchDistribution):
         # flatten batch_shape
         conc = conc.view(2, -1, 1)
         eigmin = eigmin.view(-1, 1)
-        corr = corr.view(-1, 1)
+        corr = corr.reshape(-1, 1)
         eig = eig.view(2, -1)
         b0 = b0.view(-1)
         phi_den = log_I1(0, conc[1]).view(-1, 1)
@@ -188,12 +190,10 @@ class SineBivariateVonMises(TorchDistribution):
         beta = torch.atan(corr / conc[1] * torch.sin(phi))
 
         psi = VonMises(beta, alpha).sample()
-        phi = phi.view((*self.batch_shape, total))
-        psi = psi.view((*self.batch_shape, total))
 
-        phi_psi = torch.vstack(((phi + self.phi_loc.view((*self.batch_shape, 1)) + pi) % (2 * pi) - pi,
-                                (psi + self.psi_loc.view((*self.batch_shape, 1)) + pi) % (2 * pi) - pi)).T
-        return phi_psi.view(*sample_shape, *self.batch_shape, *self.event_shape)
+        phi_psi = torch.stack(((phi + self.phi_loc.reshape((-1, 1)) + pi) % (2 * pi) - pi,
+                               (psi + self.psi_loc.reshape((-1, 1)) + pi) % (2 * pi) - pi), dim=-1).permute(1, 0, 2)
+        return phi_psi.reshape(*sample_shape, *self.batch_shape, *self.event_shape)
 
     @property
     def mean(self):
@@ -209,6 +209,7 @@ class SineBivariateVonMises(TorchDistribution):
         batch_shape = torch.Size(batch_shape)
         for k in SineBivariateVonMises.arg_constraints.keys():
             setattr(new, k, getattr(self, k).expand(batch_shape))
+        new.norm_const = self.norm_const.expand(batch_shape)
         super(SineBivariateVonMises, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
