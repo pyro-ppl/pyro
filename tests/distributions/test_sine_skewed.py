@@ -37,7 +37,8 @@ def _skewness(event_shape):
 @pytest.mark.parametrize('dist', BASE_DISTS)
 def test_ss_multidim_log_prob(event_dim, expand_shape, dist):
     if len(expand_shape) >= event_dim and event_dim:
-        base_dist = dist[0](*(torch.tensor(param).expand(*expand_shape, 2) for param in dist[1])).to_event(event_dim + 1)
+        base_dist = dist[0](*(torch.tensor(param).expand(*expand_shape, 2) for param in dist[1]))
+        base_dist = base_dist.to_event(event_dim + 1)
         assert base_dist.batch_shape == expand_shape[:-event_dim]
     else:
         base_dist = dist[0](*(torch.tensor(param) for param in dist[1])).to_event(1)

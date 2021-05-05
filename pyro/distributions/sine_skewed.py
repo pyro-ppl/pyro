@@ -56,8 +56,8 @@ class SineSkewed(TorchDistribution):
         param_names = [k for k, _ in self.arg_constraints.items() if k in self.__dict__]
 
         args_string = ', '.join(['{}: {}'.format(p, self.__dict__[p]
-        if self.__dict__[p].numel() == 1
-        else self.__dict__[p].size()) for p in param_names])
+                                if self.__dict__[p].numel() == 1
+                                else self.__dict__[p].size()) for p in param_names])
         return self.__class__.__name__ + '(' + f'base_density: {self.base_density.__repr__()}, ' + args_string + ')'
 
     def sample(self, sample_shape=torch.Size()):
