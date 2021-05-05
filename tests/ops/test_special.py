@@ -7,7 +7,7 @@ from scipy.special import iv
 from torch import tensor
 from torch.autograd import grad
 
-from pyro.ops.special import log_beta, log_binomial, safe_log, log_I1
+from pyro.ops.special import log_beta, log_binomial, log_I1, safe_log
 from tests.common import assert_equal
 
 
