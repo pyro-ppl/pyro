@@ -31,41 +31,40 @@ class SineSkewed(TorchDistribution):
             else:
                 skewness = skewness.view(*batch_shape, *event_shape)
 
-    .. note:: The base-distribution must be over a arbitrary dim torus.
+    .. note:: An event in the base-distribution must be on a d-torus so the event_shape must be (d,2) or (2,).
 
-    .. note:: ``skewness.abs().sum() <= 1.`` and ``(skewness.abs() <= 1).all()``.
+    .. note:: For the skewness parameter it must hold that the sum of the absolute value of its weights for an event
+        must be less than or equal to one. See eq. 2.1 in [1].
 
     ** References: **
       1. Sine-skewed toroidal distributions and their application in protein bioinformatics
          Ameijeiras-Alonso, J., Ley, C. (2019)
 
-    :param base_density: base density on the d-dimensional torus; event_shape must be [..., 2] where
-        ``prod(event_shape[:-1]) == d``.
-    :param skewness: skewness of the distribution; must have same shape as base_density.event_shape, all values
-        must be in [-1,1] and ``abs(skewness).sum() <= 1``.
+    :param base_density: base density on the d-dimensional torus.
+    :param skewness: skewness of the distribution.
     """
     arg_constraints = {'skewness': constraints.interval(-1., 1.)}
     support = constraints.independent(constraints.real, 1)
 
     def __init__(self, base_density: TorchDistribution, skewness, validate_args=None):
-        assert torch.all(skewness.abs() <= 1)
-        assert base_density.event_shape[-1] == 2
-        assert skewness.shape[-1] == 2
-
-        if base_density.mean.device != skewness.device:
-            raise ValueError(f"base_density: {base_density.__class__.__name__} and {self.__class__.__name__} "
-                             f"must be on same device.")
+        assert base_density.event_shape[-1] == 2 and len(base_density.event_shape) <= 2
+        assert base_density.shape()[len(base_density.shape()) - len(skewness.shape):] == skewness.shape
+        assert (skewness.abs().sum(-1 if len(skewness.shape) == 1 else (-2, -1)) <= 1).all()
 
         self.base_density = base_density
-        self.skewness = skewness
+        self.skewness = skewness.broadcast_to(base_density.shape())
         super().__init__(base_density.batch_shape, base_density.event_shape, validate_args=validate_args)
+
+        if self._validate_args and base_density.mean.device != skewness.device:
+            raise ValueError(f"base_density: {base_density.__class__.__name__} and {self.__class__.__name__} "
+                             f"must be on same device.")
 
     def __repr__(self):
         param_names = [k for k, _ in self.arg_constraints.items() if k in self.__dict__]
 
         args_string = ', '.join(['{}: {}'.format(p, self.__dict__[p]
-                                if self.__dict__[p].numel() == 1
-                                else self.__dict__[p].size()) for p in param_names])
+        if self.__dict__[p].numel() == 1
+        else self.__dict__[p].size()) for p in param_names])
         return self.__class__.__name__ + '(' + f'base_density: {self.base_density.__repr__()}, ' + args_string + ')'
 
     def sample(self, sample_shape=torch.Size()):
