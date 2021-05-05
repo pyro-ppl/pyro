@@ -2,6 +2,7 @@ from math import pi
 
 import pytest
 import torch
+from numpy.testing import assert_raises
 
 import pyro
 from pyro.distributions import Normal, SineSkewed, Uniform, constraints
@@ -30,28 +31,45 @@ def _skewness(event_shape):
     return skewness
 
 
-@pytest.mark.parametrize('batch_shape',
+@pytest.mark.parametrize('expand_shape',
                          [(), (1,), (4,), (1, 1), (1, 2), (10, 10), (1, 3, 1), (10, 1, 5), (1, 1, 1), (3, 2, 3)])
 @pytest.mark.parametrize('event_dim', [0, 1])
 @pytest.mark.parametrize('dist', BASE_DISTS)
-def test_ss_multidim_log_prob(event_dim, batch_shape, dist):
-    if len(batch_shape) >= event_dim and event_dim:
-        base_dist = dist[0](*(torch.tensor(param).expand(*batch_shape, 2) for param in dist[1])).to_event(event_dim + 1)
-        assert base_dist.batch_shape == batch_shape[:-event_dim]
+def test_ss_multidim_log_prob(event_dim, expand_shape, dist):
+    if len(expand_shape) >= event_dim and event_dim:
+        base_dist = dist[0](*(torch.tensor(param).expand(*expand_shape, 2) for param in dist[1])).to_event(event_dim + 1)
+        assert base_dist.batch_shape == expand_shape[:-event_dim]
     else:
         base_dist = dist[0](*(torch.tensor(param) for param in dist[1])).to_event(1)
-        base_dist = base_dist.expand(batch_shape)
-        assert base_dist.batch_shape == batch_shape
+        base_dist = base_dist.expand(expand_shape)
+        assert base_dist.batch_shape == expand_shape
 
     loc = Normal(0., 1.).sample(base_dist.event_shape) % (2 * pi) - pi
 
     base_prob = base_dist.log_prob(loc)
     skewness = _skewness(base_dist.event_shape)
+
     ss = SineSkewed(base_dist, skewness)
     assert_equal(base_prob + torch.log(
         1 + (skewness * torch.sin(loc - base_dist.mean)).view(*base_dist.batch_shape, -1).sum(-1)),
                  ss.log_prob(loc))
-    assert_equal(ss.sample().shape, torch.Size((*batch_shape, 2)))
+    assert_equal(ss.sample().shape, torch.Size((*expand_shape, 2)))
+
+
+def test_ss_invalid_event_shape():
+    base_dist = Uniform(-1, 1).expand((3, 3, 2)).to_event(3)
+    assert_raises(AssertionError, SineSkewed, base_dist, torch.zeros(base_dist.shape()))
+    base_dist = Uniform(-1, 1).expand((5,)).to_event(1)
+    assert_raises(AssertionError, SineSkewed, base_dist, torch.zeros(base_dist.shape()))
+
+
+def test_ss_skewness_too_high():
+    base_dist = Uniform(-1, 1).expand((2,)).to_event(1)
+    assert_raises(AssertionError, SineSkewed, base_dist, torch.ones(base_dist.shape()))
+    base_dist = Uniform(-1, 1).expand((1, 2,)).to_event(1)
+    assert_raises(AssertionError, SineSkewed, base_dist, .51 * torch.ones(base_dist.shape()))
+    base_dist = Uniform(-1, 1).expand((2, 2,)).to_event(1)
+    assert_raises(AssertionError, SineSkewed, base_dist, .5 * torch.ones(base_dist.shape()))
 
 
 @pytest.mark.parametrize('dist', BASE_DISTS)

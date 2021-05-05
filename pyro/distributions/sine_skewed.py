@@ -9,27 +9,20 @@ from .torch_distribution import TorchDistribution
 
 
 class SineSkewed(TorchDistribution):
-    """The Sine Skewed distribution is a distribution for breaking pointwise-symmetry on a base-distributions over
+    """The Sine Skewed distribution [1] is a distribution for breaking pointwise-symmetry on a base-distribution over
     the d-dimensional torus.
 
-    This distribution requires a base distribution on the torus. The parameter skewness can be inferred using
+    This distribution requires the base distribution on a torus. The parameter skewness can be inferred using
     :class:`~pyro.infer.HMC` or :class:`~pyro.infer.NUTS`. The following will produce a uniform prior
-    over skewness,::
+    over skewness for the 1-torus,::
 
-        def model(data, batch_shape, event_shape):
-            n = torch.prod(torch.tensor(event_shape), -1, dtype=torch.int)
-            skewness = torch.empty((*batch_shape, n)).view(-1, n)
-            tots = torch.zeros(batch_shape).view(-1)
-            for i in range(n):
-                skewness[..., i] = pyro.sample(f'skew{i}', Uniform(0., 1 - tots))
-                tots += skewness[..., i]
-            sign = pyro.sample('sign', Uniform(0., torch.ones(skewness.shape)).to_event(len(skewness.shape)))
-            skewness = torch.where(sign < .5, -skewness, skewness)
-
-            if (*batch_shape, *event_shape) == tuple():
-                skewness = skewness.reshape((*batch_shape, *event_shape))
-            else:
-                skewness = skewness.view(*batch_shape, *event_shape)
+        def model(...):
+            ...
+            skewness_phi = pyro.sample(f'skewness_phi}', Uniform(skewness.abs().sum(), 1 - tots))
+            psi_bound = 1 - skewness_phi.abs()
+            skewness_psi = pyro.sample(f'skewness_psi}', Uniform(-psi_bound, psi_bound)
+            skewness = torch.stack((skewness_phi, skewness_psi), dim=0)
+            ...
 
     .. note:: An event in the base-distribution must be on a d-torus so the event_shape must be (d,2) or (2,).
 
@@ -40,7 +33,7 @@ class SineSkewed(TorchDistribution):
       1. Sine-skewed toroidal distributions and their application in protein bioinformatics
          Ameijeiras-Alonso, J., Ley, C. (2019)
 
-    :param base_density: base density on the d-dimensional torus.
+    :param base_density: base density on a d-dimensional torus.
     :param skewness: skewness of the distribution.
     """
     arg_constraints = {'skewness': constraints.interval(-1., 1.)}
@@ -81,11 +74,11 @@ class SineSkewed(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        flat_event = torch.tensor(self.event_shape, device=value.device).prod()
         bd = self.base_density
         bd_prob = bd.log_prob(value)
         sine_prob = torch.log(
-            1 + (self.skewness * torch.sin((value - bd.mean) % (2 * pi))).reshape((-1, flat_event)).sum(-1))
+            1 + (self.skewness * torch.sin((value - bd.mean) % (2 * pi))).reshape((-1, self.event_shape.numel())).sum(
+                -1))
         return (bd_prob.view((-1)) + sine_prob).view(bd_prob.shape)
 
     def expand(self, batch_shape, _instance=None):
