@@ -328,7 +328,7 @@ continuous_dists = [
                 {'phi_loc': [3.003], 'psi_loc': [-1.343], 'phi_concentration': [5.], 'psi_concentration': [6.],
                  'correlation': [2.], 'test_data': [[0., 1.]]},
                 {'phi_loc': -math.pi / 3, 'psi_loc': -1., 'phi_concentration': .5, 'psi_concentration': 10.,
-                 'correlation': .1, 'test_data': [1., 0.555]},
+                 'correlation': .9, 'test_data': [1., 0.555]},
             ]),
     Fixture(pyro_dist=dist.SoftLaplace,
             examples=[
