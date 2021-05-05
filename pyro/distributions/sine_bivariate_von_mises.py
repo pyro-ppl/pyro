@@ -46,7 +46,8 @@ class SineBivariateVonMises(TorchDistribution):
 
     .. note:: The correlation and weighted_correlation params are mutually exclusive.
 
-    .. note:: This distribution does not work with :class:`~pyro.infer.svi.SVI`.
+    .. note:: In the context of :class:`~pyro.infer.SVI`, this distribution can be used as a likelihood but not for
+        latent variables.
 
     ** References: **
       1. Probabilistic model for two dependent circular variables Singh, H., Hnizdo, V., and Demchuck, E. (2002)
