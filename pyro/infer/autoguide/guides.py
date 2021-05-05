@@ -21,6 +21,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from contextlib import ExitStack
+from types import SimpleNamespace
 from typing import Callable, Dict, Union
 
 import torch
@@ -1357,7 +1358,25 @@ class AutoStructured(AutoGuide):
             del num_pending[name]
             for child in children[name]:
                 num_pending[child] -= 1
-            self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
+            site = self._compress_site(self.prototype_trace.nodes[name])
+            self._sorted_sites.append((name, site))
+
+        # Prune non-essential parts of the trace to save memory.
+        for name, site in self.prototype_trace.nodes.items():
+            site.clear()
+
+    @staticmethod
+    def _compress_site(site):
+        # Save memory by retaining only necessary parts of the site.
+        return {
+            "name": site["name"],
+            "type": site["type"],
+            "cond_indep_stack": site["cond_indep_stack"],
+            "fn": SimpleNamespace(
+                support=site["fn"].support,
+                event_dim=site["fn"].event_dim,
+            ),
+        }
 
     @poutine.infer_config(config_fn=_config_auxiliary)
     def get_deltas(self, save_params=None):
