@@ -3,7 +3,6 @@
 
 import math
 import warnings
-from functools import reduce
 from math import pi
 
 import torch
@@ -122,6 +121,7 @@ class SineBivariateVonMises(TorchDistribution):
                John T. Kent, Asaad M. Ganeiber & Kanti V. Mardia (2018)
         """
         assert not torch._C._get_tracing_state(), "jit not supported"
+        sample_shape = torch.Size(sample_shape)
 
         corr = self.correlation
         conc = torch.stack((self.phi_concentration, self.psi_concentration))
@@ -132,9 +132,8 @@ class SineBivariateVonMises(TorchDistribution):
         eig = eig - eigmin
         b0 = self._bfind(eig)
 
-        total = int(torch.prod(torch.tensor(sample_shape)))
-        missing = total * torch.ones(reduce(lambda a, b: a * b, self.batch_shape, 1), dtype=torch.int,
-                                     device=conc.device)
+        total = sample_shape.numel()
+        missing = total * torch.ones((self.batch_shape.numel(),), dtype=torch.int, device=conc.device)
         start = torch.zeros_like(missing, device=conc.device)
         phi = torch.empty((2, *missing.shape, total), dtype=corr.dtype, device=conc.device)
 

@@ -55,9 +55,11 @@ def test_log_binomial_stirling(tol):
 
 
 @pytest.mark.parametrize('order', [0, 1, 5, 10, 20])
-def test_log_I1(order):
-    expected = torch.tensor([iv(i, tensor((.6,)).numpy()) for i in range(order + 1)]).log()
-    actual = log_I1(order, tensor([.6]))
+@pytest.mark.parametrize('value', [0.01, .1, 1., 10., 100.])
+def test_log_I1(order, value):
+    value = tensor([value])
+    expected = torch.tensor([iv(i, value.numpy()) for i in range(order + 1)]).log()
+    actual = log_I1(order, value)
     assert_equal(actual, expected)
 
 
