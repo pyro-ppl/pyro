@@ -59,7 +59,7 @@ class StructuredReparam(Reparam):
 
     def __call__(self, name, fn, obs):
         assert obs is None, "StructuredReparam does not support observe statements"
-        if not self.deltas:  # On first sample site.
+        if name not in self.deltas:  # On first sample site.
             self.deltas = self.guide.get_deltas()
         new_fn = self.deltas.pop(name)
         value = new_fn.v
