@@ -12,10 +12,10 @@ from tests.common import assert_equal
 BASE_DISTS = [(Uniform, [-pi, pi]), (VonMises, (0., 1.))]
 
 
-def _skewness(event_shape, max_sum=1.):
+def _skewness(event_shape):
     skewness = torch.zeros(event_shape.numel())
     done = False
-    while not done and skewness.abs().sum(-1) > max_sum:
+    while not done:
         for i in range(event_shape.numel()):
             max_ = 1. - skewness.abs().sum(-1)
             if torch.any(max_ < 1e-15):
@@ -59,7 +59,7 @@ def test_ss_mle(dim, dist):
         for i in range(dim):
             skews.append(pyro.param(f'skew{i}', torch.zeros(batch_shape), constraint=constraints.interval(-1, 1)))
 
-        skewness = torch.stack(skews, dim=-1).squeeze()
+        skewness = torch.stack(skews, dim=-1)
         with pyro.plate("data", data.size(-len(data.size()))):
             pyro.sample('obs', SineSkewed(base_dist, skewness), obs=data)
 

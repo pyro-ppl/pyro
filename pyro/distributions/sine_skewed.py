@@ -1,6 +1,7 @@
 from math import pi
 
 import torch
+from torch import broadcast_shapes
 from torch.distributions import Uniform
 
 from pyro.distributions import constraints
@@ -47,11 +48,13 @@ class SineSkewed(TorchDistribution):
     support = constraints.independent(constraints.real, 1)
 
     def __init__(self, base_dist: TorchDistribution, skewness, validate_args=None):
-        assert skewness.abs().sum(-1) <= 1., "total skewness weight cannot exceed one."
+        if (skewness.abs().sum(-1) > 1.).any():
+            raise Warning("Total skewness weight shouldn't exceed one.", UserWarning)
 
-        self.base_density = base_dist
-        self.skewness = skewness.broadcast_to(base_dist.shape())
-        super().__init__(base_dist.batch_shape, base_dist.event_shape, validate_args=validate_args)
+        batch_shape = broadcast_shapes(base_dist.batch_shape, skewness.shape[:-1])
+        self.skewness = skewness.broadcast_to(batch_shape + base_dist.event_shape)
+        self.base_dist = base_dist.expand(batch_shape)
+        super().__init__(batch_shape, base_dist.event_shape, validate_args=validate_args)
 
         if self._validate_args and base_dist.mean.device != skewness.device:
             raise ValueError(f"base_density: {base_dist.__class__.__name__} and SineSkewed "
@@ -61,10 +64,10 @@ class SineSkewed(TorchDistribution):
         args_string = ', '.join(['{}: {}'.format(p, getattr(self, p)
                                 if getattr(self, p).numel() == 1
                                 else getattr(self, p).size()) for p in self.arg_constraints.keys()])
-        return self.__class__.__name__ + '(' + f'base_density: {str(self.base_density)}, ' + args_string + ')'
+        return self.__class__.__name__ + '(' + f'base_density: {str(self.base_dist)}, ' + args_string + ')'
 
     def sample(self, sample_shape=torch.Size()):
-        bd = self.base_density
+        bd = self.base_dist
         ys = bd.sample(sample_shape)
         u = Uniform(0., torch.ones(torch.Size([]), device=self.skewness.device)).sample(sample_shape + self.batch_shape)
 
@@ -76,15 +79,15 @@ class SineSkewed(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        skew_prob = torch.log(1 + (self.skewness * torch.sin((value - self.base_density.mean) % (2 * pi))).sum(-1))
-        return self.base_density.log_prob(value) + skew_prob
+        skew_prob = torch.log(1 + (self.skewness * torch.sin((value - self.base_dist.mean) % (2 * pi))).sum(-1))
+        return self.base_dist.log_prob(value) + skew_prob
 
     def expand(self, batch_shape, _instance=None):
         batch_shape = torch.Size(batch_shape)
         new = self._get_checked_instance(SineSkewed, _instance)
-        base_dist = self.base_density.expand(batch_shape, None)
-        new.base_density = base_dist
-        new.skewness = self.skewness.expand(batch_shape)
-        super(SineSkewed, new).__init__(batch_shape, self.event_shape, validate_args=None)
+        base_dist = self.base_dist.expand(batch_shape)
+        new.base_dist = base_dist
+        new.skewness = self.skewness.expand(batch_shape+(-1,))
+        super(SineSkewed, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
