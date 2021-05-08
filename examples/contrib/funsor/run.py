@@ -84,18 +84,13 @@ class model1(nn.Module):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
         hidden_dim = args.hidden_dim
-        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim),
-                            constraint=constraints.simplex)
-        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, data_dim),
-                             constraint=constraints.unit_interval)
+        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim), constraint=constraints.simplex)
 
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
 
-        x_onehot = torch.eye(args.hidden_dim, device=mb.device)
-        y = Vindex(sequences)[mb, :-1]
-
-        nn_logits = self.tones_generator(x_onehot, y).unsqueeze(-4)
-        init_logits = pyro.param("init_logits", torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
+        x_onehot = torch.eye(hidden_dim, device=mb.device)
+        nn_logits = self.tones_generator(x_onehot, Vindex(sequences)[mb, :-1]).unsqueeze(-4)
+        init_logits = pyro.param("init_logits", 0.1 * torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
 
         with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
             handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
@@ -105,7 +100,7 @@ class model1(nn.Module):
                     x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
                                          infer={"enumerate": "parallel"})
                     with tones_plate:
-                        if not hasattr(t, 'shape'):
+                        if isinstance(t, int):
                             logits = init_logits
                         elif t[0].item() == 0:
                             logits = nn_logits
@@ -143,7 +138,7 @@ def main(args):
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
     elif args.dataset == 'muse':
-        args.batch_size = 8
+        args.batch_size = 16
         args.num_steps = 150
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
@@ -252,7 +247,7 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--batch-size", default=8, type=int)
     parser.add_argument("-d", "--hidden-dim", default=49, type=int)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
-    parser.add_argument("-nc", "--nn-channels", default=2, type=int)
+    parser.add_argument("-nc", "--nn-channels", default=4, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.03, type=float)
     parser.add_argument("--scale", default=1.0, type=float)
     parser.add_argument("-lrd", "--learning-rate-decay", default=1.0e-2, type=float)
