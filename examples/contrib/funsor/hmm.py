@@ -540,7 +540,10 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
             with handlers.mask(mask=(t < lengths.unsqueeze(-1)).unsqueeze(-1)):
                 x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
                                      infer={"enumerate": "parallel"})
+                print("x_curr",x_curr.shape)
+                print("batch_size", batch_size)
                 with tones_plate:
+                    print("py", probs_y[x_curr.squeeze(-1)].shape)
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
                                 obs=Vindex(sequences)[batch, t])
 # Let's see how vectorizing time dimension changes the shapes of sample sites:

@@ -25,6 +25,28 @@ from utils import get_mb_indices, get_logger
 import uuid
 
 
+# takes x and y as input
+class TonesGenerator(nn.Module):
+    def __init__(self, args, data_dim):
+        self.args = args
+        self.data_dim = data_dim
+        super(TonesGenerator, self).__init__()
+        self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
+        self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
+        self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
+        self.hidden_to_logits = nn.Linear(args.nn_dim, data_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, y):
+        _y = y.unsqueeze(-2)
+        _y = _y.reshape((-1,) + _y.shape[-2:])
+        y_conv = self.relu(self.conv(_y))
+        y_conv = y_conv.reshape(y.shape[:2] + (-1,))
+        h = self.relu(self.x_to_hidden(x).unsqueeze(-2).unsqueeze(-2) + self.y_to_hidden(y_conv))
+        logits = self.hidden_to_logits(h)
+        return logits
+
+
 class model0(nn.Module):
     def __init__(self, args, data_dim):
         super(model0, self).__init__()
@@ -49,13 +71,15 @@ class model0(nn.Module):
                         pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
                                 obs=sequences[mb, t])
 
-# HMM
+# nnHMM
 class model1(nn.Module):
     def __init__(self, args, data_dim):
         super(model1, self).__init__()
+        self.tones_generator = TonesGenerator(args, data_dim)
 
     @ignore_jit_warnings()
     def model(self, args, sequences, lengths, mb, mask):
+        pyro.module("model1", self)
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
@@ -66,6 +90,13 @@ class model1(nn.Module):
                              constraint=constraints.unit_interval)
 
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
+
+        x_onehot = torch.eye(args.hidden_dim, device=mb.device)
+        y = Vindex(sequences)[mb, :-1]
+
+        nn_logits = self.tones_generator(x_onehot, y).unsqueeze(-4)
+        init_logits = pyro.param("init_logits", torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
+
         with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
             handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
             x_prev = 0
@@ -74,7 +105,13 @@ class model1(nn.Module):
                     x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
                                          infer={"enumerate": "parallel"})
                     with tones_plate:
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
+                        if not hasattr(t, 'shape'):
+                            logits = init_logits
+                        elif t[0].item() == 0:
+                            logits = nn_logits
+                        elif t[0].item() == 1:
+                            logits = nn_logits.unsqueeze(-4)
+                        pyro.sample("y_{}".format(t), dist.Bernoulli(logits=logits),
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
 
 
@@ -92,7 +129,7 @@ def main(args):
     N_train = {'jsb': 229, 'piano': 87, 'nottingham': 694, 'muse': 524}[args.dataset]
     if args.dataset == 'jsb':
         args.batch_size = 20
-        args.num_steps = 200 # 400
+        args.num_steps = 300 # 400
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
     elif args.dataset == 'piano':
@@ -101,18 +138,18 @@ def main(args):
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
     elif args.dataset == 'nottingham':
-        args.batch_size = 30
+        args.batch_size = 20
         args.num_steps = 200
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
     elif args.dataset == 'muse':
-        args.batch_size = 20
+        args.batch_size = 8
         args.num_steps = 150
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
 
     log_tag = 'hmm.{}.model{}.num_steps_{}.bs_{}.hd_{}.seed_{}'
-    log_tag += '.lrd_{:.5f}.lr_{:.3f}.nn_{}_{}.scale_{}'
+    log_tag += '.lrd_{:.5f}.lr_{:.3f}.nn_{}_{}.scale_{}.double'
     log_tag = log_tag.format(args.dataset, args.model, args.num_steps, args.batch_size,
                              args.hidden_dim, args.seed, args.learning_rate_decay,
                              args.learning_rate, args.nn_dim, args.nn_channels,
@@ -132,6 +169,8 @@ def main(args):
     test_sequences = data['test']['sequences'].float()
     test_lengths = data['test']['sequence_lengths'].long()
     data_dim = 88
+    print("longest train/test sequence: {}/{}".format(train_lengths.max().item(), test_lengths.max().item()))
+    print("mean length train/test sequence: {}/{}".format(train_lengths.float().mean().item(), test_lengths.float().mean().item()))
 
     model = models[args.model](args, data_dim)
 
@@ -206,12 +245,12 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
-    parser.add_argument("--dataset", default="jsb", type=str)
+    parser.add_argument("--dataset", default="muse", type=str)
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=20, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
-    parser.add_argument("-d", "--hidden-dim", default=36, type=int)
+    parser.add_argument("-d", "--hidden-dim", default=49, type=int)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.03, type=float)
