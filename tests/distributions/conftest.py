@@ -188,7 +188,7 @@ continuous_dists = [
             ],
             # This hack seems to be the best option right now, as 'scale' is not handled well by get_scipy_batch_logpdf
             scipy_arg_fn=lambda loc, covariance_matrix=None:
-                ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
+            ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),
     Fixture(pyro_dist=dist.LowRankMultivariateNormal,
@@ -198,7 +198,7 @@ continuous_dists = [
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             scipy_arg_fn=lambda loc, cov_diag=None, cov_factor=None:
-                ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
+            ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
     Fixture(pyro_dist=FoldedNormal,
@@ -281,12 +281,12 @@ continuous_dists = [
     Fixture(pyro_dist=dist.LKJ,
             examples=[
                 {'dim': 3, 'concentration': 1., 'test_data':
-                    [[[1.0000, -0.8221,  0.7655], [-0.8221,  1.0000, -0.5293], [0.7655,  -0.5293,  1.0000]],
-                     [[1.0000, -0.5345, -0.5459], [-0.5345,  1.0000, -0.0333], [-0.5459, -0.0333,  1.0000]],
-                     [[1.0000, -0.3758, -0.2409], [-0.3758,  1.0000,  0.4653], [-0.2409,  0.4653,  1.0000]],
-                     [[1.0000, -0.8800, -0.9493], [-0.8800,  1.0000,  0.9088], [-0.9493,  0.9088,  1.0000]],
-                     [[1.0000,  0.2284, -0.1283], [0.2284,   1.0000,  0.0146], [-0.1283,  0.0146,  1.0000]]]},
-                ]),
+                    [[[1.0000, -0.8221, 0.7655], [-0.8221, 1.0000, -0.5293], [0.7655, -0.5293, 1.0000]],
+                     [[1.0000, -0.5345, -0.5459], [-0.5345, 1.0000, -0.0333], [-0.5459, -0.0333, 1.0000]],
+                     [[1.0000, -0.3758, -0.2409], [-0.3758, 1.0000, 0.4653], [-0.2409, 0.4653, 1.0000]],
+                     [[1.0000, -0.8800, -0.9493], [-0.8800, 1.0000, 0.9088], [-0.9493, 0.9088, 1.0000]],
+                     [[1.0000, 0.2284, -0.1283], [0.2284, 1.0000, 0.0146], [-0.1283, 0.0146, 1.0000]]]},
+            ]),
     Fixture(pyro_dist=dist.LKJCholesky,
             examples=[
                 {
@@ -306,19 +306,19 @@ continuous_dists = [
             examples=[
                 {'stability': [1.5], 'skew': 0.1, 'test_data': [-10.]},
                 {'stability': [1.5], 'skew': 0.1, 'scale': 2.0, 'loc': -2.0, 'test_data': [10.]},
-                ]),
+            ]),
     Fixture(pyro_dist=dist.MultivariateStudentT,
             examples=[
                 {'df': 1.5, 'loc': [0.2, 0.3], 'scale_tril': [[0.8, 0.0], [1.3, 0.4]],
                  'test_data': [-3., 2]},
-                ]),
+            ]),
     Fixture(pyro_dist=dist.ProjectedNormal,
             examples=[
                 {'concentration': [0., 0.], 'test_data': [1., 0.]},
                 {'concentration': [2., 3.], 'test_data': [0., 1.]},
                 {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
                 {'concentration': [-1., 2., 3.], 'test_data': [0., 0., 1.]},
-                ]),
+            ]),
     Fixture(pyro_dist=dist.SoftLaplace,
             examples=[
                 {'loc': [2.0], 'scale': [4.0],
@@ -329,12 +329,16 @@ continuous_dists = [
                  'test_data': [[[2.0]]]},
                 {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
                  'test_data': [[2.0, 50.0], [2.0, 50.0]]},
-                ]),
+            ]),
     Fixture(pyro_dist=dist.SineSkewed,
-            examples=[{
-                'base_density': dist.Uniform(*tensor_wrap([-pi, -pi], [pi, pi])).to_event(1),
-                'skewness': [-pi/4, 0.], 'test_data': [pi/2, -2*pi/3]
-            }])
+            examples=[
+                {'base_dist': dist.VonMises(*tensor_wrap([0.], [1.])).to_event(1),
+                 'skewness': [.342355], 'test_data': [.1]},
+                {'base_dist': dist.Uniform(*tensor_wrap([-pi, -pi], [pi, pi])).to_event(1),
+                 'skewness': [-pi / 4, .1], 'test_data': [pi / 2, -2 * pi / 3]},
+                {'base_dist': dist.VonMises(*tensor_wrap([0., -1.234], [1., 10.])).to_event(1),
+                 'skewness': [[.342355, -.0001], [.91, 0.09]], 'test_data': [[.1, -3.2], [-2., 0.]]},
+            ])
 ]
 
 discrete_dists = [
