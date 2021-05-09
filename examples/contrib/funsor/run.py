@@ -26,11 +26,11 @@ import uuid
 
 
 # takes x and y as input
-class TonesGenerator(nn.Module):
+class TonesGenerator1(nn.Module):
     def __init__(self, args, data_dim):
         self.args = args
         self.data_dim = data_dim
-        super(TonesGenerator, self).__init__()
+        super(TonesGenerator1, self).__init__()
         self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
         self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
         self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
@@ -75,7 +75,7 @@ class model0(nn.Module):
 class model1(nn.Module):
     def __init__(self, args, data_dim):
         super(model1, self).__init__()
-        self.tones_generator = TonesGenerator(args, data_dim)
+        self.tones_generator = TonesGenerator1(args, data_dim)
 
     @ignore_jit_warnings()
     def model(self, args, sequences, lengths, mb, mask):
@@ -110,6 +110,82 @@ class model1(nn.Module):
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
 
 
+# takes w, x and y as input
+class TonesGenerator2(nn.Module):
+    def __init__(self, args, data_dim):
+        self.args = args
+        self.data_dim = data_dim
+        super(TonesGenerator1, self).__init__()
+        self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
+        self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
+        self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
+        self.hidden_to_logits = nn.Linear(args.nn_dim, data_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, y):
+        _y = y.unsqueeze(-2)
+        _y = _y.reshape((-1,) + _y.shape[-2:])
+        y_conv = self.relu(self.conv(_y))
+        y_conv = y_conv.reshape(y.shape[:2] + (-1,))
+        h = self.relu(self.x_to_hidden(x).unsqueeze(-2).unsqueeze(-2) + self.y_to_hidden(y_conv))
+        logits = self.hidden_to_logits(h)
+        return logits
+
+# nnHMM
+class model2(nn.Module):
+    def __init__(self, args, data_dim):
+        super(model2, self).__init__()
+        #self.tones_generator = TonesGenerator2(args, data_dim)
+
+    @ignore_jit_warnings()
+    def model(self, args, sequences, lengths, mb, mask):
+        pyro.module("model2", self)
+        num_sequences, max_length, data_dim = map(int, sequences.shape)
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+        hidden_dim = int(math.sqrt(args.hidden_dim))
+
+        probs_w = pyro.param("probs_w", lambda: torch.rand(hidden_dim, hidden_dim), constraint=constraints.simplex)
+        probs_w_init = pyro.param("w_init", lambda: torch.rand(hidden_dim), constraint=constraints.simplex)
+        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim), constraint=constraints.simplex)
+        probs_x_init = pyro.param("x_init", lambda: torch.rand(hidden_dim), constraint=constraints.simplex)
+
+        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, data_dim),
+                             constraint=constraints.unit_interval)
+
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+
+        #x_onehot = torch.eye(hidden_dim, device=mb.device)
+        #nn_logits = self.tones_generator(x_onehot, Vindex(sequences)[mb, :-1]).unsqueeze(-4)
+        #init_logits = pyro.param("init_logits", 0.1 * torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
+
+        with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
+            handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
+            w_prev = None
+            x_prev = None
+            for t in pyro.vectorized_markov(name="time", size=max_length, dim=-2):
+                with handlers.mask(mask=(t < lengths[mb].unsqueeze(-1)).unsqueeze(-1)):
+                    w_curr = pyro.sample("w_{}".format(t), dist.Categorical(probs_w_init if isinstance(t, int) else probs_w[w_prev]),
+                                         infer={"enumerate": "parallel"})
+                    #print("wprob", (probs_w_init if isinstance(t, int) else probs_w[w_prev]).shape)
+                    x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x_init if isinstance(t, int) else probs_x[x_prev]),
+                                         infer={"enumerate": "parallel"})
+                    #print("xprob", (probs_x_init if isinstance(t, int) else probs_x[x_prev]).shape)
+                    #print("w,x ", w_curr.shape, x_curr.shape)
+                    with tones_plate:
+                        #if isinstance(t, int):
+                        #    logits = init_logits
+                        #elif t[0].item() == 0:
+                        #    logits = nn_logits
+                        #elif t[0].item() == 1:
+                        #    logits = nn_logits.unsqueeze(-4)
+                        #print("p", Vindex(probs_y)[w_curr, x_curr].squeeze(-2).shape)
+                        #print("obs", Vindex(sequences)[mb.unsqueeze(-1), t].shape)
+                        pyro.sample("y_{}".format(t), dist.Bernoulli(Vindex(probs_y)[w_curr, x_curr].squeeze(-2)),
+                                    obs=Vindex(sequences)[mb.unsqueeze(-1), t])
+                        x_prev, w_prev = x_curr, w_curr
+
+
 models = {name[len('model'):]: model
           for name, model in globals().items()
           if name.startswith('model')}
@@ -138,13 +214,13 @@ def main(args):
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
     elif args.dataset == 'muse':
-        args.batch_size = 16
+        args.batch_size = 12
         args.num_steps = 150
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
 
     log_tag = 'hmm.{}.model{}.num_steps_{}.bs_{}.hd_{}.seed_{}'
-    log_tag += '.lrd_{:.5f}.lr_{:.3f}.nn_{}_{}.scale_{}.double'
+    log_tag += '.lrd_{:.5f}.lr_{:.3f}.nn_{}_{}.scale_{}'
     log_tag = log_tag.format(args.dataset, args.model, args.num_steps, args.batch_size,
                              args.hidden_dim, args.seed, args.learning_rate_decay,
                              args.learning_rate, args.nn_dim, args.nn_channels,
@@ -194,14 +270,14 @@ def main(args):
     max_plate_nesting = 3
     if args.model == "0":
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
-    elif args.model == "1":
+    elif args.model in ["1", "2"]:
         elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     elbo_eval = infer.TraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     #elbo_eval = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     svi = infer.SVI(model_train, guide, optim, elbo)
 
     @torch.no_grad()
-    def evaluate(sequences, lengths, evaluate_batch_size=16):
+    def evaluate(sequences, lengths, evaluate_batch_size=12):
         mb_indices, masks = get_mb_indices(sequences.size(0), evaluate_batch_size)
         return sum([elbo_eval.differentiable_loss(model_eval, guide, sequences, lengths, mb, mask)
                     for mb, mask in zip(mb_indices, masks)])
@@ -219,10 +295,11 @@ def main(args):
         ts.append(time.time())
         log('[epoch %03d]  running train loss: %.4f\t\t (epoch dt: %.2f)' % (epoch, epoch_loss,
                                                       (ts[-1] - ts[0])/(epoch+1)))
-        if epoch > 9 and epoch % eval_frequency == 0:
-            train_loss = evaluate(train_sequences, train_lengths) / N_train_obs
+
+        if epoch > 9 and epoch % eval_frequency == 0 or epoch == args.num_steps - 1:
+            #train_loss = evaluate(train_sequences, train_lengths) / N_train_obs
             test_loss = evaluate(test_sequences, test_lengths) / N_test_obs
-            log('[epoch %03d]  train loss: %.4f' % (epoch, train_loss))
+            #log('[epoch %03d]  train loss: %.4f' % (epoch, train_loss))
             log('[epoch %03d]   test loss: %.4f' % (epoch, test_loss))
 
     # We evaluate on the entire training dataset,
@@ -241,13 +318,13 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("--dataset", default="muse", type=str)
-    parser.add_argument("-m", "--model", default="1", type=str,
+    parser.add_argument("-m", "--model", default="2", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=20, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
-    parser.add_argument("-d", "--hidden-dim", default=49, type=int)
+    parser.add_argument("-d", "--hidden-dim", default=16, type=int)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
-    parser.add_argument("-nc", "--nn-channels", default=4, type=int)
+    parser.add_argument("-nc", "--nn-channels", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.03, type=float)
     parser.add_argument("--scale", default=1.0, type=float)
     parser.add_argument("-lrd", "--learning-rate-decay", default=1.0e-2, type=float)
