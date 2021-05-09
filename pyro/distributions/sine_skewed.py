@@ -27,9 +27,7 @@ class SineSkewed(TorchDistribution):
 
     In the context of :class:`~pyro.infer.SVI`, this distribution can be freely used as a likelihood, but use as a
     latent variables will lead to slow inference for 2 and higher order toruses. This is because the base_dist
-    cannot be reparameterized). For the 1-torus (circle) with a
-    :class:`~pyro.distribution.ProjectedNormal` base distribution inference is tractable using ``poutine.reparam`` as
-    outlined in :class:`~pyro.distribution.ProjectedNormal`.
+    cannot be reparameterized.
 
     .. note:: An event in the base distribution must be on a d-torus, so the event_shape must be (d,).
 
@@ -52,9 +50,10 @@ class SineSkewed(TorchDistribution):
             raise Warning("Total skewness weight shouldn't exceed one.", UserWarning)
 
         batch_shape = broadcast_shapes(base_dist.batch_shape, skewness.shape[:-1])
-        self.skewness = skewness.broadcast_to(batch_shape + base_dist.event_shape)
+        event_shape = skewness.shape[-1:]
+        self.skewness = skewness.broadcast_to(batch_shape + event_shape)
         self.base_dist = base_dist.expand(batch_shape)
-        super().__init__(batch_shape, base_dist.event_shape, validate_args=validate_args)
+        super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
         if self._validate_args and base_dist.mean.device != skewness.device:
             raise ValueError(f"base_density: {base_dist.__class__.__name__} and SineSkewed "
@@ -87,7 +86,7 @@ class SineSkewed(TorchDistribution):
         new = self._get_checked_instance(SineSkewed, _instance)
         base_dist = self.base_dist.expand(batch_shape)
         new.base_dist = base_dist
-        new.skewness = self.skewness.expand(batch_shape+(-1,))
+        new.skewness = self.skewness.expand(batch_shape + (-1,))
         super(SineSkewed, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new

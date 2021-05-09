@@ -57,7 +57,7 @@ def test_ss_mle(dim, dist):
     def model(data, batch_shape):
         skews = []
         for i in range(dim):
-            skews.append(pyro.param(f'skew{i}', torch.zeros(batch_shape), constraint=constraints.interval(-1, 1)))
+            skews.append(pyro.param(f'skew{i}', .5 * torch.ones(batch_shape), constraint=constraints.interval(-1, 1)))
 
         skewness = torch.stack(skews, dim=-1)
         with pyro.plate("data", data.size(-len(data.size()))):

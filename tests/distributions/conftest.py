@@ -331,11 +331,13 @@ continuous_dists = [
                  'test_data': [[2.0, 50.0], [2.0, 50.0]]},
             ]),
     Fixture(pyro_dist=dist.SineSkewed,
-            examples=[{
-                'base_dist': dist.Uniform(*tensor_wrap([-pi, -pi], [pi, pi])).to_event(1),
-                'skewness': [-pi / 4, .1], 'test_data': [pi / 2, -2 * pi / 3]},
+            examples=[
                 {'base_dist': dist.VonMises(*tensor_wrap([0.], [1.])).to_event(1),
-                 'skewness': [[.342355], [0.]], 'test_data': [[-.4], [.1]]},
+                 'skewness': [.342355], 'test_data': [.1]},
+                {'base_dist': dist.Uniform(*tensor_wrap([-pi, -pi], [pi, pi])).to_event(1),
+                 'skewness': [-pi / 4, .1], 'test_data': [pi / 2, -2 * pi / 3]},
+                {'base_dist': dist.VonMises(*tensor_wrap([0., -1.234], [1., 10.])).to_event(1),
+                 'skewness': [[.342355, -.0001], [.91, 0.09]], 'test_data': [[.1, -3.2], [-2., 0.]]},
             ])
 ]
 
