@@ -142,16 +142,19 @@ class AutoStructured_shapes(AutoStructured):
                 "z4": conditional_z4,
                 "z5": ConditionalZ5(),
                 "z6": ConditionalZ6(),
+                "z7": "mvn",
             },
             dependencies={
                 "z3": {"z2": "linear"},
                 "z4": {"z3": "linear", "z2": "linear"},
                 "z6": {"z3": dependency_z6_z3, "z5": dependency_z6_z5},
+                "z7": {"z6": "linear"},
             },
             init_loc_fn=init_loc_fn,
         )
 
 
+@pytest.mark.parametrize("num_particles", [1, 10])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 @pytest.mark.parametrize("init_loc_fn", [
     init_to_feasible,
@@ -170,7 +173,7 @@ class AutoStructured_shapes(AutoStructured):
     AutoStructured_shapes,
 ])
 @pytest.mark.filterwarnings("ignore::FutureWarning")
-def test_shapes(auto_class, init_loc_fn, Elbo):
+def test_shapes(auto_class, init_loc_fn, Elbo, num_particles):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
@@ -180,9 +183,11 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
         pyro.sample("z4", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
         pyro.sample("z5", dist.Dirichlet(torch.ones(3)))
         pyro.sample("z6", dist.Normal(0, 1).expand((2,)).mask(torch.arange(2) > 0).to_event(1))
+        pyro.sample("z7", dist.LKJCholesky(2, torch.tensor(1.)))
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
-    elbo = Elbo(strict_enumeration_warning=False)
+    elbo = Elbo(num_particles=num_particles, vectorize_particles=True,
+                strict_enumeration_warning=False)
     loss = elbo.loss(model, guide)
     assert np.isfinite(loss), loss
 
@@ -1010,3 +1015,95 @@ def test_sphere_raw_ok(auto_class, init_loc_fn):
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
     poutine.trace(guide).get_trace().compute_log_prob()
+
+
+class AutoStructured_exact_normal(AutoStructured):
+    def __init__(self, model):
+        super().__init__(
+            model,
+            conditionals={"loc": "normal"},
+            dependencies={},
+        )
+
+
+class AutoStructured_exact_mvn(AutoStructured):
+    def __init__(self, model):
+        super().__init__(
+            model,
+            conditionals={"loc": "mvn"},
+            dependencies={},
+        )
+
+
+@pytest.mark.parametrize("Guide", [
+    AutoNormal,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoStructured_exact_normal,
+    AutoStructured_exact_mvn,
+])
+def test_exact(Guide):
+
+    def model(data):
+        loc = pyro.sample("loc", dist.Normal(0, 1))
+        with pyro.plate("data", len(data)):
+            pyro.sample("obs", dist.Normal(loc, 1), obs=data)
+        return loc
+
+    data = torch.randn(3)
+    expected_mean = (0 + data.sum().item()) / (1 + len(data))
+    expected_std = (1 + len(data)) ** (-0.5)
+
+    guide = Guide(model)
+    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
+    optim = Adam({"lr": 0.01})
+    svi = SVI(model, guide, optim, elbo)
+    for step in range(500):
+        svi.step(data)
+
+    guide.requires_grad_(False)
+    with torch.no_grad():
+        vectorize = pyro.plate("particles", 10000, dim=-2)
+        guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
+        samples = poutine.replay(vectorize(model), guide_trace)(data)
+        actual_mean = samples.mean().item()
+        actual_std = samples.std().item()
+        assert_close(actual_mean, expected_mean, atol=0.05)
+        assert_close(actual_std, expected_std, rtol=0.05)
+
+
+@pytest.mark.parametrize("Guide", [
+    AutoNormal,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoStructured_exact_normal,
+    AutoStructured_exact_mvn,
+])
+def test_exact_batch(Guide):
+
+    def model(data):
+        with pyro.plate("data", len(data)):
+            loc = pyro.sample("loc", dist.Normal(0, 1))
+            pyro.sample("obs", dist.Normal(loc, 1), obs=data)
+        return loc
+
+    data = torch.randn(3)
+    expected_mean = (0 + data) / (1 + 1)
+    expected_std = (1 + torch.ones_like(data)) ** (-0.5)
+
+    guide = Guide(model)
+    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
+    optim = Adam({"lr": 0.01})
+    svi = SVI(model, guide, optim, elbo)
+    for step in range(500):
+        svi.step(data)
+
+    guide.requires_grad_(False)
+    with torch.no_grad():
+        vectorize = pyro.plate("particles", 10000, dim=-2)
+        guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
+        samples = poutine.replay(vectorize(model), guide_trace)(data)
+        actual_mean = samples.mean(0)
+        actual_std = samples.std(0)
+        assert_close(actual_mean, expected_mean, atol=0.05)
+        assert_close(actual_std, expected_std, rtol=0.05)
