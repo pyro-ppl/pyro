@@ -31,45 +31,20 @@ class TonesGenerator1(nn.Module):
         self.args = args
         self.data_dim = data_dim
         super(TonesGenerator1, self).__init__()
-        self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
+        self.x_to_hidden = nn.Parameter(torch.randn(args.hidden_dim, args.nn_dim))
         self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
         self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
         self.hidden_to_logits = nn.Linear(args.nn_dim, data_dim)
         self.relu = nn.ReLU()
 
-    def forward(self, x, y):
+    def forward(self, y):
         _y = y.unsqueeze(-2)
         _y = _y.reshape((-1,) + _y.shape[-2:])
-        y_conv = self.relu(self.conv(_y))
-        y_conv = y_conv.reshape(y.shape[:2] + (-1,))
-        h = self.relu(self.x_to_hidden(x).unsqueeze(-2).unsqueeze(-2) + self.y_to_hidden(y_conv))
+        y_conv = self.relu(self.conv(_y)).reshape(y.shape[:2] + (-1,))
+        h = self.relu(self.x_to_hidden.unsqueeze(-2).unsqueeze(-2) + self.y_to_hidden(y_conv))
         logits = self.hidden_to_logits(h)
         return logits
 
-
-class model0(nn.Module):
-    def __init__(self, args, data_dim):
-        super(model0, self).__init__()
-
-    def model(self, args, sequences, lengths, mb, mask):
-        num_sequences, max_length, data_dim = sequences.shape
-        hidden_dim = args.hidden_dim
-        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim),
-                             constraint=constraints.simplex)
-        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, data_dim),
-                             constraint=constraints.unit_interval)
-        tones_plate = pyro.plate("tones", data_dim, dim=-1)
-        with pyro.plate("sequences", mb.size(0), dim=-2), handlers.scale(scale=torch.tensor(args.scale)), \
-            handlers.mask(mask=mask.unsqueeze(-1)):
-            lengths = lengths[mb]
-            x = 0
-            for t in pyro.markov(range(lengths.max())):
-                with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
-                    x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                    infer={"enumerate": "parallel"})
-                    with tones_plate:
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
-                                obs=sequences[mb, t])
 
 # nnHMM
 class model1(nn.Module):
@@ -85,19 +60,19 @@ class model1(nn.Module):
         assert lengths.max() <= max_length
         hidden_dim = args.hidden_dim
         probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim), constraint=constraints.simplex)
+        probs_x_init = pyro.param("x_init", lambda: torch.rand(hidden_dim), constraint=constraints.simplex)
 
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
 
-        x_onehot = torch.eye(hidden_dim, device=mb.device)
-        nn_logits = self.tones_generator(x_onehot, Vindex(sequences)[mb, :-1]).unsqueeze(-4)
+        nn_logits = self.tones_generator(Vindex(sequences)[mb, :-1]).unsqueeze(-4)
         init_logits = pyro.param("init_logits", 0.1 * torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
 
         with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
             handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
-            x_prev = 0
+            x_prev = None
             for t in pyro.vectorized_markov(name="time", size=max_length, dim=-2):
                 with handlers.mask(mask=(t < lengths[mb].unsqueeze(-1)).unsqueeze(-1)):
-                    x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
+                    x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x_init if isinstance(t, int) else probs_x[x_prev]),
                                          infer={"enumerate": "parallel"})
                     with tones_plate:
                         if isinstance(t, int):
@@ -108,26 +83,26 @@ class model1(nn.Module):
                             logits = nn_logits.unsqueeze(-4)
                         pyro.sample("y_{}".format(t), dist.Bernoulli(logits=logits),
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
-
+                        x_prev = x_curr
 
 # takes w, x and y as input
 class TonesGenerator2(nn.Module):
     def __init__(self, args, data_dim):
         self.args = args
         self.data_dim = data_dim
-        super(TonesGenerator1, self).__init__()
-        self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
+        super(TonesGenerator2, self).__init__()
+        hidden_dim = int(math.sqrt(args.hidden_dim))
+        self.x_to_hidden = nn.Parameter(torch.randn(hidden_dim, hidden_dim, args.nn_dim))
         self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
         self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
         self.hidden_to_logits = nn.Linear(args.nn_dim, data_dim)
         self.relu = nn.ReLU()
 
-    def forward(self, x, y):
+    def forward(self, y):
         _y = y.unsqueeze(-2)
         _y = _y.reshape((-1,) + _y.shape[-2:])
-        y_conv = self.relu(self.conv(_y))
-        y_conv = y_conv.reshape(y.shape[:2] + (-1,))
-        h = self.relu(self.x_to_hidden(x).unsqueeze(-2).unsqueeze(-2) + self.y_to_hidden(y_conv))
+        y_conv = self.relu(self.conv(_y)).reshape(y.shape[:2] + (-1,))
+        h = self.relu(self.x_to_hidden.unsqueeze(-2).unsqueeze(-2) + self.y_to_hidden(y_conv))
         logits = self.hidden_to_logits(h)
         return logits
 
@@ -135,7 +110,7 @@ class TonesGenerator2(nn.Module):
 class model2(nn.Module):
     def __init__(self, args, data_dim):
         super(model2, self).__init__()
-        #self.tones_generator = TonesGenerator2(args, data_dim)
+        self.tones_generator = TonesGenerator2(args, data_dim)
 
     @ignore_jit_warnings()
     def model(self, args, sequences, lengths, mb, mask):
@@ -153,35 +128,28 @@ class model2(nn.Module):
         probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, data_dim),
                              constraint=constraints.unit_interval)
 
-        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+        nn_logits = self.tones_generator(Vindex(sequences)[mb, :-1])
+        init_logits = pyro.param("init_logits", 0.1 * torch.randn(hidden_dim, hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
 
-        #x_onehot = torch.eye(hidden_dim, device=mb.device)
-        #nn_logits = self.tones_generator(x_onehot, Vindex(sequences)[mb, :-1]).unsqueeze(-4)
-        #init_logits = pyro.param("init_logits", 0.1 * torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
 
         with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
             handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
-            w_prev = None
-            x_prev = None
+            w_prev, x_prev = None, None
             for t in pyro.vectorized_markov(name="time", size=max_length, dim=-2):
                 with handlers.mask(mask=(t < lengths[mb].unsqueeze(-1)).unsqueeze(-1)):
                     w_curr = pyro.sample("w_{}".format(t), dist.Categorical(probs_w_init if isinstance(t, int) else probs_w[w_prev]),
                                          infer={"enumerate": "parallel"})
-                    #print("wprob", (probs_w_init if isinstance(t, int) else probs_w[w_prev]).shape)
                     x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x_init if isinstance(t, int) else probs_x[x_prev]),
                                          infer={"enumerate": "parallel"})
-                    #print("xprob", (probs_x_init if isinstance(t, int) else probs_x[x_prev]).shape)
-                    #print("w,x ", w_curr.shape, x_curr.shape)
                     with tones_plate:
-                        #if isinstance(t, int):
-                        #    logits = init_logits
-                        #elif t[0].item() == 0:
-                        #    logits = nn_logits
-                        #elif t[0].item() == 1:
-                        #    logits = nn_logits.unsqueeze(-4)
-                        #print("p", Vindex(probs_y)[w_curr, x_curr].squeeze(-2).shape)
-                        #print("obs", Vindex(sequences)[mb.unsqueeze(-1), t].shape)
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(Vindex(probs_y)[w_curr, x_curr].squeeze(-2)),
+                        if isinstance(t, int):
+                            logits = init_logits
+                        elif t[0].item() == 0:
+                            logits = nn_logits
+                        elif t[0].item() == 1:
+                            logits = nn_logits.unsqueeze(-4).unsqueeze(-4)
+                        pyro.sample("y_{}".format(t), dist.Bernoulli(logits=logits),
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
                         x_prev, w_prev = x_curr, w_curr
 
