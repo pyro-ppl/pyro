@@ -20,10 +20,10 @@ class SineSkewed(TorchDistribution):
 
         def model(...):
             ...
-            skewness_phi = pyro.sample(f'skewness_phi', Uniform(skewness.abs().sum(), 1 - tots))
+            skew_phi = pyro.sample(f'skew_phi', Uniform(-1., 1.))
             psi_bound = 1 - skewness_phi.abs()
-            skewness_psi = pyro.sample(f'skewness_psi', Uniform(-psi_bound, psi_bound)
-            skewness = torch.stack((skewness_phi, skewness_psi), dim=0)
+            skew_psi = pyro.sample(f'skew_psi', Uniform(-1, 1.))
+            skewness = torch.stack((skew_phi, psi_bound * skew_psi), dim=0)
             ...
 
     In the context of :class:`~pyro.infer.SVI`, this distribution can be freely used as a likelihood, but use as a
