@@ -71,6 +71,7 @@ class SineSkewed(TorchDistribution):
         ys = bd.sample(sample_shape)
         u = Uniform(0., torch.ones(torch.Size([]), device=self.skewness.device)).sample(sample_shape + self.batch_shape)
 
+        # Section 2.3 step 3 in [1]
         mask = u < 1. + (self.skewness * torch.sin((ys - bd.mean) % (2 * pi))).sum(-1)
         mask = mask[..., None]
         samples = (torch.where(mask, ys, -ys + 2 * bd.mean) + pi) % (2 * pi) - pi
@@ -79,6 +80,8 @@ class SineSkewed(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
+
+        # Eq. 2.1 in [1]
         skew_prob = torch.log(1 + (self.skewness * torch.sin((value - self.base_dist.mean) % (2 * pi))).sum(-1))
         return self.base_dist.log_prob(value) + skew_prob
 
