@@ -1,3 +1,4 @@
+import warnings
 from math import pi
 
 import torch
@@ -47,7 +48,7 @@ class SineSkewed(TorchDistribution):
 
     def __init__(self, base_dist: TorchDistribution, skewness, validate_args=None):
         if (skewness.abs().sum(-1) > 1.).any():
-            raise Warning("Total skewness weight shouldn't exceed one.", UserWarning)
+            warnings.warn("Total skewness weight shouldn't exceed one.", UserWarning)
 
         batch_shape = broadcast_shapes(base_dist.batch_shape, skewness.shape[:-1])
         event_shape = skewness.shape[-1:]
