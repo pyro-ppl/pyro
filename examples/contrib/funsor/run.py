@@ -25,7 +25,6 @@ from utils import get_mb_indices, get_logger
 import uuid
 
 
-# takes x and y as input
 class TonesGenerator1(nn.Module):
     def __init__(self, args, data_dim):
         self.args = args
@@ -85,7 +84,6 @@ class model1(nn.Module):
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
                         x_prev = x_curr
 
-# takes w, x and y as input
 class TonesGenerator2(nn.Module):
     def __init__(self, args, data_dim):
         self.args = args
@@ -106,7 +104,7 @@ class TonesGenerator2(nn.Module):
         logits = self.hidden_to_logits(h)
         return logits
 
-# nnHMM
+# nnIFHMM
 class model2(nn.Module):
     def __init__(self, args, data_dim):
         super(model2, self).__init__()
@@ -141,6 +139,54 @@ class model2(nn.Module):
                     w_curr = pyro.sample("w_{}".format(t), dist.Categorical(probs_w_init if isinstance(t, int) else probs_w[w_prev]),
                                          infer={"enumerate": "parallel"})
                     x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x_init if isinstance(t, int) else probs_x[x_prev]),
+                                         infer={"enumerate": "parallel"})
+                    with tones_plate:
+                        if isinstance(t, int):
+                            logits = init_logits
+                        elif t[0].item() == 0:
+                            logits = nn_logits
+                        elif t[0].item() == 1:
+                            logits = nn_logits.unsqueeze(-4).unsqueeze(-4)
+                        pyro.sample("y_{}".format(t), dist.Bernoulli(logits=logits),
+                                    obs=Vindex(sequences)[mb.unsqueeze(-1), t])
+                        x_prev, w_prev = x_curr, w_curr
+
+
+# nnPFHMM
+class model3(nn.Module):
+    def __init__(self, args, data_dim):
+        super(model3, self).__init__()
+        self.tones_generator = TonesGenerator2(args, data_dim)
+
+    @ignore_jit_warnings()
+    def model(self, args, sequences, lengths, mb, mask):
+        pyro.module("model3", self)
+        num_sequences, max_length, data_dim = map(int, sequences.shape)
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+        hidden_dim = int(math.sqrt(args.hidden_dim))
+
+        probs_w = pyro.param("probs_w", lambda: torch.rand(hidden_dim, hidden_dim), constraint=constraints.simplex)
+        probs_w_init = pyro.param("w_init", lambda: torch.rand(hidden_dim), constraint=constraints.simplex)
+        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim, hidden_dim), constraint=constraints.simplex)
+        probs_x_init = pyro.param("x_init", lambda: torch.rand(hidden_dim, hidden_dim), constraint=constraints.simplex)
+
+        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, data_dim),
+                             constraint=constraints.unit_interval)
+
+        nn_logits = self.tones_generator(Vindex(sequences)[mb, :-1])
+        init_logits = pyro.param("init_logits", 0.1 * torch.randn(hidden_dim, hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
+
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+
+        with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
+            handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
+            w_prev, x_prev = None, None
+            for t in pyro.vectorized_markov(name="time", size=max_length, dim=-2):
+                with handlers.mask(mask=(t < lengths[mb].unsqueeze(-1)).unsqueeze(-1)):
+                    w_curr = pyro.sample("w_{}".format(t), dist.Categorical(probs_w_init if isinstance(t, int) else probs_w[w_prev]),
+                                         infer={"enumerate": "parallel"})
+                    x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x_init[w_curr] if isinstance(t, int) else probs_x[w_curr, x_prev]),
                                          infer={"enumerate": "parallel"})
                     with tones_plate:
                         if isinstance(t, int):
@@ -236,10 +282,7 @@ def main(args):
                          'lrd': args.learning_rate_decay, 'clip_norm': 20.0})
 
     max_plate_nesting = 3
-    if args.model == "0":
-        elbo = infer.TraceEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
-    elif args.model in ["1", "2"]:
-        elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
+    elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     elbo_eval = infer.TraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     #elbo_eval = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     svi = infer.SVI(model_train, guide, optim, elbo)
