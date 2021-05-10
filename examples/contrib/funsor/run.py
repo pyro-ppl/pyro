@@ -84,6 +84,7 @@ class model1(nn.Module):
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
                         x_prev = x_curr
 
+
 class TonesGenerator2(nn.Module):
     def __init__(self, args, data_dim):
         self.args = args
@@ -199,6 +200,55 @@ class model3(nn.Module):
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
                         x_prev, w_prev = x_curr, w_curr
 
+# nn2HMM
+class model4(nn.Module):
+    def __init__(self, args, data_dim):
+        super(model4, self).__init__()
+        #self.tones_generator = TonesGenerator1(args, data_dim)
+
+    @ignore_jit_warnings()
+    def model(self, args, sequences, lengths, mb, mask):
+        pyro.module("model1", self)
+        num_sequences, max_length, data_dim = map(int, sequences.shape)
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+        hidden_dim = args.hidden_dim
+
+        probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim, hidden_dim), constraint=constraints.simplex)
+        probs_x_init = pyro.param("x_init", lambda: torch.rand(hidden_dim), constraint=constraints.simplex)
+
+        y_probs = pyro.param("y_probs", lambda: torch.rand(hidden_dim, data_dim), constraint=constraints.simplex)
+
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+
+        #nn_logits = self.tones_generator(Vindex(sequences)[mb, :-1]).unsqueeze(-4)
+        #init_logits = pyro.param("init_logits", 0.1 * torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
+
+        with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
+            handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
+            x_prev, x_prev_prev = None, None
+            for t in pyro.vectorized_markov(name="time", size=max_length, dim=-2, history=2):
+                with handlers.mask(mask=(t < lengths[mb].unsqueeze(-1)).unsqueeze(-1)):
+                    px = probs_x_init if isinstance(t, int) else Vindex(probs_x)[x_prev_prev, x_prev]
+                    print("\npx", px.shape)
+                    print("xname", "x_{}".format(t))
+                    x_curr = pyro.sample("x_{}".format(t), dist.Categorical(px),
+                                         infer={"enumerate": "parallel"})
+                    print("t", t if isinstance(t, int) else t[:3])
+                    print("x_curr", x_curr.shape)
+                    with tones_plate:
+                        #if isinstance(t, int):
+                        #    logits = init_logits
+                        #elif t[0].item() == 0:
+                        #    logits = nn_logits
+                        #elif t[0].item() == 1:
+                        #    logits = nn_logits.unsqueeze(-4)
+                        py = Vindex(y_probs)[x_curr].squeeze(-2)
+                        print("py", py.shape)
+                        pyro.sample("y_{}".format(t), dist.Bernoulli(py),
+                                    obs=Vindex(sequences)[mb.unsqueeze(-1), t])
+                        x_prev_prev, x_prev = x_prev, x_curr
+
 
 models = {name[len('model'):]: model
           for name, model in globals().items()
@@ -228,7 +278,7 @@ def main(args):
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
     elif args.dataset == 'muse':
-        args.batch_size = 12
+        args.batch_size = 8 # 12
         args.num_steps = 150
         NN = args.num_steps * N_train / args.batch_size
         args.learning_rate_decay = math.exp(math.log(args.learning_rate_decay) / NN)
@@ -281,14 +331,14 @@ def main(args):
     optim = ClippedAdam({'lr': args.learning_rate, 'betas': (0.90, 0.999),
                          'lrd': args.learning_rate_decay, 'clip_norm': 20.0})
 
-    max_plate_nesting = 3
+    max_plate_nesting = 3 #4 if args.model == "4" else 3
     elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     elbo_eval = infer.TraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     #elbo_eval = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     svi = infer.SVI(model_train, guide, optim, elbo)
 
     @torch.no_grad()
-    def evaluate(sequences, lengths, evaluate_batch_size=12):
+    def evaluate(sequences, lengths, evaluate_batch_size=8):
         mb_indices, masks = get_mb_indices(sequences.size(0), evaluate_batch_size)
         return sum([elbo_eval.differentiable_loss(model_eval, guide, sequences, lengths, mb, mask)
                     for mb, mask in zip(mb_indices, masks)])
@@ -308,9 +358,9 @@ def main(args):
                                                       (ts[-1] - ts[0])/(epoch+1)))
 
         if epoch > 9 and epoch % eval_frequency == 0 or epoch == args.num_steps - 1:
-            #train_loss = evaluate(train_sequences, train_lengths) / N_train_obs
+            train_loss = evaluate(train_sequences, train_lengths) / N_train_obs
             test_loss = evaluate(test_sequences, test_lengths) / N_test_obs
-            #log('[epoch %03d]  train loss: %.4f' % (epoch, train_loss))
+            log('[epoch %03d]  train loss: %.4f' % (epoch, train_loss))
             log('[epoch %03d]   test loss: %.4f' % (epoch, test_loss))
 
     # We evaluate on the entire training dataset,
@@ -333,12 +383,12 @@ if __name__ == '__main__':
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=20, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
-    parser.add_argument("-d", "--hidden-dim", default=16, type=int)
+    parser.add_argument("-d", "--hidden-dim", default=25, type=int)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.03, type=float)
     parser.add_argument("--scale", default=1.0, type=float)
-    parser.add_argument("-lrd", "--learning-rate-decay", default=1.0e-2, type=float)
+    parser.add_argument("-lrd", "--learning-rate-decay", default=1.0e-1, type=float)
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument('--scale-loss', action='store_true')
     parser.add_argument('--cuda', action='store_true')
