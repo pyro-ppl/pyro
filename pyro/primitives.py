@@ -12,6 +12,7 @@ import torch
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
+from pyro.distributions import constraints
 from pyro.params import param_with_module_name
 from pyro.poutine.plate_messenger import PlateMessenger
 from pyro.poutine.runtime import (
@@ -27,14 +28,19 @@ from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 def get_param_store():
     """
-    Returns the ParamStore
+    Returns the global :class:`~pyro.params.param_store.ParamStoreDict`.
     """
     return _PYRO_PARAM_STORE
 
 
 def clear_param_store():
     """
-    Clears the ParamStore. This is especially useful if you're working in a REPL.
+    Clears the global :class:`~pyro.params.param_store.ParamStoreDict`.
+
+    This is especially useful if you're working in a REPL. We recommend calling
+    this before each training loop (to avoid leaking parameters from past
+    models), and before each unit test (to avoid leaking parameters across
+    tests).
     """
     return _PYRO_PARAM_STORE.clear()
 
@@ -42,7 +48,7 @@ def clear_param_store():
 _param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
 
 
-def param(name, *args, **kwargs):
+def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
     """
     Saves the variable as a parameter in the param store.
     To interact with the param store or write to disk,
@@ -57,16 +63,19 @@ def param(name, *args, **kwargs):
     :param constraint: torch constraint, defaults to ``constraints.real``.
     :type constraint: torch.distributions.constraints.Constraint
     :param int event_dim: (optional) number of rightmost dimensions unrelated
-        to baching. Dimension to the left of this will be considered batch
+        to batching. Dimension to the left of this will be considered batch
         dimensions; if the param statement is inside a subsampled plate, then
         corresponding batch dimensions of the parameter will be correspondingly
         subsampled. If unspecified, all dimensions will be considered event
         dims and no subsampling will be performed.
-    :returns: parameter
+    :returns: A constrained parameter. The underlying unconstrained parameter
+        is accessible via ``pyro.param(...).unconstrained()``, where
+        ``.unconstrained`` is a weakref attribute.
     :rtype: torch.Tensor
     """
-    kwargs["name"] = name
-    return _param(name, *args, **kwargs)
+    # Note effectful(-) requires the double passing of name below.
+    args = (name,) if init_tensor is None else (name, init_tensor)
+    return _param(*args, constraint=constraint, event_dim=event_dim, name=name)
 
 
 def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
@@ -95,10 +104,10 @@ def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
 
 def sample(name, fn, *args, **kwargs):
     """
-    Calls the stochastic function `fn` with additional side-effects depending
-    on `name` and the enclosing context (e.g. an inference algorithm).
-    See `Intro I <http://pyro.ai/examples/intro_part_i.html>`_ and
-    `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion.
+    Calls the stochastic function ``fn`` with additional side-effects depending
+    on ``name`` and the enclosing context (e.g. an inference algorithm).  See
+    `Intro I <http://pyro.ai/examples/intro_part_i.html>`_ and `Intro II
+    <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion.
 
     :param name: name of sample
     :param fn: distribution class or function
@@ -162,6 +171,13 @@ def factor(name, log_factor):
     Factor statement to add arbitrary log probability factor to a
     probabilisitic model.
 
+    .. warning:: Beware using factor statements in guides. Factor statements
+        assume ``log_factor`` is computed from non-reparametrized statements
+        such as observation statements ``pyro.sample(..., obs=...)``. If
+        instead ``log_factor`` is computed from e.g. the Jacobian determinant
+        of a transformation of a reparametrized variable, factor statements
+        in the guide will result in incorrect results.
+
     :param str name: Name of the trivial sample
     :param torch.Tensor log_factor: A possibly batched log probability factor.
     """
@@ -172,9 +188,9 @@ def factor(name, log_factor):
 
 def deterministic(name, value, event_dim=None):
     """
-    EXPERIMENTAL Deterministic statement to add a :class:`~pyro.distributions.Delta`
-    site with name `name` and value `value` to the trace. This is useful when
-    we want to record values which are completely determined by their parents.
+    Deterministic statement to add a :class:`~pyro.distributions.Delta` site
+    with name `name` and value `value` to the trace. This is useful when we
+    want to record values which are completely determined by their parents.
     For example::
 
         x = pyro.sample("x", dist.Normal(0, 1))
@@ -195,13 +211,13 @@ def deterministic(name, value, event_dim=None):
 @effectful(type="subsample")
 def subsample(data, event_dim):
     """
-    EXPERIMENTAL Subsampling statement to subsample data based on enclosing
-    :class:`~pyro.primitives.plate` s.
+    Subsampling statement to subsample data tensors based on enclosing
+    :class:`plate` s.
 
     This is typically called on arguments to ``model()`` when subsampling is
-    performed automatically by :class:`~pyro.primitives.plate` s by passing
-    either the ``subsample`` or ``subsample_size`` kwarg. For example the
-    following are equivalent::
+    performed automatically by :class:`plate` s by passing either the
+    ``subsample`` or ``subsample_size`` kwarg. For example the following are
+    equivalent::
 
         # Version 1. using indexing
         def model(data):
@@ -367,9 +383,18 @@ def plate_stack(prefix, sizes, rightmost_dim=-1):
 
 def module(name, nn_module, update_module_params=False):
     """
-    Takes a torch.nn.Module and registers its parameters with the ParamStore.
-    In conjunction with the ParamStore save() and load() functionality, this
+    Registers all parameters of a :class:`torch.nn.Module` with Pyro's
+    :mod:`~pyro.params.param_store`.  In conjunction with the
+    :class:`~pyro.params.param_store.ParamStoreDict`
+    :meth:`~pyro.params.param_store.ParamStoreDict.save` and
+    :meth:`~pyro.params.param_store.ParamStoreDict.load` functionality, this
     allows the user to save and load modules.
+
+    .. note:: Consider instead using :class:`~pyro.nn.module.PyroModule`, a
+        newer alternative to ``pyro.module()`` that has better support for:
+        jitting, serving in C++, and converting parameters to random variables.
+        For details see the `Modules Tutorial
+        <https://pyro.ai/examples/modules.html>`_ .
 
     :param name: name of module
     :type name: str
@@ -433,10 +458,9 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_
         for an example.
 
-
-    Places a prior over the parameters of the module `nn_module`.
-    Returns a distribution (callable) over `nn.Module`\s, which
-    upon calling returns a sampled `nn.Module`.
+    DEPRECATED Places a prior over the parameters of the module `nn_module`.
+    Returns a distribution (callable) over `nn.Module`\s, which upon calling
+    returns a sampled `nn.Module`.
 
     :param name: name of pyro module
     :type name: str
