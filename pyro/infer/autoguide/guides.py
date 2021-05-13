@@ -1273,11 +1273,6 @@ class AutoStructured(AutoGuide):
                 assert upstream in conditionals
                 assert upstream != downstream
                 assert isinstance(dep, str) or callable(dep)
-                if conditionals[upstream] == "delta":
-                    raise ValueError(
-                        f"Site {repr(downstream)} cannot depend on "
-                        f"upstream point-estimated site {repr(upstream)}"
-                    )
         self.conditionals = conditionals
         self.dependencies = dependencies
 
