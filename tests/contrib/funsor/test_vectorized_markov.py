@@ -507,8 +507,6 @@ def test_model_enumerated_elbo(model, guide, data, history):
     pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
-        #  if history > 1:
-        #      pytest.xfail(reason="TraceMarkovEnum_ELBO does not yet support history > 1")
 
         model = infer.config_enumerate(model, default="parallel")
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
