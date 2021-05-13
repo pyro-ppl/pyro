@@ -120,7 +120,7 @@ setup(
         'horovod': ['horovod[pytorch]>=0.19'],
         'funsor': [
             # This must be a released version when Pyro is released.
-            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@d5574988665dd822ec64e41f2b54b9dc929959dc',
+            'funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@7be0ef9af6a100e52ac98ab13b203a4dec0ae42e',
         ],
     },
     python_requires='>=3.6',
