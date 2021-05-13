@@ -26,11 +26,11 @@ import uuid
 
 
 class TonesGenerator1(nn.Module):
-    def __init__(self, args, data_dim):
+    def __init__(self, args, hidden_dim, data_dim):
         self.args = args
         self.data_dim = data_dim
         super(TonesGenerator1, self).__init__()
-        self.x_to_hidden = nn.Parameter(torch.randn(args.hidden_dim, args.nn_dim))
+        self.x_to_hidden = nn.Parameter(torch.randn(hidden_dim, args.nn_dim))
         self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
         self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
         self.hidden_to_logits = nn.Linear(args.nn_dim, data_dim)
@@ -49,7 +49,7 @@ class TonesGenerator1(nn.Module):
 class model1(nn.Module):
     def __init__(self, args, data_dim):
         super(model1, self).__init__()
-        self.tones_generator = TonesGenerator1(args, data_dim)
+        self.tones_generator = TonesGenerator1(args, args.hidden_dim, data_dim)
 
     @ignore_jit_warnings()
     def model(self, args, sequences, lengths, mb, mask):
@@ -86,11 +86,10 @@ class model1(nn.Module):
 
 
 class TonesGenerator2(nn.Module):
-    def __init__(self, args, data_dim):
+    def __init__(self, args, hidden_dim, data_dim):
         self.args = args
         self.data_dim = data_dim
         super(TonesGenerator2, self).__init__()
-        hidden_dim = int(math.sqrt(args.hidden_dim))
         self.x_to_hidden = nn.Parameter(torch.randn(hidden_dim, hidden_dim, args.nn_dim))
         self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
         self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
@@ -105,11 +104,13 @@ class TonesGenerator2(nn.Module):
         logits = self.hidden_to_logits(h)
         return logits
 
+
 # nnIFHMM
 class model2(nn.Module):
     def __init__(self, args, data_dim):
         super(model2, self).__init__()
-        self.tones_generator = TonesGenerator2(args, data_dim)
+        hidden_dim = int(math.sqrt(args.hidden_dim))
+        self.tones_generator = TonesGenerator2(args, hidden_dim, data_dim)
 
     @ignore_jit_warnings()
     def model(self, args, sequences, lengths, mb, mask):
@@ -157,7 +158,8 @@ class model2(nn.Module):
 class model3(nn.Module):
     def __init__(self, args, data_dim):
         super(model3, self).__init__()
-        self.tones_generator = TonesGenerator2(args, data_dim)
+        hidden_dim = int(math.sqrt(args.hidden_dim))
+        self.tones_generator = TonesGenerator2(args, hidden_dim, data_dim)
 
     @ignore_jit_warnings()
     def model(self, args, sequences, lengths, mb, mask):
@@ -200,29 +202,30 @@ class model3(nn.Module):
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
                         x_prev, w_prev = x_curr, w_curr
 
+
 # nn2HMM
 class model4(nn.Module):
     def __init__(self, args, data_dim):
         super(model4, self).__init__()
-        #self.tones_generator = TonesGenerator1(args, data_dim)
+        #hidden_dim = int(math.sqrt(args.hidden_dim))
+        self.tones_generator = TonesGenerator1(args, args.hidden_dim, data_dim)
 
     @ignore_jit_warnings()
     def model(self, args, sequences, lengths, mb, mask):
-        pyro.module("model1", self)
+        pyro.module("model4", self)
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
+        #hidden_dim = int(math.sqrt(args.hidden_dim))
         hidden_dim = args.hidden_dim
 
         probs_x = pyro.param("probs_x", lambda: torch.rand(hidden_dim, hidden_dim, hidden_dim), constraint=constraints.simplex)
         probs_x_init = pyro.param("x_init", lambda: torch.rand(hidden_dim), constraint=constraints.simplex)
 
-        y_probs = pyro.param("y_probs", lambda: torch.rand(hidden_dim, data_dim), constraint=constraints.simplex)
-
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
 
-        #nn_logits = self.tones_generator(Vindex(sequences)[mb, :-1]).unsqueeze(-4)
-        #init_logits = pyro.param("init_logits", 0.1 * torch.randn(args.hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
+        nn_logits = self.tones_generator(Vindex(sequences)[mb, :-2]).unsqueeze(-4).unsqueeze(-4)
+        init_logits = pyro.param("init_logits", 0.1 * torch.randn(hidden_dim, data_dim)).unsqueeze(-2).unsqueeze(-2)
 
         with pyro.plate("sequences", mb.size(0), dim=-3), handlers.scale(scale=torch.tensor(args.scale)), \
             handlers.mask(mask=mask.unsqueeze(-1).unsqueeze(-1)):
@@ -230,22 +233,19 @@ class model4(nn.Module):
             for t in pyro.vectorized_markov(name="time", size=max_length, dim=-2, history=2):
                 with handlers.mask(mask=(t < lengths[mb].unsqueeze(-1)).unsqueeze(-1)):
                     px = probs_x_init if isinstance(t, int) else Vindex(probs_x)[x_prev_prev, x_prev]
-                    print("\npx", px.shape)
-                    print("xname", "x_{}".format(t))
-                    x_curr = pyro.sample("x_{}".format(t), dist.Categorical(px),
-                                         infer={"enumerate": "parallel"})
-                    print("t", t if isinstance(t, int) else t[:3])
-                    print("x_curr", x_curr.shape)
+                    x_curr = pyro.sample("x_{}".format(t), dist.Categorical(px), infer={"enumerate": "parallel"})
                     with tones_plate:
-                        #if isinstance(t, int):
-                        #    logits = init_logits
-                        #elif t[0].item() == 0:
-                        #    logits = nn_logits
-                        #elif t[0].item() == 1:
-                        #    logits = nn_logits.unsqueeze(-4)
-                        py = Vindex(y_probs)[x_curr].squeeze(-2)
-                        print("py", py.shape)
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(py),
+                        if isinstance(t, int) and t == 0:
+                            logits = init_logits
+                        elif isinstance(t, int) and t == 1:
+                            logits = init_logits.unsqueeze(-2)
+                        elif t[0].item() == 0:
+                            logits = nn_logits
+                        elif t[0].item() == 1:
+                            logits = nn_logits.unsqueeze(-4)
+                        elif t[0].item() == 2:
+                            logits = nn_logits.unsqueeze(-4).unsqueeze(-4)
+                        pyro.sample("y_{}".format(t), dist.Bernoulli(logits=logits),
                                     obs=Vindex(sequences)[mb.unsqueeze(-1), t])
                         x_prev_prev, x_prev = x_prev, x_curr
 
@@ -331,7 +331,7 @@ def main(args):
     optim = ClippedAdam({'lr': args.learning_rate, 'betas': (0.90, 0.999),
                          'lrd': args.learning_rate_decay, 'clip_norm': 20.0})
 
-    max_plate_nesting = 3 #4 if args.model == "4" else 3
+    max_plate_nesting = 3
     elbo = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     elbo_eval = infer.TraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
     #elbo_eval = infer.JitTraceMarkovEnum_ELBO(max_plate_nesting=max_plate_nesting, strict_enumeration_warning=True)
@@ -383,7 +383,7 @@ if __name__ == '__main__':
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=20, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
-    parser.add_argument("-d", "--hidden-dim", default=25, type=int)
+    parser.add_argument("-d", "--hidden-dim", default=9, type=int)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.03, type=float)
