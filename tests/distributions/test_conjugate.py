@@ -5,10 +5,31 @@ import math
 
 import pytest
 import torch
+from torch.autograd import grad
 
 import pyro.distributions as dist
 from pyro.distributions import BetaBinomial, DirichletMultinomial, GammaPoisson
+from pyro.distributions.conjugate import _log_beta_1
 from tests.common import assert_close
+
+
+@pytest.mark.parametrize("alpha_shape", [(), (2,), (3, 1), (3, 2)], ids=str)
+@pytest.mark.parametrize("value_shape", [(), (2,), (3, 1), (3, 2)], ids=str)
+@pytest.mark.parametrize("size", [2, 5, 10, 100, 1000])
+def test_log_beta_1(alpha_shape, value_shape, size):
+    alpha = torch.randn(alpha_shape + (size,)).abs().requires_grad_()
+    value = torch.randn(value_shape + (size,)).abs() * 1000
+
+    # Test value.
+    actual = _log_beta_1(alpha, value, is_sparse=True)
+    expected = _log_beta_1(alpha, value, is_sparse=False)
+    assert_close(actual, expected, rtol=1e-6)
+
+    # Test gradient.
+    probe = torch.randn(actual.shape)
+    actual_grad = grad((probe * actual).sum(), [alpha])[0]
+    expected_grad = grad((probe * expected).sum(), [alpha])[0]
+    assert_close(actual_grad, expected_grad, rtol=1e-6)
 
 
 @pytest.mark.parametrize("dist", [

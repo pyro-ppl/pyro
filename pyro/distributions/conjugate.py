@@ -14,17 +14,26 @@ from .torch_distribution import TorchDistribution
 from .util import broadcast_shape
 
 
-def _log_beta_1(alpha, value, is_sparse):
-    if is_sparse:
-        mask = (value != 0)
-        value, alpha, mask = torch.broadcast_tensors(value, alpha, mask)
-        result = torch.zeros_like(value)
-        value = value[mask]
-        alpha = alpha[mask]
-        result[mask] = torch.lgamma(1 + value) + torch.lgamma(alpha) - torch.lgamma(value + alpha)
-        return result
-    else:
-        return torch.lgamma(1 + value) + torch.lgamma(alpha) - torch.lgamma(value + alpha)
+def _log_beta_1(alpha, value, is_sparse, large_thresh=1e3):
+    if not is_sparse:
+        return torch.lgamma(1 + value) - torch.lgamma(value + alpha) + torch.lgamma(alpha)
+
+    # Split into 0, medium, and large values.
+    nonzero = value != 0
+    large = value > large_thresh
+    medium = nonzero & ~large
+    value, alpha, medium, large = torch.broadcast_tensors(value, alpha, medium, large)
+    result = torch.zeros_like(value)
+
+    # Compute medium part using usual formula.
+    result[medium] = _log_beta_1(alpha[medium], value[medium], is_sparse=False)
+
+    # Compute large part using digamma linearization.
+    alpha = alpha[large]
+    value = value[large]
+    result[large] = torch.digamma(value + (alpha + 1) * 0.5) * (1 - alpha) + torch.lgamma(alpha)
+
+    return result
 
 
 class BetaBinomial(TorchDistribution):
@@ -123,8 +132,10 @@ class DirichletMultinomial(TorchDistribution):
     :param float or torch.Tensor concentration: concentration parameter (alpha) for the
         Dirichlet distribution.
     :param int or torch.Tensor total_count: number of Categorical trials.
-    :param bool is_sparse: Whether to assume value is mostly zero when computing
-        :meth:`log_prob`, which can speed up computation when data is sparse.
+    :param bool is_sparse: Whether to split value into parts that are zero,
+        medium, and very large when computing :meth:`log_prob`. This can speed
+        up computation when many values are zero, and can stabilize gradients
+        when some values are very large.
     """
     arg_constraints = {'concentration': constraints.independent(constraints.positive, 1),
                        'total_count': constraints.nonnegative_integer}
