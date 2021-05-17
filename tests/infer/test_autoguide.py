@@ -441,6 +441,7 @@ def test_quantiles(auto_class, Elbo):
     assert quantiles["z"][1] + 0.1 < quantiles["z"][2]
     assert quantiles["z"][2] < 0.99
 
+
 @pytest.mark.parametrize("auto_class", [
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -458,7 +459,7 @@ def test_guide_list_quantile(auto_class, Elbo):
     guide = AutoGuideList(model)
     guide.append(auto_class(poutine.block(model, expose=["x"])))
     guide.append(auto_class(poutine.block(model, expose=["y", "z"])))
-    
+
     optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
     elbo = Elbo(strict_enumeration_warning=False,
                 num_particles=100, vectorize_particles=True)
@@ -489,6 +490,7 @@ def test_guide_list_quantile(auto_class, Elbo):
     assert quantiles["z"][0] + 0.1 < quantiles["z"][1]
     assert quantiles["z"][1] + 0.1 < quantiles["z"][2]
     assert quantiles["z"][2] < 0.99
+
 
 @pytest.mark.parametrize("continuous_class", [
     AutoDelta,
