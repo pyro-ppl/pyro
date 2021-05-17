@@ -14,7 +14,7 @@ from .torch_distribution import TorchDistribution
 from .util import broadcast_shape
 
 
-def _log_beta_1(alpha, value, is_sparse, large_thresh=1e3):
+def _log_beta_1(alpha, value, is_sparse, large_thresh=2e3):
     if not is_sparse:
         return torch.lgamma(1 + value) - torch.lgamma(value + alpha) + torch.lgamma(alpha)
 
@@ -31,9 +31,14 @@ def _log_beta_1(alpha, value, is_sparse, large_thresh=1e3):
     # Compute large part using digamma linearization.
     alpha = alpha[large]
     value = value[large]
-    result[large] = torch.digamma(value + (alpha + 1) * 0.5) * (1 - alpha) + torch.lgamma(alpha)
+    result[large] = _digamma_stirling(value + (alpha + 1) * 0.5) * (1 - alpha) + torch.lgamma(alpha)
 
     return result
+
+
+def _digamma_stirling(x):
+    # Stirling's approximation to torch.digamma(x) can be more accurate for very large x.
+    return x.log() - 0.5 / x
 
 
 class BetaBinomial(TorchDistribution):

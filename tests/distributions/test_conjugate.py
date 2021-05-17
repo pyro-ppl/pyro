@@ -18,7 +18,7 @@ from tests.common import assert_close
 @pytest.mark.parametrize("size", [2, 5, 10, 100, 1000])
 def test_log_beta_1(alpha_shape, value_shape, size):
     alpha = torch.randn(alpha_shape + (size,)).abs().requires_grad_()
-    value = torch.randn(value_shape + (size,)).abs() * 1000
+    value = torch.randn(value_shape + (size,)).abs() * 2000
 
     # Test value.
     actual = _log_beta_1(alpha, value, is_sparse=True)
