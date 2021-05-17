@@ -268,7 +268,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
         for part in self:
             result.update(part.median(*args, **kwargs))
         return result
-    
+
     def quantiles(self, quantiles, *args, **kwargs):
         """
         Returns the posterior quantile values of each latent variable.

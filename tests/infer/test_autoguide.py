@@ -441,6 +441,54 @@ def test_quantiles(auto_class, Elbo):
     assert quantiles["z"][1] + 0.1 < quantiles["z"][2]
     assert quantiles["z"][2] < 0.99
 
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    AutoLowRankMultivariateNormal
+])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_guide_list_quantile(auto_class, Elbo):
+
+    def model():
+        pyro.sample("x", dist.Normal(0.0, 1.0))
+        pyro.sample("y", dist.LogNormal(0.0, 1.0))
+        pyro.sample("z", dist.Beta(2.0, 2.0))
+
+    guide = AutoGuideList(model)
+    guide.append(auto_class(poutine.block(model, expose=["x"])))
+    guide.append(auto_class(poutine.block(model, expose=["y", "z"])))
+    
+    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    elbo = Elbo(strict_enumeration_warning=False,
+                num_particles=100, vectorize_particles=True)
+    infer = SVI(model, guide, optim, elbo)
+    for _ in range(100):
+        infer.step()
+
+    quantiles = guide.quantiles([0.1, 0.5, 0.9])
+    median = guide.median()
+    for name in ["x", "y", "z"]:
+        assert not median[name].requires_grad
+        for q in quantiles[name]:
+            assert not q.requires_grad
+        assert_equal(median[name], quantiles[name][1])
+    quantiles = {name: [v.item() for v in value] for name, value in quantiles.items()}
+
+    assert -3.0 < quantiles["x"][0]
+    assert quantiles["x"][0] + 1.0 < quantiles["x"][1]
+    assert quantiles["x"][1] + 1.0 < quantiles["x"][2]
+    assert quantiles["x"][2] < 3.0
+
+    assert 0.01 < quantiles["y"][0]
+    assert quantiles["y"][0] * 2.0 < quantiles["y"][1]
+    assert quantiles["y"][1] * 2.0 < quantiles["y"][2]
+    assert quantiles["y"][2] < 100.0
+
+    assert 0.01 < quantiles["z"][0]
+    assert quantiles["z"][0] + 0.1 < quantiles["z"][1]
+    assert quantiles["z"][1] + 0.1 < quantiles["z"][2]
+    assert quantiles["z"][2] < 0.99
 
 @pytest.mark.parametrize("continuous_class", [
     AutoDelta,
