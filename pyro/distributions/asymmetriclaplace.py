@@ -51,10 +51,23 @@ class AsymmetricLaplace(TorchDistribution):
 
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
-        denom = self.left_scale + self.right_scale
-        shift = -self.left_scale / denom
-        u = self.loc.new_empty(shape).uniform_() - shift
+        total_scale = self.left_scale + self.right_scale
+        u = self.loc.new_empty(shape).uniform_() - self.left_scale / total_scale
         scale = torch.where(u < 0, -self.left_scale, self.right_scale)
-        u = u.abs().mul(denom / scale)
-        u = u.data.clamp(max=1 - torch.finfo(u.dtype).eps)
-        return u.neg().log1p().mul(scale)
+        u = u.mul(total_scale / scale)
+        u = u.clamp(max=1 - torch.finfo(u.dtype).eps)
+        return self.loc - u.neg().log1p().mul(scale)
+
+    @property
+    def mean(self):
+        total_scale = self.left_scale + self.right_scale
+        return self.loc + (self.right_scale ** 2 - self.left_scale ** 2) / total_scale
+
+    @property
+    def variance(self):
+        left = self.left_scale
+        right = self.right_scale
+        total = left + right
+        p = left / total
+        q = right / total
+        return p * left ** 2 + q * right ** 2 + p * q * total ** 2
