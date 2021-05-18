@@ -73,3 +73,27 @@ def test_counterfactual_query(intervene, observe, flip):
                 assert_equal(interventions[name], actual_values[name])
             if interventions[name] != observations[name]:
                 assert_not_equal(interventions[name], tr.nodes[name]['value'])
+
+
+def test_plate_duplication_smoke():
+
+    def model(N):
+
+        with pyro.plate("x_plate", N):
+            z1 = pyro.sample("z1", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
+            z2 = pyro.sample("z2", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
+            return pyro.sample("x", dist.MultivariateNormal(z1+z2, torch.eye(2)))
+
+    fix_z1 = torch.tensor([[-6.1258, -6.1524],
+                           [-4.1513, -4.3080]])
+
+    obs_x = torch.tensor([[-6.1258, -6.1524],
+                          [-4.1513, -4.3080]])
+
+    do_model = poutine.do(model, data={"z1": fix_z1})
+    do_model = poutine.condition(do_model, data={"x": obs_x})
+    do_auto = pyro.infer.autoguide.AutoMultivariateNormal(do_model)
+    optim = pyro.optim.Adam({"lr": 0.05})
+
+    svi = pyro.infer.SVI(do_model, do_auto, optim, pyro.infer.Trace_ELBO())
+    svi.step(len(obs_x))
