@@ -66,6 +66,7 @@ class DoMessenger(Messenger):
 
             # split node, avoid reapplying self recursively to new node
             new_msg = msg.copy()
+            new_msg["cond_indep_stack"] = ()  # avoid entering plates twice
             apply_stack(new_msg)
 
             # apply intervention

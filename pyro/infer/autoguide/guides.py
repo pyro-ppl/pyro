@@ -21,6 +21,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from contextlib import ExitStack
+from types import SimpleNamespace
 from typing import Callable, Dict, Union
 
 import torch
@@ -32,7 +33,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.distributions.transforms import affine_autoregressive, iterated
-from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
+from pyro.distributions.util import eye_like, is_identically_zero, sum_rightmost
 from pyro.infer.autoguide.initialization import (
     InitMessenger,
     init_to_feasible,
@@ -435,9 +436,7 @@ class AutoNormal(AutoGuide):
         automatically as usual. This is useful for data subsampling.
     """
 
-    # TODO consider switching to constraints.softplus_positive
-    # See https://github.com/pyro-ppl/numpyro/issues/855
-    scale_constraint = constraints.positive
+    scale_constraint = constraints.softplus_positive
 
     def __init__(self, model, *,
                  init_loc_fn=init_to_feasible,
@@ -699,8 +698,8 @@ class AutoContinuous(AutoGuide):
             unconstrained_shape = self._unconstrained_shapes[name]
             size = _product(unconstrained_shape)
             event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
-            unconstrained_shape = broadcast_shape(unconstrained_shape,
-                                                  batch_shape + (1,) * event_dim)
+            unconstrained_shape = torch.broadcast_shapes(unconstrained_shape,
+                                                         batch_shape + (1,) * event_dim)
             unconstrained_value = latent[..., pos:pos + size].view(unconstrained_shape)
             yield site, unconstrained_value
             pos += size
@@ -818,9 +817,7 @@ class AutoMultivariateNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    # TODO consider switching to constraints.softplus_lower_cholesky
-    # See https://github.com/pyro-ppl/numpyro/issues/855
-    scale_tril_constraint = constraints.lower_cholesky
+    scale_tril_constraint = constraints.softplus_lower_cholesky
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -872,9 +869,7 @@ class AutoDiagonalNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    # TODO consider switching to constraints.softplus_positive
-    # See https://github.com/pyro-ppl/numpyro/issues/855
-    scale_constraint = constraints.positive
+    scale_constraint = constraints.softplus_positive
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -931,9 +926,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         deviation of each (unconstrained transformed) latent variable.
     """
 
-    # TODO consider switching to constraints.softplus_positive
-    # See https://github.com/pyro-ppl/numpyro/issues/855
-    scale_constraint = constraints.positive
+    scale_constraint = constraints.softplus_positive
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1, rank=None):
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -1280,11 +1273,6 @@ class AutoStructured(AutoGuide):
                 assert upstream in conditionals
                 assert upstream != downstream
                 assert isinstance(dep, str) or callable(dep)
-                if conditionals[upstream] == "delta":
-                    raise ValueError(
-                        f"Site {repr(downstream)} cannot depend on "
-                        f"upstream point-estimated site {repr(upstream)}"
-                    )
         self.conditionals = conditionals
         self.dependencies = dependencies
 
@@ -1302,7 +1290,8 @@ class AutoStructured(AutoGuide):
         self.scale_trils = PyroModule()
         self.conds = PyroModule()
         self.deps = PyroModule()
-        self._unconstrained_shapes = {}
+        self._batch_shapes = {}
+        self._unconstrained_event_shapes = {}
 
         # Collect unconstrained shapes.
         init_locs = {}
@@ -1310,7 +1299,8 @@ class AutoStructured(AutoGuide):
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             with helpful_support_errors(site):
                 init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
-            self._unconstrained_shapes[name] = init_loc.shape
+            self._batch_shapes[name] = site["fn"].batch_shape
+            self._unconstrained_event_shapes[name] = init_loc.shape[len(site["fn"].batch_shape):]
             numel[name] = init_loc.numel()
             init_locs[name] = init_loc.reshape(-1)
 
@@ -1363,7 +1353,25 @@ class AutoStructured(AutoGuide):
             del num_pending[name]
             for child in children[name]:
                 num_pending[child] -= 1
-            self._sorted_sites.append((name, self.prototype_trace.nodes[name]))
+            site = self._compress_site(self.prototype_trace.nodes[name])
+            self._sorted_sites.append((name, site))
+
+        # Prune non-essential parts of the trace to save memory.
+        for name, site in self.prototype_trace.nodes.items():
+            site.clear()
+
+    @staticmethod
+    def _compress_site(site):
+        # Save memory by retaining only necessary parts of the site.
+        return {
+            "name": site["name"],
+            "type": site["type"],
+            "cond_indep_stack": site["cond_indep_stack"],
+            "fn": SimpleNamespace(
+                support=site["fn"].support,
+                event_dim=site["fn"].event_dim,
+            ),
+        }
 
     @poutine.infer_config(config_fn=_config_auxiliary)
     def get_deltas(self, save_params=None):
@@ -1392,7 +1400,7 @@ class AutoStructured(AutoGuide):
                 scale = _deep_getattr(self.scales, name)
                 aux_value = aux_value * scale
                 if compute_density:
-                    log_density = log_density - scale.log().sum(-1)
+                    log_density = (-scale.log()).expand_as(aux_value)
             elif conditional == "mvn":
                 # This overparametrizes by learning (scale,scale_tril),
                 # enabling faster learning of the more-global scale parameter.
@@ -1405,10 +1413,8 @@ class AutoStructured(AutoGuide):
                 scale_tril = _deep_getattr(self.scale_trils, name)
                 aux_value = aux_value @ scale_tril.T * scale
                 if compute_density:
-                    log_density = (
-                        log_density - scale.log().sum(-1)
-                        - scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-                    )
+                    log_density = (-scale_tril.diagonal(dim1=-2, dim2=-1).log()
+                                   - scale.log()).expand_as(aux_value)
             else:
                 raise ValueError(f"Unsupported conditional type: {conditional}")
 
@@ -1427,20 +1433,26 @@ class AutoStructured(AutoGuide):
                 aux_value = aux_value + dep(aux_values[upstream])
             aux_values[name] = aux_value
 
-            # Shift by loc, reshape, and transform to constrained space.
-            unconstrained = aux_value + loc
-            shape = self._unconstrained_shapes[name]
-            if torch._C._get_tracing_state() or unconstrained.shape != shape:
-                sample_shape = unconstrained.shape[:-1]
-                unconstrained = unconstrained.reshape(sample_shape + shape)
+            # Shift by loc and reshape.
+            batch_shape = torch.broadcast_shapes(
+                aux_value.shape[:-1], self._batch_shapes[name]
+            )
+            unconstrained = (aux_value + loc).reshape(
+                batch_shape + self._unconstrained_event_shapes[name]
+            )
+            if not is_identically_zero(log_density):
+                log_density = log_density.reshape(batch_shape + (-1,)).sum(-1)
+
+            # Transform to constrained space.
             transform = biject_to(site["fn"].support)
             value = transform(unconstrained)
-
-            # Create a Delta distribution.
             if compute_density and conditional != "delta":
-                ldj = transform.inv.log_abs_det_jacobian(value, unconstrained)
-                ldj = sum_rightmost(ldj, ldj.dim() - value.dim() + site["fn"].event_dim)
-                log_density = log_density + ldj
+                assert transform.codomain.event_dim == site["fn"].event_dim
+                log_density = log_density + transform.inv.log_abs_det_jacobian(
+                    value, unconstrained
+                )
+
+            # Create a reparametrized Delta distribution.
             deltas[name] = dist.Delta(value, log_density, site["fn"].event_dim)
 
         return deltas
@@ -1466,9 +1478,7 @@ class AutoStructured(AutoGuide):
         result = {}
         for name, site in self._sorted_sites:
             loc = _deep_getattr(self.locs, name).detach()
-            shape = self._unconstrained_shapes[name]
-            if loc.shape != shape:
-                sample_shape = loc.shape[:-1]
-                loc = loc.reshape(sample_shape + shape)
+            shape = self._batch_shapes[name] + self._unconstrained_event_shapes[name]
+            loc = loc.reshape(shape)
             result[name] = biject_to(site["fn"].support)(loc)
         return result
