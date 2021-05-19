@@ -3,9 +3,11 @@
 
 import pytest
 import torch
+from scipy.special import iv
+from torch import tensor
 from torch.autograd import grad
 
-from pyro.ops.special import log_beta, log_binomial, safe_log
+from pyro.ops.special import log_beta, log_binomial, log_I1, safe_log
 from tests.common import assert_equal
 
 
@@ -50,3 +52,20 @@ def test_log_binomial_stirling(tol):
     actual = log_binomial(n, k, tol=tol)
 
     assert (actual - expected).abs().max() < tol
+
+
+@pytest.mark.parametrize('order', [0, 1, 5, 10, 20])
+@pytest.mark.parametrize('value', [0.01, .1, 1., 10., 100.])
+def test_log_I1(order, value):
+    value = tensor([value])
+    expected = torch.tensor([iv(i, value.numpy()) for i in range(order + 1)]).log()
+    actual = log_I1(order, value)
+    assert_equal(actual, expected)
+
+
+def test_log_I1_shapes():
+    assert_equal(log_I1(10, tensor(.6)).shape, torch.Size([11, 1]))
+    assert_equal(log_I1(10, tensor([.6])).shape, torch.Size([11, 1]))
+    assert_equal(log_I1(10, tensor([[.6]])).shape, torch.Size([11, 1, 1]))
+    assert_equal(log_I1(10, tensor([.6, .2])).shape, torch.Size([11, 2]))
+    assert_equal(log_I1(0, tensor(.6)).shape, torch.Size((1, 1)))

@@ -323,6 +323,13 @@ Rejector
     :undoc-members:
     :show-inheritance:
 
+SineBivariateVonMises
+---------------------
+.. autoclass:: pyro.distributions.SineBivariateVonMises
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SoftLaplace
 -------------
 .. autoclass:: pyro.distributions.SoftLaplace
