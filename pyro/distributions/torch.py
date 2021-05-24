@@ -4,6 +4,7 @@
 import math
 
 import torch
+from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.distributions.util import broadcast_shape, sum_rightmost
@@ -202,12 +203,36 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
 
 
 class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
+    @staticmethod
     def infer_shapes(total_count=None, probs=None, logits=None):
         tensor = probs if logits is None else logits
         batch_shape, event_shape = tensor[:-1], tensor[-1:]
         if isinstance(total_count, tuple):
             batch_shape = broadcast_shape(batch_shape, total_count)
         return batch_shape, event_shape
+
+    # Work around over-zealous validation in torch Distribution.__init__().
+    @lazy_property
+    def probs(self):
+        return self._categorical.probs
+
+    # Work around over-zealous validation in torch Distribution.__init__().
+    @lazy_property
+    def logits(self):
+        return self._categorical.logits
+
+    # This is faster than PyTorch version for sparse tensors.
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        mask = (value != 0)
+        value, logits, mask = torch.broadcast_tensors(value, self.logits, mask)
+        global_part = torch.lgamma(value.sum(-1) + 1)
+        local_part = torch.zeros_like(value)
+        value = value[mask]
+        logits = logits[mask]
+        local_part[mask] = logits * value - torch.lgamma(value + 1)
+        return global_part + local_part.sum(-1)
 
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
