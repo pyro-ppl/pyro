@@ -12,8 +12,8 @@ class AsymmetricLaplace(TorchDistribution):
     """
     Asymmetric version of Laplace distribution.
 
-    To the left of ``loc`` this acts like an ``-Exponential(left_scale)``;
-    to the right of ``loc`` this acts like an ``Exponential(right_scale)``.
+    To the left of ``loc`` this acts like an ``-Exponential(1 / left_scale)``;
+    to the right of ``loc`` this acts like an ``Exponential(1 / right_scale)``.
     The density is continuous so the left and right densities at ``loc`` agree.
 
     :param loc: Location parameter, i.e. the mode.
@@ -51,12 +51,8 @@ class AsymmetricLaplace(TorchDistribution):
 
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
-        total_scale = self.left_scale + self.right_scale
-        u = self.loc.new_empty(shape).uniform_() - self.left_scale / total_scale
-        scale = torch.where(u < 0, -self.left_scale, self.right_scale)
-        u = u.mul(total_scale / scale)
-        u = u.clamp(max=1 - torch.finfo(u.dtype).eps)
-        return self.loc - u.neg().log1p().mul(scale)
+        u, v = self.loc.new_empty((2,) + shape).exponential_()
+        return self.loc - self.left_scale * u + self.right_scale * v
 
     @property
     def mean(self):
