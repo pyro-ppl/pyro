@@ -7,6 +7,7 @@ from pyro.distributions.torch import *  # noqa F403
 # isort: split
 
 from pyro.distributions.affine_beta import AffineBeta
+from pyro.distributions.asymmetriclaplace import AsymmetricLaplace
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.coalescent import (
     CoalescentRateLikelihood,
@@ -86,6 +87,7 @@ from . import constraints, kl, transforms
 
 __all__ = [
     "AffineBeta",
+    "AsymmetricLaplace",
     "AVFMultivariateNormal",
     "BetaBinomial",
     "CoalescentRateLikelihood",
