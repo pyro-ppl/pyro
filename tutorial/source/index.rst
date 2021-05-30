@@ -208,6 +208,7 @@ List of Tutorials
    inclined_plane
    RSA-implicature
    RSA-hyperbole
+   predictive_deterministic
 
 .. toctree::
    :maxdepth: 1
