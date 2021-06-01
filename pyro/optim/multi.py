@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Dict,List,Optional
+
 import torch
 
 from pyro.ops.newton import newton_step
@@ -29,7 +31,7 @@ class MultiOptimizer:
                   if site['type'] == 'param'}
         optim.step(loss, params)
     """
-    def step(self, loss, params):
+    def step(self, loss:torch.Tensor, params:Dict)->None:
         """
         Performs an in-place optimization step on parameters given a
         differentiable ``loss`` tensor.
@@ -47,7 +49,7 @@ class MultiOptimizer:
                 # we need to detach because updated_value may depend on value
                 value.copy_(updated_values[name].detach())
 
-    def get_step(self, loss, params):
+    def get_step(self, loss:torch.Tensor, params:Dict)->None:
         """
         Computes an optimization step of parameters given a differentiable
         ``loss`` tensor, returning the updated values.
@@ -70,12 +72,12 @@ class PyroMultiOptimizer(MultiOptimizer):
     Facade to wrap :class:`~pyro.optim.optim.PyroOptim` objects
     in a :class:`MultiOptimizer` interface.
     """
-    def __init__(self, optim):
+    def __init__(self, optim:PyroOptim)->None:
         if not isinstance(optim, PyroOptim):
             raise TypeError('Expected a PyroOptim object but got a {}'.format(type(optim)))
         self.optim = optim
 
-    def step(self, loss, params):
+    def step(self, loss:torch.Tensor, params):
         values = params.values()
         grads = torch.autograd.grad(loss, values, create_graph=True)
         for x, g in zip(values, grads):
@@ -88,7 +90,7 @@ class TorchMultiOptimizer(PyroMultiOptimizer):
     Facade to wrap :class:`~torch.optim.Optimizer` objects
     in a :class:`MultiOptimizer` interface.
     """
-    def __init__(self, optim_constructor, optim_args):
+    def __init__(self, optim_constructor:torch.optim.Optimizer, optim_args:Dict):
         optim = PyroOptim(optim_constructor, optim_args)
         super().__init__(optim)
 
@@ -105,7 +107,7 @@ class MixedMultiOptimizer(MultiOptimizer):
         partition up all desired parameters to optimize.
     :raises ValueError: if any name is optimized by multiple optimizers.
     """
-    def __init__(self, parts):
+    def __init__(self, parts:List)->None:
         optim_dict = {}
         self.parts = []
         for names_part, optim in parts:
@@ -118,11 +120,11 @@ class MixedMultiOptimizer(MultiOptimizer):
                 optim_dict[name] = optim
             self.parts.append((names_part, optim))
 
-    def step(self, loss, params):
+    def step(self, loss:torch.Tensor, params:Dict):
         for names_part, optim in self.parts:
             optim.step(loss, {name: params[name] for name in names_part})
 
-    def get_step(self, loss, params):
+    def get_step(self, loss:torch.Tensor, params:Dict)->Dict:
         updated_values = {}
         for names_part, optim in self.parts:
             updated_values.update(
@@ -144,10 +146,10 @@ class Newton(MultiOptimizer):
         region. Missing names will use unregularized Newton update, equivalent
         to infinite trust radius.
     """
-    def __init__(self, trust_radii={}):
+    def __init__(self, trust_radii:Optional[Dict]={}):
         self.trust_radii = trust_radii
 
-    def get_step(self, loss, params):
+    def get_step(self, loss:torch.Tensor, params:Dict):
         updated_values = {}
         for name, value in params.items():
             trust_radius = self.trust_radii.get(name)
