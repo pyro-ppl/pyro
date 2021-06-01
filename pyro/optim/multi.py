@@ -77,7 +77,7 @@ class PyroMultiOptimizer(MultiOptimizer):
             raise TypeError('Expected a PyroOptim object but got a {}'.format(type(optim)))
         self.optim = optim
 
-    def step(self, loss: torch.Tensor, params):
+    def step(self, loss: torch.Tensor, params: Dict):
         values = params.values()
         grads = torch.autograd.grad(loss, values, create_graph=True)
         for x, g in zip(values, grads):

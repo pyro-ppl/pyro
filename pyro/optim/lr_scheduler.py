@@ -1,7 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional, Union
 
 from torch.optim import lr_scheduler
 
@@ -29,7 +29,8 @@ class PyroLRScheduler(PyroOptim):
                 svi.step(minibatch)
             scheduler.step()
     """
-    def __init__(self, scheduler_constructor: lr_scheduler, optim_args: Dict, clip_args: Optional[Dict] = None):
+    def __init__(self, scheduler_constructor: lr_scheduler, optim_args: Union[Dict, Callable[..., Dict]],
+                 clip_args: Optional[Union[Dict, Callable[..., Dict]]] = None):
         # pytorch scheduler
         self.pt_scheduler_constructor = scheduler_constructor
         # torch optimizer

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from typing import Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 import torch
 from torch.nn.utils import clip_grad_norm_, clip_grad_value_
@@ -29,7 +29,8 @@ class PyroOptim:
     :param clip_args: a dictionary of clip_norm and/or clip_value args or a callable that returns
         such dictionaries
     """
-    def __init__(self, optim_constructor: Optimizer, optim_args: Dict, clip_args: Optional[Dict] = None):
+    def __init__(self, optim_constructor: Optimizer, optim_args: Union[Dict, Callable[..., Dict]],
+                 clip_args: Optional[Union[Dict, Callable[..., Dict]]] = None):
         self.pt_optim_constructor = optim_constructor
 
         # must be callable or dict
@@ -56,7 +57,7 @@ class PyroOptim:
         # any optimizer state that's waiting to be consumed (because that parameter hasn't been seen before)
         self._state_waiting_to_be_consumed = {}
 
-    def __call__(self, params: List[str],  *args, **kwargs) -> None:
+    def __call__(self, params: List,  *args, **kwargs) -> None:
         """
         :param params: a list of parameters
         :type params: an iterable of strings
