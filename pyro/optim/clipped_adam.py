@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from typing import Callable, Optional, Tuple
 
 import torch
 from torch.optim.optimizer import Optimizer
-from typing import Dict,List,Optional,Tuple,Callable
 
 
 class ClippedAdam(Optimizer):
@@ -28,14 +28,15 @@ class ClippedAdam(Optimizer):
     `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
     https://arxiv.org/abs/1412.6980
     """
-    def __init__(self, params, lr:Optional[float]=1e-3, betas:Optional[Tuple]=(0.9, 0.999), eps:Optional[float]=1e-8,
-                 weight_decay=0, clip_norm:Optional[float]=10.0, lrd:Optional[float]=1.0):
+    def __init__(self, params, lr: Optional[float] = 1e-3, betas: Optional[Tuple] = (0.9, 0.999),
+                 eps: Optional[float] = 1e-8, weight_decay=0, clip_norm: Optional[float] = 10.0,
+                 lrd: Optional[float] = 1.0):
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         weight_decay=weight_decay,
                         clip_norm=clip_norm, lrd=lrd)
         super().__init__(params, defaults)
 
-    def step(self, closure:Optional[Callable]=None)->torch.Tensor:
+    def step(self, closure: Optional[Callable] = None) -> torch.Tensor:
         """
         :param closure: An optional closure that reevaluates the model and returns the loss.
 

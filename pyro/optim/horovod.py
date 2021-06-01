@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict,List,Optional
+from typing import Dict
 
 import pyro
 
@@ -27,7 +27,7 @@ class HorovodOptimizer(PyroOptim):
     :param \*\*horovod_kwargs: Extra parameters passed to
         :func:`horovod.torch.DistributedOptimizer`.
     """
-    def __init__(self, pyro_optim:PyroOptim, **horovod_kwargs):
+    def __init__(self, pyro_optim: PyroOptim, **horovod_kwargs):
         param_name = pyro.get_param_store().param_name
 
         def optim_constructor(params, **pt_kwargs):
@@ -43,7 +43,7 @@ class HorovodOptimizer(PyroOptim):
 
         super().__init__(optim_constructor, pyro_optim.pt_optim_args, pyro_optim.pt_clip_args)
 
-    def __call__(self, params:Dict, *args, **kwargs)->None:
+    def __call__(self, params: Dict, *args, **kwargs) -> None:
         # Sort by name to ensure deterministic processing order.
         params = sorted(params, key=pyro.get_param_store().param_name)
         super().__call__(params, *args, **kwargs)

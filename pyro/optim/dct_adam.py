@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-
-from typing import Dict,List,Optional,Tuple,Callable
+from typing import Callable, Dict, Optional, Tuple
 
 import torch
 from torch.nn.functional import pad
@@ -11,7 +10,8 @@ from torch.optim.optimizer import Optimizer
 
 from pyro.ops.tensor_utils import dct, idct, next_fast_len
 
-def _transform_forward(x:torch.Tensor, dim:List, duration:int)->torch.Tensor:
+
+def _transform_forward(x: torch.Tensor, dim: Tuple, duration: int) -> torch.Tensor:
     assert not x.requires_grad
     assert dim < 0
     assert duration == x.size(dim)
@@ -25,7 +25,7 @@ def _transform_forward(x:torch.Tensor, dim:List, duration:int)->torch.Tensor:
     return torch.cat([time_domain, freq_domain], dim=dim)
 
 
-def _transform_inverse(x:torch.Tensor, dim:int, duration:int):
+def _transform_inverse(x: torch.Tensor, dim: int, duration: int):
     assert not x.requires_grad
     assert dim < 0
     dots = (slice(None),) * (x.dim() + dim)
@@ -73,13 +73,13 @@ class DCTAdam(Optimizer):
     :param bool subsample_aware: whether to update gradient statistics only for
         those elements that appear in a subsample (default: False).
     """
-    def __init__(self, params, lr:float=1e-3, betas:Tuple=(0.9, 0.999), eps:float=1e-8,
-                 clip_norm=10.0, lrd=1.0, subsample_aware=False):
+    def __init__(self, params, lr: float = 1e-3, betas: Tuple = (0.9, 0.999), eps: float = 1e-8,
+                 clip_norm: float = 10.0, lrd: float = 1.0, subsample_aware: bool = False):
         defaults = dict(lr=lr, betas=betas, eps=eps, clip_norm=clip_norm, lrd=lrd,
                         subsample_aware=subsample_aware)
         super().__init__(params, defaults)
 
-    def step(self, closure:Optional[Callable]=None)->torch.Tensor:
+    def step(self, closure: Optional[Callable] = None) -> torch.Tensor:
         """
         :param closure: An optional closure that reevaluates the model and returns the loss.
 
@@ -104,7 +104,7 @@ class DCTAdam(Optimizer):
 
         return loss
 
-    def _step_param(self, group:Dict, p)->None:
+    def _step_param(self, group: Dict, p) -> None:
         grad = p.grad.data
         grad.clamp_(-group['clip_norm'], group['clip_norm'])
 
@@ -145,7 +145,7 @@ class DCTAdam(Optimizer):
             step = _transform_inverse(exp_avg / denom, time_dim, duration)
             p.data.add_(step.mul_(-step_size))
 
-    def _step_param_subsample(self, group:Dict, p, subsample)->None:
+    def _step_param_subsample(self, group: Dict, p, subsample) -> None:
         mask = _get_mask(p, subsample)
 
         grad = p.grad.data.masked_select(mask)

@@ -1,10 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict,List,Optional
+from typing import Dict, Optional
+
+from torch.optim import lr_scheduler
 
 from pyro.optim.optim import PyroOptim
-import torch
+
 
 class PyroLRScheduler(PyroOptim):
     """
@@ -27,7 +29,7 @@ class PyroLRScheduler(PyroOptim):
                 svi.step(minibatch)
             scheduler.step()
     """
-    def __init__(self, scheduler_constructor:torch.optim.lr_scheduler, optim_args:Dict, clip_args:Optional[Dict]=None):
+    def __init__(self, scheduler_constructor: lr_scheduler, optim_args: Dict, clip_args: Optional[Dict] = None):
         # pytorch scheduler
         self.pt_scheduler_constructor = scheduler_constructor
         # torch optimizer
@@ -37,14 +39,14 @@ class PyroLRScheduler(PyroOptim):
         self.kwargs = optim_args
         super().__init__(pt_optim_constructor, optim_kwargs, clip_args)
 
-    def __call__(self, params:Dict, *args, **kwargs)->None:
+    def __call__(self, params: Dict, *args, **kwargs) -> None:
         super().__call__(params, *args, **kwargs)
 
-    def _get_optim(self, params:Dict):
+    def _get_optim(self, params: Dict):
         optim = super()._get_optim(params)
         return self.pt_scheduler_constructor(optim, **self.kwargs)
 
-    def step(self, *args, **kwargs)->None:
+    def step(self, *args, **kwargs) -> None:
         """
         Takes the same arguments as the PyTorch scheduler
         (e.g. optional ``loss`` for ``ReduceLROnPlateau``)
