@@ -87,6 +87,11 @@ jobs:
               - pip install -e .[funsor]
               - pytest -vs --cov=pyro --cov-config .coveragerc --stage funsor --durations 10
               - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10 -k funsor
+        - name: type_check
+          python: 3.6
+          script:
+              - pip install mypy
+              - mypy pyro/optim
 
 after_success:
           - coveralls
