@@ -148,6 +148,7 @@ class CountMeanVarianceStats(StreamingStats):
     def __init__(self):
         self.shape = None
         self.welford = WelfordCovariance(diagonal=True)
+        super().__init__()
 
     def update(self, sample: torch.Tensor):
         assert isinstance(sample, torch.Tensor)
