@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import torch
 from torch.optim.optimizer import Optimizer
@@ -36,7 +36,7 @@ class ClippedAdam(Optimizer):
                         clip_norm=clip_norm, lrd=lrd)
         super().__init__(params, defaults)
 
-    def step(self, closure: Optional[Callable] = None) -> torch.Tensor:
+    def step(self, closure: Optional[Callable] = None) -> Optional[Any]:
         """
         :param closure: An optional closure that reevaluates the model and returns the loss.
 

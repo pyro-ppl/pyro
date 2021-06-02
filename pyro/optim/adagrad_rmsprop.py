@@ -1,7 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import torch
 from torch.optim.optimizer import Optimizer
@@ -49,7 +49,7 @@ class AdagradRMSProp(Optimizer):
                 state = self.state[p]
                 state['sum'].share_memory_()
 
-    def step(self, closure: Optional[Callable] = None) -> torch.Tensor:
+    def step(self, closure: Optional[Callable] = None) -> Optional[Any]:
         """
         Performs a single optimization step.
 

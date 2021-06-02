@@ -49,7 +49,7 @@ class MultiOptimizer:
                 # we need to detach because updated_value may depend on value
                 value.copy_(updated_values[name].detach())
 
-    def get_step(self, loss: torch.Tensor, params: Dict) -> None:
+    def get_step(self, loss: torch.Tensor, params: Dict) -> Dict:
         """
         Computes an optimization step of parameters given a differentiable
         ``loss`` tensor, returning the updated values.
@@ -77,7 +77,7 @@ class PyroMultiOptimizer(MultiOptimizer):
             raise TypeError('Expected a PyroOptim object but got a {}'.format(type(optim)))
         self.optim = optim
 
-    def step(self, loss: torch.Tensor, params: Dict):
+    def step(self, loss: torch.Tensor, params: Dict) -> None:
         values = params.values()
         grads = torch.autograd.grad(loss, values, create_graph=True)
         for x, g in zip(values, grads):
@@ -108,7 +108,7 @@ class MixedMultiOptimizer(MultiOptimizer):
     :raises ValueError: if any name is optimized by multiple optimizers.
     """
     def __init__(self, parts: List) -> None:
-        optim_dict = {}
+        optim_dict: Dict = {}
         self.parts = []
         for names_part, optim in parts:
             if isinstance(optim, PyroOptim):

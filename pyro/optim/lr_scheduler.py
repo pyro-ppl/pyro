@@ -1,9 +1,9 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, Optional, Union
+from typing import Dict, List, Optional, Union, Iterable, Any, ValuesView
 
-from torch.optim import lr_scheduler
+from torch import Tensor
 
 from pyro.optim.optim import PyroOptim
 
@@ -29,8 +29,8 @@ class PyroLRScheduler(PyroOptim):
                 svi.step(minibatch)
             scheduler.step()
     """
-    def __init__(self, scheduler_constructor: lr_scheduler, optim_args: Union[Dict, Callable[..., Dict]],
-                 clip_args: Optional[Union[Dict, Callable[..., Dict]]] = None):
+    def __init__(self, scheduler_constructor, optim_args: Union[Dict],
+                 clip_args: Optional[Union[Dict]] = None):
         # pytorch scheduler
         self.pt_scheduler_constructor = scheduler_constructor
         # torch optimizer
@@ -40,10 +40,10 @@ class PyroLRScheduler(PyroOptim):
         self.kwargs = optim_args
         super().__init__(pt_optim_constructor, optim_kwargs, clip_args)
 
-    def __call__(self, params: Dict, *args, **kwargs) -> None:
+    def __call__(self, params: Union[List, ValuesView], *args, **kwargs) -> None:
         super().__call__(params, *args, **kwargs)
 
-    def _get_optim(self, params: Dict):
+    def _get_optim(self, params: Union[Tensor, Iterable[Tensor], Iterable[Dict[Any, Any]]]):
         optim = super()._get_optim(params)
         return self.pt_scheduler_constructor(optim, **self.kwargs)
 

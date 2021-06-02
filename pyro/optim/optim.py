@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, Iterable, List, Optional, Union, Type, Any, ValuesView
 
 import torch
+from torch import Tensor
 from torch.nn.utils import clip_grad_norm_, clip_grad_value_
 from torch.optim import Optimizer
 
@@ -29,7 +30,7 @@ class PyroOptim:
     :param clip_args: a dictionary of clip_norm and/or clip_value args or a callable that returns
         such dictionaries
     """
-    def __init__(self, optim_constructor: Optimizer, optim_args: Union[Dict, Callable[..., Dict]],
+    def __init__(self, optim_constructor: Union[Callable, Optimizer, Type[Optimizer]], optim_args: Union[Dict, Callable[..., Dict]],
                  clip_args: Optional[Union[Dict, Callable[..., Dict]]] = None):
         self.pt_optim_constructor = optim_constructor
 
@@ -51,13 +52,13 @@ class PyroOptim:
         self.pt_clip_args = clip_args
 
         # holds the torch optimizer objects
-        self.optim_objs = {}
-        self.grad_clip = {}
+        self.optim_objs: Dict = {}
+        self.grad_clip: Dict = {}
 
         # any optimizer state that's waiting to be consumed (because that parameter hasn't been seen before)
-        self._state_waiting_to_be_consumed = {}
+        self._state_waiting_to_be_consumed: Dict = {}
 
-    def __call__(self, params: List,  *args, **kwargs) -> None:
+    def __call__(self, params: Union[List, ValuesView], *args, **kwargs) -> None:
         """
         :param params: a list of parameters
         :type params: an iterable of strings
@@ -127,11 +128,11 @@ class PyroOptim:
             state = torch.load(input_file)
         self.set_state(state)
 
-    def _get_optim(self, param: Dict):
+    def _get_optim(self, param: Union[Iterable[Tensor], Iterable[Dict[Any, Any]]]):
         return self.pt_optim_constructor([param], **self._get_optim_args(param))
 
     # helper to fetch the optim args if callable (only used internally)
-    def _get_optim_args(self, param: str):
+    def _get_optim_args(self, param: Union[Iterable[Tensor], Iterable[Dict]]):
         # If we were passed a function, we call function with a
         # fully qualified name e.g. 'mymodule.mysubmodule.bias'.
         if callable(self.pt_optim_args):
@@ -158,7 +159,7 @@ class PyroOptim:
         if not grad_clip_args:
             return None
 
-        def _clip_grad(params: List[str]):
+        def _clip_grad(params: Union[Tensor, Iterable[Tensor]]):
             self._clip_grad(params, **grad_clip_args)
 
         return _clip_grad
@@ -183,7 +184,7 @@ class PyroOptim:
             return self.pt_clip_args
 
     @staticmethod
-    def _clip_grad(params: List[str], clip_norm: Optional[Union[int, float]] = None,
+    def _clip_grad(params: Union[Tensor, Iterable[Tensor]], clip_norm: Optional[Union[int, float]] = None,
                    clip_value: Optional[Union[int, float]] = None) -> None:
         if clip_norm is not None:
             clip_grad_norm_(params, clip_norm)

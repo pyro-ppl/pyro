@@ -11,7 +11,7 @@ from torch.optim.optimizer import Optimizer
 from pyro.ops.tensor_utils import dct, idct, next_fast_len
 
 
-def _transform_forward(x: torch.Tensor, dim: Tuple, duration: int) -> torch.Tensor:
+def _transform_forward(x: torch.Tensor, dim: int, duration: int) -> torch.Tensor:
     assert not x.requires_grad
     assert dim < 0
     assert duration == x.size(dim)
@@ -79,7 +79,7 @@ class DCTAdam(Optimizer):
                         subsample_aware=subsample_aware)
         super().__init__(params, defaults)
 
-    def step(self, closure: Optional[Callable] = None) -> torch.Tensor:
+    def step(self, closure: Optional[Callable] = None) -> Optional[float]:
         """
         :param closure: An optional closure that reevaluates the model and returns the loss.
 

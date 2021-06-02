@@ -1,7 +1,9 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict
+from typing import List, ValuesView, Union
+
+from torch.optim import Optimizer
 
 import pyro
 
@@ -30,8 +32,8 @@ class HorovodOptimizer(PyroOptim):
     def __init__(self, pyro_optim: PyroOptim, **horovod_kwargs):
         param_name = pyro.get_param_store().param_name
 
-        def optim_constructor(params, **pt_kwargs):
-            import horovod.torch as hvd
+        def optim_constructor(params, **pt_kwargs) -> Optimizer:
+            import horovod.torch as hvd  # type: ignore
             pt_optim = pyro_optim.pt_optim_constructor(params, **pt_kwargs)
             named_parameters = [(param_name(p), p) for p in params]
             hvd_optim = hvd.DistributedOptimizer(
@@ -43,7 +45,7 @@ class HorovodOptimizer(PyroOptim):
 
         super().__init__(optim_constructor, pyro_optim.pt_optim_args, pyro_optim.pt_clip_args)
 
-    def __call__(self, params: Dict, *args, **kwargs) -> None:
+    def __call__(self, params: Union[List, ValuesView], *args, **kwargs) -> None:
         # Sort by name to ensure deterministic processing order.
         params = sorted(params, key=pyro.get_param_store().param_name)
         super().__call__(params, *args, **kwargs)
