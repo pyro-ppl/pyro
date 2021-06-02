@@ -1,14 +1,16 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
+
 import pytest
 import torch
 
 from pyro.ops.streaming import (
     CountMeanStats,
     CountMeanVarianceStats,
-    DictStats,
-    SelectStats,
+    CountStats,
+    StatsOfDict,
 )
 from tests.common import assert_close
 
@@ -22,12 +24,21 @@ def generate_data(num_samples):
 
 
 EXAMPLE_STATS = [
-    lambda: CountMeanStats(),
-    lambda: CountMeanVarianceStats(),
-    lambda: SelectStats({"aaa": CountMeanVarianceStats(), "bbb": CountMeanStats()}),
-    lambda: DictStats({"cm": CountMeanStats(), "cmv": CountMeanVarianceStats()}),
+    CountStats,
+    functools.partial(StatsOfDict, default=CountMeanStats),
+    functools.partial(StatsOfDict, default=CountMeanVarianceStats),
+    StatsOfDict,
+    functools.partial(
+        StatsOfDict, {"aaa": CountMeanStats, "bbb": CountMeanVarianceStats}
+    ),
 ]
-EXAMPLE_STATS_IDS = [type(x()).__name__ for x in EXAMPLE_STATS]
+EXAMPLE_STATS_IDS = [
+    "CountStats",
+    "CountMeanStats",
+    "CountMeanVarianceStats",
+    "StatsOfDict1",
+    "StatsOfDict2",
+]
 
 
 @pytest.mark.parametrize("size", [0, 10])

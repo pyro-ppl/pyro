@@ -4,7 +4,7 @@
 import copy
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Dict, Union
+from typing import Dict, Type, Union
 
 import torch
 
@@ -13,22 +13,24 @@ from pyro.ops.welford import WelfordCovariance
 
 class StreamingStats(ABC):
     """
-    Base class for streamable statistics of dictionaries of tensors.
+    Abstract base class for streamable statistics of trees of tensors.
 
     Derived classes must implelement :meth:`update`, :meth:`merge`, and
     :meth:`get`.
     """
 
     @abstractmethod
-    def update(self, sample: Dict[str, torch.Tensor]) -> None:
+    def update(self, sample) -> None:
         """
         Update state from a single sample.
 
         This mutates ``self`` and returns nothing. Updates should be
         independent of order, i.e. samples should be exchangeable.
 
-        :param dict sample: A sample dictionary mapping sample name to sample
-            value (a :class:`torch.Tensor`).
+        :param sample: A sample value which is a nested dictionary of
+            :class:`torch.Tensor` leaves. This can have arbitrary nesting and
+            shape shape, but assumes shape is constant across calls to
+            ``.update()``.
         """
         raise NotImplementedError
 
@@ -46,190 +48,148 @@ class StreamingStats(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get(self) -> Dict[str, object]:
+    def get(self) -> dict:
         """
-        Return the aggregate statistic. This is typically a tensor or
-        collection of tensors, but can be any Python object.
+        Return the aggregate statistic, which should be a dictionary.
         """
         raise NotImplementedError
 
 
-class SelectStats(StreamingStats):
+class CountStats(StreamingStats):
     """
-    Collection to select different statistics for each sample name.
-
-    This is useful for computing statistics for only a subset of sample names,
-    or computing different statistics for different samples (e.g. expensive
-    statistics for small tensors and cheap statistis for large tensors).
-
-    :param stats: A dictionary mapping sample name to :class:`StreamingStats`
-        instance corresponding to that name. Note instances can be reused by
-        multiple keys.
+    Statistic tracking only the number of samples.
     """
-    def __init__(self, stats: Dict[object, StreamingStats]):
-        self.stats = stats
 
-    def update(self, sample: Dict[str, torch.Tensor]) -> None:
-        assert isinstance(sample, dict)
-        for k, stat in self.stats.items():
-            stat.update({k: sample[k]})
+    def __init__(self):
+        self.count = 0
+        super().__init__()
 
-    def merge(self, other: "SelectStats") -> "SelectStats":
+    def update(self, sample):
+        self.count += 1
+
+    def merge(self, other: "CountStats"):
         assert isinstance(other, type(self))
-        assert set(self.stats) == set(other.stats)
-        merged: Dict[int, SelectStats] = {}
-        result: Dict[str, SelectStats] = {}
-        for key, lhs in self.stats.items():
-            rhs = other.stats[key]
-            ids = id(lhs), id(rhs)
-            if ids in merged:
-                stat = merged[ids]
-            else:
-                merged[ids] = stat = lhs.merge(rhs)
-            result[key] = stat
-        return type(self)(result)
-
-    def get(self) -> Dict[str, object]:
-        result = {}
-        for k, v in self.stats.items():
-            result.update(v.get())
+        result = CountStats()
+        result.count = self.count + other.count
         return result
 
+    def get(self) -> Dict[str, Dict[str, Union[int, torch.Tensor]]]:
+        return {"count": self.count}
 
-class DictStats(StreamingStats):
+
+class StatsOfDict(StreamingStats):
     """
-    Collection of multiple streaming statistics into a dictionary.
+    Statistics of samples that are dictionaries with constant set of keys.
 
-    This is useful for computing multiple statistics for each sample.
-
-    :param stats: A dictionary mapping statistic name to
-        :class:`StreamingStats` instance corresponding to that name.
+    :param default: Default type of statistics of values of the dictionary.
+        Defaults to :class:`CountStats`.
+    :param dict types: Dictionary mapping key to type of statistic that should
+        be recorded for values corresponding to that key.
     """
+    def __init__(
+        self,
+        types: Dict[object, Type[StreamingStats]] = {},
+        default: Type[StreamingStats] = CountStats,
+    ):
+        self.stats = defaultdict(default)
+        self.stats.update(**{k: v() for k, v in types.items()})
+        super().__init__()
 
-    def __init__(self, stats: Dict[str, StreamingStats]):
-        self.stats = stats
+    def update(self, sample: dict):
+        for k, v in sample.items():
+            self.stats[k].update(v)
 
-    def update(self, sample: Dict[str, torch.Tensor]) -> None:
-        assert isinstance(sample, dict)
-        for stat in self.stats.values():
-            stat.update(sample)
+    def merge(self, other):
+        result = copy.deepcopy(self)
+        for k in set(self.stats).union(other.stats):
+            if k not in self.stats:
+                result.stats[k] = copy.deepcopy(other.stats[k])
+            elif k in other.stats:
+                result.stats[k] = self.stats[k].merge(other.stats[k])
+        return result
 
-    def merge(self, other: "DictStats") -> "DictStats":
-        assert isinstance(other, type(self))
-        assert set(other.stats) == set(self.stats)
-        stats = {
-            name: stat.merge(other.stats[name])
-            for name, stat in self.stats.items()
-        }
-        return type(self)(stats)
-
-    def get(self) -> Dict[str, Dict[str, object]]:
-        result = defaultdict(dict)
-        for name, stat in self.stats.items():
-            for k, v in stat.get().items():
-                result[k][name] = v
-        return dict(result)
+    def get(self) -> dict:
+        return {k: v.get() for k, v in self.stats.items()}
 
 
 class CountMeanStats(StreamingStats):
     """
-    Statistic tracking the count and mean of all sample tensors.
+    Statistic tracking the count and mean of a single :class:`torch.Tensor`.
     """
 
     def __init__(self):
-        self.count = defaultdict(int)
-        self.mean = {}
+        self.count = 0
+        self.mean = 0
+        super().__init__()
 
-    def update(self, sample: Dict[str, torch.Tensor]):
-        assert isinstance(sample, dict)
-        for k, v in sample.items():
-            self.count[k] += 1
-            if self.count[k] == 1:
-                self.mean[k] = v.detach().clone()
-            else:
-                self.mean[k] += (v.detach() - self.mean[k]) / self.count[k]
+    def update(self, sample: torch.Tensor):
+        assert isinstance(sample, torch.Tensor)
+        self.count += 1
+        self.mean += (sample.detach() - self.mean) / self.count
 
-    def merge(self, other: "CountMeanStats") -> "CountMeanStats":
+    def merge(self, other: "CountMeanStats"):
         assert isinstance(other, type(self))
-        keys = set(self.count).union(other.count)
         result = CountMeanStats()
-        for k in keys:
-            if self.count.get(k, 0) == 0:
-                result.count[k] = other.count[k]
-                result.mean[k] = other.mean[k].clone()
-            elif other.count.get(k, 0) == 0:
-                result.count[k] = self.count[k]
-                result.mean[k] = self.mean[k].clone()
-            else:
-                result.count[k] = self.count[k] + other.count[k]
-                result.mean[k] = (self.mean[k] * (self.count[k] / result.count[k])
-                                  + other.mean[k] * (other.count[k] / result.count[k]))
+        result.count = self.count + other.count
+        p = self.count / max(result.count, 1)
+        q = other.count / max(result.count, 1)
+        result.mean = p * self.mean + q * other.mean
         return result
 
     def get(self) -> Dict[str, Dict[str, Union[int, torch.Tensor]]]:
-        return {k: {"count": self.count, "mean": v} for k, v in self.mean.items()}
+        return {"count": self.count, "mean": self.mean}
 
 
 class CountMeanVarianceStats(StreamingStats):
     """
-    Statistic tracking the count, mean, and (diagonal) variance of all sample
-    tensors.
-
-    Note the count is shared across all samples.
+    Statistic tracking the count, mean, and (diagonal) variance of a single
+    :class:`torch.Tensor`.
     """
     def __init__(self):
-        self.shape = {}
-        self.welford = {}
+        self.shape = None
+        self.welford = WelfordCovariance(diagonal=True)
 
-    def update(self, sample: Dict[str, torch.Tensor]):
-        assert isinstance(sample, dict)
-        for k, v in sample.items():
-            if k not in self.shape:
-                self.shape[k] = v.shape
-                self.welford[k] = WelfordCovariance(diagonal=True)
-            assert v.shape == self.shape[k]
-            self.welford[k].update(v.detach().reshape(-1))
+    def update(self, sample: torch.Tensor):
+        assert isinstance(sample, torch.Tensor)
+        if self.shape is None:
+            self.shape = sample.shape
+        assert sample.shape == self.shape
+        self.welford.update(sample.detach().reshape(-1))
 
     def merge(self, other: "CountMeanVarianceStats") -> "CountMeanVarianceStats":
         assert isinstance(other, type(self))
-        keys = set(self.shape).union(other.shape)
+        if self.shape is None:
+            return copy.deepcopy(other)
+        if other.shape is None:
+            return copy.deepcopy(self)
         result = copy.deepcopy(self)
-        for key in keys:
-            if key not in self.shape:
-                result.shape[key] = other.shape[key]
-                result.welford[key] = copy.deepcopy(other.welford[key])
-            elif key in other.shape:
-                assert other.shape[key] == self.shape[key]
-                lhs = self.welford[key]
-                rhs = other.welford[key]
-                res = result.welford[key]
-                res.n_samples = lhs.n_samples + rhs.n_samples
-                lhs_weight = lhs.n_samples / res.n_samples
-                rhs_weight = rhs.n_samples / res.n_samples
-                res._mean = lhs_weight * lhs._mean + rhs_weight * rhs._mean
-                res._m2 = (
-                    lhs._m2 + rhs._m2
-                    + (lhs.n_samples * rhs.n_samples / res.n_samples)
-                    * (lhs._mean - rhs._mean) ** 2
-                )
+        res = result.welford
+        lhs = self.welford
+        rhs = other.welford
+        res.n_samples = lhs.n_samples + rhs.n_samples
+        lhs_weight = lhs.n_samples / res.n_samples
+        rhs_weight = rhs.n_samples / res.n_samples
+        res._mean = lhs_weight * lhs._mean + rhs_weight * rhs._mean
+        res._m2 = (
+            lhs._m2 + rhs._m2
+            + (lhs.n_samples * rhs.n_samples / res.n_samples)
+            * (lhs._mean - rhs._mean) ** 2
+        )
         return result
 
     def get(self) -> Dict[str, Dict[str, Union[int, torch.Tensor]]]:
-        result = {}
-        for k, welford in self.welford.items():
-            shape = self.shape[k]
-            result[k] = {
-                "count": welford.n_samples,
-                "mean": welford._mean.reshape(shape),
-                "variance": welford.get_covariance(regularize=False).reshape(shape),
-            }
-        return result
+        if self.shape is None:
+            return {"count": 0}
+        count = self.welford.n_samples
+        mean = self.welford._mean.reshape(self.shape)
+        variance = self.welford.get_covariance(regularize=False).reshape(self.shape)
+        return {"count": count, "mean": mean, "variance": variance}
 
 
 __all__ = [
-    "StreamingStats",
-    "SelectStats",
-    "DictStats",
     "CountMeanStats",
     "CountMeanVarianceStats",
+    "CountStats",
+    "StatsOfDict",
+    "StreamingStats",
 ]
