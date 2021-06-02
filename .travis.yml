@@ -61,7 +61,7 @@ jobs:
               - pip install mypy
               - ls
               - pwd
-              - mypy pyro/optim
+              - cd pyro && mypy optim
         - name: perf
           python: 3.6
           script:
