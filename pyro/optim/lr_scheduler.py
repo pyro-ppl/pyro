@@ -1,7 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, List, Optional, Union, Iterable, Any, ValuesView
+from typing import Any, Dict, Iterable, List, Optional, Union, ValuesView
 
 from torch import Tensor
 

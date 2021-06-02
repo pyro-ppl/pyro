@@ -2,7 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from typing import Callable, Dict, Iterable, List, Optional, Union, Type, Any, ValuesView
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Type,
+    Union,
+    ValuesView,
+)
 
 import torch
 from torch import Tensor
@@ -30,7 +40,8 @@ class PyroOptim:
     :param clip_args: a dictionary of clip_norm and/or clip_value args or a callable that returns
         such dictionaries
     """
-    def __init__(self, optim_constructor: Union[Callable, Optimizer, Type[Optimizer]], optim_args: Union[Dict, Callable[..., Dict]],
+    def __init__(self, optim_constructor: Union[Callable, Optimizer, Type[Optimizer]],
+                 optim_args: Union[Dict, Callable[..., Dict]],
                  clip_args: Optional[Union[Dict, Callable[..., Dict]]] = None):
         self.pt_optim_constructor = optim_constructor
 

@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List, ValuesView, Union
+from typing import List, Union, ValuesView
 
 from torch.optim import Optimizer
 
