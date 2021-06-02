@@ -95,7 +95,7 @@ class TraceMarkovEnum_ELBO(ELBO):
             # incorporate the effects of subsampling and handlers.scale through a common scale factor
             markov_dims = frozenset({
                     plate for plate, step in model_terms["plate_to_step"].items() if step})
-            contracted_costs = [model_terms["scale"] * f for f in funsor.sum_product.modified_partial_sum_product(
+            contracted_costs = [model_terms["scale"] * f for f in funsor.sum_product.dynamic_partial_sum_product(
                 funsor.ops.logaddexp, funsor.ops.add,
                 model_terms["log_measures"] + contracted_factors,
                 plate_to_step=model_terms["plate_to_step"],

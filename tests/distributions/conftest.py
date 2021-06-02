@@ -319,6 +319,18 @@ continuous_dists = [
                 {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
                 {'concentration': [-1., 2., 3.], 'test_data': [0., 0., 1.]},
             ]),
+    Fixture(pyro_dist=dist.SineBivariateVonMises,
+            examples=[
+                {'phi_loc': [0.], 'psi_loc': [0.], 'phi_concentration': [5.], 'psi_concentration': [6.],
+                 'correlation': [2.], 'test_data': [[0., 0.]]},
+                {'phi_loc': [3.003], 'psi_loc': [-1.343], 'phi_concentration': [5.], 'psi_concentration': [6.],
+                 'correlation': [2.], 'test_data': [[0., 1.]]},
+                {'phi_loc': [-math.pi / 3], 'psi_loc': -1., 'phi_concentration': .5, 'psi_concentration': 10.,
+                 'correlation': .9, 'test_data': [[1., 0.555]]},
+                {'phi_loc': [math.pi - .2, 1.], 'psi_loc': [0., 1.],
+                 'phi_concentration': [5., 5.], 'psi_concentration': [7., .5],
+                 'weighted_correlation': [.5, .1], 'test_data': [[[1., -3.], [1., 59.]]]},
+            ]),
     Fixture(pyro_dist=dist.SoftLaplace,
             examples=[
                 {'loc': [2.0], 'scale': [4.0],
@@ -338,7 +350,14 @@ continuous_dists = [
                  'skewness': [-pi / 4, .1], 'test_data': [pi / 2, -2 * pi / 3]},
                 {'base_dist': dist.VonMises(*tensor_wrap([0., -1.234], [1., 10.])).to_event(1),
                  'skewness': [[.342355, -.0001], [.91, 0.09]], 'test_data': [[.1, -3.2], [-2., 0.]]},
-            ])
+            ]),
+    Fixture(pyro_dist=dist.AsymmetricLaplace,
+            examples=[
+                {'loc': [1.0], 'left_scale': [1.0], 'right_scale': [4.0],
+                 'test_data': [2.0]},
+                {'loc': [2.0, -50.0], 'left_scale': [4.0, 100.0],
+                 'right_scale': [0.5, 10.0], 'test_data': [[2.0, 10.0], [-1.0, -50.0]]},
+            ]),
 ]
 
 discrete_dists = [
