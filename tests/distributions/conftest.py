@@ -16,7 +16,7 @@ from pyro.distributions.testing.rejection_gamma import (
     ShapeAugmentedDirichlet,
     ShapeAugmentedGamma,
 )
-from tests.distributions.dist_fixture import Fixture, tensor_wrap
+from tests.distributions.dist_fixture import Fixture
 
 
 class FoldedNormal(dist.FoldedDistribution):
