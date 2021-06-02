@@ -39,6 +39,18 @@ class SparsePoisson(dist.Poisson):
         super().__init__(rate, is_sparse=True, validate_args=validate_args)
 
 
+class SineSkewedUniform(dist.SineSkewed):
+    def __init__(self, lower, upper, skewness, *args, **kwargs):
+        base_dist = dist.Uniform(lower, upper).to_event(lower.ndim)
+        super().__init__(base_dist, skewness, *args, **kwargs)
+
+
+class SineSkewedVonMises(dist.SineSkewed):
+    def __init__(self, von_loc, von_conc, skewness):
+        base_dist = dist.VonMises(von_loc, von_conc).to_event(von_loc.ndim)
+        super().__init__(base_dist, skewness)
+
+
 continuous_dists = [
     Fixture(pyro_dist=dist.Uniform,
             scipy_dist=sp.uniform,
@@ -342,14 +354,23 @@ continuous_dists = [
                 {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
                  'test_data': [[2.0, 50.0], [2.0, 50.0]]},
             ]),
-    Fixture(pyro_dist=dist.SineSkewed,
+    Fixture(pyro_dist=SineSkewedUniform,
             examples=[
-                {'base_dist': dist.VonMises(*tensor_wrap([0.], [1.])).to_event(1),
-                 'skewness': [.342355], 'test_data': [.1]},
-                {'base_dist': dist.Uniform(*tensor_wrap([-pi, -pi], [pi, pi])).to_event(1),
-                 'skewness': [-pi / 4, .1], 'test_data': [pi / 2, -2 * pi / 3]},
-                {'base_dist': dist.VonMises(*tensor_wrap([0., -1.234], [1., 10.])).to_event(1),
-                 'skewness': [[.342355, -.0001], [.91, 0.09]], 'test_data': [[.1, -3.2], [-2., 0.]]},
+                {'lower': [-pi, -pi],
+                 'upper':[pi, pi],
+                 'skewness': [-pi / 4, .1],
+                 'test_data': [pi / 2, -2 * pi / 3]}
+            ]),
+    Fixture(pyro_dist=SineSkewedVonMises,
+            examples=[
+                {'von_loc': [0.],
+                 'von_conc': [1.],
+                 'skewness': [.342355],
+                 'test_data': [.1]},
+                {'von_loc': [0., -1.234],
+                 'von_conc': [1., 10.],
+                 'skewness': [[.342355, -.0001], [.91, 0.09]],
+                 'test_data': [[.1, -3.2], [-2., 0.]]}
             ]),
     Fixture(pyro_dist=dist.AsymmetricLaplace,
             examples=[
