@@ -4,7 +4,7 @@
 import copy
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Any, Dict, Hashable, Type, Union
+from typing import Any, Callable, Dict, Hashable, Union
 
 import torch
 
@@ -116,8 +116,8 @@ class StatsOfDict(StreamingStats):
 
     def __init__(
         self,
-        types: Dict[Hashable, Type[StreamingStats]] = {},
-        default: Type[StreamingStats] = CountStats,
+        types: Dict[Hashable, Callable[[], StreamingStats]] = {},
+        default: Callable[[], StreamingStats] = CountStats,
     ):
         self.stats: Dict[Hashable, StreamingStats] = defaultdict(default)
         self.stats.update({k: v() for k, v in types.items()})
