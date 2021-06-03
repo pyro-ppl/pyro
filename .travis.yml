@@ -59,6 +59,8 @@ jobs:
           python: 3.6
           script:
               - pip install mypy
+              - pwd
+              - ls
               - mypy pyro
         - name: perf
           python: 3.6
