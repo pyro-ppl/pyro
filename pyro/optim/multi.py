@@ -1,7 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import torch
 
@@ -146,7 +146,7 @@ class Newton(MultiOptimizer):
         region. Missing names will use unregularized Newton update, equivalent
         to infinite trust radius.
     """
-    def __init__(self, trust_radii: Optional[Dict] = {}):
+    def __init__(self, trust_radii: Dict = {}):
         self.trust_radii = trust_radii
 
     def get_step(self, loss: torch.Tensor, params: Dict):

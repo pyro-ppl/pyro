@@ -28,9 +28,9 @@ class ClippedAdam(Optimizer):
     `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
     https://arxiv.org/abs/1412.6980
     """
-    def __init__(self, params, lr: Optional[float] = 1e-3, betas: Optional[Tuple] = (0.9, 0.999),
-                 eps: Optional[float] = 1e-8, weight_decay=0, clip_norm: Optional[float] = 10.0,
-                 lrd: Optional[float] = 1.0):
+    def __init__(self, params, lr: float = 1e-3, betas: Tuple = (0.9, 0.999),
+                 eps: float = 1e-8, weight_decay=0, clip_norm: float = 10.0,
+                 lrd: float = 1.0):
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         weight_decay=weight_decay,
                         clip_norm=clip_norm, lrd=lrd)
