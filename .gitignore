@@ -144,3 +144,6 @@ ENV/
 *.swo
 *.swp
 *~
+
+# mypy cache
+.mypy_cache
