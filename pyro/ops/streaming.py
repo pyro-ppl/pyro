@@ -71,10 +71,10 @@ class CountStats(StreamingStats):
         self.count = 0
         super().__init__()
 
-    def update(self, sample):
+    def update(self, sample) -> None:
         self.count += 1
 
-    def merge(self, other: "CountStats"):
+    def merge(self, other: "CountStats") -> "CountStats":
         assert isinstance(other, type(self))
         result = CountStats()
         result.count = self.count + other.count
@@ -123,11 +123,11 @@ class StatsOfDict(StreamingStats):
         self.stats.update(**{k: v() for k, v in types.items()})
         super().__init__()
 
-    def update(self, sample: dict):
+    def update(self, sample: Dict[str, Any]) -> None:
         for k, v in sample.items():
             self.stats[k].update(v)
 
-    def merge(self, other):
+    def merge(self, other: "StatsOfDict") -> "StatsOfDict":
         assert isinstance(other, type(self))
         result = copy.deepcopy(self)
         for k in set(self.stats).union(other.stats):
@@ -155,7 +155,7 @@ class StackStats(StreamingStats):
     def __init__(self):
         self.samples = []
 
-    def update(self, sample: torch.Tensor):
+    def update(self, sample: torch.Tensor) -> None:
         assert isinstance(sample, torch.Tensor)
         self.samples.append(sample)
 
@@ -186,7 +186,7 @@ class CountMeanStats(StreamingStats):
         self.mean = 0
         super().__init__()
 
-    def update(self, sample: torch.Tensor):
+    def update(self, sample: torch.Tensor) -> None:
         assert isinstance(sample, torch.Tensor)
         self.count += 1
         self.mean += (sample.detach() - self.mean) / self.count
@@ -222,7 +222,7 @@ class CountMeanVarianceStats(StreamingStats):
         self.welford = WelfordCovariance(diagonal=True)
         super().__init__()
 
-    def update(self, sample: torch.Tensor):
+    def update(self, sample: torch.Tensor) -> None:
         assert isinstance(sample, torch.Tensor)
         if self.shape is None:
             self.shape = sample.shape
