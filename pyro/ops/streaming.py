@@ -62,9 +62,9 @@ class CountStats(StreamingStats):
     For example::
 
         >>> stats = CountStats()
-        >>> stats.update(torch.tensor(3, 3))
+        >>> stats.update(torch.randn(3, 3))
         >>> stats.get()
-        {"count": 1}
+        {'count': 1}
     """
 
     def __init__(self):
@@ -95,16 +95,18 @@ class StatsOfDict(StreamingStats):
     For example the following are equivalent::
 
         # Version 1. Hand encode statistics.
-        a_stats = CountStats()
-        b_stats = CountMeanStats()
-        a_stats.update(torch.tensor(0.))
-        b_stats.update(torch.tensor([1., 2.]))
-        summary = {"a": a_stats.get(), "b": b_stats.get()}
+        >>> a_stats = CountStats()
+        >>> b_stats = CountMeanStats()
+        >>> a_stats.update(torch.tensor(0.))
+        >>> b_stats.update(torch.tensor([1., 2.]))
+        >>> summary = {"a": a_stats.get(), "b": b_stats.get()}
 
         # Version 2. Collect samples into dictionaries.
-        stats = StatsOfDict({"a": CountStats, "b": CountMeanStats})
-        stats.update({"a": torch.tensor(0.), "b": torch.tensor([1., 2.])})
-        summary = stats.get()
+        >>> stats = StatsOfDict({"a": CountStats, "b": CountMeanStats})
+        >>> stats.update({"a": torch.tensor(0.), "b": torch.tensor([1., 2.])})
+        >>> summary = stats.get()
+        >>> summary
+        {'a': {'count': 1}, 'b': {'count': 1, 'mean': tensor([1., 2.])}}
 
     :param default: Default type of statistics of values of the dictionary.
         Defaults to the inexpensive :class:`CountStats`.
