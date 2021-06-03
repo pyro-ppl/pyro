@@ -9,15 +9,16 @@ This module offers a modified interface for MCMC inference with the following ob
     code that works with different backends.
   - minimal memory consumption with multiprocessing and CUDA.
 """
-
-from abc import ABC
+import copy
 import json
 import logging
 import queue
 import signal
 import threading
 import warnings
+from abc import ABC, abstractmethod
 from collections import OrderedDict
+from typing import Dict
 
 import torch
 import torch.multiprocessing as mp
@@ -33,8 +34,8 @@ from pyro.infer.mcmc.logger import (
 )
 from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.util import diagnostics, print_summary
+from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict, StreamingStats
 from pyro.util import optional
-from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict
 
 MAX_SEED = 2**32 - 1
 
@@ -267,6 +268,10 @@ class AbstractMCMC(ABC):
         self.kernel = kernel
         self.num_chains = num_chains
         self.transforms = transforms
+
+    @abstractmethod
+    def run(self, *args, **kwargs):
+        raise NotImplementedError
 
     def _set_transforms(self, *args, **kwargs):
         # Use `kernel.transforms` when available
@@ -529,6 +534,7 @@ class StreamingMCMC(AbstractMCMC):
         if statistics is None:
             statistics = StatsOfDict(default=CountMeanVarianceStats)
         self._statistics = statistics
+        self._default_statistics = copy.deepcopy(statistics)
         if save_params is not None:
             kernel.save_params = save_params
         self._validate_kernel(initial_params)
@@ -583,11 +589,22 @@ class StreamingMCMC(AbstractMCMC):
                             z_acc[name] = self.transforms[name].inv(z)
 
                     self._statistics.update({
-                        name: transformed_sample for name, transformed_sample in z_acc.items()
+                        (chain_id, name): transformed_sample for name, transformed_sample in z_acc.items()
                     })
 
         # terminate the sampler (shut down worker processes)
         self.sampler.terminate(True)
 
-    def summary(self, prob=0.9):
-        return self._statistics.get()
+    def get_statistics(self, group_by_chain=True):
+        if group_by_chain:
+            return self._statistics.get()
+        else:
+            # merge all chains with respect to names
+            merged_dict: Dict[str, StreamingStats] = {}
+            for (_, name), stat in self._statistics.stats.items():
+                if name in merged_dict:
+                    merged_dict[name] = merged_dict[name].merge(stat)
+                else:
+                    merged_dict[name] = stat
+
+        return {k: v.get() for k, v in merged_dict.items()}

@@ -14,8 +14,8 @@ from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC, StreamingMCMC, _MultiSampler, _UnarySampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
+from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict
 from pyro.util import optional
-from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict, CountStats
 from tests.common import assert_close
 
 
@@ -77,7 +77,8 @@ def normal_normal_model(data):
 @pytest.mark.parametrize("mcmc_cls", [StreamingMCMC])
 @pytest.mark.parametrize('num_chains', [1, 2])
 @pytest.mark.filterwarnings("ignore:num_chains")
-def test_mcmc_summary(mcmc_cls, num_chains):
+@pytest.mark.parametrize('group_by_chain', [True, False])
+def test_mcmc_summary(mcmc_cls, num_chains, group_by_chain):
     num_samples = 2000
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,),
@@ -87,7 +88,11 @@ def test_mcmc_summary(mcmc_cls, num_chains):
                          statistics=StatsOfDict(default=CountMeanVarianceStats),
                          num_chains=num_chains, initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
-    print(mcmc.summary())  # TODO Draft test
+    statistics = mcmc.get_statistics(group_by_chain=group_by_chain)
+    count = 0
+    for stat in statistics.values():
+        count += stat['count']
+    assert count == num_samples * num_chains
 
 
 @pytest.mark.parametrize('num_draws', [None, 1800, 2200])
