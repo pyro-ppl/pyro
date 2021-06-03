@@ -34,14 +34,14 @@ class HorovodOptimizer(PyroOptim):
 
         def optim_constructor(params, **pt_kwargs) -> Optimizer:
             import horovod.torch as hvd  # type: ignore
-            pt_optim = pyro_optim.pt_optim_constructor(params, **pt_kwargs)
+            pt_optim = pyro_optim.pt_optim_constructor(params, **pt_kwargs) # type: ignore
             named_parameters = [(param_name(p), p) for p in params]
             hvd_optim = hvd.DistributedOptimizer(
                 pt_optim,
                 named_parameters=named_parameters,
                 **horovod_kwargs,
             )
-            return hvd_optim
+            return hvd_optim # type: ignore
 
         super().__init__(optim_constructor, pyro_optim.pt_optim_args, pyro_optim.pt_clip_args)
 
