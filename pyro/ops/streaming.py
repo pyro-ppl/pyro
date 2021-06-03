@@ -4,7 +4,7 @@
 import copy
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Any, Dict, Type, Union
+from typing import Any, Dict, Hashable, Type, Union
 
 import torch
 
@@ -48,9 +48,9 @@ class StreamingStats(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get(self) -> Dict[str, Any]:
+    def get(self) -> Any:
         """
-        Return the aggregate statistic, which should be a dictionary.
+        Return the aggregate statistic.
         """
         raise NotImplementedError
 
@@ -116,14 +116,14 @@ class StatsOfDict(StreamingStats):
 
     def __init__(
         self,
-        types: Dict[str, Type[StreamingStats]] = {},
+        types: Dict[Hashable, Type[StreamingStats]] = {},
         default: Type[StreamingStats] = CountStats,
     ):
-        self.stats: Dict[str, StreamingStats] = defaultdict(default)
-        self.stats.update(**{k: v() for k, v in types.items()})
+        self.stats: Dict[Hashable, StreamingStats] = defaultdict(default)
+        self.stats.update({k: v() for k, v in types.items()})
         super().__init__()
 
-    def update(self, sample: Dict[str, Any]) -> None:
+    def update(self, sample: Dict[Hashable, Any]) -> None:
         for k, v in sample.items():
             self.stats[k].update(v)
 
@@ -137,7 +137,7 @@ class StatsOfDict(StreamingStats):
                 result.stats[k] = self.stats[k].merge(other.stats[k])
         return result
 
-    def get(self) -> Dict[str, Any]:
+    def get(self) -> Dict[Hashable, Any]:
         """
         :returns: A dictionary of statistics. The keys of this dictionary are
             the same as the keys of the samples from which this object is
