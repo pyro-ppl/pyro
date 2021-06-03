@@ -10,6 +10,7 @@ from pyro.ops.streaming import (
     CountMeanStats,
     CountMeanVarianceStats,
     CountStats,
+    StackStats,
     StatsOfDict,
 )
 from tests.common import assert_close
@@ -17,16 +18,14 @@ from tests.common import assert_close
 
 def generate_data(num_samples):
     shapes = {"aaa": (), "bbb": (4,), "ccc": (3, 2), "ddd": (5, 1)}
-    return [
-        {k: torch.randn(v) for k, v in shapes.items()}
-        for _ in range(num_samples)
-    ]
+    return [{k: torch.randn(v) for k, v in shapes.items()} for _ in range(num_samples)]
 
 
 EXAMPLE_STATS = [
     CountStats,
     functools.partial(StatsOfDict, default=CountMeanStats),
     functools.partial(StatsOfDict, default=CountMeanVarianceStats),
+    StackStats,
     StatsOfDict,
     functools.partial(
         StatsOfDict, {"aaa": CountMeanStats, "bbb": CountMeanVarianceStats}
@@ -36,6 +35,7 @@ EXAMPLE_STATS_IDS = [
     "CountStats",
     "CountMeanStats",
     "CountMeanVarianceStats",
+    "StackStats",
     "StatsOfDict1",
     "StatsOfDict2",
 ]
@@ -80,4 +80,18 @@ def test_update_merge_get(make_stats, left_size, right_size):
     assert isinstance(actual_stats, type(expected_stats))
 
     actual = actual_stats.get()
+    assert_close(actual, expected)
+
+
+def test_stats_of_dict():
+    stats = StatsOfDict(types={"aaa": CountMeanStats}, default=CountStats)
+    stats.update({"aaa": torch.tensor(0.0)})
+    stats.update({"aaa": torch.tensor(1.0), "bbb": torch.randn(3, 3)})
+    stats.update({"aaa": torch.tensor(2.0), "bbb": torch.randn(3, 3)})
+    actual = stats.get()
+
+    expected = {
+        "aaa": {"count": 3, "mean": torch.tensor(1.0)},
+        "bbb": {"count": 3},
+    }
     assert_close(actual, expected)
