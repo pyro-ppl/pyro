@@ -58,7 +58,7 @@ jobs:
         - name: type_check
           python: 3.6
           script:
-              - pip install mypy
+              - pip install mypy==0.812
               - pwd
               - ls
               - mypy pyro
