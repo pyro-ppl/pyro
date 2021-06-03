@@ -25,7 +25,7 @@ EXAMPLE_STATS = [
     CountStats,
     functools.partial(StatsOfDict, default=CountMeanStats),
     functools.partial(StatsOfDict, default=CountMeanVarianceStats),
-    StackStats,
+    functools.partial(StatsOfDict, default=StackStats),
     StatsOfDict,
     functools.partial(
         StatsOfDict, {"aaa": CountMeanStats, "bbb": CountMeanVarianceStats}
@@ -39,6 +39,14 @@ EXAMPLE_STATS_IDS = [
     "StatsOfDict1",
     "StatsOfDict2",
 ]
+
+
+def sort_samples_in_place(x):
+    for key, value in list(x.items()):
+        if isinstance(key, str) and key == "samples":
+            x[key] = value.sort(0).values
+        elif isinstance(value, dict):
+            sort_samples_in_place(value)
 
 
 @pytest.mark.parametrize("size", [0, 10])
@@ -55,6 +63,10 @@ def test_update_get(make_stats, size):
     for i in torch.randperm(len(samples)).tolist():
         actual_stats.update(samples[i])
     actual = actual_stats.get()
+
+    # Sort samples in case of StackStats.
+    sort_samples_in_place(expected)
+    sort_samples_in_place(actual)
 
     assert_close(actual, expected)
 
@@ -92,6 +104,6 @@ def test_stats_of_dict():
 
     expected = {
         "aaa": {"count": 3, "mean": torch.tensor(1.0)},
-        "bbb": {"count": 3},
+        "bbb": {"count": 2},
     }
     assert_close(actual, expected)
