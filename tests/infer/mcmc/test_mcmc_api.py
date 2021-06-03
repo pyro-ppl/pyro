@@ -11,10 +11,11 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.mcmc import HMC, NUTS
-from pyro.infer.mcmc.api import MCMC, _MultiSampler, _UnarySampler
+from pyro.infer.mcmc.api import MCMC, StreamingMCMC, _MultiSampler, _UnarySampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
 from pyro.util import optional
+from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict, CountStats
 from tests.common import assert_close
 
 
@@ -71,6 +72,22 @@ def normal_normal_model(data):
     y = pyro.sample('y', dist.Normal(x, torch.ones(data.shape)))
     pyro.sample('obs', dist.Normal(y, torch.tensor([1.0])), obs=data)
     return y
+
+
+@pytest.mark.parametrize("mcmc_cls", [StreamingMCMC])
+@pytest.mark.parametrize('num_chains', [1, 2])
+@pytest.mark.filterwarnings("ignore:num_chains")
+def test_mcmc_summary(mcmc_cls, num_chains):
+    num_samples = 2000
+    data = torch.tensor([1.0])
+    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,),
+                                                        num_chains=num_chains)
+    kernel = PriorKernel(normal_normal_model)
+    mcmc = StreamingMCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100,
+                         statistics=StatsOfDict(default=CountMeanVarianceStats),
+                         num_chains=num_chains, initial_params=initial_params, transforms=transforms)
+    mcmc.run(data)
+    print(mcmc.summary())  # TODO Draft test
 
 
 @pytest.mark.parametrize('num_draws', [None, 1800, 2200])
