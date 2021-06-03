@@ -140,7 +140,7 @@ class PyroOptim:
         self.set_state(state)
 
     def _get_optim(self, param: Union[Iterable[Tensor], Iterable[Dict[Any, Any]]]):
-        return self.pt_optim_constructor([param], **self._get_optim_args(param)) # type: ignore
+        return self.pt_optim_constructor([param], **self._get_optim_args(param))  # type: ignore
 
     # helper to fetch the optim args if callable (only used internally)
     def _get_optim_args(self, param: Union[Iterable[Tensor], Iterable[Dict]]):
