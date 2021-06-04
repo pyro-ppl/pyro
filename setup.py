@@ -104,6 +104,7 @@ setup(
         'dev': EXTRAS_REQUIRE + [
             'flake8',
             'isort>=5.0',
+            'mypy>=0.812',
             'nbformat',
             'nbsphinx>=0.3.2',
             'nbstripout',
