@@ -42,7 +42,7 @@ jobs:
         - stage: lint
           name: lint
           python: 3.6
-          before_install: pip install flake8 isort>=5.0 nbstripout nbformat
+          before_install: pip install flake8 isort>=5.0 mypy nbstripout nbformat
           install:
           script:
               - make lint
@@ -55,13 +55,6 @@ jobs:
               - pip install -r docs/requirements.txt
               - make docs
               - make doctest
-        - name: type_check
-          python: 3.6
-          script:
-              - pip install mypy==0.812
-              - pwd
-              - ls
-              - mypy pyro
         - name: perf
           python: 3.6
           script:
