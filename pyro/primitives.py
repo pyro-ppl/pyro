@@ -48,7 +48,7 @@ def clear_param_store():
 _param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
 
 
-def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
+def param(name, init_tensor=None, constraint=constraints.real):
     """
     Saves the variable as a parameter in the param store.
     To interact with the param store or write to disk,
@@ -62,12 +62,6 @@ def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
     :type init_tensor: torch.Tensor or callable
     :param constraint: torch constraint, defaults to ``constraints.real``.
     :type constraint: torch.distributions.constraints.Constraint
-    :param int event_dim: (optional) number of rightmost dimensions unrelated
-        to batching. Dimension to the left of this will be considered batch
-        dimensions; if the param statement is inside a subsampled plate, then
-        corresponding batch dimensions of the parameter will be correspondingly
-        subsampled. If unspecified, all dimensions will be considered event
-        dims and no subsampling will be performed.
     :returns: A constrained parameter. The underlying unconstrained parameter
         is accessible via ``pyro.param(...).unconstrained()``, where
         ``.unconstrained`` is a weakref attribute.
@@ -75,7 +69,7 @@ def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
     """
     # Note effectful(-) requires the double passing of name below.
     args = (name,) if init_tensor is None else (name, init_tensor)
-    return _param(*args, constraint=constraint, event_dim=event_dim, name=name)
+    return _param(*args, constraint=constraint, name=name)
 
 
 def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):

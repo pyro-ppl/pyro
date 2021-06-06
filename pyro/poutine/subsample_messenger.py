@@ -133,7 +133,12 @@ class SubsampleMessenger(IndepMessenger):
 
     def _postprocess_message(self, msg):
         if msg["type"] in ("param", "subsample") and self.dim is not None:
-            event_dim = msg["kwargs"].get("event_dim")
+            # Extract event dim based on type
+            if msg["type"] == "param":
+                constraint = msg["kwargs"].get("constraint")
+                event_dim = None if constraint is None else constraint.event_dim
+            else:
+                event_dim = msg["kwargs"].get("event_dim")
             if event_dim is not None:
                 assert event_dim >= 0
                 dim = self.dim - event_dim
@@ -141,7 +146,8 @@ class SubsampleMessenger(IndepMessenger):
                 if len(shape) >= -dim and shape[dim] != 1:
                     if is_validation_enabled() and shape[dim] != self.size:
                         if msg["type"] == "param":
-                            statement = "pyro.param({}, ..., event_dim={})".format(msg["name"], event_dim)
+                            statement = "pyro.param({}, ..., constraint=constraint(..., event_dim={}))"\
+                                .format(msg["name"], event_dim)
                         else:
                             statement = "pyro.subsample(..., event_dim={})".format(event_dim)
                         raise ValueError(
