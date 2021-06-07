@@ -44,7 +44,7 @@ class SineSkewed(TorchDistribution):
                                              phi_concentration=1000 * phi_conc,
                                              psi_concentration=1000 * psi_conc,
                                              weighted_correlation=corr_scale)
-                return pyro.sample(' phi_psi', SineSkewed(sine, skewness), obs=obs)
+                return pyro.sample('phi_psi', SineSkewed(sine, skewness), obs=obs)
 
     To ensure the skewing does not alter the normalization constant of the (Sine Bivaraite von Mises) base
     distribution the skewness parameters are constraint. The constraint requires the sum of the absolute values of
