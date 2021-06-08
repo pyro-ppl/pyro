@@ -330,6 +330,13 @@ SineBivariateVonMises
     :undoc-members:
     :show-inheritance:
 
+SineSkewed
+----------
+.. autoclass:: pyro.distributions.SineSkewed
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SoftLaplace
 -------------
 .. autoclass:: pyro.distributions.SoftLaplace

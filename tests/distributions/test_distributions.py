@@ -40,7 +40,7 @@ def test_support_shape(dist):
 
 
 def test_infer_shapes(dist):
-    if "LKJ" in dist.pyro_dist.__name__:
+    if "LKJ" in dist.pyro_dist.__name__ or "SineSkewed" in dist.pyro_dist.__name__:
         pytest.xfail(reason="cannot statically compute shape")
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)

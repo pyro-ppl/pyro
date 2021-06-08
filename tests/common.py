@@ -225,7 +225,7 @@ def assert_close(actual, expected, atol=1e-7, rtol=0, msg=''):
         assert set(actual.keys()) == set(expected.keys())
         for key, x_val in actual.items():
             assert_close(x_val, expected[key], atol=atol, rtol=rtol,
-                         msg='At key{}: {} vs {}'.format(key, x_val, expected[key]))
+                         msg='At key {}: {} vs {}'.format(repr(key), x_val, expected[key]))
     elif isinstance(actual, str):
         assert actual == expected, msg
     elif is_iterable(actual) and is_iterable(expected):

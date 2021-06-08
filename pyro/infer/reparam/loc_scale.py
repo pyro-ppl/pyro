@@ -49,7 +49,7 @@ class LocScaleReparam(Reparam):
         assert obs is None, "LocScaleReparam does not support observe statements"
         centered = self.centered
         if is_identically_one(centered):
-            return name, fn, obs
+            return fn, obs
         event_shape = fn.event_shape
         fn, event_dim = self._unwrap(fn)
 
