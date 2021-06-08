@@ -46,9 +46,9 @@ def test_normal(dist_type, centered, shape):
     expected_probe = get_moments(value)
 
     if "dist_type" == "Normal":
-        reparam = LocScaleReparam()
+        reparam = LocScaleReparam(centered)
     else:
-        reparam = LocScaleReparam(shape_params=["df"])
+        reparam = LocScaleReparam(centered, shape_params=["df"])
     reparam_model = poutine.reparam(model, {"x": reparam})
     value = poutine.trace(reparam_model).get_trace().nodes["x"]["value"]
     actual_probe = get_moments(value)
