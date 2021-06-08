@@ -32,6 +32,10 @@ class SineBivariateVonMises(TorchDistribution):
     where I_i(\cdot) is the modified bessel function of first kind, mu's are the locations of the distribution,
     kappa's are the concentration and rho gives the correlation between angles x_1 and x_2.
 
+    This distribution is a submodel of the Bivariate von Mises distribution, called the Sine Distribution [2] in
+    directional statistics.
+
+
     This distribution is helpful for modeling coupled angles such as torsion angles in peptide chains.
     To infer parameters, use :class:`~pyro.infer.NUTS` or :class:`~pyro.infer.HMC` with priors that
     avoid parameterizations where the distribution becomes bimodal; see note below.
@@ -51,6 +55,8 @@ class SineBivariateVonMises(TorchDistribution):
 
     ** References: **
       1. Probabilistic model for two dependent circular variables Singh, H., Hnizdo, V., and Demchuck, E. (2002)
+      2. Protein Bioinformatics and Mixtures of Bivariate von Mises Distributions for Angular Data,
+         Mardia, K. V, Taylor, T. C., and Subramaniam, G. (2007)
 
     :param torch.Tensor phi_loc: location of first angle
     :param torch.Tensor psi_loc: location of second angle
