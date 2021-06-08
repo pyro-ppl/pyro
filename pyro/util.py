@@ -11,6 +11,7 @@ import warnings
 from collections import defaultdict
 from contextlib import contextmanager
 from itertools import zip_longest
+from typing import Dict
 
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ import torch
 from pyro.poutine.util import site_is_subsample
 
 
-def set_rng_seed(rng_seed):
+def set_rng_seed(rng_seed : int) -> None:
     """
     Sets seeds of `torch` and `torch.cuda` (if available).
 
@@ -29,11 +30,11 @@ def set_rng_seed(rng_seed):
     np.random.seed(rng_seed)
 
 
-def get_rng_state():
+def get_rng_state() -> Dict:
     return {'torch': torch.get_rng_state(), 'random': random.getstate(), 'numpy': np.random.get_state()}
 
 
-def set_rng_state(state):
+def set_rng_state(state : Dict) -> Dict:
     torch.set_rng_state(state['torch'])
     random.setstate(state['random'])
     if 'numpy' in state:

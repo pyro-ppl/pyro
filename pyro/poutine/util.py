@@ -38,7 +38,7 @@ def prune_subsample_sites(trace):
     return trace
 
 
-def enum_extend(trace, msg, num_samples=None):
+def enum_extend(trace, msg: str, num_samples: Optional[int]=None) -> List:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -65,7 +65,7 @@ def enum_extend(trace, msg, num_samples=None):
     return extended_traces
 
 
-def mc_extend(trace, msg, num_samples=None):
+def mc_extend(trace, msg: str, num_samples:Optional[int] = None) -> List:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -90,7 +90,7 @@ def mc_extend(trace, msg, num_samples=None):
     return extended_traces
 
 
-def discrete_escape(trace, msg):
+def discrete_escape(trace, msg: str) -> bool:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -107,7 +107,7 @@ def discrete_escape(trace, msg):
         (getattr(msg["fn"], "has_enumerate_support", False))
 
 
-def all_escape(trace, msg):
+def all_escape(trace, msg: str) -> bool:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
