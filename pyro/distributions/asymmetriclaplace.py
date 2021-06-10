@@ -14,7 +14,7 @@ class AsymmetricLaplace(TorchDistribution):
 
     To the left of ``loc`` this acts like an
     ``-Exponential(1/(asymmetry*scale))``; to the right of ``loc`` this acts
-    like an ``Exponential(asymmetry/scale)`` The density is continuous so the
+    like an ``Exponential(asymmetry/scale)``. The density is continuous so the
     left and right densities at ``loc`` agree.
 
     :param loc: Location parameter, i.e. the mode.
