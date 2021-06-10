@@ -3,7 +3,7 @@
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all
+from torch.distributions.utils import broadcast_all, lazy_property
 
 from .torch_distribution import TorchDistribution
 
@@ -17,27 +17,33 @@ class AsymmetricLaplace(TorchDistribution):
     The density is continuous so the left and right densities at ``loc`` agree.
 
     :param loc: Location parameter, i.e. the mode.
-    :param left_scale: Scale parameter to the left of ``loc``.
-    :param right_scale: Scale parameter to the right of ``loc``.
+    :param scale: Scale parameter = geometric mean of left and right scales.
+    :param asymmetry: Log ratio of right scale to left scale.
     """
     arg_constraints = {"loc": constraints.real,
-                       "right_scale": constraints.positive,
-                       "left_scale": constraints.positive}
+                       "scale": constraints.positive,
+                       "asymmetry": constraints.real}
     support = constraints.real
     has_rsample = True
 
-    def __init__(self, loc, left_scale, right_scale, validate_args=None):
-        self.loc, self.left_scale, self.right_scale = broadcast_all(
-            loc, left_scale, right_scale
-        )
+    def __init__(self, loc, scale, asymmetry, validate_args=None):
+        self.loc, self.scale, self.asymmetry = broadcast_all(loc, scale, asymmetry)
         super().__init__(self.loc.shape, validate_args=validate_args)
+
+    @lazy_property
+    def left_scale(self):
+        return self.scale * self.asymmetry.neg().exp()
+
+    @lazy_property
+    def right_scale(self):
+        return self.scale * self.asymmetry.exp()
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(AsymmetricLaplace, _instance)
         batch_shape = torch.Size(batch_shape)
         new.loc = self.loc.expand(batch_shape)
-        new.left_scale = self.left_scale.expand(batch_shape)
-        new.right_scale = self.right_scale.expand(batch_shape)
+        new.scale = self.scale.expand(batch_shape)
+        new.asymmetry = self.asymmetry.expand(batch_shape)
         super(AsymmetricLaplace, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
