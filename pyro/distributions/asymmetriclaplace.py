@@ -18,11 +18,11 @@ class AsymmetricLaplace(TorchDistribution):
 
     :param loc: Location parameter, i.e. the mode.
     :param scale: Scale parameter = geometric mean of left and right scales.
-    :param asymmetry: Log ratio of right scale to left scale.
+    :param asymmetry: Ratio of left scale to right scale.
     """
     arg_constraints = {"loc": constraints.real,
                        "scale": constraints.positive,
-                       "asymmetry": constraints.real}
+                       "asymmetry": constraints.positive}
     support = constraints.real
     has_rsample = True
 
@@ -32,11 +32,11 @@ class AsymmetricLaplace(TorchDistribution):
 
     @lazy_property
     def left_scale(self):
-        return self.scale * self.asymmetry.neg().exp()
+        return self.scale * self.asymmetry
 
     @lazy_property
     def right_scale(self):
-        return self.scale * self.asymmetry.exp()
+        return self.scale / self.asymmetry
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(AsymmetricLaplace, _instance)
