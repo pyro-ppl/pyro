@@ -12,13 +12,14 @@ class AsymmetricLaplace(TorchDistribution):
     """
     Asymmetric version of Laplace distribution.
 
-    To the left of ``loc`` this acts like an ``-Exponential(1 / left_scale)``;
-    to the right of ``loc`` this acts like an ``Exponential(1 / right_scale)``.
-    The density is continuous so the left and right densities at ``loc`` agree.
+    To the left of ``loc`` this acts like an
+    ``-Exponential(1/(asymmetry*scale))``; to the right of ``loc`` this acts
+    like an ``Exponential(asymmetry/scale)`` The density is continuous so the
+    left and right densities at ``loc`` agree.
 
     :param loc: Location parameter, i.e. the mode.
     :param scale: Scale parameter = geometric mean of left and right scales.
-    :param asymmetry: Ratio of left scale to right scale.
+    :param asymmetry: Square of ratio of left to right scales.
     """
     arg_constraints = {"loc": constraints.real,
                        "scale": constraints.positive,
