@@ -11,8 +11,8 @@ import argparse
 
 import torch
 
-from pyro.generic import distributions as dist
 # We use the pyro.generic interface to support dynamic choice of backend.
+from pyro.generic import distributions as dist
 from pyro.generic import infer, ops, optim, pyro, pyro_backend
 
 
@@ -65,7 +65,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
     parser.add_argument("-b", "--backend", default="minipyro")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)

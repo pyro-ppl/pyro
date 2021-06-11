@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sphinx_rtd_theme
+
 from pyro import __version__
 
 # -*- coding: utf-8 -*-
@@ -64,7 +65,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Pyro Tutorials'
-copyright = u'2017-2018, Uber Technologies, Inc'
+copyright = u'Pyro Contributors'
 author = u'Uber AI Labs'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -121,7 +122,7 @@ html_theme_options = {
 html_static_path = ['_static']
 html_style = 'css/pyro.css'
 
-# html_favicon = '../img/favicon/favicon.ico'
+html_favicon = '_static/img/favicon/favicon.ico'
 
 
 # -- Options for HTMLHelp output ------------------------------------------

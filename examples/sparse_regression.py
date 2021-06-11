@@ -2,20 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import math
 
 import numpy as np
 import torch
-import math
+from torch.optim import Adam
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide import AutoDelta
 from pyro.infer import Trace_ELBO
-from pyro.infer.autoguide import init_to_median
-
-from torch.optim import Adam
-
+from pyro.infer.autoguide import AutoDelta, init_to_median
 
 """
 We demonstrate how to do sparse linear regression using a variant of the
@@ -44,7 +41,6 @@ References
 """
 
 
-pyro.enable_validation(True)
 torch.set_default_tensor_type('torch.FloatTensor')
 
 
@@ -79,11 +75,8 @@ def model(X, Y, hypers, jitter=1.0e-4):
     kappa = msq.sqrt() * lam / (msq + (eta1 * lam).pow(2.0)).sqrt()
     kX = kappa * X
 
-    # sample the observation noise
-    var_obs = pyro.sample("var_obs", dist.InverseGamma(hypers['alpha_obs'], hypers['beta_obs']))
-
     # compute the kernel for the given hyperparameters
-    k = kernel(kX, kX, eta1, eta2, hypers['c']) + (var_obs + jitter) * torch.eye(N, device=X.device)
+    k = kernel(kX, kX, eta1, eta2, hypers['c']) + (sigma ** 2 + jitter) * torch.eye(N, device=X.device)
 
     # observe the outputs Y
     pyro.sample("Y", dist.MultivariateNormal(torch.zeros(N, device=X.device), covariance_matrix=k),
@@ -99,7 +92,7 @@ Compare to theorem 5.1 in reference [1].
 
 
 @torch.no_grad()
-def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-4):
+def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4):
     N, P = X.shape
 
     # prepare for computation of posterior statistics for singleton weights
@@ -115,7 +108,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
     kprobe = kprobe.reshape(-1, P)
 
     # compute various kernels
-    k_xx = kernel(kX, kX, eta1, eta2, c) + (jitter + var_obs) * torch.eye(N, dtype=X.dtype, device=X.device)
+    k_xx = kernel(kX, kX, eta1, eta2, c) + (jitter + sigma ** 2) * torch.eye(N, dtype=X.dtype, device=X.device)
     k_xx_inv = torch.inverse(k_xx)
     k_probeX = kernel(kprobe, kX, eta1, eta2, c)
     k_prbprb = kernel(kprobe, kprobe, eta1, eta2, c)
@@ -131,7 +124,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
 
     # select active dimensions (those that are non-zero with sufficient statistical significance)
     active_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)).bool()
-    active_dims = active_dims.nonzero().squeeze(-1)
+    active_dims = active_dims.nonzero(as_tuple=False).squeeze(-1)
 
     print("Identified the following active dimensions:", active_dims.data.numpy().flatten())
     print("Mean estimate for active singleton weights:\n", mu[active_dims].data.numpy())
@@ -142,7 +135,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
         return active_dims.data.numpy(), []
 
     # prep for computation of posterior statistics for quadratic weights
-    left_dims, right_dims = torch.ones(M, M).triu(1).nonzero().t()
+    left_dims, right_dims = torch.ones(M, M).triu(1).nonzero(as_tuple=False).t()
     left_dims, right_dims = active_dims[left_dims], active_dims[right_dims]
 
     probe = torch.zeros(left_dims.size(0), 4, P, dtype=X.dtype, device=X.device)
@@ -169,7 +162,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
     std = ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1)).sum(-2).clamp(min=0.0).sqrt()
 
     active_quad_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)) & (mu.abs() > 1.0e-4).bool()
-    active_quad_dims = active_quad_dims.nonzero()
+    active_quad_dims = active_quad_dims.nonzero(as_tuple=False)
 
     active_quadratic_dims = np.stack([left_dims[active_quad_dims].data.numpy().flatten(),
                                       right_dims[active_quad_dims].data.numpy().flatten()], axis=1)
@@ -220,10 +213,10 @@ def get_data(N=20, P=10, S=2, Q=2, sigma_obs=0.15):
 
 def init_loc_fn(site):
     value = init_to_median(site, num_samples=50)
-    # we also make sure the initial observation noise is not too large
+    # we also make sure the initial sigma is not too large.
     # (otherwise we run the danger of getting stuck in bad local optima during optimization).
-    if site["name"] == "var_obs":
-        value = 0.2 * value
+    if site["name"] == "sigma":
+        value = 0.1 * value
     return value
 
 
@@ -231,7 +224,7 @@ def main(args):
     # setup hyperparameters for the model
     hypers = {'expected_sparsity': max(1.0, args.num_dimensions / 10),
               'alpha1': 3.0, 'beta1': 1.0, 'alpha2': 3.0, 'beta2': 1.0, 'alpha3': 1.0,
-              'c': 1.0, 'alpha_obs': 3.0, 'beta_obs': 1.0}
+              'c': 1.0}
 
     P = args.num_dimensions
     S = args.active_dimensions
@@ -290,7 +283,7 @@ def main(args):
         compute_posterior_stats(X.double(), Y.double(), median['msq'].double(),
                                 median['lambda'].double(), median['eta1'].double(),
                                 median['xisq'].double(), torch.tensor(hypers['c']).double(),
-                                median['var_obs'].double())
+                                median['sigma'].double())
 
     expected_active_dims = np.arange(S).tolist()
 
@@ -314,7 +307,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description='Krylov KIT')
     parser.add_argument('--num-data', type=int, default=750)
     parser.add_argument('--num-steps', type=int, default=1000)

@@ -16,7 +16,7 @@ from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MarginalRing
 from pyro.poutine.util import site_is_subsample
 
-_VALIDATION_ENABLED = False
+_VALIDATION_ENABLED = __debug__
 LAST_CACHE_SIZE = [Counter()]  # for profiling
 
 
@@ -76,13 +76,6 @@ def torch_sum(tensor, dims):
     return tensor.sum(dims) if dims else tensor
 
 
-def detach_iterable(iterable):
-    if torch.is_tensor(iterable):
-        return iterable.detach()
-    else:
-        return [var.detach() for var in iterable]
-
-
 def zero_grads(tensors):
     """
     Sets gradients of list of Tensors to zero in place
@@ -106,14 +99,14 @@ def get_plate_stacks(trace):
 
 def get_dependent_plate_dims(sites):
     """
-    Return a list of dims for plates that are not common to all sites.
+    Return a list of unique dims for plates that are not common to all sites.
     """
     plate_sets = [site["cond_indep_stack"]
                   for site in sites if site["type"] == "sample"]
     all_plates = set().union(*plate_sets)
     common_plates = all_plates.intersection(*plate_sets)
     sum_plates = all_plates - common_plates
-    sum_dims = list(sorted(f.dim for f in sum_plates))
+    sum_dims = sorted({f.dim for f in sum_plates if f.dim is not None})
     return sum_dims
 
 
@@ -159,7 +152,7 @@ class MultiFrameTensor(dict):
             while value.shape and value.shape[0] == 1:
                 value = value.squeeze(0)
             total = value if total is None else total + value
-        return total
+        return 0. if total is None else total
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ",\n\t".join([

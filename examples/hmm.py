@@ -43,12 +43,12 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
-import dmm.polyphonic_data_loader as poly
 import pyro
+import pyro.contrib.examples.polyphonic_data_loader as poly
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO, TraceTMC_ELBO
+from pyro.infer.autoguide import AutoDelta
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
@@ -563,7 +563,6 @@ def main(args):
     num_observations = float(lengths.sum())
     pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
-    pyro.enable_validation(__debug__)
 
     # We'll train using MAP Baum-Welch, i.e. MAP estimation while marginalizing
     # out the hidden state x. This is accomplished via an automatic guide that
@@ -638,7 +637,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))

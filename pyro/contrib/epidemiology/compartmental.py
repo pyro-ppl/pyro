@@ -8,7 +8,7 @@ import re
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from functools import reduce
 from timeit import default_timer
 
@@ -20,16 +20,35 @@ import pyro.distributions as dist
 import pyro.distributions.hmm
 import pyro.poutine as poutine
 from pyro.distributions.transforms import HaarTransform
-from pyro.infer import MCMC, NUTS, SVI, JitTrace_ELBO, SMCFilter, Trace_ELBO, infer_discrete
-from pyro.infer.autoguide import AutoLowRankMultivariateNormal, init_to_generated, init_to_value
+from pyro.infer import (
+    MCMC,
+    NUTS,
+    SVI,
+    JitTrace_ELBO,
+    SMCFilter,
+    Trace_ELBO,
+    infer_discrete,
+)
+from pyro.infer.autoguide import (
+    AutoLowRankMultivariateNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+    init_to_generated,
+    init_to_value,
+)
 from pyro.infer.mcmc import ArrowheadMassMatrix
 from pyro.infer.reparam import HaarReparam, SplitReparam
 from pyro.infer.smcfilter import SMCFailed
-from pyro.infer.util import is_validation_enabled, site_is_subsample
+from pyro.infer.util import is_validation_enabled
 from pyro.optim import ClippedAdam
+from pyro.poutine.util import site_is_factor, site_is_subsample
 from pyro.util import warn_if_nan
 
-from .distributions import set_approx_log_prob_tol, set_approx_sample_thresh, set_relaxed_distributions
+from .distributions import (
+    set_approx_log_prob_tol,
+    set_approx_sample_thresh,
+    set_relaxed_distributions,
+)
 from .util import align_samples, cat2, clamp, quantize, quantize_enumerate
 
 logger = logging.getLogger(__name__)
@@ -40,6 +59,20 @@ def _require_double_precision():
         warnings.warn("CompartmentalModel is unstable for dtypes less than torch.float64; "
                       "try torch.set_default_dtype(torch.float64)",
                       RuntimeWarning)
+
+
+@contextmanager
+def _disallow_latent_variables(section_name):
+    if not is_validation_enabled():
+        yield
+        return
+
+    with poutine.trace() as tr:
+        yield
+    for name, site in tr.trace.nodes.items():
+        if site["type"] == "sample" and not site["is_observed"]:
+            raise NotImplementedError("{} contained latent variable {}"
+                                      .format(section_name, name))
 
 
 class CompartmentalModel(ABC):
@@ -80,6 +113,22 @@ class CompartmentalModel(ABC):
         samples2 = model.predict(forecast=30)
         effect = samples2["my_result"].mean() - samples1["my_result"].mean()
         print("average effect = {:0.3g}".format(effect))
+
+    An example workflow is to use cheaper approximate inference while finding
+    good model structure and priors, then move to more accurate but more
+    expensive inference once the model is plausible.
+
+    1.  Start with ``.fit_svi(guide_rank=0, num_steps=2000)`` for cheap
+        inference while you search for a good model.
+    2.  Additionally infer long-range correlations by moving to a low-rank
+        multivariate normal guide via ``.fit_svi(guide_rank=None,
+        num_steps=5000)``.
+    3.  Optionally additionally infer non-Gaussian posterior by moving to the
+        more expensive (but still approximate via moment matching)
+        ``.fit_mcmc(num_quant_bins=1, num_samples=10000, num_chains=2)``.
+    4.  Optionally improve fit around small counts by moving the the more
+        expensive enumeration-based algorithm ``.fit_mcmc(num_quant_bins=4,
+        num_samples=10000, num_chains=2)`` (GPU recommended).
 
     :ivar dict samples: Dictionary of posterior samples.
     :param list compartments: A list of strings of compartment names.
@@ -235,6 +284,31 @@ class CompartmentalModel(ABC):
         """
         raise NotImplementedError
 
+    def finalize(self, params, prev, curr):
+        """
+        Optional method for likelihoods that depend on entire time series.
+
+        This should be used only for non-factorizable likelihoods that couple
+        states across time. Factorizable likelihoods should instead be added to
+        the :meth:`transition` method, thereby enabling their use in
+        :meth:`heuristic` initialization. Since this method is called only
+        after the last time step, it is not used in :meth:`heuristic`
+        initialization.
+
+        .. warning:: This currently does not support latent variables.
+
+        :param params: The global params returned by :meth:`global_model`.
+        :param dict prev:
+        :param dict curr: Dictionaries mapping compartment name to tensor of
+            entire time series. These two parameters are offset by 1 step,
+            thereby making it easy to compute time series of fluxes. For
+            quantized inference, this uses the approximate point estimates, so
+            users must request any needed time series in :meth:`__init__`, e.g.
+            by calling ``super().__init__(..., approximate=("I", "E"))`` if
+            likelihood depends on the ``I`` and ``E`` time series.
+        """
+        pass
+
     def compute_flows(self, prev, curr, t):
         """
         Computes flows between compartments, given compartment populations
@@ -297,24 +371,31 @@ class CompartmentalModel(ABC):
 
     def fit_svi(self, *,
                 num_samples=100,
-                num_steps=5000,
+                num_steps=2000,
                 num_particles=32,
                 learning_rate=0.1,
                 learning_rate_decay=0.01,
                 betas=(0.8, 0.99),
                 haar=True,
-                init_scale=0.1,
-                guide_rank=None,
+                init_scale=0.01,
+                guide_rank=0,
                 jit=False,
                 log_every=200,
                 **options):
         """
         Runs stochastic variational inference to generate posterior samples.
 
+        This runs :class:`~pyro.infer.svi.SVI`, setting the ``.samples``
+        attribute on completion.
+
+        This approximate inference method is useful for quickly iterating on
+        probabilistic models.
+
         :param int num_samples: Number of posterior samples to draw from the
             trained guide. Defaults to 100.
         :param int num_steps: Number of :class:`~pyro.infer.svi.SVI` steps.
-        :param int num_particles: Number of :class:`~pyro.infer.svi.SVI` particles per step.
+        :param int num_particles: Number of :class:`~pyro.infer.svi.SVI`
+            particles per step.
         :param int learning_rate: Learning rate for the
             :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
         :param int learning_rate_decay: Learning rate for the
@@ -323,8 +404,13 @@ class CompartmentalModel(ABC):
         :param tuple betas: Momentum parameters for the
             :class:`~pyro.optim.clipped_adam.ClippedAdam` optimizer.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
-        :param int guide_rank: Rank of the
+        :param int guide_rank: Rank of the auto normal guide. If zero (default)
+            use an :class:`~pyro.infer.autoguide.AutoNormal` guide. If a
+            positive integer or None, use an
             :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
+            If the string "full", use an
+            :class:`~pyro.infer.autoguide.AutoMultivariateNormal` guide. These
+            latter two require more ``num_steps`` to fit.
         :param float init_scale: Initial scale of the
             :class:`~pyro.infer.autoguide.AutoLowRankMultivariateNormal` guide.
         :param bool jit: Whether to use a jit compiled ELBO.
@@ -360,8 +446,16 @@ class CompartmentalModel(ABC):
         model = self._relaxed_model
         if haar:
             model = haar.reparam(model)
-        guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
-                                              init_scale=init_scale, rank=guide_rank)
+        if guide_rank == 0:
+            guide = AutoNormal(model, init_loc_fn=init_strategy, init_scale=init_scale)
+        elif guide_rank == "full":
+            guide = AutoMultivariateNormal(model, init_loc_fn=init_strategy,
+                                           init_scale=init_scale)
+        elif guide_rank is None or isinstance(guide_rank, int):
+            guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
+                                                  init_scale=init_scale, rank=guide_rank)
+        else:
+            raise ValueError("Invalid guide_rank: {}".format(guide_rank))
         Elbo = JitTrace_ELBO if jit else Trace_ELBO
         elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
                     num_particles=num_particles, vectorize_particles=True,
@@ -390,9 +484,13 @@ class CompartmentalModel(ABC):
             model_trace = poutine.trace(
                 poutine.replay(particle_plate(model), guide_trace)).get_trace()
             self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
-                            if site["type"] == "sample"}
+                            if site["type"] == "sample"
+                            if not site["is_observed"]
+                            if not site_is_subsample(site)}
             if haar:
                 haar.aux_to_user(self.samples)
+        assert all(v.size(0) == num_samples for v in self.samples.values()), \
+            {k: tuple(v.shape) for k, v in self.samples.items()}
 
         return losses
 
@@ -404,6 +502,10 @@ class CompartmentalModel(ABC):
         This uses the :class:`~pyro.infer.mcmc.nuts.NUTS` kernel to run
         :class:`~pyro.infer.mcmc.api.MCMC`, setting the ``.samples``
         attribute on completion.
+
+        This uses an asymptotically exact enumeration-based model when
+        ``num_quant_bins > 1``, and a cheaper moment-matched approximate model
+        when ``num_quant_bins == 1``.
 
         :param \*\*options: Options passed to
             :class:`~pyro.infer.mcmc.api.MCMC`. The remaining options are
@@ -423,9 +525,10 @@ class CompartmentalModel(ABC):
             Note that computational cost is exponential in `num_quant_bins`.
             Defaults to 1 for relaxed inference.
         :param bool haar: Whether to use a Haar wavelet reparameterizer.
+            Defaults to True.
         :param int haar_full_mass: Number of low frequency Haar components to
-            include in the full mass matrix. If nonzero this implies
-            ``haar=True``.
+            include in the full mass matrix. If ``haar=False`` then this is
+            ignored. Defaults to 10.
         :param int heuristic_num_particles: Passed to :meth:`heuristic` as
             ``num_particles``. Defaults to 1024.
         :returns: An MCMC object for diagnostics, e.g. ``MCMC.summary()``.
@@ -434,7 +537,8 @@ class CompartmentalModel(ABC):
         _require_double_precision()
 
         # Parse options, saving some for use in .predict().
-        options.setdefault("num_samples", 100)
+        num_samples = options.setdefault("num_samples", 100)
+        num_chains = options.setdefault("num_chains", 1)
         self.num_quant_bins = options.pop("num_quant_bins", 1)
         assert isinstance(self.num_quant_bins, int)
         assert self.num_quant_bins >= 1
@@ -442,14 +546,14 @@ class CompartmentalModel(ABC):
 
         # Setup Haar wavelet transform.
         haar = options.pop("haar", False)
-        haar_full_mass = options.pop("haar_full_mass", 0)
+        haar_full_mass = options.pop("haar_full_mass", 10)
         full_mass = options.pop("full_mass", self.full_mass)
         assert isinstance(haar, bool)
         assert isinstance(haar_full_mass, int) and haar_full_mass >= 0
         assert isinstance(full_mass, (bool, list))
         haar_full_mass = min(haar_full_mass, self.duration)
-        if haar_full_mass:
-            haar = True
+        if not haar:
+            haar_full_mass = 0
         if full_mass is True:
             haar_full_mass = 0  # No need to split.
         elif haar_full_mass >= self.duration:
@@ -505,6 +609,9 @@ class CompartmentalModel(ABC):
         model = self._relaxed_model if self.relaxed else self._quantized_model
         self.samples = align_samples(self.samples, model,
                                      particle_dim=-1 - self.max_plate_nesting)
+        assert all(v.size(0) == num_samples * num_chains for v in self.samples.values()), \
+            {k: tuple(v.shape) for k, v in self.samples.items()}
+
         return mcmc  # E.g. so user can run mcmc.summary().
 
     @torch.no_grad()
@@ -544,9 +651,13 @@ class CompartmentalModel(ABC):
         if not self.relaxed:
             model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
         trace = poutine.trace(model).get_trace()
-        samples = OrderedDict((name, site["value"])
+        samples = OrderedDict((name, site["value"].expand(site["fn"].shape()))
                               for name, site in trace.nodes.items()
-                              if site["type"] == "sample")
+                              if site["type"] == "sample"
+                              if not site_is_subsample(site)
+                              if not site_is_factor(site))
+        assert all(v.size(0) == num_samples for v in samples.values()), \
+            {k: tuple(v.shape) for k, v in samples.items()}
 
         # Optionally forecast with the forward _generative_model. This samples
         # time steps [duration:duration+forecast].
@@ -558,9 +669,13 @@ class CompartmentalModel(ABC):
             trace = poutine.trace(model).get_trace(forecast)
             samples = OrderedDict((name, site["value"])
                                   for name, site in trace.nodes.items()
-                                  if site["type"] == "sample")
+                                  if site["type"] == "sample"
+                                  if not site_is_subsample(site)
+                                  if not site_is_factor(site))
 
         self._concat_series(samples, trace, forecast)
+        assert all(v.size(0) == num_samples for v in samples.values()), \
+            {k: tuple(v.shape) for k, v in samples.items()}
         return samples
 
     @torch.no_grad()
@@ -601,6 +716,7 @@ class CompartmentalModel(ABC):
                 continue
 
         # Select the most probable hypothesis.
+        # Note this ignores the .finalize() likelihood.
         i = int(smc.state._log_weights.max(0).indices)
         init = {key: value[i, 0] for key, value in smc.state.items()}
 
@@ -622,7 +738,7 @@ class CompartmentalModel(ABC):
             haar.user_to_aux(init_values)
         logger.info("Heuristic init: {}".format(", ".join(
             "{}={:0.3g}".format(k, v.item())
-            for k, v in init_values.items()
+            for k, v in sorted(init_values.items())
             if v.numel() == 1)))
         return init_to_value(values=init_values)
 
@@ -766,6 +882,7 @@ class CompartmentalModel(ABC):
         Sequential model used to sample latents in the interval [0:duration].
         This is compatible with both quantized and relaxed inference.
         This method is called only inside particle_plate.
+        This method is used only for prediction.
         """
         C = len(self.compartments)
         T = self.duration
@@ -777,7 +894,8 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Reshape to accommodate the time_plate below.
-        assert auxiliary.shape == (num_samples, C, T) + R_shape, auxiliary.shape
+        assert auxiliary.shape == (num_samples, C, T) + R_shape, \
+            (auxiliary.shape, (num_samples, C, T) + R_shape)
         aux = [aux.unbind(2) for aux in auxiliary.unsqueeze(1).unbind(2)]
 
         # Sequentially transition.
@@ -886,6 +1004,12 @@ class CompartmentalModel(ABC):
         warn_if_nan(logp)
         pyro.factor("transition", logp)
 
+        # Apply final likelihood.
+        prev = {name: prev[name + "_approx"] for name in self.approximate}
+        curr = {name: curr[name + "_approx"] for name in self.approximate}
+        with _disallow_latent_variables(".finalize()"):
+            self.finalize(params, prev, curr)
+
         self._clear_plates()
 
     @set_relaxed_distributions()
@@ -922,6 +1046,10 @@ class CompartmentalModel(ABC):
         with self.time_plate:
             t = slice(0, T, 1)  # Used to slice data tensors.
             self._transition_bwd(params, prev, curr, t)
+
+        # Apply final likelihood.
+        with _disallow_latent_variables(".finalize()"):
+            self.finalize(params, prev, curr)
 
         self._clear_plates()
 

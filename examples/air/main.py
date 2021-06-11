@@ -19,15 +19,15 @@ from functools import partial
 import numpy as np
 import torch
 import visdom
+from air import AIR, latents_to_tensor
+from viz import draw_many, tensor_to_objs
 
 import pyro
 import pyro.contrib.examples.multi_mnist as multi_mnist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from air import AIR, latents_to_tensor
 from pyro.contrib.examples.util import get_data_directory
 from pyro.infer import SVI, JitTraceGraph_ELBO, TraceGraph_ELBO
-from viz import draw_many, tensor_to_objs
 
 
 def count_accuracy(X, true_counts, air, batch_size):
@@ -51,12 +51,12 @@ def count_accuracy(X, true_counts, air, batch_size):
         inferred_counts_m = count_vec_to_mat(inferred_counts, 3)
         counts += torch.mm(true_counts_m.t(), inferred_counts_m)
         error_ind = 1 - (true_counts_batch == inferred_counts)
-        error_ix = error_ind.nonzero().squeeze()
+        error_ix = error_ind.nonzero(as_tuple=False).squeeze()
         error_latents.append(latents_to_tensor((z_where, z_pres)).index_select(0, error_ix))
         error_indicators.append(error_ind)
 
     acc = counts.diag().sum().float() / X.size(0)
-    error_indices = torch.cat(error_indicators).nonzero().squeeze()
+    error_indices = torch.cat(error_indicators).nonzero(as_tuple=False).squeeze()
     if X.is_cuda:
         error_indices = error_indices.cuda()
     return acc, counts, torch.cat(error_latents), error_indices
@@ -198,11 +198,11 @@ def main(**kwargs):
         z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
 
-    def isBaselineParam(module_name, param_name):
-        return 'bl_' in module_name or 'bl_' in param_name
+    def isBaselineParam(param_name):
+        return 'bl_' in param_name
 
-    def per_param_optim_args(module_name, param_name):
-        lr = args.baseline_learning_rate if isBaselineParam(module_name, param_name) else args.learning_rate
+    def per_param_optim_args(param_name):
+        lr = args.baseline_learning_rate if isBaselineParam(param_name) else args.learning_rate
         return {'lr': lr}
 
     adam = optim.Adam(per_param_optim_args)
@@ -248,7 +248,7 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
     parser.add_argument('-n', '--num-steps', type=int, default=int(1e8),
                         help='number of optimization steps to take')

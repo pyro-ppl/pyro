@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import operator
+from functools import partial, reduce
 from unittest import TestCase
 
 import pytest
@@ -8,9 +10,8 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
-
-from functools import partial, reduce
-import operator
+from pyro.distributions import constraints
+from tests.common import assert_close
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -19,26 +20,39 @@ class Flatten(dist.TransformModule):
     """
     Used to handle transforms with `event_dim > 1` until we have a Reshape transform in PyTorch
     """
-    event_dim = 1
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
 
     def __init__(self, transform, input_shape):
         super().__init__(cache_size=1)
-        assert(transform.event_dim == len(input_shape))
+        assert transform.domain.event_dim == len(input_shape)
+        output_shape = transform.forward_shape(input_shape)
+        assert len(output_shape) >= transform.codomain.event_dim
+        output_shape = output_shape[len(output_shape) - transform.codomain.event_dim:]
 
         self.transform = transform
         self.input_shape = input_shape
-
-    def _unflatten(self, x):
-        return x.view(x.shape[:-1] + self.input_shape)
+        self.output_shape = output_shape
 
     def _call(self, x):
-        return self.transform._call(self._unflatten(x)).view_as(x)
+        x = x.reshape(x.shape[:-1] + self.input_shape)
+        y = self.transform._call(x)
+        y = y.reshape(y.shape[:y.dim() - len(self.output_shape)] + (-1,))
+        return y
 
-    def _inverse(self, x):
-        return self.transform._inverse(self._unflatten(x)).view_as(x)
+    def _inverse(self, y):
+        y = y.reshape(y.shape[:-1] + self.output_shape)
+        x = self.transform._inverse(y)
+        x = x.reshape(x.shape[:x.dim() - len(self.input_shape)] + (-1,))
+        return x
 
     def log_abs_det_jacobian(self, x, y):
-        return self.transform.log_abs_det_jacobian(self._unflatten(x), self._unflatten(y))
+        x = x.reshape(x.shape[:-1] + self.input_shape)
+        y = y.reshape(y.shape[:-1] + self.output_shape)
+        return self.transform.log_abs_det_jacobian(x, y)
+
+    def parameters(self):
+        return self.transform.parameters()
 
 
 class TransformTests(TestCase):
@@ -100,20 +114,56 @@ class TransformTests(TestCase):
         base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
-        J_1 = transform.log_abs_det_jacobian(x_true, y)
         x_calculated = transform._inverse(y)
-        J_2 = transform.log_abs_det_jacobian(x_true, y)
-        assert (x_true - x_calculated).abs().max().item() < self.delta
+        if transform.bijective:
+            assert (x_true - x_calculated).abs().max().item() < self.delta
+        else:
+            # Check the weaker pseudoinverse equation.
+            y2 = transform._call(x_calculated)
+            assert (y - y2).abs().max().item() < self.delta
 
-        # Test that Jacobian after inverse op is same as after forward
-        assert (J_1 - J_2).abs().max().item() < self.delta
+        if transform.bijective:
+            # Test that Jacobian after inverse op is same as after forward
+            J_1 = transform.log_abs_det_jacobian(x_true, y)
+            J_2 = transform.log_abs_det_jacobian(x_calculated, y)
+            assert (J_1 - J_2).abs().max().item() < self.delta
 
     def _test_shape(self, base_shape, transform):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
         sample = dist.TransformedDistribution(base_dist, [transform]).sample()
         assert sample.shape == base_shape
 
-    def _test(self, transform_factory, shape=True, jacobian=True, inverse=True, event_dim=1):
+        batch_shape = base_shape[:len(base_shape) - transform.domain.event_dim]
+        input_event_shape = base_shape[len(base_shape) - transform.domain.event_dim:]
+        output_event_shape = base_shape[len(base_shape) - transform.codomain.event_dim:]
+        output_shape = batch_shape + output_event_shape
+        assert transform.forward_shape(input_event_shape) == output_event_shape
+        assert transform.forward_shape(base_shape) == output_shape
+        assert transform.inverse_shape(output_event_shape) == input_event_shape
+        assert transform.inverse_shape(output_shape) == base_shape
+
+    def _test_autodiff(self, input_dim, transform, inverse=False):
+        """
+        This method essentially tests whether autodiff will not throw any errors
+        when you're doing maximum-likelihood learning with the transform. Many
+        transforms have only one direction with an explicit inverse, hence why we
+        pass in the inverse flag.
+        """
+        temp_transform = transform
+        if inverse:
+            transform = transform.inv
+
+        base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+        flow_dist = dist.TransformedDistribution(base_dist, [transform])
+        optimizer = torch.optim.Adam(temp_transform.parameters())
+        x = torch.rand(1, input_dim)
+        for _ in range(3):
+            optimizer.zero_grad()
+            loss = -flow_dist.log_prob(x.detach()).mean()
+            loss.backward()
+            optimizer.step()
+
+    def _test(self, transform_factory, shape=True, jacobian=True, inverse=True, autodiff=True, event_dim=1):
         for event_shape in [(2,), (5,)]:
             if event_dim > 1:
                 event_shape = tuple([event_shape[0] + i for i in range(event_dim)])
@@ -125,15 +175,24 @@ class TransformTests(TestCase):
                 for shape in [(3,), (3, 4), (3, 4, 5)]:
                     base_shape = shape + event_shape
                     self._test_shape(base_shape, transform)
-            if jacobian:
+            if jacobian and transform.bijective:
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
                 self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
+            if autodiff:
+                # If the function doesn't have an explicit inverse, then use the forward op for autodiff
+                self._test_autodiff(reduce(operator.mul, event_shape, 1), transform, inverse=not inverse)
 
     def _test_conditional(self, conditional_transform_factory, context_dim=3, event_dim=1, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
             z = torch.rand(1, context_dim)
-            return conditional_transform_factory(input_dim, context_dim).condition(z)
+            cond_transform = conditional_transform_factory(input_dim, context_dim)
+            transform = cond_transform.condition(z)
+
+            # A bit of a hack since conditioned transforms don't expose .parameters()
+            transform.parameters = lambda: cond_transform.parameters()
+
+            return transform
         self._test(transform_factory, event_dim=event_dim, **kwargs)
 
     def test_affine_autoregressive(self):
@@ -186,6 +245,9 @@ class TransformTests(TestCase):
         self._test_conditional(T.conditional_householder)
         self._test_conditional(partial(T.conditional_householder, count_transforms=2))
 
+    def test_conditional_matrix_exponential(self):
+        self._test_conditional(T.conditional_matrix_exponential)
+
     def test_conditional_neural_autoregressive(self):
         self._test_conditional(T.conditional_neural_autoregressive, inverse=False)
 
@@ -196,23 +258,25 @@ class TransformTests(TestCase):
         self._test_conditional(T.conditional_radial, inverse=False)
 
     def test_conditional_spline(self):
-        self._test_conditional(T.conditional_spline)
+        for order in ['linear', 'quadratic']:
+            self._test_conditional(partial(T.conditional_spline, order=order))
+
+    def test_conditional_spline_autoregressive(self):
+        self._test_conditional(T.conditional_spline_autoregressive)
 
     def test_discrete_cosine(self):
         # NOTE: Need following since helper function unimplemented
-        self._test(lambda input_dim: T.DiscreteCosineTransform())
-        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=0.5))
-        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=1.0))
-        self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=2.0))
+        for smooth in [0.0, 0.5, 1.0, 2.0]:
+            self._test(lambda input_dim: T.DiscreteCosineTransform(smooth=smooth), autodiff=False)
 
     def test_haar_transform(self):
         # NOTE: Need following since helper function unimplemented
-        self._test(lambda input_dim: T.HaarTransform(flip=True))
-        self._test(lambda input_dim: T.HaarTransform(flip=False))
+        for flip in [True, False]:
+            self._test(lambda input_dim: T.HaarTransform(flip=flip), autodiff=False)
 
     def test_elu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
-        self._test(lambda input_dim: T.elu())
+        self._test(lambda input_dim: T.elu(), autodiff=False)
 
     def test_generalized_channel_permute(self):
         for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 3, 64, 64)]:
@@ -231,7 +295,7 @@ class TransformTests(TestCase):
 
     def test_leaky_relu(self):
         # NOTE: Need following since helper function mistakenly doesn't take input dim
-        self._test(lambda input_dim: T.leaky_relu())
+        self._test(lambda input_dim: T.leaky_relu(), autodiff=False)
 
     def test_lower_cholesky_affine(self):
         # NOTE: Need following since helper function unimplemented
@@ -241,15 +305,22 @@ class TransformTests(TestCase):
             scale_tril = scale_tril.tril(0)
             return T.LowerCholeskyAffine(loc, scale_tril)
 
-        self._test(transform_factory)
+        self._test(transform_factory, autodiff=False)
+
+    def test_matrix_exponential(self):
+        self._test(T.matrix_exponential)
 
     def test_neural_autoregressive(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             self._test(partial(T.neural_autoregressive, activation=activation), inverse=False)
 
+    def test_ordered_transform(self):
+        # NOTE: Need following since transform takes no input parameters
+        self._test(lambda event_shape: T.OrderedTransform(), autodiff=False)
+
     def test_permute(self):
         for dim in [-1, -2]:
-            self._test(partial(T.permute, dim=dim), event_dim=-dim)
+            self._test(partial(T.permute, dim=dim), event_dim=-dim, autodiff=False)
 
     def test_planar(self):
         self._test(T.planar, inverse=False)
@@ -261,7 +332,79 @@ class TransformTests(TestCase):
         self._test(T.radial, inverse=False)
 
     def test_spline(self):
-        self._test(T.spline)
+        for order in ['linear', 'quadratic']:
+            self._test(partial(T.spline, order=order))
+
+    def test_spline_coupling(self):
+        self._test(T.spline_coupling)
+
+    def test_spline_autoregressive(self):
+        self._test(T.spline_autoregressive)
 
     def test_sylvester(self):
         self._test(T.sylvester, inverse=False)
+
+    def test_normalize_transform(self):
+        self._test(lambda p: T.Normalize(p=p), autodiff=False)
+
+    def test_softplus(self):
+        self._test(lambda _: T.SoftplusTransform(), autodiff=False)
+
+
+@pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
+@pytest.mark.parametrize('dim', [2, 3, 5])
+@pytest.mark.parametrize('transform', [
+    T.CholeskyTransform(),
+    T.CorrMatrixCholeskyTransform(),
+], ids=lambda t: type(t).__name__)
+def test_cholesky_transform(batch_shape, dim, transform):
+    arange = torch.arange(dim)
+    domain = transform.domain
+    z = torch.randn(batch_shape + (dim * (dim - 1) // 2,))
+    if domain is dist.constraints.corr_matrix:
+        tril_mask = arange < arange.view(-1, 1)
+    else:
+        tril_mask = arange < arange.view(-1, 1) + 1
+    x = transform.inv(T.CorrLCholeskyTransform()(z))  # creates corr_matrix
+
+    def vec_to_mat(x_vec):
+        x_mat = x_vec.new_zeros(batch_shape + (dim, dim))
+        x_mat[..., tril_mask] = x_vec
+        x_mat = x_mat + x_mat.transpose(-2, -1) - x_mat.diagonal(dim1=-2, dim2=-1).diag_embed()
+        if domain == dist.constraints.corr_matrix:
+            x_mat = x_mat + x_mat.new_ones(x_mat.shape[-1]).diag_embed()
+        return x_mat
+
+    def transform_to_vec(x_vec):
+        x_mat = vec_to_mat(x_vec)
+        return transform(x_mat)[..., tril_mask]
+
+    x_vec = x[..., tril_mask].clone().requires_grad_()
+    x_mat = vec_to_mat(x_vec)
+    y = transform(x_mat)
+    log_det = transform.log_abs_det_jacobian(x_mat, y)
+    if batch_shape == ():
+        jacobian = torch.autograd.functional.jacobian(transform_to_vec, x_vec)
+        assert_close(log_det, torch.slogdet(jacobian)[1])
+
+    assert log_det.shape == batch_shape
+    assert_close(y, x_mat.cholesky())
+    assert_close(transform.inv(y), x_mat)
+
+
+@pytest.mark.parametrize('batch_shape', [(), (7,), (6, 5)])
+@pytest.mark.parametrize('dim', [2, 3, 5])
+@pytest.mark.parametrize('transform', [
+    T.LowerCholeskyTransform(),
+    T.SoftplusLowerCholeskyTransform(),
+], ids=lambda t: type(t).__name__)
+def test_lower_cholesky_transform(transform, batch_shape, dim):
+    shape = batch_shape + (dim, dim)
+    x = torch.randn(shape)
+    y = transform(x)
+    assert y.shape == shape
+    x2 = transform.inv(y)
+    assert x2.shape == shape
+    y2 = transform(x2)
+    assert y2.shape == shape
+    assert_close(y, y2)

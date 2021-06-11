@@ -6,7 +6,7 @@ import math
 import torch
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
-from torch.distributions import constraints, Categorical
+from torch.distributions import Categorical, constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import sum_leftmost

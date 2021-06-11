@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pyro.util import ignore_jit_warnings
+
 from .messenger import Messenger
 
 

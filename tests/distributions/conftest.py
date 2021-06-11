@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from math import pi
 
 import numpy as np
 import pytest
@@ -10,13 +11,44 @@ import scipy.stats as sp
 import pyro.distributions as dist
 from pyro.distributions.testing.naive_dirichlet import NaiveBeta, NaiveDirichlet
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
-from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
+from pyro.distributions.testing.rejection_gamma import (
+    ShapeAugmentedBeta,
+    ShapeAugmentedDirichlet,
+    ShapeAugmentedGamma,
+)
 from tests.distributions.dist_fixture import Fixture
 
 
 class FoldedNormal(dist.FoldedDistribution):
+    arg_constraints = dist.Normal.arg_constraints
+
     def __init__(self, loc, scale):
         super().__init__(dist.Normal(loc, scale))
+
+    @property
+    def loc(self):
+        return self.base_dist.loc
+
+    @property
+    def scale(self):
+        return self.base_dist.scale
+
+
+class SparsePoisson(dist.Poisson):
+    def __init__(self, rate, *, validate_args=None):
+        super().__init__(rate, is_sparse=True, validate_args=validate_args)
+
+
+class SineSkewedUniform(dist.SineSkewed):
+    def __init__(self, lower, upper, skewness, *args, **kwargs):
+        base_dist = dist.Uniform(lower, upper).to_event(lower.ndim)
+        super().__init__(base_dist, skewness, *args, **kwargs)
+
+
+class SineSkewedVonMises(dist.SineSkewed):
+    def __init__(self, von_loc, von_conc, skewness):
+        base_dist = dist.VonMises(von_loc, von_conc).to_event(von_loc.ndim)
+        super().__init__(base_dist, skewness)
 
 
 continuous_dists = [
@@ -131,6 +163,20 @@ continuous_dists = [
                  'test_data': [[5.5], [6.4]]}
             ],
             scipy_arg_fn=lambda loc, scale: ((np.array(scale),), {"scale": np.exp(np.array(loc))})),
+    Fixture(pyro_dist=dist.AffineBeta,
+            scipy_dist=sp.beta,
+            examples=[
+                {'concentration1': [2.4], 'concentration0': [3.6], 'loc': [-1.0], 'scale': [2.0],
+                 'test_data': [-0.4]},
+                {'concentration1': [[2.4, 2.4], [3.6, 3.6]], 'concentration0': [[2.5, 2.5], [2.5, 2.5]],
+                 'loc': [[-1.0, -1.0], [2.0, 2.0]], 'scale': [[2.0, 2.0], [1.0, 1.0]],
+                 'test_data': [[[-0.4, 0.4], [2.5, 2.6]]]},
+                {'concentration1': [[2.4], [3.7]], 'concentration0': [[3.6], [2.5]],
+                 'loc': [[-1.0], [2.0]], 'scale': [[2.0], [2.0]],
+                 'test_data': [[0.0], [3.0]]}
+            ],
+            scipy_arg_fn=lambda concentration1, concentration0, loc, scale:
+            ((np.array(concentration1), np.array(concentration0), np.array(loc), np.array(scale)), {})),
     Fixture(pyro_dist=dist.Normal,
             scipy_dist=sp.norm,
             examples=[
@@ -154,7 +200,7 @@ continuous_dists = [
             ],
             # This hack seems to be the best option right now, as 'scale' is not handled well by get_scipy_batch_logpdf
             scipy_arg_fn=lambda loc, covariance_matrix=None:
-                ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
+            ((), {"mean": np.array(loc), "cov": np.array([[1.0, 0.5], [0.5, 1.0]])}),
             prec=0.01,
             min_samples=500000),
     Fixture(pyro_dist=dist.LowRankMultivariateNormal,
@@ -164,7 +210,7 @@ continuous_dists = [
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             scipy_arg_fn=lambda loc, cov_diag=None, cov_factor=None:
-                ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
+            ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
     Fixture(pyro_dist=FoldedNormal,
@@ -228,7 +274,7 @@ continuous_dists = [
                 {'scale': [1.2],
                  'test_data': [1.0]},
                 {'scale': [1.2, 1.2],
-                 'test_data': [[1.0, -1.0], [1.0, -1.0]]},
+                 'test_data': [[1.0, 2.0], [1.0, 2.0]]},
                 {'scale': [[1.2], [1.0]],
                  'test_data': [[0.54], [0.35]]}
             ],
@@ -244,28 +290,113 @@ continuous_dists = [
                  'test_data': [[1.0], [2.0]]}
             ],
             scipy_arg_fn=lambda loc, concentration: ((), {"loc": np.array(loc), "kappa": np.array(concentration)})),
-    Fixture(pyro_dist=dist.LKJCorrCholesky,
+    Fixture(pyro_dist=dist.LKJ,
             examples=[
-                {'d': 3, 'eta': [1.], 'test_data':
-                    [[[1.0000,  0.0000,  0.0000], [-0.8221,  0.5693,  0.0000], [0.7655,  0.1756,  0.6190]],
-                     [[1.0000,  0.0000,  0.0000], [-0.5345,  0.8451,  0.0000], [-0.5459, -0.3847,  0.7444]],
-                     [[1.0000,  0.0000,  0.0000], [-0.3758,  0.9267,  0.0000], [-0.2409,  0.4044,  0.8823]],
-                     [[1.0000,  0.0000,  0.0000], [-0.8800,  0.4750,  0.0000], [-0.9493,  0.1546,  0.2737]],
-                     [[1.0000,  0.0000,  0.0000], [0.2284,  0.9736,  0.0000], [-0.1283,  0.0451,  0.9907]]]},
-                ]),
+                {'dim': 3, 'concentration': 1., 'test_data':
+                    [[[1.0000, -0.8221, 0.7655], [-0.8221, 1.0000, -0.5293], [0.7655, -0.5293, 1.0000]],
+                     [[1.0000, -0.5345, -0.5459], [-0.5345, 1.0000, -0.0333], [-0.5459, -0.0333, 1.0000]],
+                     [[1.0000, -0.3758, -0.2409], [-0.3758, 1.0000, 0.4653], [-0.2409, 0.4653, 1.0000]],
+                     [[1.0000, -0.8800, -0.9493], [-0.8800, 1.0000, 0.9088], [-0.9493, 0.9088, 1.0000]],
+                     [[1.0000, 0.2284, -0.1283], [0.2284, 1.0000, 0.0146], [-0.1283, 0.0146, 1.0000]]]},
+            ]),
+    Fixture(pyro_dist=dist.LKJCholesky,
+            examples=[
+                {
+                    'dim': 3,
+                    'concentration': 1.,
+                    'test_data': [
+                        [[1.0, 0.0, 0.0],
+                         [-0.17332135, 0.98486533, 0.0],
+                         [0.43106407, -0.54767312, 0.71710384]],
+                        [[1.0, 0.0, 0.0],
+                         [-0.31391555, 0.94945091, 0.0],
+                         [-0.31391296, -0.29767500, 0.90158097]],
+                    ],
+                },
+            ]),
     Fixture(pyro_dist=dist.Stable,
             examples=[
                 {'stability': [1.5], 'skew': 0.1, 'test_data': [-10.]},
                 {'stability': [1.5], 'skew': 0.1, 'scale': 2.0, 'loc': -2.0, 'test_data': [10.]},
-                ]),
+            ]),
     Fixture(pyro_dist=dist.MultivariateStudentT,
             examples=[
                 {'df': 1.5, 'loc': [0.2, 0.3], 'scale_tril': [[0.8, 0.0], [1.3, 0.4]],
                  'test_data': [-3., 2]},
-                ]),
+            ]),
+    Fixture(pyro_dist=dist.ProjectedNormal,
+            examples=[
+                {'concentration': [0., 0.], 'test_data': [1., 0.]},
+                {'concentration': [2., 3.], 'test_data': [0., 1.]},
+                {'concentration': [0., 0., 0.], 'test_data': [1., 0., 0.]},
+                {'concentration': [-1., 2., 3.], 'test_data': [0., 0., 1.]},
+            ]),
+    Fixture(pyro_dist=dist.SineBivariateVonMises,
+            examples=[
+                {'phi_loc': [0.], 'psi_loc': [0.], 'phi_concentration': [5.], 'psi_concentration': [6.],
+                 'correlation': [2.], 'test_data': [[0., 0.]]},
+                {'phi_loc': [3.003], 'psi_loc': [-1.343], 'phi_concentration': [5.], 'psi_concentration': [6.],
+                 'correlation': [2.], 'test_data': [[0., 1.]]},
+                {'phi_loc': [-math.pi / 3], 'psi_loc': -1., 'phi_concentration': .5, 'psi_concentration': 10.,
+                 'correlation': .9, 'test_data': [[1., 0.555]]},
+                {'phi_loc': [math.pi - .2, 1.], 'psi_loc': [0., 1.],
+                 'phi_concentration': [5., 5.], 'psi_concentration': [7., .5],
+                 'weighted_correlation': [.5, .1], 'test_data': [[[1., -3.], [1., 59.]]]},
+            ]),
+    Fixture(pyro_dist=dist.SoftLaplace,
+            examples=[
+                {'loc': [2.0], 'scale': [4.0],
+                 'test_data': [2.0]},
+                {'loc': [[2.0]], 'scale': [[4.0]],
+                 'test_data': [[2.0]]},
+                {'loc': [[[2.0]]], 'scale': [[[4.0]]],
+                 'test_data': [[[2.0]]]},
+                {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
+                 'test_data': [[2.0, 50.0], [2.0, 50.0]]},
+            ]),
+    Fixture(pyro_dist=SineSkewedUniform,
+            examples=[
+                {'lower': [-pi, -pi],
+                 'upper':[pi, pi],
+                 'skewness': [-pi / 4, .1],
+                 'test_data': [pi / 2, -2 * pi / 3]}
+            ]),
+    Fixture(pyro_dist=SineSkewedVonMises,
+            examples=[
+                {'von_loc': [0.],
+                 'von_conc': [1.],
+                 'skewness': [.342355],
+                 'test_data': [.1]},
+                {'von_loc': [0., -1.234],
+                 'von_conc': [1., 10.],
+                 'skewness': [[.342355, -.0001], [.91, 0.09]],
+                 'test_data': [[.1, -3.2], [-2., 0.]]}
+            ]),
+    Fixture(pyro_dist=dist.AsymmetricLaplace,
+            examples=[
+                {'loc': [1.0], 'left_scale': [1.0], 'right_scale': [4.0],
+                 'test_data': [2.0]},
+                {'loc': [2.0, -50.0], 'left_scale': [4.0, 100.0],
+                 'right_scale': [0.5, 10.0], 'test_data': [[2.0, 10.0], [-1.0, -50.0]]},
+            ]),
 ]
 
 discrete_dists = [
+    Fixture(pyro_dist=dist.OrderedLogistic,
+            examples=[
+                {'cutpoints': [0., 1., 2.],
+                 'predictor': [1.],
+                 'test_data': [1]},
+                {'cutpoints': [0., 1., 2.],
+                 'predictor': [-0.5, 0.5, 1.5, 2.5],
+                 'test_data': [0, 1, 2, 3]},
+                {'cutpoints': [0., 1.],
+                 'predictor': [[-0.5, 0.5, 1.5], [-0.5, 0.5, 1.5]],
+                 'test_data': [[0, 1, 2], [0, 1, 2]]},
+            ],
+            prec=0.05,
+            min_samples=10000,
+            is_discrete=True),
     Fixture(pyro_dist=dist.Multinomial,
             scipy_dist=sp.multinomial,
             examples=[
@@ -462,6 +593,23 @@ discrete_dists = [
             scipy_arg_fn=lambda rate: ((np.array(rate),), {}),
             prec=0.08,
             is_discrete=True),
+    Fixture(pyro_dist=SparsePoisson,
+            scipy_dist=sp.poisson,
+            examples=[
+                {'rate': [2.0],
+                 'test_data': [0.]},
+                {'rate': [3.0],
+                 'test_data': [1.]},
+                {'rate': [6.0],
+                 'test_data': [4.]},
+                {'rate': [2.0, 3.0, 6.0],
+                 'test_data': [[0., 1., 4.], [0., 1., 4.]]},
+                {'rate': [[2.0], [3.0], [6.0]],
+                 'test_data': [[0.], [1.], [4.]]}
+            ],
+            scipy_arg_fn=lambda rate: ((np.array(rate),), {}),
+            prec=0.08,
+            is_discrete=True),
     Fixture(pyro_dist=dist.Geometric,
             scipy_dist=sp.geom,
             examples=[
@@ -486,6 +634,13 @@ discrete_dists = [
                 params=continuous_dists + discrete_dists,
                 ids=lambda x: x.get_test_distribution_name())
 def all_distributions(request):
+    return request.param
+
+
+@pytest.fixture(name='continuous_dist',
+                params=continuous_dists,
+                ids=lambda x: x.get_test_distribution_name())
+def continuous_distributions(request):
     return request.param
 
 

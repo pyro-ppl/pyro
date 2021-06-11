@@ -5,13 +5,14 @@ from functools import partial
 
 import torch
 import torch.nn as nn
-from torch.distributions import constraints
 
-from pyro.distributions.conditional import ConditionalTransformModule
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms.utils import clamp_preserve_gradients
-from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN, ConditionalAutoRegressiveNN
+
+from .. import constraints
+from ..conditional import ConditionalTransformModule
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
+from .utils import clamp_preserve_gradients
 
 
 @copy_docs_from(TransformModule)
@@ -62,7 +63,7 @@ class AffineAutoregressive(TransformModule):
 
     :param autoregressive_nn: an autoregressive neural network whose forward call
         returns a real-valued mean and logit-scale as a tuple
-    :type autoregressive_nn: nn.Module
+    :type autoregressive_nn: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from
         the autoregressive NN
     :type log_scale_min_clip: float
@@ -90,10 +91,9 @@ class AffineAutoregressive(TransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
     sign = +1
     autoregressive = True
 
@@ -308,10 +308,9 @@ class ConditionalAffineAutoregressive(ConditionalTransformModule):
 
     """
 
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
 
     def __init__(self, autoregressive_nn, **kwargs):
         super().__init__()

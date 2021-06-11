@@ -1,5 +1,5 @@
-Deep Kernel Learning
-====================
+Example: Deep Kernel Learning
+=============================
 
 `View sv-dkl.py on github`__
 

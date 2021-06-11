@@ -7,11 +7,11 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import constraints
 
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms.neural_autoregressive import ELUTransform, LeakyReLUTransform, TanhTransform
-from pyro.distributions.util import copy_docs_from
+from .. import constraints
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
+from .neural_autoregressive import ELUTransform, LeakyReLUTransform, TanhTransform
 
 eps = 1e-8
 
@@ -69,10 +69,9 @@ class BlockAutoregressive(TransformModule):
     [arXiv:1904.04676]
 
     """
-    domain = constraints.real
-    codomain = constraints.real
+    domain = constraints.real_vector
+    codomain = constraints.real_vector
     bijective = True
-    event_dim = 1
     autoregressive = True
 
     def __init__(self, input_dim, hidden_factors=[8, 8], activation='tanh', residual=None):

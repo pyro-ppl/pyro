@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import traceback as tb
 import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial, reduce
 from itertools import product
-import traceback as tb
 
 import torch
-from torch.distributions import biject_to
 from opt_einsum import shared_intermediates
+from torch.distributions import biject_to
 
 import pyro
 import pyro.poutine as poutine
@@ -515,6 +515,8 @@ def print_summary(samples, prob=0.9, group_by_chain=True):
         Otherwise, the corresponding shape will be `num_samples x sample_shape`
         (i.e. without chain dimension).
     """
+    if len(samples) == 0:
+        return
     summary_dict = summary(samples, prob, group_by_chain)
 
     row_names = {k: k + '[' + ','.join(map(lambda x: str(x - 1), v.shape[2:])) + ']'

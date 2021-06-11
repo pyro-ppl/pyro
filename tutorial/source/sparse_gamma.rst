@@ -1,5 +1,5 @@
-Sparse Gamma Deep Exponential Family
-====================================
+Example: Sparse Gamma Deep Exponential Family
+=============================================
 
 `View sparse_gamma_def.py on github`__
 

@@ -330,7 +330,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs='?', default=4, type=int)
@@ -348,7 +348,6 @@ if __name__ == "__main__":
 
     pyro.set_rng_seed(args.rng_seed)
     # Enable validation checks
-    pyro.enable_validation(__debug__)
 
     # work around with the error "RuntimeError: received 0 items of ancdata"
     # see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823

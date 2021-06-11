@@ -19,10 +19,20 @@ tutorial: FORCE
 
 lint: FORCE
 	flake8
+	isort --check .
 	python scripts/update_headers.py --check
+	mypy pyro
+	# mypy examples  # FIXME
+	mypy scripts
 
 license: FORCE
 	python scripts/update_headers.py
+
+format: license FORCE
+	isort .
+
+version: FORCE
+	python scripts/update_version.py
 
 scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
@@ -30,9 +40,6 @@ scrub: FORCE
 
 doctest: FORCE
 	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
-
-format: FORCE
-	isort --recursive *.py pyro/ examples/ tests/ profiler/*.py docs/source/conf.py
 
 perf-test: FORCE
 	bash scripts/perf_test.sh ${ref}
@@ -73,6 +80,9 @@ test-jit: FORCE
 	pytest -v -n auto --tb=short --runxfail tests/infer/test_jit.py tests/test_examples.py::test_jit | tee jit.log
 	pytest -v -n auto --tb=short --runxfail tests/infer/mcmc/test_hmc.py tests/infer/mcmc/test_nuts.py \
 		-k JIT=True | tee -a jit.log
+
+test-funsor: lint FORCE
+	pytest -vx -n auto --stage funsor
 
 clean: FORCE
 	git clean -dfx -e pyro_ppl.egg-info

@@ -8,8 +8,14 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions import TorchDistribution
+from pyro.distributions.testing.gof import auto_goodness_of_fit
 from pyro.distributions.util import broadcast_shape
-from tests.common import assert_equal, xfail_if_not_implemented
+from tests.common import (
+    TEST_FAILURE_RATE,
+    assert_close,
+    assert_equal,
+    xfail_if_not_implemented,
+)
 
 
 def _log_prob_shape(dist, x_size=torch.Size()):
@@ -19,7 +25,31 @@ def _log_prob_shape(dist, x_size=torch.Size()):
         expected_shape = expected_shape[:-event_dims]
     return expected_shape
 
+
 # Distribution tests - all distributions
+
+def test_support_shape(dist):
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        d = dist.pyro_dist(**dist_params)
+        assert d.support.event_dim == d.event_dim
+        x = dist.get_test_data(idx)
+        ok = d.support.check(x)
+        assert ok.shape == broadcast_shape(d.batch_shape, x.shape[:x.dim() - d.event_dim])
+        assert ok.all()
+
+
+def test_infer_shapes(dist):
+    if "LKJ" in dist.pyro_dist.__name__ or "SineSkewed" in dist.pyro_dist.__name__:
+        pytest.xfail(reason="cannot statically compute shape")
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else ()
+                      for k, v in dist_params.items()}
+        batch_shape, event_shape = dist.pyro_dist.infer_shapes(**arg_shapes)
+        d = dist.pyro_dist(**dist_params)
+        assert d.batch_shape == batch_shape
+        assert d.event_shape == event_shape
 
 
 def test_batch_log_prob(dist):
@@ -75,6 +105,8 @@ def test_score_errors_non_broadcastable_data_shape(dist):
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)
+        if dist.get_test_distribution_name() == 'LKJCholesky':
+            pytest.skip('https://github.com/pytorch/pytorch/issues/52724')
         shape = d.shape()
         non_broadcastable_shape = (shape[0] + 1,) + shape[1:]
         test_data_non_broadcastable = torch.ones(non_broadcastable_shape)
@@ -82,7 +114,99 @@ def test_score_errors_non_broadcastable_data_shape(dist):
             d.log_prob(test_data_non_broadcastable)
 
 
+# Distributions tests - continuous distributions
+
+def test_support_is_not_discrete(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        assert not d.support.is_discrete
+
+
+def test_gof(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    if Dist in [dist.LKJ, dist.LKJCholesky]:
+        pytest.xfail(reason="incorrect submanifold scaling")
+
+    num_samples = 50000
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        samples = d.sample(torch.Size([num_samples]))
+        with xfail_if_not_implemented():
+            probs = d.log_prob(samples).exp()
+
+        dim = None
+        if "ProjectedNormal" in Dist.__name__:
+            dim = samples.size(-1) - 1
+
+        # Test each batch independently.
+        probs = probs.reshape(num_samples, -1)
+        samples = samples.reshape(probs.shape + d.event_shape)
+        if "Dirichlet" in Dist.__name__:
+            # The Dirichlet density is over all but one of the probs.
+            samples = samples[..., :-1]
+        for b in range(probs.size(-1)):
+            gof = auto_goodness_of_fit(samples[:, b], probs[:, b], dim=dim)
+            assert gof > TEST_FAILURE_RATE
+
+
+def test_mean(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    if Dist.__name__ in ["Cauchy", "HalfCauchy", "SineBivariateVonMises", "VonMises", "ProjectedNormal"]:
+        pytest.xfail(reason="Euclidean mean is not defined")
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+    with xfail_if_not_implemented():
+        actual = d.mean
+    num_samples = 100000
+    if Dist.__name__ == "LogNormal":
+        num_samples = 200000
+    expected = d.sample((num_samples,)).mean(0)
+    assert_close(actual, expected, atol=0.02, rtol=0.05)
+
+
+def test_variance(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    if Dist.__name__ in [
+        "Cauchy",
+        "HalfCauchy",
+        "MultivariateStudentT",
+        "ProjectedNormal",
+        "Stable",
+        "VonMises",
+    ]:
+        pytest.xfail(reason="Euclidean variance is not defined")
+    if Dist.__name__ in ["LogNormal"]:
+        pytest.xfail(reason="high variance estimator")
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+    with xfail_if_not_implemented():
+        actual = d.variance
+    expected = d.sample((100000,)).var(0)
+    assert_close(actual, expected, atol=0.02, rtol=0.05)
+
+
+def test_cdf_icdf(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        if d.event_shape.numel() != 1:
+            continue  # only valid for univariate distributions
+        u = torch.empty((100,) + d.shape()).uniform_()
+        with xfail_if_not_implemented():
+            x = d.icdf(u)
+            u2 = d.cdf(x)
+        assert_equal(u, u2)
+
+
 # Distributions tests - discrete distributions
+
+def test_support_is_discrete(discrete_dist):
+    Dist = discrete_dist.pyro_dist
+    for i in range(discrete_dist.get_num_test_data()):
+        d = Dist(**discrete_dist.get_dist_params(i))
+        assert d.support.is_discrete
+
 
 def test_enumerate_support(discrete_dist):
     expected_support = discrete_dist.expected_support
@@ -230,9 +354,6 @@ def test_expand_error(dist, initial_shape, proposed_shape, default):
             with xfail_if_not_implemented():
                 large = small.expand(torch.Size(initial_shape) + small.batch_shape)
         proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-        if dist.get_test_distribution_name() == 'LKJCorrCholesky':
-            pytest.skip('LKJCorrCholesky can expand to a shape not' +
-                        'broadcastable with its original batch_shape.')
         with pytest.raises((RuntimeError, ValueError)):
             large.expand(proposed_batch_shape)
 

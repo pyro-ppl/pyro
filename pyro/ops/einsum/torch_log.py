@@ -29,7 +29,7 @@ def einsum(equation, *operands):
     shifts = []
     exp_operands = []
     for dims, operand in zip(inputs, operands):
-        shift = operand
+        shift = operand.detach()
         for i, dim in enumerate(dims):
             if dim not in output:
                 shift = shift.max(i, keepdim=True)[0]

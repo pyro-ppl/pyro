@@ -7,14 +7,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import visdom
+from utils.mnist_cached import MNISTCached as MNIST
+from utils.mnist_cached import setup_data_loaders
+from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
-from utils.mnist_cached import MNISTCached as MNIST
-from utils.mnist_cached import setup_data_loaders
-from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
 
 
 # define the PyTorch module that parameterizes the
@@ -92,8 +92,11 @@ class VAE(nn.Module):
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
             # decode the latent code z
             loc_img = self.decoder.forward(z)
-            # score against actual images
-            pyro.sample("obs", dist.Bernoulli(loc_img).to_event(1), obs=x.reshape(-1, 784))
+            # score against actual images (with relaxed Bernoulli values)
+            pyro.sample("obs",
+                        dist.Bernoulli(loc_img, validate_args=False)
+                            .to_event(1),
+                        obs=x.reshape(-1, 784))
             # return the loc so we can visualize it later
             return loc_img
 
@@ -201,7 +204,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')

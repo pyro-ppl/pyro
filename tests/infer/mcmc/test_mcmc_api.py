@@ -11,7 +11,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.mcmc import HMC, NUTS
-from pyro.infer.mcmc.api import MCMC, _UnarySampler, _MultiSampler
+from pyro.infer.mcmc.api import MCMC, _MultiSampler, _UnarySampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
 from pyro.util import optional
@@ -230,3 +230,45 @@ def test_sequential_consistent(monkeypatch):
 
     assert_close(samples1["y"][0], samples2["y"][1])
     assert_close(samples1["y"][1], samples2["y"][0])
+
+
+def test_model_with_potential_fn():
+    init_params = {"z": torch.tensor(0.)}
+
+    def potential_fn(params):
+        return params["z"]
+
+    mcmc = MCMC(
+        kernel=HMC(potential_fn=potential_fn),
+        num_samples=10,
+        warmup_steps=10,
+        initial_params=init_params)
+    mcmc.run()
+
+
+@pytest.mark.parametrize("save_params", ["xy", "x", "y", "xy"])
+@pytest.mark.parametrize("Kernel,options", [
+    (HMC, {}),
+    (NUTS, {"max_tree_depth": 2}),
+])
+def test_save_params(save_params, Kernel, options):
+    save_params = list(save_params)
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        with pyro.plate("plate", 2):
+            y = pyro.sample("y", dist.Normal(x, 1))
+            pyro.sample("obs", dist.Normal(y, 1), obs=torch.zeros(2))
+
+    kernel = Kernel(model, **options)
+    mcmc = MCMC(kernel, warmup_steps=2, num_samples=4, save_params=save_params)
+    mcmc.run()
+
+    samples = mcmc.get_samples()
+    assert set(samples.keys()) == set(save_params)
+
+    diagnostics = mcmc.diagnostics()
+    diagnostics = {k: v for k, v in diagnostics.items() if k in "xy"}
+    assert set(diagnostics.keys()) == set(save_params)
+
+    mcmc.summary()  # smoke test

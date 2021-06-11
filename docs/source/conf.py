@@ -6,7 +6,6 @@ import sys
 
 import sphinx_rtd_theme
 
-
 # import pkg_resources
 
 # -*- coding: utf-8 -*-
@@ -192,6 +191,8 @@ intersphinx_mapping = {
     'funsor': ('http://funsor.pyro.ai/en/stable/', None),
     'opt_einsum': ('https://optimized-einsum.readthedocs.io/en/stable/', None),
     'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
+    'Bio': ('https://biopython.readthedocs.io/en/latest/', None),
+    'horovod': ('https://horovod.readthedocs.io/en/stable/', None),
 }
 
 # document class constructors (__init__ methods):
@@ -204,12 +205,13 @@ def skip(app, what, name, obj, skip, options):
 
 
 def setup(app):
-    app.add_stylesheet('css/pyro.css')
+    app.add_css_file('css/pyro.css')
 #     app.connect("autodoc-skip-member", skip)
 
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 # See similar line in the install section of .travis.yml
 if 'READTHEDOCS' in os.environ:
-    os.system('pip install torch==1.5.0+cpu torchvision==0.6.0+cpu '
+    os.system('pip install numpy')
+    os.system('pip install torch==1.8.0+cpu torchvision==0.9.0+cpu '
               '-f https://download.pytorch.org/whl/torch_stable.html')

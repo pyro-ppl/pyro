@@ -2,16 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+
 import torch
 from torch.distributions import constraints
 
 import pyro
-import pyro.optim
 import pyro.distributions as dist
-
-from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
-
+import pyro.optim
 from pyro.contrib.autoname import scope
+from pyro.infer import SVI, TraceEnum_ELBO, config_enumerate
 
 
 def model(K, data):
@@ -67,7 +66,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=200, type=int)
     args = parser.parse_args()

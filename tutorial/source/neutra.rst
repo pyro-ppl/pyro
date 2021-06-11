@@ -1,5 +1,5 @@
-NeuTraReparam
-=============
+Example: Neural MCMC with NeuTraReparam
+=======================================
 
 `View neutra.py on github`__
 

@@ -54,7 +54,7 @@ class Model(ForecastingModel):
 
         # Sample global parameters.
         noise_scale = pyro.sample("noise_scale",
-                                  dist.LogNormal(torch.full((dim,), -3), 1).to_event(1))
+                                  dist.LogNormal(torch.full((dim,), -3.), 1.).to_event(1))
         assert noise_scale.shape[-1:] == (dim,)
         trans_timescale = pyro.sample("trans_timescale",
                                       dist.LogNormal(torch.zeros(dim), 1).to_event(1))
@@ -66,14 +66,14 @@ class Model(ForecastingModel):
         trans_scale = pyro.sample("trans_scale",
                                   dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         trans_corr = pyro.sample("trans_corr",
-                                 dist.LKJCorrCholesky(dim, torch.ones(())))
+                                 dist.LKJCholesky(dim, torch.ones(())))
         trans_scale_tril = trans_scale.unsqueeze(-1) * trans_corr
         assert trans_scale_tril.shape[-2:] == (dim, dim)
 
         obs_scale = pyro.sample("obs_scale",
                                 dist.LogNormal(torch.zeros(dim), 0.1).to_event(1))
         obs_corr = pyro.sample("obs_corr",
-                               dist.LKJCorrCholesky(dim, torch.ones(())))
+                               dist.LKJCholesky(dim, torch.ones(())))
         obs_scale_tril = obs_scale.unsqueeze(-1) * obs_corr
         assert obs_scale_tril.shape[-2:] == (dim, dim)
 
@@ -116,7 +116,6 @@ class Model(ForecastingModel):
 
 
 def main(args):
-    pyro.enable_validation(__debug__)
     data, covariates = preprocess(args)
 
     # We will model positive count data by log1p-transforming it into real
@@ -156,7 +155,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="Bart Ridership Forecasting Example")
     parser.add_argument("--train-window", default=2160, type=int)
     parser.add_argument("--test-window", default=336, type=int)

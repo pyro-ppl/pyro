@@ -50,6 +50,20 @@ TorchDistribution
     :show-inheritance:
     :member-order: bysource
 
+AffineBeta
+---------------------
+.. autoclass:: pyro.distributions.AffineBeta
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+AsymmetricLaplace
+---------------------
+.. autoclass:: pyro.distributions.AsymmetricLaplace
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 AVFMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.AVFMultivariateNormal
@@ -204,6 +218,13 @@ LinearHMM
     :undoc-members:
     :show-inheritance:
 
+LKJ
+---
+.. autoclass:: pyro.distributions.LKJ
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LKJCorrCholesky
 ---------------
 .. autoclass:: pyro.distributions.LKJCorrCholesky
@@ -253,6 +274,34 @@ OMTMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+OneOneMatching
+--------------
+.. autoclass:: pyro.distributions.OneOneMatching
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OneTwoMatching
+--------------
+.. autoclass:: pyro.distributions.OneTwoMatching
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OrderedLogistic
+-------------------------------
+.. autoclass:: pyro.distributions.OrderedLogistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ProjectedNormal
+---------------
+.. autoclass:: pyro.distributions.ProjectedNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RelaxedBernoulliStraightThrough
 -------------------------------
 .. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough
@@ -270,6 +319,27 @@ RelaxedOneHotCategoricalStraightThrough
 Rejector
 --------
 .. autoclass:: pyro.distributions.Rejector
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SineBivariateVonMises
+---------------------
+.. autoclass:: pyro.distributions.SineBivariateVonMises
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SineSkewed
+----------
+.. autoclass:: pyro.distributions.SineSkewed
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SoftLaplace
+-------------
+.. autoclass:: pyro.distributions.SoftLaplace
     :members:
     :undoc-members:
     :show-inheritance:
@@ -309,9 +379,9 @@ VonMises3D
     :undoc-members:
     :show-inheritance:
 
-ZeroInflatedPoisson
--------------------
-.. autoclass:: pyro.distributions.ZeroInflatedPoisson
+ZeroInflatedDistribution
+------------------------
+.. autoclass:: pyro.distributions.ZeroInflatedDistribution
     :members:
     :undoc-members:
     :show-inheritance:
@@ -323,9 +393,9 @@ ZeroInflatedNegativeBinomial
     :undoc-members:
     :show-inheritance:
 
-ZeroInflatedDistribution
-------------------------
-.. autoclass:: pyro.distributions.ZeroInflatedDistribution
+ZeroInflatedPoisson
+-------------------
+.. autoclass:: pyro.distributions.ZeroInflatedPoisson
     :members:
     :undoc-members:
     :show-inheritance:
@@ -340,9 +410,30 @@ ConditionalTransform
     :undoc-members:
     :show-inheritance:
 
+CholeskyTransform
+-----------------
+.. autoclass:: pyro.distributions.transforms.CholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 CorrLCholeskyTransform
 ----------------------
 .. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+CorrMatrixCholeskyTransform
+---------------------------
+.. autoclass:: pyro.distributions.transforms.CorrMatrixCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+DiscreteCosineTransform
+-----------------------
+.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -375,6 +466,20 @@ LowerCholeskyAffine
     :undoc-members:
     :show-inheritance:
 
+Normalize
+---------
+.. autoclass:: pyro.distributions.transforms.Normalize
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+OrderedTransform
+----------------
+.. autoclass:: pyro.distributions.transforms.OrderedTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
@@ -382,9 +487,16 @@ Permute
     :undoc-members:
     :show-inheritance:
 
-DiscreteCosineTransform
------------------------
-.. autoclass:: pyro.distributions.transforms.DiscreteCosineTransform
+SoftplusLowerCholeskyTransform
+------------------------------
+.. autoclass:: pyro.distributions.transforms.SoftplusLowerCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SoftplusTransform
+-----------------
+.. autoclass:: pyro.distributions.transforms.SoftplusTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -448,6 +560,13 @@ ConditionalHouseholder
     :undoc-members:
     :show-inheritance:
 
+ConditionalMatrixExponential
+----------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalMatrixExponential
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalNeuralAutoregressive
 -------------------------------
 .. autoclass:: pyro.distributions.transforms.ConditionalNeuralAutoregressive
@@ -476,6 +595,13 @@ ConditionalSpline
     :undoc-members:
     :show-inheritance:
 
+ConditionalSplineAutoregressive
+-------------------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalSplineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransformModule
 --------------------------
 .. autoclass:: pyro.distributions.ConditionalTransformModule
@@ -493,6 +619,13 @@ GeneralizedChannelPermute
 Householder
 -----------
 .. autoclass:: pyro.distributions.transforms.Householder
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MatrixExponential
+-----------------
+.. autoclass:: pyro.distributions.transforms.MatrixExponential
     :members:
     :undoc-members:
     :show-inheritance:
@@ -528,6 +661,20 @@ Radial
 Spline
 ------
 .. autoclass:: pyro.distributions.transforms.Spline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SplineAutoregressive
+--------------------
+.. autoclass:: pyro.distributions.transforms.SplineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SplineCoupling
+--------------
+.. autoclass:: pyro.distributions.transforms.SplineCoupling
     :members:
     :undoc-members:
     :show-inheritance:
@@ -595,6 +742,10 @@ conditional_householder
 -----------------------
 .. autofunction:: pyro.distributions.transforms.conditional_householder
 
+conditional_matrix_exponential
+------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_matrix_exponential
+
 conditional_neural_autoregressive
 ---------------------------------
 .. autofunction:: pyro.distributions.transforms.conditional_neural_autoregressive
@@ -611,6 +762,10 @@ conditional_spline
 ------------------
 .. autofunction:: pyro.distributions.transforms.conditional_spline
 
+conditional_spline_autoregressive
+---------------------------------
+.. autofunction:: pyro.distributions.transforms.conditional_spline_autoregressive
+
 elu
 ---
 .. autofunction:: pyro.distributions.transforms.elu
@@ -626,6 +781,10 @@ householder
 leaky_relu
 ----------
 .. autofunction:: pyro.distributions.transforms.leaky_relu
+
+matrix_exponential
+------------------
+.. autofunction:: pyro.distributions.transforms.matrix_exponential
 
 neural_autoregressive
 ---------------------
@@ -651,6 +810,19 @@ spline
 ------
 .. autofunction:: pyro.distributions.transforms.spline
 
+spline_autoregressive
+---------------------
+.. autofunction:: pyro.distributions.transforms.spline_autoregressive
+
+spline_coupling
+---------------
+.. autofunction:: pyro.distributions.transforms.spline_coupling
+
 sylvester
 ---------
 .. autofunction:: pyro.distributions.transforms.sylvester
+
+
+Constraints
+~~~~~~~~~~~
+.. automodule:: pyro.distributions.constraints

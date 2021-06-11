@@ -34,7 +34,7 @@ class MultivariateStudentT(TorchDistribution):
         if not isinstance(df, torch.Tensor):
             df = loc.new_tensor(df)
         batch_shape = broadcast_shape(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
-        event_shape = (dim,)
+        event_shape = torch.Size((dim,))
         self.df = df.expand(batch_shape)
         self.loc = loc.expand(batch_shape + event_shape)
         self._unbroadcasted_scale_tril = scale_tril
@@ -59,6 +59,12 @@ class MultivariateStudentT(TorchDistribution):
         identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
         return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
             self._batch_shape + self._event_shape + self._event_shape)
+
+    @staticmethod
+    def infer_shapes(df, loc, scale_tril):
+        event_shape = loc[-1:]
+        batch_shape = broadcast_shape(df, loc[:-1], scale_tril[:-2])
+        return batch_shape, event_shape
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MultivariateStudentT, _instance)

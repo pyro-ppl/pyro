@@ -5,6 +5,7 @@ import math
 import numbers
 
 import torch
+from torch.fft import irfft, rfft
 
 from .tensor_utils import next_fast_len
 
@@ -105,17 +106,13 @@ def autocorrelation(input, dim=0):
 
     # centering and padding x
     centered_signal = input - input.mean(dim=-1, keepdim=True)
-    pad = torch.zeros(input.shape[:-1] + (M2 - N,), dtype=input.dtype, device=input.device)
-    centered_signal = torch.cat([centered_signal, pad], dim=-1)
 
     # Fourier transform
-    freqvec = torch.rfft(centered_signal, signal_ndim=1, onesided=False)
+    freqvec = torch.view_as_real(rfft(centered_signal, n=M2))
     # take square of magnitude of freqvec (or freqvec x freqvec*)
-    freqvec_gram = freqvec.pow(2).sum(-1, keepdim=True)
-    freqvec_gram = torch.cat([freqvec_gram, torch.zeros(freqvec_gram.shape, dtype=input.dtype,
-                                                        device=input.device)], dim=-1)
+    freqvec_gram = freqvec.pow(2).sum(-1)
     # inverse Fourier transform
-    autocorr = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
+    autocorr = irfft(freqvec_gram, n=M2)
 
     # truncate and normalize the result, then transpose back to original shape
     autocorr = autocorr[..., :N]

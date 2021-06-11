@@ -24,9 +24,14 @@ import torch.multiprocessing as mp
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.logger import DIAGNOSTIC_MSG, ProgressBar, TqdmHandler, initialize_logger
+from pyro.infer.mcmc.logger import (
+    DIAGNOSTIC_MSG,
+    ProgressBar,
+    TqdmHandler,
+    initialize_logger,
+)
 from pyro.infer.mcmc.nuts import NUTS
-from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
+from pyro.infer.mcmc.util import diagnostics, print_summary
 from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
@@ -85,9 +90,6 @@ class _Worker:
     def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
-        # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
-        # at https://github.com/pytorch/pytorch/issues/10375
-        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in args]
         kwargs = kwargs
         logger = logging.getLogger("pyro.infer.mcmc")
         logger_id = "CHAIN:{}".format(self.chain_id)
@@ -110,15 +112,17 @@ class _Worker:
 def _gen_samples(kernel, warmup_steps, num_samples, hook, chain_id, *args, **kwargs):
     kernel.setup(warmup_steps, *args, **kwargs)
     params = kernel.initial_params
+    save_params = getattr(kernel, "save_params", sorted(params))
     # yield structure (key, value.shape) of params
-    yield {k: v.shape for k, v in params.items()}
+    yield {name: params[name].shape for name in save_params}
     for i in range(warmup_steps):
         params = kernel.sample(params)
         hook(kernel, params, 'Warmup [{}]'.format(chain_id) if chain_id is not None else 'Warmup', i)
     for i in range(num_samples):
         params = kernel.sample(params)
         hook(kernel, params, 'Sample [{}]'.format(chain_id) if chain_id is not None else 'Sample', i)
-        yield torch.cat([params[site].reshape(-1) for site in sorted(params)]) if params else torch.tensor([])
+        flat = [params[name].reshape(-1) for name in save_params]
+        yield (torch.cat if flat else torch.tensor)(flat)
     yield kernel.diagnostics()
     kernel.cleanup()
 
@@ -296,10 +300,13 @@ class MCMC:
         to ``None`` to preserve existing global values.
     :param dict transforms: dictionary that specifies a transform for a sample site
         with constrained support to unconstrained space.
+    :param List[str] save_params: Optional list of a subset of parameter names to
+        save during sampling and diagnostics. This is useful in models with
+        large nuisance variables. Defaults to None, saving all params.
     """
     def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
                  num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False,
-                 disable_validation=True, transforms=None):
+                 disable_validation=True, transforms=None, save_params=None):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         self.kernel = kernel
@@ -308,6 +315,8 @@ class MCMC:
         self._samples = None
         self._args = None
         self._kwargs = None
+        if save_params is not None:
+            kernel.save_params = save_params
         if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
             if initial_params is None:
                 raise ValueError("Must provide valid initial parameters to begin sampling"
@@ -377,6 +386,11 @@ class MCMC:
         z_flat_acc = [[] for _ in range(self.num_chains)]
         with optional(pyro.validation_enabled(not self.disable_validation),
                       self.disable_validation is not None):
+            # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
+            # at https://github.com/pytorch/pytorch/issues/10375
+            # This also resolves "RuntimeError: Cowardly refusing to serialize non-leaf tensor which
+            # requires_grad", which happens with `jit_compile` under PyTorch 1.7
+            args = [arg.detach() if torch.is_tensor(arg) else arg for arg in args]
             for x, chain_id in self.sampler.run(*args, **kwargs):
                 if num_samples[chain_id] == 0:
                     num_samples[chain_id] += 1
@@ -408,26 +422,22 @@ class MCMC:
         # If transforms is not explicitly provided, infer automatically using
         # model args, kwargs.
         if self.transforms is None:
-            # Try to initialize kernel.transforms using kernel.setup().
-            if getattr(self.kernel, "transforms", None) is None:
-                warmup_steps = 0
-                self.kernel.setup(warmup_steps, *args, **kwargs)
             # Use `kernel.transforms` when available
             if getattr(self.kernel, "transforms", None) is not None:
                 self.transforms = self.kernel.transforms
             # Else, get transforms from model (e.g. in multiprocessing).
             elif self.kernel.model:
-                _, _, self.transforms, _ = initialize_model(self.kernel.model,
-                                                            model_args=args,
-                                                            model_kwargs=kwargs,
-                                                            initial_params={})
+                warmup_steps = 0
+                self.kernel.setup(warmup_steps, *args, **kwargs)
+                self.transforms = self.kernel.transforms
             # Assign default value
             else:
                 self.transforms = {}
 
         # transform samples back to constrained space
-        for name, transform in self.transforms.items():
-            z_acc[name] = transform.inv(z_acc[name])
+        for name, z in z_acc.items():
+            if name in self.transforms:
+                z_acc[name] = self.transforms[name].inv(z)
         self._samples = z_acc
 
         # terminate the sampler (shut down worker processes)

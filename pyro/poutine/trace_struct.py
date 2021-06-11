@@ -1,8 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import OrderedDict
 import sys
+from collections import OrderedDict
 
 import opt_einsum
 
@@ -189,11 +189,11 @@ class Trace:
                 else:
                     try:
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
-                    except ValueError:
+                    except ValueError as e:
                         _, exc_value, traceback = sys.exc_info()
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError("Error while computing log_prob_sum at site '{}':\n{}\n{}\n"
-                                         .format(name, exc_value, shapes)).with_traceback(traceback)
+                                         .format(name, exc_value, shapes)).with_traceback(traceback) from e
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
                     site["log_prob_sum"] = log_p
                     if is_validation_enabled():
@@ -214,11 +214,11 @@ class Trace:
                 if "log_prob" not in site:
                     try:
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
-                    except ValueError:
+                    except ValueError as e:
                         _, exc_value, traceback = sys.exc_info()
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError("Error while computing log_prob at site '{}':\n{}\n{}"
-                                         .format(name, exc_value, shapes)).with_traceback(traceback)
+                                         .format(name, exc_value, shapes)).with_traceback(traceback) from e
                     site["unscaled_log_prob"] = log_p
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"])
                     site["log_prob"] = log_p
@@ -241,11 +241,11 @@ class Trace:
                 # to correctly scale each of its three parts.
                 try:
                     value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"])
-                except ValueError:
+                except ValueError as e:
                     _, exc_value, traceback = sys.exc_info()
                     shapes = self.format_shapes(last_site=site["name"])
                     raise ValueError("Error while computing score_parts at site '{}':\n{}\n{}"
-                                     .format(name, exc_value, shapes)).with_traceback(traceback)
+                                     .format(name, exc_value, shapes)).with_traceback(traceback) from e
                 site["unscaled_log_prob"] = value.log_prob
                 value = value.scale_and_mask(site["scale"], site["mask"])
                 site["score_parts"] = value
@@ -375,11 +375,11 @@ class Trace:
                 elif "log_prob" in site:
                     packed["log_prob"] = pack(site["log_prob"], dim_to_symbol)
                     packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
-            except ValueError:
+            except ValueError as e:
                 _, exc_value, traceback = sys.exc_info()
                 shapes = self.format_shapes(last_site=site["name"])
                 raise ValueError("Error while packing tensors at site '{}':\n  {}\n{}"
-                                 .format(site["name"], exc_value, shapes)).with_traceback(traceback)
+                                 .format(site["name"], exc_value, shapes)).with_traceback(traceback) from e
 
     def format_shapes(self, title='Trace Shapes:', last_site=None):
         """

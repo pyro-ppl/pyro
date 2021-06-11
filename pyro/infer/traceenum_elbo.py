@@ -1,10 +1,10 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import queue
 import warnings
 import weakref
 from collections import OrderedDict
-import queue
 
 import torch
 from opt_einsum import shared_intermediates
@@ -15,7 +15,11 @@ import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
+from pyro.infer.enum import (
+    get_importance_trace,
+    iter_discrete_escape,
+    iter_discrete_extend,
+)
 from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
 from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
@@ -133,15 +137,13 @@ def _compute_model_factors(model_trace, guide_trace):
                 cost = site["packed"]["masked_log_prob"]
                 log_factors.setdefault(t, []).append(cost)
                 scales.append(site["scale"])
-    if log_factors:
-        for t, sites_t in enum_sites.items():
-            # TODO refine this coarse dependency ordering using time and tensor shapes.
-            if any(t <= u for u in log_factors):
-                for site in sites_t:
-                    logprob = site["packed"]["unscaled_log_prob"]
-                    log_factors.setdefault(t, []).append(logprob)
-                    scales.append(site["scale"])
-        scale = _get_common_scale(scales)
+    for t, sites_t in enum_sites.items():
+        # TODO refine this coarse dependency ordering using time and tensor shapes.
+        for site in sites_t:
+            logprob = site["packed"]["unscaled_log_prob"]
+            log_factors.setdefault(t, []).append(logprob)
+            scales.append(site["scale"])
+    scale = _get_common_scale(scales)
     return marginal_costs, log_factors, ordering, enum_dims, scale
 
 

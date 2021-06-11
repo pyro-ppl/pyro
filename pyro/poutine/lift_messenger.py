@@ -104,9 +104,8 @@ class LiftMessenger(Messenger):
             msg["kwargs"] = {}
             msg["infer"] = {}
         elif callable(self.prior):
-            if not isinstance(self.prior, Distribution):
-                # prior is a stochastic fn. block sample
-                msg["stop"] = True
+            # prior is a stochastic fn. block sample
+            msg["stop"] = True
             msg["fn"] = self.prior
             msg["args"] = msg["args"][1:]
         else:

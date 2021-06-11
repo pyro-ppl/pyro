@@ -4,6 +4,7 @@ run_outputs*
 data
 .data
 results
+*.csv
 examples/*/processed
 examples/*/results
 examples/*/raw
@@ -18,6 +19,12 @@ pyro/_version.py
 processed
 raw
 *.pkl
+*.fasta
+baseline_net_q1.pth
+cvae_net_q1.pth
+cvae_plot_q1.png
+prep_seal_data.csv
+results.csv
 
 # Logs
 logs
@@ -137,3 +144,6 @@ ENV/
 *.swo
 *.swp
 *~
+
+# mypy cache
+.mypy_cache

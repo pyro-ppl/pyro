@@ -213,9 +213,9 @@ class Dict(dict):
     def __getitem__(self, key):
         try:
             return super().__getitem__(key)
-        except KeyError:
+        except KeyError as e:
             if self._name is None:
-                raise RuntimeError("Cannot access an unnamed named.Dict")
+                raise RuntimeError("Cannot access an unnamed named.Dict") from e
             value = Object("{}[{!r}]".format(self._name, key))
             super(Object, value).__setattr__(
                 "_set_value", lambda value: self.__setitem__(key, value))

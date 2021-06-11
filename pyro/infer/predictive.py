@@ -1,8 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import reduce
 import warnings
+from functools import reduce
 
 import torch
 
@@ -50,6 +50,7 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
 
 def _predictive(model, posterior_samples, num_samples, return_sites=(),
                 return_trace=False, parallel=False, model_args=(), model_kwargs={}):
+    model = torch.no_grad()(poutine.mask(model, mask=False))
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
     vectorize = pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1)
     model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*model_args, **model_kwargs))
@@ -186,6 +187,10 @@ class Predictive(torch.nn.Module):
         Returns dict of samples from the predictive distribution. By default, only sample sites not
         contained in `posterior_samples` are returned. This can be modified by changing the
         `return_sites` keyword argument of this :class:`Predictive` instance.
+
+        .. note:: This method is used internally by :class:`~torch.nn.Module`.
+            Users should instead use :meth:`~torch.nn.Module.__call__` as in
+            ``Predictive(model)(*args, **kwargs)``.
 
         :param args: model arguments.
         :param kwargs: model keyword arguments.

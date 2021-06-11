@@ -63,7 +63,7 @@ class ReplayMessenger(Messenger):
                 return None
             if guide_msg["type"] != "sample" or \
                     guide_msg["is_observed"]:
-                raise RuntimeError("site {} must be sample in trace".format(name))
+                raise RuntimeError("site {} must be sampled in trace".format(name))
             msg["done"] = True
             msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]

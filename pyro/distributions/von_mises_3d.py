@@ -4,9 +4,9 @@
 import math
 
 import torch
-from torch.distributions import constraints
 
-from pyro.distributions import TorchDistribution
+from . import constraints
+from .torch_distribution import TorchDistribution
 
 
 class VonMises3D(TorchDistribution):
@@ -19,7 +19,8 @@ class VonMises3D(TorchDistribution):
     must be a normalized 3-vector that lies on the 2-sphere.
 
     See :class:`~pyro.distributions.VonMises` for a 2D polar coordinate cousin
-    of this distribution.
+    of this distribution. See :class:`~pyro.distributions.projected_normal` for
+    a qualitatively similar distribution but implementing more functionality.
 
     Currently only :meth:`log_prob` is implemented.
 
@@ -28,7 +29,7 @@ class VonMises3D(TorchDistribution):
         magnitude is the concentration.
     """
     arg_constraints = {'concentration': constraints.real}
-    support = constraints.real  # TODO implement constraints.sphere or similar
+    support = constraints.sphere
 
     def __init__(self, concentration, validate_args=None):
         if concentration.dim() < 1 or concentration.shape[-1] != 3:

@@ -1,5 +1,5 @@
-Gaussian Process Time Series Models
-===================================
+Example: Gaussian Process Time Series Models
+============================================
 
 `View gp_models.py on github`__
 

@@ -32,6 +32,15 @@ Loc-Scale Decentering
     :special-members: __call__
     :show-inheritance:
 
+Gumbel-Softmax
+--------------
+.. automodule:: pyro.infer.reparam.softmax
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Transformed Distributions
 -------------------------
 .. automodule:: pyro.infer.reparam.transform
@@ -86,6 +95,15 @@ Stable Distributions
     :special-members: __call__
     :show-inheritance:
 
+Projected Normal Distributions
+------------------------------
+.. automodule:: pyro.infer.reparam.projected_normal
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Hidden Markov Models
 --------------------
 .. automodule:: pyro.infer.reparam.hmm
@@ -107,6 +125,15 @@ Site Splitting
 Neural Transport
 ----------------
 .. automodule:: pyro.infer.reparam.neutra
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
+Structured Preconditioning
+--------------------------
+.. automodule:: pyro.infer.reparam.structured
     :members:
     :undoc-members:
     :member-order: bysource

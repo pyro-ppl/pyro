@@ -9,7 +9,12 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim
 import pyro.poutine as poutine
-from pyro.optim.multi import MixedMultiOptimizer, Newton, PyroMultiOptimizer, TorchMultiOptimizer
+from pyro.optim.multi import (
+    MixedMultiOptimizer,
+    Newton,
+    PyroMultiOptimizer,
+    TorchMultiOptimizer,
+)
 from tests.common import assert_equal
 
 FACTORIES = [

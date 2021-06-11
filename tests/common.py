@@ -4,6 +4,7 @@
 import contextlib
 import numbers
 import os
+import re
 import shutil
 import tempfile
 import warnings
@@ -26,10 +27,22 @@ Source: https://github.com/pytorch/pytorch/blob/master/test/common.py
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = os.path.join(TESTS_DIR, 'resources')
 EXAMPLES_DIR = os.path.join(os.path.dirname(TESTS_DIR), 'examples')
+TEST_FAILURE_RATE = 2e-5  # For all goodness-of-fit tests.
 
 
 def xfail_param(*args, **kwargs):
+    kwargs.setdefault("reason", "unknown")
     return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
+
+
+def str_erase_pointers(x):
+    """
+    Print a string representation of ``x`` but remove pointers from function
+    names, since the pointers have different values on different pytest xdist
+    workers and break test collection. This is useful as the ``ids`` arg to
+    ``@pytest.mark.parametrize``.
+    """
+    return re.sub(" at 0x[a-f0-9]+", "", str(x))
 
 
 def skipif_param(*args, **kwargs):
@@ -58,6 +71,20 @@ def TemporaryDirectory():
 
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
                                    reason="cuda is not available")
+
+try:
+    import horovod
+except ImportError:
+    horovod = None
+requires_horovod = pytest.mark.skipif(horovod is None,
+                                      reason="horovod is not available")
+
+try:
+    import funsor
+except ImportError:
+    funsor = None
+requires_funsor = pytest.mark.skipif(funsor is None,
+                                     reason="funsor is not available")
 
 
 def get_cpu_type(t):
@@ -198,7 +225,7 @@ def assert_close(actual, expected, atol=1e-7, rtol=0, msg=''):
         assert set(actual.keys()) == set(expected.keys())
         for key, x_val in actual.items():
             assert_close(x_val, expected[key], atol=atol, rtol=rtol,
-                         msg='At key{}: {} vs {}'.format(key, x_val, expected[key]))
+                         msg='At key {}: {} vs {}'.format(repr(key), x_val, expected[key]))
     elif isinstance(actual, str):
         assert actual == expected, msg
     elif is_iterable(actual) and is_iterable(expected):

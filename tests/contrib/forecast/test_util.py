@@ -6,7 +6,12 @@ import torch
 from torch.distributions import transform_to
 
 import pyro.distributions as dist
-from pyro.contrib.forecast.util import UNIVARIATE_DISTS, UNIVARIATE_TRANSFORMS, prefix_condition, reshape_batch
+from pyro.contrib.forecast.util import (
+    UNIVARIATE_DISTS,
+    UNIVARIATE_TRANSFORMS,
+    prefix_condition,
+    reshape_batch,
+)
 from tests.ops.gaussian import random_mvn
 
 DISTS = [
@@ -27,10 +32,13 @@ DISTS = [
     dist.Laplace,
     dist.LinearHMM,
     dist.LogNormal,
+    dist.MaskedDistribution,
     dist.MultivariateNormal,
     dist.NegativeBinomial,
     dist.Normal,
     dist.StudentT,
+    dist.TransformedDistribution,
+    dist.Uniform,
     dist.ZeroInflatedPoisson,
     dist.ZeroInflatedNegativeBinomial,
 ]
@@ -39,6 +47,20 @@ DISTS = [
 def random_dist(Dist, shape, transform=None):
     if Dist is dist.FoldedDistribution:
         return Dist(random_dist(dist.Normal, shape))
+    elif Dist is dist.MaskedDistribution:
+        base_dist = random_dist(dist.Normal, shape)
+        mask = torch.empty(shape, dtype=torch.bool).bernoulli_(0.5)
+        return base_dist.mask(mask)
+    elif Dist is dist.TransformedDistribution:
+        base_dist = random_dist(dist.Normal, shape)
+        transforms = [
+            dist.transforms.ExpTransform(),
+            dist.transforms.ComposeTransform([
+                dist.transforms.AffineTransform(1, 1),
+                dist.transforms.ExpTransform().inv,
+            ]),
+        ]
+        return dist.TransformedDistribution(base_dist, transforms)
     elif Dist in (dist.GaussianHMM, dist.LinearHMM):
         batch_shape, duration, obs_dim = shape[:-2], shape[-2], shape[-1]
         hidden_dim = obs_dim + 1
@@ -58,6 +80,10 @@ def random_dist(Dist, shape, transform=None):
         return Dist(base_dist)
     elif Dist is dist.MultivariateNormal:
         return random_mvn(shape[:-1], shape[-1])
+    elif Dist is dist.Uniform:
+        low = torch.randn(shape)
+        high = low + torch.randn(shape).exp()
+        return Dist(low, high)
     else:
         params = {
             name: transform_to(Dist.arg_constraints[name])(torch.rand(shape) - 0.5)

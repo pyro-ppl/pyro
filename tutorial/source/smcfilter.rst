@@ -1,5 +1,5 @@
-Sequential Monte Carlo Filtering
-================================
+Example: Sequential Monte Carlo Filtering
+==========================================
 
 `View smcfilter.py on github`__
 

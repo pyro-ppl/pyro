@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import copy
+import ctypes
 import functools
 import numbers
 import weakref
@@ -13,7 +15,8 @@ from torch.distributions.utils import broadcast_all
 
 from pyro.util import ignore_jit_warnings
 
-_VALIDATION_ENABLED = False
+_VALIDATION_ENABLED = __debug__
+torch_dist.Distribution.set_default_validate_args(__debug__)
 
 log_sum_exp = logsumexp  # DEPRECATED
 
@@ -56,6 +59,7 @@ def copy_docs_from(source_class, full_text=False):
     return decorator
 
 
+# TODO replace with weakref.WeakMethod?
 def weakmethod(fn):
     """
     Decorator to enforce weak binding of a method, so as to avoid reference
@@ -90,6 +94,45 @@ def weakmethod(fn):
             raise AttributeError("cannot overwrite weakmethod {}".format(fn.__name__))
 
     return weak_binder
+
+
+# This helper intervenes in copy.deepcopy's use of a memo dict to
+# use .detatch() to copy tensors.
+class _DetachMemo(dict):
+    def get(self, key, default=None):
+        result = super().get(key, default)
+
+        if result is default:
+            # Assume key is the id of another object, and look up that object.
+            old = ctypes.cast(key, ctypes.py_object).value
+            if isinstance(old, torch.Tensor):
+                self[key] = result = old.detach()
+
+        return result
+
+
+def detach(obj):
+    """
+    Create a deep copy of an object, detaching all :class:`torch.Tensor` s in
+    the object. No tensor data is actually copied.
+
+    :param obj: Any python object.
+    :returns: A deep copy of ``obj`` with all :class:`torch.Tensor` s detached.
+    """
+    memo = _DetachMemo()
+    return copy.deepcopy(obj, memo)
+
+
+# Import a lazy jit.script decorator only if available.
+torch_jit_script_if_tracing = getattr(
+    torch.jit,
+    "script_if_tracing",
+    getattr(
+        torch.jit,
+        "_script_if_tracing",
+        torch.jit.script
+    ),
+)
 
 
 def is_identically_zero(x):
@@ -221,12 +264,14 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param scale: a positive scale
     :type scale: torch.Tensor or number
     :param mask: an optional masking tensor
-    :type mask: torch.BoolTensor or None
+    :type mask: torch.BoolTensor, bool, or None
     """
     if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
         return tensor
-    if mask is None:
+    if mask is None or mask is True:
         return tensor * scale
+    if mask is False:
+        return torch.zeros_like(tensor)
     return torch.where(mask, tensor * scale, tensor.new_zeros(()))
 
 

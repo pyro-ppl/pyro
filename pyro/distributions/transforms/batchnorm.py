@@ -4,10 +4,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import constraints
 
-from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.util import copy_docs_from
+from .. import constraints
+from ..torch_transform import TransformModule
+from ..util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
@@ -73,7 +73,6 @@ class BatchNorm(TransformModule):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    event_dim = 0
 
     def __init__(self, input_dim, momentum=0.1, epsilon=1e-5):
         super().__init__()

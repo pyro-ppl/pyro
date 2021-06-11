@@ -22,6 +22,14 @@ __________________
     :undoc-members:
     :show-inheritance:
 
+CollapseMessenger
+_________________
+
+.. automodule:: pyro.poutine.collapse_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionMessenger
 ___________________
 

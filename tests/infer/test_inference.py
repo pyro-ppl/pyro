@@ -16,13 +16,30 @@ import pyro.optim as optim
 from pyro import poutine
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
-from pyro.infer import (SVI, EnergyDistance, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, RenyiELBO,
-                        ReweightedWakeSleep, Trace_ELBO, Trace_MMD, TraceEnum_ELBO, TraceGraph_ELBO,
-                        TraceMeanField_ELBO, TraceTailAdaptive_ELBO)
+from pyro.infer import (
+    SVI,
+    EnergyDistance,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    JitTraceGraph_ELBO,
+    RenyiELBO,
+    ReweightedWakeSleep,
+    Trace_ELBO,
+    Trace_MMD,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+    TraceMeanField_ELBO,
+    TraceTailAdaptive_ELBO,
+)
 from pyro.infer.autoguide import AutoDelta
 from pyro.infer.reparam import LatentStableReparam
 from pyro.infer.util import torch_item
-from tests.common import assert_close, assert_equal, xfail_if_not_implemented, xfail_param
+from tests.common import (
+    assert_close,
+    assert_equal,
+    xfail_if_not_implemented,
+    xfail_param,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +234,7 @@ class TestFixedModelGuide(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.Gamma(alpha_q, beta_q))
 
-        def per_param_args(module_name, param_name):
+        def per_param_args(param_name):
             if 'model' in fixed_parts and 'p_' in param_name:
                 return {'lr': 0.0}
             if 'guide' in fixed_parts and 'q_' in param_name:
@@ -743,5 +760,68 @@ def test_reparam_stable():
     svi = SVI(model, guide, optim.Adam({"lr": 0.01}), Trace_ELBO())
     for step in range(100):
         loss = svi.step()
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+def test_sequential_plating_sum():
+    """Example from https://github.com/pyro-ppl/pyro/issues/2361"""
+
+    def model(data):
+        x = pyro.sample('x', dist.Bernoulli(torch.tensor(0.5)))
+        for i in pyro.plate('data_plate', len(data)):
+            pyro.sample('data_{:d}'.format(i),
+                        dist.Normal(x, scale=torch.tensor(0.1)),
+                        obs=data[i])
+
+    def guide(data):
+        p = pyro.param('p', torch.tensor(0.5))
+        pyro.sample('x', pyro.distributions.Bernoulli(p))
+
+    data = torch.cat([torch.randn([5]), 1. + torch.randn([5])])
+    adam = optim.Adam({"lr": 0.01})
+    loss_fn = RenyiELBO(alpha=0, num_particles=30, vectorize_particles=True)
+    svi = SVI(model, guide, adam, loss_fn)
+
+    for step in range(1):
+        loss = svi.step(data)
+        if step % 20 == 0:
+            logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+def test_non_nested_plating_sum():
+    """Example from https://github.com/pyro-ppl/pyro/issues/2361"""
+
+    # Generative model: data = x @ weights + eps
+    def model(data, weights):
+        loc = torch.tensor(1.0)
+        scale = torch.tensor(0.1)
+
+        # Sample latents (shares no dimensions with data)
+        with pyro.plate('x_plate', weights.shape[0]):
+            x = pyro.sample('x', pyro.distributions.Normal(loc, scale))
+
+        # Combine with weights and sample
+        with pyro.plate('data_plate_1', data.shape[-1]):
+            with pyro.plate('data_plate_2', data.shape[-2]):
+                pyro.sample('data', pyro.distributions.Normal(x @ weights, scale), obs=data)
+
+    def guide(data, weights):
+        loc = pyro.param('x_loc', torch.tensor(0.5))
+        scale = torch.tensor(0.1)
+
+        with pyro.plate('x_plate', weights.shape[0]):
+            pyro.sample('x', pyro.distributions.Normal(loc, scale))
+
+    data = torch.randn([5, 3])
+    weights = torch.randn([2, 3])
+    adam = optim.Adam({"lr": 0.01})
+    loss_fn = RenyiELBO(num_particles=30, vectorize_particles=True)
+    svi = SVI(model, guide, adam, loss_fn)
+
+    for step in range(1):
+        loss = svi.step(data, weights)
         if step % 20 == 0:
             logger.info("step {} loss = {:0.4g}".format(step, loss))

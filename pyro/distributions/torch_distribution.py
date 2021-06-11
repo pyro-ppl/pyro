@@ -5,13 +5,14 @@ import warnings
 from collections import OrderedDict
 
 import torch
-from torch.distributions import constraints
 from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
-from pyro.distributions.distribution import Distribution
-from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import broadcast_shape, scale_and_mask
+
+from . import constraints
+from .distribution import Distribution
+from .score_parts import ScoreParts
+from .util import broadcast_shape, scale_and_mask
 
 
 class TorchDistributionMixin(Distribution):
@@ -67,6 +68,34 @@ class TorchDistributionMixin(Distribution):
         :rtype: torch.Size
         """
         return sample_shape + self.batch_shape + self.event_shape
+
+    @classmethod
+    def infer_shapes(cls, **arg_shapes):
+        r"""
+        Infers ``batch_shape`` and ``event_shape`` given shapes of args to
+        :meth:`__init__`.
+
+        .. note:: This assumes distribution shape depends only on the shapes
+            of tensor inputs, not in the data contained in those inputs.
+
+        :param \*\*arg_shapes: Keywords mapping name of input arg to
+            :class:`torch.Size` or tuple representing the sizes of each
+            tensor input.
+        :returns: A pair ``(batch_shape, event_shape)`` of the shapes of a
+            distribution that would be created with input args of the given
+            shapes.
+        :rtype: tuple
+        """
+        if cls.support.event_dim > 0:
+            raise NotImplementedError
+        # Assumes distribution is univariate.
+        batch_shapes = []
+        for name, shape in arg_shapes.items():
+            event_dim = cls.arg_constraints.get(name, constraints.real).event_dim
+            batch_shapes.append(shape[:len(shape) - event_dim])
+        batch_shape = torch.Size(broadcast_shape(*batch_shapes))
+        event_shape = torch.Size()
+        return batch_shape, event_shape
 
     def expand(self, batch_shape, _instance=None):
         """

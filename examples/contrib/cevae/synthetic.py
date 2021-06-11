@@ -44,7 +44,6 @@ def generate_data(args):
 
 
 def main(args):
-    pyro.enable_validation(__debug__)
     if args.cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
@@ -81,7 +80,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.3.1')
+    assert pyro.__version__.startswith('1.6.0')
     parser = argparse.ArgumentParser(description="Causal Effect Variational Autoencoder")
     parser.add_argument("--num-data", default=1000, type=int)
     parser.add_argument("--feature-dim", default=5, type=int)
