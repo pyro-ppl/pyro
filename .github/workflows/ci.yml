@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.5]
+        python-version: [3.6]
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
@@ -27,7 +27,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 nbstripout nbformat
+        pip install flake8 isort>=5.0 mypy nbstripout nbformat
     - name: Lint with flake8
       run: |
         make lint
@@ -36,7 +36,7 @@ jobs:
     needs: lint
     strategy:
       matrix:
-        python-version: [3.5]
+        python-version: [3.6]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -48,7 +48,7 @@ jobs:
           pip install -U pip
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           sudo apt-get install graphviz
           pip install -r docs/requirements.txt
@@ -62,7 +62,7 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.5]
+        python-version: [3.6]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -74,7 +74,7 @@ jobs:
           pip install -U pip
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
           pip install coveralls
@@ -89,7 +89,7 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.5]
+        python-version: [3.6]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -101,7 +101,7 @@ jobs:
           pip install -U pip
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
           pip install coveralls
@@ -118,7 +118,7 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.5]
+        python-version: [3.6]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -130,7 +130,7 @@ jobs:
           pip install -U pip
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
           pip install coveralls
@@ -145,7 +145,34 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.5]
+        python-version: [3.6]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          # Keep track of pyro-api master branch
+          pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
+          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          sudo apt-get install ninja-build
+          pip install .[test]
+          pip install coveralls
+          pip freeze
+      - name: Run integration test (batch 2)
+        run: |
+          pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
+      - name: Submit to coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
+  funsor:
+    runs-on: ubuntu-latest
+    needs: docs
+    strategy:
+      matrix:
+        python-version: [3.6]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -160,15 +187,17 @@ jobs:
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           sudo apt-get install ninja-build
           pip install .[test]
+          pip install -e .[funsor]
           pip install coveralls
           pip freeze
-      - name: Run integration test (batch 2)
+      - name: Run funsor tests
         run: |
-          pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
+          pytest -vs --cov=pyro --cov-config .coveragerc --stage funsor --durations 10
+          CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10 -k funsor
       - name: Submit to coveralls
         run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   finish:
-    needs: [unit, examples, integration_1, integration_2]
+    needs: [unit, examples, integration_1, integration_2, funsor]
     runs-on: ubuntu-latest
     steps:
     - name: Coveralls Finished
