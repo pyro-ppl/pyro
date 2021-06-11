@@ -11,6 +11,9 @@ env:
   CC: gcc-8
   COVERALLS_PARALLEL: true
   COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+  # those two lines seem to be required for coveralls
+  # see issue: https://github.com/lemurheavy/coveralls-public/issues/1435
+  COVERALLS_SERVICE_NAME: github
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
