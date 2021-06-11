@@ -14,7 +14,7 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         python-version: [3.6]
@@ -32,7 +32,7 @@ jobs:
       run: |
         make lint
   docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: lint
     strategy:
       matrix:
@@ -58,7 +58,7 @@ jobs:
           make docs
           make doctest
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: docs
     strategy:
       matrix:
@@ -85,7 +85,7 @@ jobs:
       - name: Submit to coveralls
         run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   examples:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: docs
     strategy:
       matrix:
@@ -114,7 +114,7 @@ jobs:
       - name: Submit to coveralls
         run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   integration_1:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: docs
     strategy:
       matrix:
@@ -141,7 +141,7 @@ jobs:
       - name: Submit to coveralls
         run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   integration_2:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: docs
     strategy:
       matrix:
@@ -168,7 +168,7 @@ jobs:
       - name: Submit to coveralls
         run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   funsor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: docs
     strategy:
       matrix:
@@ -198,7 +198,7 @@ jobs:
         run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
   finish:
     needs: [unit, examples, integration_1, integration_2, funsor]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
     - name: Coveralls Finished
       uses: coverallsapp/github-action@master
