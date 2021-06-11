@@ -574,9 +574,10 @@ class AutoNormal(AutoGuide):
             site_loc, site_scale = self._get_loc_and_scale(name)
 
             site_quantiles = torch.tensor(quantiles, dtype=site_loc.dtype, device=site_loc.device)
+            site_quantiles = site_quantiles.reshape((-1,) + (1,) * site_loc.dim())
             site_quantiles_values = dist.Normal(site_loc, site_scale).icdf(site_quantiles)
             constrained_site_quantiles = biject_to(site["fn"].support)(site_quantiles_values)
-            results[name] = constrained_site_quantiles
+            results[name] = list(constrained_site_quantiles)
 
         return results
 

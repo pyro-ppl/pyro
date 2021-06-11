@@ -404,7 +404,7 @@ def test_quantiles(auto_class, Elbo):
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
         pyro.sample("y", dist.LogNormal(0.0, 1.0))
-        pyro.sample("z", dist.Beta(2.0, 2.0))
+        pyro.sample("z", dist.Beta(2.0, 2.0).expand([2]).to_event(1))
 
     guide = auto_class(model)
     optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
@@ -421,10 +421,12 @@ def test_quantiles(auto_class, Elbo):
     median = guide.median()
     for name in ["x", "y", "z"]:
         assert not median[name].requires_grad
+        assert isinstance(quantiles[name], list)
+        assert len(quantiles[name]) == 3
         for q in quantiles[name]:
             assert not q.requires_grad
+            assert q.shape == (() if name != "z" else (2,))
         assert_equal(median[name], quantiles[name][1])
-    quantiles = {name: [v.item() for v in value] for name, value in quantiles.items()}
 
     assert -3.0 < quantiles["x"][0]
     assert quantiles["x"][0] + 1.0 < quantiles["x"][1]
@@ -436,10 +438,10 @@ def test_quantiles(auto_class, Elbo):
     assert quantiles["y"][1] * 2.0 < quantiles["y"][2]
     assert quantiles["y"][2] < 100.0
 
-    assert 0.01 < quantiles["z"][0]
-    assert quantiles["z"][0] + 0.1 < quantiles["z"][1]
-    assert quantiles["z"][1] + 0.1 < quantiles["z"][2]
-    assert quantiles["z"][2] < 0.99
+    assert (0.01 < quantiles["z"][0]).all()
+    assert (quantiles["z"][0] + 0.1 < quantiles["z"][1]).all()
+    assert (quantiles["z"][1] + 0.1 < quantiles["z"][2]).all()
+    assert (quantiles["z"][2] < 0.99).all()
 
 
 @pytest.mark.parametrize("continuous_class", [
