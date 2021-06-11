@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all, lazy_property
@@ -100,8 +102,8 @@ class SoftAsymmetricLaplace(TorchDistribution):
 
     :param loc: Location parameter, i.e. the mode.
     :param scale: Scale parameter = geometric mean of left and right scales.
-    :param asymmetry: Square of ratio of left to right scales.
-    :param softness: Scale parameter of the Gaussian smoother.
+    :param asymmetry: Square of ratio of left to right scales. Defaults to 1.
+    :param softness: Scale parameter of the Gaussian smoother. Defaults to 1.
     """
     arg_constraints = {"loc": constraints.real,
                        "scale": constraints.positive,
@@ -140,8 +142,27 @@ class SoftAsymmetricLaplace(TorchDistribution):
         return new
 
     def log_prob(self, value):
-        z = (value - self.loc) / self.scale
-        raise NotImplementedError("TODO compute sum of two Gaussian integrals")
+        if self._validate_args:
+            self._validate_sample(value)
+
+        L = self.left_scale
+        R = self.right_scale
+        S = self.soft_scale
+        SS = S * S
+        S2 = S * math.sqrt(2)
+        x = value - self.loc
+        Lx = L * x
+        Rx = R * x
+
+        # This is the sum of two integrals which are proportional to:
+        # left = Integrate[e^(-t/L - ((x+t)/S)^2/2)/sqrt(2 pi)/S, {t,0,Infinity}]
+        #      = 1/2 e^((2 L x + S^2)/(2 L^2)) erfc((L x + S^2)/(sqrt(2) L S))
+        # right = Integrate[e^(-t/R - ((x-t)/S)^2/2)/sqrt(2 pi)/S, {t,0,Infinity}]
+        #       = 1/2 e^((S^2 - 2 R x)/(2 R^2)) erfc((S^2 - R x)/(sqrt(2) R S))
+        return math.log(0.5) - (L + R).log() + torch.logaddexp(
+            (SS / 2 + Lx) / L ** 2 + ((SS + Lx) / (L * S2)).erfc().log(),
+            (SS / 2 - Rx) / R ** 2 + ((SS - Rx) / (R * S2)).erfc().log(),
+        )
 
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
