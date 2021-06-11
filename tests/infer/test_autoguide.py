@@ -421,7 +421,7 @@ def test_quantiles(auto_class, Elbo):
     median = guide.median()
     for name in ["x", "y", "z"]:
         assert not median[name].requires_grad
-        assert isinstance(quantiles[name], list)
+        assert torch.is_tensor(quantiles[name])
         assert len(quantiles[name]) == 3
         for q in quantiles[name]:
             assert not q.requires_grad
