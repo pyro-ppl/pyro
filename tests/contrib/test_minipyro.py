@@ -246,4 +246,6 @@ def elbo_test_case(backend, jit, expected_elbo, data, steps=None):
         if backend == "pyro":
             # TODO: this is a difference between the two implementations
             elbo = elbo.loss
-        assert elbo(constrained_model, guide_constrained_model, data) == approx(expected_elbo, rel=0.1)
+        with torch.no_grad():
+            actual = elbo(constrained_model, guide_constrained_model, data)
+        assert actual == approx(expected_elbo, rel=0.1)
