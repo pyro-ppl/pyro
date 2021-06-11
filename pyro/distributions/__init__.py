@@ -7,7 +7,10 @@ from pyro.distributions.torch import *  # noqa F403
 # isort: split
 
 from pyro.distributions.affine_beta import AffineBeta
-from pyro.distributions.asymmetriclaplace import AsymmetricLaplace
+from pyro.distributions.asymmetriclaplace import (
+    AsymmetricLaplace,
+    SoftAsymmetricLaplace,
+)
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.coalescent import (
     CoalescentRateLikelihood,
@@ -135,6 +138,7 @@ __all__ = [
     "SineBivariateVonMises",
     "SineSkewed",
     "SoftLaplace",
+    "SoftAsymmetricLaplace",
     "SpanningTree",
     "Stable",
     "TorchDistribution",
