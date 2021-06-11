@@ -75,7 +75,9 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-          sudo apt-get install ninja-build
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install gcc-8 g++-8 ninja-build
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -102,7 +104,9 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-          sudo apt-get install ninja-build
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install gcc-8 g++-8 ninja-build
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -131,7 +135,9 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-          sudo apt-get install ninja-build
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install gcc-8 g++-8 ninja-build
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -158,7 +164,9 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-          sudo apt-get install ninja-build
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install gcc-8 g++-8 ninja-build
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -185,7 +193,9 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch==1.5.0+cpu torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-          sudo apt-get install ninja-build
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install gcc-8 g++-8 ninja-build
           pip install .[test]
           pip install -e .[funsor]
           pip install coveralls
