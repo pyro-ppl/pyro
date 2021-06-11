@@ -374,10 +374,10 @@ continuous_dists = [
             ]),
     Fixture(pyro_dist=dist.AsymmetricLaplace,
             examples=[
-                {'loc': [1.0], 'left_scale': [1.0], 'right_scale': [4.0],
+                {'loc': [1.0], 'scale': [1.0], 'asymmetry': [2.0],
                  'test_data': [2.0]},
-                {'loc': [2.0, -50.0], 'left_scale': [4.0, 100.0],
-                 'right_scale': [0.5, 10.0], 'test_data': [[2.0, 10.0], [-1.0, -50.0]]},
+                {'loc': [2.0, -50.0], 'scale': [2.0, 10.0],
+                 'asymmetry': [0.5, 2.5], 'test_data': [[2.0, 10.0], [-1.0, -50.0]]},
             ]),
 ]
 
