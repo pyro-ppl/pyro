@@ -145,12 +145,13 @@ class SoftAsymmetricLaplace(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
 
-        L = self.left_scale
-        R = self.right_scale
-        S = self.soft_scale
+        # Standardize.
+        x = (value - self.loc) / self.scale
+        L = self.asymmetry
+        R = self.asymmetry.reciprocal()
+        S = self.softness
         SS = S * S
         S2 = S * math.sqrt(2)
-        x = value - self.loc
         Lx = L * x
         Rx = R * x
 
@@ -159,10 +160,10 @@ class SoftAsymmetricLaplace(TorchDistribution):
         #      = 1/2 e^((2 L x + S^2)/(2 L^2)) erfc((L x + S^2)/(sqrt(2) L S))
         # right = Integrate[e^(-t/R - ((x-t)/S)^2/2)/sqrt(2 pi)/S, {t,0,Infinity}]
         #       = 1/2 e^((S^2 - 2 R x)/(2 R^2)) erfc((S^2 - R x)/(sqrt(2) R S))
-        return math.log(0.5) - (L + R).log() + torch.logaddexp(
-            (SS / 2 + Lx) / L ** 2 + ((SS + Lx) / (L * S2)).erfc().log(),
-            (SS / 2 - Rx) / R ** 2 + ((SS - Rx) / (R * S2)).erfc().log(),
-        )
+        return math.log(0.5) + torch.logaddexp(
+            (SS / 2 + Lx) / L ** 2 + _logerfc((SS + Lx) / (L * S2)),
+            (SS / 2 - Rx) / R ** 2 + _logerfc((SS - Rx) / (R * S2)),
+        ) - (L + R).log() - self.scale.log()
 
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
@@ -185,3 +186,11 @@ class SoftAsymmetricLaplace(TorchDistribution):
         q = right / total
         return (p * left ** 2 + q * right ** 2 + p * q * total ** 2
                 + self.soft_scale ** 2)
+
+
+def _logerfc(x):
+    try:
+        # Requires https://github.com/pytorch/pytorch/issues/31945
+        return torch.logerfc(x)
+    except AttributeError:
+        return x.clamp(min=-10, max=10).erfc().log()
