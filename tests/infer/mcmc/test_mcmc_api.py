@@ -13,8 +13,8 @@ from pyro import poutine
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC, StreamingMCMC, _MultiSampler, _UnarySampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
-from pyro.infer.mcmc.util import initialize_model
-from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict
+from pyro.infer.mcmc.util import initialize_model, select_samples
+from pyro.ops.streaming import CountMeanVarianceStats, StackStats, StatsOfDict
 from pyro.util import optional
 from tests.common import assert_close
 
@@ -74,6 +74,45 @@ def normal_normal_model(data):
     return y
 
 
+def run_default_mcmc(data, kernel, num_samples, warmup_steps=None, initial_params=None,
+                     num_chains=1, hook_fn=None, mp_context=None, transforms=None, num_draws=None,
+                     group_by_chain=False):
+    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=warmup_steps, initial_params=initial_params,
+                num_chains=num_chains, hook_fn=hook_fn, mp_context=mp_context, transforms=transforms)
+    mcmc.run(data)
+    return mcmc.get_samples(num_draws, group_by_chain=group_by_chain), mcmc.num_chains
+
+
+def run_streaming_mcmc(data, kernel, num_samples, warmup_steps=None, initial_params=None,
+                       num_chains=1, hook_fn=None, mp_context=None, transforms=None, num_draws=None,
+                       group_by_chain=False):
+    mcmc = StreamingMCMC(kernel=kernel, num_samples=num_samples, warmup_steps=warmup_steps,
+                         initial_params=initial_params, statistics=StatsOfDict(default=StackStats),
+                         num_chains=num_chains, hook_fn=hook_fn, transforms=transforms)
+    mcmc.run(data)
+    statistics = mcmc.get_statistics(group_by_chain=group_by_chain)
+
+    if group_by_chain:
+        samples = {}
+        agg = {}
+        for (_, name), stat in statistics.items():
+            if name in agg:
+                agg[name].append(stat['samples'])
+            else:
+                agg[name] = [stat['samples']]
+        for name, l in agg.items():
+            samples[name] = torch.stack(l)
+    else:
+        samples = {name: stat['samples'] for name, stat in statistics.items()}
+
+    samples = select_samples(samples, num_draws, group_by_chain)
+
+    if not group_by_chain:
+        samples = {name: stat.unsqueeze(-1) for name, stat in samples.items()}
+
+    return samples, mcmc.num_chains
+
+
 @pytest.mark.parametrize("mcmc_cls", [StreamingMCMC])
 @pytest.mark.parametrize('num_chains', [1, 2])
 @pytest.mark.filterwarnings("ignore:num_chains")
@@ -84,9 +123,9 @@ def test_mcmc_summary(mcmc_cls, num_chains, group_by_chain):
     initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,),
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = StreamingMCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100,
-                         statistics=StatsOfDict(default=CountMeanVarianceStats),
-                         num_chains=num_chains, initial_params=initial_params, transforms=transforms)
+    mcmc = StreamingMCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100, initial_params=initial_params,
+                         statistics=StatsOfDict(default=CountMeanVarianceStats), num_chains=num_chains,
+                         transforms=transforms)
     mcmc.run(data)
     statistics = mcmc.get_statistics(group_by_chain=group_by_chain)
     count = 0
@@ -95,29 +134,29 @@ def test_mcmc_summary(mcmc_cls, num_chains, group_by_chain):
     assert count == num_samples * num_chains
 
 
+@pytest.mark.parametrize("run_mcmc_cls", [run_default_mcmc, run_streaming_mcmc])
 @pytest.mark.parametrize('num_draws', [None, 1800, 2200])
 @pytest.mark.parametrize('group_by_chain', [False, True])
 @pytest.mark.parametrize('num_chains', [1, 2])
 @pytest.mark.filterwarnings("ignore:num_chains")
-def test_mcmc_interface(num_draws, group_by_chain, num_chains):
+def test_mcmc_interface(run_mcmc_cls, num_draws, group_by_chain, num_chains):
     num_samples = 2000
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,),
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100, num_chains=num_chains,
-                mp_context="spawn", initial_params=initial_params, transforms=transforms)
-    mcmc.run(data)
-    samples = mcmc.get_samples(num_draws, group_by_chain=group_by_chain)
+    samples, mcmc_num_chains = run_mcmc_cls(data, kernel, num_samples=num_samples, warmup_steps=100,
+                                            initial_params=initial_params, num_chains=num_chains, mp_context='spawn',
+                                            transforms=transforms, num_draws=num_draws, group_by_chain=group_by_chain)
     # test sample shape
     expected_samples = num_draws if num_draws is not None else num_samples
     if group_by_chain:
-        expected_shape = (mcmc.num_chains, expected_samples, 1)
+        expected_shape = (mcmc_num_chains, expected_samples, 1)
     elif num_draws is not None:
         # FIXME: what is the expected behavior of num_draw is not None and group_by_chain=False?
         expected_shape = (expected_samples, 1)
     else:
-        expected_shape = (mcmc.num_chains * expected_samples, 1)
+        expected_shape = (mcmc_num_chains * expected_samples, 1)
     assert samples['y'].shape == expected_shape
 
     # test sample stats
@@ -168,6 +207,7 @@ def _hook(iters, kernel, samples, stage, i):
     iters.append((stage, i))
 
 
+@pytest.mark.parametrize("run_mcmc_cls", [run_default_mcmc, run_streaming_mcmc])
 @pytest.mark.parametrize("kernel, model", [
     (HMC, _empty_model),
     (NUTS, _empty_model),
@@ -178,7 +218,7 @@ def _hook(iters, kernel, samples, stage, i):
     2
 ])
 @pytest.mark.filterwarnings("ignore:num_chains")
-def test_null_model_with_hook(kernel, model, jit, num_chains):
+def test_null_model_with_hook(run_mcmc_cls, kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
     initial_params, potential_fn, transforms, _ = initialize_model(model,
                                                                    num_chains=num_chains)
@@ -189,10 +229,8 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
     mp_context = "spawn" if "CUDA_TEST" in os.environ else None
 
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
-    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
-                num_chains=num_chains, initial_params=initial_params, hook_fn=hook, mp_context=mp_context)
-    mcmc.run()
-    samples = mcmc.get_samples()
+    samples, _ = run_mcmc_cls(data=None, kernel=kern, num_samples=num_samples, warmup_steps=num_warmup,
+                              initial_params=initial_params, hook_fn=hook, num_chains=num_chains, mp_context=mp_context)
     assert samples == {}
     if num_chains == 1:
         expected = [("Warmup", i) for i in range(num_warmup)] + [("Sample", i) for i in range(num_samples)]
@@ -222,8 +260,9 @@ def test_mcmc_diagnostics(num_chains):
                                         for i in range(num_chains)}
 
 
+@pytest.mark.parametrize("run_mcmc_cls", [run_default_mcmc, run_streaming_mcmc])
 @pytest.mark.filterwarnings("ignore:num_chains")
-def test_sequential_consistent(monkeypatch):
+def test_sequential_consistent(run_mcmc_cls, monkeypatch):
     # test if there is no stuff left from the previous chain
     monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda: 1)
 
@@ -241,31 +280,24 @@ def test_sequential_consistent(monkeypatch):
 
     data = torch.tensor([1.0])
     kernel = FirstKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
-    mcmc.run(data)
-    samples1 = mcmc.get_samples(group_by_chain=True)
+    samples1, _ = run_mcmc_cls(data, kernel, num_samples=100, warmup_steps=100, num_chains=2, group_by_chain=True)
 
     kernel = SecondKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
-    mcmc.run(data)
-    samples2 = mcmc.get_samples(group_by_chain=True)
+    samples2, _ = run_mcmc_cls(data, kernel, num_samples=100, warmup_steps=100, num_chains=2, group_by_chain=True)
 
     assert_close(samples1["y"][0], samples2["y"][1])
     assert_close(samples1["y"][1], samples2["y"][0])
 
 
-def test_model_with_potential_fn():
+@pytest.mark.parametrize("run_mcmc_cls", [run_default_mcmc, run_streaming_mcmc])
+def test_model_with_potential_fn(run_mcmc_cls):
     init_params = {"z": torch.tensor(0.)}
 
     def potential_fn(params):
         return params["z"]
 
-    mcmc = MCMC(
-        kernel=HMC(potential_fn=potential_fn),
-        num_samples=10,
-        warmup_steps=10,
-        initial_params=init_params)
-    mcmc.run()
+    run_mcmc_cls(data=None, kernel=HMC(potential_fn=potential_fn), num_samples=10,
+                 warmup_steps=10, initial_params=init_params)
 
 
 @pytest.mark.parametrize("save_params", ["xy", "x", "y", "xy"])

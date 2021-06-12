@@ -662,3 +662,33 @@ def predictive(model, posterior_samples, *args, **kwargs):
             predictions[site] = value.reshape(shape)
 
     return predictions
+
+
+def select_samples(samples, num_samples=None, group_by_chain=False):
+    """
+    Performs selection from given MCMC samples.
+
+    :param dictionary samples: Samples object to sample from.
+    :param int num_samples: Number of samples to return. If `None`, all the samples
+        from an MCMC chain are returned in their original ordering.
+    :param bool group_by_chain: Whether to preserve the chain dimension. If True,
+        all samples will have num_chains as the size of their leading dimension.
+    :return: dictionary of samples keyed by site name.
+    """
+    if num_samples is None:
+        # reshape to collapse chain dim when group_by_chain=False
+        if not group_by_chain:
+            samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+    else:
+        if not samples:
+            raise ValueError("No samples found from MCMC run.")
+        if group_by_chain:
+            batch_dim = 1
+        else:
+            samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+            batch_dim = 0
+        sample_tensor = list(samples.values())[0]
+        batch_size, device = sample_tensor.shape[batch_dim], sample_tensor.device
+        idxs = torch.randint(0, batch_size, size=(num_samples,), device=device)
+        samples = {k: v.index_select(batch_dim, idxs) for k, v in samples.items()}
+    return samples
