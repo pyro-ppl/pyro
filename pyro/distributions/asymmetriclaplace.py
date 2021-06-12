@@ -193,4 +193,4 @@ def _logerfc(x):
         # Requires https://github.com/pytorch/pytorch/issues/31945
         return torch.logerfc(x)
     except AttributeError:
-        return x.clamp(min=-10, max=10).erfc().log()
+        return x.double().erfc().log().to(dtype=x.dtype)
