@@ -14,7 +14,7 @@ from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC, StreamingMCMC, _MultiSampler, _UnarySampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model, select_samples
-from pyro.ops.streaming import CountMeanVarianceStats, StackStats, StatsOfDict
+from pyro.ops.streaming import StackStats, StatsOfDict
 from pyro.util import optional
 from tests.common import assert_close
 
@@ -113,27 +113,6 @@ def run_streaming_mcmc(data, kernel, num_samples, warmup_steps=None, initial_par
     return samples, mcmc.num_chains
 
 
-@pytest.mark.parametrize("mcmc_cls", [StreamingMCMC])
-@pytest.mark.parametrize('num_chains', [1, 2])
-@pytest.mark.filterwarnings("ignore:num_chains")
-@pytest.mark.parametrize('group_by_chain', [True, False])
-def test_mcmc_summary(mcmc_cls, num_chains, group_by_chain):
-    num_samples = 2000
-    data = torch.tensor([1.0])
-    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,),
-                                                        num_chains=num_chains)
-    kernel = PriorKernel(normal_normal_model)
-    mcmc = StreamingMCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100, initial_params=initial_params,
-                         statistics=StatsOfDict(default=CountMeanVarianceStats), num_chains=num_chains,
-                         transforms=transforms)
-    mcmc.run(data)
-    statistics = mcmc.get_statistics(group_by_chain=group_by_chain)
-    count = 0
-    for stat in statistics.values():
-        count += stat['count']
-    assert count == num_samples * num_chains
-
-
 @pytest.mark.parametrize("run_mcmc_cls", [run_default_mcmc, run_streaming_mcmc])
 @pytest.mark.parametrize('num_draws', [None, 1800, 2200])
 @pytest.mark.parametrize('group_by_chain', [False, True])
@@ -207,7 +186,10 @@ def _hook(iters, kernel, samples, stage, i):
     iters.append((stage, i))
 
 
-@pytest.mark.parametrize("run_mcmc_cls", [run_default_mcmc, run_streaming_mcmc])
+@pytest.mark.parametrize("run_mcmc_cls", [
+    run_default_mcmc,
+    run_streaming_mcmc
+])
 @pytest.mark.parametrize("kernel, model", [
     (HMC, _empty_model),
     (NUTS, _empty_model),

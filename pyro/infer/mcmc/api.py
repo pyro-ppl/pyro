@@ -502,6 +502,13 @@ class MCMC(AbstractMCMC):
 
 
 class StreamingMCMC(AbstractMCMC):
+    """
+    MCMC that computes required statistics in a streaming fashion. For this class no samples are retained
+    but only aggregated statistics. This is useful for running memory expensive models where we care only
+    about specific statistics (especially useful in a memory constrained environments like GPU).
+
+    For available streaming ops please see :mod:`~pyro.ops.streaming`.
+    """
     def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
                  statistics=None, num_chains=1, hook_fn=None, disable_progbar=False,
                  disable_validation=True, transforms=None, save_params=None):
@@ -531,6 +538,9 @@ class StreamingMCMC(AbstractMCMC):
 
     @poutine.block
     def run(self, *args, **kwargs):
+        """
+        Run StreamingMCMC to compute required `self._statistics`.
+        """
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
 
@@ -576,6 +586,11 @@ class StreamingMCMC(AbstractMCMC):
         self.sampler.terminate(True)
 
     def get_statistics(self, group_by_chain=True):
+        """
+        Returns a dict of statistics defined by those passed to the class constructor.
+
+        :param bool group_by_chain: Whether statistics should be chain-wise or merged together.
+        """
         if group_by_chain:
             return self._statistics.get()
         else:

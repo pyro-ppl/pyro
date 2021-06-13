@@ -6,6 +6,14 @@ MCMC
     :undoc-members:
     :show-inheritance:
 
+StreamingMCMC
+-------------
+
+.. autoclass:: pyro.infer.mcmc.api.StreamingMCMC
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 MCMCKernel
 ----------
 .. autoclass:: pyro.infer.mcmc.mcmc_kernel.MCMCKernel
