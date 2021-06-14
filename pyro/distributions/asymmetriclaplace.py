@@ -93,9 +93,9 @@ class SoftAsymmetricLaplace(TorchDistribution):
 
         z ~ Normal(loc, scale * softness)
         u ~ Exponential(1 / (scale * asymmetry))
-        v ~ Exponential(scale / asymmetry)
+        v ~ Exponential(asymetry / scale)
 
-    This is also equivalent the sum of two random variables ``z - a`` where::
+    This is also equivalent the sum of two random variables ``z + a`` where::
 
         z ~ Normal(loc, scale * softness)
         a ~ AsymmetricLaplace(0, scale, asymmetry)
