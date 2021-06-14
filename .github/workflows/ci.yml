@@ -9,13 +9,11 @@ on:
 env:
   CXX: g++-8
   CC: gcc-8
-  COVERALLS_PARALLEL: true
-  COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-  # those two lines seem to be required for coveralls
-  # see issue: https://github.com/lemurheavy/coveralls-public/issues/1435
-  COVERALLS_SERVICE_NAME: github
+  # See coveralls-python - Github Actions support:
+  # https://github.com/TheKevJames/coveralls-python/blob/master/docs/usage/configuration.rst#github-actions-support
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+  COVERALLS_PARALLEL: true
+  COVERALLS_SERVICE_NAME: github
 
 
 jobs:
@@ -93,7 +91,7 @@ jobs:
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
       - name: Submit to coveralls
-        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls --service=github
   examples:
     runs-on: ubuntu-20.04
     needs: docs
@@ -124,7 +122,7 @@ jobs:
           grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                             | CI=1 xargs pytest -vx --nbval-lax --current-env
       - name: Submit to coveralls
-        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls --service=github
   integration_1:
     runs-on: ubuntu-20.04
     needs: docs
@@ -153,7 +151,7 @@ jobs:
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
       - name: Submit to coveralls
-        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls --service=github
   integration_2:
     runs-on: ubuntu-20.04
     needs: docs
@@ -182,7 +180,7 @@ jobs:
         run: |
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
       - name: Submit to coveralls
-        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls --service=github
   funsor:
     runs-on: ubuntu-20.04
     needs: docs
@@ -213,7 +211,7 @@ jobs:
           pytest -vs --cov=pyro --cov-config .coveragerc --stage funsor --durations 10
           CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10 -k funsor
       - name: Submit to coveralls
-        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls
+        run: GITHUB_SHA="$GITHUB_RUN_ID" GITHUB_REF="" coveralls --service=github
   finish:
     needs: [unit, examples, integration_1, integration_2, funsor]
     runs-on: ubuntu-20.04
