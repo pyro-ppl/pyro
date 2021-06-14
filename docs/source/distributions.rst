@@ -337,6 +337,13 @@ SineSkewed
     :undoc-members:
     :show-inheritance:
 
+SoftAsymmetricLaplace
+---------------------
+.. autoclass:: pyro.distributions.SoftAsymmetricLaplace
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SoftLaplace
 -------------
 .. autoclass:: pyro.distributions.SoftLaplace
