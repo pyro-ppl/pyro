@@ -8,6 +8,7 @@ from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.distributions.util import is_identically_one
 from pyro.infer.reparam import LocScaleReparam
 from tests.common import assert_close
 
@@ -27,7 +28,7 @@ def get_moments(x):
 
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("centered", [0., 0.6, 1., torch.tensor(0.4), None])
-@pytest.mark.parametrize("dist_type", ["Normal", "StudentT"])
+@pytest.mark.parametrize("dist_type", ["Normal", "StudentT", "AsymmetricLaplace"])
 def test_normal(dist_type, centered, shape):
     loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
@@ -39,23 +40,31 @@ def test_normal(dist_type, centered, shape):
             with pyro.plate("particles", 200000):
                 if "dist_type" == "Normal":
                     pyro.sample("x", dist.Normal(loc, scale))
-                else:
+                elif "dist_type" == "StudentT":
                     pyro.sample("x", dist.StudentT(10.0, loc, scale))
+                else:
+                    pyro.sample("x", dist.AsymmetricLaplace(loc, scale, 1.5))
 
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = get_moments(value)
 
-    if "dist_type" == "Normal":
-        reparam = LocScaleReparam(centered)
-    else:
-        reparam = LocScaleReparam(centered, shape_params=["df"])
+    reparam = LocScaleReparam(centered)
     reparam_model = poutine.reparam(model, {"x": reparam})
     value = poutine.trace(reparam_model).get_trace().nodes["x"]["value"]
     actual_probe = get_moments(value)
-    assert_close(actual_probe, expected_probe, atol=0.1)
+
+    if not is_identically_one(centered):
+        if "dist_type" == "Normal":
+            assert reparam.shape_params == ()
+        elif "dist_type" == "StudentT":
+            assert reparam.shape_params == ("df",)
+        else:
+            assert reparam.shape_params == ("asymmetry",)
+
+    assert_close(actual_probe, expected_probe, atol=0.1, rtol=0.05)
 
     for actual_m, expected_m in zip(actual_probe, expected_probe):
         expected_grads = grad(expected_m.sum(), [loc, scale], retain_graph=True)
         actual_grads = grad(actual_m.sum(), [loc, scale], retain_graph=True)
-        assert_close(actual_grads[0], expected_grads[0], atol=0.05)
-        assert_close(actual_grads[1], expected_grads[1], atol=0.05)
+        assert_close(actual_grads[0], expected_grads[0], atol=0.1, rtol=0.05)
+        assert_close(actual_grads[1], expected_grads[1], atol=0.1, rtol=0.05)
