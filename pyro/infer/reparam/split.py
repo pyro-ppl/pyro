@@ -38,7 +38,11 @@ class SplitReparam(Reparam):
 
     def __call__(self, name, fn, obs):
         assert fn.event_dim >= self.event_dim
-        assert obs is None, "SplitReparam does not support observe statements"
+        if obs is not None:
+            raise NotImplementedError(
+                "SplitReparam does not support observe statements"
+                f" (at sample site {repr(name)})"
+            )
 
         # Draw independent parts.
         dim = fn.event_dim - self.event_dim

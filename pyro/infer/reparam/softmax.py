@@ -22,7 +22,11 @@ class GumbelSoftmaxReparam(Reparam):
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.RelaxedOneHotCategorical)
-        assert obs is None, "SoftmaxReparam does not support observe statements"
+        if obs is not None:
+            raise NotImplementedError(
+                "SoftmaxReparam does not support observe statements"
+                f" (at sample site {repr(name)})"
+            )
 
         # Draw parameter-free noise.
         proto = fn.logits

@@ -20,14 +20,19 @@ class ProjectedNormalReparam(Reparam):
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.ProjectedNormal)
-        assert obs is None, "ProjectedNormalReparam does not support observe statements"
+
+        # Differentiably invert transform.
+        obs_normal = None
+        if obs is not None:
+            obs_normal = obs - fn.concentration
 
         # Draw parameter-free noise.
         new_fn = dist.Normal(torch.zeros_like(fn.concentration), 1).to_event(1)
-        x = pyro.sample("{}_normal".format(name), self._wrap(new_fn, event_dim))
+        x = pyro.sample("{}_normal".format(name), self._wrap(new_fn, event_dim),
+                        obs=obs_normal)
 
         # Differentiably transform.
-        value = safe_normalize(x + fn.concentration)
+        value = safe_normalize(x + fn.concentration) if obs is None else obs
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)

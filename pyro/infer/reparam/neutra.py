@@ -59,7 +59,11 @@ class NeuTraReparam(Reparam):
     def __call__(self, name, fn, obs):
         if name not in self.guide.prototype_trace.nodes:
             return fn, obs
-        assert obs is None, "NeuTraReparam does not support observe statements"
+        if obs is not None:
+            raise NotImplementedError(
+                "NeuTraReparam does not support observe statements"
+                f" (at sample site {repr(name)})"
+            )
         log_density = 0.0
         compute_density = (poutine.get_mask() is not False)
         if not self.x_unconstrained:  # On first sample site.

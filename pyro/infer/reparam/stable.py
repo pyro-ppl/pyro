@@ -39,7 +39,11 @@ class LatentStableReparam(Reparam):
     def __call__(self, name, fn, obs):
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
-        assert obs is None, "LatentStableReparam does not support observe statements"
+        if obs is not None:
+            raise NotImplementedError(
+                "LatentStableReparam does not support observe statements"
+                f" (at sample site {repr(name)})"
+            )
 
         # Draw parameter-free noise.
         proto = fn.stability

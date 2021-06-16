@@ -58,7 +58,11 @@ class StructuredReparam(Reparam):
         return poutine.reparam(fn, config=self._reparam_config)
 
     def __call__(self, name, fn, obs):
-        assert obs is None, "StructuredReparam does not support observe statements"
+        if obs is not None:
+            raise NotImplementedError(
+                "StructuredReparam does not support observe statements"
+                f" (at sample site {repr(name)})"
+            )
         if name not in self.deltas:  # On first sample site.
             self.deltas = self.guide.get_deltas()
         new_fn = self.deltas.pop(name)

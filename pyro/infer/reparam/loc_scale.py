@@ -48,7 +48,6 @@ class LocScaleReparam(Reparam):
         self.shape_params = shape_params
 
     def __call__(self, name, fn, obs):
-        assert obs is None, "LocScaleReparam does not support observe statements"
         centered = self.centered
         if is_identically_one(centered):
             return fn, obs
@@ -69,13 +68,22 @@ class LocScaleReparam(Reparam):
         params["scale"] = fn.scale ** centered
         decentered_fn = type(fn)(**params)
 
+        # Differentiably invert transform.
+        decentered_obs = None
+        if obs is not None:
+            delta = (obs - fn.loc) * fn.scale.pow(centered - 1)
+            decentered_obs = delta + centered * fn.loc
+
         # Draw decentered noise.
         decentered_value = pyro.sample("{}_decentered".format(name),
-                                       self._wrap(decentered_fn, event_dim))
+                                       self._wrap(decentered_fn, event_dim),
+                                       obs=decentered_obs)
 
         # Differentiably transform.
-        delta = decentered_value - centered * fn.loc
-        value = fn.loc + fn.scale.pow(1 - centered) * delta
+        value = obs
+        if value is None:
+            delta = decentered_value - centered * fn.loc
+            value = fn.loc + fn.scale.pow(1 - centered) * delta
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)

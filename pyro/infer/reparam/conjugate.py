@@ -51,7 +51,11 @@ class ConjugateReparam(Reparam):
         self.guide = guide
 
     def __call__(self, name, fn, obs):
-        assert obs is None, "PosteriorReparam does not support observe statements"
+        if obs is not None:
+            raise NotImplementedError(
+                "ConjugateReparam does not support observe statements"
+                f" (at sample site {repr(name)})"
+            )
 
         # Compute a guide distribution, either static or dependent.
         guide_dist = self.guide
