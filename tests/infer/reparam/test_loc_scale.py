@@ -9,6 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.util import is_identically_one
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_value
 from pyro.infer.reparam import LocScaleReparam
 from tests.common import assert_close
 
@@ -29,7 +30,7 @@ def get_moments(x):
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("centered", [0., 0.6, 1., torch.tensor(0.4), None])
 @pytest.mark.parametrize("dist_type", ["Normal", "StudentT", "AsymmetricLaplace"])
-def test_normal(dist_type, centered, shape):
+def test_moments(dist_type, centered, shape):
     loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
     if isinstance(centered, torch.Tensor):
@@ -68,3 +69,31 @@ def test_normal(dist_type, centered, shape):
         actual_grads = grad(actual_m.sum(), [loc, scale], retain_graph=True)
         assert_close(actual_grads[0], expected_grads[0], atol=0.1, rtol=0.05)
         assert_close(actual_grads[1], expected_grads[1], atol=0.1, rtol=0.05)
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("centered", [0., 0.6, 1., torch.tensor(0.4), None])
+@pytest.mark.parametrize("dist_type", ["Normal", "StudentT", "AsymmetricLaplace"])
+def test_init(dist_type, centered, shape):
+    loc = torch.empty(shape).uniform_(-1., 1.)
+    scale = torch.empty(shape).uniform_(0.5, 1.5)
+
+    def model():
+        with pyro.plate_stack("plates", shape):
+            if "dist_type" == "Normal":
+                return pyro.sample("x", dist.Normal(loc, scale))
+            elif "dist_type" == "StudentT":
+                return pyro.sample("x", dist.StudentT(10.0, loc, scale))
+            else:
+                return pyro.sample("x", dist.AsymmetricLaplace(loc, scale, 1.5))
+
+    expected = torch.randn(shape)
+    with InitMessenger(init_to_value(values={"x": expected})):
+        # Sanity check without reparametrizing.
+        actual = model()
+        assert_close(actual, expected)
+
+        # Check with reparametrizing.
+        with poutine.reparam(config={"x": LocScaleReparam()}):
+            actual = model()
+            assert_close(actual, expected)

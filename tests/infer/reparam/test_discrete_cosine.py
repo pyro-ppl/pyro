@@ -8,6 +8,7 @@ from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from tests.common import assert_close
 
@@ -83,3 +84,32 @@ def test_uniform(shape, dim, smooth):
     value = trace.nodes["x"]["value"]
     actual_probe = get_moments(value)
     assert_close(actual_probe, expected_probe, atol=0.1)
+
+
+@pytest.mark.parametrize("smooth", [0., 0.5, 1.0, 2.0])
+@pytest.mark.parametrize("shape,dim", [
+    ((6,), -1),
+    ((2, 5,), -1),
+    ((4, 2), -2),
+    ((2, 3, 1), -2),
+], ids=str)
+def test_init(shape, dim, smooth):
+    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
+
+    def model():
+        with pyro.plate_stack("plates", shape[:dim]):
+            return pyro.sample("x", dist.Normal(loc, scale).to_event(-dim))
+
+    expected = torch.randn(shape)
+    with InitMessenger(init_to_value(values={"x": expected})):
+        # Sanity check without reparametrizing.
+        actual = model()
+        assert_close(actual, expected)
+
+        # Check with reparametrizing.
+        with poutine.reparam(
+            config={"x": DiscreteCosineReparam(dim=dim, smooth=smooth)}
+        ):
+            actual = model()
+            assert_close(actual, expected)

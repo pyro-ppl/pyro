@@ -38,11 +38,11 @@ class SplitReparam(Reparam):
 
     def __call__(self, name, fn, obs):
         assert fn.event_dim >= self.event_dim
+
+        # Split obs into parts.
+        obs_split = [None] * len(self.sections)
         if obs is not None:
-            raise NotImplementedError(
-                "SplitReparam does not support observe statements"
-                f" (at sample site {repr(name)})"
-            )
+            obs_split = obs.split(self.sections, -self.event_dim)
 
         # Draw independent parts.
         dim = fn.event_dim - self.event_dim
@@ -53,8 +53,9 @@ class SplitReparam(Reparam):
             event_shape = left_shape + (size,) + right_shape
             parts.append(pyro.sample(
                 "{}_split_{}".format(name, i),
-                dist.ImproperUniform(fn.support, fn.batch_shape, event_shape)))
-        value = torch.cat(parts, dim=-self.event_dim)
+                dist.ImproperUniform(fn.support, fn.batch_shape, event_shape),
+                obs=obs_split[i]))
+        value = torch.cat(parts, dim=-self.event_dim) if obs is None else obs
 
         # Combine parts.
         if poutine.get_mask() is False:

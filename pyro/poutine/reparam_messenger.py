@@ -5,7 +5,7 @@ from .messenger import Messenger
 from .runtime import effectful
 
 
-@effectful(type="get_init_messenger")
+@effectful(type="get_init_messengers")
 def get_init_messengers():
     return []
 
@@ -52,6 +52,7 @@ class ReparamMessenger(Messenger):
 
         # Apply init messengers at higher priority than reparam.
         for m in get_init_messengers():
+            print("DEBUG", msg["name"])
             m._pyro_sample(msg)
 
         reparam.args_kwargs = self._args_kwargs
