@@ -2,6 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .messenger import Messenger
+from .runtime import effectful
+
+
+@effectful
+def get_init_messengers():
+    return []
 
 
 class ReparamMessenger(Messenger):
@@ -43,6 +49,10 @@ class ReparamMessenger(Messenger):
             reparam = self.config(msg)
         if reparam is None:
             return
+
+        # Apply init messengers at higher priority than reparam.
+        for m in get_init_messengers():
+            m._pyro_sample(msg)
 
         reparam.args_kwargs = self._args_kwargs
         try:

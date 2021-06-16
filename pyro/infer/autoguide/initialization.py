@@ -195,3 +195,8 @@ class InitMessenger(Messenger):
                     .format(self.init_fn, msg["name"], msg["value"].shape, value.shape))
         msg["value"] = value
         msg["done"] = True
+
+    def _pyro_get_init_messengers(self, msg):
+        if msg["value"] is None:
+            msg["value"] = []
+        msg["value"].append(self)
