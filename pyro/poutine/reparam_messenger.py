@@ -5,7 +5,7 @@ from .messenger import Messenger
 from .runtime import effectful
 
 
-@effectful
+@effectful(type="get_init_messenger")
 def get_init_messengers():
     return []
 
