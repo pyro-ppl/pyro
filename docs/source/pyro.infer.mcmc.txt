@@ -51,3 +51,5 @@ Utilities
 .. autofunction:: pyro.infer.mcmc.util.initialize_model
 
 .. autofunction:: pyro.infer.mcmc.util.diagnostics
+
+.. autofunction:: pyro.infer.mcmc.util.select_samples

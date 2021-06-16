@@ -469,8 +469,7 @@ class MCMC(AbstractMCMC):
         """
         Get samples from the MCMC run, potentially resampling with replacement.
 
-        For parameter details see:
-            :meth:`select_samples <pyro.infer.mcmc.util.select_samples>`.
+        For parameter details see: :meth:`select_samples <pyro.infer.mcmc.util.select_samples>`.
         """
         samples = self._samples
         return select_samples(samples, num_samples, group_by_chain)
