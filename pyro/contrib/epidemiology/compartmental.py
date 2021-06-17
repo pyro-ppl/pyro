@@ -734,8 +734,8 @@ class CompartmentalModel(ABC):
         assert isinstance(init_values, dict)
         assert "auxiliary" in init_values, \
             ".heuristic() did not define auxiliary value"
-        if haar:
-            haar.user_to_aux(init_values)
+        # if haar:
+        #     haar.user_to_aux(init_values)
         logger.info("Heuristic init: {}".format(", ".join(
             "{}={:0.3g}".format(k, v.item())
             for k, v in sorted(init_values.items())

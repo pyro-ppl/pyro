@@ -24,6 +24,7 @@ class ProjectedNormalReparam(Reparam):
         # Differentiably invert transform.
         obs_normal = None
         if obs is not None:
+            # This is an arbitrary injection.
             obs_normal = obs - fn.concentration
 
         # Draw parameter-free noise.

@@ -10,6 +10,15 @@ def get_init_messengers():
     return []
 
 
+class MarkObservedMessenger(Messenger):
+    def __init__(self, is_observed):
+        self.is_observed = is_observed
+
+    def _pyro_sample(self, msg):
+        if msg["value"] is not None:
+            msg["is_observed"] = self.is_observed
+
+
 class ReparamMessenger(Messenger):
     """
     Reparametrizes each affected sample site into one or more auxiliary sample
@@ -52,18 +61,29 @@ class ReparamMessenger(Messenger):
 
         # Apply init messengers at higher priority than reparam.
         for m in get_init_messengers():
-            print("DEBUG", msg["name"])
             m._pyro_sample(msg)
 
         reparam.args_kwargs = self._args_kwargs
         try:
+            # Version 1. old behavior
+            # FIXME this breaks test_haar.py::test_nested
             new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
+
+            # Version 2. global messenger
+            # with MarkObservedMessenger(is_observed=msg["is_observed"]):
+            #     new_fn, value = reparam(msg["name"], msg["fn"], msg["value"])
+
+            # Version 3. lots of precise plumbing
+            # new_fn, value, msg["is_observed"] = reparam(
+            #     msg["name"], msg["fn"], msg["value"], msg["is_observed"]
+            # )
         finally:
             reparam.args_kwargs = None
 
         if value is not None:
             if msg["value"] is None:
                 msg["is_observed"] = True
+
             msg["value"] = value
             if getattr(msg["fn"], "_validation_enabled", False):
                 # Validate while the original msg["fn"] is known.
