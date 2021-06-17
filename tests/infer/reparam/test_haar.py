@@ -121,7 +121,7 @@ def test_nested():
     def model():
         pyro.sample("x", dist.Normal(torch.zeros(shape), 1).to_event(2))
 
-    # Try without initialization.
+    # Try without initialization, e.g. in AutoGuide._setup_prototype().
     trace = poutine.trace(model).get_trace()
     assert {"x", "x_haar", "x_haar_haar"}.issubset(trace.nodes)
     assert trace.nodes["x"]["is_observed"]
@@ -129,7 +129,7 @@ def test_nested():
     assert not trace.nodes["x_haar_haar"]["is_observed"]
     assert trace.nodes["x"]["value"].shape == shape
 
-    # Try conditioning on x_haar_haar.
+    # Try conditioning on x_haar_haar, e.g. in Predictive.
     x = torch.randn(shape)
     x_haar = HaarTransform(dim=-1)(x)
     x_haar_haar = HaarTransform(dim=-2)(x_haar)
@@ -160,6 +160,5 @@ def test_nested():
         assert {"x", "x_haar", "x_haar_haar"}.issubset(trace.nodes)
         assert trace.nodes["x"]["is_observed"]
         assert trace.nodes["x_haar"]["is_observed"]
-        # TODO Decide behavior for the final latent, currently ambiguous.
-        # assert trace.nodes["x_haar_haar"]["is_observed"] == ???
+        # assert trace.nodes["x_haar_haar"]["is_observed"]
         assert_close(trace.nodes["x"]["value"], x)

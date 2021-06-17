@@ -1,24 +1,56 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from abc import ABC, abstractmethod
+import warnings
+from abc import ABC
+from typing import Callable, Optional, TypedDict
 
 import torch
+
+ReparamMessage = TypedDict(
+    "ReparamMessage",
+    name=str,
+    fn=Callable,
+    value=Optional[torch.Tensor],
+    is_observded=Optional[bool],
+)
+
+ReparamResult = TypedDict(
+    "ReparamResult",
+    fn=Callable,
+    value=Optional[torch.Tensor],
+)
 
 
 class Reparam(ABC):
     """
     Base class for reparameterizers.
     """
-    @abstractmethod
+
+    # @abstractmethod  # Not abstract, for backwards compatibility.
+    def apply(self, msg: ReparamMessage) -> ReparamResult:
+        """
+        Abstract method to apply reparameterizer.
+
+        :param dict name: A simplified Pyro message with fields:
+            - ``fn``
+            - TODO
+        """
+
+        # This default is provided for backwards compatibility only.
+        # New subclasses should define .apply() and omit .__call__().
+        warnings.warn(
+            "Reparam.__call__() is deprecated in favor of .apply(); "
+            "new subclasses should implement .apply().",
+            DeprecationWarning,
+        )
+        return self(msg["name"], msg["fn"], msg["value"])
+
     def __call__(self, name, fn, obs):
         """
-        :param str name: A sample site name.
-        :param ~pyro.distributions.TorchDistribution fn: A distribution.
-        :param ~torch.Tensor obs: Observed value or None.
-        :return: A pair (``new_fn``, ``value``).
+        DEPRECATED. Implement :meth:`apply` instead.
         """
-        return fn, obs
+        raise NotImplementedError
 
     def _unwrap(self, fn):
         """

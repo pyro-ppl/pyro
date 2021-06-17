@@ -31,7 +31,12 @@ class UnitJacobianReparam(Reparam):
         self.suffix = suffix
         self.experimental_allow_batch = experimental_allow_batch
 
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
+
         event_dim = fn.event_dim
         transform = self.transform
         with ExitStack() as stack:
@@ -60,18 +65,28 @@ class UnitJacobianReparam(Reparam):
             # Differentiably invert transform.
             transform = ComposeTransform([biject_to(fn.support).inv.with_cache(),
                                           self.transform])
-            obs_trans = None if obs is None else transform(obs)
+            value_trans = None
+            if value is not None:
+                if shift:
+                    raise NotImplementedError("TODO")
+                value_trans = transform(value)
 
             # Draw noise from the base distribution.
-            x_trans = pyro.sample("{}_{}".format(name, self.suffix),
-                                  dist.TransformedDistribution(fn, transform),
-                                  obs=obs_trans)
+            value_trans = pyro.sample(
+                "{}_{}".format(name, self.suffix),
+                dist.TransformedDistribution(fn, transform),
+                obs=value_trans,
+                infer={"is_observed": is_observed},
+            )
 
         # Differentiably transform. This should be free due to transform cache.
-        x = transform.inv(x_trans) if obs is None else obs
-        if shift:
-            x = x.reshape(x.shape[:-2 * shift - event_dim] + x.shape[-shift - event_dim:])
+        if value is None:
+            value = transform.inv(value_trans)
+            if shift:
+                value = value.reshape(
+                    value.shape[:-2 * shift - event_dim] + value.shape[-shift - event_dim:]
+                )
 
         # Simulate a pyro.deterministic() site.
-        new_fn = dist.Delta(x, event_dim=event_dim)
-        return new_fn, x
+        new_fn = dist.Delta(value, event_dim=event_dim)
+        return {"fn": new_fn, "value": value}
