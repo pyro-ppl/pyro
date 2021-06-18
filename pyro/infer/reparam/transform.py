@@ -18,31 +18,39 @@ class TransformReparam(Reparam):
 
     This reparameterization works only for latent variables, not likelihoods.
     """
-    def __call__(self, name, fn, obs):
+
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
+
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.TransformedDistribution)
 
         # Differentiably invert transform.
-        obs_base = obs
-        if obs is not None:
+        value_base = value
+        if value is not None:
             for t in reversed(fn.transforms):
-                obs_base = t.inv(obs_base)
+                value_base = t.inv(value_base)
 
         # Draw noise from the base distribution.
         base_event_dim = event_dim
         for t in reversed(fn.transforms):
             base_event_dim += t.domain.event_dim - t.codomain.event_dim
-        x = pyro.sample("{}_base".format(name),
-                        self._wrap(fn.base_dist, base_event_dim),
-                        obs=obs_base)
+        value_base = pyro.sample(
+            f"{name}_base",
+            self._wrap(fn.base_dist, base_event_dim),
+            obs=value_base,
+            infer={"is_observed": is_observed},
+        )
 
         # Differentiably transform.
-        if obs is None:
+        if value is None:
+            value = value_base
             for t in fn.transforms:
-                x = t(x)
-        else:
-            x = obs
+                value = t(value)
 
         # Simulate a pyro.deterministic() site.
-        new_fn = dist.Delta(x, event_dim=event_dim).mask(False)
-        return new_fn, x
+        new_fn = dist.Delta(value, event_dim=event_dim).mask(False)
+        return {"fn": new_fn, "value": value}

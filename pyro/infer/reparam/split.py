@@ -36,31 +36,38 @@ class SplitReparam(Reparam):
         self.event_dim = -dim
         self.sections = sections
 
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
         assert fn.event_dim >= self.event_dim
 
-        # Split obs into parts.
-        obs_split = [None] * len(self.sections)
-        if obs is not None:
-            obs_split = obs.split(self.sections, -self.event_dim)
+        # Split value into parts.
+        value_split = [None] * len(self.sections)
+        if value is not None:
+            value_split = value.split(self.sections, -self.event_dim)
 
         # Draw independent parts.
         dim = fn.event_dim - self.event_dim
         left_shape = fn.event_shape[:dim]
         right_shape = fn.event_shape[1 + dim:]
-        parts = []
         for i, size in enumerate(self.sections):
             event_shape = left_shape + (size,) + right_shape
-            parts.append(pyro.sample(
-                "{}_split_{}".format(name, i),
+            value_split[i] = pyro.sample(
+                f"{name}_split_{i}",
                 dist.ImproperUniform(fn.support, fn.batch_shape, event_shape),
-                obs=obs_split[i]))
-        value = torch.cat(parts, dim=-self.event_dim) if obs is None else obs
+                value=value_split[i],
+                infer={"is_observed": is_observed},
+            )
 
-        # Combine parts.
+        # Combine parts into value.
+        if value is None:
+            value = torch.cat(value_split, dim=-self.event_dim)
+
         if poutine.get_mask() is False:
             log_density = 0.0
         else:
             log_density = fn.log_prob(value)
         new_fn = dist.Delta(value, event_dim=fn.event_dim, log_density=log_density)
-        return new_fn, value
+        return {"fn": new_fn, "value": value}

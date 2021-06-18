@@ -56,14 +56,24 @@ class NeuTraReparam(Reparam):
     def reparam(self, fn=None):
         return poutine.reparam(fn, config=self._reparam_config)
 
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
         if name not in self.guide.prototype_trace.nodes:
-            return fn, obs
-        if obs is not None:
+            return fn, value
+        if is_observed:
             raise NotImplementedError(
                 "NeuTraReparam does not support observe statements"
                 f" (at sample site {repr(name)})"
             )
+        if value is not None:
+            raise NotImplementedError(
+                "NeuTraReparam does not support automatic initialization"
+                f" (at sample site {repr(name)})"
+            )
+
         log_density = 0.0
         compute_density = (poutine.get_mask() is not False)
         if not self.x_unconstrained:  # On first sample site.
@@ -94,7 +104,7 @@ class NeuTraReparam(Reparam):
             logdet = sum_rightmost(logdet, logdet.dim() - value.dim() + fn.event_dim)
             log_density = log_density + fn.log_prob(value) + logdet
         new_fn = dist.Delta(value, log_density, event_dim=fn.event_dim)
-        return new_fn, value
+        return {"fn": new_fn, "value": value}
 
     def transform_sample(self, latent):
         """
