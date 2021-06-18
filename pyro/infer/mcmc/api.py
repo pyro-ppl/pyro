@@ -602,3 +602,40 @@ class StreamingMCMC(AbstractMCMC):
                     merged_dict[name] = stat
 
         return {k: v.get() for k, v in merged_dict.items()}
+
+    def diagnostics(self):
+        """
+        Gets diagnostics. Currently a split Gelman-Rubin is only supported and requires
+        'mean' and 'variance' streaming statistics to be present.
+        """
+        statistics = self._statistics.get()
+
+        diag = {}
+        mean_var_dict = {}
+        for (_, name), stat in statistics.items():
+            if name in mean_var_dict:
+                mean, var = mean_var_dict[name]
+                mean.append(stat['mean'])
+                var.append(stat['variance'])
+            elif 'mean' in stat and 'variance' in stat:
+                mean_var_dict[name] = ([stat['mean']], [stat['variance']])
+
+        for name, (m, v) in mean_var_dict.items():
+            mean_var_dict[name] = (torch.stack(m), torch.stack(v))
+
+        for name, (m, v) in mean_var_dict.items():
+            N = self.num_samples
+            var_within = v.mean(dim=0)
+            var_estimator = (N - 1) / N * var_within
+            if self.num_chains > 1:
+                var_between = m.var(dim=0)
+                var_estimator = var_estimator + var_between
+            else:
+                var_within = var_estimator
+
+            diag[name] = {"r_hat": (var_estimator / var_within).sqrt()}
+
+        for diag_name in self._diagnostics[0]:
+            diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
+                               for i in range(self.num_chains)}
+        return diag
