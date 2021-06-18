@@ -53,4 +53,4 @@ class TransformReparam(Reparam):
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": True}

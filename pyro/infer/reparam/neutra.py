@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
+
 from torch.distributions import biject_to
 
 import pyro
@@ -65,14 +67,17 @@ class NeuTraReparam(Reparam):
             return fn, value
         if is_observed:
             raise NotImplementedError(
-                "NeuTraReparam does not support observe statements"
-                f" (at sample site {repr(name)})"
+                f"At pyro.sample({repr(name)},...), "
+                "NeuTraReparam does not support observe statements."
             )
         if value is not None:
-            raise NotImplementedError(
-                "NeuTraReparam does not support automatic initialization"
-                f" (at sample site {repr(name)})"
+            warnings.warn(
+                f"At pyro.sample({repr(name)},...), "
+                "NeuTraReparam does not support transformed initialization; "
+                "falling back to default initialization.",
+                RuntimeWarning,
             )
+            value = None
 
         log_density = 0.0
         compute_density = (poutine.get_mask() is not False)
@@ -104,7 +109,7 @@ class NeuTraReparam(Reparam):
             logdet = sum_rightmost(logdet, logdet.dim() - value.dim() + fn.event_dim)
             log_density = log_density + fn.log_prob(value) + logdet
         new_fn = dist.Delta(value, log_density, event_dim=fn.event_dim)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": True}
 
     def transform_sample(self, latent):
         """

@@ -25,6 +25,7 @@ class StudentTReparam(Reparam):
         name = msg["name"]
         fn = msg["fn"]
         value = msg["value"]
+        is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.StudentT)
@@ -38,4 +39,4 @@ class StudentTReparam(Reparam):
         loc = fn.loc
         scale = fn.scale * gamma.rsqrt()
         new_fn = self._wrap(dist.Normal(loc, scale), event_dim)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": is_observed}

@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
+
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.autoguide.guides import AutoStructured
@@ -65,14 +67,17 @@ class StructuredReparam(Reparam):
         is_observed = msg["is_observed"]
         if is_observed:
             raise NotImplementedError(
+                f"At pyro.sample({repr(name)},...), "
                 "StructuredReparam does not support observe statements"
-                f" (at sample site {repr(name)})"
             )
         if value is not None:
-            raise NotImplementedError(
-                "StructuredReparam does not support automatic initialization"
-                f" (at sample site {repr(name)})"
+            warnings.warn(
+                f"At pyro.sample({repr(name)},...), "
+                "StructuredReparam does not support transformed initialization; "
+                "falling back to default initialization.",
+                RuntimeWarning,
             )
+            value = None
 
         if name not in self.deltas:  # On first sample site.
             self.deltas = self.guide.get_deltas()
@@ -82,7 +87,7 @@ class StructuredReparam(Reparam):
         if poutine.get_mask() is not False:
             log_density = new_fn.log_density + fn.log_prob(value)
             new_fn = dist.Delta(value, log_density, new_fn.event_dim)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": True}
 
     def transform_samples(self, aux_samples, save_params=None):
         """

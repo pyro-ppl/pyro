@@ -65,10 +65,11 @@ class ReparamMessenger(Messenger):
         finally:
             reparam.args_kwargs = None
 
+        msg["is_observed"] = new_msg["is_observed"]
         if msg["value"] is None and new_msg["value"] is not None:
             # Simulate a pyro.deterministic() site.
-            msg["is_observed"] = True
             msg["value"] = new_msg["value"]
+            assert msg["is_observed"]
 
             # Validate while the original msg["fn"] is known.
             if getattr(msg["fn"], "_validation_enabled", False):

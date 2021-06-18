@@ -102,4 +102,4 @@ class ConjugateReparam(Reparam):
 
         # Return an importance-weighted point estimate.
         new_fn = dist.Delta(value, log_density=log_density, event_dim=fn.event_dim)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": True}

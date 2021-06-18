@@ -180,7 +180,7 @@ class InitMessenger(Messenger):
         super().__init__()
 
     def _pyro_sample(self, msg):
-        if msg["done"] or msg["is_observed"] or type(msg["fn"]).__name__ == "_Subsample":
+        if msg["value"] is not None or type(msg["fn"]).__name__ == "_Subsample":
             return
         with torch.no_grad(), helpful_support_errors(msg):
             value = self.init_fn(msg)
@@ -194,7 +194,6 @@ class InitMessenger(Messenger):
                     "{} provided invalid shape for site {}:\nexpected {}\nactual {}"
                     .format(self.init_fn, msg["name"], msg["value"].shape, value.shape))
         msg["value"] = value
-        msg["done"] = True  # FIXME should this be (value is not None)?
 
     def _pyro_get_init_messengers(self, msg):
         if msg["value"] is None:

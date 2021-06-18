@@ -55,7 +55,7 @@ class LocScaleReparam(Reparam):
 
         centered = self.centered
         if is_identically_one(centered):
-            return {"fn": fn, "value": value}
+            return msg
         event_shape = fn.event_shape
         fn, event_dim = self._unwrap(fn)
 
@@ -94,4 +94,4 @@ class LocScaleReparam(Reparam):
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": True}

@@ -3,28 +3,38 @@
 
 import warnings
 from abc import ABC
-from typing import Callable, Optional, TypedDict
+from typing import Callable, Optional
 
 import torch
+
+try:
+    from typing import TypedDict
+except ImportError:
+
+    def TypedDict(*args, **kwargs):
+        return dict
 
 ReparamMessage = TypedDict(
     "ReparamMessage",
     name=str,
     fn=Callable,
     value=Optional[torch.Tensor],
-    is_observded=Optional[bool],
+    is_observed=Optional[bool],
 )
 
 ReparamResult = TypedDict(
     "ReparamResult",
     fn=Callable,
     value=Optional[torch.Tensor],
+    is_observed=Optional[bool],
 )
 
 
 class Reparam(ABC):
     """
-    Base class for reparameterizers.
+    Abstract base class for reparameterizers.
+
+    Derived classes should implement :meth:`apply`.
     """
 
     # @abstractmethod  # Not abstract, for backwards compatibility.
@@ -33,8 +43,13 @@ class Reparam(ABC):
         Abstract method to apply reparameterizer.
 
         :param dict name: A simplified Pyro message with fields:
-            - ``fn``
-            - TODO
+            - ``name: str`` the sample site's name
+            - ``fn: Callable`` a distribution
+            - ``value: Optional[torch.Tensor]`` an observed or initial value
+            - ``is_observed: bool`` whether ``value`` is an observation
+        :returns: A simplified Pyro message with fields ``fn``, ``value``, and
+            ``is_observed``.
+        :rtype: dict
         """
 
         # This default is provided for backwards compatibility only.
@@ -44,11 +59,15 @@ class Reparam(ABC):
             "new subclasses should implement .apply().",
             DeprecationWarning,
         )
-        return self(msg["name"], msg["fn"], msg["value"])
+        new_fn, value = self(msg["name"], msg["fn"], msg["value"])
+        is_observed = msg["value"] is None and value is not None
+        return {"fn": new_fn, "value": value, "is_observed": is_observed}
 
     def __call__(self, name, fn, obs):
         """
-        DEPRECATED. Implement :meth:`apply` instead.
+        DEPRECATED.
+        Subclasses should implement :meth:`apply` instead.
+        This will be removed in a future release.
         """
         raise NotImplementedError
 

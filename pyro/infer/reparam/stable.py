@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+import warnings
 
 import torch
 
@@ -46,14 +47,17 @@ class LatentStableReparam(Reparam):
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
         if is_observed:
             raise NotImplementedError(
+                f"At pyro.sample({repr(name)},...), "
                 "LatentStableReparam does not support observe statements"
-                f" (at sample site {repr(name)})"
             )
         if value is not None:
-            raise NotImplementedError(
-                "LatentStableReparam does not support automatic initialization"
-                f" (at sample site {repr(name)})"
+            warnings.warn(
+                f"At pyro.sample({repr(name)},...), "
+                "LatentStableReparam does not support transformed initialization; "
+                "falling back to default initialization.",
+                RuntimeWarning,
             )
+            value = None
 
         # Draw parameter-free noise.
         proto = fn.stability
@@ -70,7 +74,7 @@ class LatentStableReparam(Reparam):
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": True}
 
 
 class SymmetricStableReparam(Reparam):
@@ -98,6 +102,7 @@ class SymmetricStableReparam(Reparam):
         name = msg["name"]
         fn = msg["fn"]
         value = msg["value"]
+        is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
@@ -125,7 +130,7 @@ class SymmetricStableReparam(Reparam):
 
         # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
         new_fn = self._wrap(dist.Normal(fn.loc, scale * (2 ** 0.5)), event_dim)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": is_observed}
 
 
 class StableReparam(Reparam):
@@ -151,6 +156,7 @@ class StableReparam(Reparam):
         name = msg["name"]
         fn = msg["fn"]
         value = msg["value"]
+        is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
@@ -211,7 +217,7 @@ class StableReparam(Reparam):
 
         # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
         new_fn = self._wrap(dist.Normal(loc, scale * (2 ** 0.5)), event_dim)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": is_observed}
 
 
 def _unsafe_shift(a, skew, t_scale):

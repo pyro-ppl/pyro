@@ -120,6 +120,7 @@ def test_distribution(stability, skew, Reparam):
     assert ks_2samp(expected, actual).pvalue > 0.05
 
 
+@pytest.mark.filterwarnings("ignore:.*falling back to default:RuntimeWarning")
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
 @pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
 def test_subsample_smoke(Reparam, subsample):

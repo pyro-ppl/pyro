@@ -46,7 +46,7 @@ class SplitReparam(Reparam):
         # Split value into parts.
         value_split = [None] * len(self.sections)
         if value is not None:
-            value_split = value.split(self.sections, -self.event_dim)
+            value_split[:] = value.split(self.sections, -self.event_dim)
 
         # Draw independent parts.
         dim = fn.event_dim - self.event_dim
@@ -57,7 +57,7 @@ class SplitReparam(Reparam):
             value_split[i] = pyro.sample(
                 f"{name}_split_{i}",
                 dist.ImproperUniform(fn.support, fn.batch_shape, event_shape),
-                value=value_split[i],
+                obs=value_split[i],
                 infer={"is_observed": is_observed},
             )
 
@@ -70,4 +70,4 @@ class SplitReparam(Reparam):
         else:
             log_density = fn.log_prob(value)
         new_fn = dist.Delta(value, event_dim=fn.event_dim, log_density=log_density)
-        return {"fn": new_fn, "value": value}
+        return {"fn": new_fn, "value": value, "is_observed": True}

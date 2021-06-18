@@ -148,9 +148,9 @@ def test_nested():
     with InitMessenger(init_to_value(values={"x": x})):
         trace = poutine.trace(model).get_trace()
         assert {"x", "x_haar", "x_haar_haar"}.issubset(trace.nodes)
-        # assert trace.nodes["x"]["is_observed"]  # FIXME
+        assert trace.nodes["x"]["is_observed"]
         assert trace.nodes["x_haar"]["is_observed"]
-        # assert not trace.nodes["x_haar_haar"]["is_observed"]  # FIXME
+        assert not trace.nodes["x_haar_haar"]["is_observed"]
         assert_close(trace.nodes["x"]["value"], x)
 
     # Try conditioning on x.
@@ -160,5 +160,5 @@ def test_nested():
         assert {"x", "x_haar", "x_haar_haar"}.issubset(trace.nodes)
         assert trace.nodes["x"]["is_observed"]
         assert trace.nodes["x_haar"]["is_observed"]
-        # assert trace.nodes["x_haar_haar"]["is_observed"]
+        assert trace.nodes["x_haar_haar"]["is_observed"]
         assert_close(trace.nodes["x"]["value"], x)
