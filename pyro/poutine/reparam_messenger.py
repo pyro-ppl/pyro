@@ -6,7 +6,7 @@ from .runtime import effectful
 
 
 @effectful(type="get_init_messengers")
-def get_init_messengers():
+def _get_init_messengers():
     return []
 
 
@@ -50,10 +50,30 @@ class ReparamMessenger(Messenger):
         if reparam is None:
             return
 
-        # Apply init messengers at higher priority than reparam.
-        for m in get_init_messengers():
+        # See https://github.com/pyro-ppl/pyro/issues/2878
+        # This is a tricky hack to apply messengers in an order other than the
+        # standard _PYRO_STACK order. Our goal is to allow (model, initializer)
+        # pairs to be reparametrized as a unit. The problem is that messengers
+        # are typically applied in the order
+        #
+        #    InitMessenger(init_to_value(...))(ReparamMessenger(...)(model))
+        #
+        # so that original model sites are reparametrized by the time they are
+        # seen by init_to_value(). To work around this we allow
+        # ReparamMessenger to apply enclosing InitMessengers early, simulating
+        # a priority system for messengers (indeed we might consider
+        # prioritizing messengers). Note that the enclosing InitMessenger will be
+        # called a second time, after ReparamMessenger, but that is ok because
+        # InitMessenger does not overwrite values.
+        #
+        # To get this same logic to work for ConditionMessenger or
+        # ReplayMessenger we would need to ensure those messengers can
+        # similarly be safely applied twice, with the second application
+        # avoiding overwriting the original application.
+        for m in _get_init_messengers():
             m._pyro_sample(msg)
 
+        # Pass args_kwargs to the reparam via a side channel.
         reparam.args_kwargs = self._args_kwargs
         try:
             new_msg = reparam.apply({
