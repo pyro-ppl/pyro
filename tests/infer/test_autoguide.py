@@ -939,7 +939,7 @@ def test_discrete_helpful_error(auto_class, init_loc_fn):
     def model():
         p = pyro.sample("p", dist.Beta(2., 2.))
         x = pyro.sample("x", dist.Bernoulli(p))
-        pyro.sample("obs", p * x + (1 - p) * (1 - x),
+        pyro.sample("obs", dist.Bernoulli(p * x + (1 - p) * (1 - x)),
                     obs=torch.tensor([1., 0.]))
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
