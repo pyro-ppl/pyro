@@ -244,10 +244,9 @@ def test_mcmc_diagnostics(run_mcmc_cls, num_chains):
     if not torch.backends.mkl.is_available():
         pytest.skip()
     diagnostics = mcmc.diagnostics()
-    # TODO n_eff for streaming MCMC
-    # assert diagnostics["y"]["n_eff"].shape == data.shape
+    if run_mcmc_cls == run_default_mcmc:  # TODO n_eff for streaming MCMC
+        assert diagnostics["y"]["n_eff"].shape == data.shape
     assert diagnostics["y"]["r_hat"].shape == data.shape
-    print(diagnostics["y"])
     assert diagnostics["dummy_key"] == {'chain {}'.format(i): 'dummy_value'
                                         for i in range(num_chains)}
 
