@@ -692,3 +692,41 @@ def select_samples(samples, num_samples=None, group_by_chain=False):
         idxs = torch.randint(0, batch_size, size=(num_samples,), device=device)
         samples = {k: v.index_select(batch_dim, idxs) for k, v in samples.items()}
     return samples
+
+
+def diagnostics_from_stats(statistics, num_samples, num_chains):
+    """
+    Computes diagnostics from streaming statistics.
+    Currently only Gelman-Rubin is computed.
+
+    :param dict statistics: Dictionary of streaming statistics.
+    :param int num_samples: Number of samples.
+    :param int num_chains: Number of chains.
+    :return: dictionary of diagnostic stats for each sample site.
+    """
+    diag = {}
+    mean_var_dict = {}
+    for (_, name), stat in statistics.items():
+        if name in mean_var_dict:
+            mean, var = mean_var_dict[name]
+            mean.append(stat['mean'])
+            var.append(stat['variance'])
+        elif 'mean' in stat and 'variance' in stat:
+            mean_var_dict[name] = ([stat['mean']], [stat['variance']])
+
+    for name, (m, v) in mean_var_dict.items():
+        mean_var_dict[name] = (torch.stack(m), torch.stack(v))
+
+    for name, (m, v) in mean_var_dict.items():
+        N = num_samples
+        var_within = v.mean(dim=0)
+        var_estimator = (N - 1) / N * var_within
+        if num_chains > 1:
+            var_between = m.var(dim=0)
+            var_estimator = var_estimator + var_between
+        else:
+            var_within = var_estimator
+
+        diag[name] = OrderedDict({"r_hat": (var_estimator / var_within).sqrt()})
+
+    return diag

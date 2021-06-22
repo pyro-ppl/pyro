@@ -219,24 +219,33 @@ def test_null_model_with_hook(run_mcmc_cls, kernel, model, jit, num_chains):
         assert iters == expected
 
 
+@pytest.mark.parametrize("run_mcmc_cls", [
+    run_default_mcmc,
+    run_streaming_mcmc
+])
 @pytest.mark.parametrize("num_chains", [
     1,
     2
 ])
 @pytest.mark.filterwarnings("ignore:num_chains")
-def test_mcmc_diagnostics(num_chains):
+def test_mcmc_diagnostics(run_mcmc_cls, num_chains):
     data = torch.tensor([2.0]).repeat(3)
     initial_params, _, transforms, _ = initialize_model(normal_normal_model,
                                                         model_args=(data,),
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains, mp_context="spawn",
-                initial_params=initial_params, transforms=transforms)
+    if run_mcmc_cls == run_default_mcmc:
+        mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains, mp_context="spawn",
+                    initial_params=initial_params, transforms=transforms)
+    else:
+        mcmc = StreamingMCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
+                             initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
     if not torch.backends.mkl.is_available():
         pytest.skip()
     diagnostics = mcmc.diagnostics()
-    assert diagnostics["y"]["n_eff"].shape == data.shape
+    if run_mcmc_cls == run_default_mcmc:  # TODO n_eff for streaming MCMC
+        assert diagnostics["y"]["n_eff"].shape == data.shape
     assert diagnostics["y"]["r_hat"].shape == data.shape
     assert diagnostics["dummy_key"] == {'chain {}'.format(i): 'dummy_value'
                                         for i in range(num_chains)}

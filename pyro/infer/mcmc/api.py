@@ -33,7 +33,12 @@ from pyro.infer.mcmc.logger import (
     initialize_logger,
 )
 from pyro.infer.mcmc.nuts import NUTS
-from pyro.infer.mcmc.util import diagnostics, print_summary, select_samples
+from pyro.infer.mcmc.util import (
+    diagnostics,
+    diagnostics_from_stats,
+    print_summary,
+    select_samples,
+)
 from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict, StreamingStats
 from pyro.util import optional
 
@@ -271,6 +276,10 @@ class AbstractMCMC(ABC):
 
     @abstractmethod
     def run(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @abstractmethod
+    def diagnostics(self):
         raise NotImplementedError
 
     def _set_transforms(self, *args, **kwargs):
@@ -602,3 +611,15 @@ class StreamingMCMC(AbstractMCMC):
                     merged_dict[name] = stat
 
         return {k: v.get() for k, v in merged_dict.items()}
+
+    def diagnostics(self):
+        """
+        Gets diagnostics. Currently a split Gelman-Rubin is only supported and requires
+        'mean' and 'variance' streaming statistics to be present.
+        """
+        statistics = self._statistics.get()
+        diag = diagnostics_from_stats(statistics, self.num_samples, self.num_chains)
+        for diag_name in self._diagnostics[0]:
+            diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
+                               for i in range(self.num_chains)}
+        return diag
