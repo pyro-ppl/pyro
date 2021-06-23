@@ -662,3 +662,71 @@ def predictive(model, posterior_samples, *args, **kwargs):
             predictions[site] = value.reshape(shape)
 
     return predictions
+
+
+def select_samples(samples, num_samples=None, group_by_chain=False):
+    """
+    Performs selection from given MCMC samples.
+
+    :param dictionary samples: Samples object to sample from.
+    :param int num_samples: Number of samples to return. If `None`, all the samples
+        from an MCMC chain are returned in their original ordering.
+    :param bool group_by_chain: Whether to preserve the chain dimension. If True,
+        all samples will have num_chains as the size of their leading dimension.
+    :return: dictionary of samples keyed by site name.
+    """
+    if num_samples is None:
+        # reshape to collapse chain dim when group_by_chain=False
+        if not group_by_chain:
+            samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+    else:
+        if not samples:
+            raise ValueError("No samples found from MCMC run.")
+        if group_by_chain:
+            batch_dim = 1
+        else:
+            samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+            batch_dim = 0
+        sample_tensor = list(samples.values())[0]
+        batch_size, device = sample_tensor.shape[batch_dim], sample_tensor.device
+        idxs = torch.randint(0, batch_size, size=(num_samples,), device=device)
+        samples = {k: v.index_select(batch_dim, idxs) for k, v in samples.items()}
+    return samples
+
+
+def diagnostics_from_stats(statistics, num_samples, num_chains):
+    """
+    Computes diagnostics from streaming statistics.
+    Currently only Gelman-Rubin is computed.
+
+    :param dict statistics: Dictionary of streaming statistics.
+    :param int num_samples: Number of samples.
+    :param int num_chains: Number of chains.
+    :return: dictionary of diagnostic stats for each sample site.
+    """
+    diag = {}
+    mean_var_dict = {}
+    for (_, name), stat in statistics.items():
+        if name in mean_var_dict:
+            mean, var = mean_var_dict[name]
+            mean.append(stat['mean'])
+            var.append(stat['variance'])
+        elif 'mean' in stat and 'variance' in stat:
+            mean_var_dict[name] = ([stat['mean']], [stat['variance']])
+
+    for name, (m, v) in mean_var_dict.items():
+        mean_var_dict[name] = (torch.stack(m), torch.stack(v))
+
+    for name, (m, v) in mean_var_dict.items():
+        N = num_samples
+        var_within = v.mean(dim=0)
+        var_estimator = (N - 1) / N * var_within
+        if num_chains > 1:
+            var_between = m.var(dim=0)
+            var_estimator = var_estimator + var_between
+        else:
+            var_within = var_estimator
+
+        diag[name] = OrderedDict({"r_hat": (var_estimator / var_within).sqrt()})
+
+    return diag

@@ -386,6 +386,13 @@ continuous_dists = [
                 {'loc': [2.0, -50.0], 'scale': [2.0, 10.0], 'asymmetry': [0.5, 2.5],
                  'softness': [0.7, 1.4], 'test_data': [[2.0, 10.0], [-1.0, -50.0]]},
             ]),
+    Fixture(pyro_dist=dist.SkewLogistic,
+            examples=[
+                {'loc': [1.0], 'scale': [1.0], 'asymmetry': [2.0],
+                 'test_data': [2.0]},
+                {'loc': [2.0, -50.0], 'scale': [2.0, 10.0], 'asymmetry': [0.5, 2.5],
+                 'test_data': [[2.0, 10.0], [-1.0, -50.0]]},
+            ]),
 ]
 
 discrete_dists = [
