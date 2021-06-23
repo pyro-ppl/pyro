@@ -59,6 +59,11 @@ class UnitJacobianReparam(Reparam):
                 transform = reshape_transform_batch(transform,
                                                     old_shape + fn.event_shape,
                                                     new_shape + fn.event_shape)
+                if value is not None:
+                    value = value.reshape(
+                        value.shape[:-shift - event_dim] + (1,) * shift
+                        + value.shape[-shift - event_dim:]
+                    )
                 for dim in range(-shift, 0):
                     stack.enter_context(block_plate(dim=dim, strict=False))
 
@@ -67,8 +72,6 @@ class UnitJacobianReparam(Reparam):
                                           self.transform])
             value_trans = None
             if value is not None:
-                if shift:
-                    raise NotImplementedError("TODO")
                 value_trans = transform(value)
 
             # Draw noise from the base distribution.
