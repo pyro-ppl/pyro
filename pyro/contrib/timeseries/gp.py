@@ -149,7 +149,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
     :param int num_gps: The number of independent GPs that are mixed to model the time series.
-        Typical values might be :math:`\\N_{\\rm gp} \\in [\\D_{\\rm obs} / 2, \\D_{\\rm obs}]`
+        Typical values might be :math:`N_{\\rm gp} \\in [\\frac{D_{\\rm obs}}{2}, D_{\\rm obs}]`
     :param torch.Tensor length_scale_init: optional initial values for the kernel length scale
         given as a ``num_gps``-dimensional tensor
     :param torch.Tensor kernel_scale_init: optional initial values for the kernel scale

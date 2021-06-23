@@ -15,6 +15,7 @@ from pyro.infer.autoguide.guides import (
     AutoMultivariateNormal,
     AutoNormal,
     AutoNormalizingFlow,
+    AutoStructured,
 )
 from pyro.infer.autoguide.initialization import (
     init_to_feasible,
@@ -41,6 +42,7 @@ __all__ = [
     'AutoMultivariateNormal',
     'AutoNormal',
     'AutoNormalizingFlow',
+    'AutoStructured',
     'init_to_feasible',
     'init_to_generated',
     'init_to_mean',

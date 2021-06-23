@@ -10,7 +10,12 @@ import pyro.distributions as dist
 from pyro.distributions import TorchDistribution
 from pyro.distributions.testing.gof import auto_goodness_of_fit
 from pyro.distributions.util import broadcast_shape
-from tests.common import TEST_FAILURE_RATE, assert_equal, xfail_if_not_implemented
+from tests.common import (
+    TEST_FAILURE_RATE,
+    assert_close,
+    assert_equal,
+    xfail_if_not_implemented,
+)
 
 
 def _log_prob_shape(dist, x_size=torch.Size()):
@@ -35,7 +40,7 @@ def test_support_shape(dist):
 
 
 def test_infer_shapes(dist):
-    if "LKJ" in dist.pyro_dist.__name__:
+    if "LKJ" in dist.pyro_dist.__name__ or "SineSkewed" in dist.pyro_dist.__name__:
         pytest.xfail(reason="cannot statically compute shape")
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)
@@ -143,6 +148,55 @@ def test_gof(continuous_dist):
         for b in range(probs.size(-1)):
             gof = auto_goodness_of_fit(samples[:, b], probs[:, b], dim=dim)
             assert gof > TEST_FAILURE_RATE
+
+
+def test_mean(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    if Dist.__name__ in ["Cauchy", "HalfCauchy", "SineBivariateVonMises", "VonMises", "ProjectedNormal"]:
+        pytest.xfail(reason="Euclidean mean is not defined")
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+    with xfail_if_not_implemented():
+        actual = d.mean
+    num_samples = 100000
+    if Dist.__name__ == "LogNormal":
+        num_samples = 200000
+    expected = d.sample((num_samples,)).mean(0)
+    assert_close(actual, expected, atol=0.02, rtol=0.05)
+
+
+def test_variance(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    if Dist.__name__ in [
+        "Cauchy",
+        "HalfCauchy",
+        "MultivariateStudentT",
+        "ProjectedNormal",
+        "Stable",
+        "VonMises",
+    ]:
+        pytest.xfail(reason="Euclidean variance is not defined")
+    if Dist.__name__ in ["LogNormal"]:
+        pytest.xfail(reason="high variance estimator")
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+    with xfail_if_not_implemented():
+        actual = d.variance
+    expected = d.sample((100000,)).var(0)
+    assert_close(actual, expected, atol=0.02, rtol=0.05)
+
+
+def test_cdf_icdf(continuous_dist):
+    Dist = continuous_dist.pyro_dist
+    for i in range(continuous_dist.get_num_test_data()):
+        d = Dist(**continuous_dist.get_dist_params(i))
+        if d.event_shape.numel() != 1:
+            continue  # only valid for univariate distributions
+        u = torch.empty((100,) + d.shape()).uniform_()
+        with xfail_if_not_implemented():
+            x = d.icdf(u)
+            u2 = d.cdf(x)
+        assert_equal(u, u2)
 
 
 # Distributions tests - discrete distributions

@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any, Callable, Optional
+
 import torch
 from torch.optim.optimizer import Optimizer
 
@@ -31,7 +33,7 @@ class AdagradRMSProp(Optimizer):
     :type delta: float
     """
 
-    def __init__(self, params, eta=1.0, delta=1.0e-16, t=0.1):
+    def __init__(self, params, eta: float = 1.0, delta: float = 1.0e-16, t: float = 0.1):
         defaults = dict(eta=eta, delta=delta, t=t)
         super().__init__(params, defaults)
 
@@ -41,13 +43,13 @@ class AdagradRMSProp(Optimizer):
                 state['step'] = 0
                 state['sum'] = torch.zeros_like(p.data)
 
-    def share_memory(self):
+    def share_memory(self) -> None:
         for group in self.param_groups:
             for p in group['params']:
                 state = self.state[p]
                 state['sum'].share_memory_()
 
-    def step(self, closure=None):
+    def step(self, closure: Optional[Callable] = None) -> Optional[Any]:
         """
         Performs a single optimization step.
 

@@ -57,6 +57,13 @@ AffineBeta
     :undoc-members:
     :show-inheritance:
 
+AsymmetricLaplace
+---------------------
+.. autoclass:: pyro.distributions.AsymmetricLaplace
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 AVFMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.AVFMultivariateNormal
@@ -312,6 +319,41 @@ RelaxedOneHotCategoricalStraightThrough
 Rejector
 --------
 .. autoclass:: pyro.distributions.Rejector
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SineBivariateVonMises
+---------------------
+.. autoclass:: pyro.distributions.SineBivariateVonMises
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SineSkewed
+----------
+.. autoclass:: pyro.distributions.SineSkewed
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SkewLogistic
+------------
+.. autoclass:: pyro.distributions.SkewLogistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SoftAsymmetricLaplace
+---------------------
+.. autoclass:: pyro.distributions.SoftAsymmetricLaplace
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SoftLaplace
+-------------
+.. autoclass:: pyro.distributions.SoftLaplace
     :members:
     :undoc-members:
     :show-inheritance:

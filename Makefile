@@ -21,6 +21,9 @@ lint: FORCE
 	flake8
 	isort --check .
 	python scripts/update_headers.py --check
+	mypy pyro
+	# mypy examples  # FIXME
+	mypy scripts
 
 license: FORCE
 	python scripts/update_headers.py

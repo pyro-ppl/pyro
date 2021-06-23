@@ -26,14 +26,16 @@ class LocScaleReparam(Reparam):
         a per-site per-element centering parameter in ``[0,1]``. If 0, fully
         decenter the distribution; if 1, preserve the centered distribution
         unchanged.
-    :param shape_params: list of additional parameter names to copy unchanged from
-        the centered to decentered distribution.
+    :param shape_params: Optional list of additional parameter names to copy
+        unchanged from the centered to decentered distribution. If absent,
+        all params in a distributions ``.arg_constraints`` will be copied.
     :type shape_params: tuple or list
     """
-    def __init__(self, centered=None, shape_params=()):
+    def __init__(self, centered=None, shape_params=None):
         assert centered is None or isinstance(centered, (float, torch.Tensor))
-        assert isinstance(shape_params, (tuple, list))
-        assert all(isinstance(name, str) for name in shape_params)
+        if shape_params is not None:
+            assert isinstance(shape_params, (tuple, list))
+            assert all(isinstance(name, str) for name in shape_params)
         if is_validation_enabled():
             if isinstance(centered, float):
                 assert 0 <= centered and centered <= 1
@@ -49,13 +51,17 @@ class LocScaleReparam(Reparam):
         assert obs is None, "LocScaleReparam does not support observe statements"
         centered = self.centered
         if is_identically_one(centered):
-            return name, fn, obs
+            return fn, obs
         event_shape = fn.event_shape
         fn, event_dim = self._unwrap(fn)
 
         # Apply a partial decentering transform.
+        if self.shape_params is None:
+            self.shape_params = tuple(
+                k for k in fn.arg_constraints if k not in ("loc", "scale")
+            )
         params = {key: getattr(fn, key) for key in self.shape_params}
-        if self.centered is None:
+        if centered is None:
             centered = pyro.param("{}_centered".format(name),
                                   lambda: fn.loc.new_full(event_shape, 0.5),
                                   constraint=constraints.unit_interval)

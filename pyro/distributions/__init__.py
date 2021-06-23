@@ -7,6 +7,10 @@ from pyro.distributions.torch import *  # noqa F403
 # isort: split
 
 from pyro.distributions.affine_beta import AffineBeta
+from pyro.distributions.asymmetriclaplace import (
+    AsymmetricLaplace,
+    SoftAsymmetricLaplace,
+)
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.coalescent import (
     CoalescentRateLikelihood,
@@ -45,6 +49,7 @@ from pyro.distributions.hmm import (
 from pyro.distributions.improper_uniform import ImproperUniform
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJ, LKJCorrCholesky
+from pyro.distributions.logistic import SkewLogistic
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
@@ -58,6 +63,9 @@ from pyro.distributions.relaxed_straight_through import (
     RelaxedBernoulliStraightThrough,
     RelaxedOneHotCategoricalStraightThrough,
 )
+from pyro.distributions.sine_bivariate_von_mises import SineBivariateVonMises
+from pyro.distributions.sine_skewed import SineSkewed
+from pyro.distributions.softlaplace import SoftLaplace
 from pyro.distributions.spanning_tree import SpanningTree
 from pyro.distributions.stable import Stable
 from pyro.distributions.torch import __all__ as torch_dists
@@ -84,6 +92,7 @@ from . import constraints, kl, transforms
 
 __all__ = [
     "AffineBeta",
+    "AsymmetricLaplace",
     "AVFMultivariateNormal",
     "BetaBinomial",
     "CoalescentRateLikelihood",
@@ -127,6 +136,11 @@ __all__ = [
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
+    "SineBivariateVonMises",
+    "SineSkewed",
+    "SkewLogistic",
+    "SoftLaplace",
+    "SoftAsymmetricLaplace",
     "SpanningTree",
     "Stable",
     "TorchDistribution",
