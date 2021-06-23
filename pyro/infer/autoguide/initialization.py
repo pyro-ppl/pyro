@@ -10,6 +10,7 @@ trace ``site`` dict and returns an appropriately sized ``value`` to serve
 as an initial constrained value for a guide estimate.
 """
 import functools
+from typing import Callable, Optional
 
 import torch
 from torch.distributions import transform_to
@@ -54,10 +55,20 @@ def init_to_sample(site=None):
     return site["fn"].sample().detach()
 
 
-def init_to_median(site=None, num_samples=15):
+def init_to_median(
+    site=None,
+    num_samples=15,
+    *,
+    fallback: Optional[Callable] = init_to_feasible,
+):
     """
-    Initialize to the prior median; fallback to a feasible point if median is
-    undefined.
+    Initialize to the prior median; fallback to ``fallback`` (defaults to
+    :func:`init_to_feasible`` if mean is undefined.
+
+    :param callable fallback: Fallback init strategy, for sites not specified
+        in ``values``.
+    :raises ValueError: If ``fallback=None`` and no value for a site is given
+        in ``values``.
     """
     if site is None:
         return functools.partial(init_to_median, num_samples=num_samples)
@@ -75,13 +86,25 @@ def init_to_median(site=None, num_samples=15):
             site["fn"]._validate_sample(value)
         return value
     except (RuntimeError, ValueError):
-        # Fall back to feasible point.
-        return init_to_feasible(site)
+        pass
+    if fallback is not None:
+        return fallback(site)
+    raise ValueError(f"No init strategy specified for site {repr(site['name'])}")
 
 
-def init_to_mean(site=None):
+def init_to_mean(
+    site=None,
+    *,
+    fallback: Optional[Callable] = init_to_median,
+):
     """
-    Initialize to the prior mean; fallback to median if mean is undefined.
+    Initialize to the prior mean; fallback to ``fallback`` (defaults to
+    :func:`init_to_median`` if mean is undefined.
+
+    :param callable fallback: Fallback init strategy, for sites not specified
+        in ``values``.
+    :raises ValueError: If ``fallback=None`` and no value for a site is given
+        in ``values``.
     """
     if site is None:
         return init_to_mean
@@ -95,17 +118,23 @@ def init_to_mean(site=None):
             site["fn"]._validate_sample(value)
         return value
     except (NotImplementedError, ValueError):
-        # Fall back to a median.
-        # This is required for distributions with infinite variance, e.g. Cauchy.
-        return init_to_median(site)
+        # This may happen for distributions with infinite variance, e.g. Cauchy.
+        pass
+    if fallback is not None:
+        return fallback(site)
+    raise ValueError(f"No init strategy specified for site {repr(site['name'])}")
 
 
-def init_to_uniform(site=None, radius=2):
+def init_to_uniform(
+    site: Optional[dict] = None,
+    radius: float = 2.0,
+):
     """
     Initialize to a random point in the area ``(-radius, radius)`` of
     unconstrained domain.
 
-    :param float radius: specifies the range to draw an initial point in the unconstrained domain.
+    :param float radius: specifies the range to draw an initial point in the
+        unconstrained domain.
     """
     if site is None:
         return functools.partial(init_to_uniform, radius=radius)
@@ -115,20 +144,31 @@ def init_to_uniform(site=None, radius=2):
     return t(torch.rand_like(t.inv(value)) * (2 * radius) - radius)
 
 
-def init_to_value(site=None, values={}):
+def init_to_value(
+    site: Optional[dict] = None,
+    values: dict = {},
+    *,
+    fallback: Optional[Callable] = init_to_uniform,
+):
     """
-    Initialize to the value specified in ``values``. We defer to
-    :func:`init_to_uniform` strategy for sites which do not appear in ``values``.
+    Initialize to the value specified in ``values``. Fallback to ``fallback``
+    (defaults to :func:`init_to_uniform`) strategy for sites not appearing in
+    ``values``.
 
     :param dict values: dictionary of initial values keyed by site name.
+    :param callable fallback: Fallback init strategy, for sites not specified
+        in ``values``.
+    :raises ValueError: If ``fallback=None`` and no value for a site is given
+        in ``values``.
     """
     if site is None:
         return functools.partial(init_to_value, values=values)
 
     if site["name"] in values:
         return values[site["name"]]
-    else:
-        return init_to_uniform(site)
+    if fallback is not None:
+        return fallback(site)
+    raise ValueError(f"No init strategy specified for site {repr(site['name'])}")
 
 
 class _InitToGenerated:
