@@ -42,7 +42,9 @@ def init_to_feasible(site=None):
 
     value = site["fn"].sample().detach()
     t = transform_to(site["fn"].support)
-    return t(torch.zeros_like(t.inv(value)))
+    value = t(torch.zeros_like(t.inv(value)))
+    value._pyro_warn_on_overwrite = False
+    return value
 
 
 def init_to_sample(site=None):
@@ -52,7 +54,9 @@ def init_to_sample(site=None):
     if site is None:
         return init_to_sample
 
-    return site["fn"].sample().detach()
+    value = site["fn"].sample().detach()
+    value._pyro_warn_on_overwrite = False
+    return value
 
 
 def init_to_median(
@@ -71,7 +75,9 @@ def init_to_median(
         in ``values``.
     """
     if site is None:
-        return functools.partial(init_to_median, num_samples=num_samples)
+        return functools.partial(
+            init_to_median, num_samples=num_samples, fallback=fallback
+        )
 
     # The median undefined for multivariate distributions.
     if _is_multivariate(site["fn"]):
@@ -84,6 +90,7 @@ def init_to_median(
             raise ValueError
         if hasattr(site["fn"], "_validate_sample"):
             site["fn"]._validate_sample(value)
+        value._pyro_warn_on_overwrite = False
         return value
     except (RuntimeError, ValueError):
         pass
@@ -107,7 +114,7 @@ def init_to_mean(
         in ``values``.
     """
     if site is None:
-        return init_to_mean
+        return functools.partial(init_to_mean, fallback=fallback)
 
     try:
         # Try .mean() method.
@@ -116,6 +123,7 @@ def init_to_mean(
             raise ValueError
         if hasattr(site["fn"], "_validate_sample"):
             site["fn"]._validate_sample(value)
+        value._pyro_warn_on_overwrite = False
         return value
     except (NotImplementedError, ValueError):
         # This may happen for distributions with infinite variance, e.g. Cauchy.
@@ -141,7 +149,9 @@ def init_to_uniform(
 
     value = site["fn"].sample().detach()
     t = transform_to(site["fn"].support)
-    return t(torch.rand_like(t.inv(value)) * (2 * radius) - radius)
+    value = t(torch.rand_like(t.inv(value)) * (2 * radius) - radius)
+    value._pyro_warn_on_overwrite = False
+    return value
 
 
 def init_to_value(
@@ -162,7 +172,7 @@ def init_to_value(
         in ``values``.
     """
     if site is None:
-        return functools.partial(init_to_value, values=values)
+        return functools.partial(init_to_value, values=values, fallback=fallback)
 
     if site["name"] in values:
         return values[site["name"]]

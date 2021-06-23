@@ -71,7 +71,7 @@ class NeuTraReparam(Reparam):
                 f"At pyro.sample({repr(name)},...), "
                 "NeuTraReparam does not support observe statements."
             )
-        if value is not None:
+        if value is not None and getattr(value, "_pyro_warn_on_overwrite", True):
             warnings.warn(
                 f"At pyro.sample({repr(name)},...), "
                 "NeuTraReparam does not support transformed initialization; "
