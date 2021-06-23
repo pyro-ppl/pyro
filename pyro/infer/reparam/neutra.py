@@ -50,6 +50,7 @@ class NeuTraReparam(Reparam):
         self.guide = guide
         self.transform = None
         self.x_unconstrained = []
+        self.is_observed = None
 
     def _reparam_config(self, site):
         if site["name"] in self.guide.prototype_trace:
@@ -64,7 +65,7 @@ class NeuTraReparam(Reparam):
         value = msg["value"]
         is_observed = msg["is_observed"]
         if name not in self.guide.prototype_trace.nodes:
-            return fn, value
+            return {"fn": fn, "value": value, "is_observed": is_observed}
         if is_observed:
             raise NotImplementedError(
                 f"At pyro.sample({repr(name)},...), "

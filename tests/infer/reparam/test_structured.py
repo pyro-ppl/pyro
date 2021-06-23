@@ -18,6 +18,7 @@ def neals_funnel(dim):
         pyro.sample('x', dist.Normal(0, torch.exp(y / 2)))
 
 
+@pytest.mark.filterwarnings('ignore:.*transformed initialization.*:RuntimeWarning')
 @pytest.mark.parametrize('jit', [False, True])
 def test_neals_funnel_smoke(jit):
     dim = 10

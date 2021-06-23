@@ -65,6 +65,8 @@ class StructuredReparam(Reparam):
         fn = msg["fn"]
         value = msg["value"]
         is_observed = msg["is_observed"]
+        if name not in self.guide.prototype_trace.nodes:
+            return {"fn": fn, "value": value, "is_observed": is_observed}
         if is_observed:
             raise NotImplementedError(
                 f"At pyro.sample({repr(name)},...), "

@@ -29,6 +29,7 @@ def dirichlet_categorical(data):
     return p_latent
 
 
+@pytest.mark.filterwarnings('ignore:.*transformed initialization.*:RuntimeWarning')
 @pytest.mark.parametrize('jit', [
     False,
     xfail_param(True, reason="https://github.com/pyro-ppl/pyro/issues/2292"),
@@ -54,6 +55,7 @@ def test_neals_funnel_smoke(jit):
     assert 'y' in transformed_samples
 
 
+@pytest.mark.filterwarnings('ignore:.*transformed initialization.*:RuntimeWarning')
 @pytest.mark.parametrize('model, kwargs', [
     (neals_funnel, {'dim': 10}),
     (dirichlet_categorical, {'data': torch.ones(10,)})

@@ -87,7 +87,7 @@ class LinearHMMReparam(Reparam):
             hmm = dist.IndependentHMM(hmm.to_event(-1))
             if value is not None:
                 value = value.squeeze(-1).transpose(-1, -2)
-            return hmm, value
+            return {"fn": hmm, "value": value, "is_observed": is_observed}
 
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist = fn.initial_dist
