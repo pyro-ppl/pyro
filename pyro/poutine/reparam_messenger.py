@@ -1,7 +1,35 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
+from typing import Callable, Optional, Union
+
 from .messenger import Messenger
+
+_STRATEGIES = {}
+
+
+def register_reparam_strategy(name: str, fn: Optional[Callable] = None):
+    """
+    Registers a named reparametrization strategy.
+
+    Example::
+
+        @register_reparam_strategy("custom")
+        def my_strategy(msg):
+            ...
+
+        with poutine.reparam(config="custom"):
+            ...
+
+    :param str name: Name of the strategy.
+    :param callable fn: The function. If missing, this returns a decorator.
+    """
+    assert isinstance(name, str)
+    if fn is None:
+        return functools.partial(register_reparam_strategy, name)
+    assert callable(fn)
+    _STRATEGIES[name] = fn
 
 
 class ReparamMessenger(Messenger):
@@ -27,8 +55,10 @@ class ReparamMessenger(Messenger):
         :class:`~pyro.infer.reparam.reparam.Reparameterizer` or None.
     :type config: dict or callable
     """
-    def __init__(self, config):
+    def __init__(self, config: Union[dict, Callable, str]):
         super().__init__()
+        if isinstance(config, str):
+            config = _STRATEGIES[config]
         assert isinstance(config, dict) or callable(config)
         self.config = config
         self._args_kwargs = None
