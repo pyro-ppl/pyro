@@ -11,11 +11,13 @@ from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoStructured
 from pyro.infer.reparam import StructuredReparam
 
+from .util import check_init_reparam
 
-def neals_funnel(dim):
+
+def neals_funnel(dim=10):
     y = pyro.sample('y', dist.Normal(0, 3))
     with pyro.plate('D', dim):
-        pyro.sample('x', dist.Normal(0, torch.exp(y / 2)))
+        return pyro.sample('x', dist.Normal(0, torch.exp(y / 2)))
 
 
 @pytest.mark.parametrize('jit', [False, True])
@@ -43,3 +45,14 @@ def test_neals_funnel_smoke(jit):
     transformed_samples = rep.transform_samples(samples)
     assert isinstance(transformed_samples, dict)
     assert set(transformed_samples) == {"x", "y"}
+
+
+def test_init():
+    guide = AutoStructured(
+        neals_funnel,
+        conditionals={"y": "normal", "x": "mvn"},
+        dependencies={"x": {"y": "linear"}},
+    )
+    guide()
+
+    check_init_reparam(neals_funnel, StructuredReparam(guide))

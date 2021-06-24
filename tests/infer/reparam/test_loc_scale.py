@@ -9,9 +9,10 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.util import is_identically_one
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_value
 from pyro.infer.reparam import LocScaleReparam
 from tests.common import assert_close
+
+from .util import check_init_reparam
 
 
 # Test helper to extract a few central moments from samples.
@@ -87,13 +88,4 @@ def test_init(dist_type, centered, shape):
             else:
                 return pyro.sample("x", dist.AsymmetricLaplace(loc, scale, 1.5))
 
-    expected = torch.randn(shape)
-    with InitMessenger(init_to_value(values={"x": expected})):
-        # Sanity check without reparametrizing.
-        actual = model()
-        assert_close(actual, expected)
-
-        # Check with reparametrizing.
-        with poutine.reparam(config={"x": LocScaleReparam()}):
-            actual = model()
-            assert_close(actual, expected)
+    check_init_reparam(model, LocScaleReparam(centered))

@@ -8,9 +8,10 @@ from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_value
 from pyro.infer.reparam import SplitReparam
 from tests.common import assert_close
+
+from .util import check_init_reparam
 
 
 @pytest.mark.parametrize("event_shape,splits,dim", [
@@ -77,13 +78,4 @@ def test_init(batch_shape, event_shape, splits, dim):
         with pyro.plate_stack("plates", batch_shape):
             return pyro.sample("x", dist.Normal(loc, scale).to_event(len(event_shape)))
 
-    expected = torch.randn(shape)
-    with InitMessenger(init_to_value(values={"x": expected})):
-        # Sanity check without reparametrizing.
-        actual = model()
-        assert_close(actual, expected)
-
-        # Check with reparametrizing.
-        with poutine.reparam(config={"x": SplitReparam(splits, dim)}):
-            actual = model()
-            assert_close(actual, expected)
+    check_init_reparam(model, SplitReparam(splits, dim))

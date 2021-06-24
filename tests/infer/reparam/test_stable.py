@@ -19,6 +19,8 @@ from pyro.infer.reparam import (
 )
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 # Test helper to extract a few absolute moments from univariate samples.
 # This uses abs moments because Stable variance is infinite.
@@ -133,3 +135,21 @@ def test_subsample_smoke(Reparam, subsample):
 
     guide = AutoNormal(model, create_plates=create_plates if subsample else None)
     Trace_ELBO().loss(model, guide)  # smoke test
+
+
+@pytest.mark.parametrize("skew", [-1.0, -0.5, 0.0, 0.5, 1.0])
+@pytest.mark.parametrize("stability", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
+@pytest.mark.parametrize(
+    "Reparam",
+    [LatentStableReparam, SymmetricStableReparam, StableReparam],
+)
+def test_init(stability, skew, Reparam):
+    if Reparam is SymmetricStableReparam and (skew != 0 or stability == 2):
+        pytest.skip()
+    if stability == 2 and skew in (-1, 1):
+        pytest.skip()
+
+    def model():
+        return pyro.sample("x", dist.Stable(stability, skew))
+
+    check_init_reparam(model, Reparam())

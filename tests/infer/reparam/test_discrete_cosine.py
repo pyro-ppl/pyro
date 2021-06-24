@@ -8,9 +8,10 @@ from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide.initialization import InitMessenger, init_to_value
 from pyro.infer.reparam import DiscreteCosineReparam
 from tests.common import assert_close
+
+from .util import check_init_reparam
 
 
 # Test helper to extract central moments from samples.
@@ -101,15 +102,4 @@ def test_init(shape, dim, smooth):
         with pyro.plate_stack("plates", shape[:dim]):
             return pyro.sample("x", dist.Normal(loc, scale).to_event(-dim))
 
-    expected = torch.randn(shape)
-    with InitMessenger(init_to_value(values={"x": expected})):
-        # Sanity check without reparametrizing.
-        actual = model()
-        assert_close(actual, expected)
-
-        # Check with reparametrizing.
-        with poutine.reparam(
-            config={"x": DiscreteCosineReparam(dim=dim, smooth=smooth)}
-        ):
-            actual = model()
-            assert_close(actual, expected)
+    check_init_reparam(model, DiscreteCosineReparam(dim=dim, smooth=smooth))

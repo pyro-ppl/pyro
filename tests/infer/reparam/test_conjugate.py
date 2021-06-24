@@ -15,6 +15,8 @@ from pyro.infer.reparam import ConjugateReparam, LinearHMMReparam, StableReparam
 from tests.common import assert_close
 from tests.ops.gaussian import random_mvn
 
+from .util import check_init_reparam
+
 
 def test_beta_binomial_static_sample():
     total = 10
@@ -208,3 +210,20 @@ def test_beta_binomial_hmc():
 
     assert_close(samples.mean(), posterior.mean, atol=0.01)
     assert_close(samples.std(), posterior.variance.sqrt(), atol=0.01)
+
+
+def test_init():
+    total = 10
+    counts = dist.Binomial(total, 0.3).sample()
+    concentration1 = torch.tensor(0.5)
+    concentration0 = torch.tensor(1.5)
+
+    prior = dist.Beta(concentration1, concentration0)
+    likelihood = dist.Beta(1 + counts, 1 + total - counts)
+
+    def model():
+        x = pyro.sample("x", prior)
+        pyro.sample("counts", dist.Binomial(total, x), obs=counts)
+        return x
+
+    check_init_reparam(model, ConjugateReparam(likelihood))

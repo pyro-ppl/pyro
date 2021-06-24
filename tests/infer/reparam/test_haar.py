@@ -13,6 +13,8 @@ from pyro.infer.autoguide.initialization import InitMessenger, init_to_value
 from pyro.infer.reparam import HaarReparam
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 # Test helper to extract central moments from samples.
 def get_moments(x):
@@ -102,16 +104,7 @@ def test_init(shape, dim, flip):
         with pyro.plate_stack("plates", shape[:dim]):
             return pyro.sample("x", dist.Normal(loc, scale).to_event(-dim))
 
-    expected = torch.randn(shape)
-    with InitMessenger(init_to_value(values={"x": expected})):
-        # Sanity check without reparametrizing.
-        actual = model()
-        assert_close(actual, expected)
-
-        # Check with reparametrizing.
-        with poutine.reparam(config={"x": HaarReparam(dim=dim, flip=flip)}):
-            actual = model()
-            assert_close(actual, expected)
+    check_init_reparam(model, HaarReparam(dim=dim, flip=flip))
 
 
 def test_nested():
