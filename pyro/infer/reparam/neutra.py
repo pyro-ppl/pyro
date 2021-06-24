@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from contextlib import ExitStack
+
 from torch.distributions import biject_to
 
 import pyro
@@ -8,6 +10,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.autoguide.guides import AutoContinuous
+from pyro.poutine.plate_messenger import block_plate
 
 from .reparam import Reparam
 
@@ -47,7 +50,7 @@ class NeuTraReparam(Reparam):
                             .format(type(guide)))
         self.guide = guide
         self.transform = None
-        self.x_unconstrained = []
+        self.x_unconstrained = {}
         self.is_observed = None
 
     def _reparam_config(self, site):
@@ -72,7 +75,7 @@ class NeuTraReparam(Reparam):
 
         log_density = 0.0
         compute_density = (poutine.get_mask() is not False)
-        if not self.x_unconstrained:  # On first sample site.
+        if name not in self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
             try:
                 self.transform = self.guide.get_transform()
@@ -81,18 +84,23 @@ class NeuTraReparam(Reparam):
                                  "`get_transform` method that does not depend on the "
                                  "model's `*args, **kwargs`") from e
 
-            z_unconstrained = pyro.sample("{}_shared_latent".format(name),
-                                          self.guide.get_base_dist().mask(False))
+            with ExitStack() as stack:
+                for plate in self.guide.plates.values():
+                    stack.enter_context(block_plate(dim=plate.dim, strict=False))
+                z_unconstrained = pyro.sample(f"{name}_shared_latent",
+                                              self.guide.get_base_dist().mask(False))
 
             # Differentiably transform.
             x_unconstrained = self.transform(z_unconstrained)
             if compute_density:
                 log_density = self.transform.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
-            self.x_unconstrained = list(reversed(list(self.guide._unpack_latent(x_unconstrained))))
+            self.x_unconstrained = {
+                site["name"]: (site, unconstrained_value)
+                for site, unconstrained_value in self.guide._unpack_latent(x_unconstrained)
+            }
 
         # Extract a single site's value from the shared latent.
-        site, unconstrained_value = self.x_unconstrained.pop()
-        assert name == site["name"], "model structure changed"
+        site, unconstrained_value = self.x_unconstrained.pop(name)
         transform = biject_to(fn.support)
         value = transform(unconstrained_value)
         if compute_density:
