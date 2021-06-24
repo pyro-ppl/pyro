@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
+
 from .messenger import Messenger
 from .runtime import effectful
 
@@ -85,16 +87,27 @@ class ReparamMessenger(Messenger):
         finally:
             reparam.args_kwargs = None
 
-        msg["is_observed"] = new_msg["is_observed"]
-        if msg["value"] is None and new_msg["value"] is not None:
-            # Simulate a pyro.deterministic() site.
-            msg["value"] = new_msg["value"]
-            assert msg["is_observed"]
-
+        if new_msg["value"] is not None:
             # Validate while the original msg["fn"] is known.
             if getattr(msg["fn"], "_validation_enabled", False):
-                msg["fn"]._validate_sample(msg["value"])
+                msg["fn"]._validate_sample(new_msg["value"])
+            if msg["value"] is None:
+                # The reparam is simulating a pyro.deterministic() site.
+                assert new_msg["is_observed"]
+            elif not msg["is_observed"] and new_msg["value"] is not msg["value"]:
+                # Warn if a custom init method is overwritten by another init method.
+                if getattr(msg["value"], "_pyro_init_method", None) is None:
+                    warnings.warn(
+                        f"At pyro.sample({repr(msg['name'])},...), "
+                        f"{type(reparam).__name__} "
+                        "does not commute with initialization; "
+                        "falling back to default initialization.",
+                        RuntimeWarning,
+                    )
+
         msg["fn"] = new_msg["fn"]
+        msg["value"] = new_msg["value"]
+        msg["is_observed"] = new_msg["is_observed"]
 
 
 class ReparamHandler(object):

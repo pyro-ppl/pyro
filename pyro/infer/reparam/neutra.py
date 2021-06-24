@@ -1,8 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
-
 from torch.distributions import biject_to
 
 import pyro
@@ -71,14 +69,6 @@ class NeuTraReparam(Reparam):
                 f"At pyro.sample({repr(name)},...), "
                 "NeuTraReparam does not support observe statements."
             )
-        if value is not None and getattr(value, "_pyro_warn_on_overwrite", True):
-            warnings.warn(
-                f"At pyro.sample({repr(name)},...), "
-                "NeuTraReparam does not support transformed initialization; "
-                "falling back to default initialization.",
-                RuntimeWarning,
-            )
-            value = None
 
         log_density = 0.0
         compute_density = (poutine.get_mask() is not False)

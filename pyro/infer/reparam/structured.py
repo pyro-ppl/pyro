@@ -1,8 +1,6 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
-
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.autoguide.guides import AutoStructured
@@ -72,14 +70,6 @@ class StructuredReparam(Reparam):
                 f"At pyro.sample({repr(name)},...), "
                 "StructuredReparam does not support observe statements"
             )
-        if value is not None and getattr(value, "_pyro_warn_on_overwrite", True):
-            warnings.warn(
-                f"At pyro.sample({repr(name)},...), "
-                "StructuredReparam does not support transformed initialization; "
-                "falling back to default initialization.",
-                RuntimeWarning,
-            )
-            value = None
 
         if name not in self.deltas:  # On first sample site.
             self.deltas = self.guide.get_deltas()

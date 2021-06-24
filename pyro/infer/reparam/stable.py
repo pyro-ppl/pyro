@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-import warnings
 
 import torch
 
@@ -40,7 +39,7 @@ class LatentStableReparam(Reparam):
     def apply(self, msg):
         name = msg["name"]
         fn = msg["fn"]
-        value = msg["value"]
+        # ignore msg["value"]
         is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
@@ -50,14 +49,6 @@ class LatentStableReparam(Reparam):
                 f"At pyro.sample({repr(name)},...), "
                 "LatentStableReparam does not support observe statements"
             )
-        if value is not None and getattr(value, "_pyro_warn_on_overwrite", True):
-            warnings.warn(
-                f"At pyro.sample({repr(name)},...), "
-                "LatentStableReparam does not support transformed initialization; "
-                "falling back to default initialization.",
-                RuntimeWarning,
-            )
-            value = None
 
         # Draw parameter-free noise.
         proto = fn.stability

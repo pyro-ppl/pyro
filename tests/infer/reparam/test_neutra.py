@@ -29,7 +29,6 @@ def dirichlet_categorical(data):
     return p_latent
 
 
-@pytest.mark.filterwarnings('ignore:.*transformed initialization.*:RuntimeWarning')
 @pytest.mark.parametrize('jit', [
     False,
     xfail_param(True, reason="https://github.com/pyro-ppl/pyro/issues/2292"),
