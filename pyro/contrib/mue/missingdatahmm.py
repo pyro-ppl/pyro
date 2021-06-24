@@ -130,3 +130,45 @@ class MissingDataDiscreteHMM(TorchDistribution):
             state = OneHotCategorical(logits=trans_logits).sample()
 
         return sample
+
+    def map_states(self, value):
+        """
+        Compute maximum a posteriori (MAP) estimate of state variable with
+        Viterbi algorithm.
+
+        :param ~torch.Tensor value: One-hot encoded observation.
+            Must be real-valued (float) and broadcastable to
+            ``(batch_size, num_steps, categorical_size)`` where
+            ``categorical_size`` is the dimension of the categorical output.
+        """
+        # Setup for Viterbi.
+        # batch_size x num_steps x state_dim
+        shape = broadcast_shape(torch.Size(list(value.shape[:-1]) + [1]),
+                                torch.Size((1, 1,
+                                            self.initial_logits.shape[-1])))
+        state_logits = torch.zeros(shape)
+        state_traceback = torch.zeros(shape, dtype=torch.long)
+
+        # Combine observation and transition factors.
+        # batch_size x num_steps x state_dim
+        value_logits = torch.matmul(
+                value, torch.transpose(self.observation_logits, -2, -1))
+        # batch_size x num_steps-1 x state_dim x state_dim
+        result = (self.transition_logits.unsqueeze(-3) +
+                  value_logits[..., 1:, None, :])
+
+        # Forward pass.
+        state_logits[..., 0, :] = self.initial_logits + value_logits[..., 0, :]
+        for i in range(1, shape[-2]):
+            transit_weights = (state_logits[..., i-1, :, None] +
+                               result[..., i-1, :, :])
+            state_logits[..., i, :], state_traceback[..., i, :] = torch.max(
+                    transit_weights, -2)
+        # Traceback.
+        map_states = torch.zeros(shape[:-1], dtype=torch.long)
+        map_states[..., -1] = torch.argmax(state_logits[..., -1, :], -1)
+        for i in range(shape[-2]-1, 0, -1):
+            map_states[..., i-1] = torch.gather(
+                    state_traceback[..., i, :], -1,
+                    map_states[..., i].unsqueeze(-1)).squeeze(-1)
+        return map_states

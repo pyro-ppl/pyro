@@ -216,3 +216,85 @@ def test_samples(batch_data):
                               torch.tensor([[1., 0., 0.],
                                             [0., 0., 1.],
                                             [1., 0., 0.]]))
+
+
+def indiv_map_states(a0, a, e, x):
+
+    # Viterbi algorithm.
+    delta = torch.zeros((x.shape[0], a0.shape[0]))
+    for j in range(a0.shape[0]):
+        delta[0, j] = a0[j] * torch.dot(x[0, :], e[j, :])
+    traceback = torch.zeros((x.shape[0], a0.shape[0]), dtype=torch.long)
+    for t in range(1, x.shape[0]):
+        for j in range(a0.shape[0]):
+            vec = delta[t-1, :] * a[:, j]
+            if torch.sum(x[t, :]) > 0.5:
+                vec = vec * torch.dot(x[t, :], e[j, :])
+            delta[t, j] = torch.max(vec)
+            traceback[t, j] = torch.argmax(vec)
+    chk_map_states = torch.zeros(x.shape[0], dtype=torch.long)
+    chk_map_states[-1] = torch.argmax(delta[-1, :])
+    for t in range(x.shape[0]-1, 0, -1):
+        chk_map_states[t-1] = traceback[t, chk_map_states[t]]
+
+    return chk_map_states
+
+
+def test_map_states():
+
+    # HMM parameters.
+    a0 = torch.tensor([0.9, 0.08, 0.02])
+    a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
+    e = torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.5, 0.5]])
+    # Observed value.
+    x = torch.tensor([[0., 1.],
+                      [1., 0.],
+                      [0., 1.],
+                      [0., 1.],
+                      [1., 0.],
+                      [0., 0.]])
+
+    chk_map_states = indiv_map_states(a0, a, e, x)
+
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
+    map_states = hmm_distr.map_states(x)
+
+    assert torch.allclose(map_states, chk_map_states)
+
+    # Batch values.
+    x = torch.cat([
+        x[None, :, :],
+        torch.tensor([[1., 0.],
+                      [1., 0.],
+                      [1., 0.],
+                      [0., 0.],
+                      [0., 0.],
+                      [0., 0.]])[None, :, :]], dim=0)
+    map_states = hmm_distr.map_states(x)
+
+    chk_map_states = torch.cat([indiv_map_states(a0, a, e, x[0])[None, :],
+                                indiv_map_states(a0, a, e, x[1])[None, :]],
+                               -2)
+
+    assert torch.allclose(map_states, chk_map_states)
+
+    # Batch both parameters and values.
+    a0 = torch.cat([a0[None, :], torch.tensor([0.2, 0.7, 0.1])[None, :]])
+    a = torch.cat([
+        a[None, :, :],
+        torch.tensor([[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.1, 0.8]]
+                     )[None, :, :]], dim=0)
+    e = torch.cat([
+        e[None, :, :],
+        torch.tensor([[0.4, 0.6], [0.99, 0.01], [0.7, 0.3]])[None, :, :]],
+        dim=0)
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
+    map_states = hmm_distr.map_states(x)
+
+    chk_map_states = torch.cat([
+        indiv_map_states(a0[0], a[0], e[0], x[0])[None, :],
+        indiv_map_states(a0[1], a[1], e[1], x[1])[None, :]], -2)
+
+    assert torch.allclose(map_states, chk_map_states)
