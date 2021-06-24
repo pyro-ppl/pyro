@@ -298,3 +298,17 @@ def test_map_states():
         indiv_map_states(a0[1], a[1], e[1], x[1])[None, :]], -2)
 
     assert torch.allclose(map_states, chk_map_states)
+
+
+def test_conditional_sample():
+    a0 = torch.tensor([0.9, 0.08, 0.02])
+    a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
+    eps = 1e-10
+    e = torch.tensor([[1 - eps, eps], [eps, 1-eps], [eps, 1-eps]])
+
+    map_states = torch.tensor([0, 2, 1, 0], dtype=torch.long)
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
+    sample = hmm_distr.conditional_sample(map_states)
+    chk_sample = torch.tensor([[1., 0.], [0., 1.], [0., 1.], [1., 0.]])
+    assert torch.allclose(sample, chk_sample)

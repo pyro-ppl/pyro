@@ -172,3 +172,17 @@ class MissingDataDiscreteHMM(TorchDistribution):
                     state_traceback[..., i, :], -1,
                     map_states[..., i].unsqueeze(-1)).squeeze(-1)
         return map_states
+
+    def conditional_sample(self, map_states):
+        """
+        Sample an observation conditional on the state variable.
+
+        :param ~torch.Tensor map_states: State trajectory. Must be
+            integer-valued (long) and broadcastable to
+            ``(batch_size, num_steps)``.
+        """
+        logits = torch.gather(self.observation_logits, -2,
+                              map_states.unsqueeze(-1)*torch.ones(
+                                self.observation_logits.shape[-1],
+                                dtype=torch.long))
+        return OneHotCategorical(logits=logits).sample()
