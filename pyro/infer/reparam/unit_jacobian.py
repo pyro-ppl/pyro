@@ -76,7 +76,7 @@ class UnitJacobianReparam(Reparam):
 
             # Draw noise from the base distribution.
             value_trans = pyro.sample(
-                "{}_{}".format(name, self.suffix),
+                f"{name}_{self.suffix}",
                 dist.TransformedDistribution(fn, transform),
                 obs=value_trans,
                 infer={"is_observed": is_observed},
@@ -85,10 +85,11 @@ class UnitJacobianReparam(Reparam):
         # Differentiably transform. This should be free due to transform cache.
         if value is None:
             value = transform.inv(value_trans)
-            if shift:
-                value = value.reshape(
-                    value.shape[:-2 * shift - event_dim] + value.shape[-shift - event_dim:]
-                )
+        if shift:
+            value = value.reshape(
+                value.shape[:-2 * shift - event_dim]
+                + value.shape[-shift - event_dim:]
+            )
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim)

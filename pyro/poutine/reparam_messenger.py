@@ -3,6 +3,8 @@
 
 import warnings
 
+import torch
+
 from .messenger import Messenger
 from .runtime import effectful
 
@@ -91,12 +93,14 @@ class ReparamMessenger(Messenger):
             # Validate while the original msg["fn"] is known.
             if getattr(msg["fn"], "_validation_enabled", False):
                 msg["fn"]._validate_sample(new_msg["value"])
-            if msg["value"] is None:
-                # The reparam is simulating a pyro.deterministic() site.
-                assert new_msg["is_observed"]
-            elif not msg["is_observed"] and new_msg["value"] is not msg["value"]:
+
+            if msg["value"] is not None and msg["value"] is not new_msg["value"]:
+                # Check that overwritten initialization preserves shape.
+                if not torch._C._get_tracing_state():
+                    assert new_msg["value"].shape == msg["value"].shape
+
                 # Warn if a custom init method is overwritten by another init method.
-                if getattr(msg["value"], "_pyro_init_method", None) is None:
+                if getattr(msg["value"], "_pyro_custom_init", True):
                     warnings.warn(
                         f"At pyro.sample({repr(msg['name'])},...), "
                         f"{type(reparam).__name__} "

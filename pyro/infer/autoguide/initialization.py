@@ -43,7 +43,7 @@ def init_to_feasible(site=None):
     value = site["fn"].sample().detach()
     t = transform_to(site["fn"].support)
     value = t(torch.zeros_like(t.inv(value)))
-    value._pyro_init_method = "feasible"
+    value._pyro_custom_init = False
     return value
 
 
@@ -55,7 +55,7 @@ def init_to_sample(site=None):
         return init_to_sample
 
     value = site["fn"].sample().detach()
-    value._pyro_init_method = "sample"
+    value._pyro_custom_init = False
     return value
 
 
@@ -90,7 +90,7 @@ def init_to_median(
             raise ValueError
         if hasattr(site["fn"], "_validate_sample"):
             site["fn"]._validate_sample(value)
-        value._pyro_init_method = "median"
+        value._pyro_custom_init = False
         return value
     except (RuntimeError, ValueError):
         pass
@@ -123,7 +123,7 @@ def init_to_mean(
             raise ValueError
         if hasattr(site["fn"], "_validate_sample"):
             site["fn"]._validate_sample(value)
-        value._pyro_init_method = "mean"
+        value._pyro_custom_init = False
         return value
     except (NotImplementedError, ValueError):
         # This may happen for distributions with infinite variance, e.g. Cauchy.
@@ -150,7 +150,7 @@ def init_to_uniform(
     value = site["fn"].sample().detach()
     t = transform_to(site["fn"].support)
     value = t(torch.rand_like(t.inv(value)) * (2 * radius) - radius)
-    value._pyro_init_method = "uniform"
+    value._pyro_custom_init = False
     return value
 
 
