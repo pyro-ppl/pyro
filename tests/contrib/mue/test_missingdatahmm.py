@@ -171,6 +171,16 @@ def test_DiscreteHMM_comparison(batch_initial, batch_transition,
         assert lp_vldhmm.shape == (batch_size,)
     # Values.
     assert torch.allclose(lp_vldhmm, lp_dhmm)
+    # Filter.
+    filter_dhmm = dhmm.filter(value)
+    filter_vldhmm = vldhmm.filter(value_oh)
+    assert torch.allclose(filter_dhmm.logits, filter_vldhmm[..., -1, :])
+    # Check other computations run.
+    vldhmm.smooth(value_oh)
+    vldhmm.sample_states(value_oh)
+    map_states = vldhmm.map_states(value_oh)
+    print(value_oh.shape, map_states.shape)
+    vldhmm.conditional_sample(map_states)
 
 
 @pytest.mark.parametrize('batch_data', [False, True])
@@ -218,12 +228,51 @@ def test_samples(batch_data):
                                             [1., 0., 0.]]))
 
 
-def indiv_map_states(a0, a, e, x):
+def indiv_filter(a0, a, e, x):
 
-    # Viterbi algorithm.
+    alph = torch.zeros((x.shape[0], a0.shape[0]))
+    for j in range(a0.shape[0]):
+        vec = a0[j]
+        if torch.sum(x[0, :]) > 0.5:
+            vec = vec * torch.dot(x[0, :], e[j, :])
+        alph[0, j] = vec
+    alph[0, :] = alph[0, :]/torch.sum(alph[0, :])
+    for t in range(1, x.shape[0]):
+        for j in range(a0.shape[0]):
+            vec = torch.sum(alph[t-1, :] * a[:, j])
+            if torch.sum(x[t, :]) > 0.5:
+                vec = vec * torch.dot(x[t, :], e[j, :])
+            alph[t, j] = vec
+        alph[t, :] = alph[t, :]/torch.sum(alph[t, :])
+    return torch.log(alph)
+
+
+def indiv_smooth(a0, a, e, x):
+
+    alph = indiv_filter(a0, a, e, x)
+    beta = torch.zeros(alph.shape)
+    beta[-1, :] = 1.
+    for t in range(alph.shape[0]-1, 0, -1):
+        for i in range(a0.shape[0]):
+            for j in range(a0.shape[0]):
+                vec = beta[t, j] * a[i, j]
+                if torch.sum(x[t, :]) > 0.5:
+                    vec = vec * torch.dot(x[t, :], e[j, :])
+                beta[t-1, i] += vec
+    smooth = torch.exp(alph) * beta
+    smooth = smooth/torch.sum(smooth, -1, True)
+    return torch.log(smooth)
+
+
+def indiv_map_states(a0, a, e, x):
+    # Viterbi algorithm, implemented without batching or vector operations.
+
     delta = torch.zeros((x.shape[0], a0.shape[0]))
     for j in range(a0.shape[0]):
-        delta[0, j] = a0[j] * torch.dot(x[0, :], e[j, :])
+        vec = a0[j]
+        if torch.sum(x[0, :]) > 0.5:
+            vec = vec * torch.dot(x[0, :], e[j, :])
+        delta[0, j] = vec
     traceback = torch.zeros((x.shape[0], a0.shape[0]), dtype=torch.long)
     for t in range(1, x.shape[0]):
         for j in range(a0.shape[0]):
@@ -240,7 +289,7 @@ def indiv_map_states(a0, a, e, x):
     return chk_map_states
 
 
-def test_map_states():
+def test_state_infer():
 
     # HMM parameters.
     a0 = torch.tensor([0.9, 0.08, 0.02])
@@ -255,12 +304,18 @@ def test_map_states():
                       [0., 0.]])
 
     chk_map_states = indiv_map_states(a0, a, e, x)
+    chk_filter = indiv_filter(a0, a, e, x)
+    chk_smooth = indiv_smooth(a0, a, e, x)
 
     hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
                                        torch.log(e))
     map_states = hmm_distr.map_states(x)
+    filter = hmm_distr.filter(x)
+    smooth = hmm_distr.smooth(x)
 
     assert torch.allclose(map_states, chk_map_states)
+    assert torch.allclose(filter, chk_filter)
+    assert torch.allclose(smooth, chk_smooth)
 
     # Batch values.
     x = torch.cat([
@@ -272,14 +327,22 @@ def test_map_states():
                       [0., 0.],
                       [0., 0.]])[None, :, :]], dim=0)
     map_states = hmm_distr.map_states(x)
+    filter = hmm_distr.filter(x)
+    smooth = hmm_distr.smooth(x)
 
     chk_map_states = torch.cat([indiv_map_states(a0, a, e, x[0])[None, :],
                                 indiv_map_states(a0, a, e, x[1])[None, :]],
                                -2)
+    chk_filter = torch.cat([indiv_filter(a0, a, e, x[0])[None, :, :],
+                            indiv_filter(a0, a, e, x[1])[None, :, :]], -3)
+    chk_smooth = torch.cat([indiv_smooth(a0, a, e, x[0])[None, :, :],
+                            indiv_smooth(a0, a, e, x[1])[None, :, :]], -3)
 
     assert torch.allclose(map_states, chk_map_states)
+    assert torch.allclose(filter, chk_filter)
+    assert torch.allclose(smooth, chk_smooth)
 
-    # Batch both parameters and values.
+    # Batch parameters.
     a0 = torch.cat([a0[None, :], torch.tensor([0.2, 0.7, 0.1])[None, :]])
     a = torch.cat([
         a[None, :, :],
@@ -291,20 +354,50 @@ def test_map_states():
         dim=0)
     hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
                                        torch.log(e))
+    map_states = hmm_distr.map_states(x[1])
+    filter = hmm_distr.filter(x[1])
+    smooth = hmm_distr.smooth(x[1])
+
+    chk_map_states = torch.cat([
+        indiv_map_states(a0[0], a[0], e[0], x[1])[None, :],
+        indiv_map_states(a0[1], a[1], e[1], x[1])[None, :]], -2)
+    chk_filter = torch.cat([
+        indiv_filter(a0[0], a[0], e[0], x[1])[None, :, :],
+        indiv_filter(a0[1], a[1], e[1], x[1])[None, :, :]], -3)
+    chk_smooth = torch.cat([
+        indiv_smooth(a0[0], a[0], e[0], x[1])[None, :, :],
+        indiv_smooth(a0[1], a[1], e[1], x[1])[None, :, :]], -3)
+
+    assert torch.allclose(map_states, chk_map_states)
+    assert torch.allclose(filter, chk_filter)
+    assert torch.allclose(smooth, chk_smooth)
+
+    # Batch both parameters and values.
     map_states = hmm_distr.map_states(x)
+    filter = hmm_distr.filter(x)
+    smooth = hmm_distr.smooth(x)
 
     chk_map_states = torch.cat([
         indiv_map_states(a0[0], a[0], e[0], x[0])[None, :],
         indiv_map_states(a0[1], a[1], e[1], x[1])[None, :]], -2)
+    chk_filter = torch.cat([
+        indiv_filter(a0[0], a[0], e[0], x[0])[None, :, :],
+        indiv_filter(a0[1], a[1], e[1], x[1])[None, :, :]], -3)
+    chk_smooth = torch.cat([
+        indiv_smooth(a0[0], a[0], e[0], x[0])[None, :, :],
+        indiv_smooth(a0[1], a[1], e[1], x[1])[None, :, :]], -3)
 
     assert torch.allclose(map_states, chk_map_states)
+    assert torch.allclose(filter, chk_filter)
+    assert torch.allclose(smooth, chk_smooth)
 
 
 def test_conditional_sample():
     a0 = torch.tensor([0.9, 0.08, 0.02])
     a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
     eps = 1e-10
-    e = torch.tensor([[1 - eps, eps], [eps, 1-eps], [eps, 1-eps]])
+    # Effectively deterministic to check sampler.
+    e = torch.tensor([[1-eps, eps], [eps, 1-eps], [eps, 1-eps]])
 
     map_states = torch.tensor([0, 2, 1, 0], dtype=torch.long)
     hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
@@ -312,3 +405,84 @@ def test_conditional_sample():
     sample = hmm_distr.conditional_sample(map_states)
     chk_sample = torch.tensor([[1., 0.], [0., 1.], [0., 1.], [1., 0.]])
     assert torch.allclose(sample, chk_sample)
+
+    # Batch values
+    map_states = torch.tensor([[0, 2, 1, 0], [0, 0, 0, 1]], dtype=torch.long)
+    sample = hmm_distr.conditional_sample(map_states)
+    chk_sample = torch.tensor([[[1., 0.], [0., 1.], [0., 1.], [1., 0.]],
+                               [[1., 0.], [1., 0.], [1., 0.], [0., 1.]]])
+    assert torch.allclose(sample, chk_sample)
+
+    # Batch parameters
+    e = torch.cat([
+        e[None, :, :],
+        torch.tensor([[eps, 1-eps], [eps, 1-eps], [1-eps, eps]])[None, :, :]],
+        dim=0)
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
+    sample = hmm_distr.conditional_sample(map_states[0])
+    chk_sample = torch.tensor([[[1., 0.], [0., 1.], [0., 1.], [1., 0.]],
+                               [[0., 1.], [1., 0.], [0., 1.], [0., 1.]]])
+    assert torch.allclose(sample, chk_sample)
+
+    # Batch parameters and values.
+    sample = hmm_distr.conditional_sample(map_states)
+    chk_sample = torch.tensor([[[1., 0.], [0., 1.], [0., 1.], [1., 0.]],
+                               [[0., 1.], [0., 1.], [0., 1.], [0., 1.]]])
+    assert torch.allclose(sample, chk_sample)
+
+
+def test_sample_states():
+
+    # Effectively deterministic to check sampler.
+    eps = 1e-10
+    a0 = torch.tensor([1-eps, eps/2, eps/2])
+    a = torch.tensor([[eps/2, 1-eps, eps/2],
+                      [eps, 0.5-eps/2, 0.5-eps/2],
+                      [eps, 0.5-eps/2, 0.5-eps/2]])
+    e = torch.tensor([[1-eps, eps], [1-eps, eps], [eps, 1-eps]])
+    x = torch.tensor([[1., 0.],
+                      [0., 0.],
+                      [0., 1.],
+                      [0., 1.]])
+
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
+    states = hmm_distr.sample_states(x)
+    chk_states = torch.tensor([0, 1, 2, 2])
+    assert torch.allclose(states, chk_states)
+
+    # Batch values.
+    x = torch.cat([
+        x[None, :, :],
+        torch.tensor([[1., 0.],
+                      [0., 0.],
+                      [0., 1.],
+                      [1., 0.]])[None, :, :]], dim=0)
+    states = hmm_distr.sample_states(x)
+    chk_states = torch.tensor([[0, 1, 2, 2], [0, 1, 2, 1]])
+    assert torch.allclose(states, chk_states)
+
+    # Batch parameters
+    a0 = torch.cat([a0[None, :],
+                    torch.tensor([eps/2, 1-eps, eps/2])[None, :]])
+    a = torch.cat([
+        a[None, :, :],
+        torch.tensor([[eps/2, 1-eps, eps/2],
+                      [eps/2, 1-eps, eps/2],
+                      [eps/2, 1-eps, eps/2]]
+                     )[None, :, :]], dim=0)
+    e = torch.cat([
+        e[None, :, :],
+        torch.tensor([[1-eps, eps], [0.5, 0.5], [eps, 1-eps]])[None, :, :]],
+        dim=0)
+    hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a),
+                                       torch.log(e))
+    states = hmm_distr.sample_states(x[1])
+    chk_states = torch.tensor([[0, 1, 2, 1], [1, 1, 1, 1]])
+    assert torch.allclose(states, chk_states)
+
+    # Batch both parameters and values.
+    states = hmm_distr.sample_states(x)
+    chk_states = torch.tensor([[0, 1, 2, 2], [1, 1, 1, 1]])
+    assert torch.allclose(states, chk_states)
