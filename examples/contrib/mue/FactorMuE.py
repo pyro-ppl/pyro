@@ -23,8 +23,8 @@ multiple small clusters, and the perplexity should be around 4.
 
 Reference:
 [1] E. N. Weinstein, D. S. Marks (2021)
-"Generative probabilistic biological sequence models that account for
-mutational variability"
+"A structured observation distribution for generative biological sequence
+prediction and forecasting"
 https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.full.pdf
 """
 
