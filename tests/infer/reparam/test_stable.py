@@ -126,8 +126,8 @@ def test_distribution(stability, skew, Reparam):
 @pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
 def test_subsample_smoke(Reparam, subsample):
     def model():
-        with pyro.plate("plate", 10):
-            with poutine.reparam(config={"x": Reparam()}):
+        with poutine.reparam(config={"x": Reparam()}):
+            with pyro.plate("plate", 10):
                 return pyro.sample("x", dist.Stable(1.5, 0))
 
     def create_plates():
