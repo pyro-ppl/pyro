@@ -110,3 +110,43 @@ class BiosequenceDataset(Dataset):
     def __getitem__(self, ind):
 
         return (self.seq_data[ind], self.L_data[ind])
+
+
+def write(x, alphabet, file, truncate_stop=False, append=False):
+    """
+    Write sequence samples to file.
+
+    :param ~torch.Tensor x: One-hot encoded sequences, with size
+        ``(data_size, seq_length, alphabet_length)``. May be padded with
+        zeros for variable length sequences.
+    :param ~np.array alphabet: Alphabet.
+    :param str file: Output file, where sequences will be written
+        in fasta format.
+    :param bool truncate_stop: If True, sequences will be truncated at the
+        first stop symbol (i.e. the stop symbol and everything after will not
+        be written). If False, the whole sequence will be written, including
+        any internal stop symbols.
+    :param bool append: If True, sequences are appended to the end of the
+        output file. If False, the file is first erased.
+    """
+    print_alphabet = np.array(list(alphabet) + [''])
+    x = torch.cat([x, torch.zeros(list(x.shape[:2]) + [1])], -1)
+    if truncate_stop:
+        mask = (torch.cumsum(torch.matmul(
+                        x, torch.tensor(print_alphabet == '*',
+                                        dtype=torch.double)), -1) > 0
+                ).to(torch.double)
+        x = x * (1 - mask).unsqueeze(-1)
+        x[:, :, -1] = mask
+    else:
+        x[:, :, -1] = (torch.sum(x, -1) < 0.5).to(torch.double)
+    index = torch.matmul(x, torch.arange(x.shape[-1], dtype=torch.double)
+                         ).to(torch.long).numpy()
+    seqs = ['>{}\n'.format(j) + ''.join(elem) + '\n' for j, elem in
+            enumerate(print_alphabet[index])]
+    if append:
+        open_flag = 'a'
+    else:
+        open_flag = 'w'
+    with open(file, open_flag) as fw:
+        fw.write(''.join(seqs))
