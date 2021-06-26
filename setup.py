@@ -89,7 +89,7 @@ setup(
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'pyro-api>=0.1.1',
-        'torch>=1.8.0',
+        'torch>=1.9.0',
         'tqdm>=4.36',
     ],
     extras_require={
