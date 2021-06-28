@@ -5,6 +5,7 @@ import torch
 
 import pyro.distributions as dist
 from pyro.ops.gaussian import Gaussian
+from pyro.ops.gaussian_sqrt import GaussianS
 from tests.common import assert_close
 
 
@@ -24,6 +25,21 @@ def random_gaussian(batch_shape, dim, rank=None):
     return result
 
 
+def random_gaussianS(batch_shape, dim, rank=None):
+    """
+    Generate a random Gaussian for testing.
+    """
+    if rank is None:
+        rank = dim + dim
+    log_normalizer = torch.randn(batch_shape)
+    info_vec = torch.randn(batch_shape + (dim,))
+    samples = torch.randn(batch_shape + (dim, rank))
+    result = GaussianS(log_normalizer, info_vec, samples)
+    assert result.dim() == dim
+    assert result.batch_shape == batch_shape
+    return result
+
+
 def random_mvn(batch_shape, dim):
     """
     Generate a random MultivariateNormal distribution for testing.
@@ -36,8 +52,8 @@ def random_mvn(batch_shape, dim):
 
 
 def assert_close_gaussian(actual, expected):
-    assert isinstance(actual, Gaussian)
-    assert isinstance(expected, Gaussian)
+    assert isinstance(actual, (Gaussian, GaussianS))
+    assert isinstance(expected, (Gaussian, GaussianS))
     assert actual.dim() == expected.dim()
     assert actual.batch_shape == expected.batch_shape
     assert_close(actual.log_normalizer, expected.log_normalizer)
