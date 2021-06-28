@@ -67,7 +67,7 @@ def init_to_median(
 ):
     """
     Initialize to the prior median; fallback to ``fallback`` (defaults to
-    :func:`init_to_feasible`` if mean is undefined.
+    :func:`init_to_feasible`) if mean is undefined.
 
     :param callable fallback: Fallback init strategy, for sites not specified
         in ``values``.
@@ -106,7 +106,7 @@ def init_to_mean(
 ):
     """
     Initialize to the prior mean; fallback to ``fallback`` (defaults to
-    :func:`init_to_median`` if mean is undefined.
+    :func:`init_to_median`) if mean is undefined.
 
     :param callable fallback: Fallback init strategy, for sites not specified
         in ``values``.
