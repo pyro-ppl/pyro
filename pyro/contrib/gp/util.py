@@ -83,7 +83,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     if Lff is None:
         Kff = kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
-        Lff = Kff.cholesky()
+        Lff = torch.linalg.cholesky(Kff)
     Kfs = kernel(X, Xnew)
 
     # convert f_loc_shape from latent_shape x N to N x latent_shape

@@ -18,7 +18,7 @@ Xnew = torch.tensor([[2., 3.], [4., 6.]])
 X = torch.tensor([[1., 5.], [2., 1.], [3., 2.]])
 kernel = Matern52(input_dim=2)
 Kff = kernel(X) + torch.eye(3) * 1e-6
-Lff = Kff.cholesky()
+Lff = torch.linalg.cholesky(Kff)
 pyro.set_rng_seed(123)
 f_loc = torch.rand(3)
 f_scale_tril = torch.rand(3, 3).tril(-1) + torch.rand(3).exp().diag()
@@ -76,7 +76,7 @@ def test_conditional_whiten(Xnew, X, kernel, f_loc, f_scale_tril, loc, cov):
     loc0, cov0 = conditional(Xnew, X, kernel, f_loc, f_scale_tril, full_cov=True,
                              whiten=False)
     Kff = kernel(X) + torch.eye(3) * 1e-6
-    Lff = Kff.cholesky()
+    Lff = torch.linalg.cholesky(Kff)
     whiten_f_loc = Lff.inverse().matmul(f_loc)
     whiten_f_scale_tril = Lff.inverse().matmul(f_scale_tril)
     loc1, cov1 = conditional(Xnew, X, kernel, whiten_f_loc, whiten_f_scale_tril,

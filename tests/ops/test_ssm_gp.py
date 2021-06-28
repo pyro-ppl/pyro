@@ -23,8 +23,8 @@ def test_matern_kernel(num_gps, nu):
     assert_equal(forward_backward, eye)
 
     # let's just check that these are PSD
-    mk.stationary_covariance().cholesky()
-    mk.process_covariance(forward).cholesky()
+    torch.linalg.cholesky(mk.stationary_covariance())
+    torch.linalg.cholesky(mk.process_covariance(forward))
 
     # evolving forward infinitesimally should yield the identity
     nudge = mk.transition_matrix(torch.tensor([1.0e-9]))

@@ -458,7 +458,7 @@ def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, h
             actual_std = actual_cov.diagonal(dim1=-2, dim2=-1).sqrt()
             actual_corr = actual_cov / (actual_std.unsqueeze(-1) * actual_std.unsqueeze(-2))
 
-            expected_cov = g.precision.cholesky().cholesky_inverse()
+            expected_cov = torch.linalg.cholesky(g.precision).cholesky_inverse()
             expected_mean = expected_cov.matmul(g.info_vec.unsqueeze(-1)).squeeze(-1)
             expected_std = expected_cov.diagonal(dim1=-2, dim2=-1).sqrt()
             expected_corr = expected_cov / (expected_std.unsqueeze(-1) * expected_std.unsqueeze(-2))

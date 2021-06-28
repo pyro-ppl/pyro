@@ -78,7 +78,7 @@ class GPRegression(GPModel):
         N = self.X.size(0)
         Kff = self.kernel(self.X)
         Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
-        Lff = Kff.cholesky()
+        Lff = torch.linalg.cholesky(Kff)
 
         zero_loc = self.X.new_zeros(self.X.size(0))
         f_loc = zero_loc + self.mean_function(self.X)
@@ -123,7 +123,7 @@ class GPRegression(GPModel):
         N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
-        Lff = Kff.cholesky()
+        Lff = torch.linalg.cholesky(Kff)
 
         y_residual = self.y - self.mean_function(self.X)
         loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, Lff,
@@ -179,7 +179,7 @@ class GPRegression(GPModel):
             X, y, Kff = outside_vars["X"], outside_vars["y"], outside_vars["Kff"]
 
             # Compute Cholesky decomposition of kernel matrix
-            Lff = Kff.cholesky()
+            Lff = torch.linalg.cholesky(Kff)
             y_residual = y - self.mean_function(X)
 
             # Compute conditional mean and variance

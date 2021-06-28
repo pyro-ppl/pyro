@@ -28,7 +28,7 @@ def assert_cov_validity(cov, eigenvalue_lbnd=0., condition_number_ubnd=1e6):
     # Symmetry
     assert (cov.t() == cov).all(), 'Covariance must be symmetric!'
     # Precompute eigenvalues for subsequent tests.
-    ws, _ = torch.symeig(cov)  # The eigenvalues of cov
+    ws = torch.linalg.eigvalsh(cov)  # The eigenvalues of cov
     w_min = torch.min(ws)
     w_max = torch.max(ws)
 

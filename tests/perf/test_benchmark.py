@@ -106,7 +106,7 @@ def vsgp_multiclass(num_steps, whiten):
     pyro.set_rng_seed(0)
     X = torch.rand(100, 1)
     K = (-0.5 * (X - X.t()).pow(2) / 0.01).exp() + torch.eye(100) * 1e-6
-    f = K.cholesky().matmul(torch.randn(100, 3))
+    f = torch.linalg.cholesky(K).matmul(torch.randn(100, 3))
     y = f.argmax(dim=-1)
 
     kernel = gp.kernels.Sum(gp.kernels.Matern32(1),

@@ -388,7 +388,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
         assert_close(log_det, torch.slogdet(jacobian)[1])
 
     assert log_det.shape == batch_shape
-    assert_close(y, x_mat.cholesky())
+    assert_close(y, torch.linalg.cholesky(x_mat))
     assert_close(transform.inv(y), x_mat)
 
 

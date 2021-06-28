@@ -303,7 +303,7 @@ def test_unnormalized_normal(kernel, jit):
 
 
 @pytest.mark.parametrize('jit', [False, mark_jit(True)], ids=jit_idfn)
-@pytest.mark.parametrize('op', [torch.inverse, torch.cholesky])
+@pytest.mark.parametrize('op', [torch.inverse, torch.linalg.cholesky])
 def test_singular_matrix_catch(jit, op):
     def potential_energy(z):
         return op(z['cov']).sum()

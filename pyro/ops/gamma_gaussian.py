@@ -251,7 +251,7 @@ class GammaGaussian:
         P_aa = self.precision[..., a, a]
         P_ba = self.precision[..., b, a]
         P_bb = self.precision[..., b, b]
-        P_b = P_bb.cholesky()
+        P_b = torch.linalg.cholesky(P_bb)
         P_a = P_ba.triangular_solve(P_b, upper=False).solution
         P_at = P_a.transpose(-1, -2)
         precision = P_aa - P_at.matmul(P_a)
@@ -290,7 +290,7 @@ class GammaGaussian:
         Integrates out all latent state (i.e. operating on event dimensions) of Gaussian component.
         """
         n = self.dim()
-        chol_P = self.precision.cholesky()
+        chol_P = torch.linalg.cholesky(self.precision)
         chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
         # considering GammaGaussian as a Gaussian with precision = s * precision, info_vec = s * info_vec,

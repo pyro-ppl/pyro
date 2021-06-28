@@ -1098,7 +1098,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         H = hessian(loss, self.loc)
         cov = H.inverse()
         loc = self.loc
-        scale_tril = cov.cholesky()
+        scale_tril = torch.linalg.cholesky(cov)
 
         gaussian_guide = AutoMultivariateNormal(self.model)
         gaussian_guide._setup_prototype(*args, **kwargs)

@@ -261,7 +261,7 @@ def test_gamma_gaussian_tensordot(dot_dims,
     nb = dot_dims
     nc = y_dim - dot_dims
     try:
-        torch.cholesky(x.precision[..., na:, na:] + y.precision[..., :nb, :nb])
+        torch.linalg.cholesky(x.precision[..., na:, na:] + y.precision[..., :nb, :nb])
     except RuntimeError:
         pytest.skip("Cannot marginalize the common variables of two Gaussians.")
 

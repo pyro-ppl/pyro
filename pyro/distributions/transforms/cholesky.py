@@ -91,7 +91,7 @@ class CholeskyTransform(Transform):
         return isinstance(other, CholeskyTransform)
 
     def _call(self, x):
-        return torch.cholesky(x)
+        return torch.linalg.cholesky(x)
 
     def _inverse(self, y):
         return torch.matmul(y, torch.transpose(y, -2, -1))
