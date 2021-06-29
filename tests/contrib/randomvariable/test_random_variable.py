@@ -3,7 +3,7 @@
 
 import math
 
-import torch.tensor as tt
+import torch
 
 from pyro.distributions import Uniform
 
@@ -61,7 +61,7 @@ def test_pow():
 def test_tensor_ops():
     pi = 3.141592654
     X = Uniform(0, 1).expand([5, 5]).rv
-    a = tt([[1, 2, 3, 4, 5]])
+    a = torch.tensor([[1, 2, 3, 4, 5]])
     b = a.T
     X = abs(pi*(-X + a - 3*b))
     x = X.dist.sample()

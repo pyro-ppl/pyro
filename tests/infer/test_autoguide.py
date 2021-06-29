@@ -862,8 +862,8 @@ def test_subsample_guide(auto_class, init_fn):
 
     if auto_class == AutoGuideList:
         guide = AutoGuideList(model, create_plates=create_plates)
-        guide.add(AutoDelta(poutine.block(model, expose=["drift"])))
-        guide.add(AutoNormal(poutine.block(model, hide=["drift"])))
+        guide.append(AutoDelta(poutine.block(model, expose=["drift"])))
+        guide.append(AutoNormal(poutine.block(model, hide=["drift"])))
     else:
         guide = auto_class(model, create_plates=create_plates)
 
