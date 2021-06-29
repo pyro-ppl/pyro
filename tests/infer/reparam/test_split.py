@@ -11,6 +11,8 @@ from pyro import poutine
 from pyro.infer.reparam import SplitReparam
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 @pytest.mark.parametrize("event_shape,splits,dim", [
     ((6,), [2, 1, 3], -1),
@@ -58,3 +60,22 @@ def test_normal(batch_shape, event_shape, splits, dim):
     assert_close(actual_log_prob, expected_log_prob)
     actual_grads = grad(actual_log_prob, [loc, scale], create_graph=True)
     assert_close(actual_grads, expected_grads)
+
+
+@pytest.mark.parametrize("event_shape,splits,dim", [
+    ((6,), [2, 1, 3], -1),
+    ((2, 5,), [2, 3], -1),
+    ((4, 2), [1, 3], -2),
+    ((2, 3, 1), [1, 2], -2),
+], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+def test_init(batch_shape, event_shape, splits, dim):
+    shape = batch_shape + event_shape
+    loc = torch.empty(shape).uniform_(-1., 1.)
+    scale = torch.empty(shape).uniform_(0.5, 1.5)
+
+    def model():
+        with pyro.plate_stack("plates", batch_shape):
+            return pyro.sample("x", dist.Normal(loc, scale).to_event(len(event_shape)))
+
+    check_init_reparam(model, SplitReparam(splits, dim))

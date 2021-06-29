@@ -36,10 +36,19 @@ class LatentStableReparam(Reparam):
         Stable Distributions: Models for Heavy Tailed Data.
         http://fs2.american.edu/jpnolan/www/stable/chap1.pdf
     """
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        # ignore msg["value"]
+        is_observed = msg["is_observed"]
+
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
-        assert obs is None, "LatentStableReparam does not support observe statements"
+        if is_observed:
+            raise NotImplementedError(
+                f"At pyro.sample({repr(name)},...), "
+                "LatentStableReparam does not support observe statements"
+            )
 
         # Draw parameter-free noise.
         proto = fn.stability
@@ -56,7 +65,7 @@ class LatentStableReparam(Reparam):
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim).mask(False)
-        return new_fn, value
+        return {"fn": new_fn, "value": value, "is_observed": True}
 
 
 class SymmetricStableReparam(Reparam):
@@ -80,7 +89,12 @@ class SymmetricStableReparam(Reparam):
         "Option Pricing with Levy-Stable Processes"
         https://pdfs.semanticscholar.org/4d66/c91b136b2a38117dd16c2693679f5341c616.pdf
     """
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
+
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
         if is_validation_enabled():
@@ -107,7 +121,7 @@ class SymmetricStableReparam(Reparam):
 
         # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
         new_fn = self._wrap(dist.Normal(fn.loc, scale * (2 ** 0.5)), event_dim)
-        return new_fn, obs
+        return {"fn": new_fn, "value": value, "is_observed": is_observed}
 
 
 class StableReparam(Reparam):
@@ -129,7 +143,12 @@ class StableReparam(Reparam):
         "One-dimensional stable distributions"
     """
 
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
+
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
 
@@ -189,7 +208,7 @@ class StableReparam(Reparam):
 
         # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
         new_fn = self._wrap(dist.Normal(loc, scale * (2 ** 0.5)), event_dim)
-        return new_fn, obs
+        return {"fn": new_fn, "value": value, "is_observed": is_observed}
 
 
 def _unsafe_shift(a, skew, t_scale):

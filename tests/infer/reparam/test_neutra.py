@@ -14,11 +14,13 @@ from pyro.infer.mcmc.util import initialize_model
 from pyro.infer.reparam import NeuTraReparam
 from tests.common import assert_close, xfail_param
 
+from .util import check_init_reparam
 
-def neals_funnel(dim):
+
+def neals_funnel(dim=10):
     y = pyro.sample('y', dist.Normal(0, 3))
     with pyro.plate('D', dim):
-        pyro.sample('x', dist.Normal(0, torch.exp(y / 2)))
+        return pyro.sample('x', dist.Normal(0, torch.exp(y / 2)))
 
 
 def dirichlet_categorical(data):
@@ -73,3 +75,10 @@ def test_reparam_log_joint(model, kwargs):
     log_det_jacobian = neutra_transform.log_abs_det_jacobian(latent_x, latent_y)
     pe = pe_fn({k: transforms[k](v) for k, v in transformed_params.items()})
     assert_close(pe_transformed, pe - log_det_jacobian)
+
+
+def test_init():
+    guide = AutoIAFNormal(neals_funnel)
+    guide()
+
+    check_init_reparam(neals_funnel, NeuTraReparam(guide))

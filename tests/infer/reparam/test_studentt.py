@@ -12,6 +12,8 @@ from pyro import poutine
 from pyro.infer.reparam import StudentTReparam
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 # Test helper to extract a few absolute moments from univariate samples.
 # This uses abs moments because StudentT variance may be infinite.
@@ -65,3 +67,16 @@ def test_distribution(df, loc, scale):
     with poutine.reparam(config={"x": StudentTReparam()}):
         actual = model()
     assert ks_2samp(expected, actual).pvalue > 0.05
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
+def test_init(shape):
+    df = torch.empty(shape).uniform_(1.8, 5).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
+
+    def model():
+        with pyro.plate_stack("plates", shape):
+            return pyro.sample("x", dist.StudentT(df, loc, scale))
+
+    check_init_reparam(model, StudentTReparam())

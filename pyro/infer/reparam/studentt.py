@@ -21,7 +21,12 @@ class StudentTReparam(Reparam):
     an auxiliary :class:`~pyro.distributions.Gamma` variable conditioned on
     which the result is :class:`~pyro.distributions.Normal` .
     """
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
+
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.StudentT)
 
@@ -34,4 +39,4 @@ class StudentTReparam(Reparam):
         loc = fn.loc
         scale = fn.scale * gamma.rsqrt()
         new_fn = self._wrap(dist.Normal(loc, scale), event_dim)
-        return new_fn, obs
+        return {"fn": new_fn, "value": value, "is_observed": is_observed}

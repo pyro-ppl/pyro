@@ -132,6 +132,7 @@ def sample(name, fn, *args, **kwargs):
     # Check if stack is empty.
     # if stack empty, default behavior (defined here)
     infer = kwargs.pop("infer", {}).copy()
+    is_observed = infer.pop("is_observed", obs is not None)
     if not am_i_wrapped():
         if obs is not None and not infer.get("_deterministic"):
             warnings.warn("trying to observe a value outside of inference at " + name,
@@ -145,10 +146,10 @@ def sample(name, fn, *args, **kwargs):
             "type": "sample",
             "name": name,
             "fn": fn,
-            "is_observed": False,
+            "is_observed": is_observed,
             "args": args,
             "kwargs": kwargs,
-            "value": None,
+            "value": obs,
             "infer": infer,
             "scale": 1.0,
             "mask": None,
@@ -157,10 +158,6 @@ def sample(name, fn, *args, **kwargs):
             "stop": False,
             "continuation": None
         }
-        # handle observation
-        if obs is not None:
-            msg["value"] = obs
-            msg["is_observed"] = True
         # apply the stack and return its return value
         apply_stack(msg)
         return msg["value"]

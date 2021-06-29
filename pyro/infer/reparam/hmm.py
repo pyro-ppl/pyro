@@ -60,7 +60,12 @@ class LinearHMMReparam(Reparam):
         self.trans = trans
         self.obs = obs
 
-    def __call__(self, name, fn, obs):
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
+
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, (dist.LinearHMM, dist.IndependentHMM))
         if fn.duration is None:
@@ -69,28 +74,47 @@ class LinearHMMReparam(Reparam):
 
         # Unwrap IndependentHMM.
         if isinstance(fn, dist.IndependentHMM):
-            if obs is not None:
-                obs = obs.transpose(-1, -2).unsqueeze(-1)
-            hmm, obs = self(name, fn.base_dist.to_event(1), obs)
+            indep_value = None
+            if value is not None:
+                indep_value = value.transpose(-1, -2).unsqueeze(-1)
+            msg = self.apply({
+                "name": name,
+                "fn": fn.base_dist.to_event(1),
+                "value": indep_value,
+                "is_observed": is_observed,
+            })
+            hmm = msg["fn"]
             hmm = dist.IndependentHMM(hmm.to_event(-1))
-            if obs is not None:
-                obs = obs.squeeze(-1).transpose(-1, -2)
-            return hmm, obs
+            if msg["value"] is not indep_value:
+                value = msg["value"].squeeze(-1).transpose(-1, -2)
+            return {"fn": hmm, "value": value, "is_observed": is_observed}
 
         # Reparameterize the initial distribution as conditionally Gaussian.
         init_dist = fn.initial_dist
         if self.init is not None:
-            init_dist, _ = self.init("{}_init".format(name),
-                                     self._wrap(init_dist, event_dim - 1), None)
+            msg = self.init.apply({
+                "name": f"{name}_init",
+                "fn": self._wrap(init_dist, event_dim - 1),
+                "value": None,
+                "is_observed": False,
+            })
+            init_dist = msg["fn"]
             init_dist = init_dist.to_event(1 - init_dist.event_dim)
 
         # Reparameterize the transition distribution as conditionally Gaussian.
         trans_dist = fn.transition_dist
         if self.trans is not None:
             if trans_dist.batch_shape[-1] != fn.duration:
-                trans_dist = trans_dist.expand(trans_dist.batch_shape[:-1] + (fn.duration,))
-            trans_dist, _ = self.trans("{}_trans".format(name),
-                                       self._wrap(trans_dist, event_dim), None)
+                trans_dist = trans_dist.expand(
+                    trans_dist.batch_shape[:-1] + (fn.duration,)
+                )
+            msg = self.trans.apply({
+                "name": f"{name}_trans",
+                "fn": self._wrap(trans_dist, event_dim),
+                "value": None,
+                "is_observed": False,
+            })
+            trans_dist = msg["fn"]
             trans_dist = trans_dist.to_event(1 - trans_dist.event_dim)
 
         # Reparameterize the observation distribution as conditionally Gaussian.
@@ -98,9 +122,16 @@ class LinearHMMReparam(Reparam):
         if self.obs is not None:
             if obs_dist.batch_shape[-1] != fn.duration:
                 obs_dist = obs_dist.expand(obs_dist.batch_shape[:-1] + (fn.duration,))
-            obs_dist, obs = self.obs("{}_obs".format(name),
-                                     self._wrap(obs_dist, event_dim), obs)
+            msg = self.obs.apply({
+                "name": f"{name}_obs",
+                "fn": self._wrap(obs_dist, event_dim),
+                "value": value,
+                "is_observed": is_observed,
+            })
+            obs_dist = msg["fn"]
             obs_dist = obs_dist.to_event(1 - obs_dist.event_dim)
+            value = msg["value"]
+            is_observed = msg["is_observed"]
 
         # Reparameterize the entire HMM as conditionally Gaussian.
         hmm = dist.GaussianHMM(init_dist, fn.transition_matrix, trans_dist,
@@ -111,4 +142,4 @@ class LinearHMMReparam(Reparam):
         if fn.transforms:
             hmm = dist.TransformedDistribution(hmm, fn.transforms)
 
-        return hmm, obs
+        return {"fn": hmm, "value": value, "is_observed": is_observed}

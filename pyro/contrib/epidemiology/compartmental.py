@@ -734,13 +734,11 @@ class CompartmentalModel(ABC):
         assert isinstance(init_values, dict)
         assert "auxiliary" in init_values, \
             ".heuristic() did not define auxiliary value"
-        if haar:
-            haar.user_to_aux(init_values)
         logger.info("Heuristic init: {}".format(", ".join(
             "{}={:0.3g}".format(k, v.item())
             for k, v in sorted(init_values.items())
             if v.numel() == 1)))
-        return init_to_value(values=init_values)
+        return init_to_value(values=init_values, fallback=None)
 
     def _concat_series(self, samples, trace, forecast=0):
         """
@@ -1141,25 +1139,6 @@ class _HaarSplitReparam:
             model = poutine.reparam(model, config)
 
         return model
-
-    def user_to_aux(self, samples):
-        """
-        Convert from user-facing samples to auxiliary samples, in-place.
-        """
-        # Transform to Haar coordinates.
-        for name, dim in self.dims.items():
-            x = samples.pop(name)
-            x = biject_to(self.supports[name]).inv(x)
-            x = HaarTransform(dim=dim, flip=True)(x)
-            samples[name + "_haar"] = x
-
-        if self.split:
-            # Split into low- and high-frequency parts.
-            splits = [self.split, self.duration - self.split]
-            for name, dim in self.dims.items():
-                x0, x1 = samples.pop(name + "_haar").split(splits, dim=dim)
-                samples[name + "_haar_split_0"] = x0
-                samples[name + "_haar_split_1"] = x1
 
     def aux_to_user(self, samples):
         """
