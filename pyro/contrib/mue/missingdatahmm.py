@@ -111,7 +111,8 @@ class MissingDataDiscreteHMM(TorchDistribution):
             ``(batch_size, num_steps)``. batch_size must be int not tuple.
         """
         # shape: batch_size x num_steps x categorical_size
-        shape = broadcast_shape(torch.Size(list(sample_shape) + [1]),
+        shape = broadcast_shape(torch.Size(list(self.batch_shape) + [1, 1]),
+                                torch.Size(list(sample_shape) + [1]),
                                 torch.Size((1, 1, self.event_shape[-1])))
         # state: batch_size x state_dim
         state = OneHotCategorical(logits=self.initial_logits).sample()
