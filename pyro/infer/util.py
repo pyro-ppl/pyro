@@ -300,10 +300,17 @@ class Dice:
                         cost = cost.masked_select(mask)
                     else:
                         cost, prob = packed.broadcast_all(cost, prob)
-                    expected_cost = expected_cost + scale * torch.tensordot(prob, cost, prob.dim())
+                    expected_cost = expected_cost + scale * _fulldot(prob, cost)
 
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost
+
+
+def _fulldot(x, y):
+    assert x.dim() == y.dim()
+    if x.dim() == 0:
+        return x * y
+    return torch.tensordot(x, y, dims=x.dim())
 
 
 def check_fully_reparametrized(guide_site):

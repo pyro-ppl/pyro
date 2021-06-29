@@ -167,7 +167,7 @@ class GeneralizedChannelPermute(ConditionedGeneralizedChannelPermute, TransformM
         self.__delattr__('permutation')
 
         # Sample a random orthogonal matrix
-        W, _ = torch.qr(torch.randn(channels, channels))
+        W, _ = torch.linalg.qr(torch.randn(channels, channels))
 
         # Construct the partially pivoted LU-form and the pivots
         LU, pivots = W.lu()
