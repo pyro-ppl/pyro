@@ -176,6 +176,7 @@ def test_DiscreteHMM_comparison(batch_initial, batch_transition,
     filter_vldhmm = vldhmm.filter(value_oh)
     assert torch.allclose(filter_dhmm.logits, filter_vldhmm[..., -1, :])
     # Check other computations run.
+    vldhmm.sample(value_oh.shape[:-1])
     vldhmm.smooth(value_oh)
     vldhmm.sample_states(value_oh)
     map_states = vldhmm.map_states(value_oh)

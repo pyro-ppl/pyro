@@ -201,8 +201,12 @@ def main(args):
                 'FactorMuE_results.input_{}.txt'.format(time_stamp)),
                 'w') as ow:
             ow.write('[args]\n')
+            args.latent_seq_length = model.latent_seq_length
+            args.latent_alphabet = model.latent_alphabet_length
             for elem in list(args.__dict__.keys()):
                 ow.write('{} = {}\n'.format(elem, args.__getattribute__(elem)))
+            ow.write('alphabet_str = {}\n'.format(''.join(dataset.alphabet)))
+            ow.write('max_length = {}\n'.format(dataset.max_length))
 
 
 if __name__ == '__main__':

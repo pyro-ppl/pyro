@@ -112,7 +112,7 @@ class BiosequenceDataset(Dataset):
         return (self.seq_data[ind], self.L_data[ind])
 
 
-def write(x, alphabet, file, truncate_stop=False, append=False):
+def write(x, alphabet, file, truncate_stop=False, append=False, scores=None):
     """
     Write sequence samples to file.
 
@@ -142,8 +142,12 @@ def write(x, alphabet, file, truncate_stop=False, append=False):
         x[:, :, -1] = (torch.sum(x, -1) < 0.5).to(torch.double)
     index = torch.matmul(x, torch.arange(x.shape[-1], dtype=torch.double)
                          ).to(torch.long).numpy()
-    seqs = ['>{}\n'.format(j) + ''.join(elem) + '\n' for j, elem in
-            enumerate(print_alphabet[index])]
+    if scores is None:
+        seqs = ['>{}\n'.format(j) + ''.join(elem) + '\n' for j, elem in
+                enumerate(print_alphabet[index])]
+    else:
+        seqs = ['>{}\n'.format(j) + ''.join(elem) + '\n' for j, elem in
+                zip(scores, print_alphabet[index])]
     if append:
         open_flag = 'a'
     else:
