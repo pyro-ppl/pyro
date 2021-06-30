@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
+from pyro.infer import MCMC, NUTS, SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.infer.autoguide import AutoStructured
 from pyro.infer.reparam import StructuredReparam
 
@@ -27,9 +27,16 @@ def test_neals_funnel_smoke(jit):
         conditionals={"y": "normal", "x": "mvn"},
         dependencies={"x": {"y": "linear"}},
     )
-    svi = SVI(neals_funnel, guide,  optim.Adam({"lr": 1e-10}), Trace_ELBO())
+    Elbo = JitTrace_ELBO if jit else Trace_ELBO
+    svi = SVI(neals_funnel, guide,  optim.Adam({"lr": 1e-10}), Elbo())
     for _ in range(1000):
-        svi.step(dim)
+        try:
+            svi.step(dim=dim)
+        except SystemError as e:
+            if "returned a result with an error set" in str(e):
+                pytest.xfail(reason="PyTorch jit bug")
+            else:
+                raise e from None
 
     rep = StructuredReparam(guide)
     model = rep.reparam(neals_funnel)
