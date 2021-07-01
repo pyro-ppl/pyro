@@ -491,6 +491,7 @@ def guide_empty(data, history, vectorized):
     pass
 
 
+@pytest.mark.xfail(reason="funsor version drift")
 @pytest.mark.parametrize("model,guide,data,history", [
     (model_0, guide_empty, torch.rand(3, 5, 4), 1),
     (model_1, guide_empty, torch.rand(5, 4), 1),
@@ -526,6 +527,7 @@ def guide_empty_multi(weeks_data, days_data, history, vectorized):
     pass
 
 
+@pytest.mark.xfail(reason="funsor version drift")
 @pytest.mark.parametrize("model,guide,weeks_data,days_data,history", [
     (model_8, guide_empty_multi, torch.ones(3), torch.zeros(9), 1),
     (model_8, guide_empty_multi, torch.ones(30), torch.zeros(50), 1),
