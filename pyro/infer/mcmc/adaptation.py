@@ -198,7 +198,7 @@ def _matvecmul(x, y):
 
 
 def _cholesky(x):
-    return x.sqrt() if x.dim() == 1 else x.cholesky()
+    return x.sqrt() if x.dim() == 1 else torch.linalg.cholesky(x)
 
 
 def _transpose(x):

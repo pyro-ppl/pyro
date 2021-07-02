@@ -37,7 +37,9 @@ def sqrt(x):
         # is upper triangular) using some `flip` operators:
         #   flip(cholesky(flip(schur_complement)))
         try:
-            top_left = torch.flip(torch.cholesky(torch.flip(schur_complement, (-2, -1))), (-2, -1))
+            top_left = torch.flip(
+                torch.linalg.cholesky(torch.flip(schur_complement, (-2, -1))), (-2, -1)
+            )
             break
         except RuntimeError:
             B = B / 2

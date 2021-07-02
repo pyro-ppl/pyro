@@ -107,7 +107,7 @@ class VariationalSparseGP(GPModel):
         M = self.Xu.size(0)
         Kuu = self.kernel(self.Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.cholesky()
+        Luu = torch.linalg.cholesky(Kuu)
 
         zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:

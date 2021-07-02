@@ -20,7 +20,7 @@ def random_mvt(df_shape, loc_shape, cov_shape, dim):
     loc = torch.randn(loc_shape + (dim,), requires_grad=True)
     cov = torch.randn(cov_shape + (dim, rank), requires_grad=True)
     cov = cov.matmul(cov.transpose(-1, -2))
-    scale_tril = cov.cholesky()
+    scale_tril = torch.linalg.cholesky(cov)
     return MultivariateStudentT(df, loc, scale_tril)
 
 
@@ -59,7 +59,7 @@ def test_shape(df_shape, loc_shape, cov_shape, dim):
 def test_log_prob(batch_shape, dim):
     loc = torch.randn(batch_shape + (dim,))
     A = torch.randn(batch_shape + (dim, dim + dim))
-    scale_tril = A.matmul(A.transpose(-2, -1)).cholesky()
+    scale_tril = torch.linalg.cholesky(A.matmul(A.transpose(-2, -1)))
     x = torch.randn(batch_shape + (dim,))
     df = torch.randn(batch_shape).exp() + 2
     actual_log_prob = MultivariateStudentT(df, loc, scale_tril).log_prob(x)
@@ -128,7 +128,7 @@ def test_mean_var(batch_shape):
     dim = 2
     loc = torch.randn(batch_shape + (dim,))
     A = torch.randn(batch_shape + (dim, dim + dim))
-    scale_tril = A.matmul(A.transpose(-2, -1)).cholesky()
+    scale_tril = torch.linalg.cholesky(A.matmul(A.transpose(-2, -1)))
     df = torch.randn(batch_shape).exp() + 4
     num_samples = 100000
     d = MultivariateStudentT(df, loc, scale_tril)

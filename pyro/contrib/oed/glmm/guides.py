@@ -146,7 +146,9 @@ class LinearModelLaplaceGuide(nn.Module):
                 continue
             hess_l = self._hessian_diag(loss, mu_l, event_shape=(self.w_sizes[l],))
             cov_l = rinverse(hess_l)
-            self.scale_trils[l] = cov_l.cholesky(upper=False)
+            self.scale_trils[l] = torch.linalg.cholesky(
+                cov_l.transpose(-2, -1)
+            ).transpose(-2, -1)
 
     def forward(self, design, target_labels=None):
         """

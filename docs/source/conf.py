@@ -213,5 +213,5 @@ def setup(app):
 # See similar line in the install section of .travis.yml
 if 'READTHEDOCS' in os.environ:
     os.system('pip install numpy')
-    os.system('pip install torch==1.8.0+cpu torchvision==0.9.0+cpu '
+    os.system('pip install torch==1.9.0+cpu torchvision==0.10.0+cpu '
               '-f https://download.pytorch.org/whl/torch_stable.html')

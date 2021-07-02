@@ -176,5 +176,5 @@ def test_precision_to_scale_tril(batch_shape, event_shape):
     x = torch.randn(batch_shape + event_shape + event_shape)
     precision = x.matmul(x.transpose(-2, -1))
     actual = precision_to_scale_tril(precision)
-    expected = precision.inverse().cholesky()
+    expected = torch.linalg.cholesky(precision.inverse())
     assert_close(actual, expected)

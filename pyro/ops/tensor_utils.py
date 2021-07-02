@@ -382,7 +382,7 @@ def inverse_haar_transform(x):
 def cholesky(x):
     if x.size(-1) == 1:
         return x.sqrt()
-    return x.cholesky()
+    return torch.linalg.cholesky(x)
 
 
 def cholesky_solve(x, y):
@@ -410,7 +410,7 @@ def triangular_solve(x, y, upper=False, transpose=False):
 
 
 def precision_to_scale_tril(P):
-    Lf = torch.cholesky(torch.flip(P, (-2, -1)))
+    Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
     L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
                                L_inv, upper=False)[0]

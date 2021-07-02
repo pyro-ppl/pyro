@@ -86,7 +86,7 @@ class VariationalGP(GPModel):
         N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
-        Lff = Kff.cholesky()
+        Lff = torch.linalg.cholesky(Kff)
 
         zero_loc = self.X.new_zeros(self.f_loc.shape)
         if self.whiten:

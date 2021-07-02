@@ -125,7 +125,7 @@ class SpanningTree(TorchDistribution):
             import gpytorch
             log_det = gpytorch.lazy.NonLazyTensor(truncated).logdet()
         except ImportError:
-            log_det = torch.cholesky(truncated).diag().log().sum() * 2
+            log_det = torch.linalg.cholesky(truncated).diag().log().sum() * 2
         return log_det + log_diag[:-1].sum()
 
     def log_prob(self, edges):

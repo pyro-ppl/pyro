@@ -27,7 +27,7 @@ def test_lower_cholesky_transform(batch_shape, dim):
     x = torch.randn(batch_shape + (dim, dim))
     y = t(x)
     assert y.shape == x.shape
-    actual = y.matmul(y.transpose(-1, -2)).cholesky()
+    actual = torch.linalg.cholesky(y.matmul(y.transpose(-1, -2)))
     assert_close(actual, y)
     x2 = t.inv(y)
     assert x2.shape == x.shape

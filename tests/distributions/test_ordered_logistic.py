@@ -3,7 +3,6 @@
 
 import pytest
 import torch
-import torch.tensor as tt
 from torch.autograd.functional import jacobian
 
 from pyro.distributions import Normal, OrderedLogistic
@@ -27,9 +26,9 @@ def test_sample(n_cutpoints, pred_shape):
 def test_constraints():
     predictor = torch.randn(5)
     for cp in (
-        tt([1, 2, 3, 4, 0]),
-        tt([1, 2, 4, 3, 5]),
-        tt([1, 2, 3, 4, 4]),
+        torch.tensor([1, 2, 3, 4, 0]),
+        torch.tensor([1, 2, 4, 3, 5]),
+        torch.tensor([1, 2, 3, 4, 4]),
     ):
         with pytest.raises(ValueError):
             OrderedLogistic(predictor, cp)

@@ -78,7 +78,7 @@ def _PositiveDefinite_check(self, value):
     matrix_shape = value.shape[-2:]
     batch_shape = value.shape[:-2]
     flattened_value = value.reshape((-1,) + matrix_shape)
-    return torch.stack([v.symeig(eigenvectors=False)[0][:1] > 0.0
+    return torch.stack([torch.linalg.eigvalsh(v)[:1] > 0.0
                         for v in flattened_value]).view(batch_shape)
 
 

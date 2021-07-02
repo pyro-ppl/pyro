@@ -55,7 +55,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.9.0+cpu torchvision==0.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install -r docs/requirements.txt
           pip freeze
@@ -83,7 +83,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.9.0+cpu torchvision==0.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -112,7 +112,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.9.0+cpu torchvision==0.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -143,7 +143,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.9.0+cpu torchvision==0.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -172,7 +172,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.9.0+cpu torchvision==0.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install coveralls
           pip freeze
@@ -201,7 +201,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.8.0+cpu torchvision==0.9.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch==1.9.0+cpu torchvision==0.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install -e .[funsor]
           pip install coveralls
