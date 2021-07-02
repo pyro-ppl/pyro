@@ -8,6 +8,7 @@ try:
     import funsor
 
     import pyro.contrib.funsor  # noqa: F401
+
     funsor.set_backend("torch")
 except ImportError:
     pytestmark = pytest.mark.skip()

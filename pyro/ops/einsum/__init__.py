@@ -17,7 +17,7 @@ def contract_expression(equation, *shapes, **kwargs):
         Defaults to True.
     """
     # memoize the contraction path
-    cache_path = kwargs.pop('cache_path', True)
+    cache_path = kwargs.pop("cache_path", True)
     if cache_path:
         kwargs_key = tuple(kwargs.items())
         key = equation, shapes, kwargs_key
@@ -38,12 +38,12 @@ def contract(equation, *operands, **kwargs):
     :param bool cache_path: whether to cache the contraction path.
         Defaults to True.
     """
-    backend = kwargs.pop('backend', 'numpy')
-    out = kwargs.pop('out', None)
+    backend = kwargs.pop("backend", "numpy")
+    out = kwargs.pop("out", None)
     shapes = [tuple(t.shape) for t in operands]
     with ignore_jit_warnings():
         expr = contract_expression(equation, *shapes)
         return expr(*operands, backend=backend, out=out)
 
 
-__all__ = ['contract', 'contract_expression']
+__all__ = ["contract", "contract_expression"]

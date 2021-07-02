@@ -18,6 +18,7 @@ class SMCFailed(ValueError):
     Exception raised when :class:`SMCFilter` fails to find any hypothesis with
     nonzero probability.
     """
+
     pass
 
 
@@ -50,9 +51,11 @@ class SMCFilter:
         when to importance resample: resampling occurs when
         ``ess < ess_threshold * num_particles``.
     """
+
     # TODO: Add window kwarg that defaults to float("inf")
-    def __init__(self, model, guide, num_particles, max_plate_nesting, *,
-                 ess_threshold=0.5):
+    def __init__(
+        self, model, guide, num_particles, max_plate_nesting, *, ess_threshold=0.5
+    ):
         assert 0 < ess_threshold <= 1
         self.model = model
         self.guide = guide
@@ -69,10 +72,14 @@ class SMCFilter:
         Perform any initialization for sequential importance resampling.
         Any args or kwargs are passed to the model and guide
         """
-        self.particle_plate = pyro.plate("particles", self.num_particles, dim=-1-self.max_plate_nesting)
+        self.particle_plate = pyro.plate(
+            "particles", self.num_particles, dim=-1 - self.max_plate_nesting
+        )
         with poutine.block(), self.particle_plate:
             with self.state._lock():
-                guide_trace = poutine.trace(self.guide.init).get_trace(self.state, *args, **kwargs)
+                guide_trace = poutine.trace(self.guide.init).get_trace(
+                    self.state, *args, **kwargs
+                )
             model = poutine.replay(self.model.init, guide_trace)
             model_trace = poutine.trace(model).get_trace(self.state, *args, **kwargs)
 
@@ -87,7 +94,9 @@ class SMCFilter:
         """
         with poutine.block(), self.particle_plate:
             with self.state._lock():
-                guide_trace = poutine.trace(self.guide.step).get_trace(self.state, *args, **kwargs)
+                guide_trace = poutine.trace(self.guide.step).get_trace(
+                    self.state, *args, **kwargs
+                )
             model = poutine.replay(self.model.step, guide_trace)
             model_trace = poutine.trace(model).get_trace(self.state, *args, **kwargs)
 
@@ -100,8 +109,10 @@ class SMCFilter:
         :rtype: a dictionary with keys which are latent variables and values
             which are :class:`~pyro.distributions.Empirical` objects.
         """
-        return {key: dist.Empirical(value, self.state._log_weights)
-                for key, value in self.state.items()}
+        return {
+            key: dist.Empirical(value, self.state._log_weights)
+            for key, value in self.state.items()
+        }
 
     @torch.no_grad()
     def _update_weights(self, model_trace, guide_trace):
@@ -120,16 +131,20 @@ class SMCFilter:
                 log_q = guide_site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 self.state._log_weights += log_p - log_q
                 if not (self.state._log_weights.max() > -math.inf):
-                    raise SMCFailed("Failed to find feasible hypothesis after site {}"
-                                    .format(name))
+                    raise SMCFailed(
+                        "Failed to find feasible hypothesis after site {}".format(name)
+                    )
 
         for site in model_trace.nodes.values():
             if site["type"] == "sample" and site["is_observed"]:
                 log_p = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 self.state._log_weights += log_p
                 if not (self.state._log_weights.max() > -math.inf):
-                    raise SMCFailed("Failed to find feasible hypothesis after site {}"
-                                    .format(site["name"]))
+                    raise SMCFailed(
+                        "Failed to find feasible hypothesis after site {}".format(
+                            site["name"]
+                        )
+                    )
 
         self.state._log_weights -= self.state._log_weights.max()
 
@@ -172,6 +187,7 @@ class SMCState(dict):
 
     :param int num_particles:
     """
+
     def __init__(self, num_particles):
         assert isinstance(num_particles, int) and num_particles > 0
         super().__init__()
@@ -192,14 +208,20 @@ class SMCState(dict):
             raise RuntimeError("Guide cannot write to SMCState")
         if is_validation_enabled():
             if not isinstance(value, torch.Tensor):
-                raise TypeError("Only Tensors can be stored in an SMCState, but got {}"
-                                .format(type(value).__name__))
+                raise TypeError(
+                    "Only Tensors can be stored in an SMCState, but got {}".format(
+                        type(value).__name__
+                    )
+                )
             if value.dim() == 0 or value.size(0) != self._num_particles:
-                raise ValueError("Expected leading dim of size {} but got shape {}"
-                                 .format(self._num_particles, value.shape))
+                raise ValueError(
+                    "Expected leading dim of size {} but got shape {}".format(
+                        self._num_particles, value.shape
+                    )
+                )
         super().__setitem__(key, value)
 
     def _resample(self, index):
         for key, value in self.items():
             self[key] = value[index].contiguous()
-        self._log_weights.fill_(0.)
+        self._log_weights.fill_(0.0)

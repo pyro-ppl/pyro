@@ -14,6 +14,7 @@ class InferConfigMessenger(Messenger):
     :param config_fn: a callable taking a site and returning an infer dict
     :returns: stochastic function decorated with :class:`~pyro.poutine.infer_config_messenger.InferConfigMessenger`
     """
+
     def __init__(self, config_fn):
         """
         :param config_fn: a callable taking a site and returning an infer dict

@@ -65,8 +65,10 @@ class LiftMessenger(Messenger):
             if extra:
                 warnings.warn(
                     "pyro.module prior did not find params ['{}']. "
-                    "Did you instead mean one of ['{}']?"
-                    .format("', '".join(extra), "', '".join(self._param_misses)))
+                    "Did you instead mean one of ['{}']?".format(
+                        "', '".join(extra), "', '".join(self._param_misses)
+                    )
+                )
         return super().__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
@@ -87,7 +89,7 @@ class LiftMessenger(Messenger):
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
                 msg["args"] = msg["args"][1:]
-                if isinstance(msg['fn'], Distribution):
+                if isinstance(msg["fn"], Distribution):
                     msg["args"] = ()
                     msg["kwargs"] = {}
                     msg["infer"] = {}
@@ -115,7 +117,7 @@ class LiftMessenger(Messenger):
         if name in self._samples_cache:
             # Multiple pyro.param statements with the same
             # name. Block the site and fix the value.
-            msg['value'] = self._samples_cache[name]['value']
+            msg["value"] = self._samples_cache[name]["value"]
             msg["is_observed"] = True
             msg["stop"] = True
         else:

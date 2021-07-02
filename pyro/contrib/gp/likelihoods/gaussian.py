@@ -19,10 +19,11 @@ class Gaussian(Likelihood):
     :param torch.Tensor variance: A variance parameter, which plays the role of
         ``noise`` in regression problems.
     """
+
     def __init__(self, variance=None):
         super().__init__()
 
-        variance = torch.tensor(1.) if variance is None else variance
+        variance = torch.tensor(1.0) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)
 
     def forward(self, f_loc, f_var, y=None):
@@ -43,5 +44,5 @@ class Gaussian(Likelihood):
 
         y_dist = dist.Normal(f_loc, y_var.sqrt())
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f_loc.dim()]).to_event(y.dim())
+            y_dist = y_dist.expand_by(y.shape[: -f_loc.dim()]).to_event(y.dim())
         return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)

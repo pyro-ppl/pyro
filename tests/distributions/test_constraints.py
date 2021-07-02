@@ -22,9 +22,12 @@ def test_sphere_check(dim):
 @pytest.mark.parametrize("batch_shape", [(), (3, 4)])
 @pytest.mark.parametrize(
     "constraint, event_shape",
-    [(constraints.positive_ordered_vector, (5,)),
-     (constraints.corr_matrix, (6,)),
-     (constraints.positive_definite, (3, 3))])
+    [
+        (constraints.positive_ordered_vector, (5,)),
+        (constraints.corr_matrix, (6,)),
+        (constraints.positive_definite, (3, 3)),
+    ],
+)
 def test_constraints(constraint, batch_shape, event_shape):
     x = torch.randn(batch_shape + event_shape)
     y = torch.distributions.transform_to(constraint)(x)

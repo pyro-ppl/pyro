@@ -16,7 +16,7 @@ class DotProduct(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None):
         super().__init__(input_dim, active_dims)
 
-        variance = torch.tensor(1.) if variance is None else variance
+        variance = torch.tensor(1.0) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)
 
     def _dot_product(self, X, Z=None, diag=False):
@@ -70,12 +70,16 @@ class Polynomial(DotProduct):
     def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None):
         super().__init__(input_dim, variance, active_dims)
 
-        bias = torch.tensor(1.) if bias is None else bias
+        bias = torch.tensor(1.0) if bias is None else bias
         self.bias = PyroParam(bias, constraints.positive)
 
         if not isinstance(degree, int) or degree < 1:
-            raise ValueError("Degree for Polynomial kernel should be a positive integer.")
+            raise ValueError(
+                "Degree for Polynomial kernel should be a positive integer."
+            )
         self.degree = degree
 
     def forward(self, X, Z=None, diag=False):
-        return self.variance * ((self.bias + self._dot_product(X, Z, diag)) ** self.degree)
+        return self.variance * (
+            (self.bias + self._dot_product(X, Z, diag)) ** self.degree
+        )

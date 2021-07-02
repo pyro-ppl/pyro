@@ -94,12 +94,15 @@ class SparseGPRegression(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6):
+
+    def __init__(
+        self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6
+    ):
         super().__init__(X, y, kernel, mean_function, jitter)
 
         self.Xu = Parameter(Xu)
 
-        noise = self.X.new_tensor(1.) if noise is None else noise
+        noise = self.X.new_tensor(1.0) if noise is None else noise
         self.noise = PyroParam(noise, constraints.positive)
 
         if approx is None:
@@ -107,8 +110,10 @@ class SparseGPRegression(GPModel):
         elif approx in ["DTC", "FITC", "VFE"]:
             self.approx = approx
         else:
-            raise ValueError("The sparse approximation method should be one of "
-                             "'DTC', 'FITC', 'VFE'.")
+            raise ValueError(
+                "The sparse approximation method should be one of "
+                "'DTC', 'FITC', 'VFE'."
+            )
 
     @pyro_method
     def model(self):
@@ -126,8 +131,8 @@ class SparseGPRegression(GPModel):
         N = self.X.size(0)
         M = self.Xu.size(0)
         Kuu = self.kernel(self.Xu).contiguous()
-        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.cholesky()
+        Kuu.view(-1)[:: M + 1] += self.jitter  # add jitter to the diagonal
+        Luu = torch.linalg.cholesky(Kuu)
         Kuf = self.kernel(self.Xu, self.X)
         W = Kuf.triangular_solve(Luu, upper=False)[0].t()
 
@@ -148,13 +153,15 @@ class SparseGPRegression(GPModel):
             return f_loc, f_var
         else:
             if self.approx == "VFE":
-                pyro.factor(self._pyro_get_fullname("trace_term"), -trace_term / 2.)
+                pyro.factor(self._pyro_get_fullname("trace_term"), -trace_term / 2.0)
 
-            return pyro.sample(self._pyro_get_fullname("y"),
-                               dist.LowRankMultivariateNormal(f_loc, W, D)
-                                   .expand_by(self.y.shape[:-1])
-                                   .to_event(self.y.dim() - 1),
-                               obs=self.y)
+            return pyro.sample(
+                self._pyro_get_fullname("y"),
+                dist.LowRankMultivariateNormal(f_loc, W, D)
+                .expand_by(self.y.shape[:-1])
+                .to_event(self.y.dim() - 1),
+                obs=self.y,
+            )
 
     @pyro_method
     def guide(self):
@@ -203,8 +210,8 @@ class SparseGPRegression(GPModel):
         # TODO: cache these calculations to get faster inference
 
         Kuu = self.kernel(self.Xu).contiguous()
-        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.cholesky()
+        Kuu.view(-1)[:: M + 1] += self.jitter  # add jitter to the diagonal
+        Luu = torch.linalg.cholesky(Kuu)
 
         Kuf = self.kernel(self.Xu, self.X)
 
@@ -217,8 +224,8 @@ class SparseGPRegression(GPModel):
 
         W_Dinv = W / D
         K = W_Dinv.matmul(W.t()).contiguous()
-        K.view(-1)[::M + 1] += 1  # add identity matrix to K
-        L = K.cholesky()
+        K.view(-1)[:: M + 1] += 1  # add identity matrix to K
+        L = torch.linalg.cholesky(K)
 
         # get y_residual and convert it into 2D tensor for packing
         y_residual = self.y - self.mean_function(self.X)
@@ -232,8 +239,8 @@ class SparseGPRegression(GPModel):
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
         Linv_pack = pack.triangular_solve(L, upper=False)[0]
         # unpack
-        Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.shape[1]]
-        Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1]:]
+        Linv_W_Dinv_y = Linv_pack[:, : W_Dinv_y.shape[1]]
+        Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1] :]
 
         C = Xnew.size(0)
         loc_shape = self.y.shape[:-1] + (C,)
@@ -242,7 +249,7 @@ class SparseGPRegression(GPModel):
         if full_cov:
             Kss = self.kernel(Xnew).contiguous()
             if not noiseless:
-                Kss.view(-1)[::C + 1] += self.noise  # add noise to the diagonal
+                Kss.view(-1)[:: C + 1] += self.noise  # add noise to the diagonal
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
             cov_shape = self.y.shape[:-1] + (C, C)

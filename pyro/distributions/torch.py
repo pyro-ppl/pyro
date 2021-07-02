@@ -32,7 +32,9 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
             y = d.concentration0
             return (x + y).lgamma() - x.lgamma() - y.lgamma()
 
-        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        log_normalizer = (
+            _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        )
         return updated, log_normalizer
 
 
@@ -46,7 +48,7 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
     # a shifted Sterling's approximation to the Beta function, reducing
     # computational cost from 3 lgamma() evaluations to 4 log() evaluations
     # plus arithmetic. Recommended values are between 0.1 and 0.01.
-    approx_log_prob_tol = 0.
+    approx_log_prob_tol = 0.0
 
     def sample(self, sample_shape=torch.Size()):
         if self.approx_sample_thresh < math.inf:
@@ -65,10 +67,12 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
                     sample = torch.where(p < q, result, self.total_count - result)
                 # Draw exact samples for remaining items.
                 if exact.any():
-                    total_count = torch.where(exact, self.total_count,
-                                              torch.zeros_like(self.total_count))
+                    total_count = torch.where(
+                        exact, self.total_count, torch.zeros_like(self.total_count)
+                    )
                     exact_sample = torch.distributions.Binomial(
-                        total_count, self.probs, validate_args=False).sample(sample_shape)
+                        total_count, self.probs, validate_args=False
+                    ).sample(sample_shape)
                     sample = torch.where(exact, exact_sample, sample)
                 return sample
         return super().sample(sample_shape)
@@ -84,9 +88,14 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
         #     (case logit > 0)              = k * logit - n * (log(p) - log(1 - p)) + n * log(p)
         #                                   = k * logit - n * logit - n * log1p(e^-logit)
         #     (merge two cases)             = k * logit - n * max(logit, 0) - n * log1p(e^-|logit|)
-        normalize_term = n * (_clamp_by_zero(self.logits) + self.logits.abs().neg().exp().log1p())
-        return (k * self.logits - normalize_term
-                + log_binomial(n, k, tol=self.approx_log_prob_tol))
+        normalize_term = n * (
+            _clamp_by_zero(self.logits) + self.logits.abs().neg().exp().log1p()
+        )
+        return (
+            k * self.logits
+            - normalize_term
+            + log_binomial(n, k, tol=self.approx_log_prob_tol)
+        )
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
@@ -94,11 +103,10 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
 # and merely reshape the self.logits tensor. This is especially important for
 # Pyro models that use enumeration.
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
-    arg_constraints = {"probs": constraints.simplex,
-                       "logits": constraints.real_vector}
+    arg_constraints = {"probs": constraints.simplex, "logits": constraints.real_vector}
 
     def log_prob(self, value):
-        if getattr(value, '_pyro_categorical_support', None) == id(self):
+        if getattr(value, "_pyro_categorical_support", None) == id(self):
             # Assume value is a reshaped torch.arange(event_shape[0]).
             # In this case we can call .reshape() rather than torch.gather().
             if not torch._C._get_tracing_state():
@@ -107,7 +115,9 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
                 assert value.size(0) == self.logits.size(-1)
             logits = self.logits
             if logits.dim() <= value.dim():
-                logits = logits.reshape((1,) * (1 + value.dim() - logits.dim()) + logits.shape)
+                logits = logits.reshape(
+                    (1,) * (1 + value.dim() - logits.dim()) + logits.shape
+                )
             if not torch._C._get_tracing_state():
                 assert logits.size(-1 - value.dim()) == 1
             return logits.transpose(-1 - value.dim(), -1).squeeze(-1)
@@ -121,7 +131,6 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
-
     @staticmethod
     def infer_shapes(concentration):
         batch_shape = concentration[:-1]
@@ -140,7 +149,9 @@ class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
             c = d.concentration
             return c.sum(-1).lgamma() - c.lgamma().sum(-1)
 
-        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        log_normalizer = (
+            _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        )
         return updated, log_normalizer
 
 
@@ -158,7 +169,9 @@ class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
             c = d.concentration
             return d.rate.log() * c - c.lgamma()
 
-        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        log_normalizer = (
+            _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
+        )
         return updated, log_normalizer
 
 
@@ -176,14 +189,21 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
         # This differs from torch.distributions.LogNormal only in that base_dist is
         # a pyro.distributions.Normal rather than a torch.distributions.Normal.
         super(torch.distributions.LogNormal, self).__init__(
-            base_dist, torch.distributions.transforms.ExpTransform(), validate_args=validate_args)
+            base_dist,
+            torch.distributions.transforms.ExpTransform(),
+            validate_args=validate_args,
+        )
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(LogNormal, _instance)
-        return super(torch.distributions.LogNormal, self).expand(batch_shape, _instance=new)
+        return super(torch.distributions.LogNormal, self).expand(
+            batch_shape, _instance=new
+        )
 
 
-class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal, TorchDistributionMixin):
+class LowRankMultivariateNormal(
+    torch.distributions.LowRankMultivariateNormal, TorchDistributionMixin
+):
     @staticmethod
     def infer_shapes(loc, cov_factor, cov_diag):
         event_shape = loc[-1:]
@@ -191,9 +211,13 @@ class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal, T
         return batch_shape, event_shape
 
 
-class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+class MultivariateNormal(
+    torch.distributions.MultivariateNormal, TorchDistributionMixin
+):
     @staticmethod
-    def infer_shapes(loc, covariance_matrix=None, precision_matrix=None, scale_tril=None):
+    def infer_shapes(
+        loc, covariance_matrix=None, precision_matrix=None, scale_tril=None
+    ):
         batch_shape, event_shape = loc[:-1], loc[-1:]
         for matrix in [covariance_matrix, precision_matrix, scale_tril]:
             if matrix is not None:
@@ -242,13 +266,16 @@ class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
         rate, value, nonzero = torch.broadcast_tensors(self.rate, value, value > 0)
         sparse_rate = rate[nonzero]
         sparse_value = value[nonzero]
-        return torch.zeros_like(rate).masked_scatter(
-            nonzero, (sparse_rate.log() * sparse_value) - (sparse_value + 1).lgamma()
-        ) - rate
+        return (
+            torch.zeros_like(rate).masked_scatter(
+                nonzero,
+                (sparse_rate.log() * sparse_value) - (sparse_value + 1).lgamma(),
+            )
+            - rate
+        )
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
-
     @staticmethod
     def infer_shapes(**kwargs):
         raise NotImplementedError
@@ -307,21 +334,26 @@ for _name, _Dist in torch.distributions.__dict__.items():
         _PyroDist.__module__ = __name__
         locals()[_name] = _PyroDist
 
-    _PyroDist.__doc__ = '''
+    _PyroDist.__doc__ = """
     Wraps :class:`{}.{}` with
     :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
-    '''.format(_Dist.__module__, _Dist.__name__)
+    """.format(
+        _Dist.__module__, _Dist.__name__
+    )
 
     __all__.append(_name)
 
 
 # Create sphinx documentation.
-__doc__ = '\n\n'.join([
-
-    '''
+__doc__ = "\n\n".join(
+    [
+        """
     {0}
     ----------------------------------------------------------------
     .. autoclass:: pyro.distributions.{0}
-    '''.format(_name)
-    for _name in sorted(__all__)
-])
+    """.format(
+            _name
+        )
+        for _name in sorted(__all__)
+    ]
+)

@@ -36,10 +36,16 @@ def _tmc_mixture_sample(msg):
 
         index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
-        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
-            if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
+        for squashed_dim, squashed_size in zip(
+            range(1, len(thin_sample.shape)), thin_sample.shape[1:]
+        ):
+            if squashed_size > 1 and (
+                target_shape[squashed_dim] == 1 or squashed_dim == 0
+            ):
                 # uniformly sample one ancestor per upstream particle population
-                ancestor_dist = Categorical(logits=torch.zeros((squashed_size,), device=thin_sample.device))
+                ancestor_dist = Categorical(
+                    logits=torch.zeros((squashed_size,), device=thin_sample.device)
+                )
                 ancestor_index = ancestor_dist.sample(sample_shape=(num_samples,))
                 index[squashed_dim] = ancestor_index
                 squashed_dims.append(squashed_dim)
@@ -76,8 +82,12 @@ def _tmc_diagonal_sample(msg):
 
         index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
-        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
-            if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
+        for squashed_dim, squashed_size in zip(
+            range(1, len(thin_sample.shape)), thin_sample.shape[1:]
+        ):
+            if squashed_size > 1 and (
+                target_shape[squashed_dim] == 1 or squashed_dim == 0
+            ):
                 # diagonal approximation: identify particle indices across populations
                 ancestor_index = torch.arange(squashed_size, device=thin_sample.device)
                 index[squashed_dim] = ancestor_index
@@ -122,8 +132,11 @@ class EnumMessenger(Messenger):
         dimension and all dimensions left may be used internally by Pyro.
         This should be a negative integer or None.
     """
+
     def __init__(self, first_available_dim=None):
-        assert first_available_dim is None or first_available_dim < 0, first_available_dim
+        assert (
+            first_available_dim is None or first_available_dim < 0
+        ), first_available_dim
         self.first_available_dim = first_available_dim
         super().__init__()
 
@@ -149,7 +162,9 @@ class EnumMessenger(Messenger):
         param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
         if scope is not None:
             for name, depth in scope.items():
-                if self._markov_depths[name] == depth:  # hide sites whose markov context has exited
+                if (
+                    self._markov_depths[name] == depth
+                ):  # hide sites whose markov context has exited
                     param_dims.update(self._value_dims[name])
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
         self._param_dims[msg["name"]] = param_dims
@@ -161,9 +176,11 @@ class EnumMessenger(Messenger):
         actual_dim = -1 - len(msg["fn"].batch_shape)  # the leftmost dim of log_prob
 
         # Move actual_dim to a safe target_dim.
-        target_dim, id_ = _ENUM_ALLOCATOR.allocate(None if scope is None else param_dims)
+        target_dim, id_ = _ENUM_ALLOCATOR.allocate(
+            None if scope is None else param_dims
+        )
         event_dim = msg["fn"].event_dim
-        categorical_support = getattr(value, '_pyro_categorical_support', None)
+        categorical_support = getattr(value, "_pyro_categorical_support", None)
         if categorical_support is not None:
             # Preserve categorical supports to speed up Categorical.log_prob().
             # See pyro/distributions/torch.py for details.
@@ -171,8 +188,9 @@ class EnumMessenger(Messenger):
             value = value.reshape(value.shape[:1] + (1,) * (-1 - target_dim))
             value._pyro_categorical_support = categorical_support
         elif actual_dim < target_dim:
-            assert value.size(target_dim - event_dim) == 1, \
-                'pyro.markov dim conflict at dim {}'.format(actual_dim)
+            assert (
+                value.size(target_dim - event_dim) == 1
+            ), "pyro.markov dim conflict at dim {}".format(actual_dim)
             value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
             while value.dim() and value.size(0) == 1:
                 value = value.squeeze(0)
@@ -181,8 +199,11 @@ class EnumMessenger(Messenger):
             value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
 
         # Compute dims passed downstream through the value.
-        value_dims = {dim: param_dims[dim] for dim in range(event_dim - value.dim(), 0)
-                      if value.size(dim - event_dim) > 1 and dim in param_dims}
+        value_dims = {
+            dim: param_dims[dim]
+            for dim in range(event_dim - value.dim(), 0)
+            if value.size(dim - event_dim) > 1 and dim in param_dims
+        }
         value_dims[target_dim] = id_
 
         msg["infer"]["_enumerate_dim"] = target_dim
@@ -200,9 +221,12 @@ class EnumMessenger(Messenger):
         value = msg["value"]
         if value is None:
             return
-        shape = value.data.shape[:value.dim() - msg["fn"].event_dim]
+        shape = value.data.shape[: value.dim() - msg["fn"].event_dim]
         dim_to_id = msg["infer"].setdefault("_dim_to_id", {})
         dim_to_id.update(self._param_dims.get(msg["name"], {}))
         with ignore_jit_warnings():
-            self._value_dims[msg["name"]] = {dim: id_ for dim, id_ in dim_to_id.items()
-                                             if len(shape) >= -dim and shape[dim] > 1}
+            self._value_dims[msg["name"]] = {
+                dim: id_
+                for dim, id_ in dim_to_id.items()
+                if len(shape) >= -dim and shape[dim] > 1
+            }

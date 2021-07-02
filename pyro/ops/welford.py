@@ -14,13 +14,14 @@ class WelfordCovariance:
     [1] `The Art of Computer Programming`,
     Donald E. Knuth
     """
+
     def __init__(self, diagonal=True):
         self.diagonal = diagonal
         self.reset()
 
     def reset(self):
-        self._mean = 0.
-        self._m2 = 0.
+        self._mean = 0.0
+        self._m2 = 0.0
         self.n_samples = 0
 
     def update(self, sample):
@@ -36,16 +37,16 @@ class WelfordCovariance:
 
     def get_covariance(self, regularize=True):
         if self.n_samples < 2:
-            raise RuntimeError('Insufficient samples to estimate covariance')
+            raise RuntimeError("Insufficient samples to estimate covariance")
         cov = self._m2 / (self.n_samples - 1)
         if regularize:
             # Regularization from stan
-            scaled_cov = (self.n_samples / (self.n_samples + 5.)) * cov
-            shrinkage = 1e-3 * (5. / (self.n_samples + 5.0))
+            scaled_cov = (self.n_samples / (self.n_samples + 5.0)) * cov
+            shrinkage = 1e-3 * (5.0 / (self.n_samples + 5.0))
             if self.diagonal:
                 cov = scaled_cov + shrinkage
             else:
-                scaled_cov.view(-1)[::scaled_cov.size(0) + 1] += shrinkage
+                scaled_cov.view(-1)[:: scaled_cov.size(0) + 1] += shrinkage
                 cov = scaled_cov
         return cov
 
@@ -54,14 +55,15 @@ class WelfordArrowheadCovariance:
     """
     Likes :class:`WelfordCovariance` but generalized to the arrowhead structure.
     """
+
     def __init__(self, head_size=0):
         self.head_size = head_size
         self.reset()
 
     def reset(self):
-        self._mean = 0.
-        self._m2_top = 0.  # upper part, shape: head_size x matrix_size
-        self._m2_bottom_diag = 0.  # lower right part, shape: (matrix_size - head_size)
+        self._mean = 0.0
+        self._m2_top = 0.0  # upper part, shape: head_size x matrix_size
+        self._m2_bottom_diag = 0.0  # lower right part, shape: (matrix_size - head_size)
         self.n_samples = 0
 
     def update(self, sample):
@@ -70,10 +72,15 @@ class WelfordArrowheadCovariance:
         self._mean = self._mean + delta_pre / self.n_samples
         delta_post = sample - self._mean
         if self.head_size > 0:
-            self._m2_top = self._m2_top + torch.ger(delta_post[:self.head_size], delta_pre)
+            self._m2_top = self._m2_top + torch.ger(
+                delta_post[: self.head_size], delta_pre
+            )
         else:
             self._m2_top = sample.new_empty(0, sample.size(0))
-        self._m2_bottom_diag = self._m2_bottom_diag + delta_post[self.head_size:] * delta_pre[self.head_size:]
+        self._m2_bottom_diag = (
+            self._m2_bottom_diag
+            + delta_post[self.head_size :] * delta_pre[self.head_size :]
+        )
 
     def get_covariance(self, regularize=True):
         """
@@ -81,14 +88,14 @@ class WelfordArrowheadCovariance:
         and `bottom_diag = cov.diag()[head_size:]`.
         """
         if self.n_samples < 2:
-            raise RuntimeError('Insufficient samples to estimate covariance')
+            raise RuntimeError("Insufficient samples to estimate covariance")
         top = self._m2_top / (self.n_samples - 1)
         bottom_diag = self._m2_bottom_diag / (self.n_samples - 1)
         if regularize:
-            top = top * (self.n_samples / (self.n_samples + 5.))
-            bottom_diag = bottom_diag * (self.n_samples / (self.n_samples + 5.))
-            shrinkage = 1e-3 * (5. / (self.n_samples + 5.0))
-            top.view(-1)[::top.size(-1) + 1] += shrinkage
+            top = top * (self.n_samples / (self.n_samples + 5.0))
+            bottom_diag = bottom_diag * (self.n_samples / (self.n_samples + 5.0))
+            shrinkage = 1e-3 * (5.0 / (self.n_samples + 5.0))
+            top.view(-1)[:: top.size(-1) + 1] += shrinkage
             bottom_diag = bottom_diag + shrinkage
 
         return top, bottom_diag

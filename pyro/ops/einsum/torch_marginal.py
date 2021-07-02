@@ -14,8 +14,8 @@ class _EinsumBackward(Backward):
     def process(self, message):
         # Create extended lists of inputs and operands.
         operands = list(self.operands)
-        inputs, output = self.equation.split('->')
-        inputs = inputs.split(',')
+        inputs, output = self.equation.split("->")
+        inputs = inputs.split(",")
         if message is not None:
             assert message.dim() == len(output)
             inputs.append(output)
@@ -32,9 +32,9 @@ class _EinsumBackward(Backward):
                 del inputs_i[i]
                 del operands_i[i]
             if operands_i:
-                inputs_i = ','.join(inputs_i)
-                output_i = ''.join(dim for dim in output_i if dim in inputs_i)
-                equation = inputs_i + '->' + output_i
+                inputs_i = ",".join(inputs_i)
+                output_i = "".join(dim for dim in output_i if dim in inputs_i)
+                equation = inputs_i + "->" + output_i
                 message_i = pyro.ops.einsum.torch_log.einsum(equation, *operands_i)
                 if output_i != inputs[i]:
                     for pos, dim in enumerate(inputs[i]):
@@ -52,7 +52,7 @@ def einsum(equation, *operands):
     """
     result = pyro.ops.einsum.torch_log.einsum(equation, *operands)
 
-    if any(hasattr(x, '_pyro_backward') for x in operands):
+    if any(hasattr(x, "_pyro_backward") for x in operands):
         result._pyro_backward = _EinsumBackward(equation, operands)
     return result
 

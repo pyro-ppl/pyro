@@ -93,6 +93,14 @@ Statistical Utilities
     :show-inheritance:
     :member-order: bysource
 
+Streaming Statistics
+--------------------
+
+.. automodule:: pyro.ops.streaming
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
  
 State Space Model and GP Utilities
 ----------------------------------

@@ -91,22 +91,24 @@ class HMC(MCMCKernel):
         tensor([ 0.9819,  1.9258,  2.9737])
     """
 
-    def __init__(self,
-                 model=None,
-                 potential_fn=None,
-                 step_size=1,
-                 trajectory_length=None,
-                 num_steps=None,
-                 adapt_step_size=True,
-                 adapt_mass_matrix=True,
-                 full_mass=False,
-                 transforms=None,
-                 max_plate_nesting=None,
-                 jit_compile=False,
-                 jit_options=None,
-                 ignore_jit_warnings=False,
-                 target_accept_prob=0.8,
-                 init_strategy=init_to_uniform):
+    def __init__(
+        self,
+        model=None,
+        potential_fn=None,
+        step_size=1,
+        trajectory_length=None,
+        num_steps=None,
+        adapt_step_size=True,
+        adapt_mass_matrix=True,
+        full_mass=False,
+        transforms=None,
+        max_plate_nesting=None,
+        jit_compile=False,
+        jit_options=None,
+        ignore_jit_warnings=False,
+        target_accept_prob=0.8,
+        init_strategy=init_to_uniform,
+    ):
         if not ((model is None) ^ (potential_fn is None)):
             raise ValueError("Only one of `model` or `potential_fn` must be specified.")
         # NB: deprecating args - model, transforms
@@ -131,15 +133,17 @@ class HMC(MCMCKernel):
         self._direction_threshold = math.log(0.8)  # from Stan
         self._max_sliced_energy = 1000
         self._reset()
-        self._adapter = WarmupAdapter(step_size,
-                                      adapt_step_size=adapt_step_size,
-                                      adapt_mass_matrix=adapt_mass_matrix,
-                                      target_accept_prob=target_accept_prob,
-                                      dense_mass=full_mass)
+        self._adapter = WarmupAdapter(
+            step_size,
+            adapt_step_size=adapt_step_size,
+            adapt_mass_matrix=adapt_mass_matrix,
+            target_accept_prob=target_accept_prob,
+            dense_mass=full_mass,
+        )
         super().__init__()
 
     def _kinetic_energy(self, r_unscaled):
-        energy = 0.
+        energy = 0.0
         for site_names, value in r_unscaled.items():
             energy = energy + value.dot(value)
         return 0.5 * energy
@@ -147,7 +151,7 @@ class HMC(MCMCKernel):
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
-        self._mean_accept_prob = 0.
+        self._mean_accept_prob = 0.0
         self._divergences = []
         self._prototype_trace = None
         self._initial_params = None
@@ -169,7 +173,8 @@ class HMC(MCMCKernel):
         # contains transforms with cache_size > 0 (https://github.com/pyro-ppl/pyro/issues/2292)
         z = {k: v.clone() for k, v in z.items()}
         z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-            z, r, self.potential_fn, self.mass_matrix_adapter.kinetic_grad, step_size)
+            z, r, self.potential_fn, self.mass_matrix_adapter.kinetic_grad, step_size
+        )
         r_new_unscaled = self.mass_matrix_adapter.unscale(r_new)
         energy_new = self._kinetic_energy(r_new_unscaled) + potential_energy_new
         delta_energy = energy_new - energy_current
@@ -191,7 +196,12 @@ class HMC(MCMCKernel):
             r, r_unscaled = self._sample_r(name="r_presample_{}".format(t))
             energy_current = self._kinetic_energy(r_unscaled) + potential_energy
             z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-                z, r, self.potential_fn, self.mass_matrix_adapter.kinetic_grad, step_size)
+                z,
+                r,
+                self.potential_fn,
+                self.mass_matrix_adapter.kinetic_grad,
+                step_size,
+            )
             r_new_unscaled = self.mass_matrix_adapter.unscale(r_new)
             energy_new = self._kinetic_energy(r_new_unscaled) + potential_energy_new
             delta_energy = energy_new - energy_current
@@ -200,14 +210,19 @@ class HMC(MCMCKernel):
 
     def _sample_r(self, name):
         r_unscaled = {}
-        options = {"dtype": self._potential_energy_last.dtype,
-                   "device": self._potential_energy_last.device}
+        options = {
+            "dtype": self._potential_energy_last.dtype,
+            "device": self._potential_energy_last.device,
+        }
         for site_names, size in self.mass_matrix_adapter.mass_matrix_size.items():
             # we want to sample from Normal distribution using `sample` method rather than
             # `rsample` method because the former is a bit faster
             r_unscaled[site_names] = pyro.sample(
                 "{}_{}".format(name, site_names),
-                NonreparameterizedNormal(torch.zeros(size, **options), torch.ones(size, **options)))
+                NonreparameterizedNormal(
+                    torch.zeros(size, **options), torch.ones(size, **options)
+                ),
+            )
 
         r = self.mass_matrix_adapter.scale(r_unscaled, r_prototype=self.initial_params)
         return r, r_unscaled
@@ -272,10 +287,14 @@ class HMC(MCMCKernel):
                 for name in dense_sites:
                     assert isinstance(name, str) and name in self.initial_params, msg
         dense_sites_set = set().union(*dense_sites_list)
-        diag_sites = tuple(sorted([name for name in self.initial_params
-                                   if name not in dense_sites_set]))
-        assert len(diag_sites) + sum([len(sites) for sites in dense_sites_list]) == len(self.initial_params), \
-            "Site names specified in full_mass are duplicated."
+        diag_sites = tuple(
+            sorted(
+                [name for name in self.initial_params if name not in dense_sites_set]
+            )
+        )
+        assert len(diag_sites) + sum([len(sites) for sites in dense_sites_list]) == len(
+            self.initial_params
+        ), "Site names specified in full_mass are duplicated."
 
         mass_matrix_shape = OrderedDict()
         for dense_sites in dense_sites_list:
@@ -286,12 +305,16 @@ class HMC(MCMCKernel):
             size = sum([self.initial_params[site].numel() for site in diag_sites])
             mass_matrix_shape[diag_sites] = (size,)
 
-        options = {"dtype": self._potential_energy_last.dtype,
-                   "device": self._potential_energy_last.device}
-        self._adapter.configure(self._warmup_steps,
-                                mass_matrix_shape=mass_matrix_shape,
-                                find_reasonable_step_size_fn=self._find_reasonable_step_size,
-                                options=options)
+        options = {
+            "dtype": self._potential_energy_last.dtype,
+            "device": self._potential_energy_last.device,
+        }
+        self._adapter.configure(
+            self._warmup_steps,
+            mass_matrix_shape=mass_matrix_shape,
+            find_reasonable_step_size_fn=self._find_reasonable_step_size,
+            options=options,
+        )
 
         if self._adapter.adapt_step_size:
             self._adapter.reset_step_size_adaptation(self._initial_params)
@@ -335,7 +358,7 @@ class HMC(MCMCKernel):
         # return early if no sample sites
         elif len(z) == 0:
             self._t += 1
-            self._mean_accept_prob = 1.
+            self._mean_accept_prob = 1.0
             if self._t > self._warmup_steps:
                 self._accept_cnt += 1
             return params
@@ -346,21 +369,35 @@ class HMC(MCMCKernel):
         # NaNs are expected during step size adaptation
         with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
             z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-                z, r, self.potential_fn, self.mass_matrix_adapter.kinetic_grad,
-                self.step_size, self.num_steps, z_grads=z_grads)
+                z,
+                r,
+                self.potential_fn,
+                self.mass_matrix_adapter.kinetic_grad,
+                self.step_size,
+                self.num_steps,
+                z_grads=z_grads,
+            )
             # apply Metropolis correction.
             r_new_unscaled = self.mass_matrix_adapter.unscale(r_new)
-            energy_proposal = self._kinetic_energy(r_new_unscaled) + potential_energy_new
+            energy_proposal = (
+                self._kinetic_energy(r_new_unscaled) + potential_energy_new
+            )
         delta_energy = energy_proposal - energy_current
         # handle the NaN case which may be the case for a diverging trajectory
         # when using a large step size.
-        delta_energy = scalar_like(delta_energy, float("inf")) if torch_isnan(delta_energy) else delta_energy
+        delta_energy = (
+            scalar_like(delta_energy, float("inf"))
+            if torch_isnan(delta_energy)
+            else delta_energy
+        )
         if delta_energy > self._max_sliced_energy and self._t >= self._warmup_steps:
             self._divergences.append(self._t - self._warmup_steps)
 
-        accept_prob = (-delta_energy).exp().clamp(max=1.)
-        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(scalar_like(accept_prob, 0.),
-                                                                     scalar_like(accept_prob, 1.)))
+        accept_prob = (-delta_energy).exp().clamp(max=1.0)
+        rand = pyro.sample(
+            "rand_t={}".format(self._t),
+            dist.Uniform(scalar_like(accept_prob, 0.0), scalar_like(accept_prob, 1.0)),
+        )
         accepted = False
         if rand < accept_prob:
             accepted = True
@@ -381,11 +418,15 @@ class HMC(MCMCKernel):
         return z.copy()
 
     def logging(self):
-        return OrderedDict([
-            ("step size", "{:.2e}".format(self.step_size)),
-            ("acc. prob", "{:.3f}".format(self._mean_accept_prob))
-        ])
+        return OrderedDict(
+            [
+                ("step size", "{:.2e}".format(self.step_size)),
+                ("acc. prob", "{:.3f}".format(self._mean_accept_prob)),
+            ]
+        )
 
     def diagnostics(self):
-        return {"divergences": self._divergences,
-                "acceptance rate": self._accept_cnt / (self._t - self._warmup_steps)}
+        return {
+            "divergences": self._divergences,
+            "acceptance rate": self._accept_cnt / (self._t - self._warmup_steps),
+        }

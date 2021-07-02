@@ -26,6 +26,7 @@ def _make_cls(base, static_attrs, instance_attrs, parent_linkage=None):
         a reference to the distribution class.
     :return cls: dynamically generated class.
     """
+
     def _expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(cls, _instance)
         for attr in instance_attrs:
@@ -43,11 +44,15 @@ def _make_cls(base, static_attrs, instance_attrs, parent_linkage=None):
 
 
 def _latent(base, parent):
-    return _make_cls(base, {"collapsible": True}, {"site_name": None, "parent": parent}, "_latent")
+    return _make_cls(
+        base, {"collapsible": True}, {"site_name": None, "parent": parent}, "_latent"
+    )
 
 
 def _conditional(base, parent):
-    return _make_cls(base, {"marginalize_latent": True}, {"parent": parent}, "_conditional")
+    return _make_cls(
+        base, {"marginalize_latent": True}, {"parent": parent}, "_conditional"
+    )
 
 
 def _compound(base, parent):
@@ -76,14 +81,18 @@ class BetaBinomialPair:
         # Raise exception if this isn't possible.
         total_count = sum_leftmost(total_count, reduce_dims)
         summed_obs = sum_leftmost(obs, reduce_dims)
-        return dist.Beta(concentration1 + summed_obs,
-                         total_count + concentration0 - summed_obs,
-                         validate_args=self._latent._validate_args)
+        return dist.Beta(
+            concentration1 + summed_obs,
+            total_count + concentration0 - summed_obs,
+            validate_args=self._latent._validate_args,
+        )
 
     def compound(self):
-        return _compound(dist.BetaBinomial, parent=self)(concentration1=self._latent.concentration1,
-                                                         concentration0=self._latent.concentration0,
-                                                         total_count=self._conditional.total_count)
+        return _compound(dist.BetaBinomial, parent=self)(
+            concentration1=self._latent.concentration1,
+            concentration0=self._latent.concentration0,
+            total_count=self._conditional.total_count,
+        )
 
 
 class GammaPoissonPair:
@@ -108,8 +117,9 @@ class GammaPoissonPair:
         return dist.Gamma(concentration + summed_obs, rate + num_obs)
 
     def compound(self):
-        return _compound(dist.GammaPoisson, parent=self)(concentration=self._latent.concentration,
-                                                         rate=self._latent.rate)
+        return _compound(dist.GammaPoisson, parent=self)(
+            concentration=self._latent.concentration, rate=self._latent.rate
+        )
 
 
 class UncollapseConjugateMessenger(Messenger):
@@ -117,6 +127,7 @@ class UncollapseConjugateMessenger(Messenger):
     Replay regular sample sites in addition to uncollapsing any collapsed
     conjugate sites.
     """
+
     def __init__(self, trace):
         """
         :param trace: a trace whose values should be reused
@@ -137,8 +148,11 @@ class UncollapseConjugateMessenger(Messenger):
                 if parent is not None and parent._latent.site_name == msg["name"]:
                     conj_node = self.trace.nodes[site_name]
                     break
-            assert conj_node is not None, "Collapsible latent site `{}` with no corresponding conjugate site."\
-                .format(msg["name"])
+            assert (
+                conj_node is not None
+            ), "Collapsible latent site `{}` with no corresponding conjugate site.".format(
+                msg["name"]
+            )
             msg["fn"] = parent.posterior(conj_node["value"])
             msg["value"] = msg["fn"].sample()
         # regular replay behavior.
@@ -208,16 +222,21 @@ def posterior_replay(model, posterior_samples, *args, **kwargs):
     """
     posterior_samples = posterior_samples.copy()
     num_samples = kwargs.pop("num_samples", None)
-    assert posterior_samples or num_samples, "`num_samples` must be provided if `posterior_samples` is empty."
+    assert (
+        posterior_samples or num_samples
+    ), "`num_samples` must be provided if `posterior_samples` is empty."
     if num_samples is None:
         num_samples = list(posterior_samples.values())[0].shape[0]
 
     return_samples = defaultdict(list)
     for i in range(num_samples):
         conditioned_nodes = {k: v[i] for k, v in posterior_samples.items()}
-        collapsed_trace = poutine.trace(poutine.condition(collapse_conjugate(model), conditioned_nodes))\
-            .get_trace(*args, **kwargs)
-        trace = poutine.trace(uncollapse_conjugate(model, collapsed_trace)).get_trace(*args, **kwargs)
+        collapsed_trace = poutine.trace(
+            poutine.condition(collapse_conjugate(model), conditioned_nodes)
+        ).get_trace(*args, **kwargs)
+        trace = poutine.trace(uncollapse_conjugate(model, collapsed_trace)).get_trace(
+            *args, **kwargs
+        )
         for name, site in trace.iter_stochastic_nodes():
             if not site_is_subsample(site):
                 return_samples[name].append(site["value"])

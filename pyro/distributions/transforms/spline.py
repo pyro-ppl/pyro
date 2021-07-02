@@ -31,10 +31,7 @@ def _searchsorted(sorted_sequence, values):
 
     TODO: Replace with torch.searchsorted once it is released
     """
-    return torch.sum(
-        values[..., None] >= sorted_sequence,
-        dim=-1
-    ) - 1
+    return torch.sum(values[..., None] >= sorted_sequence, dim=-1) - 1
 
 
 def _select_bins(x, idx):
@@ -69,7 +66,7 @@ def _calculate_knots(lengths, lower, upper):
     knots = torch.cumsum(lengths, dim=-1)
 
     # Pad left of last dimension with 1 zero to compensate for dim lost to cumsum
-    knots = F.pad(knots, pad=(1, 0), mode='constant', value=0.0)
+    knots = F.pad(knots, pad=(1, 0), mode="constant", value=0.0)
 
     # Translate [0,1] knot points to [-B, B]
     knots = (upper - lower) * knots + lower
@@ -83,18 +80,20 @@ def _calculate_knots(lengths, lower, upper):
     return lengths, knots
 
 
-def _monotonic_rational_spline(inputs,
-                               widths,
-                               heights,
-                               derivatives,
-                               lambdas=None,
-                               inverse=False,
-                               bound=3.,
-                               min_bin_width=1e-3,
-                               min_bin_height=1e-3,
-                               min_derivative=1e-3,
-                               min_lambda=0.025,
-                               eps=1e-6):
+def _monotonic_rational_spline(
+    inputs,
+    widths,
+    heights,
+    derivatives,
+    lambdas=None,
+    inverse=False,
+    bound=3.0,
+    min_bin_width=1e-3,
+    min_bin_height=1e-3,
+    min_derivative=1e-3,
+    min_lambda=0.025,
+    eps=1e-6,
+):
     """
     Calculating a monotonic rational spline (linear or quadratic) or its inverse,
     plus the log(abs(detJ)) required for normalizing flows.
@@ -110,9 +109,9 @@ def _monotonic_rational_spline(inputs,
 
     num_bins = widths.shape[-1]
     if min_bin_width * num_bins > 1.0:
-        raise ValueError('Minimal bin width too large for the number of bins')
+        raise ValueError("Minimal bin width too large for the number of bins")
     if min_bin_height * num_bins > 1.0:
-        raise ValueError('Minimal bin height too large for the number of bins')
+        raise ValueError("Minimal bin height too large for the number of bins")
 
     # inputs, inside_interval_mask, outside_interval_mask ~ (batch_dim, input_dim)
     left, right = -bound, bound
@@ -140,11 +139,15 @@ def _monotonic_rational_spline(inputs,
     # Pad left and right derivatives with fixed values at first and last knots
     # These are 1 since the function is the identity outside the bounding box and the derivative is continuous
     # NOTE: Not sure why this is 1.0 - min_derivative rather than 1.0. I've copied this from original implementation
-    derivatives = F.pad(derivatives, pad=(1, 1), mode='constant', value=1.0 - min_derivative)
+    derivatives = F.pad(
+        derivatives, pad=(1, 1), mode="constant", value=1.0 - min_derivative
+    )
 
     # Get the index of the bin that each input is in
     # bin_idx ~ (batch_dim, input_dim, 1)
-    bin_idx = _searchsorted(cumheights + eps if inverse else cumwidths + eps, inputs).unsqueeze(-1)
+    bin_idx = _searchsorted(
+        cumheights + eps if inverse else cumwidths + eps, inputs
+    ).unsqueeze(-1)
 
     # Select the value for the relevant bin for the variables used in the main calculation
     input_widths = _select_bins(widths, bin_idx)
@@ -171,60 +174,84 @@ def _monotonic_rational_spline(inputs,
 
         # The weight, w_c, at the division point of each bin
         # Recall that each bin is divided into two parts so we have enough d.o.f. to fit spline
-        wc = (input_lambdas * wa * input_derivatives + (1 - input_lambdas)
-              * wb * input_derivatives_plus_one) / input_delta
+        wc = (
+            input_lambdas * wa * input_derivatives
+            + (1 - input_lambdas) * wb * input_derivatives_plus_one
+        ) / input_delta
 
         # Calculate y coords of bins
         ya = input_cumheights
         yb = input_heights + input_cumheights
-        yc = ((1.0 - input_lambdas) * wa * ya + input_lambdas * wb * yb) / \
-            ((1.0 - input_lambdas) * wa + input_lambdas * wb)
+        yc = ((1.0 - input_lambdas) * wa * ya + input_lambdas * wb * yb) / (
+            (1.0 - input_lambdas) * wa + input_lambdas * wb
+        )
 
         if inverse:
-            numerator = (input_lambdas * wa * (ya - inputs)) * (inputs <= yc).float() \
-                + ((wc - input_lambdas * wb) * inputs + input_lambdas * wb * yb - wc * yc) * (inputs > yc).float()
+            numerator = (input_lambdas * wa * (ya - inputs)) * (
+                inputs <= yc
+            ).float() + (
+                (wc - input_lambdas * wb) * inputs + input_lambdas * wb * yb - wc * yc
+            ) * (
+                inputs > yc
+            ).float()
 
-            denominator = ((wc - wa) * inputs + wa * ya - wc * yc) * (inputs <= yc).float()\
-                + ((wc - wb) * inputs + wb * yb - wc * yc) * (inputs > yc).float()
+            denominator = ((wc - wa) * inputs + wa * ya - wc * yc) * (
+                inputs <= yc
+            ).float() + ((wc - wb) * inputs + wb * yb - wc * yc) * (inputs > yc).float()
 
             theta = numerator / denominator
 
             outputs = theta * input_widths + input_cumwidths
 
-            derivative_numerator = (wa * wc * input_lambdas * (yc - ya) * (inputs <= yc).float()
-                                    + wb * wc * (1 - input_lambdas) * (yb - yc) * (inputs > yc).float()) * input_widths
+            derivative_numerator = (
+                wa * wc * input_lambdas * (yc - ya) * (inputs <= yc).float()
+                + wb * wc * (1 - input_lambdas) * (yb - yc) * (inputs > yc).float()
+            ) * input_widths
 
-            logabsdet = torch.log(derivative_numerator) - 2 * torch.log(torch.abs(denominator))
+            logabsdet = torch.log(derivative_numerator) - 2 * torch.log(
+                torch.abs(denominator)
+            )
 
         else:
             theta = (inputs - input_cumwidths) / input_widths
 
-            numerator = (wa * ya * (input_lambdas - theta) + wc * yc * theta) * (theta <= input_lambdas).float()\
-                + (wc * yc * (1 - theta) + wb * yb * (theta - input_lambdas)) * (theta > input_lambdas).float()
+            numerator = (wa * ya * (input_lambdas - theta) + wc * yc * theta) * (
+                theta <= input_lambdas
+            ).float() + (wc * yc * (1 - theta) + wb * yb * (theta - input_lambdas)) * (
+                theta > input_lambdas
+            ).float()
 
-            denominator = (wa * (input_lambdas - theta) + wc * theta) * (theta <= input_lambdas).float()\
-                + (wc * (1 - theta) + wb * (theta - input_lambdas)) * (theta > input_lambdas).float()
+            denominator = (wa * (input_lambdas - theta) + wc * theta) * (
+                theta <= input_lambdas
+            ).float() + (wc * (1 - theta) + wb * (theta - input_lambdas)) * (
+                theta > input_lambdas
+            ).float()
 
             outputs = numerator / denominator
 
-            derivative_numerator = (wa * wc * input_lambdas * (yc - ya) * (theta <= input_lambdas).float() +
-                                    wb * wc * (1 - input_lambdas) * (yb - yc) * (theta > input_lambdas).float()) \
-                / input_widths
+            derivative_numerator = (
+                wa * wc * input_lambdas * (yc - ya) * (theta <= input_lambdas).float()
+                + wb
+                * wc
+                * (1 - input_lambdas)
+                * (yb - yc)
+                * (theta > input_lambdas).float()
+            ) / input_widths
 
-            logabsdet = torch.log(derivative_numerator) - 2 * torch.log(torch.abs(denominator))
+            logabsdet = torch.log(derivative_numerator) - 2 * torch.log(
+                torch.abs(denominator)
+            )
 
     # Calculate monotonic *quadratic* rational spline
     else:
         if inverse:
-            a = (((inputs - input_cumheights) * (input_derivatives
-                                                 + input_derivatives_plus_one
-                                                 - 2 * input_delta)
-                  + input_heights * (input_delta - input_derivatives)))
-            b = (input_heights * input_derivatives
-                 - (inputs - input_cumheights) * (input_derivatives
-                                                  + input_derivatives_plus_one
-                                                  - 2 * input_delta))
-            c = - input_delta * (inputs - input_cumheights)
+            a = (inputs - input_cumheights) * (
+                input_derivatives + input_derivatives_plus_one - 2 * input_delta
+            ) + input_heights * (input_delta - input_derivatives)
+            b = input_heights * input_derivatives - (inputs - input_cumheights) * (
+                input_derivatives + input_derivatives_plus_one - 2 * input_delta
+            )
+            c = -input_delta * (inputs - input_cumheights)
 
             discriminant = b.pow(2) - 4 * a * c
             assert (discriminant >= 0).all()
@@ -233,26 +260,35 @@ def _monotonic_rational_spline(inputs,
             outputs = root * input_widths + input_cumwidths
 
             theta_one_minus_theta = root * (1 - root)
-            denominator = input_delta + ((input_derivatives + input_derivatives_plus_one - 2 * input_delta)
-                                         * theta_one_minus_theta)
-            derivative_numerator = input_delta.pow(2) * (input_derivatives_plus_one * root.pow(2)
-                                                         + 2 * input_delta * theta_one_minus_theta
-                                                         + input_derivatives * (1 - root).pow(2))
+            denominator = input_delta + (
+                (input_derivatives + input_derivatives_plus_one - 2 * input_delta)
+                * theta_one_minus_theta
+            )
+            derivative_numerator = input_delta.pow(2) * (
+                input_derivatives_plus_one * root.pow(2)
+                + 2 * input_delta * theta_one_minus_theta
+                + input_derivatives * (1 - root).pow(2)
+            )
             logabsdet = -(torch.log(derivative_numerator) - 2 * torch.log(denominator))
 
         else:
             theta = (inputs - input_cumwidths) / input_widths
             theta_one_minus_theta = theta * (1 - theta)
 
-            numerator = input_heights * (input_delta * theta.pow(2)
-                                         + input_derivatives * theta_one_minus_theta)
-            denominator = input_delta + ((input_derivatives + input_derivatives_plus_one - 2 * input_delta)
-                                         * theta_one_minus_theta)
+            numerator = input_heights * (
+                input_delta * theta.pow(2) + input_derivatives * theta_one_minus_theta
+            )
+            denominator = input_delta + (
+                (input_derivatives + input_derivatives_plus_one - 2 * input_delta)
+                * theta_one_minus_theta
+            )
             outputs = input_cumheights + numerator / denominator
 
-            derivative_numerator = input_delta.pow(2) * (input_derivatives_plus_one * theta.pow(2)
-                                                         + 2 * input_delta * theta_one_minus_theta
-                                                         + input_derivatives * (1 - theta).pow(2))
+            derivative_numerator = input_delta.pow(2) * (
+                input_derivatives_plus_one * theta.pow(2)
+                + 2 * input_delta * theta_one_minus_theta
+                + input_derivatives * (1 - theta).pow(2)
+            )
             logabsdet = torch.log(derivative_numerator) - 2 * torch.log(denominator)
 
     # Apply the identity function outside the bounding box
@@ -267,11 +303,12 @@ class ConditionedSpline(Transform):
     Helper class to manage learnable splines. One could imagine this as a standard
     layer in PyTorch...
     """
+
     domain = constraints.real
     codomain = constraints.real
     bijective = True
 
-    def __init__(self, params, bound=3.0, order='linear'):
+    def __init__(self, params, bound=3.0, order="linear"):
         super().__init__(cache_size=1)
 
         self._params = params
@@ -310,7 +347,9 @@ class ConditionedSpline(Transform):
 
     def spline_op(self, x, **kwargs):
         w, h, d, l = self._params() if callable(self._params) else self._params
-        y, log_detJ = _monotonic_rational_spline(x, w, h, d, l, bound=self.bound, **kwargs)
+        y, log_detJ = _monotonic_rational_spline(
+            x, w, h, d, l, bound=self.bound, **kwargs
+        )
         return y, log_detJ
 
 
@@ -368,7 +407,7 @@ class Spline(ConditionedSpline, TransformModule):
     codomain = constraints.real
     bijective = True
 
-    def __init__(self, input_dim, count_bins=8, bound=3., order='linear'):
+    def __init__(self, input_dim, count_bins=8, bound=3.0, order="linear"):
         super(Spline, self).__init__(self._params)
 
         self.input_dim = input_dim
@@ -376,24 +415,34 @@ class Spline(ConditionedSpline, TransformModule):
         self.bound = bound
         self.order = order
 
-        self.unnormalized_widths = nn.Parameter(torch.randn(self.input_dim, self.count_bins))
-        self.unnormalized_heights = nn.Parameter(torch.randn(self.input_dim, self.count_bins))
-        self.unnormalized_derivatives = nn.Parameter(torch.randn(self.input_dim, self.count_bins - 1))
+        self.unnormalized_widths = nn.Parameter(
+            torch.randn(self.input_dim, self.count_bins)
+        )
+        self.unnormalized_heights = nn.Parameter(
+            torch.randn(self.input_dim, self.count_bins)
+        )
+        self.unnormalized_derivatives = nn.Parameter(
+            torch.randn(self.input_dim, self.count_bins - 1)
+        )
 
         # Rational linear splines have additional lambda parameters
         if self.order == "linear":
-            self.unnormalized_lambdas = nn.Parameter(torch.rand(self.input_dim, self.count_bins))
+            self.unnormalized_lambdas = nn.Parameter(
+                torch.rand(self.input_dim, self.count_bins)
+            )
         elif self.order != "quadratic":
             raise ValueError(
                 "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
-                    self.order))
+                    self.order
+                )
+            )
 
     def _params(self):
         # widths, unnormalized_widths ~ (input_dim, num_bins)
         w = F.softmax(self.unnormalized_widths, dim=-1)
         h = F.softmax(self.unnormalized_heights, dim=-1)
         d = F.softplus(self.unnormalized_derivatives)
-        if self.order == 'linear':
+        if self.order == "linear":
             l = torch.sigmoid(self.unnormalized_lambdas)
         else:
             l = None
@@ -467,7 +516,7 @@ class ConditionalSpline(ConditionalTransformModule):
     codomain = constraints.real
     bijective = True
 
-    def __init__(self, nn, input_dim, count_bins, bound=3.0, order='linear'):
+    def __init__(self, nn, input_dim, count_bins, bound=3.0, order="linear"):
         super().__init__()
 
         self.nn = nn
@@ -493,7 +542,9 @@ class ConditionalSpline(ConditionalTransformModule):
         else:
             raise ValueError(
                 "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
-                    self.order))
+                    self.order
+                )
+            )
 
         # AutoRegressiveNN and DenseNN return different shapes...
         if w.shape[-1] == self.input_dim:
@@ -532,7 +583,9 @@ def spline(input_dim, **kwargs):
     return Spline(input_dim, **kwargs)
 
 
-def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0, order='linear'):
+def conditional_spline(
+    input_dim, context_dim, hidden_dims=None, count_bins=8, bound=3.0, order="linear"
+):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.ConditionalSpline` object that takes care
@@ -558,22 +611,33 @@ def conditional_spline(input_dim, context_dim, hidden_dims=None, count_bins=8, b
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
 
-    if order == 'linear':
-        nn = DenseNN(context_dim,
-                     hidden_dims,
-                     param_dims=[input_dim * count_bins,
-                                 input_dim * count_bins,
-                                 input_dim * (count_bins - 1),
-                                 input_dim * count_bins])
-    elif order == 'quadratic':
-        nn = DenseNN(context_dim,
-                     hidden_dims,
-                     param_dims=[input_dim * count_bins,
-                                 input_dim * count_bins,
-                                 input_dim * (count_bins - 1)])
+    if order == "linear":
+        nn = DenseNN(
+            context_dim,
+            hidden_dims,
+            param_dims=[
+                input_dim * count_bins,
+                input_dim * count_bins,
+                input_dim * (count_bins - 1),
+                input_dim * count_bins,
+            ],
+        )
+    elif order == "quadratic":
+        nn = DenseNN(
+            context_dim,
+            hidden_dims,
+            param_dims=[
+                input_dim * count_bins,
+                input_dim * count_bins,
+                input_dim * (count_bins - 1),
+            ],
+        )
 
     else:
-        raise ValueError("Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
-            order))
+        raise ValueError(
+            "Keyword argument 'order' must be one of ['linear', 'quadratic'], but '{}' was found!".format(
+                order
+            )
+        )
 
     return ConditionalSpline(nn, input_dim, count_bins, bound=bound, order=order)

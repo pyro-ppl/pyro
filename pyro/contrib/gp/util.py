@@ -7,8 +7,17 @@ from pyro.infer import TraceMeanField_ELBO
 from pyro.infer.util import torch_backward, torch_item
 
 
-def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
-                whiten=False, jitter=1e-6):
+def conditional(
+    Xnew,
+    X,
+    kernel,
+    f_loc,
+    f_scale_tril=None,
+    Lff=None,
+    full_cov=False,
+    whiten=False,
+    jitter=1e-6,
+):
     r"""
     Given :math:`X_{new}`, predicts loc and covariance matrix of the conditional
     multivariate normal distribution
@@ -82,8 +91,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
     if Lff is None:
         Kff = kernel(X).contiguous()
-        Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
-        Lff = Kff.cholesky()
+        Kff.view(-1)[:: N + 1] += jitter  # add jitter to diagonal
+        Lff = torch.linalg.cholesky(Kff)
     Kfs = kernel(X, Xnew)
 
     # convert f_loc_shape from latent_shape x N to N x latent_shape
@@ -108,10 +117,10 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
         Lffinv_pack = pack.triangular_solve(Lff, upper=False)[0]
         # unpack
-        v_2D = Lffinv_pack[:, :f_loc_2D.size(1)]
-        W = Lffinv_pack[:, f_loc_2D.size(1):f_loc_2D.size(1) + M].t()
+        v_2D = Lffinv_pack[:, : f_loc_2D.size(1)]
+        W = Lffinv_pack[:, f_loc_2D.size(1) : f_loc_2D.size(1) + M].t()
         if f_scale_tril is not None:
-            S_2D = Lffinv_pack[:, -f_scale_tril_2D.size(1):]
+            S_2D = Lffinv_pack[:, -f_scale_tril_2D.size(1) :]
 
     loc_shape = latent_shape + (M,)
     loc = W.matmul(v_2D).t().reshape(loc_shape)
@@ -164,8 +173,11 @@ def train(gpmodule, optimizer=None, loss_fn=None, retain_graph=None, num_steps=1
     :returns: a list of losses during the training procedure
     :rtype: list
     """
-    optimizer = (torch.optim.Adam(gpmodule.parameters(), lr=0.01)
-                 if optimizer is None else optimizer)
+    optimizer = (
+        torch.optim.Adam(gpmodule.parameters(), lr=0.01)
+        if optimizer is None
+        else optimizer
+    )
     # TODO: add support for JIT loss
     loss_fn = TraceMeanField_ELBO().differentiable_loss if loss_fn is None else loss_fn
 

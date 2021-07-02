@@ -12,11 +12,13 @@ from pyro import poutine
 from pyro.infer.reparam import StudentTReparam
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 # Test helper to extract a few absolute moments from univariate samples.
 # This uses abs moments because StudentT variance may be infinite.
 def get_moments(x):
-    points = torch.tensor([-4., -1., 0., 1., 4.])
+    points = torch.tensor([-4.0, -1.0, 0.0, 1.0, 4.0])
     points = points.reshape((-1,) + (1,) * x.dim())
     return torch.cat([x.mean(0, keepdim=True), (x - points).abs().mean(1)])
 
@@ -24,7 +26,7 @@ def get_moments(x):
 @pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
 def test_moments(shape):
     df = torch.empty(shape).uniform_(1.8, 5).requires_grad_()
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
     params = [df, loc, scale]
 
@@ -56,7 +58,6 @@ def test_moments(shape):
 @pytest.mark.parametrize("scale", [0.1, 1.0, 2.0])
 @pytest.mark.parametrize("loc", [0.0, 1.234])
 def test_distribution(df, loc, scale):
-
     def model():
         with pyro.plate("particles", 20000):
             return pyro.sample("x", dist.StudentT(df, loc, scale))
@@ -65,3 +66,16 @@ def test_distribution(df, loc, scale):
     with poutine.reparam(config={"x": StudentTReparam()}):
         actual = model()
     assert ks_2samp(expected, actual).pvalue > 0.05
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
+def test_init(shape):
+    df = torch.empty(shape).uniform_(1.8, 5).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
+    scale = torch.empty(shape).uniform_(0.5, 1.0).requires_grad_()
+
+    def model():
+        with pyro.plate_stack("plates", shape):
+            return pyro.sample("x", dist.StudentT(df, loc, scale))
+
+    check_init_reparam(model, StudentTReparam())

@@ -18,7 +18,7 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         a = self.mlp(x)
-        return a[:, 0:self.z_size], softplus(a[:, self.z_size:])
+        return a[:, 0 : self.z_size], softplus(a[:, self.z_size :])
 
 
 # Takes a latent code, z_what, to pixel intensities.
@@ -42,7 +42,9 @@ class Decoder(nn.Module):
 # [Linear (256 -> 256), ReLU (), Linear (256 -> 1), ReLU ()]
 # etc.
 class MLP(nn.Module):
-    def __init__(self, in_size, out_sizes, non_linear_layer, output_non_linearity=False):
+    def __init__(
+        self, in_size, out_sizes, non_linear_layer, output_non_linearity=False
+    ):
         super().__init__()
         assert len(out_sizes) >= 1
         layers = []
@@ -63,7 +65,9 @@ class MLP(nn.Module):
 # Takes the guide RNN hidden state to parameters of the guide
 # distributions over z_where and z_pres.
 class Predict(nn.Module):
-    def __init__(self, input_size, h_sizes, z_pres_size, z_where_size, non_linear_layer):
+    def __init__(
+        self, input_size, h_sizes, z_pres_size, z_where_size, non_linear_layer
+    ):
         super().__init__()
         self.z_pres_size = z_pres_size
         self.z_where_size = z_where_size
@@ -72,9 +76,9 @@ class Predict(nn.Module):
 
     def forward(self, h):
         out = self.mlp(h)
-        z_pres_p = torch.sigmoid(out[:, 0:self.z_pres_size])
-        z_where_loc = out[:, self.z_pres_size:self.z_pres_size + self.z_where_size]
-        z_where_scale = softplus(out[:, (self.z_pres_size + self.z_where_size):])
+        z_pres_p = torch.sigmoid(out[:, 0 : self.z_pres_size])
+        z_where_loc = out[:, self.z_pres_size : self.z_pres_size + self.z_where_size]
+        z_where_scale = softplus(out[:, (self.z_pres_size + self.z_where_size) :])
         return z_pres_p, z_where_loc, z_where_scale
 
 

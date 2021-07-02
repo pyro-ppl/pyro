@@ -14,7 +14,7 @@ def get_indices(labels, sizes=None, tensors=None):
     if sizes is None:
         sizes = OrderedDict([(l, t.shape[0]) for l, t in tensors.items()])
     for label in sizes:
-        end = start+sizes[label]
+        end = start + sizes[label]
         if label in labels:
             indices.extend(range(start, end))
         start = end
@@ -56,19 +56,19 @@ def lexpand(A, *dimensions):
 
 def rexpand(A, *dimensions):
     """Expand tensor, adding new dimensions on right."""
-    return A.view(A.shape + (1,)*len(dimensions)).expand(A.shape + tuple(dimensions))
+    return A.view(A.shape + (1,) * len(dimensions)).expand(A.shape + tuple(dimensions))
 
 
 def rdiag(v):
     """Converts the rightmost dimension to a diagonal matrix."""
-    return rexpand(v, v.shape[-1])*torch.eye(v.shape[-1])
+    return rexpand(v, v.shape[-1]) * torch.eye(v.shape[-1])
 
 
 def rtril(M, diagonal=0, upper=False):
     """Takes the lower-triangular of the rightmost 2 dimensions."""
     if upper:
         return rtril(M, diagonal=diagonal, upper=False).transpose(-1, -2)
-    return M*torch.tril(torch.ones(M.shape[-2], M.shape[-1]), diagonal=diagonal)
+    return M * torch.tril(torch.ones(M.shape[-2], M.shape[-1]), diagonal=diagonal)
 
 
 def iter_plates_to_shape(shape):

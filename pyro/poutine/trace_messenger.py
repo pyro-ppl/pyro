@@ -24,8 +24,13 @@ def identify_dense_edges(trace):
                     if past_name == name:
                         break
                     past_node_independent = False
-                    for query, target in zip(node["cond_indep_stack"], past_node["cond_indep_stack"]):
-                        if query.name == target.name and query.counter != target.counter:
+                    for query, target in zip(
+                        node["cond_indep_stack"], past_node["cond_indep_stack"]
+                    ):
+                        if (
+                            query.name == target.name
+                            and query.counter != target.counter
+                        ):
                             past_node_independent = True
                             break
                     if not past_node_independent:
@@ -110,10 +115,13 @@ class TraceMessenger(Messenger):
     def _reset(self):
         tr = Trace(graph_type=self.graph_type)
         if "_INPUT" in self.trace.nodes:
-            tr.add_node("_INPUT",
-                        name="_INPUT", type="input",
-                        args=self.trace.nodes["_INPUT"]["args"],
-                        kwargs=self.trace.nodes["_INPUT"]["kwargs"])
+            tr.add_node(
+                "_INPUT",
+                name="_INPUT",
+                type="input",
+                args=self.trace.nodes["_INPUT"]["args"],
+                kwargs=self.trace.nodes["_INPUT"]["kwargs"],
+            )
         self.trace = tr
         super()._reset()
 
@@ -141,6 +149,7 @@ class TraceHandler:
 
     We can also use this for visualization.
     """
+
     def __init__(self, msngr, fn):
         self.fn = fn
         self.msngr = msngr
@@ -158,9 +167,9 @@ class TraceHandler:
         and returns self.fn's return value
         """
         with self.msngr:
-            self.msngr.trace.add_node("_INPUT",
-                                      name="_INPUT", type="args",
-                                      args=args, kwargs=kwargs)
+            self.msngr.trace.add_node(
+                "_INPUT", name="_INPUT", type="args", args=args, kwargs=kwargs
+            )
             try:
                 ret = self.fn(*args, **kwargs)
             except (ValueError, RuntimeError) as e:
@@ -169,7 +178,9 @@ class TraceHandler:
                 exc = exc_type(u"{}\n{}".format(exc_value, shapes))
                 exc = exc.with_traceback(traceback)
                 raise exc from e
-            self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
+            self.msngr.trace.add_node(
+                "_RETURN", name="_RETURN", type="return", value=ret
+            )
         return ret
 
     @property
