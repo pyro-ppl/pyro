@@ -59,8 +59,18 @@ class VariationalGP(GPModel):
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, likelihood, mean_function=None,
-                 latent_shape=None, whiten=False, jitter=1e-6):
+
+    def __init__(
+        self,
+        X,
+        y,
+        kernel,
+        likelihood,
+        mean_function=None,
+        latent_shape=None,
+        whiten=False,
+        jitter=1e-6,
+    ):
         super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
@@ -85,21 +95,27 @@ class VariationalGP(GPModel):
 
         N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
+        Kff.view(-1)[:: N + 1] += self.jitter  # add jitter to the diagonal
         Lff = torch.linalg.cholesky(Kff)
 
         zero_loc = self.X.new_zeros(self.f_loc.shape)
         if self.whiten:
             identity = eye_like(self.X, N)
-            pyro.sample(self._pyro_get_fullname("f"),
-                        dist.MultivariateNormal(zero_loc, scale_tril=identity)
-                            .to_event(zero_loc.dim() - 1))
+            pyro.sample(
+                self._pyro_get_fullname("f"),
+                dist.MultivariateNormal(zero_loc, scale_tril=identity).to_event(
+                    zero_loc.dim() - 1
+                ),
+            )
             f_scale_tril = Lff.matmul(self.f_scale_tril)
             f_loc = Lff.matmul(self.f_loc.unsqueeze(-1)).squeeze(-1)
         else:
-            pyro.sample(self._pyro_get_fullname("f"),
-                        dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                            .to_event(zero_loc.dim() - 1))
+            pyro.sample(
+                self._pyro_get_fullname("f"),
+                dist.MultivariateNormal(zero_loc, scale_tril=Lff).to_event(
+                    zero_loc.dim() - 1
+                ),
+            )
             f_scale_tril = self.f_scale_tril
             f_loc = self.f_loc
 
@@ -115,9 +131,12 @@ class VariationalGP(GPModel):
         self.set_mode("guide")
         self._load_pyro_samples()
 
-        pyro.sample(self._pyro_get_fullname("f"),
-                    dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
-                        .to_event(self.f_loc.dim()-1))
+        pyro.sample(
+            self._pyro_get_fullname("f"),
+            dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril).to_event(
+                self.f_loc.dim() - 1
+            ),
+        )
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -141,6 +160,14 @@ class VariationalGP(GPModel):
         self._check_Xnew_shape(Xnew)
         self.set_mode("guide")
 
-        loc, cov = conditional(Xnew, self.X, self.kernel, self.f_loc, self.f_scale_tril,
-                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
+        loc, cov = conditional(
+            Xnew,
+            self.X,
+            self.kernel,
+            self.f_loc,
+            self.f_scale_tril,
+            full_cov=full_cov,
+            whiten=self.whiten,
+            jitter=self.jitter,
+        )
         return loc + self.mean_function(Xnew), cov

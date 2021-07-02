@@ -31,21 +31,28 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
     Hao Liu, Qiang Liu, NeurIPS 2018
     https://papers.nips.cc/paper/7816-variational-inference-with-tail-adaptive-f-divergence
     """
+
     def loss(self, model, guide, *args, **kwargs):
         """
         It is not necessary to estimate the tail-adaptive f-divergence itself in order
         to compute the corresponding gradients. Consequently the loss method is left
         unimplemented.
         """
-        raise NotImplementedError("Loss method for TraceTailAdaptive_ELBO not implemented")
+        raise NotImplementedError(
+            "Loss method for TraceTailAdaptive_ELBO not implemented"
+        )
 
     def _differentiable_loss_particle(self, model_trace, guide_trace):
         if not self.vectorize_particles:
-            raise NotImplementedError("TraceTailAdaptive_ELBO only implemented for vectorize_particles==True")
+            raise NotImplementedError(
+                "TraceTailAdaptive_ELBO only implemented for vectorize_particles==True"
+            )
 
         if self.num_particles == 1:
-            warnings.warn("For num_particles==1 TraceTailAdaptive_ELBO uses the same loss function as Trace_ELBO. " +
-                          "Increase num_particles to get an adaptive f-divergence.")
+            warnings.warn(
+                "For num_particles==1 TraceTailAdaptive_ELBO uses the same loss function as Trace_ELBO. "
+                + "Increase num_particles to get an adaptive f-divergence."
+            )
 
         log_p, log_q = 0, 0
 
@@ -64,11 +71,13 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
         # rank the particles according to p/q
         log_pq = log_p - log_q
         rank = torch.argsort(log_pq, descending=False)
-        rank = torch.index_select(torch.arange(self.num_particles, device=log_pq.device) + 1, -1, rank).type_as(log_pq)
+        rank = torch.index_select(
+            torch.arange(self.num_particles, device=log_pq.device) + 1, -1, rank
+        ).type_as(log_pq)
 
         # compute the particle-specific weights used to construct the surrogate loss
         gamma = torch.pow(rank, self.tail_adaptive_beta).detach()
         surrogate_loss = -(log_pq * gamma).sum() / gamma.sum()
 
         # we do not compute the loss, so return `inf`
-        return float('inf'), surrogate_loss
+        return float("inf"), surrogate_loss

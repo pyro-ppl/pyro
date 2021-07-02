@@ -14,6 +14,7 @@ except ImportError:
     def TypedDict(*args, **kwargs):
         return dict
 
+
 ReparamMessage = TypedDict(
     "ReparamMessage",
     name=str,

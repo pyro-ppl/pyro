@@ -34,8 +34,9 @@ class DiscreteCosineReparam(UnitJacobianReparam):
         batch dimension. The targeted batch dimension and all batch dimensions
         to the right will be converted to event dimensions. Defaults to False.
     """
-    def __init__(self, dim=-1, smooth=0., *,
-                 experimental_allow_batch=False):
+
+    def __init__(self, dim=-1, smooth=0.0, *, experimental_allow_batch=False):
         transform = DiscreteCosineTransform(dim=dim, smooth=smooth, cache_size=1)
-        super().__init__(transform, suffix="dct",
-                         experimental_allow_batch=experimental_allow_batch)
+        super().__init__(
+            transform, suffix="dct", experimental_allow_batch=experimental_allow_batch
+        )

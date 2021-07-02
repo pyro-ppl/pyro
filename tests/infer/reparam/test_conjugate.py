@@ -55,9 +55,14 @@ def test_beta_binomial_dependent_sample():
         prob = pyro.sample("prob", prior)
         pyro.sample("counts", dist.Binomial(total, prob), obs=counts)
 
-    reparam_model = poutine.reparam(model, {
-        "prob": ConjugateReparam(lambda counts: dist.Beta(1 + counts, 1 + total - counts)),
-    })
+    reparam_model = poutine.reparam(
+        model,
+        {
+            "prob": ConjugateReparam(
+                lambda counts: dist.Beta(1 + counts, 1 + total - counts)
+            ),
+        },
+    )
 
     with poutine.trace() as tr, pyro.plate("particles", 10000):
         reparam_model(counts)
@@ -89,7 +94,9 @@ def test_beta_binomial_elbo():
     def reparam_guide():
         pass
 
-    elbo = Trace_ELBO(num_particles=10000, vectorize_particles=True, max_plate_nesting=0)
+    elbo = Trace_ELBO(
+        num_particles=10000, vectorize_particles=True, max_plate_nesting=0
+    )
     expected_loss = elbo.differentiable_loss(model, guide)
     actual_loss = elbo.differentiable_loss(reparam_model, reparam_guide)
     assert_close(actual_loss, expected_loss, atol=0.01)
@@ -106,9 +113,13 @@ def test_beta_binomial_elbo():
 @pytest.mark.parametrize("num_steps", range(1, 6))
 def test_gaussian_hmm_elbo(batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_mvn(batch_shape, hidden_dim)
-    trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim), requires_grad=True)
+    trans_mat = torch.randn(
+        batch_shape + (num_steps, hidden_dim, hidden_dim), requires_grad=True
+    )
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
-    obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim), requires_grad=True)
+    obs_mat = torch.randn(
+        batch_shape + (num_steps, hidden_dim, obs_dim), requires_grad=True
+    )
     obs_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
 
     data = obs_dist.sample()
@@ -156,26 +167,38 @@ def random_stable(shape):
 @pytest.mark.parametrize("num_steps", range(1, 6))
 def test_stable_hmm_smoke(batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_stable(batch_shape + (hidden_dim,)).to_event(1)
-    trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim), requires_grad=True)
+    trans_mat = torch.randn(
+        batch_shape + (num_steps, hidden_dim, hidden_dim), requires_grad=True
+    )
     trans_dist = random_stable(batch_shape + (num_steps, hidden_dim)).to_event(1)
-    obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim), requires_grad=True)
+    obs_mat = torch.randn(
+        batch_shape + (num_steps, hidden_dim, obs_dim), requires_grad=True
+    )
     obs_dist = random_stable(batch_shape + (num_steps, obs_dim)).to_event(1)
     data = obs_dist.sample()
     assert data.shape == batch_shape + (num_steps, obs_dim)
 
     def model(data):
-        hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps)
+        hmm = dist.LinearHMM(
+            init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps
+        )
         with pyro.plate_stack("plates", batch_shape):
             z = pyro.sample("z", hmm)
             pyro.sample("x", dist.Normal(z, 1).to_event(2), obs=data)
 
     # Test that we can combine these two reparameterizers.
-    reparam_model = poutine.reparam(model, {
-        "z": LinearHMMReparam(StableReparam(), StableReparam(), StableReparam()),
-    })
-    reparam_model = poutine.reparam(reparam_model, {
-        "z": ConjugateReparam(dist.Normal(data, 1).to_event(2)),
-    })
+    reparam_model = poutine.reparam(
+        model,
+        {
+            "z": LinearHMMReparam(StableReparam(), StableReparam(), StableReparam()),
+        },
+    )
+    reparam_model = poutine.reparam(
+        reparam_model,
+        {
+            "z": ConjugateReparam(dist.Normal(data, 1).to_event(2)),
+        },
+    )
     reparam_guide = AutoDiagonalNormal(reparam_model)  # Models auxiliary variables.
 
     # Smoke test only.

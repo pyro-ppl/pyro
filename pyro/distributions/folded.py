@@ -15,6 +15,7 @@ class FoldedDistribution(TransformedDistribution):
     :param ~torch.distributions.Distribution base_dist: The distribution to
         reflect.
     """
+
     support = constraints.positive
 
     def __init__(self, base_dist, validate_args=None):
@@ -30,5 +31,5 @@ class FoldedDistribution(TransformedDistribution):
         if self._validate_args:
             self._validate_sample(value)
         dim = max(len(self.batch_shape), value.dim())
-        plus_minus = value.new_tensor([1., -1.]).reshape((2,) + (1,) * dim)
+        plus_minus = value.new_tensor([1.0, -1.0]).reshape((2,) + (1,) * dim)
         return self.base_dist.log_prob(plus_minus * value).logsumexp(0)

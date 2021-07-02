@@ -17,14 +17,16 @@ def _vector_to_l_cholesky(z):
     x = torch.zeros(z.shape[:-1] + (D, D), dtype=z.dtype, device=z.device)
 
     x[..., 0, 0] = 1
-    x[..., 1:, 0] = z[..., :(D - 1)]
+    x[..., 1:, 0] = z[..., : (D - 1)]
     i = D - 1
     last_squared_x = torch.zeros(z.shape[:-1] + (D,), dtype=z.dtype, device=z.device)
     for j in range(1, D):
         distance_to_copy = D - 1 - j
-        last_squared_x = last_squared_x[..., 1:] + x[..., j:, (j - 1)].clone()**2
+        last_squared_x = last_squared_x[..., 1:] + x[..., j:, (j - 1)].clone() ** 2
         x[..., j, j] = (1 - last_squared_x[..., 0]).sqrt()
-        x[..., (j + 1):, j] = z[..., i:(i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
+        x[..., (j + 1) :, j] = (
+            z[..., i : (i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
+        )
         i += distance_to_copy
     return x
 
@@ -42,6 +44,7 @@ class CorrLCholeskyTransform(Transform):
     Section 10.12.
 
     """
+
     domain = constraints.real_vector
     codomain = constraints.corr_cholesky
     bijective = True
@@ -54,17 +57,21 @@ class CorrLCholeskyTransform(Transform):
         return _vector_to_l_cholesky(z)
 
     def _inverse(self, y):
-        if (y.shape[-2] != y.shape[-1]):
-            raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
+        if y.shape[-2] != y.shape[-1]:
+            raise ValueError(
+                "A matrix that isn't square can't be a Cholesky factor of a correlation matrix"
+            )
         D = y.shape[-1]
 
-        z_tri = torch.zeros(y.shape[:-2] + (D - 2, D - 2), dtype=y.dtype, device=y.device)
-        z_stack = [
-            y[..., 1:, 0]
-        ]
+        z_tri = torch.zeros(
+            y.shape[:-2] + (D - 2, D - 2), dtype=y.dtype, device=y.device
+        )
+        z_stack = [y[..., 1:, 0]]
 
         for i in range(2, D):
-            z_tri[..., i - 2, 0:(i - 1)] = y[..., i, 1:i] / (1 - y[..., i, 0:(i - 1)].pow(2).cumsum(-1)).sqrt()
+            z_tri[..., i - 2, 0 : (i - 1)] = (
+                y[..., i, 1:i] / (1 - y[..., i, 0 : (i - 1)].pow(2).cumsum(-1)).sqrt()
+            )
         for j in range(D - 2):
             z_stack.append(z_tri[..., j:, j])
 
@@ -74,7 +81,9 @@ class CorrLCholeskyTransform(Transform):
     def log_abs_det_jacobian(self, x, y):
         # Note dependence on pytorch 1.0.1 for batched tril
         tanpart = x.cosh().log().sum(-1).mul(-2)
-        matpart = (1 - y.pow(2).cumsum(-1).tril(diagonal=-2)).log().div(2).sum(-1).sum(-1)
+        matpart = (
+            (1 - y.pow(2).cumsum(-1).tril(diagonal=-2)).log().div(2).sum(-1).sum(-1)
+        )
         return tanpart + matpart
 
 
@@ -100,7 +109,9 @@ class CholeskyTransform(Transform):
         # Ref: http://web.mit.edu/18.325/www/handouts/handout2.pdf page 13
         n = x.shape[-1]
         order = torch.arange(n, 0, -1, dtype=x.dtype, device=x.device)
-        return -n * math.log(2) - (order * torch.diagonal(y, dim1=-2, dim2=-1).log()).sum(-1)
+        return -n * math.log(2) - (
+            order * torch.diagonal(y, dim1=-2, dim2=-1).log()
+        ).sum(-1)
 
 
 class CorrMatrixCholeskyTransform(CholeskyTransform):

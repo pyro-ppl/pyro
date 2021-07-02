@@ -11,9 +11,12 @@ class ReplayMessenger(OrigReplayMessenger):
     except that it calls :func:`~pyro.contrib.funsor.to_data` on the replayed funsor values.
     This may result in different unpacked shapes, but should produce correct allocations.
     """
+
     def _pyro_sample(self, msg):
         name = msg["name"]
-        msg["replay_active"] = True  # indicate replaying so importance weights can be scaled
+        msg[
+            "replay_active"
+        ] = True  # indicate replaying so importance weights can be scaled
         if self.trace is None:
             return
 
@@ -24,7 +27,9 @@ class ReplayMessenger(OrigReplayMessenger):
                 raise RuntimeError("site {} must be sample in trace".format(name))
             # TODO make this work with sequential enumeration
             if guide_msg.get("funsor", {}).get("value", None) is not None:
-                msg["value"] = to_data(guide_msg["funsor"]["value"])  # only difference is here
+                msg["value"] = to_data(
+                    guide_msg["funsor"]["value"]
+                )  # only difference is here
             else:
                 msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]

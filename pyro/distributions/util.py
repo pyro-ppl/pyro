@@ -31,26 +31,26 @@ def copy_docs_from(source_class, full_text=False):
         # if not destin_class.__doc__:
         #     destin_class.__doc__ = source_class.__doc__
         for name in dir(destin_class):
-            if name.startswith('_'):
+            if name.startswith("_"):
                 continue
             destin_attr = getattr(destin_class, name)
-            destin_attr = getattr(destin_attr, '__func__', destin_attr)
+            destin_attr = getattr(destin_attr, "__func__", destin_attr)
             source_attr = getattr(source_class, name, None)
-            source_doc = getattr(source_attr, '__doc__', None)
-            if source_doc and not getattr(destin_attr, '__doc__', None):
-                if full_text or source_doc.startswith('See '):
+            source_doc = getattr(source_attr, "__doc__", None)
+            if source_doc and not getattr(destin_attr, "__doc__", None):
+                if full_text or source_doc.startswith("See "):
                     destin_doc = source_doc
                 else:
-                    destin_doc = 'See :meth:`{}.{}.{}`'.format(
-                        source_class.__module__, source_class.__name__, name)
+                    destin_doc = "See :meth:`{}.{}.{}`".format(
+                        source_class.__module__, source_class.__name__, name
+                    )
                 if isinstance(destin_attr, property):
                     # Set docs for object properties.
                     # Since __doc__ is read-only, we need to reset the property
                     # with the updated doc.
-                    updated_property = property(destin_attr.fget,
-                                                destin_attr.fset,
-                                                destin_attr.fdel,
-                                                destin_doc)
+                    updated_property = property(
+                        destin_attr.fget, destin_attr.fset, destin_attr.fdel, destin_doc
+                    )
                     setattr(destin_class, name, updated_property)
                 else:
                     destin_attr.__doc__ = destin_doc
@@ -75,11 +75,13 @@ def weakmethod(fn):
             def _callback(self, result):
                 print(result)
     """
+
     def weak_fn(weakself, *args, **kwargs):
         self = weakself()
         if self is None:
-            raise AttributeError("self was garbage collected when calling self.{}"
-                                 .format(fn.__name__))
+            raise AttributeError(
+                "self was garbage collected when calling self.{}".format(fn.__name__)
+            )
         return fn(self, *args, **kwargs)
 
     @property
@@ -89,8 +91,12 @@ def weakmethod(fn):
 
     @weak_binder.setter
     def weak_binder(self, new):
-        if not (isinstance(new, functools.partial) and new.func is weak_fn and
-                len(new.args) == 1 and new.args[0] is weakref.ref(self)):
+        if not (
+            isinstance(new, functools.partial)
+            and new.func is weak_fn
+            and len(new.args) == 1
+            and new.args[0] is weakref.ref(self)
+        ):
             raise AttributeError("cannot overwrite weakmethod {}".format(fn.__name__))
 
     return weak_binder
@@ -127,11 +133,7 @@ def detach(obj):
 torch_jit_script_if_tracing = getattr(
     torch.jit,
     "script_if_tracing",
-    getattr(
-        torch.jit,
-        "_script_if_tracing",
-        torch.jit.script
-    ),
+    getattr(torch.jit, "_script_if_tracing", torch.jit.script),
 )
 
 
@@ -172,7 +174,7 @@ def broadcast_shape(*shapes, **kwargs):
     :rtype: tuple
     :raises: ValueError
     """
-    strict = kwargs.pop('strict', False)
+    strict = kwargs.pop("strict", False)
     reversed_shape = []
     for shape in shapes:
         for i, size in enumerate(reversed(shape)):
@@ -181,8 +183,11 @@ def broadcast_shape(*shapes, **kwargs):
             elif reversed_shape[i] == 1 and not strict:
                 reversed_shape[i] = size
             elif reversed_shape[i] != size and (size != 1 or strict):
-                raise ValueError('shape mismatch: objects cannot be broadcast to a single shape: {}'.format(
-                    ' vs '.join(map(str, shapes))))
+                raise ValueError(
+                    "shape mismatch: objects cannot be broadcast to a single shape: {}".format(
+                        " vs ".join(map(str, shapes))
+                    )
+                )
     return tuple(reversed(reversed_shape))
 
 
@@ -284,7 +289,7 @@ def eye_like(value, m, n=None):
     if n is None:
         n = m
     eye = torch.zeros(m, n, dtype=value.dtype, device=value.device)
-    eye.view(-1)[:min(m, n) * n:n + 1] = 1
+    eye.view(-1)[: min(m, n) * n : n + 1] = 1
     return eye
 
 

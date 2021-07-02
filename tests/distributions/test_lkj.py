@@ -29,8 +29,12 @@ def test_constraint(value_shape):
 
 def _autograd_log_det(ys, x):
     # computes log_abs_det_jacobian of y w.r.t. x
-    return torch.stack([torch.autograd.grad(y, (x,), retain_graph=True)[0]
-                        for y in ys]).det().abs().log()
+    return (
+        torch.stack([torch.autograd.grad(y, (x,), retain_graph=True)[0] for y in ys])
+        .det()
+        .abs()
+        .log()
+    )
 
 
 @pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
@@ -89,7 +93,7 @@ def test_corr_cholesky_transform(x_shape, mapping):
 
 @pytest.mark.parametrize("dim", [2, 3, 4, 10])
 def test_log_prob_conc1(dim):
-    dist = LKJCholesky(dim, torch.tensor([1.]))
+    dist = LKJCholesky(dim, torch.tensor([1.0]))
 
     a_sample = dist.sample(torch.Size([100]))
     lp = dist.log_prob(a_sample)
@@ -97,17 +101,30 @@ def test_log_prob_conc1(dim):
     if dim == 2:
         assert_equal(lp, lp.new_full(lp.size(), -math.log(2)))
     else:
-        ladj = a_sample.diagonal(dim1=-2, dim2=-1).log().mul(
-            torch.linspace(start=dim-1, end=0, steps=dim, device=a_sample.device, dtype=a_sample.dtype)
-        ).sum(-1)
+        ladj = (
+            a_sample.diagonal(dim1=-2, dim2=-1)
+            .log()
+            .mul(
+                torch.linspace(
+                    start=dim - 1,
+                    end=0,
+                    steps=dim,
+                    device=a_sample.device,
+                    dtype=a_sample.dtype,
+                )
+            )
+            .sum(-1)
+        )
         lps_less_ladj = lp - ladj
         assert (lps_less_ladj - lps_less_ladj.min()).abs().sum() < 1e-4
 
 
-@pytest.mark.parametrize("concentration", [.1, .5, 1., 2., 5.])
+@pytest.mark.parametrize("concentration", [0.1, 0.5, 1.0, 2.0, 5.0])
 def test_log_prob_d2(concentration):
     dist = LKJCholesky(2, torch.tensor([concentration]))
-    test_dist = TransformedDistribution(Beta(concentration, concentration), AffineTransform(loc=-1., scale=2.0))
+    test_dist = TransformedDistribution(
+        Beta(concentration, concentration), AffineTransform(loc=-1.0, scale=2.0)
+    )
 
     samples = dist.sample(torch.Size([100]))
     lp = dist.log_prob(samples)

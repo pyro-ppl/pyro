@@ -29,10 +29,10 @@ def get_moments(x):
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("centered", [0., 0.6, 1., torch.tensor(0.4), None])
+@pytest.mark.parametrize("centered", [0.0, 0.6, 1.0, torch.tensor(0.4), None])
 @pytest.mark.parametrize("dist_type", ["Normal", "StudentT", "AsymmetricLaplace"])
 def test_moments(dist_type, centered, shape):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
     if isinstance(centered, torch.Tensor):
         centered = centered.expand(shape)
@@ -73,10 +73,10 @@ def test_moments(dist_type, centered, shape):
 
 
 @pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("centered", [0., 0.6, 1., torch.tensor(0.4), None])
+@pytest.mark.parametrize("centered", [0.0, 0.6, 1.0, torch.tensor(0.4), None])
 @pytest.mark.parametrize("dist_type", ["Normal", "StudentT", "AsymmetricLaplace"])
 def test_init(dist_type, centered, shape):
-    loc = torch.empty(shape).uniform_(-1., 1.)
+    loc = torch.empty(shape).uniform_(-1.0, 1.0)
     scale = torch.empty(shape).uniform_(0.5, 1.5)
 
     def model():

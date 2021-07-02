@@ -56,9 +56,11 @@ logger = logging.getLogger(__name__)
 
 def _require_double_precision():
     if torch.get_default_dtype() != torch.float64:
-        warnings.warn("CompartmentalModel is unstable for dtypes less than torch.float64; "
-                      "try torch.set_default_dtype(torch.float64)",
-                      RuntimeWarning)
+        warnings.warn(
+            "CompartmentalModel is unstable for dtypes less than torch.float64; "
+            "try torch.set_default_dtype(torch.float64)",
+            RuntimeWarning,
+        )
 
 
 @contextmanager
@@ -71,8 +73,9 @@ def _disallow_latent_variables(section_name):
         yield
     for name, site in tr.trace.nodes.items():
         if site["type"] == "sample" and not site["is_observed"]:
-            raise NotImplementedError("{} contained latent variable {}"
-                                      .format(section_name, name))
+            raise NotImplementedError(
+                "{} contained latent variable {}".format(section_name, name)
+            )
 
 
 class CompartmentalModel(ABC):
@@ -144,8 +147,7 @@ class CompartmentalModel(ABC):
         are continuous-valued with support ``(-0.5, population + 0.5)``.
     """
 
-    def __init__(self, compartments, duration, population, *,
-                 approximate=()):
+    def __init__(self, compartments, duration, population, *, approximate=()):
         super().__init__()
 
         assert isinstance(duration, int)
@@ -183,8 +185,9 @@ class CompartmentalModel(ABC):
         A ``pyro.plate`` for the time dimension.
         """
         if self._time_plate is None:
-            self._time_plate = pyro.plate("time", self.duration,
-                                          dim=-2 if self.is_regional else -1)
+            self._time_plate = pyro.plate(
+                "time", self.duration, dim=-2 if self.is_regional else -1
+            )
         return self._time_plate
 
     @property
@@ -211,8 +214,13 @@ class CompartmentalModel(ABC):
         """
         with torch.no_grad(), poutine.block(), poutine.trace() as tr:
             self.global_model()
-        return [tuple(name for name, site in tr.trace.iter_stochastic_nodes()
-                      if not site_is_subsample(site))]
+        return [
+            tuple(
+                name
+                for name, site in tr.trace.iter_stochastic_nodes()
+                if not site_is_subsample(site)
+            )
+        ]
 
     @lazy_property
     def series(self):
@@ -228,10 +236,12 @@ class CompartmentalModel(ABC):
             curr = prev.copy()
             with poutine.trace() as tr:
                 self.transition(params, curr, 0)
-        return frozenset(re.match("(.*)_0", name).group(1)
-                         for name, site in tr.trace.nodes.items()
-                         if site["type"] == "sample"
-                         if not site_is_subsample(site))
+        return frozenset(
+            re.match("(.*)_0", name).group(1)
+            for name, site in tr.trace.nodes.items()
+            if site["type"] == "sample"
+            if not site_is_subsample(site)
+        )
 
     # Overridable attributes and methods ########################################
 
@@ -362,26 +372,31 @@ class CompartmentalModel(ABC):
         model = self._generative_model
         model = poutine.condition(model, fixed)
         trace = poutine.trace(model).get_trace()
-        samples = OrderedDict((name, site["value"])
-                              for name, site in trace.nodes.items()
-                              if site["type"] == "sample")
+        samples = OrderedDict(
+            (name, site["value"])
+            for name, site in trace.nodes.items()
+            if site["type"] == "sample"
+        )
 
         self._concat_series(samples, trace)
         return samples
 
-    def fit_svi(self, *,
-                num_samples=100,
-                num_steps=2000,
-                num_particles=32,
-                learning_rate=0.1,
-                learning_rate_decay=0.01,
-                betas=(0.8, 0.99),
-                haar=True,
-                init_scale=0.01,
-                guide_rank=0,
-                jit=False,
-                log_every=200,
-                **options):
+    def fit_svi(
+        self,
+        *,
+        num_samples=100,
+        num_steps=2000,
+        num_particles=32,
+        learning_rate=0.1,
+        learning_rate_decay=0.01,
+        betas=(0.8, 0.99),
+        haar=True,
+        init_scale=0.01,
+        guide_rank=0,
+        jit=False,
+        log_every=200,
+        **options,
+    ):
         """
         Runs stochastic variational inference to generate posterior samples.
 
@@ -435,9 +450,11 @@ class CompartmentalModel(ABC):
             haar = _HaarSplitReparam(0, self.duration, dims, supports)
 
         # Heuristically initialize to feasible latents.
-        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
-                             for k in list(options)
-                             if k.startswith("heuristic_")}
+        heuristic_options = {
+            k.replace("heuristic_", ""): options.pop(k)
+            for k in list(options)
+            if k.startswith("heuristic_")
+        }
         assert not options, "unrecognized options: {}".format(", ".join(options))
         init_strategy = self._heuristic(haar, **heuristic_options)
 
@@ -449,19 +466,29 @@ class CompartmentalModel(ABC):
         if guide_rank == 0:
             guide = AutoNormal(model, init_loc_fn=init_strategy, init_scale=init_scale)
         elif guide_rank == "full":
-            guide = AutoMultivariateNormal(model, init_loc_fn=init_strategy,
-                                           init_scale=init_scale)
+            guide = AutoMultivariateNormal(
+                model, init_loc_fn=init_strategy, init_scale=init_scale
+            )
         elif guide_rank is None or isinstance(guide_rank, int):
-            guide = AutoLowRankMultivariateNormal(model, init_loc_fn=init_strategy,
-                                                  init_scale=init_scale, rank=guide_rank)
+            guide = AutoLowRankMultivariateNormal(
+                model, init_loc_fn=init_strategy, init_scale=init_scale, rank=guide_rank
+            )
         else:
             raise ValueError("Invalid guide_rank: {}".format(guide_rank))
         Elbo = JitTrace_ELBO if jit else Trace_ELBO
-        elbo = Elbo(max_plate_nesting=self.max_plate_nesting,
-                    num_particles=num_particles, vectorize_particles=True,
-                    ignore_jit_warnings=True)
-        optim = ClippedAdam({"lr": learning_rate, "betas": betas,
-                             "lrd": learning_rate_decay ** (1 / num_steps)})
+        elbo = Elbo(
+            max_plate_nesting=self.max_plate_nesting,
+            num_particles=num_particles,
+            vectorize_particles=True,
+            ignore_jit_warnings=True,
+        )
+        optim = ClippedAdam(
+            {
+                "lr": learning_rate,
+                "betas": betas,
+                "lrd": learning_rate_decay ** (1 / num_steps),
+            }
+        )
         svi = SVI(model, guide, optim, elbo)
 
         # Run inference.
@@ -473,24 +500,33 @@ class CompartmentalModel(ABC):
                 logger.info("step {} loss = {:0.4g}".format(step, loss))
             losses.append(loss)
         elapsed = default_timer() - start_time
-        logger.info("SVI took {:0.1f} seconds, {:0.1f} step/sec"
-                    .format(elapsed, (1 + num_steps) / elapsed))
+        logger.info(
+            "SVI took {:0.1f} seconds, {:0.1f} step/sec".format(
+                elapsed, (1 + num_steps) / elapsed
+            )
+        )
 
         # Draw posterior samples.
         with torch.no_grad():
-            particle_plate = pyro.plate("particles", num_samples,
-                                        dim=-1 - self.max_plate_nesting)
+            particle_plate = pyro.plate(
+                "particles", num_samples, dim=-1 - self.max_plate_nesting
+            )
             guide_trace = poutine.trace(particle_plate(guide)).get_trace()
             model_trace = poutine.trace(
-                poutine.replay(particle_plate(model), guide_trace)).get_trace()
-            self.samples = {name: site["value"] for name, site in model_trace.nodes.items()
-                            if site["type"] == "sample"
-                            if not site["is_observed"]
-                            if not site_is_subsample(site)}
+                poutine.replay(particle_plate(model), guide_trace)
+            ).get_trace()
+            self.samples = {
+                name: site["value"]
+                for name, site in model_trace.nodes.items()
+                if site["type"] == "sample"
+                if not site["is_observed"]
+                if not site_is_subsample(site)
+            }
             if haar:
                 haar.aux_to_user(self.samples)
-        assert all(v.size(0) == num_samples for v in self.samples.values()), \
-            {k: tuple(v.shape) for k, v in self.samples.items()}
+        assert all(v.size(0) == num_samples for v in self.samples.values()), {
+            k: tuple(v.shape) for k, v in self.samples.items()
+        }
 
         return losses
 
@@ -573,26 +609,31 @@ class CompartmentalModel(ABC):
             full_mass[0] += tuple(name + "_haar_split_0" for name in sorted(dims))
 
         # Heuristically initialize to feasible latents.
-        heuristic_options = {k.replace("heuristic_", ""): options.pop(k)
-                             for k in list(options)
-                             if k.startswith("heuristic_")}
+        heuristic_options = {
+            k.replace("heuristic_", ""): options.pop(k)
+            for k in list(options)
+            if k.startswith("heuristic_")
+        }
         init_strategy = init_to_generated(
-            generate=functools.partial(self._heuristic, haar, **heuristic_options))
+            generate=functools.partial(self._heuristic, haar, **heuristic_options)
+        )
 
         # Configure a kernel.
         logger.info("Running inference...")
         model = self._relaxed_model if self.relaxed else self._quantized_model
         if haar:
             model = haar.reparam(model)
-        kernel = NUTS(model,
-                      full_mass=full_mass,
-                      init_strategy=init_strategy,
-                      max_plate_nesting=self.max_plate_nesting,
-                      jit_compile=options.pop("jit_compile", False),
-                      jit_options=options.pop("jit_options", None),
-                      ignore_jit_warnings=options.pop("ignore_jit_warnings", True),
-                      target_accept_prob=options.pop("target_accept_prob", 0.8),
-                      max_tree_depth=options.pop("max_tree_depth", 5))
+        kernel = NUTS(
+            model,
+            full_mass=full_mass,
+            init_strategy=init_strategy,
+            max_plate_nesting=self.max_plate_nesting,
+            jit_compile=options.pop("jit_compile", False),
+            jit_options=options.pop("jit_options", None),
+            ignore_jit_warnings=options.pop("ignore_jit_warnings", True),
+            target_accept_prob=options.pop("target_accept_prob", 0.8),
+            max_tree_depth=options.pop("max_tree_depth", 5),
+        )
         if options.pop("arrowhead_mass", False):
             kernel.mass_matrix_adapter = ArrowheadMassMatrix()
 
@@ -607,10 +648,12 @@ class CompartmentalModel(ABC):
         # Unsqueeze samples to align particle dim for use in poutine.condition.
         # TODO refactor to an align_samples or particle_dim kwarg to MCMC.get_samples().
         model = self._relaxed_model if self.relaxed else self._quantized_model
-        self.samples = align_samples(self.samples, model,
-                                     particle_dim=-1 - self.max_plate_nesting)
-        assert all(v.size(0) == num_samples * num_chains for v in self.samples.values()), \
-            {k: tuple(v.shape) for k, v in self.samples.items()}
+        self.samples = align_samples(
+            self.samples, model, particle_dim=-1 - self.max_plate_nesting
+        )
+        assert all(
+            v.size(0) == num_samples * num_chains for v in self.samples.values()
+        ), {k: tuple(v.shape) for k, v in self.samples.items()}
 
         return mcmc  # E.g. so user can run mcmc.summary().
 
@@ -636,28 +679,35 @@ class CompartmentalModel(ABC):
 
         samples = self.samples
         num_samples = len(next(iter(samples.values())))
-        particle_plate = pyro.plate("particles", num_samples,
-                                    dim=-1 - self.max_plate_nesting)
+        particle_plate = pyro.plate(
+            "particles", num_samples, dim=-1 - self.max_plate_nesting
+        )
 
         # Sample discrete auxiliary variables conditioned on the continuous
         # variables sampled by _quantized_model. This samples only time steps
         # [0:duration]. Here infer_discrete runs a forward-filter
         # backward-sample algorithm.
-        logger.info("Predicting latent variables for {} time steps..."
-                    .format(self.duration))
+        logger.info(
+            "Predicting latent variables for {} time steps...".format(self.duration)
+        )
         model = self._sequential_model
         model = poutine.condition(model, samples)
         model = particle_plate(model)
         if not self.relaxed:
-            model = infer_discrete(model, first_available_dim=-2 - self.max_plate_nesting)
+            model = infer_discrete(
+                model, first_available_dim=-2 - self.max_plate_nesting
+            )
         trace = poutine.trace(model).get_trace()
-        samples = OrderedDict((name, site["value"].expand(site["fn"].shape()))
-                              for name, site in trace.nodes.items()
-                              if site["type"] == "sample"
-                              if not site_is_subsample(site)
-                              if not site_is_factor(site))
-        assert all(v.size(0) == num_samples for v in samples.values()), \
-            {k: tuple(v.shape) for k, v in samples.items()}
+        samples = OrderedDict(
+            (name, site["value"].expand(site["fn"].shape()))
+            for name, site in trace.nodes.items()
+            if site["type"] == "sample"
+            if not site_is_subsample(site)
+            if not site_is_factor(site)
+        )
+        assert all(v.size(0) == num_samples for v in samples.values()), {
+            k: tuple(v.shape) for k, v in samples.items()
+        }
 
         # Optionally forecast with the forward _generative_model. This samples
         # time steps [duration:duration+forecast].
@@ -667,15 +717,18 @@ class CompartmentalModel(ABC):
             model = poutine.condition(model, samples)
             model = particle_plate(model)
             trace = poutine.trace(model).get_trace(forecast)
-            samples = OrderedDict((name, site["value"])
-                                  for name, site in trace.nodes.items()
-                                  if site["type"] == "sample"
-                                  if not site_is_subsample(site)
-                                  if not site_is_factor(site))
+            samples = OrderedDict(
+                (name, site["value"])
+                for name, site in trace.nodes.items()
+                if site["type"] == "sample"
+                if not site_is_subsample(site)
+                if not site_is_factor(site)
+            )
 
         self._concat_series(samples, trace, forecast)
-        assert all(v.size(0) == num_samples for v in samples.values()), \
-            {k: tuple(v.shape) for k, v in samples.items()}
+        assert all(v.size(0) == num_samples for v in samples.values()), {
+            k: tuple(v.shape) for k, v in samples.items()
+        }
         return samples
 
     @torch.no_grad()
@@ -701,9 +754,13 @@ class CompartmentalModel(ABC):
         model = _SMCModel(self)
         guide = _SMCGuide(self)
         for attempt in range(1, 1 + retries):
-            smc = SMCFilter(model, guide, num_particles=num_particles,
-                            ess_threshold=ess_threshold,
-                            max_plate_nesting=self.max_plate_nesting)
+            smc = SMCFilter(
+                model,
+                guide,
+                num_particles=num_particles,
+                ess_threshold=ess_threshold,
+                max_plate_nesting=self.max_plate_nesting,
+            )
             try:
                 smc.init()
                 for t in range(1, self.duration):
@@ -732,12 +789,16 @@ class CompartmentalModel(ABC):
         with poutine.block():
             init_values = self.heuristic(**options)
         assert isinstance(init_values, dict)
-        assert "auxiliary" in init_values, \
-            ".heuristic() did not define auxiliary value"
-        logger.info("Heuristic init: {}".format(", ".join(
-            "{}={:0.3g}".format(k, v.item())
-            for k, v in sorted(init_values.items())
-            if v.numel() == 1)))
+        assert "auxiliary" in init_values, ".heuristic() did not define auxiliary value"
+        logger.info(
+            "Heuristic init: {}".format(
+                ", ".join(
+                    "{}={:0.3g}".format(k, v.item())
+                    for k, v in sorted(init_values.items())
+                    if v.numel() == 1
+                )
+            )
+        )
         return init_to_value(values=init_values, fallback=None)
 
     def _concat_series(self, samples, trace, forecast=0):
@@ -807,9 +868,13 @@ class CompartmentalModel(ABC):
 
         # Sample the compartmental continuous reparameterizing variable.
         shape = (C, T) + R_shape
-        auxiliary = pyro.sample("auxiliary",
-                                dist.Uniform(-0.5, self.population + 0.5)
-                                    .mask(False).expand(shape).to_event())
+        auxiliary = pyro.sample(
+            "auxiliary",
+            dist.Uniform(-0.5, self.population + 0.5)
+            .mask(False)
+            .expand(shape)
+            .to_event(),
+        )
         extra_dims = auxiliary.dim() - len(shape)
 
         # Sample any non-compartmental time series in batch.
@@ -848,9 +913,10 @@ class CompartmentalModel(ABC):
         if is_validation_enabled():
             for key in self.compartments:
                 if not torch.allclose(state[key], curr[key]):
-                    raise ValueError("Incorrect state['{}'] update in .transition(), "
-                                     "check that .transition() matches .compute_flows()."
-                                     .format(key))
+                    raise ValueError(
+                        "Incorrect state['{}'] update in .transition(), "
+                        "check that .transition() matches .compute_flows().".format(key)
+                    )
 
     def _generative_model(self, forecast=0):
         """
@@ -861,8 +927,10 @@ class CompartmentalModel(ABC):
 
         # Sample initial values.
         state = self.initialize(params)
-        state = {k: v if isinstance(v, torch.Tensor) else torch.tensor(float(v))
-                 for k, v in state.items()}
+        state = {
+            k: v if isinstance(v, torch.Tensor) else torch.tensor(float(v))
+            for k, v in state.items()
+        }
 
         # Sequentially transition.
         for t in range(self.duration + forecast):
@@ -871,7 +939,9 @@ class CompartmentalModel(ABC):
             self.transition(params, state, t)
             with self.region_plate:
                 for name in self.compartments:
-                    pyro.deterministic("{}_{}".format(name, t), state[name], event_dim=0)
+                    pyro.deterministic(
+                        "{}_{}".format(name, t), state[name], event_dim=0
+                    )
 
         self._clear_plates()
 
@@ -892,8 +962,10 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Reshape to accommodate the time_plate below.
-        assert auxiliary.shape == (num_samples, C, T) + R_shape, \
-            (auxiliary.shape, (num_samples, C, T) + R_shape)
+        assert auxiliary.shape == (num_samples, C, T) + R_shape, (
+            auxiliary.shape,
+            (num_samples, C, T) + R_shape,
+        )
         aux = [aux.unbind(2) for aux in auxiliary.unsqueeze(1).unbind(2)]
 
         # Sequentially transition.
@@ -904,13 +976,17 @@ class CompartmentalModel(ABC):
 
                 # Extract any non-compartmental variables.
                 for name, value in non_compartmental.items():
-                    curr[name] = value[:, t:t+1]
+                    curr[name] = value[:, t : t + 1]
 
                 # Extract and enumerate all compartmental variables.
                 for c, name in enumerate(self.compartments):
-                    curr[name] = quantize("{}_{}".format(name, t), aux[c][t],
-                                          min=0, max=self.population,
-                                          num_quant_bins=self.num_quant_bins)
+                    curr[name] = quantize(
+                        "{}_{}".format(name, t),
+                        aux[c][t],
+                        min=0,
+                        max=self.population,
+                        num_quant_bins=self.num_quant_bins,
+                    )
                     # Enable approximate inference by using aux as a
                     # non-enumerated proxy for enumerated compartment values.
                     if name in self.approximate:
@@ -936,8 +1012,9 @@ class CompartmentalModel(ABC):
         auxiliary, non_compartmental = self._sample_auxiliary()
 
         # Manually enumerate.
-        curr, logp = quantize_enumerate(auxiliary, min=0, max=self.population,
-                                        num_quant_bins=self.num_quant_bins)
+        curr, logp = quantize_enumerate(
+            auxiliary, min=0, max=self.population, num_quant_bins=self.num_quant_bins
+        )
         curr = OrderedDict(zip(self.compartments, curr.unbind(0)))
         logp = OrderedDict(zip(self.compartments, logp.unbind(0)))
         curr.update(non_compartmental)
@@ -949,8 +1026,9 @@ class CompartmentalModel(ABC):
             if name in self.compartments:
                 if isinstance(value, torch.Tensor):
                     value = value[..., None]  # Because curr is enumerated on the right.
-                prev[name] = cat2(value, curr[name][:-1],
-                                  dim=-3 if self.is_regional else -2)
+                prev[name] = cat2(
+                    value, curr[name][:-1], dim=-3 if self.is_regional else -2
+                )
             else:  # non-compartmental
                 prev[name] = cat2(init[name], curr[name][:-1], dim=-curr[name].dim())
 
@@ -973,8 +1051,9 @@ class CompartmentalModel(ABC):
         for name in self.approximate:
             aux = auxiliary[self.compartments.index(name)]
             curr[name + "_approx"] = aux
-            prev[name + "_approx"] = cat2(init[name], aux[:-1],
-                                          dim=-2 if self.is_regional else -1)
+            prev[name + "_approx"] = cat2(
+                init[name], aux[:-1], dim=-2 if self.is_regional else -1
+            )
 
         # Record transition factors.
         with poutine.block(), poutine.trace() as tr:
@@ -990,14 +1069,18 @@ class CompartmentalModel(ABC):
                     continue
                 if self.is_regional and log_prob.shape[-1:] != R_shape:
                     # Poor man's tensor variable elimination.
-                    log_prob = log_prob.expand(log_prob.shape[:-1] + R_shape) / R_shape[0]
+                    log_prob = (
+                        log_prob.expand(log_prob.shape[:-1] + R_shape) / R_shape[0]
+                    )
                 logp[name] = site["log_prob"]
 
         # Manually perform variable elimination.
         logp = reduce(operator.add, logp.values())
         logp = logp.reshape(Q ** C, Q ** C, T, -1)  # prev, curr, T, batch
         logp = logp.permute(3, 2, 0, 1).squeeze(0)  # batch, T, prev, curr
-        logp = pyro.distributions.hmm._sequential_logmatmulexp(logp)  # batch, prev, curr
+        logp = pyro.distributions.hmm._sequential_logmatmulexp(
+            logp
+        )  # batch, prev, curr
         logp = logp.reshape(-1, Q ** C * Q ** C).logsumexp(-1).sum()
         warn_if_nan(logp)
         pyro.factor("transition", logp)
@@ -1056,6 +1139,7 @@ class _SMCModel:
     """
     Helper to initialize a CompartmentalModel to a feasible initial state.
     """
+
     def __init__(self, model):
         assert isinstance(model, CompartmentalModel)
         self.model = model
@@ -1097,6 +1181,7 @@ class _SMCGuide(_SMCModel):
     """
     Like _SMCModel but does not update state and does not observe.
     """
+
     def init(self, state):
         super().init(state.copy())
 
@@ -1110,6 +1195,7 @@ class _HaarSplitReparam:
     Wrapper around ``HaarReparam`` and ``SplitReparam`` to additionally convert
     sample dicts between user-facing and auxiliary coordinates.
     """
+
     def __init__(self, split, duration, dims, supports):
         assert 0 <= split < duration
         self.split = split
@@ -1147,10 +1233,13 @@ class _HaarSplitReparam:
         if self.split:
             # Transform back from SplitReparam coordinates.
             for name, dim in self.dims.items():
-                samples[name + "_haar"] = torch.cat([
-                    samples.pop(name + "_haar_split_0"),
-                    samples.pop(name + "_haar_split_1"),
-                ], dim=dim)
+                samples[name + "_haar"] = torch.cat(
+                    [
+                        samples.pop(name + "_haar_split_0"),
+                        samples.pop(name + "_haar_split_1"),
+                    ],
+                    dim=dim,
+                )
 
         # Transform back from Haar coordinates.
         for name, dim in self.dims.items():

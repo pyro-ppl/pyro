@@ -43,9 +43,11 @@ def _get_sample_fn(module, name):
     # otherwise, we do inference in unconstrained space and transform the value
     # back to original space
     # TODO: move this logic to infer.autoguide or somewhere else
-    unconstrained_value = pyro.sample(module._pyro_get_fullname("{}_latent".format(name)),
-                                      guide.to_event(),
-                                      infer={"is_auxiliary": True})
+    unconstrained_value = pyro.sample(
+        module._pyro_get_fullname("{}_latent".format(name)),
+        guide.to_event(),
+        infer={"is_auxiliary": True},
+    )
     transform = biject_to(support)
     value = transform(unconstrained_value)
     log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
@@ -86,6 +88,7 @@ class Parameterized(PyroModule):
     :meth:`~torch.nn.Module.cuda`. See :class:`torch.nn.Module` for more
     information.
     """
+
     def __init__(self):
         super().__init__()
         self._priors = OrderedDict()
@@ -100,8 +103,11 @@ class Parameterized(PyroModule):
         :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
             distribution.
         """
-        warnings.warn("The method `self.set_prior({}, prior)` has been deprecated"
-                      " in favor of `self.{} = PyroSample(prior)`.".format(name, name), UserWarning)
+        warnings.warn(
+            "The method `self.set_prior({}, prior)` has been deprecated"
+            " in favor of `self.{} = PyroSample(prior)`.".format(name, name),
+            UserWarning,
+        )
         setattr(self, name, PyroSample(prior))
 
     def __setattr__(self, name, value):
@@ -132,8 +138,9 @@ class Parameterized(PyroModule):
             raise ValueError("There is no prior for parameter: {}".format(name))
 
         if dist_constructor not in [dist.Delta, dist.Normal, dist.MultivariateNormal]:
-            raise NotImplementedError("Unsupported distribution type: {}"
-                                      .format(dist_constructor))
+            raise NotImplementedError(
+                "Unsupported distribution type: {}".format(dist_constructor)
+            )
 
         # delete old guide
         if name in self._guides:
@@ -159,8 +166,9 @@ class Parameterized(PyroModule):
         elif dist_constructor is dist.MultivariateNormal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             identity = eye_like(loc, loc.size(-1))
-            scale_tril = PyroParam(identity.repeat(loc.shape[:-1] + (1, 1)),
-                                   constraints.lower_cholesky)
+            scale_tril = PyroParam(
+                identity.repeat(loc.shape[:-1] + (1, 1)), constraints.lower_cholesky
+            )
             setattr(self, "{}_loc".format(name), loc)
             setattr(self, "{}_scale_tril".format(name), scale_tril)
             dist_args = ("loc", "scale_tril")

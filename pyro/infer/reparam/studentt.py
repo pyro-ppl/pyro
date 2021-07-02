@@ -21,6 +21,7 @@ class StudentTReparam(Reparam):
     an auxiliary :class:`~pyro.distributions.Gamma` variable conditioned on
     which the result is :class:`~pyro.distributions.Normal` .
     """
+
     def apply(self, msg):
         name = msg["name"]
         fn = msg["fn"]
@@ -32,8 +33,9 @@ class StudentTReparam(Reparam):
 
         # Draw a sample that depends only on df.
         half_df = fn.df * 0.5
-        gamma = pyro.sample("{}_gamma".format(name),
-                            self._wrap(dist.Gamma(half_df, half_df), event_dim))
+        gamma = pyro.sample(
+            "{}_gamma".format(name), self._wrap(dist.Gamma(half_df, half_df), event_dim)
+        )
 
         # Construct a scaled Normal.
         loc = fn.loc

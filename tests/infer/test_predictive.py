@@ -15,7 +15,7 @@ from tests.common import assert_close
 
 def model(num_trials):
     with pyro.plate("data", num_trials.size(0)):
-        phi_prior = dist.Uniform(num_trials.new_tensor(0.), num_trials.new_tensor(1.))
+        phi_prior = dist.Uniform(num_trials.new_tensor(0.0), num_trials.new_tensor(1.0))
         success_prob = pyro.sample("phi", phi_prior)
         return pyro.sample("obs", dist.Binomial(num_trials, success_prob))
 
@@ -28,8 +28,12 @@ def one_hot_model(pseudocounts, classes=None):
 
 
 def beta_guide(num_trials):
-    phi_c0 = pyro.param("phi_c0", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
-    phi_c1 = pyro.param("phi_c1", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
+    phi_c0 = pyro.param(
+        "phi_c0", num_trials.new_tensor(5.0).expand([num_trials.size(0)])
+    )
+    phi_c1 = pyro.param(
+        "phi_c1", num_trials.new_tensor(5.0).expand([num_trials.size(0)])
+    )
     with pyro.plate("data", num_trials.size(0)):
         phi_posterior = dist.Beta(concentration0=phi_c0, concentration1=phi_c1)
         pyro.sample("phi", phi_posterior)
@@ -45,8 +49,13 @@ def test_posterior_predictive_svi_manual_guide(parallel):
     svi = SVI(conditioned_model, beta_guide, optim.Adam(dict(lr=1.0)), elbo)
     for i in range(1000):
         svi.step(num_trials)
-    posterior_predictive = Predictive(model, guide=beta_guide, num_samples=10000,
-                                      parallel=parallel, return_sites=["_RETURN"])
+    posterior_predictive = Predictive(
+        model,
+        guide=beta_guide,
+        num_samples=10000,
+        parallel=parallel,
+        return_sites=["_RETURN"],
+    )
     marginal_return_vals = posterior_predictive(num_trials)["_RETURN"]
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
@@ -61,7 +70,9 @@ def test_posterior_predictive_svi_auto_delta_guide(parallel):
     svi = SVI(conditioned_model, guide, optim.Adam(dict(lr=1.0)), Trace_ELBO())
     for i in range(1000):
         svi.step(num_trials)
-    posterior_predictive = Predictive(model, guide=guide, num_samples=10000, parallel=parallel)
+    posterior_predictive = Predictive(
+        model, guide=guide, num_samples=10000, parallel=parallel
+    )
     marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
@@ -76,9 +87,13 @@ def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace):
     svi = SVI(conditioned_model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
     for i in range(1000):
         svi.step(num_trials)
-    posterior_predictive = Predictive(model, guide=guide, num_samples=10000, parallel=True)
+    posterior_predictive = Predictive(
+        model, guide=guide, num_samples=10000, parallel=True
+    )
     if return_trace:
-        marginal_return_vals = posterior_predictive.get_vectorized_trace(num_trials).nodes["obs"]["value"]
+        marginal_return_vals = posterior_predictive.get_vectorized_trace(
+            num_trials
+        ).nodes["obs"]["value"]
     else:
         marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
@@ -117,8 +132,13 @@ def test_shapes(parallel):
     expected = poutine.replay(vectorize(model), trace)()
 
     # Use Predictive.
-    predictive = Predictive(model, guide=guide, return_sites=["x", "y"],
-                            num_samples=num_samples, parallel=parallel)
+    predictive = Predictive(
+        model,
+        guide=guide,
+        return_sites=["x", "y"],
+        num_samples=num_samples,
+        parallel=parallel,
+    )
     actual = predictive.get_samples()
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
@@ -136,13 +156,15 @@ def test_deterministic(with_plate, event_shape):
         pyro.deterministic("x3", x2)
         return pyro.sample("obs", dist.Normal(x2, 0.1).to_event(), obs=y)
 
-    y = torch.tensor(4.)
+    y = torch.tensor(4.0)
     guide = AutoDiagonalNormal(model)
     svi = SVI(model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
     for i in range(100):
         svi.step(y)
 
-    actual = Predictive(model, guide=guide, return_sites=["x2", "x3"], num_samples=1000)()
+    actual = Predictive(
+        model, guide=guide, return_sites=["x2", "x3"], num_samples=1000
+    )()
     x2_batch_shape = (3,) if with_plate else ()
     assert actual["x2"].shape == (1000,) + x2_batch_shape + event_shape
     # x3 shape is prepended 1 to match Pyro shape semantics
@@ -153,10 +175,9 @@ def test_deterministic(with_plate, event_shape):
 
 
 def test_get_mask_optimization():
-
     def model():
         x = pyro.sample("x", dist.Normal(0, 1))
-        pyro.sample("y", dist.Normal(x, 1), obs=torch.tensor(0.))
+        pyro.sample("y", dist.Normal(x, 1), obs=torch.tensor(0.0))
         called.add("model-always")
         if poutine.get_mask() is not False:
             called.add("model-sometimes")

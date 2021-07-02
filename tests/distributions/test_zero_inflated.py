@@ -80,10 +80,14 @@ def test_zip_mean_variance(gate, rate):
 def test_zinb_0_gate(total_count, probs):
     # if gate is 0 ZINB is NegativeBinomial
     zinb1 = ZeroInflatedNegativeBinomial(
-        total_count=torch.tensor(total_count), gate=torch.zeros(1), probs=torch.tensor(probs)
+        total_count=torch.tensor(total_count),
+        gate=torch.zeros(1),
+        probs=torch.tensor(probs),
     )
     zinb2 = ZeroInflatedNegativeBinomial(
-        total_count=torch.tensor(total_count), gate_logits=torch.tensor(-99.9), probs=torch.tensor(probs)
+        total_count=torch.tensor(total_count),
+        gate_logits=torch.tensor(-99.9),
+        probs=torch.tensor(probs),
     )
     neg_bin = NegativeBinomial(torch.tensor(total_count), probs=torch.tensor(probs))
     s = neg_bin.sample((20,))
@@ -99,10 +103,14 @@ def test_zinb_0_gate(total_count, probs):
 def test_zinb_1_gate(total_count, probs):
     # if gate is 1 ZINB is Delta(0)
     zinb1 = ZeroInflatedNegativeBinomial(
-        total_count=torch.tensor(total_count), gate=torch.ones(1), probs=torch.tensor(probs)
+        total_count=torch.tensor(total_count),
+        gate=torch.ones(1),
+        probs=torch.tensor(probs),
     )
     zinb2 = ZeroInflatedNegativeBinomial(
-        total_count=torch.tensor(total_count), gate_logits=torch.tensor(math.inf), probs=torch.tensor(probs)
+        total_count=torch.tensor(total_count),
+        gate_logits=torch.tensor(math.inf),
+        probs=torch.tensor(probs),
     )
     delta = Delta(torch.zeros(1))
     s = torch.tensor([0.0, 1.0])

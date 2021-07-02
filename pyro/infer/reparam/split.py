@@ -29,6 +29,7 @@ class SplitReparam(Reparam):
     :type: list(int)
     :param int dim: Dimension along which to split. Defaults to -1.
     """
+
     def __init__(self, sections, dim):
         assert isinstance(dim, int) and dim < 0
         assert isinstance(sections, list)
@@ -51,7 +52,7 @@ class SplitReparam(Reparam):
         # Draw independent parts.
         dim = fn.event_dim - self.event_dim
         left_shape = fn.event_shape[:dim]
-        right_shape = fn.event_shape[1 + dim:]
+        right_shape = fn.event_shape[1 + dim :]
         for i, size in enumerate(self.sections):
             event_shape = left_shape + (size,) + right_shape
             value_split[i] = pyro.sample(

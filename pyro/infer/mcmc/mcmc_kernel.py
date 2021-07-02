@@ -5,7 +5,6 @@ from abc import ABCMeta, abstractmethod
 
 
 class MCMCKernel(object, metaclass=ABCMeta):
-
     def setup(self, warmup_steps, *args, **kwargs):
         r"""
         Optional method to set up any state required at the start of the

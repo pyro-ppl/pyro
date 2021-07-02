@@ -40,12 +40,15 @@ class SkewLogistic(TorchDistribution):
         distribution.
     """
 
-    arg_constraints = {"loc": constraints.real, "scale": constraints.positive,
-                       "asymmetry": constraints.positive}
+    arg_constraints = {
+        "loc": constraints.real,
+        "scale": constraints.positive,
+        "asymmetry": constraints.positive,
+    }
     support = constraints.real
     has_rsample = True
 
-    def __init__(self, loc, scale, asymmetry=1., *, validate_args=None):
+    def __init__(self, loc, scale, asymmetry=1.0, *, validate_args=None):
         self.loc, self.scale, self.asymmetry = broadcast_all(loc, scale, asymmetry)
         super().__init__(self.loc.shape, validate_args=validate_args)
 

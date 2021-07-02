@@ -29,14 +29,24 @@ def get_moments(x):
 
 
 @pytest.mark.parametrize("flip", [False, True])
-@pytest.mark.parametrize("shape,dim", [
-    ((6,), -1),
-    ((2, 5,), -1),
-    ((4, 2), -2),
-    ((2, 3, 1), -2),
-], ids=str)
+@pytest.mark.parametrize(
+    "shape,dim",
+    [
+        ((6,), -1),
+        (
+            (
+                2,
+                5,
+            ),
+            -1,
+        ),
+        ((4, 2), -2),
+        ((2, 3, 1), -2),
+    ],
+    ids=str,
+)
 def test_normal(shape, dim, flip):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():
@@ -64,14 +74,23 @@ def test_normal(shape, dim, flip):
 
 
 @pytest.mark.parametrize("flip", [False, True])
-@pytest.mark.parametrize("shape,dim", [
-    ((6,), -1),
-    ((2, 5,), -1),
-    ((4, 2), -2),
-    ((2, 3, 1), -2),
-], ids=str)
+@pytest.mark.parametrize(
+    "shape,dim",
+    [
+        ((6,), -1),
+        (
+            (
+                2,
+                5,
+            ),
+            -1,
+        ),
+        ((4, 2), -2),
+        ((2, 3, 1), -2),
+    ],
+    ids=str,
+)
 def test_uniform(shape, dim, flip):
-
     def model():
         with pyro.plate_stack("plates", shape[:dim]):
             with pyro.plate("particles", 10000):
@@ -90,14 +109,24 @@ def test_uniform(shape, dim, flip):
 
 
 @pytest.mark.parametrize("flip", [False, True])
-@pytest.mark.parametrize("shape,dim", [
-    ((6,), -1),
-    ((2, 5,), -1),
-    ((4, 2), -2),
-    ((2, 3, 1), -2),
-], ids=str)
+@pytest.mark.parametrize(
+    "shape,dim",
+    [
+        ((6,), -1),
+        (
+            (
+                2,
+                5,
+            ),
+            -1,
+        ),
+        ((4, 2), -2),
+        ((2, 3, 1), -2),
+    ],
+    ids=str,
+)
 def test_init(shape, dim, flip):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():

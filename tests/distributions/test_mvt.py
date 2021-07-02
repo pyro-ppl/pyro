@@ -24,18 +24,38 @@ def random_mvt(df_shape, loc_shape, cov_shape, dim):
     return MultivariateStudentT(df, loc, scale_tril)
 
 
-@pytest.mark.parametrize('df_shape', [
-    (), (2,), (3, 2),
-])
-@pytest.mark.parametrize('loc_shape', [
-    (), (2,), (3, 2),
-])
-@pytest.mark.parametrize('cov_shape', [
-    (), (2,), (3, 2),
-])
-@pytest.mark.parametrize('dim', [
-    1, 3, 5,
-])
+@pytest.mark.parametrize(
+    "df_shape",
+    [
+        (),
+        (2,),
+        (3, 2),
+    ],
+)
+@pytest.mark.parametrize(
+    "loc_shape",
+    [
+        (),
+        (2,),
+        (3, 2),
+    ],
+)
+@pytest.mark.parametrize(
+    "cov_shape",
+    [
+        (),
+        (2,),
+        (3, 2),
+    ],
+)
+@pytest.mark.parametrize(
+    "dim",
+    [
+        1,
+        3,
+        5,
+    ],
+)
 def test_shape(df_shape, loc_shape, cov_shape, dim):
     mvt = random_mvt(df_shape, loc_shape, cov_shape, dim)
     assert mvt.df.shape == mvt.batch_shape
@@ -50,11 +70,15 @@ def test_shape(df_shape, loc_shape, cov_shape, dim):
     (mvt.precision_matrix.sum() + mvt.log_prob(torch.zeros(dim)).sum()).backward()
 
 
-@pytest.mark.parametrize("batch_shape", [
-    (),
-    (3, 2),
-    (4,),
-], ids=str)
+@pytest.mark.parametrize(
+    "batch_shape",
+    [
+        (),
+        (3, 2),
+        (4,),
+    ],
+    ids=str,
+)
 @pytest.mark.parametrize("dim", [1, 2])
 def test_log_prob(batch_shape, dim):
     loc = torch.randn(batch_shape + (dim,))
@@ -65,7 +89,9 @@ def test_log_prob(batch_shape, dim):
     actual_log_prob = MultivariateStudentT(df, loc, scale_tril).log_prob(x)
 
     if dim == 1:
-        expected_log_prob = StudentT(df.unsqueeze(-1), loc, scale_tril[..., 0]).log_prob(x).sum(-1)
+        expected_log_prob = (
+            StudentT(df.unsqueeze(-1), loc, scale_tril[..., 0]).log_prob(x).sum(-1)
+        )
         assert_equal(actual_log_prob, expected_log_prob)
 
     # test the fact MVT(df, loc, scale)(x) = int MVN(loc, scale / m)(x) Gamma(df/2,df/2)(m) dm
@@ -101,7 +127,9 @@ def test_rsample(dim, df, num_samples=200 * 1000):
 
 @pytest.mark.parametrize("dim", [1, 2])
 def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
-    scale_tril = (0.2 * torch.randn(dim) - 1.5).exp().diag() + 0.1 * torch.randn(dim, dim)
+    scale_tril = (0.2 * torch.randn(dim) - 1.5).exp().diag() + 0.1 * torch.randn(
+        dim, dim
+    )
     scale_tril = 0.1 * scale_tril.tril(0)
 
     volume_factor = domain_width
@@ -111,7 +139,9 @@ def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
         prec = 0.05
 
     sample_shape = (grid_size * grid_size, dim)
-    z = torch.distributions.Uniform(-0.5 * domain_width, 0.5 * domain_width).sample(sample_shape)
+    z = torch.distributions.Uniform(-0.5 * domain_width, 0.5 * domain_width).sample(
+        sample_shape
+    )
 
     d = MultivariateStudentT(torch.tensor(df), torch.zeros(dim), scale_tril)
     normalizer = d.log_prob(z).exp().mean().item() * volume_factor
@@ -119,11 +149,15 @@ def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
     assert_equal(normalizer, 1.0, prec=prec)
 
 
-@pytest.mark.parametrize("batch_shape", [
-    (),
-    (3, 2),
-    (4,),
-], ids=str)
+@pytest.mark.parametrize(
+    "batch_shape",
+    [
+        (),
+        (3, 2),
+        (4,),
+    ],
+    ids=str,
+)
 def test_mean_var(batch_shape):
     dim = 2
     loc = torch.randn(batch_shape + (dim,))
@@ -138,9 +172,15 @@ def test_mean_var(batch_shape):
     assert_equal(d.mean, expected_mean, prec=0.1)
     assert_equal(d.variance, expected_variance, prec=0.2)
 
-    assert_equal(MultivariateStudentT(0.5, loc, scale_tril).mean,
-                 torch.full(batch_shape + (dim,), float('nan')))
-    assert_equal(MultivariateStudentT(0.5, loc, scale_tril).variance,
-                 torch.full(batch_shape + (dim,), float('nan')))
-    assert_equal(MultivariateStudentT(1.5, loc, scale_tril).variance,
-                 torch.full(batch_shape + (dim,), float('inf')))
+    assert_equal(
+        MultivariateStudentT(0.5, loc, scale_tril).mean,
+        torch.full(batch_shape + (dim,), float("nan")),
+    )
+    assert_equal(
+        MultivariateStudentT(0.5, loc, scale_tril).variance,
+        torch.full(batch_shape + (dim,), float("nan")),
+    )
+    assert_equal(
+        MultivariateStudentT(1.5, loc, scale_tril).variance,
+        torch.full(batch_shape + (dim,), float("inf")),
+    )

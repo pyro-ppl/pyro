@@ -45,104 +45,107 @@ def test_simple():
     y = torch.ones(2)
 
     def f(x):
-        logger.debug('Inside f')
+        logger.debug("Inside f")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
             assert x is y
         return y + 1.0
 
-    logger.debug('Compiling f')
+    logger.debug("Compiling f")
     f = torch.jit.trace(f, (y,), check_trace=False)
-    logger.debug('Calling f(y)')
-    assert_equal(f(y), torch.tensor([2., 2.]))
-    logger.debug('Calling f(y)')
-    assert_equal(f(y), torch.tensor([2., 2.]))
-    logger.debug('Calling f(torch.zeros(2))')
-    assert_equal(f(torch.zeros(2)), torch.tensor([1., 1.]))
-    logger.debug('Calling f(torch.zeros(5))')
-    assert_equal(f(torch.ones(5)), torch.tensor([2., 2., 2., 2., 2.]))
+    logger.debug("Calling f(y)")
+    assert_equal(f(y), torch.tensor([2.0, 2.0]))
+    logger.debug("Calling f(y)")
+    assert_equal(f(y), torch.tensor([2.0, 2.0]))
+    logger.debug("Calling f(torch.zeros(2))")
+    assert_equal(f(torch.zeros(2)), torch.tensor([1.0, 1.0]))
+    logger.debug("Calling f(torch.zeros(5))")
+    assert_equal(f(torch.ones(5)), torch.tensor([2.0, 2.0, 2.0, 2.0, 2.0]))
 
 
 def test_multi_output():
     y = torch.ones(2)
 
     def f(x):
-        logger.debug('Inside f')
+        logger.debug("Inside f")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
             assert x is y
         return y - 1.0, y + 1.0
 
-    logger.debug('Compiling f')
+    logger.debug("Compiling f")
     f = torch.jit.trace(f, (y,), check_trace=False)
-    logger.debug('Calling f(y)')
-    assert_equal(f(y)[1], torch.tensor([2., 2.]))
-    logger.debug('Calling f(y)')
-    assert_equal(f(y)[1], torch.tensor([2., 2.]))
-    logger.debug('Calling f(torch.zeros(2))')
-    assert_equal(f(torch.zeros(2))[1], torch.tensor([1., 1.]))
-    logger.debug('Calling f(torch.zeros(5))')
-    assert_equal(f(torch.ones(5))[1], torch.tensor([2., 2., 2., 2., 2.]))
+    logger.debug("Calling f(y)")
+    assert_equal(f(y)[1], torch.tensor([2.0, 2.0]))
+    logger.debug("Calling f(y)")
+    assert_equal(f(y)[1], torch.tensor([2.0, 2.0]))
+    logger.debug("Calling f(torch.zeros(2))")
+    assert_equal(f(torch.zeros(2))[1], torch.tensor([1.0, 1.0]))
+    logger.debug("Calling f(torch.zeros(5))")
+    assert_equal(f(torch.ones(5))[1], torch.tensor([2.0, 2.0, 2.0, 2.0, 2.0]))
 
 
 def test_backward():
     y = torch.ones(2, requires_grad=True)
 
     def f(x):
-        logger.debug('Inside f')
+        logger.debug("Inside f")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
             assert x is y
         return (y + 1.0).sum()
 
-    logger.debug('Compiling f')
+    logger.debug("Compiling f")
     f = torch.jit.trace(f, (y,), check_trace=False)
-    logger.debug('Calling f(y)')
+    logger.debug("Calling f(y)")
     f(y).backward()
-    logger.debug('Calling f(y)')
+    logger.debug("Calling f(y)")
     f(y)
-    logger.debug('Calling f(torch.zeros(2))')
+    logger.debug("Calling f(torch.zeros(2))")
     f(torch.zeros(2, requires_grad=True))
-    logger.debug('Calling f(torch.zeros(5))')
+    logger.debug("Calling f(torch.zeros(5))")
     f(torch.ones(5, requires_grad=True))
 
 
 @pytest.mark.xfail(reason="grad cannot appear in jitted code")
 def test_grad():
-
     def f(x, y):
-        logger.debug('Inside f')
+        logger.debug("Inside f")
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
-    logger.debug('Compiling f')
-    f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True)))
-    logger.debug('Invoking f')
+    logger.debug("Compiling f")
+    f = torch.jit.trace(
+        f, (torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
+    )
+    logger.debug("Invoking f")
     f(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
-    logger.debug('Invoking f')
+    logger.debug("Invoking f")
     f(torch.zeros(2, requires_grad=True), torch.zeros(2, requires_grad=True))
 
 
 @pytest.mark.xfail(reason="grad cannot appear in jitted code")
 def test_grad_expand():
-
     def f(x, y):
-        logger.debug('Inside f')
+        logger.debug("Inside f")
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
-    logger.debug('Compiling f')
-    f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True)))
-    logger.debug('Invoking f')
+    logger.debug("Compiling f")
+    f = torch.jit.trace(
+        f, (torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
+    )
+    logger.debug("Invoking f")
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
-    logger.debug('Invoking f')
+    logger.debug("Invoking f")
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
 def test_scale_and_mask():
-    def f(tensor, scale, mask): return scale_and_mask(tensor, scale=scale, mask=mask)
+    def f(tensor, scale, mask):
+        return scale_and_mask(tensor, scale=scale, mask=mask)
 
-    x = torch.tensor([-float('inf'), -1., 0., 1., float('inf')])
+    x = torch.tensor([-float("inf"), -1.0, 0.0, 1.0, float("inf")])
     y = x / x.unsqueeze(-1)
     mask = y == y
     scale = torch.ones(y.shape)
@@ -156,11 +159,10 @@ def test_scale_and_mask():
 
 
 def test_masked_fill():
-
     def f(y, mask):
-        return y.clone().masked_fill_(mask, 0.)
+        return y.clone().masked_fill_(mask, 0.0)
 
-    x = torch.tensor([-float('inf'), -1., 0., 1., float('inf')])
+    x = torch.tensor([-float("inf"), -1.0, 0.0, 1.0, float("inf")])
     y = x / x.unsqueeze(-1)
     mask = ~(y == y)
     jit_f = torch.jit.trace(f, (y, mask))
@@ -173,7 +175,6 @@ def test_masked_fill():
 
 @pytest.mark.xfail(reason="https://github.com/pytorch/pytorch/issues/11614")
 def test_scatter():
-
     def make_one_hot(x, i):
         return torch.zeros_like(x).scatter(-1, i.unsqueeze(-1), 1.0)
 
@@ -182,9 +183,8 @@ def test_scatter():
     torch.jit.trace(make_one_hot, (x, i))
 
 
-@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python integer')
+@pytest.mark.filterwarnings("ignore:Converting a tensor to a Python integer")
 def test_scatter_workaround():
-
     def make_one_hot_expected(x, i):
         return torch.zeros_like(x).scatter(-1, i.unsqueeze(-1), 1.0)
 
@@ -200,9 +200,9 @@ def test_scatter_workaround():
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
-@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python boolean')
+@pytest.mark.parametrize("expand", [False, True])
+@pytest.mark.parametrize("shape", [(), (4,), (5, 4)])
+@pytest.mark.filterwarnings("ignore:Converting a tensor to a Python boolean")
 def test_bernoulli_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.full(shape, 0.25)
@@ -217,8 +217,8 @@ def test_bernoulli_enumerate(shape, expand):
     assert log_prob.shape == (2,) + shape
 
 
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
+@pytest.mark.parametrize("expand", [False, True])
+@pytest.mark.parametrize("shape", [(3,), (4, 3), (5, 4, 3)])
 def test_categorical_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.ones(shape)
@@ -234,9 +234,9 @@ def test_categorical_enumerate(shape, expand):
     assert log_prob.shape == shape[-1:] + batch_shape
 
 
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
-@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python integer')
+@pytest.mark.parametrize("expand", [False, True])
+@pytest.mark.parametrize("shape", [(3,), (4, 3), (5, 4, 3)])
+@pytest.mark.filterwarnings("ignore:Converting a tensor to a Python integer")
 def test_one_hot_categorical_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.ones(shape)
@@ -252,25 +252,30 @@ def test_one_hot_categorical_enumerate(shape, expand):
     assert log_prob.shape == shape[-1:] + batch_shape
 
 
-@pytest.mark.parametrize('num_particles', [1, 10])
-@pytest.mark.parametrize('Elbo', [
-    Trace_ELBO,
-    JitTrace_ELBO,
-    TraceGraph_ELBO,
-    JitTraceGraph_ELBO,
-    TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
-    TraceMeanField_ELBO,
-    JitTraceMeanField_ELBO,
-])
+@pytest.mark.parametrize("num_particles", [1, 10])
+@pytest.mark.parametrize(
+    "Elbo",
+    [
+        Trace_ELBO,
+        JitTrace_ELBO,
+        TraceGraph_ELBO,
+        JitTraceGraph_ELBO,
+        TraceEnum_ELBO,
+        JitTraceEnum_ELBO,
+        TraceMeanField_ELBO,
+        JitTraceMeanField_ELBO,
+    ],
+)
 def test_svi(Elbo, num_particles):
     pyro.clear_param_store()
-    data = torch.arange(10.)
+    data = torch.arange(10.0)
 
     def model(data):
         loc = pyro.param("loc", constant(0.0))
         scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
-        pyro.sample("x", dist.Normal(loc, scale).expand_by(data.shape).to_event(1), obs=data)
+        pyro.sample(
+            "x", dist.Normal(loc, scale).expand_by(data.shape).to_event(1), obs=data
+        )
 
     def guide(data):
         pass
@@ -299,7 +304,9 @@ def test_svi_enum(plate_dim, enumerate1, enumerate2):
         q = pyro.param("q")
         pyro.sample("x", dist.Bernoulli(q), infer={"enumerate": enumerate1})
         for i in pyro.plate("plate", plate_dim):
-            pyro.sample("y_{}".format(i), dist.Bernoulli(q), infer={"enumerate": enumerate2})
+            pyro.sample(
+                "y_{}".format(i), dist.Bernoulli(q), infer={"enumerate": enumerate2}
+            )
 
     kl = (1 + plate_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     expected_loss = kl.item()
@@ -307,26 +314,44 @@ def test_svi_enum(plate_dim, enumerate1, enumerate2):
 
     inner_particles = 2
     outer_particles = num_particles // inner_particles
-    elbo = TraceEnum_ELBO(max_plate_nesting=0,
-                          strict_enumeration_warning=any([enumerate1, enumerate2]),
-                          num_particles=inner_particles,
-                          ignore_jit_warnings=True)
-    actual_loss = sum(elbo.loss_and_grads(model, guide)
-                      for i in range(outer_particles)) / outer_particles
+    elbo = TraceEnum_ELBO(
+        max_plate_nesting=0,
+        strict_enumeration_warning=any([enumerate1, enumerate2]),
+        num_particles=inner_particles,
+        ignore_jit_warnings=True,
+    )
+    actual_loss = (
+        sum(elbo.loss_and_grads(model, guide) for i in range(outer_particles))
+        / outer_particles
+    )
     actual_grad = q.unconstrained().grad / outer_particles
 
-    assert_equal(actual_loss, expected_loss, prec=0.3, msg="".join([
-        "\nexpected loss = {}".format(expected_loss),
-        "\n  actual loss = {}".format(actual_loss),
-    ]))
-    assert_equal(actual_grad, expected_grad, prec=0.5, msg="".join([
-        "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
-        "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
-    ]))
+    assert_equal(
+        actual_loss,
+        expected_loss,
+        prec=0.3,
+        msg="".join(
+            [
+                "\nexpected loss = {}".format(expected_loss),
+                "\n  actual loss = {}".format(actual_loss),
+            ]
+        ),
+    )
+    assert_equal(
+        actual_grad,
+        expected_grad,
+        prec=0.5,
+        msg="".join(
+            [
+                "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
+                "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
+            ]
+        ),
+    )
 
 
-@pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parametrize("vectorized", [False, True])
+@pytest.mark.parametrize("Elbo", [TraceEnum_ELBO, JitTraceEnum_ELBO])
 def test_beta_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
@@ -342,35 +367,39 @@ def test_beta_bernoulli(Elbo, vectorized):
         alpha0 = constant(10.0)
         beta0 = constant(10.0)
         f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
-        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1),
-                    obs=data)
+        pyro.sample(
+            "obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1), obs=data
+        )
 
     model = model2 if vectorized else model1
 
     def guide(data):
-        alpha_q = pyro.param("alpha_q", constant(15.0),
-                             constraint=constraints.positive)
-        beta_q = pyro.param("beta_q", constant(15.0),
-                            constraint=constraints.positive)
+        alpha_q = pyro.param("alpha_q", constant(15.0), constraint=constraints.positive)
+        beta_q = pyro.param("beta_q", constant(15.0), constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Beta(alpha_q, beta_q))
 
-    elbo = Elbo(num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True)
+    elbo = Elbo(
+        num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True
+    )
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
         svi.step(data)
 
 
-@pytest.mark.parametrize('Elbo', [
-    Trace_ELBO,
-    JitTrace_ELBO,
-    TraceGraph_ELBO,
-    JitTraceGraph_ELBO,
-    TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
-    TraceMeanField_ELBO,
-    JitTraceMeanField_ELBO,
-])
+@pytest.mark.parametrize(
+    "Elbo",
+    [
+        Trace_ELBO,
+        JitTrace_ELBO,
+        TraceGraph_ELBO,
+        JitTraceGraph_ELBO,
+        TraceEnum_ELBO,
+        JitTraceEnum_ELBO,
+        TraceMeanField_ELBO,
+        JitTraceMeanField_ELBO,
+    ],
+)
 def test_svi_irregular_batch_size(Elbo):
     pyro.clear_param_store()
 
@@ -379,9 +408,7 @@ def test_svi_irregular_batch_size(Elbo):
         loc = pyro.param("loc", constant(0.0))
         scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
         with pyro.plate("data", data.shape[0]):
-            pyro.sample("x",
-                        dist.Normal(loc, scale).expand([data.shape[0]]),
-                        obs=data)
+            pyro.sample("x", dist.Normal(loc, scale).expand([data.shape[0]]), obs=data)
 
     def guide(data):
         pass
@@ -393,8 +420,8 @@ def test_svi_irregular_batch_size(Elbo):
     inference.step(torch.ones(3))
 
 
-@pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parametrize("vectorized", [False, True])
+@pytest.mark.parametrize("Elbo", [TraceEnum_ELBO, JitTraceEnum_ELBO])
 def test_dirichlet_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
@@ -408,29 +435,35 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     def model2(data):
         concentration0 = constant([10.0, 10.0])
         f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
-        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1),
-                    obs=data)
+        pyro.sample(
+            "obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1), obs=data
+        )
 
     model = model2 if vectorized else model1
 
     def guide(data):
-        concentration_q = pyro.param("concentration_q", constant([15.0, 15.0]),
-                                     constraint=constraints.positive)
+        concentration_q = pyro.param(
+            "concentration_q", constant([15.0, 15.0]), constraint=constraints.positive
+        )
         pyro.sample("latent_fairness", dist.Dirichlet(concentration_q))
 
-    elbo = Elbo(num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True)
+    elbo = Elbo(
+        num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True
+    )
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
         svi.step(data)
 
 
-@pytest.mark.parametrize('length', [1, 2, 10])
+@pytest.mark.parametrize("length", [1, 2, 10])
 def test_traceenum_elbo(length):
     hidden_dim = 10
-    transition = pyro.param("transition",
-                            0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim),
-                            constraint=constraints.positive)
+    transition = pyro.param(
+        "transition",
+        0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim),
+        constraint=constraints.positive,
+    )
     means = pyro.param("means", torch.arange(float(hidden_dim)))
     data = 1 + 2 * torch.randn(length)
 
@@ -440,19 +473,27 @@ def test_traceenum_elbo(length):
         means = pyro.param("means")
         states = [torch.tensor(0)]
         for t in pyro.markov(range(len(data))):
-            states.append(pyro.sample("states_{}".format(t),
-                                      dist.Categorical(transition[states[-1]]),
-                                      infer={"enumerate": "parallel"}))
-            pyro.sample("obs_{}".format(t),
-                        dist.Normal(means[states[-1]], 1.),
-                        obs=data[t])
+            states.append(
+                pyro.sample(
+                    "states_{}".format(t),
+                    dist.Categorical(transition[states[-1]]),
+                    infer={"enumerate": "parallel"},
+                )
+            )
+            pyro.sample(
+                "obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t]
+            )
         return tuple(states)
 
     def guide(data):
         pass
 
-    expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
-    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
+    expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(
+        model, guide, data
+    )
+    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(
+        model, guide, data
+    )
     assert_equal(expected_loss, actual_loss)
 
     expected_grads = grad(expected_loss, [transition, means], allow_unused=True)
@@ -461,20 +502,23 @@ def test_traceenum_elbo(length):
         assert_equal(e, a, msg="bad gradient for {}".format(name))
 
 
-@pytest.mark.parametrize('length', [1, 2, 10])
-@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+@pytest.mark.parametrize("length", [1, 2, 10])
+@pytest.mark.parametrize("temperature", [0, 1], ids=["map", "sample"])
 def test_infer_discrete(temperature, length):
-
     @ignore_jit_warnings()
     def hmm(transition, means, data):
         states = [torch.tensor(0)]
         for t in pyro.markov(range(len(data))):
-            states.append(pyro.sample("states_{}".format(t),
-                                      dist.Categorical(transition[states[-1]]),
-                                      infer={"enumerate": "parallel"}))
-            pyro.sample("obs_{}".format(t),
-                        dist.Normal(means[states[-1]], 1.),
-                        obs=data[t])
+            states.append(
+                pyro.sample(
+                    "states_{}".format(t),
+                    dist.Categorical(transition[states[-1]]),
+                    infer={"enumerate": "parallel"},
+                )
+            )
+            pyro.sample(
+                "obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t]
+            )
         return tuple(states)
 
     hidden_dim = 10
@@ -494,10 +538,19 @@ def test_infer_discrete(temperature, length):
             assert_equal(state, jit_state)
 
 
-@pytest.mark.parametrize("x,y", [
-    (CondIndepStackFrame("a", -1, torch.tensor(2000), 2), CondIndepStackFrame("a", -1, 2000, 2)),
-    (CondIndepStackFrame("a", -1, 1, 2), CondIndepStackFrame("a", -1, torch.tensor(1), 2)),
-])
+@pytest.mark.parametrize(
+    "x,y",
+    [
+        (
+            CondIndepStackFrame("a", -1, torch.tensor(2000), 2),
+            CondIndepStackFrame("a", -1, 2000, 2),
+        ),
+        (
+            CondIndepStackFrame("a", -1, 1, 2),
+            CondIndepStackFrame("a", -1, torch.tensor(1), 2),
+        ),
+    ],
+)
 def test_cond_indep_equality(x, y):
     assert x == y
     assert not x != y

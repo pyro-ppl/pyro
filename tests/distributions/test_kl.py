@@ -10,7 +10,7 @@ from pyro.distributions.util import sum_rightmost
 from tests.common import assert_close
 
 
-@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
 def test_kl_delta_normal_shape(batch_shape):
     v = torch.randn(batch_shape)
     loc = torch.randn(batch_shape)
@@ -20,8 +20,8 @@ def test_kl_delta_normal_shape(batch_shape):
     assert kl_divergence(p, q).shape == batch_shape
 
 
-@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-@pytest.mark.parametrize('size', [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("size", [1, 2, 3])
 def test_kl_delta_mvn_shape(batch_shape, size):
     v = torch.randn(batch_shape + (size,))
     p = dist.Delta(v, event_dim=1)
@@ -33,20 +33,21 @@ def test_kl_delta_mvn_shape(batch_shape, size):
     assert kl_divergence(p, q).shape == batch_shape
 
 
-@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-@pytest.mark.parametrize('event_shape', [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("event_shape", [(), (4,), (2, 3)], ids=str)
 def test_kl_independent_normal(batch_shape, event_shape):
     shape = batch_shape + event_shape
     p = dist.Normal(torch.randn(shape), torch.randn(shape).exp())
     q = dist.Normal(torch.randn(shape), torch.randn(shape).exp())
-    actual = kl_divergence(dist.Independent(p, len(event_shape)),
-                           dist.Independent(q, len(event_shape)))
+    actual = kl_divergence(
+        dist.Independent(p, len(event_shape)), dist.Independent(q, len(event_shape))
+    )
     expected = sum_rightmost(kl_divergence(p, q), len(event_shape))
     assert_close(actual, expected)
 
 
-@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-@pytest.mark.parametrize('size', [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("size", [1, 2, 3])
 def test_kl_independent_delta_mvn_shape(batch_shape, size):
     v = torch.randn(batch_shape + (size,))
     p = dist.Independent(dist.Delta(v), 1)
@@ -58,8 +59,8 @@ def test_kl_independent_delta_mvn_shape(batch_shape, size):
     assert kl_divergence(p, q).shape == batch_shape
 
 
-@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-@pytest.mark.parametrize('size', [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("size", [1, 2, 3])
 def test_kl_independent_normal_mvn(batch_shape, size):
     loc = torch.randn(batch_shape + (size,))
     scale = torch.randn(batch_shape + (size,)).exp()
@@ -76,9 +77,11 @@ def test_kl_independent_normal_mvn(batch_shape, size):
     assert_close(actual, expected)
 
 
-@pytest.mark.parametrize('shape', [(5,), (4, 5), (2, 3, 5)], ids=str)
-@pytest.mark.parametrize('event_dim', [0, 1])
-@pytest.mark.parametrize('transform', [transforms.ExpTransform(), transforms.StickBreakingTransform()])
+@pytest.mark.parametrize("shape", [(5,), (4, 5), (2, 3, 5)], ids=str)
+@pytest.mark.parametrize("event_dim", [0, 1])
+@pytest.mark.parametrize(
+    "transform", [transforms.ExpTransform(), transforms.StickBreakingTransform()]
+)
 def test_kl_transformed_transformed(shape, event_dim, transform):
     p_base = dist.Normal(torch.zeros(shape), torch.ones(shape)).to_event(event_dim)
     q_base = dist.Normal(torch.ones(shape) * 2, torch.ones(shape)).to_event(event_dim)

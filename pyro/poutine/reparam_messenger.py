@@ -37,6 +37,7 @@ class ReparamMessenger(Messenger):
         :class:`~pyro.infer.reparam.reparam.Reparameterizer` or None.
     :type config: dict or callable
     """
+
     def __init__(self, config):
         super().__init__()
         assert isinstance(config, dict) or callable(config)
@@ -80,12 +81,14 @@ class ReparamMessenger(Messenger):
         # Pass args_kwargs to the reparam via a side channel.
         reparam.args_kwargs = self._args_kwargs
         try:
-            new_msg = reparam.apply({
-                "name": msg["name"],
-                "fn": msg["fn"],
-                "value": msg["value"],
-                "is_observed": msg["is_observed"],
-            })
+            new_msg = reparam.apply(
+                {
+                    "name": msg["name"],
+                    "fn": msg["fn"],
+                    "value": msg["value"],
+                    "is_observed": msg["is_observed"],
+                }
+            )
         finally:
             reparam.args_kwargs = None
 
@@ -118,6 +121,7 @@ class ReparamHandler(object):
     """
     Reparameterization poutine.
     """
+
     def __init__(self, msngr, fn):
         self.msngr = msngr
         self.fn = fn

@@ -13,6 +13,7 @@ class PlateMessenger(SubsampleMessenger):
     Swiss army knife of broadcasting amazingness:
     combines shape inference, independence annotation, and subsampling
     """
+
     def _process_message(self, msg):
         super()._process_message(msg)
         return BroadcastMessenger._pyro_sample(msg)
@@ -72,7 +73,9 @@ def block_plate(name=None, dim=None, *, strict=True):
 
     with block_messengers(predicate) as matches:
         if strict and len(matches) != 1:
-            raise ValueError(f"block_plate matched {len(matches)} messengers. "
-                             "Try either removing the block_plate or "
-                             "setting strict=False.")
+            raise ValueError(
+                f"block_plate matched {len(matches)} messengers. "
+                "Try either removing the block_plate or "
+                "setting strict=False."
+            )
         yield

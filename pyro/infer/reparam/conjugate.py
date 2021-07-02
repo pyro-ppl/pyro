@@ -47,6 +47,7 @@ class ConjugateReparam(Reparam):
         implementation.
     :type guide: ~pyro.distributions.Distribution or callable
     """
+
     def __init__(self, guide):
         self.guide = guide
 
@@ -69,8 +70,10 @@ class ConjugateReparam(Reparam):
         if not fn.has_rsample:
             # Note supporting non-reparameterized sites would require more delicate
             # handling of traced sites than the crude _do_not_trace flag below.
-            raise NotImplementedError("ConjugateReparam inference supports only reparameterized "
-                                      "distributions, but got {}".format(type(fn)))
+            raise NotImplementedError(
+                "ConjugateReparam inference supports only reparameterized "
+                "distributions, but got {}".format(type(fn))
+            )
         value = pyro.sample(
             f"{name}_updated",
             fn,

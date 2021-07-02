@@ -30,20 +30,24 @@ class TestOneHotCategorical(TestCase):
         # Discrete Distribution
         self.d_ps = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.1, 0.8]])
         self.d_test_data = torch.tensor([[0.0], [5.0]])
-        self.d_v_test_data = [['a'], ['f']]
+        self.d_v_test_data = [["a"], ["f"]]
 
         self.n_samples = 50000
 
-        self.support_one_hot_non_vec = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        self.support_one_hot = torch.tensor([[[1, 0, 0], [1, 0, 0]],
-                                             [[0, 1, 0], [0, 1, 0]],
-                                             [[0, 0, 1], [0, 0, 1]]])
+        self.support_one_hot_non_vec = torch.tensor(
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        )
+        self.support_one_hot = torch.tensor(
+            [[[1, 0, 0], [1, 0, 0]], [[0, 1, 0], [0, 1, 0]], [[0, 0, 1], [0, 0, 1]]]
+        )
         self.support_non_vec = torch.LongTensor([[0], [1], [2]])
         self.support = torch.LongTensor([[[0], [0]], [[1], [1]], [[2], [2]]])
         self.discrete_support_non_vec = torch.tensor([[0.0], [1.0], [2.0]])
-        self.discrete_support = torch.tensor([[[0.0], [3.0]], [[1.0], [4.0]], [[2.0], [5.0]]])
-        self.discrete_arr_support_non_vec = [['a'], ['b'], ['c']]
-        self.discrete_arr_support = [[['a'], ['d']], [['b'], ['e']], [['c'], ['f']]]
+        self.discrete_support = torch.tensor(
+            [[[0.0], [3.0]], [[1.0], [4.0]], [[2.0], [5.0]]]
+        )
+        self.discrete_arr_support_non_vec = [["a"], ["b"], ["c"]]
+        self.discrete_arr_support = [[["a"], ["d"]], [["b"], ["e"]], [["c"], ["f"]]]
 
     def test_support_non_vectorized(self):
         s = dist.OneHotCategorical(self.d_ps[0].squeeze(0)).enumerate_support()
@@ -57,7 +61,7 @@ class TestOneHotCategorical(TestCase):
 def wrap_nested(x, dim):
     if dim == 0:
         return x
-    return wrap_nested([x], dim-1)
+    return wrap_nested([x], dim - 1)
 
 
 def assert_correct_dimensions(sample, probs):
@@ -77,7 +81,7 @@ def probs(request):
 
 
 def modify_params_using_dims(probs, dim):
-    return torch.tensor(wrap_nested(probs, dim-1))
+    return torch.tensor(wrap_nested(probs, dim - 1))
 
 
 def test_support_dims(dim, probs):
@@ -101,8 +105,10 @@ def test_sample_dims(dim, probs):
 
 
 def test_batch_log_dims(dim, probs):
-    batch_pdf_shape = (3,) + (1,) * (dim-1)
-    expected_log_prob_sum = np.array(wrap_nested(list(np.log(probs)), dim-1)).reshape(*batch_pdf_shape)
+    batch_pdf_shape = (3,) + (1,) * (dim - 1)
+    expected_log_prob_sum = np.array(wrap_nested(list(np.log(probs)), dim - 1)).reshape(
+        *batch_pdf_shape
+    )
     probs = modify_params_using_dims(probs, dim)
     support = dist.OneHotCategorical(probs).enumerate_support()
     log_prob = dist.OneHotCategorical(probs).log_prob(support)

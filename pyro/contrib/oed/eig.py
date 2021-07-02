@@ -22,12 +22,24 @@ __all__ = [
     "posterior_eig",
     "marginal_eig",
     "lfire_eig",
-    "vnmc_eig"
+    "vnmc_eig",
 ]
 
 
-def laplace_eig(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
-                final_num_samples, y_dist=None, eig=True, **prior_entropy_kwargs):
+def laplace_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    guide,
+    loss,
+    optim,
+    num_steps,
+    final_num_samples,
+    y_dist=None,
+    eig=True,
+    **prior_entropy_kwargs
+):
     """
     Estimates the expected information gain (EIG) by making repeated Laplace approximations to the posterior.
 
@@ -57,8 +69,18 @@ def laplace_eig(model, design, observation_labels, target_labels, guide, loss, o
     if target_labels is not None and isinstance(target_labels, str):
         target_labels = [target_labels]
 
-    ape = _laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
-                          final_num_samples, y_dist=y_dist)
+    ape = _laplace_vi_ape(
+        model,
+        design,
+        observation_labels,
+        target_labels,
+        guide,
+        loss,
+        optim,
+        num_steps,
+        final_num_samples,
+        y_dist=y_dist,
+    )
     return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
 
 
@@ -67,19 +89,34 @@ def _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs):
     if eig:
         if mean_field:
             try:
-                prior_entropy = mean_field_entropy(model, [design], whitelist=target_labels)
+                prior_entropy = mean_field_entropy(
+                    model, [design], whitelist=target_labels
+                )
             except NotImplemented:
-                prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
+                prior_entropy = monte_carlo_entropy(
+                    model, design, target_labels, **prior_entropy_kwargs
+                )
         else:
-            prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
+            prior_entropy = monte_carlo_entropy(
+                model, design, target_labels, **prior_entropy_kwargs
+            )
         return prior_entropy - ape
     else:
         return ape
 
 
-def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
-                    final_num_samples, y_dist=None):
-
+def _laplace_vi_ape(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    guide,
+    loss,
+    optim,
+    num_steps,
+    final_num_samples,
+    y_dist=None,
+):
     def posterior_entropy(y_dist, design):
         # Important that y_dist is sampled *within* the function
         y = pyro.sample("conditioning_y", y_dist)
@@ -99,8 +136,10 @@ def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, los
         return entropy
 
     if y_dist is None:
-        y_dist = EmpiricalMarginal(Importance(model, num_samples=final_num_samples).run(design),
-                                   sites=observation_labels)
+        y_dist = EmpiricalMarginal(
+            Importance(model, num_samples=final_num_samples).run(design),
+            sites=observation_labels,
+        )
 
     # Calculate the expected posterior entropy under this distn of y
     loss_dist = EmpiricalMarginal(Search(posterior_entropy).run(y_dist, design))
@@ -110,8 +149,17 @@ def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, los
 
 
 # Deprecated
-def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None,
-           eig=True, **prior_entropy_kwargs):
+def vi_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    vi_parameters,
+    is_parameters,
+    y_dist=None,
+    eig=True,
+    **prior_entropy_kwargs
+):
     """.. deprecated:: 0.4.1
         Use `posterior_eig` instead.
 
@@ -157,19 +205,38 @@ def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_p
 
     """
 
-    warnings.warn("`vi_eig` is deprecated in favour of the amortized version: `posterior_eig`.", DeprecationWarning)
+    warnings.warn(
+        "`vi_eig` is deprecated in favour of the amortized version: `posterior_eig`.",
+        DeprecationWarning,
+    )
 
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
     if target_labels is not None and isinstance(target_labels, str):
         target_labels = [target_labels]
 
-    ape = _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=y_dist)
+    ape = _vi_ape(
+        model,
+        design,
+        observation_labels,
+        target_labels,
+        vi_parameters,
+        is_parameters,
+        y_dist=y_dist,
+    )
     return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
 
 
-def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None):
-    svi_num_steps = vi_parameters.pop('num_steps')
+def _vi_ape(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    vi_parameters,
+    is_parameters,
+    y_dist=None,
+):
+    svi_num_steps = vi_parameters.pop("num_steps")
 
     def posterior_entropy(y_dist, design):
         # Important that y_dist is sampled *within* the function
@@ -187,8 +254,9 @@ def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_
         return entropy
 
     if y_dist is None:
-        y_dist = EmpiricalMarginal(Importance(model, **is_parameters).run(design),
-                                   sites=observation_labels)
+        y_dist = EmpiricalMarginal(
+            Importance(model, **is_parameters).run(design), sites=observation_labels
+        )
 
     # Calculate the expected posterior entropy under this distn of y
     loss_dist = EmpiricalMarginal(Search(posterior_entropy).run(y_dist, design))
@@ -197,8 +265,16 @@ def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_
     return loss
 
 
-def nmc_eig(model, design, observation_labels, target_labels=None,
-            N=100, M=10, M_prime=None, independent_priors=False):
+def nmc_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels=None,
+    N=100,
+    M=10,
+    M_prime=None,
+    independent_priors=False,
+):
     """Nested Monte Carlo estimate of the expected information
     gain (EIG). The estimate is, when there are not any random effects,
 
@@ -251,8 +327,12 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
     trace.compute_log_prob()
 
     if M_prime is not None:
-        y_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in observation_labels}
-        theta_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in target_labels}
+        y_dict = {
+            l: lexpand(trace.nodes[l]["value"], M_prime) for l in observation_labels
+        }
+        theta_dict = {
+            l: lexpand(trace.nodes[l]["value"], M_prime) for l in target_labels
+        }
         theta_dict.update(y_dict)
         # Resample M values of u and compute conditional probabilities
         # WARNING: currently the use of condition does not actually sample
@@ -267,8 +347,9 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
             reexpanded_design = lexpand(design, M_prime, N)
         retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
         retrace.compute_log_prob()
-        conditional_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
-            - math.log(M_prime)
+        conditional_lp = sum(
+            retrace.nodes[l]["log_prob"] for l in observation_labels
+        ).logsumexp(0) - math.log(M_prime)
     else:
         # This assumes that y are independent conditional on theta
         # Furthermore assume that there are no other variables besides theta
@@ -282,18 +363,29 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
     reexpanded_design = lexpand(design, M, 1)  # sample M theta
     retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
     retrace.compute_log_prob()
-    marginal_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
-        - math.log(M)
+    marginal_lp = sum(
+        retrace.nodes[l]["log_prob"] for l in observation_labels
+    ).logsumexp(0) - math.log(M)
 
     terms = conditional_lp - marginal_lp
     nonnan = (~torch.isnan(terms)).sum(0).type_as(terms)
-    terms[torch.isnan(terms)] = 0.
-    return terms.sum(0)/nonnan
+    terms[torch.isnan(terms)] = 0.0
+    return terms.sum(0) / nonnan
 
 
-def donsker_varadhan_eig(model, design, observation_labels, target_labels,
-                         num_samples, num_steps, T, optim, return_history=False,
-                         final_design=None, final_num_samples=None):
+def donsker_varadhan_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    num_samples,
+    num_steps,
+    T,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+):
     """
     Donsker-Varadhan estimate of the expected information gain (EIG).
 
@@ -335,13 +427,35 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
     if isinstance(target_labels, str):
         target_labels = [target_labels]
     loss = _donsker_varadhan_loss(model, T, observation_labels, target_labels)
-    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
-                            final_design, final_num_samples)
+    return opt_eig_ape_loss(
+        design,
+        loss,
+        num_samples,
+        num_steps,
+        optim,
+        return_history,
+        final_design,
+        final_num_samples,
+    )
 
 
-def posterior_eig(model, design, observation_labels, target_labels, num_samples, num_steps, guide, optim,
-                  return_history=False, final_design=None, final_num_samples=None, eig=True, prior_entropy_kwargs={},
-                  *args, **kwargs):
+def posterior_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    num_samples,
+    num_steps,
+    guide,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+    eig=True,
+    prior_entropy_kwargs={},
+    *args,
+    **kwargs
+):
     """
     Posterior estimate of expected information gain (EIG) computed from the average posterior entropy (APE)
     using :math:`EIG(d) = H[p(\\theta)] - APE(d)`. See [1] for full details.
@@ -390,24 +504,68 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
     if isinstance(target_labels, str):
         target_labels = [target_labels]
 
-    ape = _posterior_ape(model, design, observation_labels, target_labels, num_samples, num_steps, guide, optim,
-                         return_history=return_history, final_design=final_design, final_num_samples=final_num_samples,
-                         *args, **kwargs)
+    ape = _posterior_ape(
+        model,
+        design,
+        observation_labels,
+        target_labels,
+        num_samples,
+        num_steps,
+        guide,
+        optim,
+        return_history=return_history,
+        final_design=final_design,
+        final_num_samples=final_num_samples,
+        *args,
+        **kwargs
+    )
     return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
 
 
-def _posterior_ape(model, design, observation_labels, target_labels,
-                   num_samples, num_steps, guide, optim, return_history=False,
-                   final_design=None, final_num_samples=None, *args, **kwargs):
+def _posterior_ape(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    num_samples,
+    num_steps,
+    guide,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+    *args,
+    **kwargs
+):
 
-    loss = _posterior_loss(model, guide, observation_labels, target_labels, *args, **kwargs)
-    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
-                            final_design, final_num_samples)
+    loss = _posterior_loss(
+        model, guide, observation_labels, target_labels, *args, **kwargs
+    )
+    return opt_eig_ape_loss(
+        design,
+        loss,
+        num_samples,
+        num_steps,
+        optim,
+        return_history,
+        final_design,
+        final_num_samples,
+    )
 
 
-def marginal_eig(model, design, observation_labels, target_labels,
-                 num_samples, num_steps, guide, optim, return_history=False,
-                 final_design=None, final_num_samples=None):
+def marginal_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    num_samples,
+    num_steps,
+    guide,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+):
     """Estimate EIG by estimating the marginal entropy :math:`p(y|d)`. See [1] for full details.
 
     The marginal representation of EIG is
@@ -448,13 +606,32 @@ def marginal_eig(model, design, observation_labels, target_labels,
     if isinstance(target_labels, str):
         target_labels = [target_labels]
     loss = _marginal_loss(model, guide, observation_labels, target_labels)
-    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
-                            final_design, final_num_samples)
+    return opt_eig_ape_loss(
+        design,
+        loss,
+        num_samples,
+        num_steps,
+        optim,
+        return_history,
+        final_design,
+        final_num_samples,
+    )
 
 
-def marginal_likelihood_eig(model, design, observation_labels, target_labels,
-                            num_samples, num_steps, marginal_guide, cond_guide, optim,
-                            return_history=False, final_design=None, final_num_samples=None):
+def marginal_likelihood_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    num_samples,
+    num_steps,
+    marginal_guide,
+    cond_guide,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+):
     """Estimates EIG by estimating the marginal entropy, that of :math:`p(y|d)`,
     *and* the conditional entropy, of :math:`p(y|\\theta, d)`, both via Gibbs' Inequality. See [1] for full details.
 
@@ -489,14 +666,35 @@ def marginal_likelihood_eig(model, design, observation_labels, target_labels,
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
         target_labels = [target_labels]
-    loss = _marginal_likelihood_loss(model, marginal_guide, cond_guide, observation_labels, target_labels)
-    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
-                            final_design, final_num_samples)
+    loss = _marginal_likelihood_loss(
+        model, marginal_guide, cond_guide, observation_labels, target_labels
+    )
+    return opt_eig_ape_loss(
+        design,
+        loss,
+        num_samples,
+        num_steps,
+        optim,
+        return_history,
+        final_design,
+        final_num_samples,
+    )
 
 
-def lfire_eig(model, design, observation_labels, target_labels,
-              num_y_samples, num_theta_samples, num_steps, classifier, optim, return_history=False,
-              final_design=None, final_num_samples=None):
+def lfire_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    num_y_samples,
+    num_theta_samples,
+    num_steps,
+    classifier,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+):
     """Estimates the EIG using the method of Likelihood-Free Inference by Ratio Estimation (LFIRE) as in [1].
     LFIRE is run separately for several samples of :math:`\\theta`.
 
@@ -540,17 +738,35 @@ def lfire_eig(model, design, observation_labels, target_labels,
     cond_model = pyro.condition(model, data=theta_dict)
 
     loss = _lfire_loss(model, cond_model, classifier, observation_labels, target_labels)
-    out = opt_eig_ape_loss(expanded_design, loss, num_y_samples, num_steps, optim, return_history,
-                           final_design, final_num_samples)
+    out = opt_eig_ape_loss(
+        expanded_design,
+        loss,
+        num_y_samples,
+        num_steps,
+        optim,
+        return_history,
+        final_design,
+        final_num_samples,
+    )
     if return_history:
         return out[0], out[1].sum(0) / num_theta_samples
     else:
         return out.sum(0) / num_theta_samples
 
 
-def vnmc_eig(model, design, observation_labels, target_labels,
-             num_samples, num_steps, guide, optim, return_history=False,
-             final_design=None, final_num_samples=None):
+def vnmc_eig(
+    model,
+    design,
+    observation_labels,
+    target_labels,
+    num_samples,
+    num_steps,
+    guide,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+):
     """Estimates the EIG using Variational Nested Monte Carlo (VNMC). The VNMC estimate [1] is
 
     .. math::
@@ -596,12 +812,28 @@ def vnmc_eig(model, design, observation_labels, target_labels,
     if isinstance(target_labels, str):
         target_labels = [target_labels]
     loss = _vnmc_eig_loss(model, guide, observation_labels, target_labels)
-    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
-                            final_design, final_num_samples)
+    return opt_eig_ape_loss(
+        design,
+        loss,
+        num_samples,
+        num_steps,
+        optim,
+        return_history,
+        final_design,
+        final_num_samples,
+    )
 
 
-def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_history=False,
-                     final_design=None, final_num_samples=None):
+def opt_eig_ape_loss(
+    design,
+    loss_fn,
+    num_samples,
+    num_steps,
+    optim,
+    return_history=False,
+    final_design=None,
+    final_num_samples=None,
+):
 
     if final_design is None:
         final_design = design
@@ -615,8 +847,9 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
             pyro.infer.util.zero_grads(params)
         with poutine.trace(param_only=True) as param_capture:
             agg_loss, loss = loss_fn(design, num_samples, evaluation=return_history)
-        params = set(site["value"].unconstrained()
-                     for site in param_capture.trace.nodes.values())
+        params = set(
+            site["value"].unconstrained() for site in param_capture.trace.nodes.values()
+        )
         if torch.isnan(agg_loss):
             raise ArithmeticError("Encountered NaN loss in opt_eig_ape_loss")
         agg_loss.backward(retain_graph=True)
@@ -673,10 +906,14 @@ def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
         conditional_model = pyro.condition(model, data=y_dict)
         shuffled_trace = poutine.trace(conditional_model).get_trace(expanded_design)
 
-        T_joint = T(expanded_design, unshuffled_trace, observation_labels, target_labels)
-        T_independent = T(expanded_design, shuffled_trace, observation_labels, target_labels)
+        T_joint = T(
+            expanded_design, unshuffled_trace, observation_labels, target_labels
+        )
+        T_independent = T(
+            expanded_design, shuffled_trace, observation_labels, target_labels
+        )
 
-        joint_expectation = T_joint.sum(0)/num_particles
+        joint_expectation = T_joint.sum(0) / num_particles
 
         A = T_independent - math.log(num_particles)
         s, _ = torch.max(A, dim=0)
@@ -690,7 +927,9 @@ def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
     return loss_fn
 
 
-def _posterior_loss(model, guide, observation_labels, target_labels, analytic_entropy=False):
+def _posterior_loss(
+    model, guide, observation_labels, target_labels, analytic_entropy=False
+):
     """Posterior loss: to evaluate directly use `posterior_eig` setting `num_steps=0`, `eig=False`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
@@ -705,12 +944,18 @@ def _posterior_loss(model, guide, observation_labels, target_labels, analytic_en
         # Run through q(theta | y, d)
         conditional_guide = pyro.condition(guide, data=theta_dict)
         cond_trace = poutine.trace(conditional_guide).get_trace(
-            y_dict, expanded_design, observation_labels, target_labels)
+            y_dict, expanded_design, observation_labels, target_labels
+        )
         cond_trace.compute_log_prob()
         if evaluation and analytic_entropy:
-            loss = mean_field_entropy(
-                guide, [y_dict, expanded_design, observation_labels, target_labels],
-                whitelist=target_labels).sum(0) / num_particles
+            loss = (
+                mean_field_entropy(
+                    guide,
+                    [y_dict, expanded_design, observation_labels, target_labels],
+                    whitelist=target_labels,
+                ).sum(0)
+                / num_particles
+            )
             agg_loss = loss.sum()
         else:
             terms = -sum(cond_trace.nodes[l]["log_prob"] for l in target_labels)
@@ -735,7 +980,8 @@ def _marginal_loss(model, guide, observation_labels, target_labels):
         # Run through q(y | d)
         conditional_guide = pyro.condition(guide, data=y_dict)
         cond_trace = poutine.trace(conditional_guide).get_trace(
-             expanded_design, observation_labels, target_labels)
+            expanded_design, observation_labels, target_labels
+        )
         cond_trace.compute_log_prob()
 
         terms = -sum(cond_trace.nodes[l]["log_prob"] for l in observation_labels)
@@ -750,7 +996,9 @@ def _marginal_loss(model, guide, observation_labels, target_labels):
     return loss_fn
 
 
-def _marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observation_labels, target_labels):
+def _marginal_likelihood_loss(
+    model, marginal_guide, likelihood_guide, observation_labels, target_labels
+):
     """Marginal_likelihood loss: to evaluate directly use `marginal_likelihood_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
@@ -765,13 +1013,15 @@ def _marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observati
         # Run through q(y | d)
         qyd = pyro.condition(marginal_guide, data=y_dict)
         marginal_trace = poutine.trace(qyd).get_trace(
-             expanded_design, observation_labels, target_labels)
+            expanded_design, observation_labels, target_labels
+        )
         marginal_trace.compute_log_prob()
 
         # Run through q(y | theta, d)
         qythetad = pyro.condition(likelihood_guide, data=y_dict)
         cond_trace = poutine.trace(qythetad).get_trace(
-                theta_dict, expanded_design, observation_labels, target_labels)
+            theta_dict, expanded_design, observation_labels, target_labels
+        )
         cond_trace.compute_log_prob()
         terms = -sum(marginal_trace.nodes[l]["log_prob"] for l in observation_labels)
 
@@ -787,7 +1037,9 @@ def _marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observati
     return loss_fn
 
 
-def _lfire_loss(model_marginal, model_conditional, h, observation_labels, target_labels):
+def _lfire_loss(
+    model_marginal, model_conditional, h, observation_labels, target_labels
+):
     """LFIRE loss: to evaluate directly use `lfire_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
@@ -798,19 +1050,37 @@ def _lfire_loss(model_marginal, model_conditional, h, observation_labels, target
             pass
 
         expanded_design = lexpand(design, num_particles)
-        model_conditional_trace = poutine.trace(model_conditional).get_trace(expanded_design)
+        model_conditional_trace = poutine.trace(model_conditional).get_trace(
+            expanded_design
+        )
 
         if not evaluation:
-            model_marginal_trace = poutine.trace(model_marginal).get_trace(expanded_design)
+            model_marginal_trace = poutine.trace(model_marginal).get_trace(
+                expanded_design
+            )
 
-            h_joint = h(expanded_design, model_conditional_trace, observation_labels, target_labels)
-            h_independent = h(expanded_design, model_marginal_trace, observation_labels, target_labels)
+            h_joint = h(
+                expanded_design,
+                model_conditional_trace,
+                observation_labels,
+                target_labels,
+            )
+            h_independent = h(
+                expanded_design, model_marginal_trace, observation_labels, target_labels
+            )
 
-            terms = torch.nn.functional.softplus(-h_joint) + torch.nn.functional.softplus(h_independent)
+            terms = torch.nn.functional.softplus(
+                -h_joint
+            ) + torch.nn.functional.softplus(h_independent)
             return _safe_mean_terms(terms)
 
         else:
-            h_joint = h(expanded_design, model_conditional_trace, observation_labels, target_labels)
+            h_joint = h(
+                expanded_design,
+                model_conditional_trace,
+                observation_labels,
+                target_labels,
+            )
             return _safe_mean_terms(h_joint)
 
     return loss_fn
@@ -831,7 +1101,8 @@ def _vnmc_eig_loss(model, guide, observation_labels, target_labels):
         reexpanded_design = lexpand(expanded_design, M)
         conditional_guide = pyro.condition(guide, data=y_dict)
         guide_trace = poutine.trace(conditional_guide).get_trace(
-            y_dict, reexpanded_design, observation_labels, target_labels)
+            y_dict, reexpanded_design, observation_labels, target_labels
+        )
         theta_y_dict = {l: guide_trace.nodes[l]["value"] for l in target_labels}
         theta_y_dict.update(y_dict)
         guide_trace.compute_log_prob()
@@ -857,12 +1128,12 @@ def _vnmc_eig_loss(model, guide, observation_labels, target_labels):
 
 
 def _safe_mean_terms(terms):
-    mask = torch.isnan(terms) | (terms == float('-inf')) | (terms == float('inf'))
+    mask = torch.isnan(terms) | (terms == float("-inf")) | (terms == float("inf"))
     if terms.dtype is torch.float32:
         nonnan = (~mask).sum(0).float()
     elif terms.dtype is torch.float64:
         nonnan = (~mask).sum(0).double()
-    terms[mask] = 0.
+    terms[mask] = 0.0
     loss = terms.sum(0) / nonnan
     agg_loss = loss.sum()
     return agg_loss, loss
@@ -876,9 +1147,9 @@ def xexpx(a):
     :param torch.Tensor a:
     :return: Equivalent of `a*torch.exp(a)`.
     """
-    mask = (a == float('-inf'))
-    y = a*torch.exp(a)
-    y[mask] = 0.
+    mask = a == float("-inf")
+    y = a * torch.exp(a)
+    y[mask] = 0.0
     return y
 
 
@@ -890,7 +1161,7 @@ class _EwmaLogFn(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        ewma, = ctx.saved_tensors
+        (ewma,) = ctx.saved_tensors
         return grad_output / ewma, None
 
 
@@ -915,20 +1186,21 @@ class EwmaLog:
 
     def __init__(self, alpha):
         self.alpha = alpha
-        self.ewma = 0.
+        self.ewma = 0.0
         self.n = 0
-        self.s = 0.
+        self.s = 0.0
 
     def __call__(self, inputs, s, dim=0, keepdim=False):
-        """Updates the moving average, and returns :code:`inputs.log()`.
-        """
+        """Updates the moving average, and returns :code:`inputs.log()`."""
         self.n += 1
         if torch_isnan(self.ewma) or torch_isinf(self.ewma):
             ewma = inputs
         else:
-            ewma = inputs * (1. - self.alpha) / (1 - self.alpha**self.n) \
-                    + torch.exp(self.s - s) * self.ewma \
-                    * (self.alpha - self.alpha**self.n) / (1 - self.alpha**self.n)
+            ewma = inputs * (1.0 - self.alpha) / (1 - self.alpha ** self.n) + torch.exp(
+                self.s - s
+            ) * self.ewma * (self.alpha - self.alpha ** self.n) / (
+                1 - self.alpha ** self.n
+            )
         self.ewma = ewma.detach()
         self.s = s.detach()
         return _ewma_log_fn(inputs, ewma)

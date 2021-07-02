@@ -39,7 +39,8 @@ def test_log_normal(batch_shape, event_shape):
     def model():
         fn = dist.TransformedDistribution(
             dist.Normal(torch.zeros_like(loc), torch.ones_like(scale)),
-            [AffineTransform(loc, scale), ExpTransform()])
+            [AffineTransform(loc, scale), ExpTransform()],
+        )
         if event_shape:
             fn = fn.to_event(len(event_shape))
         with pyro.plate_stack("plates", batch_shape):
@@ -48,8 +49,9 @@ def test_log_normal(batch_shape, event_shape):
 
     with poutine.trace() as tr:
         value = model()
-    assert isinstance(tr.trace.nodes["x"]["fn"],
-                      (dist.TransformedDistribution, dist.Independent))
+    assert isinstance(
+        tr.trace.nodes["x"]["fn"], (dist.TransformedDistribution, dist.Independent)
+    )
     expected_moments = get_moments(value)
 
     with poutine.reparam(config={"x": TransformReparam()}):
@@ -70,7 +72,8 @@ def test_init(batch_shape, event_shape):
     def model():
         fn = dist.TransformedDistribution(
             dist.Normal(torch.zeros_like(loc), torch.ones_like(scale)),
-            [AffineTransform(loc, scale), ExpTransform()])
+            [AffineTransform(loc, scale), ExpTransform()],
+        )
         if event_shape:
             fn = fn.to_event(len(event_shape))
         with pyro.plate_stack("plates", batch_shape):

@@ -9,6 +9,7 @@ class EscapeMessenger(Messenger):
     """
     Messenger that does a nonlocal exit by raising a util.NonlocalExit exception
     """
+
     def __init__(self, escape_fn):
         """
         :param escape_fn: function that takes a msg as input and returns True
@@ -35,5 +36,6 @@ class EscapeMessenger(Messenger):
 
             def cont(m):
                 raise NonlocalExit(m)
+
             msg["continuation"] = cont
         return None

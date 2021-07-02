@@ -19,9 +19,12 @@ class Poisson(Likelihood):
 
     :param callable response_function: A mapping to positive real numbers.
     """
+
     def __init__(self, response_function=None):
         super().__init__()
-        self.response_function = torch.exp if response_function is None else response_function
+        self.response_function = (
+            torch.exp if response_function is None else response_function
+        )
 
     def forward(self, f_loc, f_var, y=None):
         r"""
@@ -45,5 +48,5 @@ class Poisson(Likelihood):
 
         y_dist = dist.Poisson(f_res)
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f_res.dim()]).to_event(y.dim())
+            y_dist = y_dist.expand_by(y.shape[: -f_res.dim()]).to_event(y.dim())
         return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)

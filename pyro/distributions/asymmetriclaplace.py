@@ -24,9 +24,12 @@ class AsymmetricLaplace(TorchDistribution):
     :param scale: Scale parameter = geometric mean of left and right scales.
     :param asymmetry: Square of ratio of left to right scales.
     """
-    arg_constraints = {"loc": constraints.real,
-                       "scale": constraints.positive,
-                       "asymmetry": constraints.positive}
+
+    arg_constraints = {
+        "loc": constraints.real,
+        "scale": constraints.positive,
+        "asymmetry": constraints.positive,
+    }
     support = constraints.real
     has_rsample = True
 
@@ -105,16 +108,22 @@ class SoftAsymmetricLaplace(TorchDistribution):
     :param asymmetry: Square of ratio of left to right scales. Defaults to 1.
     :param softness: Scale parameter of the Gaussian smoother. Defaults to 1.
     """
-    arg_constraints = {"loc": constraints.real,
-                       "scale": constraints.positive,
-                       "asymmetry": constraints.positive,
-                       "softness": constraints.positive}
+
+    arg_constraints = {
+        "loc": constraints.real,
+        "scale": constraints.positive,
+        "asymmetry": constraints.positive,
+        "softness": constraints.positive,
+    }
     support = constraints.real
     has_rsample = True
 
     def __init__(self, loc, scale, asymmetry=1.0, softness=1.0, *, validate_args=None):
         self.loc, self.scale, self.asymmetry, self.softness = broadcast_all(
-            loc, scale, asymmetry, softness,
+            loc,
+            scale,
+            asymmetry,
+            softness,
         )
         super().__init__(self.loc.shape, validate_args=validate_args)
 
@@ -160,17 +169,23 @@ class SoftAsymmetricLaplace(TorchDistribution):
         #      = 1/2 e^((2 L x + S^2)/(2 L^2)) erfc((L x + S^2)/(sqrt(2) L S))
         # right = Integrate[e^(-t/R - ((x-t)/S)^2/2)/sqrt(2 pi)/S, {t,0,Infinity}]
         #       = 1/2 e^((S^2 - 2 R x)/(2 R^2)) erfc((S^2 - R x)/(sqrt(2) R S))
-        return math.log(0.5) + torch.logaddexp(
-            (SS / 2 + Lx) / L ** 2 + _logerfc((SS + Lx) / (L * S2)),
-            (SS / 2 - Rx) / R ** 2 + _logerfc((SS - Rx) / (R * S2)),
-        ) - (L + R).log() - self.scale.log()
+        return (
+            math.log(0.5)
+            + torch.logaddexp(
+                (SS / 2 + Lx) / L ** 2 + _logerfc((SS + Lx) / (L * S2)),
+                (SS / 2 - Rx) / R ** 2 + _logerfc((SS - Rx) / (R * S2)),
+            )
+            - (L + R).log()
+            - self.scale.log()
+        )
 
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         z = self.loc.new_empty(shape).normal_()
         u, v = self.loc.new_empty((2,) + shape).exponential_()
-        return (self.loc + self.soft_scale * z - self.left_scale * u
-                + self.right_scale * v)
+        return (
+            self.loc + self.soft_scale * z - self.left_scale * u + self.right_scale * v
+        )
 
     @property
     def mean(self):
@@ -184,8 +199,9 @@ class SoftAsymmetricLaplace(TorchDistribution):
         total = left + right
         p = left / total
         q = right / total
-        return (p * left ** 2 + q * right ** 2 + p * q * total ** 2
-                + self.soft_scale ** 2)
+        return (
+            p * left ** 2 + q * right ** 2 + p * q * total ** 2 + self.soft_scale ** 2
+        )
 
 
 def _logerfc(x):

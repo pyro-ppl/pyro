@@ -36,6 +36,7 @@ class LatentStableReparam(Reparam):
         Stable Distributions: Models for Heavy Tailed Data.
         http://fs2.american.edu/jpnolan/www/stable/chap1.pdf
     """
+
     def apply(self, msg):
         name = msg["name"]
         fn = msg["fn"]
@@ -54,10 +55,13 @@ class LatentStableReparam(Reparam):
         proto = fn.stability
         half_pi = proto.new_tensor(math.pi / 2)
         one = proto.new_ones(proto.shape)
-        u = pyro.sample("{}_uniform".format(name),
-                        self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
-        e = pyro.sample("{}_exponential".format(name),
-                        self._wrap(dist.Exponential(one), event_dim))
+        u = pyro.sample(
+            "{}_uniform".format(name),
+            self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim),
+        )
+        e = pyro.sample(
+            "{}_exponential".format(name), self._wrap(dist.Exponential(one), event_dim)
+        )
 
         # Differentiably transform.
         x = _standard_stable(fn.stability, fn.skew, u, e, coords="S0")
@@ -89,6 +93,7 @@ class SymmetricStableReparam(Reparam):
         "Option Pricing with Levy-Stable Processes"
         https://pdfs.semanticscholar.org/4d66/c91b136b2a38117dd16c2693679f5341c616.pdf
     """
+
     def apply(self, msg):
         name = msg["name"]
         fn = msg["fn"]
@@ -107,10 +112,13 @@ class SymmetricStableReparam(Reparam):
         proto = fn.stability
         half_pi = proto.new_tensor(math.pi / 2)
         one = proto.new_ones(proto.shape)
-        u = pyro.sample("{}_uniform".format(name),
-                        self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
-        e = pyro.sample("{}_exponential".format(name),
-                        self._wrap(dist.Exponential(one), event_dim))
+        u = pyro.sample(
+            "{}_uniform".format(name),
+            self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim),
+        )
+        e = pyro.sample(
+            "{}_exponential".format(name), self._wrap(dist.Exponential(one), event_dim)
+        )
 
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
         a = fn.stability
@@ -183,14 +191,22 @@ class StableReparam(Reparam):
         proto = fn.stability
         half_pi = proto.new_tensor(math.pi / 2)
         one = proto.new_ones(proto.shape)
-        zu = pyro.sample("{}_z_uniform".format(name),
-                         self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
-        ze = pyro.sample("{}_z_exponential".format(name),
-                         self._wrap(dist.Exponential(one), event_dim))
-        tu = pyro.sample("{}_t_uniform".format(name),
-                         self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim))
-        te = pyro.sample("{}_t_exponential".format(name),
-                         self._wrap(dist.Exponential(one), event_dim))
+        zu = pyro.sample(
+            "{}_z_uniform".format(name),
+            self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim),
+        )
+        ze = pyro.sample(
+            "{}_z_exponential".format(name),
+            self._wrap(dist.Exponential(one), event_dim),
+        )
+        tu = pyro.sample(
+            "{}_t_uniform".format(name),
+            self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim),
+        )
+        te = pyro.sample(
+            "{}_t_exponential".format(name),
+            self._wrap(dist.Exponential(one), event_dim),
+        )
 
         # Differentiably transform.
         a = fn.stability

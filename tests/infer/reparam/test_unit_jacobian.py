@@ -29,7 +29,7 @@ def get_moments(x):
 
 @pytest.mark.parametrize("shape", [(6,), (4, 5), (2, 1, 3)], ids=str)
 def test_normal(shape):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():
@@ -59,7 +59,7 @@ def test_normal(shape):
 
 @pytest.mark.parametrize("shape", [(6,), (4, 5), (2, 1, 3)], ids=str)
 def test_init(shape):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():

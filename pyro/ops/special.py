@@ -16,7 +16,7 @@ class _SafeLog(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad):
-        x, = ctx.saved_tensors
+        (x,) = ctx.saved_tensors
         return grad / x.clamp(min=torch.finfo(x.dtype).eps)
 
 
@@ -28,7 +28,7 @@ def safe_log(x):
     return _SafeLog.apply(x)
 
 
-def log_beta(x, y, tol=0.):
+def log_beta(x, y, tol=0.0):
     """
     Computes log Beta function.
 
@@ -76,12 +76,17 @@ def log_beta(x, y, tol=0.):
 
     log_factor = functools.reduce(operator.mul, factors).log()
 
-    return (log_factor + (x - 0.5) * x.log() + (y - 0.5) * y.log()
-            - (xy - 0.5) * xy.log() + (math.log(2 * math.pi) / 2 - shift))
+    return (
+        log_factor
+        + (x - 0.5) * x.log()
+        + (y - 0.5) * y.log()
+        - (xy - 0.5) * xy.log()
+        + (math.log(2 * math.pi) / 2 - shift)
+    )
 
 
 @torch.no_grad()
-def log_binomial(n, k, tol=0.):
+def log_binomial(n, k, tol=0.0):
     """
     Computes log binomial coefficient.
 
@@ -102,7 +107,7 @@ def log_binomial(n, k, tol=0.):
 
 
 def log_I1(orders: int, value: torch.Tensor, terms=250):
-    r""" Compute first n log modified bessel function of first kind
+    r"""Compute first n log modified bessel function of first kind
     .. math ::
 
         \log(I_v(z)) = v*\log(z/2) + \log(\sum_{k=0}^\inf \exp\left[2*k*\log(z/2) - \sum_kk^k log(kk)
@@ -136,7 +141,11 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     indices = k[:orders].view(-1, 1) + k.view(1, -1)
     assert indices.shape == (orders, terms)
 
-    seqs = (2 * lvalues[None, :, :] - lfactorials[None, None, :] - lgammas.gather(1, indices)[:, None, :]).logsumexp(-1)
+    seqs = (
+        2 * lvalues[None, :, :]
+        - lfactorials[None, None, :]
+        - lgammas.gather(1, indices)[:, None, :]
+    ).logsumexp(-1)
     assert seqs.shape == (orders, vshape.numel())
 
     i1s = lvalues[..., :orders].T + seqs

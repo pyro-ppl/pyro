@@ -15,12 +15,12 @@ from .util import check_init_reparam
 
 
 def neals_funnel(dim=10):
-    y = pyro.sample('y', dist.Normal(0, 3))
-    with pyro.plate('D', dim):
-        return pyro.sample('x', dist.Normal(0, torch.exp(y / 2)))
+    y = pyro.sample("y", dist.Normal(0, 3))
+    with pyro.plate("D", dim):
+        return pyro.sample("x", dist.Normal(0, torch.exp(y / 2)))
 
 
-@pytest.mark.parametrize('jit', [False, True])
+@pytest.mark.parametrize("jit", [False, True])
 def test_neals_funnel_smoke(jit):
     dim = 10
 
@@ -30,7 +30,7 @@ def test_neals_funnel_smoke(jit):
         dependencies={"x": {"y": "linear"}},
     )
     Elbo = JitTrace_ELBO if jit else Trace_ELBO
-    svi = SVI(neals_funnel, guide,  optim.Adam({"lr": 1e-10}), Elbo())
+    svi = SVI(neals_funnel, guide, optim.Adam({"lr": 1e-10}), Elbo())
     for _ in range(1000):
         try:
             svi.step(dim=dim)

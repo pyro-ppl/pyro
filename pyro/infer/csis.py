@@ -36,13 +36,16 @@ class CSIS(Importance):
     :param validation_batch_size: Number of samples to use for calculating
         validation loss (will only be used if `.validation_loss` is called).
     """
-    def __init__(self,
-                 model,
-                 guide,
-                 optim,
-                 num_inference_samples=10,
-                 training_batch_size=10,
-                 validation_batch_size=20):
+
+    def __init__(
+        self,
+        model,
+        guide,
+        optim,
+        num_inference_samples=10,
+        training_batch_size=10,
+        validation_batch_size=20,
+    ):
         super().__init__(model, guide, num_inference_samples)
         self.model = model
         self.guide = guide
@@ -57,8 +60,10 @@ class CSIS(Importance):
 
         Arguments are passed directly to model.
         """
-        self.validation_batch = [self._sample_from_joint(*args, **kwargs)
-                                 for _ in range(self.validation_batch_size)]
+        self.validation_batch = [
+            self._sample_from_joint(*args, **kwargs)
+            for _ in range(self.validation_batch_size)
+        ]
 
     def step(self, *args, **kwargs):
         """
@@ -71,9 +76,11 @@ class CSIS(Importance):
         with poutine.trace(param_only=True) as param_capture:
             loss = self.loss_and_grads(True, None, *args, **kwargs)
 
-        params = set(site["value"].unconstrained()
-                     for site in param_capture.trace.nodes.values()
-                     if site["value"].grad is not None)
+        params = set(
+            site["value"].unconstrained()
+            for site in param_capture.trace.nodes.values()
+            if site["value"].grad is not None
+        )
 
         self.optim(params)
 
@@ -95,8 +102,10 @@ class CSIS(Importance):
         `args` and `kwargs` are passed to the model and guide.
         """
         if batch is None:
-            batch = (self._sample_from_joint(*args, **kwargs)
-                     for _ in range(self.training_batch_size))
+            batch = (
+                self._sample_from_joint(*args, **kwargs)
+                for _ in range(self.training_batch_size)
+            )
             batch_size = self.training_batch_size
         else:
             batch_size = len(batch)
@@ -109,13 +118,21 @@ class CSIS(Importance):
             particle_loss /= batch_size
 
             if grads:
-                guide_params = set(site["value"].unconstrained()
-                                   for site in particle_param_capture.trace.nodes.values())
-                guide_grads = torch.autograd.grad(particle_loss, guide_params, allow_unused=True)
+                guide_params = set(
+                    site["value"].unconstrained()
+                    for site in particle_param_capture.trace.nodes.values()
+                )
+                guide_grads = torch.autograd.grad(
+                    particle_loss, guide_params, allow_unused=True
+                )
                 for guide_grad, guide_param in zip(guide_grads, guide_params):
                     if guide_grad is None:
                         continue
-                    guide_param.grad = guide_grad if guide_param.grad is None else guide_param.grad + guide_grad
+                    guide_param.grad = (
+                        guide_grad
+                        if guide_param.grad is None
+                        else guide_param.grad + guide_grad
+                    )
 
             loss += torch_item(particle_loss)
 
@@ -154,14 +171,16 @@ class CSIS(Importance):
         `args` and `kwargs` are passed to the guide.
         """
         kwargs["observations"] = {}
-        for node in itertools.chain(model_trace.stochastic_nodes, model_trace.observation_nodes):
+        for node in itertools.chain(
+            model_trace.stochastic_nodes, model_trace.observation_nodes
+        ):
             if "was_observed" in model_trace.nodes[node]["infer"]:
                 model_trace.nodes[node]["is_observed"] = True
                 kwargs["observations"][node] = model_trace.nodes[node]["value"]
 
-        guide_trace = poutine.trace(poutine.replay(self.guide,
-                                                   model_trace)
-                                    ).get_trace(*args, **kwargs)
+        guide_trace = poutine.trace(poutine.replay(self.guide, model_trace)).get_trace(
+            *args, **kwargs
+        )
 
         check_model_guide_match(model_trace, guide_trace)
         guide_trace = prune_subsample_sites(guide_trace)

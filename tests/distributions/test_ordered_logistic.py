@@ -40,7 +40,7 @@ def test_broadcast():
     for cp in (
         torch.arange(5),
         torch.arange(5).view(1, -1),
-        torch.stack(4*[torch.arange(5)]),
+        torch.stack(4 * [torch.arange(5)]),
         torch.sort(torch.randn(3, 4, 5), dim=-1).values,
         torch.sort(torch.randn(predictor.shape + (100,)), dim=-1).values,
     ):
