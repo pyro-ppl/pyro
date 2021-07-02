@@ -105,7 +105,7 @@ setup(
         "extras": EXTRAS_REQUIRE,
         "test": EXTRAS_REQUIRE
         + [
-            "black>=21.4",
+            "black>=21.4b0",
             "flake8",
             "nbval",
             "pytest>=5.0",
@@ -115,7 +115,7 @@ setup(
         "profile": ["prettytable", "pytest-benchmark", "snakeviz"],
         "dev": EXTRAS_REQUIRE
         + [
-            "black>=21.4",
+            "black>=21.4b0",
             "flake8",
             "isort>=5.0",
             "mypy>=0.812",
