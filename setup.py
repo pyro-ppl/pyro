@@ -63,6 +63,7 @@ EXTRAS_REQUIRE = [
     'torchvision>=0.9.0',
     'visdom>=0.1.4',
     'pandas',
+    'pillow==8.2.0',  # https://github.com/pytorch/pytorch/issues/61125
     'scikit-learn',
     'seaborn',
     'wget',
