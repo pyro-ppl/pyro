@@ -60,7 +60,7 @@ EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'graphviz>=0.8',
     'matplotlib>=1.3',
-    'torchvision>=0.9.0',
+    'torchvision>=0.10.0',
     'visdom>=0.1.4',
     'pandas',
     'pillow==8.2.0',  # https://github.com/pytorch/pytorch/issues/61125
