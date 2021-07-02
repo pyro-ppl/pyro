@@ -31,8 +31,9 @@ class EmpiricalMarginal(Empirical):
     """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
-        assert isinstance(trace_posterior, TracePosterior), \
-            "trace_dist must be trace posterior distribution object"
+        assert isinstance(
+            trace_posterior, TracePosterior
+        ), "trace_dist must be trace posterior distribution object"
         if sites is None:
             sites = "_RETURN"
         self._num_chains = 1
@@ -53,13 +54,19 @@ class EmpiricalMarginal(Empirical):
         for i in range(num_chains):
             samples = torch.stack(self._samples_buffer[i], dim=0)
             samples_by_chain.append(samples)
-            weights_dtype = samples.dtype if samples.dtype.is_floating_point else torch.float32
-            weights = torch.as_tensor(self._weights_buffer[i], device=samples.device, dtype=weights_dtype)
+            weights_dtype = (
+                samples.dtype if samples.dtype.is_floating_point else torch.float32
+            )
+            weights = torch.as_tensor(
+                self._weights_buffer[i], device=samples.device, dtype=weights_dtype
+            )
             weights_by_chain.append(weights)
         if len(samples_by_chain) == 1:
             return samples_by_chain[0], weights_by_chain[0]
         else:
-            return torch.stack(samples_by_chain, dim=0), torch.stack(weights_by_chain, dim=0)
+            return torch.stack(samples_by_chain, dim=0), torch.stack(
+                weights_by_chain, dim=0
+            )
 
     def _add_sample(self, value, log_weight=None, chain_id=0):
         """
@@ -79,7 +86,11 @@ class EmpiricalMarginal(Empirical):
         # Apply default weight of 1.0.
         if log_weight is None:
             log_weight = 0.0
-        if self._validate_args and not isinstance(log_weight, numbers.Number) and log_weight.dim() > 0:
+        if (
+            self._validate_args
+            and not isinstance(log_weight, numbers.Number)
+            and log_weight.dim() > 0
+        ):
             raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
         # Append to the buffer list
@@ -89,11 +100,16 @@ class EmpiricalMarginal(Empirical):
 
     def _populate_traces(self, trace_posterior, sites):
         assert isinstance(sites, (list, str))
-        for tr, log_weight, chain_id in zip(trace_posterior.exec_traces,
-                                            trace_posterior.log_weights,
-                                            trace_posterior.chain_ids):
-            value = tr.nodes[sites]["value"] if isinstance(sites, str) else \
-                torch.stack([tr.nodes[site]["value"] for site in sites], 0)
+        for tr, log_weight, chain_id in zip(
+            trace_posterior.exec_traces,
+            trace_posterior.log_weights,
+            trace_posterior.chain_ids,
+        ):
+            value = (
+                tr.nodes[sites]["value"]
+                if isinstance(sites, str)
+                else torch.stack([tr.nodes[site]["value"] for site in sites], 0)
+            )
             self._add_sample(value, log_weight=log_weight, chain_id=chain_id)
 
 
@@ -108,9 +124,11 @@ class Marginals:
     :param list sites: optional list of sites for which we need to generate
         the marginal distribution.
     """
+
     def __init__(self, trace_posterior, sites=None, validate_args=None):
-        assert isinstance(trace_posterior, TracePosterior), \
-            "trace_dist must be trace posterior distribution object"
+        assert isinstance(
+            trace_posterior, TracePosterior
+        ), "trace_dist must be trace posterior distribution object"
         if sites is None:
             sites = ["_RETURN"]
         elif isinstance(sites, str):
@@ -124,8 +142,10 @@ class Marginals:
         self._populate_traces(trace_posterior, validate_args)
 
     def _populate_traces(self, trace_posterior, validate):
-        self._marginals = {site: EmpiricalMarginal(trace_posterior, site, validate)
-                           for site in self.sites}
+        self._marginals = {
+            site: EmpiricalMarginal(trace_posterior, site, validate)
+            for site in self.sites
+        }
 
     def support(self, flatten=False):
         """
@@ -137,8 +157,12 @@ class Marginals:
         :returns: a dict with keys are sites' names and values are sites' supports.
         :rtype: :class:`OrderedDict`
         """
-        support = OrderedDict([(site, value.enumerate_support())
-                               for site, value in self._marginals.items()])
+        support = OrderedDict(
+            [
+                (site, value.enumerate_support())
+                for site, value in self._marginals.items()
+            ]
+        )
         if self._trace_posterior.num_chains > 1 and flatten:
             for site, samples in support.items():
                 shape = samples.size()
@@ -164,6 +188,7 @@ class TracePosterior(object, metaclass=ABCMeta):
     This is designed to be used by other utility classes like `EmpiricalMarginal`,
     that need access to the collected execution traces.
     """
+
     def __init__(self, num_chains=1):
         self.num_chains = num_chains
         self._reset()
@@ -172,7 +197,9 @@ class TracePosterior(object, metaclass=ABCMeta):
         self.log_weights = []
         self.exec_traces = []
         self.chain_ids = []  # chain id corresponding to the sample
-        self._idx_by_chain = [[] for _ in range(self.num_chains)]  # indexes of samples by chain id
+        self._idx_by_chain = [
+            [] for _ in range(self.num_chains)
+        ]  # indexes of samples by chain id
         self._categorical = None
 
     def marginal(self, sites=None):
@@ -201,7 +228,10 @@ class TracePosterior(object, metaclass=ABCMeta):
         # we get the index from ``idxs_by_chain`` instead of sampling from
         # the marginal directly.
         random_idx = self._categorical.sample().item()
-        chain_idx, sample_idx = random_idx % self.num_chains, random_idx // self.num_chains
+        chain_idx, sample_idx = (
+            random_idx % self.num_chains,
+            random_idx // self.num_chains,
+        )
         sample_idx = self._idx_by_chain[chain_idx][sample_idx]
         trace = self.exec_traces[sample_idx].copy()
         for name in trace.observation_nodes:
@@ -256,19 +286,27 @@ class TracePosterior(object, metaclass=ABCMeta):
         for trace in self.exec_traces:
             obs_nodes = trace.observation_nodes
             if len(obs_nodes) > 1:
-                raise ValueError("Infomation criterion calculation only works for models "
-                                 "with one observation node.")
+                raise ValueError(
+                    "Infomation criterion calculation only works for models "
+                    "with one observation node."
+                )
             if obs_node is None:
                 obs_node = obs_nodes[0]
             elif obs_node != obs_nodes[0]:
-                raise ValueError("Observation node has been changed, expected {} but got {}"
-                                 .format(obs_node, obs_nodes[0]))
+                raise ValueError(
+                    "Observation node has been changed, expected {} but got {}".format(
+                        obs_node, obs_nodes[0]
+                    )
+                )
 
-            log_likelihoods.append(trace.nodes[obs_node]["fn"]
-                                   .log_prob(trace.nodes[obs_node]["value"]))
+            log_likelihoods.append(
+                trace.nodes[obs_node]["fn"].log_prob(trace.nodes[obs_node]["value"])
+            )
 
         ll = torch.stack(log_likelihoods, dim=0)
-        waic_value, p_waic = waic(ll, torch.tensor(self.log_weights, device=ll.device), pointwise)
+        waic_value, p_waic = waic(
+            ll, torch.tensor(self.log_weights, device=ll.device), pointwise
+        )
         return OrderedDict([("waic", waic_value), ("p_waic", p_waic)])
 
 
@@ -288,15 +326,18 @@ class TracePredictive(TracePosterior):
     :param int num_samples: number of samples to generate.
     :param keep_sites: The sites which should be sampled from posterior distribution (default: all)
     """
+
     def __init__(self, model, posterior, num_samples, keep_sites=None):
         self.model = model
         self.posterior = posterior
         self.num_samples = num_samples
         self.keep_sites = keep_sites
         super().__init__()
-        warnings.warn('The `TracePredictive` class is deprecated and will be removed '
-                      'in a future release. Use the `pyro.infer.Predictive` class instead.',
-                      FutureWarning)
+        warnings.warn(
+            "The `TracePredictive` class is deprecated and will be removed "
+            "in a future release. Use the `pyro.infer.Predictive` class instead.",
+            FutureWarning,
+        )
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:
@@ -306,8 +347,10 @@ class TracePredictive(TracePosterior):
             model_trace = self.posterior().copy()
             self._remove_dropped_nodes(model_trace)
             self._adjust_to_data(model_trace, data_trace)
-            resampled_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
-            yield (resampled_trace, 0., 0)
+            resampled_trace = poutine.trace(
+                poutine.replay(self.model, model_trace)
+            ).get_trace(*args, **kwargs)
+            yield (resampled_trace, 0.0, 0)
 
     def _remove_dropped_nodes(self, trace):
         if self.keep_sites is None:
@@ -336,10 +379,15 @@ class TracePredictive(TracePosterior):
                 assert ocis.name == cis.name
                 assert not site_is_subsample(site)
                 batch_dim = cis.dim - site["fn"].event_dim
-                subsampled_idxs[cis.name] = subsampled_idxs.get(cis.name,
-                                                                torch.randint(0, ocis.size, (cis.size,),
-                                                                              device=site["value"].device))
-                site["value"] = site["value"].index_select(batch_dim, subsampled_idxs[cis.name])
+                subsampled_idxs[cis.name] = subsampled_idxs.get(
+                    cis.name,
+                    torch.randint(
+                        0, ocis.size, (cis.size,), device=site["value"].device
+                    ),
+                )
+                site["value"] = site["value"].index_select(
+                    batch_dim, subsampled_idxs[cis.name]
+                )
 
     def marginal(self, sites=None):
         """

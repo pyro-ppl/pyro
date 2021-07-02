@@ -14,23 +14,32 @@ from tests.common import assert_close
 from .util import check_init_reparam
 
 
-@pytest.mark.parametrize("event_shape,splits,dim", [
-    ((6,), [2, 1, 3], -1),
-    ((2, 5,), [2, 3], -1),
-    ((4, 2), [1, 3], -2),
-    ((2, 3, 1), [1, 2], -2),
-], ids=str)
+@pytest.mark.parametrize(
+    "event_shape,splits,dim",
+    [
+        ((6,), [2, 1, 3], -1),
+        (
+            (
+                2,
+                5,
+            ),
+            [2, 3],
+            -1,
+        ),
+        ((4, 2), [1, 3], -2),
+        ((2, 3, 1), [1, 2], -2),
+    ],
+    ids=str,
+)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 def test_normal(batch_shape, event_shape, splits, dim):
     shape = batch_shape + event_shape
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():
         with pyro.plate_stack("plates", batch_shape):
-            pyro.sample("x",
-                        dist.Normal(loc, scale)
-                            .to_event(len(event_shape)))
+            pyro.sample("x", dist.Normal(loc, scale).to_event(len(event_shape)))
 
     # Run without reparam.
     trace = poutine.trace(model).get_trace()
@@ -41,7 +50,8 @@ def test_normal(batch_shape, event_shape, splits, dim):
     # Run with reparam.
     split_values = {
         "x_split_{}".format(i): xi
-        for i, xi in enumerate(expected_value.split(splits, dim))}
+        for i, xi in enumerate(expected_value.split(splits, dim))
+    }
     rep = SplitReparam(splits, dim)
     reparam_model = poutine.reparam(model, {"x": rep})
     reparam_model = poutine.condition(reparam_model, split_values)
@@ -62,16 +72,27 @@ def test_normal(batch_shape, event_shape, splits, dim):
     assert_close(actual_grads, expected_grads)
 
 
-@pytest.mark.parametrize("event_shape,splits,dim", [
-    ((6,), [2, 1, 3], -1),
-    ((2, 5,), [2, 3], -1),
-    ((4, 2), [1, 3], -2),
-    ((2, 3, 1), [1, 2], -2),
-], ids=str)
+@pytest.mark.parametrize(
+    "event_shape,splits,dim",
+    [
+        ((6,), [2, 1, 3], -1),
+        (
+            (
+                2,
+                5,
+            ),
+            [2, 3],
+            -1,
+        ),
+        ((4, 2), [1, 3], -2),
+        ((2, 3, 1), [1, 2], -2),
+    ],
+    ids=str,
+)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 def test_init(batch_shape, event_shape, splits, dim):
     shape = batch_shape + event_shape
-    loc = torch.empty(shape).uniform_(-1., 1.)
+    loc = torch.empty(shape).uniform_(-1.0, 1.0)
     scale = torch.empty(shape).uniform_(0.5, 1.5)
 
     def model():

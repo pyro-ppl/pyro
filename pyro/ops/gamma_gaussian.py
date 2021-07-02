@@ -19,6 +19,7 @@ class Gamma:
 
         Gamma(concentration, rate) ~ (concentration - 1) * log(s) - rate * s
     """
+
     def __init__(self, log_normalizer, concentration, rate):
         self.log_normalizer = log_normalizer
         self.concentration = concentration
@@ -36,8 +37,11 @@ class Gamma:
         """
         Integrates out the latent variable.
         """
-        return self.log_normalizer + torch.lgamma(self.concentration) - \
-            self.concentration * self.rate.log()
+        return (
+            self.log_normalizer
+            + torch.lgamma(self.concentration)
+            - self.concentration * self.rate.log()
+        )
 
 
 class GammaGaussian:
@@ -77,6 +81,7 @@ class GammaGaussian:
 
             beta = Gamma.rate + 0.5 * info_vec.T @ inv(precision) @ info_vec
     """
+
     def __init__(self, log_normalizer, info_vec, precision, alpha, beta):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
         assert info_vec.dim() >= 1
@@ -93,11 +98,13 @@ class GammaGaussian:
 
     @lazy_property
     def batch_shape(self):
-        return broadcast_shape(self.log_normalizer.shape,
-                               self.info_vec.shape[:-1],
-                               self.precision.shape[:-2],
-                               self.alpha.shape,
-                               self.beta.shape)
+        return broadcast_shape(
+            self.log_normalizer.shape,
+            self.info_vec.shape[:-1],
+            self.precision.shape[:-2],
+            self.alpha.shape,
+            self.beta.shape,
+        )
 
     def expand(self, batch_shape):
         n = self.dim()
@@ -136,8 +143,10 @@ class GammaGaussian:
         """
         if dim < 0:
             dim += len(parts[0].batch_shape)
-        args = [torch.cat([getattr(g, attr) for g in parts], dim=dim)
-                for attr in ["log_normalizer", "info_vec", "precision", "alpha", "beta"]]
+        args = [
+            torch.cat([getattr(g, attr) for g in parts], dim=dim)
+            for attr in ["log_normalizer", "info_vec", "precision", "alpha", "beta"]
+        ]
         return GammaGaussian(*args)
 
     def event_pad(self, left=0, right=0):
@@ -151,7 +160,9 @@ class GammaGaussian:
         # otherwise, we need to change alpha (similar for beta) to
         # keep the term (alpha + 0.5 * dim - 1) * log(s) constant
         # (note that `dim` has been changed due to padding)
-        return GammaGaussian(self.log_normalizer, info_vec, precision, self.alpha, self.beta)
+        return GammaGaussian(
+            self.log_normalizer, info_vec, precision, self.alpha, self.beta
+        )
 
     def event_permute(self, perm):
         """
@@ -161,7 +172,9 @@ class GammaGaussian:
         assert perm.shape == (self.dim(),)
         info_vec = self.info_vec[..., perm]
         precision = self.precision[..., perm][..., perm, :]
-        return GammaGaussian(self.log_normalizer, info_vec, precision, self.alpha, self.beta)
+        return GammaGaussian(
+            self.log_normalizer, info_vec, precision, self.alpha, self.beta
+        )
 
     def __add__(self, other):
         """
@@ -169,11 +182,13 @@ class GammaGaussian:
         """
         assert isinstance(other, GammaGaussian)
         assert self.dim() == other.dim()
-        return GammaGaussian(self.log_normalizer + other.log_normalizer,
-                             self.info_vec + other.info_vec,
-                             self.precision + other.precision,
-                             self.alpha + other.alpha,
-                             self.beta + other.beta)
+        return GammaGaussian(
+            self.log_normalizer + other.log_normalizer,
+            self.info_vec + other.info_vec,
+            self.precision + other.precision,
+            self.alpha + other.alpha,
+            self.beta + other.beta,
+        )
 
     def log_density(self, value, s):
         """
@@ -185,7 +200,11 @@ class GammaGaussian:
         """
         if value.size(-1) == 0:
             batch_shape = broadcast_shape(value.shape[:-1], s.shape, self.batch_shape)
-            return self.alpha * s.log() - self.beta * s + self.log_normalizer.expand(batch_shape)
+            return (
+                self.alpha * s.log()
+                - self.beta * s
+                + self.log_normalizer.expand(batch_shape)
+            )
         result = (-0.5) * self.precision.matmul(value.unsqueeze(-1)).squeeze(-1)
         result = result + self.info_vec
         result = (value * result).sum(-1)
@@ -222,7 +241,11 @@ class GammaGaussian:
 
         log_normalizer = self.log_normalizer
         alpha = self.alpha
-        beta = self.beta + 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - b.mul(info_b).sum(-1)
+        beta = (
+            self.beta
+            + 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1)
+            - b.mul(info_b).sum(-1)
+        )
         return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
     def marginalize(self, left=0, right=0):
@@ -265,9 +288,11 @@ class GammaGaussian:
 
         alpha = self.alpha - 0.5 * n_b
         beta = self.beta - 0.5 * b_tmp.squeeze(-1).pow(2).sum(-1)
-        log_normalizer = (self.log_normalizer +
-                          0.5 * n_b * math.log(2 * math.pi) -
-                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+        log_normalizer = (
+            self.log_normalizer
+            + 0.5 * n_b * math.log(2 * math.pi)
+            - P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+        )
         return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
     def compound(self):
@@ -277,12 +302,16 @@ class GammaGaussian:
         """
         concentration = self.alpha - 0.5 * self.dim() + 1
         scale_tril = precision_to_scale_tril(self.precision)
-        scale_tril_t_u = scale_tril.transpose(-1, -2).matmul(self.info_vec.unsqueeze(-1)).squeeze(-1)
+        scale_tril_t_u = (
+            scale_tril.transpose(-1, -2).matmul(self.info_vec.unsqueeze(-1)).squeeze(-1)
+        )
         u_Pinv_u = scale_tril_t_u.pow(2).sum(-1)
         rate = self.beta - 0.5 * u_Pinv_u
 
         loc = scale_tril.matmul(scale_tril_t_u.unsqueeze(-1)).squeeze(-1)
-        scale_tril = scale_tril * (rate / concentration).sqrt().unsqueeze(-1).unsqueeze(-1)
+        scale_tril = scale_tril * (rate / concentration).sqrt().unsqueeze(-1).unsqueeze(
+            -1
+        )
         return MultivariateStudentT(2 * concentration, loc, scale_tril)
 
     def event_logsumexp(self):
@@ -291,7 +320,11 @@ class GammaGaussian:
         """
         n = self.dim()
         chol_P = torch.linalg.cholesky(self.precision)
-        chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
+        chol_P_u = (
+            self.info_vec.unsqueeze(-1)
+            .triangular_solve(chol_P, upper=False)
+            .solution.squeeze(-1)
+        )
         u_P_u = chol_P_u.pow(2).sum(-1)
         # considering GammaGaussian as a Gaussian with precision = s * precision, info_vec = s * info_vec,
         # marginalize x variable, we get
@@ -303,7 +336,9 @@ class GammaGaussian:
         #   Gamma(concentration, rate)
         concentration = self.alpha - 0.5 * n + 1
         rate = self.beta - 0.5 * u_P_u
-        log_normalizer_tmp = 0.5 * n * math.log(2 * math.pi) - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+        log_normalizer_tmp = 0.5 * n * math.log(2 * math.pi) - chol_P.diagonal(
+            dim1=-2, dim2=-1
+        ).log().sum(-1)
         return Gamma(self.log_normalizer + log_normalizer_tmp, concentration, rate)
 
 
@@ -330,9 +365,12 @@ def gamma_and_mvn_to_gamma_gaussian(gamma, mvn):
     # reparameterized version of concentration, rate in GaussianGamma
     alpha = gamma.concentration + (0.5 * n - 1)
     beta = gamma.rate + 0.5 * (info_vec * mvn.loc).sum(-1)
-    gaussian_logsumexp = 0.5 * n * math.log(2 * math.pi) + \
-        mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    log_normalizer = -Gamma(gaussian_logsumexp, gamma.concentration, gamma.rate).logsumexp()
+    gaussian_logsumexp = 0.5 * n * math.log(2 * math.pi) + mvn.scale_tril.diagonal(
+        dim1=-2, dim2=-1
+    ).log().sum(-1)
+    log_normalizer = -Gamma(
+        gaussian_logsumexp, gamma.concentration, gamma.rate
+    ).logsumexp()
     return GammaGaussian(log_normalizer, info_vec, precision, alpha, beta)
 
 
@@ -377,12 +415,15 @@ def matrix_and_mvn_to_gamma_gaussian(matrix, mvn):
     P_xy = -neg_P_xy
     P_yx = P_xy.transpose(-1, -2)
     P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
-    precision = torch.cat([torch.cat([P_xx, P_xy], -1),
-                           torch.cat([P_yx, P_yy], -1)], -2)
+    precision = torch.cat(
+        [torch.cat([P_xx, P_xy], -1), torch.cat([P_yx, P_yy], -1)], -2
+    )
     info_y = P_yy.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
-    log_normalizer = -0.5 * y_dim * math.log(2 * math.pi) - mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+    log_normalizer = -0.5 * y_dim * math.log(2 * math.pi) - mvn.scale_tril.diagonal(
+        dim1=-2, dim2=-1
+    ).log().sum(-1)
     beta = 0.5 * (info_y * mvn.loc).sum(-1)
     alpha = beta.new_full(beta.shape, 0.5 * y_dim)
 
@@ -415,8 +456,15 @@ def gamma_gaussian_tensordot(x, y, dims=0):
     assert nc >= 0
 
     device = x.info_vec.device
-    perm = torch.cat([
-        torch.arange(na, device=device),
-        torch.arange(x.dim(), x.dim() + nc, device=device),
-        torch.arange(na, x.dim(), device=device)])
-    return (x.event_pad(right=nc) + y.event_pad(left=na)).event_permute(perm).marginalize(right=nb)
+    perm = torch.cat(
+        [
+            torch.arange(na, device=device),
+            torch.arange(x.dim(), x.dim() + nc, device=device),
+            torch.arange(na, x.dim(), device=device),
+        ]
+    )
+    return (
+        (x.event_pad(right=nc) + y.event_pad(left=na))
+        .event_permute(perm)
+        .marginalize(right=nb)
+    )

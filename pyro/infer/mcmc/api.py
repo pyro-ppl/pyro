@@ -42,15 +42,19 @@ from pyro.infer.mcmc.util import (
 from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict, StreamingStats
 from pyro.util import optional
 
-MAX_SEED = 2**32 - 1
+MAX_SEED = 2 ** 32 - 1
 
 
-def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_progbar=False):
+def logger_thread(
+    log_queue, warmup_steps, num_samples, num_chains, disable_progbar=False
+):
     """
     Logging thread that asynchronously consumes logging events from `log_queue`,
     and handles them appropriately.
     """
-    progress_bars = ProgressBar(warmup_steps, num_samples, disable=disable_progbar, num_bars=num_chains)
+    progress_bars = ProgressBar(
+        warmup_steps, num_samples, disable=disable_progbar, num_bars=num_chains
+    )
     logger = logging.getLogger(__name__)
     logger.propagate = False
     logger.addHandler(TqdmHandler())
@@ -69,7 +73,9 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
                 pbar_pos = int(logger_id.split(":")[-1])
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
-                    progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
+                    progress_bars.set_description(
+                        "Sample [{}]".format(pbar_pos + 1), pos=pbar_pos
+                    )
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
                 progress_bars.set_postfix(diagnostics, pos=pbar_pos, refresh=False)
                 progress_bars.update(pos=pbar_pos)
@@ -80,8 +86,18 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 
 class _Worker:
-    def __init__(self, chain_id, result_queue, log_queue, event, kernel, num_samples,
-                 warmup_steps, initial_params=None, hook=None):
+    def __init__(
+        self,
+        chain_id,
+        result_queue,
+        log_queue,
+        event,
+        kernel,
+        num_samples,
+        warmup_steps,
+        initial_params=None,
+        hook=None,
+    ):
         self.chain_id = chain_id
         self.kernel = kernel
         if initial_params is not None:
@@ -106,8 +122,15 @@ class _Worker:
         logging_hook = _add_logging_hook(logger, None, self.hook)
 
         try:
-            for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, logging_hook,
-                                       None, *args, **kwargs):
+            for sample in _gen_samples(
+                self.kernel,
+                self.warmup_steps,
+                self.num_samples,
+                logging_hook,
+                None,
+                *args,
+                **kwargs
+            ):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
                 self.event.clear()
@@ -125,10 +148,20 @@ def _gen_samples(kernel, warmup_steps, num_samples, hook, chain_id, *args, **kwa
     yield {name: params[name].shape for name in save_params}
     for i in range(warmup_steps):
         params = kernel.sample(params)
-        hook(kernel, params, 'Warmup [{}]'.format(chain_id) if chain_id is not None else 'Warmup', i)
+        hook(
+            kernel,
+            params,
+            "Warmup [{}]".format(chain_id) if chain_id is not None else "Warmup",
+            i,
+        )
     for i in range(num_samples):
         params = kernel.sample(params)
-        hook(kernel, params, 'Sample [{}]'.format(chain_id) if chain_id is not None else 'Sample', i)
+        hook(
+            kernel,
+            params,
+            "Sample [{}]".format(chain_id) if chain_id is not None else "Sample",
+            i,
+        )
         flat = [params[name].reshape(-1) for name in save_params]
         yield (torch.cat if flat else torch.tensor)(flat)
     yield kernel.diagnostics()
@@ -152,7 +185,16 @@ class _UnarySampler:
     Single process runner class optimized for the case chains are drawn sequentially.
     """
 
-    def __init__(self, kernel, num_samples, warmup_steps, num_chains, disable_progbar, initial_params=None, hook=None):
+    def __init__(
+        self,
+        kernel,
+        num_samples,
+        warmup_steps,
+        num_chains,
+        disable_progbar,
+        initial_params=None,
+        hook=None,
+    ):
         self.kernel = kernel
         self.initial_params = initial_params
         self.warmup_steps = warmup_steps
@@ -173,12 +215,20 @@ class _UnarySampler:
                 initial_params = {k: v[i] for k, v in self.initial_params.items()}
                 self.kernel.initial_params = initial_params
 
-            progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
+            progress_bar = ProgressBar(
+                self.warmup_steps, self.num_samples, disable=self.disable_progbar
+            )
             logger = initialize_logger(logger, "", progress_bar)
             hook_w_logging = _add_logging_hook(logger, progress_bar, self.hook)
-            for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, hook_w_logging,
-                                       i if self.num_chains > 1 else None,
-                                       *args, **kwargs):
+            for sample in _gen_samples(
+                self.kernel,
+                self.warmup_steps,
+                self.num_samples,
+                hook_w_logging,
+                i if self.num_chains > 1 else None,
+                *args,
+                **kwargs
+            ):
                 yield sample, i  # sample, chain_id
             self.kernel.cleanup()
             progress_bar.close()
@@ -190,8 +240,18 @@ class _MultiSampler:
     `torch.multiprocessing` module (itself a light wrapper over the python
     `multiprocessing` module) to spin up parallel workers.
     """
-    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context,
-                 disable_progbar, initial_params=None, hook=None):
+
+    def __init__(
+        self,
+        kernel,
+        num_samples,
+        warmup_steps,
+        num_chains,
+        mp_context,
+        disable_progbar,
+        initial_params=None,
+        hook=None,
+    ):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_chains = num_chains
@@ -202,13 +262,21 @@ class _MultiSampler:
             self.ctx = mp.get_context(mp_context)
         self.result_queue = self.ctx.Queue()
         self.log_queue = self.ctx.Queue()
-        self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
-                                        "MAIN", log_queue=self.log_queue)
+        self.logger = initialize_logger(
+            logging.getLogger("pyro.infer.mcmc"), "MAIN", log_queue=self.log_queue
+        )
         self.num_samples = num_samples
         self.initial_params = initial_params
-        self.log_thread = threading.Thread(target=logger_thread,
-                                           args=(self.log_queue, self.warmup_steps, self.num_samples,
-                                                 self.num_chains, disable_progbar))
+        self.log_thread = threading.Thread(
+            target=logger_thread,
+            args=(
+                self.log_queue,
+                self.warmup_steps,
+                self.num_samples,
+                self.num_chains,
+                disable_progbar,
+            ),
+        )
         self.log_thread.daemon = True
         self.log_thread.start()
         self.events = [self.ctx.Event() for _ in range(num_chains)]
@@ -216,12 +284,28 @@ class _MultiSampler:
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
-            init_params = {k: v[i] for k, v in self.initial_params.items()} if self.initial_params is not None else None
-            worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
-                             self.num_samples, self.warmup_steps, initial_params=init_params, hook=self.hook)
+            init_params = (
+                {k: v[i] for k, v in self.initial_params.items()}
+                if self.initial_params is not None
+                else None
+            )
+            worker = _Worker(
+                i,
+                self.result_queue,
+                self.log_queue,
+                self.events[i],
+                self.kernel,
+                self.num_samples,
+                self.warmup_steps,
+                initial_params=init_params,
+                hook=self.hook,
+            )
             worker.daemon = True
-            self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
-                                                 args=args, kwargs=kwargs))
+            self.workers.append(
+                self.ctx.Process(
+                    name=str(i), target=worker.run, args=args, kwargs=kwargs
+                )
+            )
 
     def terminate(self, terminate_workers=False):
         if self.log_thread.is_alive():
@@ -269,6 +353,7 @@ class AbstractMCMC(ABC):
     """
     Base class for MCMC methods.
     """
+
     def __init__(self, kernel, num_chains, transforms):
         self.kernel = kernel
         self.num_chains = num_chains
@@ -296,16 +381,23 @@ class AbstractMCMC(ABC):
             self.transforms = {}
 
     def _validate_kernel(self, initial_params):
-        if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
+        if (
+            isinstance(self.kernel, (HMC, NUTS))
+            and self.kernel.potential_fn is not None
+        ):
             if initial_params is None:
-                raise ValueError("Must provide valid initial parameters to begin sampling"
-                                 " when using `potential_fn` in HMC/NUTS kernel.")
+                raise ValueError(
+                    "Must provide valid initial parameters to begin sampling"
+                    " when using `potential_fn` in HMC/NUTS kernel."
+                )
 
     def _validate_initial_params(self, initial_params):
         for v in initial_params.values():
             if v.shape[0] != self.num_chains:
-                raise ValueError("The leading dimension of tensors in `initial_params` "
-                                 "must match the number of chains.")
+                raise ValueError(
+                    "The leading dimension of tensors in `initial_params` "
+                    "must match the number of chains."
+                )
 
 
 class MCMC(AbstractMCMC):
@@ -355,11 +447,25 @@ class MCMC(AbstractMCMC):
         save during sampling and diagnostics. This is useful in models with
         large nuisance variables. Defaults to None, saving all params.
     """
-    def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
-                 num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False,
-                 disable_validation=True, transforms=None, save_params=None):
+
+    def __init__(
+        self,
+        kernel,
+        num_samples,
+        warmup_steps=None,
+        initial_params=None,
+        num_chains=1,
+        hook_fn=None,
+        mp_context=None,
+        disable_progbar=False,
+        disable_validation=True,
+        transforms=None,
+        save_params=None,
+    ):
         super().__init__(kernel, num_chains, transforms)
-        self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
+        self.warmup_steps = (
+            num_samples if warmup_steps is None else warmup_steps
+        )  # Stan
         self.num_samples = num_samples
         self.disable_validation = disable_validation
         self._samples = None
@@ -382,23 +488,43 @@ class MCMC(AbstractMCMC):
                         mp_context = "spawn"
 
             # verify num_chains is compatible with available CPU.
-            available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
+            available_cpu = max(
+                mp.cpu_count() - 1, 1
+            )  # reserving 1 for the main process.
             if num_chains <= available_cpu:
                 parallel = True
             else:
-                warnings.warn("num_chains={} is more than available_cpu={}. "
-                              "Chains will be drawn sequentially."
-                              .format(num_chains, available_cpu))
+                warnings.warn(
+                    "num_chains={} is more than available_cpu={}. "
+                    "Chains will be drawn sequentially.".format(
+                        num_chains, available_cpu
+                    )
+                )
         else:
             if initial_params:
                 initial_params = {k: v.unsqueeze(0) for k, v in initial_params.items()}
         self._diagnostics = [None] * num_chains
         if parallel:
-            self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps, num_chains, mp_context,
-                                         disable_progbar, initial_params=initial_params, hook=hook_fn)
+            self.sampler = _MultiSampler(
+                kernel,
+                num_samples,
+                self.warmup_steps,
+                num_chains,
+                mp_context,
+                disable_progbar,
+                initial_params=initial_params,
+                hook=hook_fn,
+            )
         else:
-            self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, num_chains, disable_progbar,
-                                         initial_params=initial_params, hook=hook_fn)
+            self.sampler = _UnarySampler(
+                kernel,
+                num_samples,
+                self.warmup_steps,
+                num_chains,
+                disable_progbar,
+                initial_params=initial_params,
+                hook=hook_fn,
+            )
 
     @poutine.block
     def run(self, *args, **kwargs):
@@ -425,8 +551,10 @@ class MCMC(AbstractMCMC):
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
-        with optional(pyro.validation_enabled(not self.disable_validation),
-                      self.disable_validation is not None):
+        with optional(
+            pyro.validation_enabled(not self.disable_validation),
+            self.disable_validation is not None,
+        ):
             # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
             # at https://github.com/pytorch/pytorch/issues/10375
             # This also resolves "RuntimeError: Cowardly refusing to serialize non-leaf tensor which
@@ -456,7 +584,8 @@ class MCMC(AbstractMCMC):
             shape = z_structure[k]
             next_pos = pos + shape.numel()
             z_acc[k] = z_flat_acc[:, :, pos:next_pos].reshape(
-                (self.num_chains, self.num_samples) + shape)
+                (self.num_chains, self.num_samples) + shape
+            )
             pos = next_pos
         assert pos == z_flat_acc.shape[-1]
 
@@ -490,8 +619,10 @@ class MCMC(AbstractMCMC):
         """
         diag = diagnostics(self._samples)
         for diag_name in self._diagnostics[0]:
-            diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
-                               for i in range(self.num_chains)}
+            diag[diag_name] = {
+                "chain {}".format(i): self._diagnostics[i][diag_name]
+                for i in range(self.num_chains)
+            }
         return diag
 
     def summary(self, prob=0.9):
@@ -504,9 +635,17 @@ class MCMC(AbstractMCMC):
         :param float prob: the probability mass of samples within the credibility interval.
         """
         print_summary(self._samples, prob=prob)
-        if 'divergences' in self._diagnostics[0]:
-            print("Number of divergences: {}".format(
-                sum([len(self._diagnostics[i]['divergences']) for i in range(self.num_chains)])))
+        if "divergences" in self._diagnostics[0]:
+            print(
+                "Number of divergences: {}".format(
+                    sum(
+                        [
+                            len(self._diagnostics[i]["divergences"])
+                            for i in range(self.num_chains)
+                        ]
+                    )
+                )
+            )
 
 
 class StreamingMCMC(AbstractMCMC):
@@ -517,11 +656,25 @@ class StreamingMCMC(AbstractMCMC):
 
     For available streaming ops please see :mod:`~pyro.ops.streaming`.
     """
-    def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
-                 statistics=None, num_chains=1, hook_fn=None, disable_progbar=False,
-                 disable_validation=True, transforms=None, save_params=None):
+
+    def __init__(
+        self,
+        kernel,
+        num_samples,
+        warmup_steps=None,
+        initial_params=None,
+        statistics=None,
+        num_chains=1,
+        hook_fn=None,
+        disable_progbar=False,
+        disable_validation=True,
+        transforms=None,
+        save_params=None,
+    ):
         super().__init__(kernel, num_chains, transforms)
-        self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
+        self.warmup_steps = (
+            num_samples if warmup_steps is None else warmup_steps
+        )  # Stan
         self.num_samples = num_samples
         self.disable_validation = disable_validation
         self._samples = None
@@ -541,8 +694,15 @@ class StreamingMCMC(AbstractMCMC):
             if initial_params:
                 initial_params = {k: v.unsqueeze(0) for k, v in initial_params.items()}
         self._diagnostics = [None] * num_chains
-        self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, num_chains, disable_progbar,
-                                     initial_params=initial_params, hook=hook_fn)
+        self.sampler = _UnarySampler(
+            kernel,
+            num_samples,
+            self.warmup_steps,
+            num_chains,
+            disable_progbar,
+            initial_params=initial_params,
+            hook=hook_fn,
+        )
 
     @poutine.block
     def run(self, *args, **kwargs):
@@ -552,8 +712,10 @@ class StreamingMCMC(AbstractMCMC):
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
 
-        with optional(pyro.validation_enabled(not self.disable_validation),
-                      self.disable_validation is not None):
+        with optional(
+            pyro.validation_enabled(not self.disable_validation),
+            self.disable_validation is not None,
+        ):
             args = [arg.detach() if torch.is_tensor(arg) else arg for arg in args]
             for x, chain_id in self.sampler.run(*args, **kwargs):
                 if num_samples[chain_id] == 0:
@@ -586,9 +748,12 @@ class StreamingMCMC(AbstractMCMC):
                         if name in self.transforms:
                             z_acc[name] = self.transforms[name].inv(z)
 
-                    self._statistics.update({
-                        (chain_id, name): transformed_sample for name, transformed_sample in z_acc.items()
-                    })
+                    self._statistics.update(
+                        {
+                            (chain_id, name): transformed_sample
+                            for name, transformed_sample in z_acc.items()
+                        }
+                    )
 
         # terminate the sampler (shut down worker processes)
         self.sampler.terminate(True)
@@ -620,6 +785,8 @@ class StreamingMCMC(AbstractMCMC):
         statistics = self._statistics.get()
         diag = diagnostics_from_stats(statistics, self.num_samples, self.num_chains)
         for diag_name in self._diagnostics[0]:
-            diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
-                               for i in range(self.num_chains)}
+            diag[diag_name] = {
+                "chain {}".format(i): self._diagnostics[i][diag_name]
+                for i in range(self.num_chains)
+            }
         return diag

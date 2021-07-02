@@ -57,14 +57,23 @@ class HiddenLayer(TorchDistribution):
     """
     has_rsample = True
 
-    def __init__(self, X=None, A_mean=None, A_scale=None, non_linearity=F.relu,
-                 KL_factor=1.0, A_prior_scale=1.0, include_hidden_bias=True,
-                 weight_space_sampling=False):
+    def __init__(
+        self,
+        X=None,
+        A_mean=None,
+        A_scale=None,
+        non_linearity=F.relu,
+        KL_factor=1.0,
+        A_prior_scale=1.0,
+        include_hidden_bias=True,
+        weight_space_sampling=False,
+    ):
         self.X = X
         self.dim_X = X.size(-1)
         self.dim_H = A_mean.size(-1)
-        assert A_mean.size(0) == self.dim_X, \
-            "The dimensions of X and A_mean and A_scale must match accordingly; see documentation"
+        assert (
+            A_mean.size(0) == self.dim_X
+        ), "The dimensions of X and A_mean and A_scale must match accordingly; see documentation"
         self.A_mean = A_mean
         self.A_scale = A_scale
         self.non_linearity = non_linearity
@@ -91,14 +100,20 @@ class HiddenLayer(TorchDistribution):
     def rsample(self, sample_shape=torch.Size()):
         # note: weight space sampling is only meant for testing
         if self.weight_space_sampling:
-            A = self.A_mean + torch.randn(sample_shape + self.A_scale.shape).type_as(self.A_mean) * self.A_scale
+            A = (
+                self.A_mean
+                + torch.randn(sample_shape + self.A_scale.shape).type_as(self.A_mean)
+                * self.A_scale
+            )
             activation = torch.matmul(self.X, A)
         else:
             _mean = torch.matmul(self.X, self.A_mean)
             X_sqr = torch.pow(self.X, 2.0).unsqueeze(-1)
             A_scale_sqr = torch.pow(self.A_scale, 2.0)
             _std = (X_sqr * A_scale_sqr).sum(-2).sqrt()
-            activation = _mean + torch.randn(sample_shape + _std.shape).type_as(_std) * _std
+            activation = (
+                _mean + torch.randn(sample_shape + _std.shape).type_as(_std) * _std
+            )
 
         # apply non-linearity
         activation = self.non_linearity(activation)

@@ -31,6 +31,7 @@ class LocScaleReparam(Reparam):
         all params in a distributions ``.arg_constraints`` will be copied.
     :type shape_params: tuple or list
     """
+
     def __init__(self, centered=None, shape_params=None):
         assert centered is None or isinstance(centered, (float, torch.Tensor))
         if shape_params is not None:
@@ -66,9 +67,11 @@ class LocScaleReparam(Reparam):
             )
         params = {key: getattr(fn, key) for key in self.shape_params}
         if centered is None:
-            centered = pyro.param("{}_centered".format(name),
-                                  lambda: fn.loc.new_full(event_shape, 0.5),
-                                  constraint=constraints.unit_interval)
+            centered = pyro.param(
+                "{}_centered".format(name),
+                lambda: fn.loc.new_full(event_shape, 0.5),
+                constraint=constraints.unit_interval,
+            )
         params["loc"] = fn.loc * centered
         params["scale"] = fn.scale ** centered
         decentered_fn = type(fn)(**params)

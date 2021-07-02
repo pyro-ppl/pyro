@@ -38,7 +38,7 @@ def test_multiply_divide():
 
 def test_abs():
     X = Uniform(0, 1).rv  # (0, 1)
-    X = 2*(X - 0.5)  # (-1, 1)
+    X = 2 * (X - 0.5)  # (-1, 1)
     X = abs(X)  # (0, 1)
     x = X.dist.sample([N_SAMPLES])
     assert ((0 <= x) & (x <= 1)).all().item()
@@ -53,7 +53,7 @@ def test_neg():
 
 def test_pow():
     X = Uniform(0, 1).rv  # (0, 1)
-    X = X**2  # (0, 1)
+    X = X ** 2  # (0, 1)
     x = X.dist.sample([N_SAMPLES])
     assert ((0 <= x) & (x <= 1)).all().item()
 
@@ -63,7 +63,7 @@ def test_tensor_ops():
     X = Uniform(0, 1).expand([5, 5]).rv
     a = torch.tensor([[1, 2, 3, 4, 5]])
     b = a.T
-    X = abs(pi*(-X + a - 3*b))
+    X = abs(pi * (-X + a - 3 * b))
     x = X.dist.sample()
     assert x.shape == (5, 5)
     assert (x >= 0).all().item()
@@ -71,8 +71,8 @@ def test_tensor_ops():
 
 def test_chaining():
     X = (
-        Uniform(0, 1).rv  # (0, 1)
-        .add(1)  # (1, 2)
+        Uniform(0, 1)
+        .rv.add(1)  # (0, 1)  # (1, 2)
         .pow(2)  # (1, 4)
         .mul(2)  # (2, 8)
         .sub(5)  # (-3, 3)
@@ -80,4 +80,4 @@ def test_chaining():
         .exp()  # (1/e, e)
     )
     x = X.dist.sample([N_SAMPLES])
-    assert ((1/math.e <= x) & (x <= math.e)).all().item()
+    assert ((1 / math.e <= x) & (x <= math.e)).all().item()

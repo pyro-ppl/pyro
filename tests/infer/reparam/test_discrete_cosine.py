@@ -26,15 +26,25 @@ def get_moments(x):
     return torch.cat([mean, std, corr])
 
 
-@pytest.mark.parametrize("smooth", [0., 0.5, 1.0, 2.0])
-@pytest.mark.parametrize("shape,dim", [
-    ((6,), -1),
-    ((2, 5,), -1),
-    ((4, 2), -2),
-    ((2, 3, 1), -2),
-], ids=str)
+@pytest.mark.parametrize("smooth", [0.0, 0.5, 1.0, 2.0])
+@pytest.mark.parametrize(
+    "shape,dim",
+    [
+        ((6,), -1),
+        (
+            (
+                2,
+                5,
+            ),
+            -1,
+        ),
+        ((4, 2), -2),
+        ((2, 3, 1), -2),
+    ],
+    ids=str,
+)
 def test_normal(shape, dim, smooth):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():
@@ -61,15 +71,24 @@ def test_normal(shape, dim, smooth):
         assert_close(actual_grads[1], expected_grads[1], atol=0.05)
 
 
-@pytest.mark.parametrize("smooth", [0., 0.5, 1.0, 2.0])
-@pytest.mark.parametrize("shape,dim", [
-    ((6,), -1),
-    ((2, 5,), -1),
-    ((4, 2), -2),
-    ((2, 3, 1), -2),
-], ids=str)
+@pytest.mark.parametrize("smooth", [0.0, 0.5, 1.0, 2.0])
+@pytest.mark.parametrize(
+    "shape,dim",
+    [
+        ((6,), -1),
+        (
+            (
+                2,
+                5,
+            ),
+            -1,
+        ),
+        ((4, 2), -2),
+        ((2, 3, 1), -2),
+    ],
+    ids=str,
+)
 def test_uniform(shape, dim, smooth):
-
     def model():
         with pyro.plate_stack("plates", shape[:dim]):
             with pyro.plate("particles", 10000):
@@ -78,7 +97,9 @@ def test_uniform(shape, dim, smooth):
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = get_moments(value)
 
-    reparam_model = poutine.reparam(model, {"x": DiscreteCosineReparam(dim=dim, smooth=smooth)})
+    reparam_model = poutine.reparam(
+        model, {"x": DiscreteCosineReparam(dim=dim, smooth=smooth)}
+    )
     trace = poutine.trace(reparam_model).get_trace()
     assert isinstance(trace.nodes["x_dct"]["fn"], dist.TransformedDistribution)
     assert isinstance(trace.nodes["x"]["fn"], dist.Delta)
@@ -87,15 +108,25 @@ def test_uniform(shape, dim, smooth):
     assert_close(actual_probe, expected_probe, atol=0.1)
 
 
-@pytest.mark.parametrize("smooth", [0., 0.5, 1.0, 2.0])
-@pytest.mark.parametrize("shape,dim", [
-    ((6,), -1),
-    ((2, 5,), -1),
-    ((4, 2), -2),
-    ((2, 3, 1), -2),
-], ids=str)
+@pytest.mark.parametrize("smooth", [0.0, 0.5, 1.0, 2.0])
+@pytest.mark.parametrize(
+    "shape,dim",
+    [
+        ((6,), -1),
+        (
+            (
+                2,
+                5,
+            ),
+            -1,
+        ),
+        ((4, 2), -2),
+        ((2, 3, 1), -2),
+    ],
+    ids=str,
+)
 def test_init(shape, dim, smooth):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():

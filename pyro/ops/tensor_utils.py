@@ -53,7 +53,7 @@ def block_diagonal(mat, block_size):
     mat = mat.reshape(mat.shape[:-2] + (B, M, B, N))
     mat = mat.transpose(-2, -3)
     mat = mat.reshape(mat.shape[:-4] + (B * B, M, N))
-    return mat[..., ::B + 1, :, :]
+    return mat[..., :: B + 1, :, :]
 
 
 def periodic_repeat(tensor, size, dim):
@@ -117,7 +117,9 @@ def periodic_cumsum(tensor, period, dim):
         tensor = torch.nn.functional.pad(tensor, (0, 0) * (-1 - dim) + (0, padding))
 
     # Accumulate.
-    shape = tensor.shape[:dim] + (repeats, period) + tensor.shape[tensor.dim() + dim + 1:]
+    shape = (
+        tensor.shape[:dim] + (repeats, period) + tensor.shape[tensor.dim() + dim + 1 :]
+    )
     result = tensor.reshape(shape).cumsum(dim=dim - 1).reshape(tensor.shape)
 
     # Truncate to original size.
@@ -161,7 +163,9 @@ def periodic_features(duration, max_period=None, min_period=None, **options):
 
     t = torch.arange(float(duration), **options).unsqueeze(-1).unsqueeze(-1)
     phase = torch.tensor([0, math.pi / 2], **options).unsqueeze(-1)
-    freq = torch.arange(1, max_period / min_period, **options).mul_(2 * math.pi / max_period)
+    freq = torch.arange(1, max_period / min_period, **options).mul_(
+        2 * math.pi / max_period
+    )
     result = (freq * t + phase).cos_().reshape(duration, -1).contiguous()
     return result
 
@@ -197,7 +201,7 @@ def next_fast_len(size):
         next_size += 1
 
 
-def convolve(signal, kernel, mode='full'):
+def convolve(signal, kernel, mode="full"):
     """
     Computes the 1-d convolution of signal by kernel using FFTs.
     The two arguments should have the same rightmost dim, but may otherwise be
@@ -215,14 +219,14 @@ def convolve(signal, kernel, mode='full'):
     """
     m = signal.size(-1)
     n = kernel.size(-1)
-    if mode == 'full':
+    if mode == "full":
         truncate = m + n - 1
-    elif mode == 'valid':
+    elif mode == "valid":
         truncate = max(m, n) - min(m, n) + 1
-    elif mode == 'same':
+    elif mode == "same":
         truncate = max(m, n)
     else:
-        raise ValueError('Unknown mode: {}'.format(mode))
+        raise ValueError("Unknown mode: {}".format(mode))
 
     # Compute convolution using fft.
     padded_size = m + n - 1
@@ -234,7 +238,7 @@ def convolve(signal, kernel, mode='full'):
     result = irfft(f_result, n=fast_ftt_size)
 
     start_idx = (padded_size - truncate) // 2
-    return result[..., start_idx: start_idx + truncate]
+    return result[..., start_idx : start_idx + truncate]
 
 
 def repeated_matmul(M, n):
@@ -247,7 +251,9 @@ def repeated_matmul(M, n):
     :param int n: The order of the largest product :math:`M^n`
     :returns torch.Tensor: A batch of square tensors of shape (n, ..., N, N)
     """
-    assert M.size(-1) == M.size(-2), "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    assert M.size(-1) == M.size(
+        -2
+    ), "Input tensors must satisfy M.size(-1) == M.size(-2)."
     assert n > 0, "argument n to parallel_scan_repeated_matmul must be 1 or larger"
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
@@ -278,7 +284,7 @@ def dct(x, dim=-1):
     if dim >= 0:
         dim -= x.dim()
     if dim != -1:
-        y = x.reshape(x.shape[:dim + 1] + (-1,)).transpose(-1, -2)
+        y = x.reshape(x.shape[: dim + 1] + (-1,)).transpose(-1, -2)
         return dct(y).transpose(-1, -2).reshape(x.shape)
 
     # Ref: http://fourier.eng.hmc.edu/e161/lectures/dct/node2.html
@@ -288,16 +294,20 @@ def dct(x, dim=-1):
     # Step 2
     Y = rfft(y, n=N)
     # Step 3
-    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
+    coef_real = torch.cos(
+        torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device)
+    )
     M = Y.size(-1)
     coef = torch.stack([coef_real[:M], -coef_real[-M:].flip(-1)], dim=-1)
     X = as_complex(coef) * Y
     # NB: if we use the full-length version Y_full = fft(y, n=N), then
     # the real part of the later half of X will be the flip
     # of the negative of the imaginary part of the first half
-    X = torch.cat([X.real, -X.imag[..., 1:(N - M + 1)].flip(-1)], dim=-1)
+    X = torch.cat([X.real, -X.imag[..., 1 : (N - M + 1)].flip(-1)], dim=-1)
     # orthogonalize
-    scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
+    scale = torch.cat(
+        [x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))]
+    )
     return X / scale
 
 
@@ -315,11 +325,13 @@ def idct(x, dim=-1):
     if dim >= 0:
         dim -= x.dim()
     if dim != -1:
-        y = x.reshape(x.shape[:dim + 1] + (-1,)).transpose(-1, -2)
+        y = x.reshape(x.shape[: dim + 1] + (-1,)).transpose(-1, -2)
         return idct(y).transpose(-1, -2).reshape(x.shape)
 
     N = x.size(-1)
-    scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
+    scale = torch.cat(
+        [x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))]
+    )
     x = x * scale
     # Step 1, solve X = cos(k) * Yr + sin(k) * Yi
     # We know that Y[1:] is conjugate to Y[:0:-1], hence
@@ -329,9 +341,11 @@ def idct(x, dim=-1):
     # In addition, Yi[0] = 0, Yr[0] = X[0]
     # In other words, Y = complex_mul(e^ik, X - i[0, X[:0:-1]])
     M = N // 2 + 1  # half size
-    xi = torch.nn.functional.pad(-x[..., N - M + 1:], (0, 1)).flip(-1)
+    xi = torch.nn.functional.pad(-x[..., N - M + 1 :], (0, 1)).flip(-1)
     X = torch.stack([x[..., :M], xi], dim=-1)
-    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
+    coef_real = torch.cos(
+        torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device)
+    )
     coef = torch.stack([coef_real[:M], coef_real[-M:].flip(-1)], dim=-1)
     Y = as_complex(coef) * as_complex(X)
     # Step 2
@@ -351,7 +365,7 @@ def haar_transform(x):
     :rtype: Tensor
     """
     n = x.size(-1) // 2
-    even, odd, end = x[..., 0:n+n:2], x[..., 1:n+n:2], x[..., n+n:]
+    even, odd, end = x[..., 0 : n + n : 2], x[..., 1 : n + n : 2], x[..., n + n :]
     hi = _ROOT_TWO_INVERSE * (even - odd)
     lo = _ROOT_TWO_INVERSE * (even + odd)
     if n >= 2:
@@ -369,7 +383,7 @@ def inverse_haar_transform(x):
     :rtype: Tensor
     """
     n = x.size(-1) // 2
-    lo, hi, end = x[..., :n], x[..., n:n+n], x[..., n+n:]
+    lo, hi, end = x[..., :n], x[..., n : n + n], x[..., n + n :]
     if n >= 2:
         lo = inverse_haar_transform(lo)
     even = _ROOT_TWO_INVERSE * (lo + hi)
@@ -412,8 +426,9 @@ def triangular_solve(x, y, upper=False, transpose=False):
 def precision_to_scale_tril(P):
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(torch.eye(P.shape[-1], dtype=P.dtype, device=P.device),
-                               L_inv, upper=False)[0]
+    L = torch.triangular_solve(
+        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
+    )[0]
     return L
 
 

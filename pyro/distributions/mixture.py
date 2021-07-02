@@ -19,6 +19,7 @@ class MaskedConstraint(constraints.Constraint):
     :param torch.constraints.Constraint constraint1: constraint that holds
         wherever ``mask == 1``
     """
+
     def __init__(self, mask, constraint0, constraint1):
         self.mask = mask
         self.constraint0 = constraint0
@@ -26,7 +27,11 @@ class MaskedConstraint(constraints.Constraint):
 
     def check(self, value):
         result = self.constraint0.check(value)
-        mask = self.mask.expand(result.shape) if result.shape != self.mask.shape else self.mask
+        mask = (
+            self.mask.expand(result.shape)
+            if result.shape != self.mask.shape
+            else self.mask
+        )
         result[mask] = self.constraint1.check(value)[mask]
         return result
 
@@ -55,15 +60,23 @@ class MaskedMixture(TorchDistribution):
     :param pyro.distributions.TorchDistribution component1: a distribution
         for batch elements ``mask == True``.
     """
+
     arg_constraints = {}  # nothing can be constrained
 
     def __init__(self, mask, component0, component1, validate_args=None):
         if not torch.is_tensor(mask) or mask.dtype != torch.bool:
-            raise ValueError('Expected mask to be a BoolTensor but got {}'.format(type(mask)))
+            raise ValueError(
+                "Expected mask to be a BoolTensor but got {}".format(type(mask))
+            )
         if component0.event_shape != component1.event_shape:
-            raise ValueError('components event_shape disagree: {} vs {}'
-                             .format(component0.event_shape, component1.event_shape))
-        batch_shape = broadcast_shape(mask.shape, component0.batch_shape, component1.batch_shape)
+            raise ValueError(
+                "components event_shape disagree: {} vs {}".format(
+                    component0.event_shape, component1.event_shape
+                )
+            )
+        batch_shape = broadcast_shape(
+            mask.shape, component0.batch_shape, component1.batch_shape
+        )
         if mask.shape != batch_shape:
             mask = mask.expand(batch_shape)
         if component0.batch_shape != batch_shape:
@@ -89,7 +102,9 @@ class MaskedMixture(TorchDistribution):
     def support(self):
         if self.component0.support is self.component1.support:
             return self.component0.support
-        return MaskedConstraint(self.mask, self.component0.support, self.component1.support)
+        return MaskedConstraint(
+            self.mask, self.component0.support, self.component1.support
+        )
 
     def expand(self, batch_shape):
         try:
@@ -103,17 +118,21 @@ class MaskedMixture(TorchDistribution):
     def sample(self, sample_shape=torch.Size()):
         mask = self.mask.reshape(self.mask.shape + (1,) * self.event_dim)
         mask = mask.expand(sample_shape + self.shape())
-        result = torch.where(mask,
-                             self.component1.sample(sample_shape),
-                             self.component0.sample(sample_shape))
+        result = torch.where(
+            mask,
+            self.component1.sample(sample_shape),
+            self.component0.sample(sample_shape),
+        )
         return result
 
     def rsample(self, sample_shape=torch.Size()):
         mask = self.mask.reshape(self.mask.shape + (1,) * self.event_dim)
         mask = mask.expand(sample_shape + self.shape())
-        result = torch.where(mask,
-                             self.component1.rsample(sample_shape),
-                             self.component0.rsample(sample_shape))
+        result = torch.where(
+            mask,
+            self.component1.rsample(sample_shape),
+            self.component0.rsample(sample_shape),
+        )
         return result
 
     def log_prob(self, value):
@@ -122,13 +141,13 @@ class MaskedMixture(TorchDistribution):
             value = value.expand(value_shape)
         if self._validate_args:
             self._validate_sample(value)
-        mask_shape = value_shape[:len(value_shape) - len(self.event_shape)]
+        mask_shape = value_shape[: len(value_shape) - len(self.event_shape)]
         mask = self.mask
         if mask.shape != mask_shape:
             mask = mask.expand(mask_shape)
-        result = torch.where(mask,
-                             self.component1.log_prob(value),
-                             self.component0.log_prob(value))
+        result = torch.where(
+            mask, self.component1.log_prob(value), self.component0.log_prob(value)
+        )
         return result
 
     @lazy_property

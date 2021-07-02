@@ -78,13 +78,24 @@ class SplineCoupling(TransformModule):
     codomain = constraints.real_vector
     bijective = True
 
-    def __init__(self, input_dim, split_dim, hypernet, count_bins=8, bound=3., order='linear', identity=False):
+    def __init__(
+        self,
+        input_dim,
+        split_dim,
+        hypernet,
+        count_bins=8,
+        bound=3.0,
+        order="linear",
+        identity=False,
+    ):
         super(SplineCoupling, self).__init__(cache_size=1)
 
         # One part of the input is (optionally) put through an element-wise spline and the other part through a
         # conditional one that inputs the first part.
         self.lower_spline = Spline(split_dim, count_bins, bound, order)
-        self.upper_spline = ConditionalSpline(hypernet, input_dim - split_dim, count_bins, bound, order)
+        self.upper_spline = ConditionalSpline(
+            hypernet, input_dim - split_dim, count_bins, bound, order
+        )
         self.split_dim = split_dim
         self.identity = identity
 
@@ -97,7 +108,7 @@ class SplineCoupling(TransformModule):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
         the base distribution (or the output of a previous transform)
         """
-        x1, x2 = x[..., :self.split_dim], x[..., self.split_dim:]
+        x1, x2 = x[..., : self.split_dim], x[..., self.split_dim :]
 
         if not self.identity:
             y1 = self.lower_spline(x1)
@@ -123,7 +134,7 @@ class SplineCoupling(TransformModule):
         Inverts y => x. Uses a previously cached inverse if available,
         otherwise performs the inversion afresh.
         """
-        y1, y2 = y[..., :self.split_dim], y[..., self.split_dim:]
+        y1, y2 = y[..., : self.split_dim], y[..., self.split_dim :]
 
         if not self.identity:
             x1 = self.lower_spline._inv_call(y1)
@@ -154,7 +165,9 @@ class SplineCoupling(TransformModule):
         return self._cache_log_detJ.sum(-1)
 
 
-def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0):
+def spline_coupling(
+    input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0
+):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.SplineCoupling` object for consistency
@@ -171,11 +184,15 @@ def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, b
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
 
-    nn = DenseNN(split_dim,
-                 hidden_dims,
-                 param_dims=[(input_dim - split_dim) * count_bins,
-                             (input_dim - split_dim) * count_bins,
-                             (input_dim - split_dim) * (count_bins - 1),
-                             (input_dim - split_dim) * count_bins])
+    nn = DenseNN(
+        split_dim,
+        hidden_dims,
+        param_dims=[
+            (input_dim - split_dim) * count_bins,
+            (input_dim - split_dim) * count_bins,
+            (input_dim - split_dim) * (count_bins - 1),
+            (input_dim - split_dim) * count_bins,
+        ],
+    )
 
     return SplineCoupling(input_dim, split_dim, nn, count_bins, bound)

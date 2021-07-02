@@ -13,6 +13,7 @@ class Exp(nn.Module):
     """
     a custom module for exponentiation of tensors
     """
+
     def __init__(self):
         super().__init__()
 
@@ -24,6 +25,7 @@ class ConcatModule(nn.Module):
     """
     a custom module for concatenation of tensors
     """
+
     def __init__(self, allow_broadcast=False):
         self.allow_broadcast = allow_broadcast
         super().__init__()
@@ -50,6 +52,7 @@ class ListOutModule(nn.ModuleList):
     """
     a custom module for outputting a list of tensors from a list of nn modules
     """
+
     def __init__(self, modules):
         super().__init__(modules)
 
@@ -73,21 +76,32 @@ def call_nn_op(op):
 
 
 class MLP(nn.Module):
-
-    def __init__(self, mlp_sizes, activation=nn.ReLU, output_activation=None,
-                 post_layer_fct=lambda layer_ix, total_layers, layer: None,
-                 post_act_fct=lambda layer_ix, total_layers, layer: None,
-                 allow_broadcast=False, use_cuda=False):
+    def __init__(
+        self,
+        mlp_sizes,
+        activation=nn.ReLU,
+        output_activation=None,
+        post_layer_fct=lambda layer_ix, total_layers, layer: None,
+        post_act_fct=lambda layer_ix, total_layers, layer: None,
+        allow_broadcast=False,
+        use_cuda=False,
+    ):
         # init the module object
         super().__init__()
 
         assert len(mlp_sizes) >= 2, "Must have input and output layer sizes defined"
 
         # get our inputs, outputs, and hidden
-        input_size, hidden_sizes, output_size = mlp_sizes[0], mlp_sizes[1:-1], mlp_sizes[-1]
+        input_size, hidden_sizes, output_size = (
+            mlp_sizes[0],
+            mlp_sizes[1:-1],
+            mlp_sizes[-1],
+        )
 
         # assume int or list
-        assert isinstance(input_size, (int, list, tuple)), "input_size must be int, list, tuple"
+        assert isinstance(
+            input_size, (int, list, tuple)
+        ), "input_size must be int, list, tuple"
 
         # everything in MLP will be concatted if it's multiple arguments
         last_layer_size = input_size if type(input_size) == int else sum(input_size)
@@ -114,7 +128,9 @@ class MLP(nn.Module):
             all_modules.append(cur_linear_layer)
 
             # handle post_linear
-            post_linear = post_layer_fct(layer_ix + 1, len(hidden_sizes), all_modules[-1])
+            post_linear = post_layer_fct(
+                layer_ix + 1, len(hidden_sizes), all_modules[-1]
+            )
 
             # if we send something back, add it to sequential
             # here we could return a batch norm for example
@@ -125,7 +141,9 @@ class MLP(nn.Module):
             all_modules.append(activation())
 
             # now handle after activation
-            post_activation = post_act_fct(layer_ix + 1, len(hidden_sizes), all_modules[-1])
+            post_activation = post_act_fct(
+                layer_ix + 1, len(hidden_sizes), all_modules[-1]
+            )
 
             # handle post_activation if not null
             # could add batch norm for example
@@ -137,13 +155,18 @@ class MLP(nn.Module):
 
         # now we have all of our hidden layers
         # we handle outputs
-        assert isinstance(output_size, (int, list, tuple)), "output_size must be int, list, tuple"
+        assert isinstance(
+            output_size, (int, list, tuple)
+        ), "output_size must be int, list, tuple"
 
         if type(output_size) == int:
             all_modules.append(nn.Linear(last_layer_size, output_size))
             if output_activation is not None:
-                all_modules.append(call_nn_op(output_activation)
-                                   if isclass(output_activation) else output_activation)
+                all_modules.append(
+                    call_nn_op(output_activation)
+                    if isclass(output_activation)
+                    else output_activation
+                )
         else:
 
             # we're going to have a bunch of separate layers we can spit out (a tuple of outputs)
@@ -159,14 +182,18 @@ class MLP(nn.Module):
                 split_layer.append(nn.Linear(last_layer_size, out_size))
 
                 # then we get our output activation (either we repeat all or we index into a same sized array)
-                act_out_fct = output_activation if not isinstance(output_activation, (list, tuple)) \
+                act_out_fct = (
+                    output_activation
+                    if not isinstance(output_activation, (list, tuple))
                     else output_activation[out_ix]
+                )
 
-                if(act_out_fct):
+                if act_out_fct:
                     # we check if it's a class. if so, instantiate the object
                     # otherwise, use the object directly (e.g. pre-instaniated)
-                    split_layer.append(call_nn_op(act_out_fct)
-                                       if isclass(act_out_fct) else act_out_fct)
+                    split_layer.append(
+                        call_nn_op(act_out_fct) if isclass(act_out_fct) else act_out_fct
+                    )
 
                 # our outputs is just a sequential of the two
                 out_layers.append(nn.Sequential(*split_layer))

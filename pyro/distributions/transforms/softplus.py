@@ -39,6 +39,7 @@ class SoftplusLowerCholeskyTransform(Transform):
     nonnegative diagonal entries. This is useful for parameterizing positive
     definite matrices in terms of their Cholesky factorization.
     """
+
     domain = constraints.independent(constraints.real, 2)
     codomain = constraints.lower_cholesky
 
@@ -55,6 +56,6 @@ class SoftplusLowerCholeskyTransform(Transform):
 
 
 __all__ = [
-    'SoftplusTransform',
-    'SoftplusLowerCholeskyTransform',
+    "SoftplusTransform",
+    "SoftplusLowerCholeskyTransform",
 ]

@@ -24,11 +24,13 @@ from pyro.ops.tensor_utils import (
 )
 from tests.common import assert_close, assert_equal
 
-pytestmark = pytest.mark.stage('unit')
+pytestmark = pytest.mark.stage("unit")
 
 
-@pytest.mark.parametrize('batch_size', [1, 2, 3])
-@pytest.mark.parametrize('block_size', [torch.Size([2, 2]), torch.Size([3, 1]), torch.Size([4, 2])])
+@pytest.mark.parametrize("batch_size", [1, 2, 3])
+@pytest.mark.parametrize(
+    "block_size", [torch.Size([2, 2]), torch.Size([3, 1]), torch.Size([4, 2])]
+)
 def test_block_diag_embed(batch_size, block_size):
     m = torch.randn(block_size).unsqueeze(0).expand((batch_size,) + block_size)
     b = block_diag_embed(m)
@@ -43,9 +45,11 @@ def test_block_diag_embed(batch_size, block_size):
         assert_equal(b[bottom:top, left:right], m[k])
 
 
-@pytest.mark.parametrize('batch_shape', [torch.Size([]), torch.Size([7])])
-@pytest.mark.parametrize('mat_size,block_size', [(torch.Size([2, 2]), 2), (torch.Size([3, 1]), 1),
-                                                 (torch.Size([6, 3]), 3)])
+@pytest.mark.parametrize("batch_shape", [torch.Size([]), torch.Size([7])])
+@pytest.mark.parametrize(
+    "mat_size,block_size",
+    [(torch.Size([2, 2]), 2), (torch.Size([3, 1]), 1), (torch.Size([6, 3]), 3)],
+)
 def test_block_diag(batch_shape, mat_size, block_size):
     mat = torch.randn(batch_shape + (block_size,) + mat_size)
     mat_embed = block_diag_embed(mat)
@@ -75,7 +79,10 @@ def test_periodic_features(duration):
         min_period = torch.distributions.Uniform(2, max_period).sample().item()
         for min_period in [min_period, 2]:
             actual = periodic_features(duration, max_period, min_period)
-            assert actual.shape == (duration, 2 * math.ceil(max_period / min_period) - 2)
+            assert actual.shape == (
+                duration,
+                2 * math.ceil(max_period / min_period) - 2,
+            )
             assert (-1 <= actual).all()
             assert (actual <= 1).all()
 
@@ -93,12 +100,14 @@ def test_periodic_cumsum(period, size, left_shape, right_shape):
     for t in range(period):
         assert_equal(actual[dots + (t,)], tensor[dots + (t,)])
     for t in range(period, size):
-        assert_close(actual[dots + (t,)], tensor[dots + (t,)] + actual[dots + (t - period,)])
+        assert_close(
+            actual[dots + (t,)], tensor[dots + (t,)] + actual[dots + (t - period,)]
+        )
 
 
-@pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
-@pytest.mark.parametrize('n', [2, 3, 4, 5, 6, 10])
-@pytest.mark.parametrize('mode', ['full', 'valid', 'same'])
+@pytest.mark.parametrize("m", [2, 3, 4, 5, 6, 10])
+@pytest.mark.parametrize("n", [2, 3, 4, 5, 6, 10])
+@pytest.mark.parametrize("mode", ["full", "valid", "same"])
 def test_convolve_shape(m, n, mode):
     signal = torch.randn(m)
     kernel = torch.randn(n)
@@ -107,23 +116,27 @@ def test_convolve_shape(m, n, mode):
     assert actual.shape == expected.shape
 
 
-@pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
-@pytest.mark.parametrize('n', [2, 3, 4, 5, 6, 10])
-@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-@pytest.mark.parametrize('mode', ['full', 'valid', 'same'])
+@pytest.mark.parametrize("m", [2, 3, 4, 5, 6, 10])
+@pytest.mark.parametrize("n", [2, 3, 4, 5, 6, 10])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize("mode", ["full", "valid", "same"])
 def test_convolve(batch_shape, m, n, mode):
     signal = torch.randn(*batch_shape, m)
     kernel = torch.randn(*batch_shape, n)
     actual = convolve(signal, kernel, mode)
-    expected = torch.stack([
-        torch.tensor(np.convolve(s, k, mode=mode))
-        for s, k in zip(signal.reshape(-1, m), kernel.reshape(-1, n))
-    ]).reshape(*batch_shape, -1)
+    expected = torch.stack(
+        [
+            torch.tensor(np.convolve(s, k, mode=mode))
+            for s, k in zip(signal.reshape(-1, m), kernel.reshape(-1, n))
+        ]
+    ).reshape(*batch_shape, -1)
     assert_close(actual, expected)
 
 
-@pytest.mark.parametrize('size', [torch.Size([2, 2]), torch.Size([4, 3, 3]), torch.Size([4, 1, 2, 2])])
-@pytest.mark.parametrize('n', [1, 2, 3, 7, 8])
+@pytest.mark.parametrize(
+    "size", [torch.Size([2, 2]), torch.Size([4, 3, 3]), torch.Size([4, 1, 2, 2])]
+)
+@pytest.mark.parametrize("n", [1, 2, 3, 7, 8])
 def test_repeated_matmul(size, n):
     M = torch.randn(size)
     result = repeated_matmul(M, n)
@@ -135,19 +148,19 @@ def test_repeated_matmul(size, n):
         serial_result = torch.matmul(serial_result, M)
 
 
-@pytest.mark.parametrize('shape', [(3, 4), (5,), (2, 1, 6)])
+@pytest.mark.parametrize("shape", [(3, 4), (5,), (2, 1, 6)])
 def test_dct(shape):
     x = torch.randn(shape)
     actual = dct(x)
-    expected = torch.from_numpy(fftpack.dct(x.numpy(), norm='ortho'))
+    expected = torch.from_numpy(fftpack.dct(x.numpy(), norm="ortho"))
     assert_close(actual, expected)
 
 
-@pytest.mark.parametrize('shape', [(3, 4), (5,), (2, 1, 6)])
+@pytest.mark.parametrize("shape", [(3, 4), (5,), (2, 1, 6)])
 def test_idct(shape):
     x = torch.randn(shape)
     actual = idct(x)
-    expected = torch.from_numpy(fftpack.idct(x.numpy(), norm='ortho'))
+    expected = torch.from_numpy(fftpack.idct(x.numpy(), norm="ortho"))
     assert_close(actual, expected)
 
 
@@ -168,10 +181,13 @@ def test_next_fast_len():
         assert next_fast_len(size) == fftpack.next_fast_len(size)
 
 
-@pytest.mark.parametrize('batch_shape,event_shape', [
-    ((), (5,)),
-    ((3,), (4,)),
-])
+@pytest.mark.parametrize(
+    "batch_shape,event_shape",
+    [
+        ((), (5,)),
+        ((3,), (4,)),
+    ],
+)
 def test_precision_to_scale_tril(batch_shape, event_shape):
     x = torch.randn(batch_shape + event_shape + event_shape)
     precision = x.matmul(x.transpose(-2, -1))

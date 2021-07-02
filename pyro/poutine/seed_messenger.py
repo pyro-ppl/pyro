@@ -17,6 +17,7 @@ class SeedMessenger(Messenger):
     :param fn: a stochastic function (callable containing Pyro primitive calls).
     :param int rng_seed: rng seed.
     """
+
     def __init__(self, rng_seed):
         assert isinstance(rng_seed, int)
         self.rng_seed = rng_seed

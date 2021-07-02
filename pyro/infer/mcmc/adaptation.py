@@ -28,12 +28,14 @@ class WarmupAdapter:
     periodically updated when adaptation is engaged.
     """
 
-    def __init__(self,
-                 step_size=1,
-                 adapt_step_size=False,
-                 target_accept_prob=0.8,
-                 adapt_mass_matrix=False,
-                 dense_mass=False):
+    def __init__(
+        self,
+        step_size=1,
+        adapt_step_size=False,
+        target_accept_prob=0.8,
+        adapt_mass_matrix=False,
+        dense_mass=False,
+    ):
         self.adapt_step_size = adapt_step_size
         self.adapt_mass_matrix = adapt_mass_matrix
         self.target_accept_prob = target_accept_prob
@@ -70,8 +72,12 @@ class WarmupAdapter:
         start_buffer_size = self._adapt_start_buffer
         end_buffer_size = self._adapt_end_buffer
         init_window_size = self._adapt_initial_window
-        if (self._adapt_start_buffer + self._adapt_end_buffer
-                + self._adapt_initial_window > self._warmup_steps):
+        if (
+            self._adapt_start_buffer
+            + self._adapt_end_buffer
+            + self._adapt_initial_window
+            > self._warmup_steps
+        ):
             start_buffer_size = int(0.15 * self._warmup_steps)
             end_buffer_size = int(0.1 * self._warmup_steps)
             init_window_size = self._warmup_steps - start_buffer_size - end_buffer_size
@@ -88,9 +94,12 @@ class WarmupAdapter:
             else:
                 cur_window_size = end_window_start - cur_window_start
             next_window_start = cur_window_start + cur_window_size
-            adaptation_schedule.append(adapt_window(cur_window_start, next_window_start - 1))
-        adaptation_schedule.append(adapt_window(end_window_start,
-                                                self._warmup_steps - 1))
+            adaptation_schedule.append(
+                adapt_window(cur_window_start, next_window_start - 1)
+            )
+        adaptation_schedule.append(
+            adapt_window(end_window_start, self._warmup_steps - 1)
+        )
         return adaptation_schedule
 
     def reset_step_size_adaptation(self, z):
@@ -115,8 +124,14 @@ class WarmupAdapter:
             _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
 
-    def configure(self, warmup_steps, initial_step_size=None, mass_matrix_shape=None,
-                  find_reasonable_step_size_fn=None, options={}):
+    def configure(
+        self,
+        warmup_steps,
+        initial_step_size=None,
+        mass_matrix_shape=None,
+        find_reasonable_step_size_fn=None,
+        options={},
+    ):
         r"""
         Model specific properties that are specified when the HMC kernel is setup.
 
@@ -129,13 +144,19 @@ class WarmupAdapter:
             tensor options. This is used to construct initial mass matrix in `mass_matrix_adapter`.
         """
         self._warmup_steps = warmup_steps
-        self.step_size = initial_step_size if initial_step_size is not None else self._init_step_size
+        self.step_size = (
+            initial_step_size if initial_step_size is not None else self._init_step_size
+        )
         if find_reasonable_step_size_fn is not None:
             self._find_reasonable_step_size = find_reasonable_step_size_fn
         if mass_matrix_shape is None or self.step_size is None:
-            raise ValueError("Incomplete configuration - step size and inverse mass matrix "
-                             "need to be initialized.")
-        self.mass_matrix_adapter.configure(mass_matrix_shape, self.adapt_mass_matrix, options=options)
+            raise ValueError(
+                "Incomplete configuration - step size and inverse mass matrix "
+                "need to be initialized."
+            )
+        self.mass_matrix_adapter.configure(
+            mass_matrix_shape, self.adapt_mass_matrix, options=options
+        )
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
         self._current_window = 0  # starting window index
@@ -155,8 +176,9 @@ class WarmupAdapter:
             return
         window = self._adaptation_schedule[self._current_window]
         num_windows = len(self._adaptation_schedule)
-        mass_matrix_adaptation_phase = self.adapt_mass_matrix and \
-            (0 < self._current_window < num_windows - 1)
+        mass_matrix_adaptation_phase = self.adapt_mass_matrix and (
+            0 < self._current_window < num_windows - 1
+        )
         if self.adapt_step_size:
             self._update_step_size(accept_prob.item())
         if mass_matrix_adaptation_phase:
@@ -224,7 +246,8 @@ class BlockMassMatrix:
 
     :param float init_scale: initial scale to construct the initial mass matrix.
     """
-    def __init__(self, init_scale=1.):
+
+    def __init__(self, init_scale=1.0):
         # TODO: we might allow users specify the initial mass matrix in the constructor.
         self._init_scale = init_scale
         self._adapt_scheme = {}
@@ -269,8 +292,11 @@ class BlockMassMatrix:
         for site_names, shape in mass_matrix_shape.items():
             self._mass_matrix_size[site_names] = shape[0]
             diagonal = len(shape) == 1
-            inverse_mass_matrix[site_names] = torch.full(shape, self._init_scale, **options) \
-                if diagonal else torch.eye(*shape, **options) * self._init_scale
+            inverse_mass_matrix[site_names] = (
+                torch.full(shape, self._init_scale, **options)
+                if diagonal
+                else torch.eye(*shape, **options) * self._init_scale
+            )
             if adapt_mass_matrix:
                 adapt_scheme = WelfordCovariance(diagonal=diagonal)
                 self._adapt_scheme[site_names] = adapt_scheme
@@ -294,7 +320,9 @@ class BlockMassMatrix:
         """
         inverse_mass_matrix = {}
         for site_names, adapt_scheme in self._adapt_scheme.items():
-            inverse_mass_matrix[site_names] = adapt_scheme.get_covariance(regularize=True)
+            inverse_mass_matrix[site_names] = adapt_scheme.get_covariance(
+                regularize=True
+            )
         self.inverse_mass_matrix = inverse_mass_matrix
 
     def kinetic_grad(self, r):
@@ -338,7 +366,9 @@ class BlockMassMatrix:
             pos = 0
             for site_name in site_names:
                 next_pos = pos + r_prototype[site_name].numel()
-                s[site_name] = r_flat[pos:next_pos].reshape(r_prototype[site_name].shape)
+                s[site_name] = r_flat[pos:next_pos].reshape(
+                    r_prototype[site_name].shape
+                )
                 pos = next_pos
         return s
 
@@ -353,7 +383,10 @@ class BlockMassMatrix:
         :returns: a dictionary maps site names to the corresponding tensor
         """
         u = {}
-        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+        for (
+            site_names,
+            mass_matrix_sqrt_inverse,
+        ) in self._mass_matrix_sqrt_inverse.items():
             r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
             u[site_names] = _matvecmul(mass_matrix_sqrt_inverse, r_flat)
         return u
@@ -369,7 +402,8 @@ class ArrowheadMassMatrix:
 
     :param float init_scale: initial scale to construct the initial mass matrix.
     """
-    def __init__(self, init_scale=1.):
+
+    def __init__(self, init_scale=1.0):
         self._init_scale = init_scale
         self._adapt_scheme = {}
         self._mass_matrix = {}
@@ -477,14 +511,19 @@ class ArrowheadMassMatrix:
         :returns: a dictionary maps site names to the corresponding gradient
         """
         v = {}
-        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+        for (
+            site_names,
+            mass_matrix_sqrt_inverse,
+        ) in self._mass_matrix_sqrt_inverse.items():
             r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
             # NB: using inverse_mass_matrix as in BlockMassMatrix will cost
             # O(N^2 x head_size) operators and O(N^2) memory requirement;
             # here, we will leverage mass_matrix_sqrt_inverse to reduce the cost to
             # O(N x head_size^2) operators and O(N x head_size) memory requirement.
             r_unscaled = triu_matvecmul(mass_matrix_sqrt_inverse, r_flat)
-            v_flat = triu_matvecmul(mass_matrix_sqrt_inverse, r_unscaled, transpose=True)
+            v_flat = triu_matvecmul(
+                mass_matrix_sqrt_inverse, r_unscaled, transpose=True
+            )
 
             # unpacking
             pos = 0
@@ -514,7 +553,9 @@ class ArrowheadMassMatrix:
             pos = 0
             for site_name in site_names:
                 next_pos = pos + r_prototype[site_name].numel()
-                s[site_name] = r_flat[pos:next_pos].reshape(r_prototype[site_name].shape)
+                s[site_name] = r_flat[pos:next_pos].reshape(
+                    r_prototype[site_name].shape
+                )
                 pos = next_pos
         return s
 
@@ -529,7 +570,10 @@ class ArrowheadMassMatrix:
         :returns: a dictionary maps site names to the corresponding tensor
         """
         u = {}
-        for site_names, mass_matrix_sqrt_inverse in self._mass_matrix_sqrt_inverse.items():
+        for (
+            site_names,
+            mass_matrix_sqrt_inverse,
+        ) in self._mass_matrix_sqrt_inverse.items():
             r_flat = torch.cat([r[site_name].reshape(-1) for site_name in site_names])
             u[site_names] = triu_matvecmul(mass_matrix_sqrt_inverse, r_flat)
         return u

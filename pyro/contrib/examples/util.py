@@ -15,12 +15,14 @@ class MNIST(datasets.MNIST):
     ] + datasets.MNIST.mirrors
 
 
-def get_data_loader(dataset_name,
-                    data_dir,
-                    batch_size=1,
-                    dataset_transforms=None,
-                    is_training_set=True,
-                    shuffle=True):
+def get_data_loader(
+    dataset_name,
+    data_dir,
+    batch_size=1,
+    dataset_transforms=None,
+    is_training_set=True,
+    shuffle=True,
+):
     if not dataset_transforms:
         dataset_transforms = []
     trans = transforms.Compose([transforms.ToTensor()] + dataset_transforms)
@@ -29,16 +31,9 @@ def get_data_loader(dataset_name,
     else:
         dataset = getattr(datasets, dataset_name)
     print("downloading data")
-    dset = dataset(root=data_dir,
-                   train=is_training_set,
-                   transform=trans,
-                   download=True)
+    dset = dataset(root=data_dir, train=is_training_set, transform=trans, download=True)
     print("download complete.")
-    return DataLoader(
-        dset,
-        batch_size=batch_size,
-        shuffle=shuffle
-    )
+    return DataLoader(dset, batch_size=batch_size, shuffle=shuffle)
 
 
 def print_and_log(logger, msg):
@@ -51,10 +46,9 @@ def print_and_log(logger, msg):
 
 
 def get_data_directory(filepath=None):
-    if 'CI' in os.environ:
-        return os.path.expanduser('~/.data')
-    return os.path.abspath(os.path.join(os.path.dirname(filepath),
-                                        '.data'))
+    if "CI" in os.environ:
+        return os.path.expanduser("~/.data")
+    return os.path.abspath(os.path.join(os.path.dirname(filepath), ".data"))
 
 
 def _mkdir_p(dirname):

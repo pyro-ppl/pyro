@@ -19,7 +19,9 @@ class AutoRegressiveNNTests(TestCase):
     def _test_jacobian(self, input_dim, observed_dim, hidden_dim, param_dim):
         jacobian = torch.zeros(input_dim, input_dim)
         if observed_dim > 0:
-            arn = ConditionalAutoRegressiveNN(input_dim, observed_dim, [hidden_dim], param_dims=[param_dim])
+            arn = ConditionalAutoRegressiveNN(
+                input_dim, observed_dim, [hidden_dim], param_dims=[param_dim]
+            )
         else:
             arn = AutoRegressiveNN(input_dim, [hidden_dim], param_dims=[param_dim])
 
@@ -35,9 +37,15 @@ class AutoRegressiveNNTests(TestCase):
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
                     if observed_dim > 0:
-                        delta = (arn(x + 0.5 * epsilon_vector, y) - arn(x - 0.5 * epsilon_vector, y)) / self.epsilon
+                        delta = (
+                            arn(x + 0.5 * epsilon_vector, y)
+                            - arn(x - 0.5 * epsilon_vector, y)
+                        ) / self.epsilon
                     else:
-                        delta = (arn(x + 0.5 * epsilon_vector) - arn(x - 0.5 * epsilon_vector)) / self.epsilon
+                        delta = (
+                            arn(x + 0.5 * epsilon_vector)
+                            - arn(x - 0.5 * epsilon_vector)
+                        ) / self.epsilon
                     jacobian[j, k] = float(delta[0, output_index, k])
 
             permutation = arn.get_permutation()
@@ -50,8 +58,12 @@ class AutoRegressiveNNTests(TestCase):
 
             assert lower_sum == float(0.0)
 
-    def _test_masks(self, input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier):
-        masks, mask_skip = create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier)
+    def _test_masks(
+        self, input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier
+    ):
+        masks, mask_skip = create_mask(
+            input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier
+        )
 
         # First test that hidden layer masks are adequately connected
         # Tracing backwards, works out what inputs each output is connected to
@@ -61,8 +73,16 @@ class AutoRegressiveNNTests(TestCase):
         # Loop over variables
         for idx in range(input_dim):
             # Calculate correct answer
-            correct = torch.cat((torch.arange(observed_dim, dtype=torch.long), torch.tensor(
-                sorted(permutation[0:permutation.index(idx)]), dtype=torch.long) + observed_dim))
+            correct = torch.cat(
+                (
+                    torch.arange(observed_dim, dtype=torch.long),
+                    torch.tensor(
+                        sorted(permutation[0 : permutation.index(idx)]),
+                        dtype=torch.long,
+                    )
+                    + observed_dim,
+                )
+            )
 
             # Loop over parameters for each variable
             for jdx in range(output_dim_multiplier):
@@ -81,14 +101,20 @@ class AutoRegressiveNNTests(TestCase):
                                 this_connections.add(ldx)
                     prev_connections = this_connections
 
-                assert (torch.tensor(list(sorted(prev_connections)), dtype=torch.long) == correct).all()
+                assert (
+                    torch.tensor(list(sorted(prev_connections)), dtype=torch.long)
+                    == correct
+                ).all()
 
                 # Test the skip-connections mask
                 skip_connections = set()
                 for kdx in range(mask_skip.size(1)):
                     if mask_skip[idx + jdx * input_dim, kdx]:
                         skip_connections.add(kdx)
-                assert (torch.tensor(list(sorted(skip_connections)), dtype=torch.long) == correct).all()
+                assert (
+                    torch.tensor(list(sorted(skip_connections)), dtype=torch.long)
+                    == correct
+                ).all()
 
     def test_jacobians(self):
         for observed_dim in [0, 5]:
@@ -103,10 +129,11 @@ class AutoRegressiveNNTests(TestCase):
                         # NOTE: the hidden dimension must be greater than the input_dim for the
                         # masks to be well-defined!
                         hidden_dim = input_dim * 5
-                        permutation = torch.randperm(input_dim, device='cpu')
+                        permutation = torch.randperm(input_dim, device="cpu")
                         self._test_masks(
                             input_dim,
                             observed_dim,
-                            [hidden_dim]*num_layers,
+                            [hidden_dim] * num_layers,
                             permutation,
-                            output_dim_multiplier)
+                            output_dim_multiplier,
+                        )

@@ -11,14 +11,23 @@ from pyro.distributions import BetaBinomial, DirichletMultinomial, GammaPoisson
 from tests.common import assert_close
 
 
-@pytest.mark.parametrize("dist", [
-    BetaBinomial(2., 5., 10.),
-    BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
-    DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
-    DirichletMultinomial(torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.)),
-    GammaPoisson(2., 2.),
-    GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])),
-])
+@pytest.mark.parametrize(
+    "dist",
+    [
+        BetaBinomial(2.0, 5.0, 10.0),
+        BetaBinomial(
+            torch.tensor([2.0, 4.0]),
+            torch.tensor([5.0, 8.0]),
+            torch.tensor([10.0, 12.0]),
+        ),
+        DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
+        DirichletMultinomial(
+            torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.0)
+        ),
+        GammaPoisson(2.0, 2.0),
+        GammaPoisson(torch.tensor([6.0, 2]), torch.tensor([2.0, 8.0])),
+    ],
+)
 def test_mean(dist):
     analytic_mean = dist.mean
     num_samples = 500000
@@ -26,14 +35,23 @@ def test_mean(dist):
     assert_close(sample_mean, analytic_mean, atol=0.01)
 
 
-@pytest.mark.parametrize("dist", [
-    BetaBinomial(2., 5., 10.),
-    BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
-    DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
-    DirichletMultinomial(torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.)),
-    GammaPoisson(2., 2.),
-    GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])),
-])
+@pytest.mark.parametrize(
+    "dist",
+    [
+        BetaBinomial(2.0, 5.0, 10.0),
+        BetaBinomial(
+            torch.tensor([2.0, 4.0]),
+            torch.tensor([5.0, 8.0]),
+            torch.tensor([10.0, 12.0]),
+        ),
+        DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
+        DirichletMultinomial(
+            torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.0)
+        ),
+        GammaPoisson(2.0, 2.0),
+        GammaPoisson(torch.tensor([6.0, 2]), torch.tensor([2.0, 8.0])),
+    ],
+)
 def test_variance(dist):
     analytic_var = dist.variance
     num_samples = 500000
@@ -41,17 +59,20 @@ def test_variance(dist):
     assert_close(sample_var, analytic_var, rtol=0.01)
 
 
-@pytest.mark.parametrize("dist, values", [
-    (BetaBinomial(2., 5., 10), None),
-    (BetaBinomial(2., 5., 10), None),
-    (GammaPoisson(2., 2.), torch.arange(10.)),
-    (GammaPoisson(6., 2.), torch.arange(20.)),
-])
+@pytest.mark.parametrize(
+    "dist, values",
+    [
+        (BetaBinomial(2.0, 5.0, 10), None),
+        (BetaBinomial(2.0, 5.0, 10), None),
+        (GammaPoisson(2.0, 2.0), torch.arange(10.0)),
+        (GammaPoisson(6.0, 2.0), torch.arange(20.0)),
+    ],
+)
 def test_log_prob_support(dist, values):
     if values is None:
         values = dist.enumerate_support()
     log_probs = dist.log_prob(values)
-    assert_close(log_probs.logsumexp(0), torch.tensor(0.), atol=0.01)
+    assert_close(log_probs.logsumexp(0), torch.tensor(0.0), atol=0.01)
 
 
 @pytest.mark.parametrize("total_count", [1, 2, 3, 10])
@@ -59,7 +80,7 @@ def test_log_prob_support(dist, values):
 def test_beta_binomial_log_prob(total_count, shape):
     concentration0 = torch.randn(shape).exp()
     concentration1 = torch.randn(shape).exp()
-    value = torch.arange(1. + total_count)
+    value = torch.arange(1.0 + total_count)
 
     num_samples = 100000
     probs = dist.Beta(concentration1, concentration0).sample((num_samples,))
@@ -77,7 +98,9 @@ def test_dirichlet_multinomial_log_prob(total_count, batch_shape, is_sparse):
     event_shape = (3,)
     concentration = torch.rand(batch_shape + event_shape).exp()
     # test on one-hots
-    value = total_count * torch.eye(3).reshape(event_shape + (1,) * len(batch_shape) + event_shape)
+    value = total_count * torch.eye(3).reshape(
+        event_shape + (1,) * len(batch_shape) + event_shape
+    )
 
     num_samples = 100000
     probs = dist.Dirichlet(concentration).sample((num_samples, 1))
@@ -93,7 +116,7 @@ def test_dirichlet_multinomial_log_prob(total_count, batch_shape, is_sparse):
 def test_gamma_poisson_log_prob(shape):
     gamma_conc = torch.randn(shape).exp()
     gamma_rate = torch.randn(shape).exp()
-    value = torch.arange(20.)
+    value = torch.arange(20.0)
 
     num_samples = 300000
     poisson_rate = dist.Gamma(gamma_conc, gamma_rate).sample((num_samples,))

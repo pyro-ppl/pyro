@@ -10,18 +10,27 @@ class StackFrame:
     Consistent bidirectional mapping between integer positional dimensions and names.
     Can be queried like a dictionary (``value = frame[key]``, ``frame[key] = value``).
     """
+
     def __init__(self, name_to_dim, dim_to_name, history=1, keep=False):
-        assert isinstance(name_to_dim, OrderedDict) and \
-            all(isinstance(name, str) and isinstance(dim, int) for name, dim in name_to_dim.items())
-        assert isinstance(dim_to_name, OrderedDict) and \
-            all(isinstance(name, str) and isinstance(dim, int) for dim, name in dim_to_name.items())
+        assert isinstance(name_to_dim, OrderedDict) and all(
+            isinstance(name, str) and isinstance(dim, int)
+            for name, dim in name_to_dim.items()
+        )
+        assert isinstance(dim_to_name, OrderedDict) and all(
+            isinstance(name, str) and isinstance(dim, int)
+            for dim, name in dim_to_name.items()
+        )
         self.name_to_dim = name_to_dim
         self.dim_to_name = dim_to_name
         self.history = history
         self.keep = keep
 
     def __setitem__(self, key, value):
-        assert isinstance(key, (int, str)) and isinstance(value, (int, str)) and type(key) != type(value)
+        assert (
+            isinstance(key, (int, str))
+            and isinstance(value, (int, str))
+            and type(key) != type(value)
+        )
         name, dim = (value, key) if isinstance(key, int) else (key, value)
         self.name_to_dim[name], self.dim_to_name[dim] = dim, name
 
@@ -31,8 +40,11 @@ class StackFrame:
 
     def __delitem__(self, key):
         assert isinstance(key, (int, str))
-        k2v, v2k = (self.dim_to_name, self.name_to_dim) if isinstance(key, int) else \
-            (self.name_to_dim, self.dim_to_name)
+        k2v, v2k = (
+            (self.dim_to_name, self.name_to_dim)
+            if isinstance(key, int)
+            else (self.name_to_dim, self.dim_to_name)
+        )
         del v2k[k2v[key]]
         del k2v[key]
 
@@ -43,12 +55,13 @@ class StackFrame:
 
 class DimType(Enum):
     """Enumerates the possible types of dimensions to allocate"""
+
     LOCAL = 0
     GLOBAL = 1
     VISIBLE = 2
 
 
-DimRequest = namedtuple('DimRequest', ['value', 'dim_type'])
+DimRequest = namedtuple("DimRequest", ["value", "dim_type"])
 DimRequest.__new__.__defaults__ = (None, DimType.LOCAL)
 
 
@@ -60,10 +73,13 @@ class DimStack:
     the enum :class:`~pyro.poutine.runtime._EnumAllocator`, the ``stack`` in :class:`~MarkovMessenger`,
     ``_param_dims`` and ``_value_dims`` in :class:`~EnumMessenger`, and ``dim_to_symbol`` in ``msg['infer']``
     """
+
     def __init__(self):
         global_frame = StackFrame(
-            name_to_dim=OrderedDict(), dim_to_name=OrderedDict(),
-            history=0, keep=False,
+            name_to_dim=OrderedDict(),
+            dim_to_name=OrderedDict(),
+            history=0,
+            keep=False,
         )
         self._local_stack = [global_frame]
         self._iter_stack = [global_frame]
@@ -110,8 +126,11 @@ class DimStack:
 
     @property
     def current_write_env(self):
-        return self._local_stack[-1:] if not self.local_frame.keep else \
-            self._local_stack[-self.local_frame.history-1:]
+        return (
+            self._local_stack[-1:]
+            if not self.local_frame.keep
+            else self._local_stack[-self.local_frame.history - 1 :]
+        )
 
     @property
     def current_read_env(self):
@@ -119,7 +138,11 @@ class DimStack:
         Collect all frames necessary to compute the full name <--> dim mapping
         and interpret Funsor inputs or batch shapes at any point in a computation.
         """
-        return self._global_stack + self._local_stack[-self.local_frame.history-1:] + self._iter_stack
+        return (
+            self._global_stack
+            + self._local_stack[-self.local_frame.history - 1 :]
+            + self._iter_stack
+        )
 
     def _genvalue(self, key, value_request):
         """
@@ -145,12 +168,17 @@ class DimStack:
             while any(fresh_dim in p for p in self.current_read_env):
                 fresh_dim -= 1
 
-            if fresh_dim < self.MAX_DIM or \
-                    (dim_type == DimType.VISIBLE and fresh_dim <= self._first_available_dim):
-                raise ValueError("Ran out of free dims during allocation for {}".format(name))
+            if fresh_dim < self.MAX_DIM or (
+                dim_type == DimType.VISIBLE and fresh_dim <= self._first_available_dim
+            ):
+                raise ValueError(
+                    "Ran out of free dims during allocation for {}".format(name)
+                )
 
             return name, fresh_dim
-        raise ValueError("{} and {} not a valid name-dim pair".format(key, value_request))
+        raise ValueError(
+            "{} and {} not a valid name-dim pair".format(key, value_request)
+        )
 
     def allocate(self, key_to_value_request):
 
@@ -177,11 +205,19 @@ class DimStack:
             key, fresh_value = self._genvalue(key, value_request)
             # if this key is already active but inconsistent with the fresh value,
             # generate a fresh_key for future conversions via _genvalue in reverse
-            if value_request.dim_type != DimType.VISIBLE or any(key in frame for frame in self.current_read_env):
-                _, fresh_key = self._genvalue(fresh_value, DimRequest(key, value_request.dim_type))
+            if value_request.dim_type != DimType.VISIBLE or any(
+                key in frame for frame in self.current_read_env
+            ):
+                _, fresh_key = self._genvalue(
+                    fresh_value, DimRequest(key, value_request.dim_type)
+                )
             else:
                 fresh_key = key
-            for frame in ([self.global_frame] if value_request.dim_type != DimType.LOCAL else self.current_write_env):
+            for frame in (
+                [self.global_frame]
+                if value_request.dim_type != DimType.LOCAL
+                else self.current_write_env
+            ):
                 frame[fresh_key] = fresh_value
             # use the user-provided key rather than fresh_key for satisfying this request only
             key_to_value[key] = fresh_value
@@ -190,10 +226,13 @@ class DimStack:
         return key_to_value
 
     def names_from_batch_shape(self, batch_shape, dim_type=DimType.LOCAL):
-        return self.allocate_dim_to_name(OrderedDict(
-            (dim, DimRequest(None, dim_type))
-            for dim in range(-len(batch_shape), 0) if batch_shape[dim] > 1
-        ))
+        return self.allocate_dim_to_name(
+            OrderedDict(
+                (dim, DimRequest(None, dim_type))
+                for dim in range(-len(batch_shape), 0)
+                if batch_shape[dim] > 1
+            )
+        )
 
 
 _DIM_STACK = DimStack()  # only one global instance

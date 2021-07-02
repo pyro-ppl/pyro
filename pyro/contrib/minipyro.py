@@ -76,8 +76,9 @@ class trace(Messenger):
     # trace illustrates why we need postprocess_message in addition to process_message:
     # We only want to record a value after all other effects have been applied
     def postprocess_message(self, msg):
-        assert msg["type"] != "sample" or msg["name"] not in self.trace, \
-            "sample sites must have unique names"
+        assert (
+            msg["type"] != "sample" or msg["name"] not in self.trace
+        ), "sample sites must have unique names"
         self.trace[msg["name"]] = msg.copy()
 
     def get_trace(self, *args, **kwargs):
@@ -121,18 +122,21 @@ class seed(Messenger):
 
     def __enter__(self):
         self.old_state = {
-            'torch': torch.get_rng_state(), 'random': random.getstate(), 'numpy': np.random.get_state()
+            "torch": torch.get_rng_state(),
+            "random": random.getstate(),
+            "numpy": np.random.get_state(),
         }
         torch.manual_seed(self.rng_seed)
         random.seed(self.rng_seed)
         np.random.seed(self.rng_seed)
 
     def __exit__(self, type, value, traceback):
-        torch.set_rng_state(self.old_state['torch'])
-        random.setstate(self.old_state['random'])
-        if 'numpy' in self.old_state:
+        torch.set_rng_state(self.old_state["torch"])
+        random.setstate(self.old_state["random"])
+        if "numpy" in self.old_state:
             import numpy as np
-            np.random.set_state(self.old_state['numpy'])
+
+            np.random.set_state(self.old_state["numpy"])
 
 
 # This limited implementation of PlateMessenger only implements broadcasting.
@@ -170,7 +174,7 @@ def apply_stack(msg):
     # A Messenger that sets msg["stop"] == True also prevents application
     # of postprocess_message by Messengers above it on the stack
     # via the pointer variable from the process_message loop
-    for handler in PYRO_STACK[-pointer-1:]:
+    for handler in PYRO_STACK[-pointer - 1 :]:
         handler.postprocess_message(msg)
     return msg
 
@@ -178,7 +182,7 @@ def apply_stack(msg):
 # sample is an effectful version of Distribution.sample(...)
 # When any effect handlers are active, it constructs an initial message and calls apply_stack.
 def sample(name, fn, *args, **kwargs):
-    obs = kwargs.pop('obs', None)
+    obs = kwargs.pop("obs", None)
 
     # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
@@ -201,7 +205,12 @@ def sample(name, fn, *args, **kwargs):
 
 # param is an effectful version of PARAM_STORE.setdefault that also handles constraints.
 # When any effect handlers are active, it constructs an initial message and calls apply_stack.
-def param(name, init_value=None, constraint=torch.distributions.constraints.real, event_dim=None):
+def param(
+    name,
+    init_value=None,
+    constraint=torch.distributions.constraints.real,
+    event_dim=None,
+):
     if event_dim is not None:
         raise NotImplementedError("minipyro.plate does not support the event_dim arg")
 
@@ -213,12 +222,16 @@ def param(name, init_value=None, constraint=torch.distributions.constraints.real
             assert init_value is not None
             with torch.no_grad():
                 constrained_value = init_value.detach()
-                unconstrained_value = torch.distributions.transform_to(constraint).inv(constrained_value)
+                unconstrained_value = torch.distributions.transform_to(constraint).inv(
+                    constrained_value
+                )
             unconstrained_value.requires_grad_()
             PARAM_STORE[name] = unconstrained_value, constraint
 
         # Transform from unconstrained space to constrained space.
-        constrained_value = torch.distributions.transform_to(constraint)(unconstrained_value)
+        constrained_value = torch.distributions.transform_to(constraint)(
+            unconstrained_value
+        )
         constrained_value.unconstrained = weakref.ref(unconstrained_value)
         return constrained_value
 
@@ -295,8 +308,7 @@ class SVI:
         # Differentiate the loss.
         loss.backward()
         # Grab all the parameters from the trace.
-        params = [site["value"].unconstrained()
-                  for site in param_capture.values()]
+        params = [site["value"].unconstrained() for site in param_capture.values()]
         # Take a step w.r.t. each parameter in params.
         self.optim(params)
         # Zero out the gradients so that they don't accumulate.
@@ -323,7 +335,7 @@ def elbo(model, guide, *args, **kwargs):
     # distribution defined by the guide.
     model_trace = trace(replay(model, guide_trace)).get_trace(*args, **kwargs)
     # We will accumulate the various terms of the ELBO in `elbo`.
-    elbo = 0.
+    elbo = 0.0
     # Loop over all the sample sites in the model and add the corresponding
     # log p(z) term to the ELBO. Note that this will also include any observed
     # data, i.e. sample sites with the keyword `obs=...`.
@@ -362,17 +374,20 @@ class JitTrace_ELBO:
             self._param_trace = tr
 
         # Augment args with reads from the global param store.
-        unconstrained_params = tuple(param(name).unconstrained()
-                                     for name in self._param_trace)
+        unconstrained_params = tuple(
+            param(name).unconstrained() for name in self._param_trace
+        )
         params_and_args = unconstrained_params + args
 
         # On first call, create a compiled elbo.
         if self._compiled is None:
 
             def compiled(*params_and_args):
-                unconstrained_params = params_and_args[:len(self._param_trace)]
-                args = params_and_args[len(self._param_trace):]
-                for name, unconstrained_param in zip(self._param_trace, unconstrained_params):
+                unconstrained_params = params_and_args[: len(self._param_trace)]
+                args = params_and_args[len(self._param_trace) :]
+                for name, unconstrained_param in zip(
+                    self._param_trace, unconstrained_params
+                ):
                     constrained_param = param(name)  # assume param has been initialized
                     assert constrained_param.unconstrained() is unconstrained_param
                     self._param_trace[name]["value"] = constrained_param
@@ -381,6 +396,8 @@ class JitTrace_ELBO:
             with validation_enabled(False), warnings.catch_warnings():
                 if self.ignore_jit_warnings:
                     warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
-                self._compiled = torch.jit.trace(compiled, params_and_args, check_trace=False)
+                self._compiled = torch.jit.trace(
+                    compiled, params_and_args, check_trace=False
+                )
 
         return self._compiled(*params_and_args)

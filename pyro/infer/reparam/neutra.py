@@ -44,10 +44,14 @@ class NeuTraReparam(Reparam):
 
     :param ~pyro.infer.autoguide.AutoContinuous guide: A trained guide.
     """
+
     def __init__(self, guide):
         if not isinstance(guide, AutoContinuous):
-            raise TypeError("NeuTraReparam expected an AutoContinuous guide, but got {}"
-                            .format(type(guide)))
+            raise TypeError(
+                "NeuTraReparam expected an AutoContinuous guide, but got {}".format(
+                    type(guide)
+                )
+            )
         self.guide = guide
         self.transform = None
         self.x_unconstrained = {}
@@ -74,29 +78,36 @@ class NeuTraReparam(Reparam):
             )
 
         log_density = 0.0
-        compute_density = (poutine.get_mask() is not False)
+        compute_density = poutine.get_mask() is not False
         if name not in self.x_unconstrained:  # On first sample site.
             # Sample a shared latent.
             try:
                 self.transform = self.guide.get_transform()
             except (NotImplementedError, TypeError) as e:
-                raise ValueError("NeuTraReparam only supports guides that implement "
-                                 "`get_transform` method that does not depend on the "
-                                 "model's `*args, **kwargs`") from e
+                raise ValueError(
+                    "NeuTraReparam only supports guides that implement "
+                    "`get_transform` method that does not depend on the "
+                    "model's `*args, **kwargs`"
+                ) from e
 
             with ExitStack() as stack:
                 for plate in self.guide.plates.values():
                     stack.enter_context(block_plate(dim=plate.dim, strict=False))
-                z_unconstrained = pyro.sample(f"{name}_shared_latent",
-                                              self.guide.get_base_dist().mask(False))
+                z_unconstrained = pyro.sample(
+                    f"{name}_shared_latent", self.guide.get_base_dist().mask(False)
+                )
 
             # Differentiably transform.
             x_unconstrained = self.transform(z_unconstrained)
             if compute_density:
-                log_density = self.transform.log_abs_det_jacobian(z_unconstrained, x_unconstrained)
+                log_density = self.transform.log_abs_det_jacobian(
+                    z_unconstrained, x_unconstrained
+                )
             self.x_unconstrained = {
                 site["name"]: (site, unconstrained_value)
-                for site, unconstrained_value in self.guide._unpack_latent(x_unconstrained)
+                for site, unconstrained_value in self.guide._unpack_latent(
+                    x_unconstrained
+                )
             }
 
         # Extract a single site's value from the shared latent.

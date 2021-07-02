@@ -107,35 +107,66 @@ class Model4(ForecastingModel):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("cov_dim", [0, 1, 6])
 @pytest.mark.parametrize("obs_dim", [1, 2])
-@pytest.mark.parametrize("time_reparam, dct_gradients", [
-    (None, False),
-    ("haar", False),
-    ("dct", False),
-    (None, True),
-])
+@pytest.mark.parametrize(
+    "time_reparam, dct_gradients",
+    [
+        (None, False),
+        ("haar", False),
+        ("dct", False),
+        (None, True),
+    ],
+)
 @pytest.mark.parametrize("Model", [Model0, Model1, Model2, Model3, Model4])
 @pytest.mark.parametrize("engine", ["svi", "hmc"])
-def test_smoke(Model, batch_shape, t_obs, t_forecast, obs_dim, cov_dim, time_reparam, dct_gradients, engine):
+def test_smoke(
+    Model,
+    batch_shape,
+    t_obs,
+    t_forecast,
+    obs_dim,
+    cov_dim,
+    time_reparam,
+    dct_gradients,
+    engine,
+):
     model = Model()
     data = torch.randn(batch_shape + (t_obs, obs_dim))
     covariates = torch.randn(batch_shape + (t_obs + t_forecast, cov_dim))
 
     if engine == "svi":
-        forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
-                                num_steps=2, log_every=1, time_reparam=time_reparam,
-                                dct_gradients=dct_gradients)
+        forecaster = Forecaster(
+            model,
+            data,
+            covariates[..., :t_obs, :],
+            num_steps=2,
+            log_every=1,
+            time_reparam=time_reparam,
+            dct_gradients=dct_gradients,
+        )
     else:
         if dct_gradients is True:
             pytest.skip("Duplicated test.")
-        forecaster = HMCForecaster(model, data, covariates[..., :t_obs, :], max_tree_depth=1,
-                                   num_warmup=1, num_samples=1,
-                                   jit_compile=False)
+        forecaster = HMCForecaster(
+            model,
+            data,
+            covariates[..., :t_obs, :],
+            max_tree_depth=1,
+            num_warmup=1,
+            num_samples=1,
+            jit_compile=False,
+        )
 
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
-    assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+    assert samples.shape == (num_samples,) + batch_shape + (
+        t_forecast,
+        obs_dim,
+    )
     samples = forecaster(data, covariates, num_samples, batch_size=2)
-    assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+    assert samples.shape == (num_samples,) + batch_shape + (
+        t_forecast,
+        obs_dim,
+    )
 
 
 @pytest.mark.parametrize("t_obs", [1, 7])
@@ -148,8 +179,15 @@ def test_trace_smoke(Model, batch_shape, t_obs, obs_dim, cov_dim):
     data = torch.randn(batch_shape + (t_obs, obs_dim))
     covariates = torch.randn(batch_shape + (t_obs, cov_dim))
     forecaster = Forecaster(model, data, covariates, num_steps=2, log_every=1)
-    hmc_forecaster = HMCForecaster(model, data, covariates, max_tree_depth=1,
-                                   num_warmup=1, num_samples=1, jit_compile=False)
+    hmc_forecaster = HMCForecaster(
+        model,
+        data,
+        covariates,
+        max_tree_depth=1,
+        num_warmup=1,
+        num_samples=1,
+        jit_compile=False,
+    )
 
     # This is the desired syntax for recording posterior latent samples.
     num_samples = 5
@@ -191,9 +229,16 @@ def test_svi_custom_smoke(subsample_aware):
     guide = AutoDelta(model)
     optim = Adam({})
 
-    Forecaster(model, data, covariates[..., :t_obs, :],
-               guide=guide, optim=optim, subsample_aware=subsample_aware,
-               num_steps=2, log_every=1)
+    Forecaster(
+        model,
+        data,
+        covariates[..., :t_obs, :],
+        guide=guide,
+        optim=optim,
+        subsample_aware=subsample_aware,
+        num_steps=2,
+        log_every=1,
+    )
 
 
 class SubsampleModel3(ForecastingModel):
@@ -263,11 +308,23 @@ def test_subsample_smoke(Model, t_obs, t_forecast, obs_dim, cov_dim):
         size = len(zero_data)
         return pyro.plate("batch", size, subsample_size=2, dim=-2)
 
-    forecaster = Forecaster(model, data, covariates[..., :t_obs, :],
-                            num_steps=2, log_every=1, create_plates=create_plates)
+    forecaster = Forecaster(
+        model,
+        data,
+        covariates[..., :t_obs, :],
+        num_steps=2,
+        log_every=1,
+        create_plates=create_plates,
+    )
 
     num_samples = 5
     samples = forecaster(data, covariates, num_samples)
-    assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+    assert samples.shape == (num_samples,) + batch_shape + (
+        t_forecast,
+        obs_dim,
+    )
     samples = forecaster(data, covariates, num_samples, batch_size=2)
-    assert samples.shape == (num_samples,) + batch_shape + (t_forecast, obs_dim,)
+    assert samples.shape == (num_samples,) + batch_shape + (
+        t_forecast,
+        obs_dim,
+    )

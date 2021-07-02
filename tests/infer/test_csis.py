@@ -13,9 +13,9 @@ from tests.common import assert_equal, assert_not_equal
 
 
 def model(observations={"y1": 0, "y2": 0}):
-    x = pyro.sample("x", dist.Normal(torch.tensor(0.), torch.tensor(5**0.5)))
-    pyro.sample("y1", dist.Normal(x, torch.tensor(2**0.5)), obs=observations["y1"])
-    pyro.sample("y2", dist.Normal(x, torch.tensor(2**0.5)), obs=observations["y2"])
+    x = pyro.sample("x", dist.Normal(torch.tensor(0.0), torch.tensor(5 ** 0.5)))
+    pyro.sample("y1", dist.Normal(x, torch.tensor(2 ** 0.5)), obs=observations["y1"])
+    pyro.sample("y2", dist.Normal(x, torch.tensor(2 ** 0.5)), obs=observations["y2"])
     return x
 
 
@@ -23,7 +23,7 @@ class Guide(nn.Module):
     def __init__(self):
         super().__init__()
         self.linear = torch.nn.Linear(1, 1, bias=False)
-        self.std = torch.nn.Parameter(torch.tensor(1.))
+        self.std = torch.nn.Parameter(torch.tensor(1.0))
 
     def forward(self, observations={"y1": 0, "y2": 0}):
         pyro.module("guide", self)
@@ -36,13 +36,9 @@ class Guide(nn.Module):
 def test_csis_sampling():
     pyro.clear_param_store()
     guide = Guide()
-    csis = pyro.infer.CSIS(model,
-                           guide,
-                           pyro.optim.Adam({}),
-                           num_inference_samples=500)
+    csis = pyro.infer.CSIS(model, guide, pyro.optim.Adam({}), num_inference_samples=500)
     # observations chosen so that proposal distribution and true posterior will both have zero mean
-    posterior = csis.run({"y1": torch.tensor(-1.0),
-                          "y2": torch.tensor(1.0)})
+    posterior = csis.run({"y1": torch.tensor(-1.0), "y2": torch.tensor(1.0)})
     assert_equal(len(posterior.exec_traces), 500)
     marginal = pyro.infer.EmpiricalMarginal(posterior, "x")
     assert_equal(marginal.mean, torch.tensor(0.0), prec=0.1)
@@ -53,9 +49,7 @@ def test_csis_parameter_update():
     pyro.clear_param_store()
     guide = Guide()
     initial_parameters = {k: v.item() for k, v in guide.named_parameters()}
-    csis = pyro.infer.CSIS(model,
-                           guide,
-                           pyro.optim.Adam({'lr': 1e-2}))
+    csis = pyro.infer.CSIS(model, guide, pyro.optim.Adam({"lr": 1e-2}))
     csis.step()
     updated_parameters = {k: v.item() for k, v in guide.named_parameters()}
     for k, init_v in initial_parameters.items():
@@ -66,10 +60,7 @@ def test_csis_parameter_update():
 def test_csis_validation_batch():
     pyro.clear_param_store()
     guide = Guide()
-    csis = pyro.infer.CSIS(model,
-                           guide,
-                           pyro.optim.Adam({}),
-                           validation_batch_size=5)
+    csis = pyro.infer.CSIS(model, guide, pyro.optim.Adam({}), validation_batch_size=5)
     init_loss_1 = csis.validation_loss()
     init_loss_2 = csis.validation_loss()
     csis.step()

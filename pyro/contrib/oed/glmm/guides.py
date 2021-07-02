@@ -21,8 +21,16 @@ from pyro.ops.linalg import rinverse
 
 
 class LinearModelPosteriorGuide(nn.Module):
-
-    def __init__(self, d, w_sizes, y_sizes, regressor_init=0., scale_tril_init=3., use_softplus=True, **kwargs):
+    def __init__(
+        self,
+        d,
+        w_sizes,
+        y_sizes,
+        regressor_init=0.0,
+        scale_tril_init=3.0,
+        use_softplus=True,
+        **kwargs
+    ):
         """
         Guide for linear models. No amortisation happens over designs.
         Amortisation over data is taken care of by analytic formulae for
@@ -42,10 +50,20 @@ class LinearModelPosteriorGuide(nn.Module):
         # To avoid this- combine labels
         if not isinstance(d, (tuple, list, torch.Tensor)):
             d = (d,)
-        self.regressor = nn.ParameterDict({l: nn.Parameter(
-                regressor_init * torch.ones(*(d + (p, sum(y_sizes.values()))))) for l, p in w_sizes.items()})
-        self.scale_tril = nn.ParameterDict({l: nn.Parameter(
-                scale_tril_init * lexpand(torch.eye(p), *d)) for l, p in w_sizes.items()})
+        self.regressor = nn.ParameterDict(
+            {
+                l: nn.Parameter(
+                    regressor_init * torch.ones(*(d + (p, sum(y_sizes.values()))))
+                )
+                for l, p in w_sizes.items()
+            }
+        )
+        self.scale_tril = nn.ParameterDict(
+            {
+                l: nn.Parameter(scale_tril_init * lexpand(torch.eye(p), *d))
+                for l, p in w_sizes.items()
+            }
+        )
         self.w_sizes = w_sizes
         self.use_softplus = use_softplus
         self.softplus = nn.Softplus()
@@ -88,6 +106,7 @@ class LinearModelLaplaceGuide(nn.Module):
                           fixed variance.
     :param float init_value: initial value for the posterior mean parameters.
     """
+
     def __init__(self, d, w_sizes, tau_label=None, init_value=0.1, **kwargs):
         super().__init__()
         # start in train mode
@@ -97,17 +116,25 @@ class LinearModelLaplaceGuide(nn.Module):
         self.means = nn.ParameterDict()
         if tau_label is not None:
             w_sizes[tau_label] = 1
-        for l, mu_l in tensor_to_dict(w_sizes, init_value*torch.ones(*(d + (sum(w_sizes.values()), )))).items():
+        for l, mu_l in tensor_to_dict(
+            w_sizes, init_value * torch.ones(*(d + (sum(w_sizes.values()),)))
+        ).items():
             self.means[l] = nn.Parameter(mu_l)
         self.scale_trils = {}
         self.w_sizes = w_sizes
 
     @staticmethod
     def _hessian_diag(y, x, event_shape):
-        batch_shape = x.shape[:-len(event_shape)]
+        batch_shape = x.shape[: -len(event_shape)]
         assert tuple(x.shape) == tuple(batch_shape) + tuple(event_shape)
 
-        dy = torch.autograd.grad(y, [x, ], create_graph=True)[0]
+        dy = torch.autograd.grad(
+            y,
+            [
+                x,
+            ],
+            create_graph=True,
+        )[0]
         H = []
 
         # collapse independent dimensions into a single one,
@@ -125,7 +152,14 @@ class LinearModelLaplaceGuide(nn.Module):
         # loop over dependent part
         for i in range(flat_dy.shape[-1]):
             dyi = flat_dy.index_select(-1, torch.tensor([i]))
-            Hi = torch.autograd.grad([dyi], [x, ], grad_outputs=[torch.ones_like(dyi)], retain_graph=True)[0]
+            Hi = torch.autograd.grad(
+                [dyi],
+                [
+                    x,
+                ],
+                grad_outputs=[torch.ones_like(dyi)],
+                retain_graph=True,
+            )[0]
             H.append(Hi)
         H = torch.stack(H, -1).reshape(*(x.shape + event_shape))
         return H
@@ -174,12 +208,13 @@ class LinearModelLaplaceGuide(nn.Module):
             else:
                 # Laplace approximation via MVN with hessian
                 for l in target_labels:
-                    w_dist = dist.MultivariateNormal(self.means[l], scale_tril=self.scale_trils[l])
+                    w_dist = dist.MultivariateNormal(
+                        self.means[l], scale_tril=self.scale_trils[l]
+                    )
                     pyro.sample(l, w_dist)
 
 
 class SigmoidGuide(LinearModelPosteriorGuide):
-
     def __init__(self, d, n, w_sizes, **kwargs):
         super().__init__(d, w_sizes, **kwargs)
         self.inverse_sigmoid_scale = nn.Parameter(torch.ones(n))
@@ -191,9 +226,9 @@ class SigmoidGuide(LinearModelPosteriorGuide):
         y = torch.cat(list(y_dict.values()), dim=-1)
 
         # Approx invert transformation on y in expectation
-        y, y1m = y.clamp(1e-35, 1), (1.-y).clamp(1e-35, 1)
+        y, y1m = y.clamp(1e-35, 1), (1.0 - y).clamp(1e-35, 1)
         logited = y.log() - y1m.log()
-        y_trans = logited/.1
+        y_trans = logited / 0.1
         y_trans = y_trans * self.inverse_sigmoid_scale
         hidden = self.softplus(y_trans)
         y_trans = y_trans + hidden * self.h1_weight + self.h1_bias
@@ -202,12 +237,19 @@ class SigmoidGuide(LinearModelPosteriorGuide):
 
 
 class NormalInverseGammaGuide(LinearModelPosteriorGuide):
-
-    def __init__(self, d, w_sizes, mf=False, tau_label="tau", alpha_init=100.,
-                 b0_init=100., **kwargs):
+    def __init__(
+        self,
+        d,
+        w_sizes,
+        mf=False,
+        tau_label="tau",
+        alpha_init=100.0,
+        b0_init=100.0,
+        **kwargs
+    ):
         super().__init__(d, w_sizes, **kwargs)
-        self.alpha = nn.Parameter(alpha_init*torch.ones(d))
-        self.b0 = nn.Parameter(b0_init*torch.ones(d))
+        self.alpha = nn.Parameter(alpha_init * torch.ones(d))
+        self.b0 = nn.Parameter(b0_init * torch.ones(d))
         self.mf = mf
         self.tau_label = tau_label
 
@@ -215,13 +257,15 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
 
         y = torch.cat(list(y_dict.values()), dim=-1)
 
-        coefficient_labels = [label for label in target_labels if label != self.tau_label]
+        coefficient_labels = [
+            label for label in target_labels if label != self.tau_label
+        ]
         mu, scale_tril = self.linear_model_formula(y, design, coefficient_labels)
         mu_vec = torch.cat(list(mu.values()), dim=-1)
 
         yty = rvv(y, y)
         ytxmu = rvv(y, rmv(design, mu_vec))
-        beta = self.b0 + .5*(yty - ytxmu)
+        beta = self.b0 + 0.5 * (yty - ytxmu)
 
         return mu, scale_tril, self.alpha, beta
 
@@ -234,16 +278,18 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
         if self.tau_label in target_labels:
             tau_dist = dist.Gamma(alpha, beta)
             tau = pyro.sample(self.tau_label, tau_dist)
-            obs_sd = 1./tau.sqrt().unsqueeze(-1).unsqueeze(-1)
+            obs_sd = 1.0 / tau.sqrt().unsqueeze(-1).unsqueeze(-1)
 
         for label in target_labels:
             if label != self.tau_label:
                 if self.mf:
-                    w_dist = dist.MultivariateNormal(mu[label],
-                                                     scale_tril=scale_tril[label])
+                    w_dist = dist.MultivariateNormal(
+                        mu[label], scale_tril=scale_tril[label]
+                    )
                 else:
-                    w_dist = dist.MultivariateNormal(mu[label],
-                                                     scale_tril=scale_tril[label]*obs_sd)
+                    w_dist = dist.MultivariateNormal(
+                        mu[label], scale_tril=scale_tril[label] * obs_sd
+                    )
                 pyro.sample(label, w_dist)
 
 
@@ -251,6 +297,7 @@ class GuideDV(nn.Module):
     """A Donsker-Varadhan `T` family based on a guide family via
     the relation `T = log p(theta) - log q(theta | y, d)`
     """
+
     def __init__(self, guide):
         super().__init__()
         self.guide = guide
@@ -264,7 +311,8 @@ class GuideDV(nn.Module):
 
         conditional_guide = pyro.condition(self.guide, data=theta_dict)
         cond_trace = poutine.trace(conditional_guide).get_trace(
-                y_dict, design, observation_labels, target_labels)
+            y_dict, design, observation_labels, target_labels
+        )
         cond_trace.compute_log_prob()
 
         posterior_lp = sum(cond_trace.nodes[l]["log_prob"] for l in target_labels)

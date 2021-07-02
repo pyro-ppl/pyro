@@ -93,7 +93,7 @@ def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
     except RuntimeError as e:
         if "must match the size of tensor" in str(e):
             shape = torch.broadcast_shapes(observed.shape, unobserved.shape)
-            batch_shape = shape[:len(shape) - fn.event_dim]
+            batch_shape = shape[: len(shape) - fn.event_dim]
             raise ValueError(
                 f"Invalid obs_mask shape {tuple(obs_mask.shape)}; should be "
                 f"broadcastable to batch_shape = {tuple(batch_shape)}"
@@ -135,8 +135,10 @@ def sample(name, fn, *args, **kwargs):
     is_observed = infer.pop("is_observed", obs is not None)
     if not am_i_wrapped():
         if obs is not None and not infer.get("_deterministic"):
-            warnings.warn("trying to observe a value outside of inference at " + name,
-                          RuntimeWarning)
+            warnings.warn(
+                "trying to observe a value outside of inference at " + name,
+                RuntimeWarning,
+            )
             return obs
         return fn(*args, **kwargs)
     # if stack not empty, apply everything in the stack?
@@ -156,7 +158,7 @@ def sample(name, fn, *args, **kwargs):
             "cond_indep_stack": (),
             "done": False,
             "stop": False,
-            "continuation": None
+            "continuation": None,
         }
         # apply the stack and return its return value
         apply_stack(msg)
@@ -201,8 +203,12 @@ def deterministic(name, value, event_dim=None):
     :param int event_dim: Optional event dimension, defaults to `value.ndim`.
     """
     event_dim = value.ndim if event_dim is None else event_dim
-    return sample(name, dist.Delta(value, event_dim=event_dim).mask(False),
-                  obs=value, infer={"_deterministic": True})
+    return sample(
+        name,
+        dist.Delta(value, event_dim=event_dim).mask(False),
+        obs=value,
+        infer={"_deterministic": True},
+    )
 
 
 @effectful(type="subsample")
@@ -344,18 +350,23 @@ class plate(PlateMessenger):
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
     """
+
     pass
 
 
 class iarange(plate):
     def __init__(self, *args, **kwargs):
-        warnings.warn("pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning)
+        warnings.warn(
+            "pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning
+        )
         super().__init__(*args, **kwargs)
 
 
 class irange(SubsampleMessenger):
     def __init__(self, *args, **kwargs):
-        warnings.warn("pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning)
+        warnings.warn(
+            "pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning
+        )
         super().__init__(*args, **kwargs)
 
 
@@ -404,12 +415,15 @@ def module(name, nn_module, update_module_params=False):
     :returns: torch.nn.Module
     """
     assert hasattr(nn_module, "parameters"), "module has no parameters"
-    assert _MODULE_NAMESPACE_DIVIDER not in name, "improper module name, since contains %s" %\
-        _MODULE_NAMESPACE_DIVIDER
+    assert _MODULE_NAMESPACE_DIVIDER not in name, (
+        "improper module name, since contains %s" % _MODULE_NAMESPACE_DIVIDER
+    )
 
     if isclass(nn_module):
-        raise NotImplementedError("pyro.module does not support class constructors for " +
-                                  "the argument nn_module")
+        raise NotImplementedError(
+            "pyro.module does not support class constructors for "
+            + "the argument nn_module"
+        )
 
     target_state_dict = OrderedDict()
 
@@ -423,15 +437,17 @@ def module(name, nn_module, update_module_params=False):
             if param_value._cdata != returned_param._cdata:
                 target_state_dict[param_name] = returned_param
         elif nn_module.training:
-            warnings.warn(f"{param_name} was not registered in the param store "
-                          "because requires_grad=False. You can silence this "
-                          "warning by calling my_module.train(False)")
+            warnings.warn(
+                f"{param_name} was not registered in the param store "
+                "because requires_grad=False. You can silence this "
+                "warning by calling my_module.train(False)"
+            )
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
         for _name, _param in nn_module.named_parameters():
             is_param = False
-            name_arr = _name.rsplit('.', 1)
+            name_arr = _name.rsplit(".", 1)
             if len(name_arr) > 1:
                 mod_name, param_name = name_arr[0], name_arr[1]
             else:
@@ -439,7 +455,9 @@ def module(name, nn_module, update_module_params=False):
                 mod_name = _name
             if _name in target_state_dict.keys():
                 if not is_param:
-                    deep_getattr(nn_module, mod_name)._parameters[param_name] = target_state_dict[_name]
+                    deep_getattr(nn_module, mod_name)._parameters[
+                        param_name
+                    ] = target_state_dict[_name]
                 else:
                     nn_module._parameters[mod_name] = target_state_dict[_name]
 
@@ -467,9 +485,12 @@ def random_module(name, nn_module, prior, *args, **kwargs):
                   as keys and respective distributions/stochastic functions as values.
     :returns: a callable which returns a sampled module
     """
-    warnings.warn("The `random_module` primitive is deprecated, and will be removed "
-                  "in a future release. Use `pyro.nn.Module` to create Bayesian "
-                  "modules from `torch.nn.Module` instances.", FutureWarning)
+    warnings.warn(
+        "The `random_module` primitive is deprecated, and will be removed "
+        "in a future release. Use `pyro.nn.Module` to create Bayesian "
+        "modules from `torch.nn.Module` instances.",
+        FutureWarning,
+    )
 
     assert hasattr(nn_module, "parameters"), "Module is not a NN module."
     # register params in param store
@@ -479,6 +500,7 @@ def random_module(name, nn_module, prior, *args, **kwargs):
         nn_copy = copy.deepcopy(nn_module)
         # update_module_params must be True or the lifted module will not update local params
         return lifted_fn(name, nn_copy, update_module_params=True, *args, **kwargs)
+
     return _fn
 
 

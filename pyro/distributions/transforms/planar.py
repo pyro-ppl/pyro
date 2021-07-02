@@ -46,13 +46,21 @@ class ConditionedPlanar(Transform):
         # x ~ (batch_size, dim_size, 1)
         # w ~ (batch_size, 1, dim_size)
         # bias ~ (batch_size, 1)
-        act = torch.tanh(torch.matmul(w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + bias)
+        act = torch.tanh(
+            torch.matmul(w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + bias
+        )
         u_hat = self.u_hat(u, w)
         y = x + u_hat * act
 
-        psi_z = (1. - act.pow(2)) * w
+        psi_z = (1.0 - act.pow(2)) * w
         self._cached_logDetJ = torch.log(
-            torch.abs(1 + torch.matmul(psi_z.unsqueeze(-2), u_hat.unsqueeze(-1)).squeeze(-1).squeeze(-1)))
+            torch.abs(
+                1
+                + torch.matmul(psi_z.unsqueeze(-2), u_hat.unsqueeze(-1))
+                .squeeze(-1)
+                .squeeze(-1)
+            )
+        )
 
         return y
 
@@ -66,7 +74,9 @@ class ConditionedPlanar(Transform):
         cached on the forward call)
         """
 
-        raise KeyError("ConditionedPlanar object expected to find key in intermediates cache but didn't")
+        raise KeyError(
+            "ConditionedPlanar object expected to find key in intermediates cache but didn't"
+        )
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -127,9 +137,21 @@ class Planar(ConditionedPlanar, TransformModule):
     def __init__(self, input_dim):
         super().__init__(self._params)
 
-        self.bias = nn.Parameter(torch.Tensor(1,))
-        self.u = nn.Parameter(torch.Tensor(input_dim,))
-        self.w = nn.Parameter(torch.Tensor(input_dim,))
+        self.bias = nn.Parameter(
+            torch.Tensor(
+                1,
+            )
+        )
+        self.u = nn.Parameter(
+            torch.Tensor(
+                input_dim,
+            )
+        )
+        self.w = nn.Parameter(
+            torch.Tensor(
+                input_dim,
+            )
+        )
 
         self.input_dim = input_dim
         self.reset_parameters()
@@ -138,7 +160,7 @@ class Planar(ConditionedPlanar, TransformModule):
         return self.bias, self.u, self.w
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.u.size(0))
+        stdv = 1.0 / math.sqrt(self.u.size(0))
         self.w.data.uniform_(-stdv, stdv)
         self.u.data.uniform_(-stdv, stdv)
         self.bias.data.zero_()

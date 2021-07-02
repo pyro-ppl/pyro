@@ -12,21 +12,21 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize('scale', [-1., 0., -1 * torch.ones(2, 2)])
+@pytest.mark.parametrize("scale", [-1.0, 0.0, -1 * torch.ones(2, 2)])
 def test_lsh_init(scale):
     with pytest.raises(ValueError):
         LSH(scale)
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parametrize("scale", [0.1, 1, 10, 100])
 def test_lsh_add(scale):
     lsh = LSH(scale)
     a = torch.rand(10)
-    lsh.add('a', a)
-    assert lsh._hash_to_key[lsh._key_to_hash['a']] == {'a'}
+    lsh.add("a", a)
+    assert lsh._hash_to_key[lsh._key_to_hash["a"]] == {"a"}
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parametrize("scale", [0.1, 1, 10, 100])
 def test_lsh_hash_nearby(scale):
     k = 5
     lsh = LSH(scale)
@@ -44,51 +44,51 @@ def test_lsh_hash_nearby(scale):
     assert_equal(lsh._hash(e), (2,) * k)
     assert_equal(lsh._hash(f), (4,) * k)
 
-    lsh.add('a', a)
-    lsh.add('b', b)
-    lsh.add('c', c)
-    lsh.add('d', d)
-    lsh.add('e', e)
-    lsh.add('f', f)
+    lsh.add("a", a)
+    lsh.add("b", b)
+    lsh.add("c", c)
+    lsh.add("d", d)
+    lsh.add("e", e)
+    lsh.add("f", f)
 
-    assert lsh.nearby('a') == {'b'}
-    assert lsh.nearby('b') == {'a', 'c'}
-    assert lsh.nearby('c') == {'b', 'd'}
-    assert lsh.nearby('d') == {'c', 'e'}
-    assert lsh.nearby('e') == {'d'}
-    assert lsh.nearby('f') == set()
+    assert lsh.nearby("a") == {"b"}
+    assert lsh.nearby("b") == {"a", "c"}
+    assert lsh.nearby("c") == {"b", "d"}
+    assert lsh.nearby("d") == {"c", "e"}
+    assert lsh.nearby("e") == {"d"}
+    assert lsh.nearby("f") == set()
 
 
 def test_lsh_overwrite():
     lsh = LSH(1)
     a = torch.zeros(2)
     b = torch.ones(2)
-    lsh.add('a', a)
-    lsh.add('b', b)
-    assert lsh.nearby('a') == {'b'}
+    lsh.add("a", a)
+    lsh.add("b", b)
+    assert lsh.nearby("a") == {"b"}
     b = torch.ones(2) * 4
-    lsh.add('b', b)
-    assert lsh.nearby('a') == set()
+    lsh.add("b", b)
+    assert lsh.nearby("a") == set()
 
 
 def test_lsh_remove():
     lsh = LSH(1)
     a = torch.zeros(2)
     b = torch.ones(2)
-    lsh.add('a', a)
-    lsh.add('b', b)
-    assert lsh.nearby('a') == {'b'}
-    lsh.remove('b')
-    assert lsh.nearby('a') == set()
+    lsh.add("a", a)
+    lsh.add("b", b)
+    assert lsh.nearby("a") == {"b"}
+    lsh.remove("b")
+    assert lsh.nearby("a") == set()
 
 
-@pytest.mark.parametrize('scale', [-1., 0., -1 * torch.ones(2, 2)])
+@pytest.mark.parametrize("scale", [-1.0, 0.0, -1 * torch.ones(2, 2)])
 def test_aps_init(scale):
     with pytest.raises(ValueError):
         ApproxSet(scale)
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parametrize("scale", [0.1, 1, 10, 100])
 def test_aps_hash(scale):
     k = 10
     aps = ApproxSet(scale)
@@ -107,7 +107,7 @@ def test_aps_hash(scale):
     assert_equal(aps._hash(f), (4,) * k)
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parametrize("scale", [0.1, 1, 10, 100])
 def test_aps_try_add(scale):
     k = 10
     aps = ApproxSet(scale)
@@ -123,13 +123,15 @@ def test_aps_try_add(scale):
 
 
 def test_merge_points_small():
-    points = torch.tensor([
-        [0., 0.],
-        [0., 1.],
-        [2., 0.],
-        [2., 0.5],
-        [2., 1.0],
-    ])
+    points = torch.tensor(
+        [
+            [0.0, 0.0],
+            [0.0, 1.0],
+            [2.0, 0.0],
+            [2.0, 0.5],
+            [2.0, 1.0],
+        ]
+    )
     merged_points, groups = merge_points(points, radius=1.0)
 
     assert len(merged_points) == 3
@@ -140,12 +142,12 @@ def test_merge_points_small():
     assert 0.325 <= merged_points[2, 1] <= 0.625
 
 
-@pytest.mark.parametrize('radius', [0.01, 0.1, 1., 10., 100.])
-@pytest.mark.parametrize('dim', [1, 2, 3])
+@pytest.mark.parametrize("radius", [0.01, 0.1, 1.0, 10.0, 100.0])
+@pytest.mark.parametrize("dim", [1, 2, 3])
 def test_merge_points_large(dim, radius):
     points = 10 * torch.randn(200, dim)
     merged_points, groups = merge_points(points, radius)
-    logger.debug('merged {} -> {}'.format(len(points), len(merged_points)))
+    logger.debug("merged {} -> {}".format(len(points), len(merged_points)))
 
     assert merged_points.dim() == 2
     assert merged_points.shape[-1] == dim
