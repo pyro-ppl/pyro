@@ -120,6 +120,9 @@ def _make_handler(msngr_cls):
     return handler_name, handler
 
 
+trace = None  # flake8
+escape = None  # flake8
+
 for _msngr_cls in _msngrs:
     _handler_name, _handler = _make_handler(_msngr_cls)
     _handler.__module__ = __name__
