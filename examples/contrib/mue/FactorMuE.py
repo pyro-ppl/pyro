@@ -119,7 +119,7 @@ def main(args):
                              'gamma': args.learning_gamma})
     n_epochs = args.n_epochs
     losses = model.fit_svi(dataset_train, n_epochs, args.anneal,
-                           args.batch_size, scheduler, args.jit)
+                           args.batch_size, scheduler, args.jit, device)
 
     # Evaluate.
     train_lp, test_lp, train_perplex, test_perplex = model.evaluate(

@@ -67,10 +67,10 @@ def main(args):
     pyro.set_rng_seed(args.rng_seed)
 
     # Load dataset.
-    if args.cpu_data and args.cuda:
+    if args.cpu_data or not args.cuda:
         device = torch.device('cpu')
     else:
-        device = None
+        device = torch.device('cuda')
     if args.test:
         dataset = generate_data(args.small, args.include_stop, device)
     else:
@@ -85,7 +85,9 @@ def main(args):
         # Specific data split seed, for comparability across models and
         # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
-        indices = torch.randperm(sum(data_lengths)).tolist()
+        indices = torch.randperm(sum(data_lengths),
+                                 generator=torch.Generator(device=device)
+                                 ).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length):offset])
             for offset, length in zip(torch._utils._accumulate(data_lengths),
@@ -111,7 +113,7 @@ def main(args):
                              'gamma': args.learning_gamma})
     n_epochs = args.n_epochs
     losses = model.fit_svi(dataset, n_epochs, args.batch_size, scheduler,
-                           args.jit)
+                           args.jit, device)
 
     # Evaluate.
     train_lp, test_lp, train_perplex, test_perplex = model.evaluate(

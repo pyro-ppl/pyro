@@ -27,7 +27,8 @@ def test_ProfileHMM_smoke(jit):
     model = ProfileHMM(int(dataset.max_length*1.1), dataset.alphabet_length)
     n_epochs = 5
     batch_size = 2
-    losses = model.fit_svi(dataset, n_epochs, batch_size, scheduler, jit)
+    losses = model.fit_svi(dataset, n_epochs, batch_size, scheduler, jit,
+                           device=dataset.device)
 
     assert not np.isnan(losses[-1])
 
@@ -67,7 +68,7 @@ def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution,
     anneal_length = 2
     batch_size = 2
     losses = model.fit_svi(dataset, n_epochs, anneal_length, batch_size,
-                           scheduler, jit)
+                           scheduler, jit, dataset.device)
 
     # Reconstruct.
     recon = model._reconstruct_regressor_seq(dataset, 1, pyro.param)

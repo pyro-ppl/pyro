@@ -139,7 +139,7 @@ class ProfileHMM(nn.Module):
                 delete_q_mn, softplus(delete_q_sd)).to_event(3))
 
     def fit_svi(self, dataset, epochs=2, batch_size=1, scheduler=None,
-                jit=False):
+                jit=False, device=torch.device('cpu')):
         """
         Infer approximate posterior with stochastic variational inference.
 
@@ -165,7 +165,8 @@ class ProfileHMM(nn.Module):
         # Initialize guide.
         self.guide(None, None)
         dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True,
-                              pin_memory=self.pin_memory)
+                              pin_memory=self.pin_memory,
+                              generator=torch.Generator(device=device))
         # Setup stochastic variational inference.
         if jit:
             elbo = JitTrace_ELBO(ignore_jit_warnings=True)
@@ -568,7 +569,7 @@ class FactorMuE(nn.Module):
                                 dist.Laplace(z_loc, z_scale).to_event(1))
 
     def fit_svi(self, dataset, epochs=2, anneal_length=1., batch_size=None,
-                scheduler=None, jit=False):
+                scheduler=None, jit=False, device=torch.device('cpu')):
         """
         Infer approximate posterior with stochastic variational inference.
 
@@ -596,8 +597,7 @@ class FactorMuE(nn.Module):
                                      'gamma': 0.5})
         dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True,
                               pin_memory=self.pin_memory,
-                              generator=torch.Generator(
-                                            device=dataset.dataset.device))
+                              generator=torch.Generator(device=device))
         # Initialize guide.
         for seq_data, L_data in dataload:
             if self.is_cuda:
