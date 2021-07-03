@@ -61,10 +61,10 @@ def generate_data(small_test, include_stop, device):
 def main(args):
 
     # Load dataset.
-    if args.cpu_data and args.cuda:
+    if args.cpu_data or not args.cuda:
         device = torch.device('cpu')
     else:
-        device = None
+        device = torch.device('cuda')
     if args.test:
         dataset = generate_data(args.small, args.include_stop, device)
     else:
@@ -79,7 +79,8 @@ def main(args):
         # Specific data split seed, for comparability across models and
         # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
-        indices = torch.randperm(sum(data_lengths)).tolist()
+        indices = torch.randperm(sum(data_lengths),
+                                 torch.Generator(device=device)).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length):offset])
             for offset, length in zip(torch._utils._accumulate(data_lengths),
