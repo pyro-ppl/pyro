@@ -29,12 +29,10 @@ class Trace_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
 
-        costs = model_terms["log_factors"] + [
-            -f for f in guide_terms["log_factors"]
-        ]
+        costs = model_terms["log_factors"] + [-f for f in guide_terms["log_factors"]]
         plate_vars = model_terms["plate_vars"] | guide_terms["plate_vars"]
 
-        elbo = to_funsor(0.)
+        elbo = to_funsor(0.0)
         for cost in costs:
             elbo += cost.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
