@@ -595,7 +595,8 @@ class FactorMuE(nn.Module):
                                      'milestones': [],
                                      'gamma': 0.5})
         dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True,
-                              pin_memory=self.pin_memory)
+                              pin_memory=self.pin_memory,
+                              generator=torch.Generator(device=dataset.device))
         # Initialize guide.
         for seq_data, L_data in dataload:
             if self.is_cuda:
