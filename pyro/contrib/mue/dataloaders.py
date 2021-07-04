@@ -141,7 +141,7 @@ def write(x, alphabet, file, truncate_stop=False, append=False, scores=None):
     else:
         x[:, :, -1] = (torch.sum(x, -1) < 0.5).to(torch.double)
     index = torch.matmul(x, torch.arange(x.shape[-1], dtype=torch.double)
-                         ).to(torch.long).numpy()
+                         ).to(torch.long).cpu().numpy()
     if scores is None:
         seqs = ['>{}\n'.format(j) + ''.join(elem) + '\n' for j, elem in
                 enumerate(print_alphabet[index])]
