@@ -29,14 +29,19 @@ class Trace_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
 
-        costs = model_terms["log_factors"] + [-f for f in guide_terms["log_factors"]]
+        log_measures = guide_terms["log_measures"] + model_terms["log_measures"]
+        log_factors = model_terms["log_factors"] + [
+            -f for f in guide_terms["log_factors"]
+        ]
         plate_vars = model_terms["plate_vars"] | guide_terms["plate_vars"]
+        measure_vars = model_terms["measure_vars"] | guide_terms["measure_vars"]
 
-        elbo = to_funsor(0.0)
-        for cost in costs:
-            elbo += cost.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
-
-        return -to_data(elbo)
+        elbo = funsor.Integrate(
+            sum(log_measures, to_funsor(0.0)),
+            sum(log_factors, to_funsor(0.0)),
+            measure_vars,
+        )
+        elbo = elbo.reduce(funsor.ops.add, plate_vars)
 
 
 class JitTrace_ELBO(Jit_ELBO, Trace_ELBO):
