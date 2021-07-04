@@ -3,21 +3,21 @@
 
 import logging
 
+import funsor
 import numpy as np
 import pytest
 import torch
 import torch.optim
 from torch.distributions import constraints
-from pyro.infer.util import zero_grads
-from pyro.distributions.testing import fakes
-
-import funsor
 
 import pyro.contrib.funsor
+from pyro.distributions.testing import fakes
+from pyro.infer.util import zero_grads
 
 funsor.set_backend("torch")
 from pyroapi import distributions as dist
 from pyroapi import handlers, infer, pyro, pyro_backend
+
 #  import pyro
 #  import pyro.distributions as dist
 #  import pyro.poutine as poutine
@@ -39,17 +39,15 @@ from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
 
 logger = logging.getLogger(__name__)
 
-_PYRO_BACKEND = "contrib.funsor"
-# _PYRO_BACKEND = "pyro"
-
-def DiffTrace_ELBO(*args, **kwargs):
-    return infer.Trace_ELBO(*args, **kwargs).differentiable_loss
+# _PYRO_BACKEND = "contrib.funsor"
+_PYRO_BACKEND = "pyro"
 
 
 @pytest.mark.parametrize("scale", [1.0, 2.0], ids=["unscaled", "scaled"])
 @pytest.mark.parametrize(
     "reparameterized,has_rsample",
-    [(True, None), (True, False), (True, True), (False, None)],
+    # [(False, None)],
+    [(False, None), (True, False), (True, True), (False, None)],
     ids=["reparam", "reparam-False", "reparam-True", "nonreparam"],
 )
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
@@ -94,51 +92,66 @@ def test_funsor_gradient(
         num_particles = 1
 
     optim = Adam({"lr": 0.1})
-    elbo = Elbo(
+    elbo = infer.TraceEnum_ELBO(
         max_plate_nesting=1,  # set this to ensure rng agrees across runs
         num_particles=num_particles,
         vectorize_particles=True,
         strict_enumeration_warning=False,
     )
-    inference = infer.SVI(model, guide, optim, loss=elbo)
-    loc_grads = np.zeros((1000, 2))
-    scale_grads = np.zeros((1000,))
-    for i in range(1000):
-        if subsample_size == 1:
-            inference.loss_and_grads(
-                model, guide, subsample=torch.tensor([0], dtype=torch.long)
-            )
-            inference.loss_and_grads(
-                model, guide, subsample=torch.tensor([1], dtype=torch.long)
-            )
-        else:
-            inference.loss_and_grads(
-                model, guide, subsample=torch.tensor([0, 1], dtype=torch.long)
-            )
-        params = dict(pyro.get_param_store().named_parameters())
-        normalizer = 2 if subsample else 1
-        loc_grads[i, :] = params["loc"].grad.detach().cpu().numpy() / normalizer
-        scale_grads[i] = params["scale"].grad.detach().cpu().numpy() / normalizer
-        #  actual_grads = {
-        #      name: param.grad.detach().cpu().numpy() / normalizer
-        #      for name, param in params.items()
-        #  }
-        #  params = set(
-        #      site["value"].unconstrained() for site in param_capture.trace.nodes.values()
-        #  )
-
-        # zero gradients
-        zero_grads(set(params.values()))
-
+    pyro.set_rng_seed(0)
+    if subsample_size == 1:
+        elbo.loss_and_grads(model, guide, subsample=torch.tensor([0], dtype=torch.long))
+        elbo.loss_and_grads(model, guide, subsample=torch.tensor([1], dtype=torch.long))
+    else:
+        elbo.loss_and_grads(
+            model, guide, subsample=torch.tensor([0, 1], dtype=torch.long)
+        )
+    params = dict(pyro.get_param_store().named_parameters())
+    normalizer = 2 if subsample else 1
     actual_grads = {
-        "loc": loc_grads.mean(0),
-        "scale": np.array([scale_grads.mean(0)]),
+        name: param.grad.detach().cpu().numpy() / normalizer
+        for name, param in params.items()
     }
 
+    #  actual_grads = {
+    #      "loc": loc_grads.mean(0),
+    #      "scale": np.array([scale_grads.mean(0)]),
+    #  }
+
+    # reparameterization grads
+    pyro.set_rng_seed(0)
+    guide_tr = handlers.trace(guide).get_trace(
+        subsample=torch.tensor([0, 1], dtype=torch.long)
+    )
+    model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace(
+        subsample=torch.tensor([0, 1], dtype=torch.long)
+    )
+    guide_tr.compute_log_prob()
+    model_tr.compute_log_prob()
+    x = data
+    z = guide_tr.nodes["z"]["value"].data
+    mu = pyro.param("loc").data
+    sigma = pyro.param("scale").data
     expected_grads = {
-        "loc": scale * np.array([0.5, -2.0]),
-        "scale": scale * np.array([2.0]),
+        #  "loc": scale * np.array([0.5, -2.0]),
+        #  "scale": scale * np.array([2.0]),
+        "scale": (z * (z - mu) - (x - z) * (z - mu) - 1).sum() / sigma,
+        "loc": -x + 2 * z,
     }
+
+    # score function estimator
+    dmu = (z - mu) / sigma ** 2
+    dsigma = (z - mu) ** 2 / sigma ** 3 - 1 / sigma
+    loss_i = (
+        model_tr.nodes["x"]["log_prob"]
+        + model_tr.nodes["z"]["log_prob"]
+        - guide_tr.nodes["z"]["log_prob"]
+    )
+    expected_grads = {
+        "scale": -(dsigma * loss_i - dsigma).sum().data,
+        "loc": -(dmu * loss_i - dmu).data,
+    }
+
     for name in sorted(params):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
         logger.info("actual   {} = {}".format(name, actual_grads[name]))
