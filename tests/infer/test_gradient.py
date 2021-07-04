@@ -106,13 +106,18 @@ def test_particle_gradient(Elbo, reparameterized, has_rsample):
             - guide_tr.nodes["z"]["log_prob"].data
         )
         dlogq_dloc = (z - loc) / scale ** 2
-        delbo_dloc = -dlogq_dloc
         dlogq_dscale = (z - loc) ** 2 / scale ** 3 - 1 / scale
-        delbo_dscale = -dlogq_dscale
-        expected_grads = {
-            "scale": -(dlogq_dscale * elbo + delbo_dscale).sum(0, keepdim=True),
-            "loc": -(dlogq_dloc * elbo + delbo_dloc),
-        }
+        if Elbo is TraceEnum_ELBO:
+            expected_grads = {
+                "scale": -(dlogq_dscale * elbo - dlogq_dscale).sum(0, keepdim=True),
+                "loc": -(dlogq_dloc * elbo - dlogq_dloc),
+            }
+        elif Elbo is Trace_ELBO:
+            # expected value of dlogq_dscale and dlogq_dloc is zero
+            expected_grads = {
+                "scale": -(dlogq_dscale * elbo).sum(0, keepdim=True),
+                "loc": -(dlogq_dloc * elbo),
+            }
 
     for name in sorted(params):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
