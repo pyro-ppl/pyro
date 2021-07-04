@@ -43,6 +43,8 @@ class Trace_ELBO(ELBO):
         )
         elbo = elbo.reduce(funsor.ops.add, plate_vars)
 
+        return -to_data(elbo)
+
 
 class JitTrace_ELBO(Jit_ELBO, Trace_ELBO):
     pass
