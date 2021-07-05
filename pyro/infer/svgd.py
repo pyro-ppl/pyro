@@ -18,8 +18,11 @@ from pyro.infer.trace_elbo import Trace_ELBO
 
 def vectorize(fn, num_particles, max_plate_nesting):
     def _fn(*args, **kwargs):
-        with pyro.plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1):
+        with pyro.plate(
+            "num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1
+        ):
             return fn(*args, **kwargs)
+
     return _fn
 
 
@@ -28,6 +31,7 @@ class _SVGDGuide(AutoContinuous):
     This modification of :class:`AutoContinuous` is used internally in the
     :class:`SVGD` inference algorithm.
     """
+
     def __init__(self, model):
         super().__init__(model, init_loc_fn=init_to_sample)
 
@@ -70,6 +74,7 @@ class RBFSteinKernel(SteinKernel):
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
         Qiang Liu, Dilin Wang
     """
+
     def __init__(self, bandwidth_factor=None):
         """
         :param float bandwidth_factor: Optional factor by which to scale the bandwidth
@@ -135,6 +140,7 @@ class IMQSteinKernel(SteinKernel):
     [1] "Stein Points," Wilson Ye Chen, Lester Mackey, Jackson Gorham, Francois-Xavier Briol, Chris. J. Oates.
     [2] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm," Qiang Liu, Dilin Wang
     """
+
     def __init__(self, alpha=0.5, beta=-0.5, bandwidth_factor=None):
         """
         :param float alpha: Kernel hyperparameter, defaults to 0.5.
@@ -224,13 +230,21 @@ class SVGD:
     [2] "Kernelized Complete Conditional Stein Discrepancy,"
         Raghav Singhal, Saad Lahlou, Rajesh Ranganath
     """
-    def __init__(self, model, kernel, optim, num_particles, max_plate_nesting, mode="univariate"):
+
+    def __init__(
+        self, model, kernel, optim, num_particles, max_plate_nesting, mode="univariate"
+    ):
         assert callable(model)
         assert isinstance(kernel, SteinKernel), "Must provide a valid SteinKernel"
-        assert isinstance(optim, pyro.optim.PyroOptim), "Must provide a valid Pyro optimizer"
+        assert isinstance(
+            optim, pyro.optim.PyroOptim
+        ), "Must provide a valid Pyro optimizer"
         assert num_particles > 1, "Must use at least two particles"
         assert max_plate_nesting >= 0
-        assert mode in ['univariate', 'multivariate'], "mode must be one of (univariate, multivariate)"
+        assert mode in [
+            "univariate",
+            "multivariate",
+        ], "mode must be one of (univariate, multivariate)"
 
         self.model = vectorize(model, num_particles, max_plate_nesting)
         self.kernel = kernel
@@ -247,8 +261,12 @@ class SVGD:
         Create a dictionary mapping name to vectorized value, of the form ``{name: tensor}``.
         The leading dimension of each tensor corresponds to particles, i.e. this creates a struct of arrays.
         """
-        return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
-                for site, unconstrained_value in self.guide._unpack_latent(pyro.param("svgd_particles"))}
+        return {
+            site["name"]: biject_to(site["fn"].support)(unconstrained_value)
+            for site, unconstrained_value in self.guide._unpack_latent(
+                pyro.param("svgd_particles")
+            )
+        }
 
     @torch.no_grad()
     def step(self, *args, **kwargs):
@@ -279,20 +297,32 @@ class SVGD:
             repulsive_grad = torch.einsum("nm,nm...->n...", kernel, kernel_grad)
         elif self.mode == "univariate":
             kernel = log_kernel.exp()
-            assert kernel.shape == (self.num_particles, self.num_particles, reshaped_particles.size(-1))
-            attractive_grad = torch.einsum("nmd,md->nd", kernel, reshaped_particles_grad)
+            assert kernel.shape == (
+                self.num_particles,
+                self.num_particles,
+                reshaped_particles.size(-1),
+            )
+            attractive_grad = torch.einsum(
+                "nmd,md->nd", kernel, reshaped_particles_grad
+            )
             repulsive_grad = torch.einsum("nmd,nmd->nd", kernel, kernel_grad)
 
         # combine the attractive and repulsive terms in the SVGD gradient
         assert attractive_grad.shape == repulsive_grad.shape
-        particles.grad = (attractive_grad + repulsive_grad).reshape(particles.shape) / self.num_particles
+        particles.grad = (attractive_grad + repulsive_grad).reshape(
+            particles.shape
+        ) / self.num_particles
 
         # compute per-parameter mean squared gradients
-        squared_gradients = {site["name"]: value.mean().item()
-                             for site, value in self.guide._unpack_latent(particles.grad.pow(2.0))}
+        squared_gradients = {
+            site["name"]: value.mean().item()
+            for site, value in self.guide._unpack_latent(particles.grad.pow(2.0))
+        }
 
         # torch.optim objects gets instantiated for any params that haven't been seen yet
-        params = set(site["value"].unconstrained() for site in param_capture.trace.nodes.values())
+        params = set(
+            site["value"].unconstrained() for site in param_capture.trace.nodes.values()
+        )
         self.optim(params)
 
         # zero gradients

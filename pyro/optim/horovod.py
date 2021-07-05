@@ -29,11 +29,13 @@ class HorovodOptimizer(PyroOptim):
     :param \*\*horovod_kwargs: Extra parameters passed to
         :func:`horovod.torch.DistributedOptimizer`.
     """
+
     def __init__(self, pyro_optim: PyroOptim, **horovod_kwargs):
         param_name = pyro.get_param_store().param_name
 
         def optim_constructor(params, **pt_kwargs) -> Optimizer:
             import horovod.torch as hvd  # type: ignore
+
             pt_optim = pyro_optim.pt_optim_constructor(params, **pt_kwargs)  # type: ignore
             named_parameters = [(param_name(p), p) for p in params]
             hvd_optim = hvd.DistributedOptimizer(
@@ -43,7 +45,9 @@ class HorovodOptimizer(PyroOptim):
             )
             return hvd_optim  # type: ignore
 
-        super().__init__(optim_constructor, pyro_optim.pt_optim_args, pyro_optim.pt_clip_args)
+        super().__init__(
+            optim_constructor, pyro_optim.pt_optim_args, pyro_optim.pt_clip_args
+        )
 
     def __call__(self, params: Union[List, ValuesView], *args, **kwargs) -> None:
         # Sort by name to ensure deterministic processing order.

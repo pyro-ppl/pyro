@@ -16,9 +16,12 @@ class ExtendedBinomial(Binomial):
     ``total_count``. Numerical support is still the integer interval ``[0,
     total_count]``.
     """
-    arg_constraints = {"total_count": constraints.integer,
-                       "probs": constraints.unit_interval,
-                       "logits": constraints.real}
+
+    arg_constraints = {
+        "total_count": constraints.integer,
+        "probs": constraints.unit_interval,
+        "logits": constraints.real,
+    }
     support = constraints.integer
 
     def log_prob(self, value):
@@ -34,9 +37,12 @@ class ExtendedBetaBinomial(BetaBinomial):
     integer ``total_count``. Numerical support is still the integer interval
     ``[0, total_count]``.
     """
-    arg_constraints = {"concentration1": constraints.positive,
-                       "concentration0": constraints.positive,
-                       "total_count": constraints.integer}
+
+    arg_constraints = {
+        "concentration1": constraints.positive,
+        "concentration0": constraints.positive,
+        "total_count": constraints.integer,
+    }
     support = constraints.integer
 
     def log_prob(self, value):

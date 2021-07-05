@@ -32,7 +32,7 @@ def beta_bernoulli():
 
     def model(data=None):
         with pyro.plate("num_components", 5):
-            beta = pyro.sample("beta", dist.Beta(1., 1.))
+            beta = pyro.sample("beta", dist.Beta(1.0, 1.0))
             with pyro.plate("data", N):
                 pyro.sample("obs", dist.Bernoulli(beta), obs=data)
 
@@ -43,20 +43,21 @@ def beta_bernoulli():
 @pytest.mark.parametrize("parallel", [False, True])
 def test_predictive(num_samples, parallel):
     model, data, true_probs = beta_bernoulli()
-    init_params, potential_fn, transforms, _ = initialize_model(model,
-                                                                model_args=(data,))
+    init_params, potential_fn, transforms, _ = initialize_model(
+        model, model_args=(data,)
+    )
     nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
-    mcmc = MCMC(nuts_kernel,
-                100,
-                initial_params=init_params,
-                warmup_steps=100)
+    mcmc = MCMC(nuts_kernel, 100, initial_params=init_params, warmup_steps=100)
     mcmc.run(data)
     samples = mcmc.get_samples()
     with optional(pytest.warns(UserWarning), num_samples not in (None, 100)):
-        predictive = Predictive(model, samples,
-                                num_samples=num_samples,
-                                return_sites=["beta", "obs"],
-                                parallel=parallel)
+        predictive = Predictive(
+            model,
+            samples,
+            num_samples=num_samples,
+            return_sites=["beta", "obs"],
+            parallel=parallel,
+        )
         predictive_samples = predictive()
 
     # check shapes
@@ -64,11 +65,13 @@ def test_predictive(num_samples, parallel):
     assert predictive_samples["obs"].shape == (100, 1000, 5)
 
     # check sample mean
-    assert_close(predictive_samples["obs"].reshape([-1, 5]).mean(0), true_probs, rtol=0.1)
+    assert_close(
+        predictive_samples["obs"].reshape([-1, 5]).mean(0), true_probs, rtol=0.1
+    )
 
 
 def model_with_param():
-    x = pyro.param("x", torch.tensor(1.))
+    x = pyro.param("x", torch.tensor(1.0))
     pyro.sample("y", dist.Normal(x, 1))
 
 
@@ -105,25 +108,28 @@ def test_init_to_value():
     value = torch.randn(()).exp() * 10
     kernel = NUTS(model, init_strategy=partial(init_to_value, values={"x": value}))
     kernel.setup(warmup_steps=10)
-    assert_close(value, kernel.initial_params['x'].exp())
+    assert_close(value, kernel.initial_params["x"].exp())
 
 
-@pytest.mark.parametrize("init_strategy", [
-    init_to_feasible,
-    init_to_mean,
-    init_to_median,
-    init_to_sample,
-    init_to_uniform,
-    init_to_value,
-    init_to_feasible(),
-    init_to_mean(),
-    init_to_median(num_samples=4),
-    init_to_sample(),
-    init_to_uniform(radius=0.1),
-    init_to_value(values={"x": torch.tensor(3.)}),
-    init_to_generated(
-        generate=lambda: init_to_value(values={"x": torch.rand(())})),
-], ids=str_erase_pointers)
+@pytest.mark.parametrize(
+    "init_strategy",
+    [
+        init_to_feasible,
+        init_to_mean,
+        init_to_median,
+        init_to_sample,
+        init_to_uniform,
+        init_to_value,
+        init_to_feasible(),
+        init_to_mean(),
+        init_to_median(num_samples=4),
+        init_to_sample(),
+        init_to_uniform(radius=0.1),
+        init_to_value(values={"x": torch.tensor(3.0)}),
+        init_to_generated(generate=lambda: init_to_value(values={"x": torch.rand(())})),
+    ],
+    ids=str_erase_pointers,
+)
 def test_init_strategy_smoke(init_strategy):
     def model():
         pyro.sample("x", dist.LogNormal(0, 1))

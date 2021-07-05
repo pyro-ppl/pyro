@@ -32,8 +32,11 @@ class _Subsample(Distribution):
         self.use_cuda = use_cuda
         if self.use_cuda is not None:
             if self.use_cuda ^ (device != "cpu"):
-                raise ValueError("Incompatible arg values use_cuda={}, device={}."
-                                 .format(use_cuda, device))
+                raise ValueError(
+                    "Incompatible arg values use_cuda={}, device={}.".format(
+                        use_cuda, device
+                    )
+                )
         with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
             self.device = torch.Tensor().device if not device else device
 
@@ -49,13 +52,15 @@ class _Subsample(Distribution):
         if subsample_size is None or subsample_size >= self.size:
             result = torch.arange(self.size, device=self.device)
         else:
-            result = torch.randperm(self.size, device=self.device)[:subsample_size].clone()
+            result = torch.randperm(self.size, device=self.device)[
+                :subsample_size
+            ].clone()
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
         # This is zero so that plate can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = torch.tensor(0., device=self.device)
+        result = torch.tensor(0.0, device=self.device)
         return result.cuda() if self.use_cuda else result
 
 
@@ -64,8 +69,16 @@ class SubsampleMessenger(IndepMessenger):
     Extension of IndepMessenger that includes subsampling.
     """
 
-    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
-                 use_cuda=None, device=None):
+    def __init__(
+        self,
+        name,
+        size=None,
+        subsample_size=None,
+        subsample=None,
+        dim=None,
+        use_cuda=None,
+        device=None,
+    ):
         super().__init__(name, size, dim, device)
         self.subsample_size = subsample_size
         self._indices = subsample
@@ -73,11 +86,18 @@ class SubsampleMessenger(IndepMessenger):
         self.device = device
 
         self.size, self.subsample_size, self._indices = self._subsample(
-            self.name, self.size, self.subsample_size,
-            self._indices, self.use_cuda, self.device)
+            self.name,
+            self.size,
+            self.subsample_size,
+            self._indices,
+            self.use_cuda,
+            self.device,
+        )
 
     @staticmethod
-    def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
+    def _subsample(
+        name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None
+    ):
         """
         Helper function for plate. See its docstrings for details.
         """
@@ -101,19 +121,25 @@ class SubsampleMessenger(IndepMessenger):
                 "cond_indep_stack": (),
                 "done": False,
                 "stop": False,
-                "continuation": None
+                "continuation": None,
             }
             apply_stack(msg)
             subsample = msg["value"]
 
         with ignore_jit_warnings():
             if subsample_size is None:
-                subsample_size = subsample.size(0) if isinstance(subsample, torch.Tensor) \
+                subsample_size = (
+                    subsample.size(0)
+                    if isinstance(subsample, torch.Tensor)
                     else len(subsample)
+                )
             elif subsample is not None and subsample_size != len(subsample):
-                raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
-                    subsample_size, len(subsample)) +
-                    " Did you accidentally use different subsample_size in the model and guide?")
+                raise ValueError(
+                    "subsample_size does not match len(subsample), {} vs {}.".format(
+                        subsample_size, len(subsample)
+                    )
+                    + " Did you accidentally use different subsample_size in the model and guide?"
+                )
 
         return size, subsample_size, subsample
 
@@ -122,10 +148,14 @@ class SubsampleMessenger(IndepMessenger):
         super()._reset()
 
     def _process_message(self, msg):
-        frame = CondIndepStackFrame(self.name, self.dim, self.subsample_size, self.counter)
+        frame = CondIndepStackFrame(
+            self.name, self.dim, self.subsample_size, self.counter
+        )
         frame.full_size = self.size  # Used for param initialization.
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
-        if isinstance(self.size, torch.Tensor) or isinstance(self.subsample_size, torch.Tensor):
+        if isinstance(self.size, torch.Tensor) or isinstance(
+            self.subsample_size, torch.Tensor
+        ):
             if not isinstance(msg["scale"], torch.Tensor):
                 with ignore_jit_warnings():
                     msg["scale"] = torch.tensor(msg["scale"])
@@ -141,12 +171,18 @@ class SubsampleMessenger(IndepMessenger):
                 if len(shape) >= -dim and shape[dim] != 1:
                     if is_validation_enabled() and shape[dim] != self.size:
                         if msg["type"] == "param":
-                            statement = "pyro.param({}, ..., event_dim={})".format(msg["name"], event_dim)
+                            statement = "pyro.param({}, ..., event_dim={})".format(
+                                msg["name"], event_dim
+                            )
                         else:
-                            statement = "pyro.subsample(..., event_dim={})".format(event_dim)
+                            statement = "pyro.subsample(..., event_dim={})".format(
+                                event_dim
+                            )
                         raise ValueError(
-                            "Inside pyro.plate({}, {}, dim={}) invalid shape of {}: {}"
-                            .format(self.name, self.size, self.dim, statement, shape))
+                            "Inside pyro.plate({}, {}, dim={}) invalid shape of {}: {}".format(
+                                self.name, self.size, self.dim, statement, shape
+                            )
+                        )
                     # Subsample parameters with known batch semantics.
                     if self.subsample_size < self.size:
                         value = msg["value"]

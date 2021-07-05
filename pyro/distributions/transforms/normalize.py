@@ -15,6 +15,7 @@ class Normalize(Transform):
     Safely project a vector onto the sphere wrt the ``p`` norm. This avoids
     the singularity at zero by mapping to the vector ``[1, 0, 0, ..., 0]``.
     """
+
     domain = constraints.real_vector
     codomain = constraints.sphere
     bijective = False

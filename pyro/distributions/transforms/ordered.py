@@ -15,6 +15,7 @@ class OrderedTransform(Transform):
     of a given tensor via the transformation :math:`y_0 = x_0`,
     :math:`y_i = \\sum_{1 \\le j \\le i} \\exp(x_i)`
     """
+
     domain = constraints.real_vector
     codomain = constraints.ordered_vector
     bijective = True

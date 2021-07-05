@@ -237,8 +237,8 @@ class ParamStoreDict:
         Get the ParamStore state.
         """
         state = {
-            'params': self._params,
-            'constraints': self._constraints,
+            "params": self._params,
+            "constraints": self._constraints,
         }
         return state
 
@@ -247,14 +247,15 @@ class ParamStoreDict:
         Set the ParamStore state using state from a previous get_state() call
         """
         assert isinstance(state, dict), "malformed ParamStore state"
-        assert set(state.keys()) == set(['params', 'constraints']), \
-            "malformed ParamStore keys {}".format(state.keys())
+        assert set(state.keys()) == set(
+            ["params", "constraints"]
+        ), "malformed ParamStore keys {}".format(state.keys())
 
-        for param_name, param in state['params'].items():
+        for param_name, param in state["params"].items():
             self._params[param_name] = param
             self._param_to_name[param] = param_name
 
-        for param_name, constraint in state['constraints'].items():
+        for param_name, constraint in state["constraints"].items():
             if isinstance(constraint, type(constraints.real)):
                 # Work around lack of hash & equality comparison on constraints.
                 constraint = constraints.real

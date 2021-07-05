@@ -49,6 +49,7 @@ from pyro.distributions.hmm import (
 from pyro.distributions.improper_uniform import ImproperUniform
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJ, LKJCorrCholesky
+from pyro.distributions.logistic import SkewLogistic
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
@@ -137,6 +138,7 @@ __all__ = [
     "RelaxedOneHotCategoricalStraightThrough",
     "SineBivariateVonMises",
     "SineSkewed",
+    "SkewLogistic",
     "SoftLaplace",
     "SoftAsymmetricLaplace",
     "SpanningTree",

@@ -42,6 +42,7 @@ class ConditionalDenseNN(torch.nn.Module):
             hidden_dims: List[int],
             param_dims: List[int] = [1, 1],
             nonlinearity: torch.nn.Module = torch.nn.ReLU()):
+
         super().__init__()
 
         self.input_dim = input_dim
@@ -57,7 +58,7 @@ class ConditionalDenseNN(torch.nn.Module):
         self.param_slices = [slice(s.item(), e.item()) for s, e in zip(starts, ends)]
 
         # Create masked layers
-        layers = [torch.nn.Linear(input_dim+context_dim, hidden_dims[0])]
+        layers = [torch.nn.Linear(input_dim + context_dim, hidden_dims[0])]
         for i in range(1, len(hidden_dims)):
             layers.append(torch.nn.Linear(hidden_dims[i - 1], hidden_dims[i]))
         layers.append(torch.nn.Linear(hidden_dims[-1], self.output_multiplier))
@@ -68,7 +69,7 @@ class ConditionalDenseNN(torch.nn.Module):
 
     def forward(self, x:torch.Tensor, context:torch.Tensor) -> Union[torch.Tensor,Tuple[torch.Tensor]]:
         # We must be able to broadcast the size of the context over the input
-        context = context.expand(x.size()[:-1]+(context.size(-1),))
+        context = context.expand(x.size()[:-1] + (context.size(-1),))
 
         x = torch.cat([context, x], dim=-1)
         return self._forward(x)
@@ -128,12 +129,9 @@ class DenseNN(ConditionalDenseNN):
             hidden_dims: List[int],
             param_dims: List[int] = [1, 1],
             nonlinearity: torch.nn.module = torch.nn.ReLU()) ->  None:
+      
         super(DenseNN, self).__init__(
-            input_dim,
-            0,
-            hidden_dims,
-            param_dims=param_dims,
-            nonlinearity=nonlinearity
+            input_dim, 0, hidden_dims, param_dims=param_dims, nonlinearity=nonlinearity
         )
 
     def forward(self, x: torch.Tensor):

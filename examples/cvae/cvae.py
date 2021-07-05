@@ -81,7 +81,7 @@ class CVAE(nn.Module):
             # sample the handwriting style from the prior distribution, which is
             # modulated by the input xs.
             prior_loc, prior_scale = self.prior_net(xs, y_hat)
-            zs = pyro.sample('z', dist.Normal(prior_loc, prior_scale).to_event(1))
+            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
 
             # the output y is generated from the distribution pθ(y|x, z)
             loc = self.generation_net(zs)
@@ -90,16 +90,17 @@ class CVAE(nn.Module):
                 # In training, we will only sample in the masked image
                 mask_loc = loc[(xs == -1).view(-1, 784)].view(batch_size, -1)
                 mask_ys = ys[xs == -1].view(batch_size, -1)
-                pyro.sample('y',
-                            dist.Bernoulli(mask_loc, validate_args=False)
-                                .to_event(1),
-                            obs=mask_ys)
+                pyro.sample(
+                    "y",
+                    dist.Bernoulli(mask_loc, validate_args=False).to_event(1),
+                    obs=mask_ys,
+                )
             else:
                 # In testing, no need to sample: the output is already a
                 # probability in [0, 1] range, which better represent pixel
                 # values considering grayscale. If we sample, we will force
                 # each pixel to be  either 0 or 1, killing the grayscale
-                pyro.deterministic('y', loc.detach())
+                pyro.deterministic("y", loc.detach())
 
             # return the loc so we can visualize it later
             return loc
@@ -119,8 +120,16 @@ class CVAE(nn.Module):
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
 
-def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
-          early_stop_patience, model_path, pre_trained_baseline_net):
+def train(
+    device,
+    dataloaders,
+    dataset_sizes,
+    learning_rate,
+    num_epochs,
+    early_stop_patience,
+    model_path,
+    pre_trained_baseline_net,
+):
 
     # clear param store
     pyro.clear_param_store()
@@ -136,18 +145,20 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
 
     for epoch in range(num_epochs):
         # Each epoch has a training and validation phase
-        for phase in ['train', 'val']:
+        for phase in ["train", "val"]:
             running_loss = 0.0
             num_preds = 0
 
             # Iterate over data.
-            bar = tqdm(dataloaders[phase],
-                       desc='CVAE Epoch {} {}'.format(epoch, phase).ljust(20))
+            bar = tqdm(
+                dataloaders[phase],
+                desc="CVAE Epoch {} {}".format(epoch, phase).ljust(20),
+            )
             for i, batch in enumerate(bar):
-                inputs = batch['input'].to(device)
-                outputs = batch['output'].to(device)
+                inputs = batch["input"].to(device)
+                outputs = batch["output"].to(device)
 
-                if phase == 'train':
+                if phase == "train":
                     loss = svi.step(inputs, outputs)
                 else:
                     loss = svi.evaluate_loss(inputs, outputs)
@@ -156,12 +167,14 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
                 running_loss += loss / inputs.size(0)
                 num_preds += 1
                 if i % 10 == 0:
-                    bar.set_postfix(loss='{:.2f}'.format(running_loss / num_preds),
-                                    early_stop_count=early_stop_count)
+                    bar.set_postfix(
+                        loss="{:.2f}".format(running_loss / num_preds),
+                        early_stop_count=early_stop_count,
+                    )
 
             epoch_loss = running_loss / dataset_sizes[phase]
             # deep copy the model
-            if phase == 'val':
+            if phase == "val":
                 if epoch_loss < best_loss:
                     best_loss = epoch_loss
                     torch.save(cvae_net.state_dict(), model_path)

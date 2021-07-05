@@ -22,13 +22,16 @@ def test_unweighted_mean_and_var(size, dtype):
     assert_equal(empirical_dist.variance, true_var)
 
 
-@pytest.mark.parametrize("batch_shape, event_shape", [
-    ([], []),
-    ([2], []),
-    ([2], [5]),
-    ([2], [5, 3]),
-    ([2, 5], [3]),
-])
+@pytest.mark.parametrize(
+    "batch_shape, event_shape",
+    [
+        ([], []),
+        ([2], []),
+        ([2], [5]),
+        ([2], [5, 3]),
+        ([2, 5], [3]),
+    ],
+)
 @pytest.mark.parametrize("sample_shape", [[], [20], [20, 3, 4]])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
 def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
@@ -36,9 +39,11 @@ def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
     # empirical samples with desired shape
     dim_ordering = list(range(len(batch_shape + event_shape) + 1))  # +1 for agg dim
     dim_ordering.insert(len(batch_shape), dim_ordering.pop())
-    emp_samples = torch.arange(agg_dim_size, dtype=dtype)\
-        .expand(batch_shape + event_shape + [agg_dim_size])\
+    emp_samples = (
+        torch.arange(agg_dim_size, dtype=dtype)
+        .expand(batch_shape + event_shape + [agg_dim_size])
         .permute(dim_ordering)
+    )
     # initial weight assignment
     weights = torch.ones(batch_shape + [agg_dim_size])
     empirical_dist = Empirical(emp_samples, weights)
@@ -46,18 +51,23 @@ def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
     assert_equal(samples.size(), torch.Size(sample_shape + batch_shape + event_shape))
 
 
-@pytest.mark.parametrize("sample, weights, expected_mean, expected_var", [(
-        torch.tensor([[0., 0., 0.], [1., 1., 1.]]),
-        torch.ones(2),
-        torch.tensor([0.5, 0.5, 0.5]),
-        torch.tensor([0.25, 0.25, 0.25]),
-     ), (
-        torch.tensor([[0., 0., 0.], [1., 1., 1.]]),
-        torch.ones(2, 3),
-        torch.tensor([0., 1.]),
-        torch.tensor([0., 0.]),
-    ),
-])
+@pytest.mark.parametrize(
+    "sample, weights, expected_mean, expected_var",
+    [
+        (
+            torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
+            torch.ones(2),
+            torch.tensor([0.5, 0.5, 0.5]),
+            torch.tensor([0.25, 0.25, 0.25]),
+        ),
+        (
+            torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
+            torch.ones(2, 3),
+            torch.tensor([0.0, 1.0]),
+            torch.tensor([0.0, 0.0]),
+        ),
+    ],
+)
 def test_sample_examples(sample, weights, expected_mean, expected_var):
     emp_dist = Empirical(sample, weights)
     num_samples = 10000
@@ -68,20 +78,23 @@ def test_sample_examples(sample, weights, expected_mean, expected_var):
     assert_close(emp_samples.var(0), emp_dist.variance, rtol=1e-2)
 
 
-@pytest.mark.parametrize("batch_shape, event_shape", [
-    ([], []),
-    ([1], []),
-    ([10], []),
-    ([10, 8], [3]),
-    ([10, 8], [3, 4]),
-])
+@pytest.mark.parametrize(
+    "batch_shape, event_shape",
+    [
+        ([], []),
+        ([1], []),
+        ([10], []),
+        ([10, 8], [3]),
+        ([10, 8], [3, 4]),
+    ],
+)
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
 def test_log_prob(batch_shape, event_shape, dtype):
     samples = []
     for i in range(5):
         samples.append(torch.ones(event_shape, dtype=dtype) * i)
     samples = torch.stack(samples).expand(batch_shape + [5] + event_shape)
-    weights = torch.tensor(1.).expand(batch_shape + [5])
+    weights = torch.tensor(1.0).expand(batch_shape + [5])
     empirical_dist = Empirical(samples, weights)
     sample_to_score = torch.tensor(1, dtype=dtype).expand(batch_shape + event_shape)
     log_prob = empirical_dist.log_prob(sample_to_score)
@@ -116,7 +129,9 @@ def test_weighted_sample_coherence(event_shape, dtype):
     samples = empirical_dist.sample(sample_shape=torch.Size((1000,)))
     zeros = torch.zeros(event_shape, dtype=dtype)
     ones = torch.ones(event_shape, dtype=dtype)
-    num_zeros = samples.eq(zeros).contiguous().view(1000, -1).min(dim=-1)[0].float().sum()
+    num_zeros = (
+        samples.eq(zeros).contiguous().view(1000, -1).min(dim=-1)[0].float().sum()
+    )
     num_ones = samples.eq(ones).contiguous().view(1000, -1).min(dim=-1)[0].float().sum()
     assert_equal(num_zeros.item() / 1000, 0.75, prec=0.02)
     assert_equal(num_ones.item() / 1000, 0.25, prec=0.02)
@@ -151,7 +166,7 @@ def test_mean_var_non_nan():
     samples, weights = [], []
     for i in range(10):
         samples.append(true_mean)
-        weights.append(torch.tensor(-1000.))
+        weights.append(torch.tensor(-1000.0))
     samples, weights = torch.stack(samples), torch.stack(weights)
     empirical_dist = Empirical(samples, weights)
     assert_equal(empirical_dist.mean, true_mean)

@@ -12,7 +12,6 @@ import pyro.optim
 
 
 class outest(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.l0 = outer()
@@ -24,7 +23,6 @@ class outest(nn.Module):
 
 
 class outer(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.l0 = inner()
@@ -35,7 +33,6 @@ class outer(torch.nn.Module):
 
 
 class inner(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.l0 = nn.Linear(2, 2)
@@ -45,11 +42,7 @@ class inner(torch.nn.Module):
         pass
 
 
-sequential = nn.Sequential(
-          nn.Conv2d(1, 20, 5),
-          nn.ReLU(),
-          nn.Conv2d(20, 64, 5)
-          )
+sequential = nn.Sequential(nn.Conv2d(1, 20, 5), nn.ReLU(), nn.Conv2d(20, 64, 5))
 
 
 @pytest.mark.parametrize("nn_module", [outest, outer])
@@ -74,9 +67,9 @@ def test_param_no_grad(nn_module):
             pass
 
     with pytest.warns(UserWarning):
-        pyro.module('net', net())
-    assert 'net$$$x' in pyro.get_param_store().keys()
-    assert 'net$$$y' not in pyro.get_param_store().keys()
+        pyro.module("net", net())
+    assert "net$$$x" in pyro.get_param_store().keys()
+    assert "net$$$y" not in pyro.get_param_store().keys()
 
 
 @pytest.mark.parametrize("nn_module", [sequential])

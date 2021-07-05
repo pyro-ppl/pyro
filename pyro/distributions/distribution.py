@@ -44,6 +44,7 @@ class Distribution(metaclass=DistributionMeta):
     Take a look at the `examples <http://pyro.ai/examples>`_ to see how they interact
     with inference algorithms.
     """
+
     has_rsample = False
     has_enumerate_support = False
 
@@ -109,11 +110,15 @@ class Distribution(metaclass=DistributionMeta):
         """
         log_prob = self.log_prob(x, *args, **kwargs)
         if self.has_rsample:
-            return ScoreParts(log_prob=log_prob, score_function=0, entropy_term=log_prob)
+            return ScoreParts(
+                log_prob=log_prob, score_function=0, entropy_term=log_prob
+            )
         else:
             # XXX should the user be able to control inclusion of the entropy term?
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
-            return ScoreParts(log_prob=log_prob, score_function=log_prob, entropy_term=0)
+            return ScoreParts(
+                log_prob=log_prob, score_function=log_prob, entropy_term=0
+            )
 
     def enumerate_support(self, expand=True):
         """
@@ -131,7 +136,9 @@ class Distribution(metaclass=DistributionMeta):
         :return: An iterator over the distribution's discrete support.
         :rtype: iterator
         """
-        raise NotImplementedError("Support not implemented for {}".format(type(self).__name__))
+        raise NotImplementedError(
+            "Support not implemented for {}".format(type(self).__name__)
+        )
 
     def conjugate_update(self, other):
         """
@@ -162,8 +169,9 @@ class Distribution(metaclass=DistributionMeta):
             updated distribution of type ``type(self)``, and ``log_normalizer``
             is a :class:`~torch.Tensor` representing the normalization factor.
         """
-        raise NotImplementedError("{} does not support .conjugate_update()"
-                                  .format(type(self).__name__))
+        raise NotImplementedError(
+            "{} does not support .conjugate_update()".format(type(self).__name__)
+        )
 
     def has_rsample_(self, value):
         """
@@ -206,4 +214,5 @@ class Distribution(metaclass=DistributionMeta):
         :rtype: ~pyro.contrib.randomvariable.random_variable.RandomVariable
         """
         from pyro.contrib.randomvariable import RandomVariable
+
         return RandomVariable(self)

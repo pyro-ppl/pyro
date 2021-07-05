@@ -17,72 +17,87 @@ from pyro.distributions.util import (
 )
 from tests.common import assert_equal
 
-INF = float('inf')
+INF = float("inf")
 
 
-@pytest.mark.parametrize('shapes', [
-    ([],),
-    ([1],),
-    ([2],),
-    ([], []),
-    ([], [1]),
-    ([], [2]),
-    ([1], []),
-    ([2], []),
-    ([1], [2]),
-    ([2], [1]),
-    ([2], [2]),
-    ([2], [3, 1]),
-    ([2, 1], [3]),
-    ([2, 1], [1, 3]),
-    ([1, 2, 4, 1, 3], [6, 7, 1, 1, 5, 1]),
-    ([], [3, 1], [2], [4, 3, 1], [5, 4, 1, 1]),
-])
+@pytest.mark.parametrize(
+    "shapes",
+    [
+        ([],),
+        ([1],),
+        ([2],),
+        ([], []),
+        ([], [1]),
+        ([], [2]),
+        ([1], []),
+        ([2], []),
+        ([1], [2]),
+        ([2], [1]),
+        ([2], [2]),
+        ([2], [3, 1]),
+        ([2, 1], [3]),
+        ([2, 1], [1, 3]),
+        ([1, 2, 4, 1, 3], [6, 7, 1, 1, 5, 1]),
+        ([], [3, 1], [2], [4, 3, 1], [5, 4, 1, 1]),
+    ],
+)
 def test_broadcast_shape(shapes):
     assert broadcast_shape(*shapes) == np.broadcast(*map(np.empty, shapes)).shape
 
 
-@pytest.mark.parametrize('shapes', [
-    ([3], [4]),
-    ([2, 1], [1, 3, 1]),
-])
+@pytest.mark.parametrize(
+    "shapes",
+    [
+        ([3], [4]),
+        ([2, 1], [1, 3, 1]),
+    ],
+)
 def test_broadcast_shape_error(shapes):
     with pytest.raises((ValueError, RuntimeError)):
         broadcast_shape(*shapes)
 
 
-@pytest.mark.parametrize('shapes', [
-    ([],),
-    ([1],),
-    ([2],),
-    ([], []),
-    ([], [1]),
-    ([], [2]),
-    ([1], []),
-    ([2], []),
-    ([1], [1]),
-    ([2], [2]),
-    ([2], [2]),
-    ([2], [3, 2]),
-    ([2, 3], [3]),
-    ([2, 3], [2, 3]),
-    ([4], [1, 2, 3, 4], [2, 3, 4], [3, 4]),
-])
+@pytest.mark.parametrize(
+    "shapes",
+    [
+        ([],),
+        ([1],),
+        ([2],),
+        ([], []),
+        ([], [1]),
+        ([], [2]),
+        ([1], []),
+        ([2], []),
+        ([1], [1]),
+        ([2], [2]),
+        ([2], [2]),
+        ([2], [3, 2]),
+        ([2, 3], [3]),
+        ([2, 3], [2, 3]),
+        ([4], [1, 2, 3, 4], [2, 3, 4], [3, 4]),
+    ],
+)
 def test_broadcast_shape_strict(shapes):
-    assert broadcast_shape(*shapes, strict=True) == np.broadcast(*map(np.empty, shapes)).shape
+    assert (
+        broadcast_shape(*shapes, strict=True)
+        == np.broadcast(*map(np.empty, shapes)).shape
+    )
 
 
-@pytest.mark.parametrize('shapes', [
-    ([1], [2]),
-    ([2], [1]),
-    ([3], [4]),
-    ([2], [3, 1]),
-    ([2, 1], [3]),
-    ([2, 1], [1, 3]),
-    ([2, 1], [1, 3, 1]),
-    ([1, 2, 4, 1, 3], [6, 7, 1, 1, 5, 1]),
-    ([], [3, 1], [2], [4, 3, 1], [5, 4, 1, 1]),
-])
+@pytest.mark.parametrize(
+    "shapes",
+    [
+        ([1], [2]),
+        ([2], [1]),
+        ([3], [4]),
+        ([2], [3, 1]),
+        ([2, 1], [3]),
+        ([2, 1], [1, 3]),
+        ([2, 1], [1, 3, 1]),
+        ([1, 2, 4, 1, 3], [6, 7, 1, 1, 5, 1]),
+        ([], [3, 1], [2], [4, 3, 1], [5, 4, 1, 1]),
+    ],
+)
 def test_broadcast_shape_strict_error(shapes):
     with pytest.raises(ValueError):
         broadcast_shape(*shapes, strict=True)
@@ -109,7 +124,6 @@ def test_sum_leftmost():
 
 
 def test_weakmethod():
-
     class Foo:
         def __init__(self, state):
             self.state = state
@@ -130,8 +144,8 @@ def test_weakmethod():
 
 @pytest.mark.parametrize("shape", [None, (), (4,), (3, 2)], ids=str)
 def test_detach_normal(shape):
-    loc = torch.tensor(0., requires_grad=True)
-    scale = torch.tensor(1., requires_grad=True)
+    loc = torch.tensor(0.0, requires_grad=True)
+    scale = torch.tensor(1.0, requires_grad=True)
     d1 = dist.Normal(loc, scale)
     if shape is not None:
         d1 = d1.expand(shape)
@@ -163,12 +177,13 @@ def test_detach_beta(shape):
 
 @pytest.mark.parametrize("shape", [None, (), (4,), (3, 2)], ids=str)
 def test_detach_transformed(shape):
-    loc = torch.tensor(0., requires_grad=True)
-    scale = torch.tensor(1., requires_grad=True)
-    a = torch.tensor(2., requires_grad=True)
-    b = torch.tensor(3., requires_grad=True)
-    d1 = dist.TransformedDistribution(dist.Normal(loc, scale),
-                                      dist.transforms.AffineTransform(a, b))
+    loc = torch.tensor(0.0, requires_grad=True)
+    scale = torch.tensor(1.0, requires_grad=True)
+    a = torch.tensor(2.0, requires_grad=True)
+    b = torch.tensor(3.0, requires_grad=True)
+    d1 = dist.TransformedDistribution(
+        dist.Normal(loc, scale), dist.transforms.AffineTransform(a, b)
+    )
     if shape is not None:
         d1 = d1.expand(shape)
 
@@ -190,8 +205,8 @@ def test_detach_transformed(shape):
 
 @pytest.mark.parametrize("shape", [None, (), (4,), (3, 2)], ids=str)
 def test_detach_jit(shape):
-    loc = torch.tensor(0., requires_grad=True)
-    scale = torch.tensor(1., requires_grad=True)
+    loc = torch.tensor(0.0, requires_grad=True)
+    scale = torch.tensor(1.0, requires_grad=True)
     data = torch.randn(5, 1, 1)
 
     def fn(loc, scale, data):

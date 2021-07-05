@@ -337,6 +337,13 @@ SineSkewed
     :undoc-members:
     :show-inheritance:
 
+SkewLogistic
+------------
+.. autoclass:: pyro.distributions.SkewLogistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SoftAsymmetricLaplace
 ---------------------
 .. autoclass:: pyro.distributions.SoftAsymmetricLaplace

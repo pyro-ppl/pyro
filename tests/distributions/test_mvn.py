@@ -19,15 +19,30 @@ def random_mvn(loc_shape, cov_shape, dim):
     return MultivariateNormal(loc, cov)
 
 
-@pytest.mark.parametrize('loc_shape', [
-    (), (2,), (3, 2),
-])
-@pytest.mark.parametrize('cov_shape', [
-    (), (2,), (3, 2),
-])
-@pytest.mark.parametrize('dim', [
-    1, 3, 5,
-])
+@pytest.mark.parametrize(
+    "loc_shape",
+    [
+        (),
+        (2,),
+        (3, 2),
+    ],
+)
+@pytest.mark.parametrize(
+    "cov_shape",
+    [
+        (),
+        (2,),
+        (3, 2),
+    ],
+)
+@pytest.mark.parametrize(
+    "dim",
+    [
+        1,
+        3,
+        5,
+    ],
+)
 def test_shape(loc_shape, cov_shape, dim):
     mvn = random_mvn(loc_shape, cov_shape, dim)
     assert mvn.loc.shape == mvn.batch_shape + mvn.event_shape

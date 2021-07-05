@@ -28,7 +28,7 @@ class Brownian(Kernel):
             raise ValueError("Input dimensional for Brownian kernel must be 1.")
         super().__init__(input_dim, active_dims)
 
-        variance = torch.tensor(1.) if variance is None else variance
+        variance = torch.tensor(1.0) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
@@ -43,6 +43,8 @@ class Brownian(Kernel):
             raise ValueError("Inputs must have the same number of features.")
 
         Zt = Z.t()
-        return torch.where(X.sign() == Zt.sign(),
-                           self.variance * torch.min(X.abs(), Zt.abs()),
-                           X.data.new_zeros(X.size(0), Z.size(0)))
+        return torch.where(
+            X.sign() == Zt.sign(),
+            self.variance * torch.min(X.abs(), Zt.abs()),
+            X.data.new_zeros(X.size(0), Z.size(0)),
+        )

@@ -24,6 +24,7 @@ class HaarTransform(Transform):
     :param bool flip: Whether to flip the time axis before applying the
         Haar transform. Defaults to false.
     """
+
     bijective = True
 
     def __init__(self, dim=-1, flip=False, cache_size=0):
@@ -36,8 +37,11 @@ class HaarTransform(Transform):
         return hash((type(self), self.event_dim, self.flip))
 
     def __eq__(self, other):
-        return (type(self) == type(other) and self.dim == other.dim and
-                self.flip == other.flip)
+        return (
+            type(self) == type(other)
+            and self.dim == other.dim
+            and self.flip == other.flip
+        )
 
     @constraints.dependent_property(is_discrete=False)
     def domain(self):
@@ -70,7 +74,7 @@ class HaarTransform(Transform):
         return x
 
     def log_abs_det_jacobian(self, x, y):
-        return x.new_zeros(x.shape[:self.dim])
+        return x.new_zeros(x.shape[: self.dim])
 
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:

@@ -101,10 +101,12 @@ def discrete_escape(trace, msg: str) -> bool:
     Used by EscapeMessenger to decide whether to do a nonlocal exit at a site.
     Subroutine for integrating out discrete variables for variance reduction.
     """
-    return (msg["type"] == "sample") and \
-        (not msg["is_observed"]) and \
-        (msg["name"] not in trace) and \
-        (getattr(msg["fn"], "has_enumerate_support", False))
+    return (
+        (msg["type"] == "sample")
+        and (not msg["is_observed"])
+        and (msg["name"] not in trace)
+        and (getattr(msg["fn"], "has_enumerate_support", False))
+    )
 
 
 def all_escape(trace, msg: str) -> bool:
@@ -118,6 +120,8 @@ def all_escape(trace, msg: str) -> bool:
     Used by EscapeMessenger to decide whether to do a nonlocal exit at a site.
     Subroutine for approximately integrating out variables for variance reduction.
     """
-    return (msg["type"] == "sample") and \
-        (not msg["is_observed"]) and \
-        (msg["name"] not in trace)
+    return (
+        (msg["type"] == "sample")
+        and (not msg["is_observed"])
+        and (msg["name"] not in trace)
+    )

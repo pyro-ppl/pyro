@@ -17,7 +17,7 @@ def test_parameterized():
         def __init__(self):
             super().__init__()
             self._pyro_name = "Linear"
-            self.a = PyroParam(torch.tensor(1.), constraints.positive)
+            self.a = PyroParam(torch.tensor(1.0), constraints.positive)
             self.b = PyroSample(dist.Normal(0, 1))
             self.c = PyroSample(dist.Normal(0, 1))
             self.d = PyroSample(dist.Normal(0, 4).expand([1]).to_event())
@@ -26,7 +26,16 @@ def test_parameterized():
             self.g = PyroSample(dist.Exponential(1))
 
         def forward(self, x):
-            return self.a * x + self.b + self.c + self.d + self.e + self.f + self.g + self.e
+            return (
+                self.a * x
+                + self.b
+                + self.c
+                + self.d
+                + self.e
+                + self.f
+                + self.g
+                + self.e
+            )
 
     linear = Linear()
     linear.autoguide("c", dist.Normal)
@@ -34,9 +43,16 @@ def test_parameterized():
     linear.autoguide("e", dist.Normal)
 
     assert set(dict(linear.named_parameters()).keys()) == {
-        "a_unconstrained", "b_map", "c_loc", "c_scale_unconstrained",
-        "d_loc", "d_scale_tril_unconstrained",
-        "e_loc", "e_scale_unconstrained", "f_map", "g_map_unconstrained"
+        "a_unconstrained",
+        "b_map",
+        "c_loc",
+        "c_scale_unconstrained",
+        "d_loc",
+        "d_scale_tril_unconstrained",
+        "e_loc",
+        "e_scale_unconstrained",
+        "f_map",
+        "g_map_unconstrained",
     }
 
     def model(x):
@@ -47,8 +63,8 @@ def test_parameterized():
         linear.mode = "guide"
         return linear(x)
 
-    model_trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.))
-    guide_trace = pyro.poutine.trace(guide).get_trace(torch.tensor(5.))
+    model_trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.0))
+    guide_trace = pyro.poutine.trace(guide).get_trace(torch.tensor(5.0))
     for p in ["b", "c", "d"]:
         assert "Linear.{}".format(p) in model_trace.nodes
         assert "Linear.{}".format(p) in guide_trace.nodes
@@ -80,18 +96,18 @@ def test_nested_parameterized():
         def forward(self, x):
             return self.linear1(x) * x + self.linear2(self.a)
 
-    linear1 = Linear(torch.tensor(1.))
+    linear1 = Linear(torch.tensor(1.0))
     linear1.a = PyroSample(dist.Normal(0, 1))
-    linear2 = Linear(torch.tensor(1.))
+    linear2 = Linear(torch.tensor(1.0))
     linear2.a = PyroSample(dist.Normal(0, 1))
-    q = Quadratic(linear1, linear2, torch.tensor(2.))
+    q = Quadratic(linear1, linear2, torch.tensor(2.0))
     q.a = PyroSample(dist.Cauchy(0, 1))
 
     def model(x):
         q.set_mode("model")
         return q(x)
 
-    trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.))
+    trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.0))
     assert "Quadratic.a" in trace.nodes
     assert "Quadratic.linear1.a" in trace.nodes
     assert "Quadratic.linear2.a" in trace.nodes
@@ -106,10 +122,10 @@ def test_inference():
         def forward(self, x):
             return self.a * x
 
-    target_a = torch.tensor(2.)
+    target_a = torch.tensor(2.0)
     x_train = torch.rand(100)
     y_train = target_a * x_train + torch.rand(100) * 0.001
-    linear = Linear(torch.tensor(1.))
+    linear = Linear(torch.tensor(1.0))
     linear.a = PyroSample(dist.Normal(0, 10))
     linear.autoguide("a", dist.Normal)
 

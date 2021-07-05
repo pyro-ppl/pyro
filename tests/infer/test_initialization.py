@@ -24,8 +24,10 @@ def test_init_to_generated():
             self.counter = 0
 
         def __call__(self):
-            values = {"x": torch.tensor(self.counter + 0.0),
-                      "y": torch.tensor(self.counter + 0.5)}
+            values = {
+                "x": torch.tensor(self.counter + 0.0),
+                "y": torch.tensor(self.counter + 0.5),
+            }
             self.counter += 1
             return init_to_value(values=values)
 

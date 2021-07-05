@@ -23,9 +23,9 @@ def imresize(arr, size):
 
 
 def sample_one(canvas_size, mnist):
-    i = np.random.randint(mnist['digits'].shape[0])
-    digit = mnist['digits'][i]
-    label = mnist['labels'][i].item()
+    i = np.random.randint(mnist["digits"].shape[0])
+    digit = mnist["digits"][i]
+    label = mnist["labels"][i].item()
     scale = 0.1 * np.random.randn() + 1.3
     new_size = tuple(int(s / scale) for s in digit.shape)
     resized = imresize(digit, new_size)
@@ -35,7 +35,7 @@ def sample_one(canvas_size, mnist):
     pad_l = np.random.randint(0, padding)
     pad_r = np.random.randint(0, padding)
     pad_width = ((pad_l, padding - pad_l), (pad_r, padding - pad_r))
-    positioned = np.pad(resized, pad_width, 'constant', constant_values=0)
+    positioned = np.pad(resized, pad_width, "constant", constant_values=0)
     return positioned, label
 
 
@@ -65,30 +65,30 @@ def mk_dataset(n, mnist, max_digits, canvas_size):
 
 
 def load_mnist(root_path):
-    loader = get_data_loader('MNIST', root_path)
+    loader = get_data_loader("MNIST", root_path)
     return {
-        'digits': loader.dataset.data.cpu().numpy(),
-        'labels': loader.dataset.targets
+        "digits": loader.dataset.data.cpu().numpy(),
+        "labels": loader.dataset.targets,
     }
 
 
 def load(root_path):
-    file_path = os.path.join(root_path, 'multi_mnist_uint8.npz')
+    file_path = os.path.join(root_path, "multi_mnist_uint8.npz")
     if os.path.exists(file_path):
         data = np.load(file_path, allow_pickle=True)
-        return data['x'], data['y']
+        return data["x"], data["y"]
     else:
         # Set RNG to known state.
         rng_state = np.random.get_state()
         np.random.seed(681307)
         mnist = load_mnist(root_path)
-        print('Generating multi-MNIST dataset...')
+        print("Generating multi-MNIST dataset...")
         x, y = mk_dataset(60000, mnist, 2, 50)
         # Revert RNG state.
         np.random.set_state(rng_state)
         # Crude checksum.
         # assert x.sum() == 883114919, 'Did not generate the expected data.'
-        with open(file_path, 'wb') as f:
+        with open(file_path, "wb") as f:
             np.savez_compressed(f, x=x, y=y)
-        print('Done!')
+        print("Done!")
         return x, y

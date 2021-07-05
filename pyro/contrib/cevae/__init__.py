@@ -43,6 +43,7 @@ class FullyConnected(nn.Sequential):
     """
     Fully connected multi-layer network with ELU activations.
     """
+
     def __init__(self, sizes, final_activation=None):
         layers = []
         for in_size, out_size in zip(sizes, sizes[1:]):
@@ -62,6 +63,7 @@ class DistributionNet(nn.Module):
     """
     Base class for distribution nets.
     """
+
     @staticmethod
     def get_class(dtype):
         """
@@ -88,6 +90,7 @@ class BernoulliNet(DistributionNet):
         logits, = net(z)
         t = net.make_dist(logits).sample()
     """
+
     def __init__(self, sizes):
         assert len(sizes) >= 1
         super().__init__()
@@ -95,7 +98,7 @@ class BernoulliNet(DistributionNet):
 
     def forward(self, x):
         logits = self.fc(x).squeeze(-1).clamp(min=-10, max=10)
-        return logits,
+        return (logits,)
 
     @staticmethod
     def make_dist(logits):
@@ -115,6 +118,7 @@ class ExponentialNet(DistributionNet):
         rate, = net(x)
         y = net.make_dist(rate).sample()
     """
+
     def __init__(self, sizes):
         assert len(sizes) >= 1
         super().__init__()
@@ -123,7 +127,7 @@ class ExponentialNet(DistributionNet):
     def forward(self, x):
         scale = nn.functional.softplus(self.fc(x).squeeze(-1)).clamp(min=1e-3, max=1e6)
         rate = scale.reciprocal()
-        return rate,
+        return (rate,)
 
     @staticmethod
     def make_dist(rate):
@@ -144,6 +148,7 @@ class LaplaceNet(DistributionNet):
         loc, scale = net(x)
         y = net.make_dist(loc, scale).sample()
     """
+
     def __init__(self, sizes):
         assert len(sizes) >= 1
         super().__init__()
@@ -174,6 +179,7 @@ class NormalNet(DistributionNet):
         loc, scale = net(x)
         y = net.make_dist(loc, scale).sample()
     """
+
     def __init__(self, sizes):
         assert len(sizes) >= 1
         super().__init__()
@@ -204,6 +210,7 @@ class StudentTNet(DistributionNet):
         df, loc, scale = net(x)
         y = net.make_dist(df, loc, scale).sample()
     """
+
     def __init__(self, sizes):
         assert len(sizes) >= 1
         super().__init__()
@@ -239,6 +246,7 @@ class DiagNormalNet(nn.Module):
     This is intended for the latent ``z`` distribution and the prewhitened
     ``x`` features, and conservatively clips ``loc`` and ``scale`` values.
     """
+
     def __init__(self, sizes):
         assert len(sizes) >= 2
         self.dim = sizes[-1]
@@ -247,8 +255,10 @@ class DiagNormalNet(nn.Module):
 
     def forward(self, x):
         loc_scale = self.fc(x)
-        loc = loc_scale[..., :self.dim].clamp(min=-1e2, max=1e2)
-        scale = nn.functional.softplus(loc_scale[..., self.dim:]).add(1e-3).clamp(max=1e2)
+        loc = loc_scale[..., : self.dim].clamp(min=-1e2, max=1e2)
+        scale = (
+            nn.functional.softplus(loc_scale[..., self.dim :]).add(1e-3).clamp(max=1e2)
+        )
         return loc, scale
 
 
@@ -256,12 +266,13 @@ class PreWhitener(nn.Module):
     """
     Data pre-whitener.
     """
+
     def __init__(self, data):
         super().__init__()
         with torch.no_grad():
             loc = data.mean(0)
             scale = data.std(0)
-            scale[~(scale > 0)] = 1.
+            scale[~(scale > 0)] = 1.0
             self.register_buffer("loc", loc)
             self.register_buffer("inv_scale", scale.reciprocal())
 
@@ -286,18 +297,23 @@ class Model(PyroModule):
     :param dict config: A dict specifying ``feature_dim``, ``latent_dim``,
         ``hidden_dim``, ``num_layers``, and ``outcome_dist``.
     """
+
     def __init__(self, config):
         self.latent_dim = config["latent_dim"]
         super().__init__()
-        self.x_nn = DiagNormalNet([config["latent_dim"]] +
-                                  [config["hidden_dim"]] * config["num_layers"] +
-                                  [config["feature_dim"]])
+        self.x_nn = DiagNormalNet(
+            [config["latent_dim"]]
+            + [config["hidden_dim"]] * config["num_layers"]
+            + [config["feature_dim"]]
+        )
         OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
         # The y network is split between the two t values.
-        self.y0_nn = OutcomeNet([config["latent_dim"]] +
-                                [config["hidden_dim"]] * config["num_layers"])
-        self.y1_nn = OutcomeNet([config["latent_dim"]] +
-                                [config["hidden_dim"]] * config["num_layers"])
+        self.y0_nn = OutcomeNet(
+            [config["latent_dim"]] + [config["hidden_dim"]] * config["num_layers"]
+        )
+        self.y1_nn = OutcomeNet(
+            [config["latent_dim"]] + [config["hidden_dim"]] * config["num_layers"]
+        )
         self.t_nn = BernoulliNet([config["latent_dim"]])
 
     def forward(self, x, t=None, y=None, size=None):
@@ -333,7 +349,7 @@ class Model(PyroModule):
         return self.y0_nn.make_dist(*params)
 
     def t_dist(self, z):
-        logits, = self.t_nn(z)
+        (logits,) = self.t_nn(z)
         return dist.Bernoulli(logits=logits)
 
 
@@ -354,6 +370,7 @@ class Guide(PyroModule):
     :param dict config: A dict specifying ``feature_dim``, ``latent_dim``,
         ``hidden_dim``, ``num_layers``, and ``outcome_dist``.
     """
+
     def __init__(self, config):
         self.latent_dim = config["latent_dim"]
         OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
@@ -362,14 +379,18 @@ class Guide(PyroModule):
         # The y and z networks both follow an architecture where the first few
         # layers are shared for t in {0,1}, but the final layer is split
         # between the two t values.
-        self.y_nn = FullyConnected([config["feature_dim"]] +
-                                   [config["hidden_dim"]] * (config["num_layers"] - 1),
-                                   final_activation=nn.ELU())
+        self.y_nn = FullyConnected(
+            [config["feature_dim"]]
+            + [config["hidden_dim"]] * (config["num_layers"] - 1),
+            final_activation=nn.ELU(),
+        )
         self.y0_nn = OutcomeNet([config["hidden_dim"]])
         self.y1_nn = OutcomeNet([config["hidden_dim"]])
-        self.z_nn = FullyConnected([1 + config["feature_dim"]] +
-                                   [config["hidden_dim"]] * (config["num_layers"] - 1),
-                                   final_activation=nn.ELU())
+        self.z_nn = FullyConnected(
+            [1 + config["feature_dim"]]
+            + [config["hidden_dim"]] * (config["num_layers"] - 1),
+            final_activation=nn.ELU(),
+        )
         self.z0_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
         self.z1_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
 
@@ -386,7 +407,7 @@ class Guide(PyroModule):
             pyro.sample("z", self.z_dist(y, t, x))
 
     def t_dist(self, x):
-        logits, = self.t_nn(x)
+        (logits,) = self.t_nn(x)
         return dist.Bernoulli(logits=logits)
 
     def y_dist(self, t, x):
@@ -418,15 +439,20 @@ class TraceCausalEffect_ELBO(Trace_ELBO):
 
         -loss = ELBO + log q(t|x) + log q(y|t,x)
     """
+
     def _differentiable_loss_particle(self, model_trace, guide_trace):
         # Construct -ELBO part.
-        blocked_names = [name for name, site in guide_trace.nodes.items()
-                         if site["type"] == "sample" and site["is_observed"]]
+        blocked_names = [
+            name
+            for name, site in guide_trace.nodes.items()
+            if site["type"] == "sample" and site["is_observed"]
+        ]
         blocked_guide_trace = guide_trace.copy()
         for name in blocked_names:
             del blocked_guide_trace.nodes[name]
         loss, surrogate_loss = super()._differentiable_loss_particle(
-            model_trace, blocked_guide_trace)
+            model_trace, blocked_guide_trace
+        )
 
         # Add log q terms.
         for name in blocked_names:
@@ -482,11 +508,23 @@ class CEVAE(nn.Module):
     :param int num_samples: Default number of samples for the :meth:`ite`
         method. Defaults to 100.
     """
-    def __init__(self, feature_dim, outcome_dist="bernoulli",
-                 latent_dim=20, hidden_dim=200, num_layers=3, num_samples=100):
-        config = dict(feature_dim=feature_dim, latent_dim=latent_dim,
-                      hidden_dim=hidden_dim, num_layers=num_layers,
-                      num_samples=num_samples)
+
+    def __init__(
+        self,
+        feature_dim,
+        outcome_dist="bernoulli",
+        latent_dim=20,
+        hidden_dim=200,
+        num_layers=3,
+        num_samples=100,
+    ):
+        config = dict(
+            feature_dim=feature_dim,
+            latent_dim=latent_dim,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            num_samples=num_samples,
+        )
         for name, size in config.items():
             if not (isinstance(size, int) and size > 0):
                 raise ValueError("Expected {} > 0 but got {}".format(name, size))
@@ -498,13 +536,18 @@ class CEVAE(nn.Module):
         self.model = Model(config)
         self.guide = Guide(config)
 
-    def fit(self, x, t, y,
-            num_epochs=100,
-            batch_size=100,
-            learning_rate=1e-3,
-            learning_rate_decay=0.1,
-            weight_decay=1e-4,
-            log_every=100):
+    def fit(
+        self,
+        x,
+        t,
+        y,
+        num_epochs=100,
+        batch_size=100,
+        learning_rate=1e-3,
+        learning_rate_decay=0.1,
+        weight_decay=1e-4,
+        log_every=100,
+    ):
         """
         Train using :class:`~pyro.infer.svi.SVI` with the
         :class:`TraceCausalEffect_ELBO` loss.
@@ -534,9 +577,13 @@ class CEVAE(nn.Module):
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         logger.info("Training with {} minibatches per epoch".format(len(dataloader)))
         num_steps = num_epochs * len(dataloader)
-        optim = ClippedAdam({"lr": learning_rate,
-                             "weight_decay": weight_decay,
-                             "lrd": learning_rate_decay ** (1 / num_steps)})
+        optim = ClippedAdam(
+            {
+                "lr": learning_rate,
+                "weight_decay": weight_decay,
+                "lrd": learning_rate_decay ** (1 / num_steps),
+            }
+        )
         svi = SVI(self.model, self.guide, optim, TraceCausalEffect_ELBO())
         losses = []
         for epoch in range(num_epochs):
@@ -544,7 +591,9 @@ class CEVAE(nn.Module):
                 x = self.whiten(x)
                 loss = svi.step(x, t, y, size=len(dataset)) / len(dataset)
                 if log_every and len(losses) % log_every == 0:
-                    logger.debug("step {: >5d} loss = {:0.6g}".format(len(losses), loss))
+                    logger.debug(
+                        "step {: >5d} loss = {:0.6g}".format(len(losses), loss)
+                    )
                 assert not torch_isnan(loss)
                 losses.append(loss)
         return losses

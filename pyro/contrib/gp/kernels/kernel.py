@@ -33,7 +33,9 @@ class Kernel(Parameterized):
         if active_dims is None:
             active_dims = list(range(input_dim))
         elif input_dim != len(active_dims):
-            raise ValueError("Input size and the length of active dimensionals should be equal.")
+            raise ValueError(
+                "Input size and the length of active dimensionals should be equal."
+            )
         self.input_dim = input_dim
         self.active_dims = active_dims
 
@@ -77,13 +79,17 @@ class Combination(Kernel):
     :param kern1: Second kernel to combine.
     :type kern1: Kernel or numbers.Number
     """
+
     def __init__(self, kern0, kern1):
         if not isinstance(kern0, Kernel):
-            raise TypeError("The first component of a combined kernel must be a "
-                            "Kernel instance.")
+            raise TypeError(
+                "The first component of a combined kernel must be a " "Kernel instance."
+            )
         if not (isinstance(kern1, Kernel) or isinstance(kern1, numbers.Number)):
-            raise TypeError("The second component of a combined kernel must be a "
-                            "Kernel instance or a number.")
+            raise TypeError(
+                "The second component of a combined kernel must be a "
+                "Kernel instance or a number."
+            )
 
         active_dims = set(kern0.active_dims)
         if isinstance(kern1, Kernel):
@@ -101,6 +107,7 @@ class Sum(Combination):
     Returns a new kernel which acts like a sum/direct sum of two kernels.
     The second kernel can be a constant.
     """
+
     def forward(self, X, Z=None, diag=False):
         if isinstance(self.kern1, Kernel):
             return self.kern0(X, Z, diag=diag) + self.kern1(X, Z, diag=diag)
@@ -113,6 +120,7 @@ class Product(Combination):
     Returns a new kernel which acts like a product/tensor product of two kernels.
     The second kernel can be a constant.
     """
+
     def forward(self, X, Z=None, diag=False):
         if isinstance(self.kern1, Kernel):
             return self.kern0(X, Z, diag=diag) * self.kern1(X, Z, diag=diag)
@@ -127,6 +135,7 @@ class Transforming(Kernel):
 
     :param Kernel kern: The original kernel.
     """
+
     def __init__(self, kern):
         super().__init__(kern.input_dim, kern.active_dims)
 
@@ -139,6 +148,7 @@ class Exponent(Transforming):
 
         :math:`k_{new}(x, z) = \exp(k(x, z)).`
     """
+
     def forward(self, X, Z=None, diag=False):
         return self.kern(X, Z, diag=diag).exp()
 
@@ -153,6 +163,7 @@ class VerticalScaling(Transforming):
 
     :param callable vscaling_fn: A vertical scaling function :math:`f`.
     """
+
     def __init__(self, kern, vscaling_fn):
         super().__init__(kern)
 
@@ -160,13 +171,18 @@ class VerticalScaling(Transforming):
 
     def forward(self, X, Z=None, diag=False):
         if diag:
-            return self.vscaling_fn(X) * self.kern(X, Z, diag=diag) * self.vscaling_fn(X)
+            return (
+                self.vscaling_fn(X) * self.kern(X, Z, diag=diag) * self.vscaling_fn(X)
+            )
         elif Z is None:
             vscaled_X = self.vscaling_fn(X).unsqueeze(1)
             return vscaled_X * self.kern(X, Z, diag=diag) * vscaled_X.t()
         else:
-            return (self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag=diag) *
-                    self.vscaling_fn(Z).unsqueeze(0))
+            return (
+                self.vscaling_fn(X).unsqueeze(1)
+                * self.kern(X, Z, diag=diag)
+                * self.vscaling_fn(Z).unsqueeze(0)
+            )
 
 
 def _Horner_evaluate(x, coef):
@@ -176,7 +192,7 @@ def _Horner_evaluate(x, coef):
     # https://en.wikipedia.org/wiki/Horner%27s_method
     n = len(coef) - 1
     b = coef[n]
-    for i in range(n-1, -1, -1):
+    for i in range(n - 1, -1, -1):
         b = coef[i] + b * x
     return b
 
@@ -209,6 +225,7 @@ class Warping(Transforming):
     :param list owarping_coef: A list of coefficients of the output warping polynomial.
         These coefficients must be non-negative.
     """
+
     def __init__(self, kern, iwarping_fn=None, owarping_coef=None):
         super().__init__(kern)
 
@@ -217,11 +234,15 @@ class Warping(Transforming):
         if owarping_coef is not None:
             for coef in owarping_coef:
                 if not isinstance(coef, int) and coef < 0:
-                    raise ValueError("Coefficients of the polynomial must be a "
-                                     "non-negative integer.")
+                    raise ValueError(
+                        "Coefficients of the polynomial must be a "
+                        "non-negative integer."
+                    )
             if len(owarping_coef) < 2 and sum(owarping_coef) == 0:
-                raise ValueError("The ouput warping polynomial should have a degree "
-                                 "of at least 1.")
+                raise ValueError(
+                    "The ouput warping polynomial should have a degree "
+                    "of at least 1."
+                )
         self.owarping_coef = owarping_coef
 
     def forward(self, X, Z=None, diag=False):

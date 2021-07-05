@@ -17,8 +17,7 @@ with open(os.path.join(root, "pyro", "__init__.py")) as f:
 filenames = []
 for path in ["examples", "tutorial/source"]:
     for ext in ["*.py", "*.ipynb"]:
-        filenames.extend(glob.glob(os.path.join(root, path, "**", ext),
-                                   recursive=True))
+        filenames.extend(glob.glob(os.path.join(root, path, "**", ext), recursive=True))
 filenames.sort()
 
 # Update version string.
