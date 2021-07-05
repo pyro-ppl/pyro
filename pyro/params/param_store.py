@@ -10,6 +10,7 @@ from collections import KeysView
 import torch
 from torch.distributions import constraints, transform_to
 
+import pyro
 
 class ParamStoreDict:
     """
@@ -133,7 +134,7 @@ class ParamStoreDict:
         self._params[name] = unconstrained_value
         self._param_to_name[unconstrained_value] = name
 
-    def setdefault(self, name:str, init_constrained_value: Union[torch.Tensor,Callable[[],torch.Tensor]], constraint:constraints=constraints.real) -> torch.Tensor:
+    def setdefault(self, name:str, init_constrained_value: Union[torch.Tensor,Callable[[],torch.Tensor]], constraint:constraints.Constraint=constraints.real) -> torch.Tensor:
         """
         Retrieve a *constrained* parameter value from the if it exists, otherwise
         set the initial value. Note that this is a little fancier than
@@ -184,7 +185,7 @@ class ParamStoreDict:
                       DeprecationWarning)
         return self.keys()
 
-    def replace_param(self, param_name:str, new_param:str, old_param:str):
+    def replace_param(self, param_name:str, new_param: pyro.param, old_param: pyro.param):
         warnings.warn("ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
                       DeprecationWarning)
         assert self._params[param_name] is old_param.unconstrained()
@@ -241,7 +242,7 @@ class ParamStoreDict:
         }
         return state
 
-    def set_state(self, state):
+    def set_state(self, state:Dict):
         """
         Set the ParamStore state using state from a previous get_state() call
         """

@@ -15,12 +15,13 @@ the :class:`PyroSample` struct::
 import functools
 import inspect
 from collections import OrderedDict, namedtuple
+from typing import Callable, Dict, Union, Optional
 
 import torch
 from torch.distributions import constraints, transform_to
 
-import pyro
-from pyro.poutine.runtime import _PYRO_PARAM_STORE
+import pyro # type: ignore
+from pyro.poutine.runtime import _PYRO_PARAM_STORE # type: ignore
 
 
 class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
@@ -152,7 +153,7 @@ class PyroSample(namedtuple("PyroSample", ("prior",))):
         return obj.__getattr__(self.name)
 
 
-def _make_name(prefix, name):
+def _make_name(prefix:str, name:str):
     return "{}.{}".format(prefix, name) if prefix else name
 
 
@@ -202,7 +203,7 @@ def _get_pyro_params(module):
 
 
 class _PyroModuleMeta(type):
-    _pyro_mixin_cache = {}
+    _pyro_mixin_cach: Dict = {}
 
     # Unpickling helper to create an empty object of type PyroModule[Module].
     class _New:
@@ -365,14 +366,14 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     :param str name: Optional name for a root PyroModule. This is ignored in
         sub-PyroModules of another PyroModule.
     """
-    def __init__(self, name=""):
+    def __init__(self, name:str=""):
         self._pyro_name = name
         self._pyro_context = _Context()  # shared among sub-PyroModules
-        self._pyro_params = OrderedDict()
-        self._pyro_samples = OrderedDict()
+        self._pyro_params: OrderedDict = OrderedDict()
+        self._pyro_samples: OrderedDict = OrderedDict()
         super().__init__()
 
-    def add_module(self, name, module):
+    def add_module(self, name:str, module):
         """
         Adds a child module to the current module.
         """
@@ -380,7 +381,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             module._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
         super().add_module(name, module)
 
-    def named_pyro_params(self, prefix='', recurse=True):
+    def named_pyro_params(self, prefix:str='', recurse:bool=True):
         """
         Returns an iterator over PyroModule parameters, yielding both the
         name of the parameter as well as the parameter itself.
@@ -395,7 +396,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         for elem in gen:
             yield elem
 
-    def _pyro_set_supermodule(self, name, context):
+    def _pyro_set_supermodule(self, name:str, context):
         self._pyro_name = name
         self._pyro_context = context
         for key, value in self._modules.items():
@@ -404,7 +405,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     "submodule {} has executed outside of supermodule".format(name)
                 value._pyro_set_supermodule(_make_name(name, key), context)
 
-    def _pyro_get_fullname(self, name):
+    def _pyro_get_fullname(self, name:str):
         assert self.__dict__['_pyro_context'].used, "fullname is not yet defined"
         return _make_name(self.__dict__['_pyro_name'], name)
 
@@ -412,7 +413,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         with self._pyro_context:
             return super().__call__(*args, **kwargs)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name:str):
         # PyroParams trigger pyro.param statements.
         if '_pyro_params' in self.__dict__:
             _pyro_params = self.__dict__['_pyro_params']
@@ -479,7 +480,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
         return result
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name:str, value:Union[PyroParam,"PyroModule",torch.nn.Parameter,torch.Tensor]):
         if isinstance(value, PyroModule):
             # Create a new sub PyroModule, overwriting any old value.
             try:
@@ -550,7 +551,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
         super().__setattr__(name, value)
 
-    def __delattr__(self, name):
+    def __delattr__(self, name:str):
         if name in self._parameters:
             del self._parameters[name]
             if self._pyro_context.used:
@@ -586,7 +587,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         super().__delattr__(name)
 
 
-def pyro_method(fn):
+def pyro_method(fn: Callable):
     """
     Decorator for top-level methods of a :class:`PyroModule` to enable pyro
     effects and cache ``pyro.sample`` statements.
@@ -603,7 +604,7 @@ def pyro_method(fn):
     return cached_fn
 
 
-def clear(mod):
+def clear(mod:PyroModule):
     """
     Removes data from both a :class:`PyroModule` and the param store.
 
@@ -618,7 +619,7 @@ def clear(mod):
         delattr(mod, name)
 
 
-def to_pyro_module_(m, recurse=True):
+def to_pyro_module_(m:torch.nn.Module, recurse:bool=True):
     """
     Converts an ordinary :class:`torch.nn.Module` instance to a
     :class:`PyroModule` **in-place**.
@@ -679,7 +680,7 @@ def to_pyro_module_(m, recurse=True):
 # attribute. This is required if any attribute is set to a PyroParam or
 # PyroSample. For motivation, see https://github.com/pyro-ppl/pyro/issues/2390
 class _FlatWeightsDescriptor:
-    def __get__(self, obj, obj_type=None):
+    def __get__(self, obj, obj_type:Optional=None):
         if obj is None:
             return self
         return [getattr(obj, name) for name in obj._flat_weights_names]
