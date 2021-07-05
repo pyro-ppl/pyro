@@ -4,8 +4,8 @@
 
 -----------------------------------------
 
-[![Build Status](https://travis-ci.com/pyro-ppl/pyro.svg?branch=dev)](https://travis-ci.com/pyro-ppl/pyro)
-[![codecov.io](https://codecov.io/github/pyro-ppl/pyro/branch/dev/graph/badge.svg)](https://codecov.io/github/pyro-ppl/pyro)
+[![Build Status](https://github.com/pyro-ppl/pyro/workflows/CI/badge.svg)](https://github.com/pyro-ppl/pyro/actions)
+[![Coverage Status](https://coveralls.io/repos/github/pyro-ppl/pyro/badge.svg?branch=dev)](https://coveralls.io/github/pyro-ppl/pyro?branch=dev)
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
 [![Documentation Status](https://readthedocs.org/projects/pyro-ppl/badge/?version=dev)](http://pyro-ppl.readthedocs.io/en/stable/?badge=dev)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/3056/badge)](https://bestpractices.coreinfrastructure.org/projects/3056)

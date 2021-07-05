@@ -565,7 +565,7 @@ class AutoNormal(AutoGuide):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dict mapping sample site name to a list of quantile values.
+        :return: A dict mapping sample site name to a tensor of quantile values.
         :rtype: dict
         """
         results = {}
@@ -574,6 +574,7 @@ class AutoNormal(AutoGuide):
             site_loc, site_scale = self._get_loc_and_scale(name)
 
             site_quantiles = torch.tensor(quantiles, dtype=site_loc.dtype, device=site_loc.device)
+            site_quantiles = site_quantiles.reshape((-1,) + (1,) * site_loc.dim())
             site_quantiles_values = dist.Normal(site_loc, site_scale).icdf(site_quantiles)
             constrained_site_quantiles = biject_to(site["fn"].support)(site_quantiles_values)
             results[name] = constrained_site_quantiles
@@ -782,7 +783,7 @@ class AutoContinuous(AutoGuide):
 
         :param quantiles: A list of requested quantiles between 0 and 1.
         :type quantiles: torch.Tensor or list
-        :return: A dict mapping sample site name to a list of quantile values.
+        :return: A dict mapping sample site name to a tensor of quantile values.
         :rtype: dict
         """
         loc, scale = self._loc_scale(*args, **kwargs)
@@ -792,6 +793,7 @@ class AutoContinuous(AutoGuide):
         for latent in latents:
             for site, unconstrained_value in self._unpack_latent(latent):
                 result.setdefault(site["name"], []).append(biject_to(site["fn"].support)(unconstrained_value))
+        result = {k: torch.stack(v) for k, v in result.items()}
         return result
 
 
