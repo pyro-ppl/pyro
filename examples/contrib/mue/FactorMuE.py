@@ -111,7 +111,6 @@ def main(args):
                       latent_alphabet_length=args.latent_alphabet,
                       cuda=args.cuda,
                       pin_memory=args.pin_mem)
-
     # Infer with SVI.
     scheduler = MultiStepLR({'optimizer': Adam,
                              'optim_args': {'lr': args.learning_rate},
