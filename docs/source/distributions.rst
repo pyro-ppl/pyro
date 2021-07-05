@@ -232,6 +232,13 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
+Logistic
+--------
+.. autoclass:: pyro.distributions.Logistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 MaskedDistribution
 ------------------
 .. autoclass:: pyro.distributions.MaskedDistribution
