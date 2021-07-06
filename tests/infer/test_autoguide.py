@@ -422,6 +422,13 @@ def test_autoguide_serialization(auto_class, Elbo):
         assert_equal(attr_get(guide_deser), attr_get(guide).data)
 
 
+def AutoGuideList_x(model):
+    guide = AutoGuideList(model)
+    guide.append(AutoNormal(poutine.block(model, expose=["x"])))
+    guide.append(AutoLowRankMultivariateNormal(poutine.block(model, hide=["x"])))
+    return guide
+
+
 @pytest.mark.parametrize(
     "auto_class",
     [
@@ -430,6 +437,7 @@ def test_autoguide_serialization(auto_class, Elbo):
         AutoNormal,
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
+        AutoGuideList_x,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
