@@ -282,6 +282,19 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
             result.update(part.median(*args, **kwargs))
         return result
 
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns the posterior quantile values of each latent variable.
+
+        :param list quantiles: A list of requested quantiles between 0 and 1.
+        :returns: A dict mapping sample site name to quantiles tensor.
+        :rtype: dict
+        """
+        result = {}
+        for part in self:
+            result.update(part.quantiles(quantiles, *args, **kwargs))
+        return result
+
 
 class AutoCallable(AutoGuide):
     """
