@@ -12,10 +12,15 @@ from pyro.optim import Adam
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("latent_dist", [dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1),
-                                         dist.LogNormal(torch.tensor([-1.0]), torch.tensor([0.7])).to_event(1),
-                                         dist.LogNormal(torch.tensor(-1.0), torch.tensor(0.7)),
-                                         dist.Beta(torch.tensor([0.3]), torch.tensor([0.7])).to_event(1)])
+@pytest.mark.parametrize(
+    "latent_dist",
+    [
+        dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1),
+        dist.LogNormal(torch.tensor([-1.0]), torch.tensor([0.7])).to_event(1),
+        dist.LogNormal(torch.tensor(-1.0), torch.tensor(0.7)),
+        dist.Beta(torch.tensor([0.3]), torch.tensor([0.7])).to_event(1),
+    ],
+)
 @pytest.mark.parametrize("mode", ["univariate", "multivariate"])
 @pytest.mark.parametrize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
 def test_mean_variance(latent_dist, mode, stein_kernel, verbose=True):
@@ -34,25 +39,33 @@ def test_mean_variance(latent_dist, mode, stein_kernel, verbose=True):
 
     # scramble initial particles
     svgd.step()
-    pyro.param('svgd_particles').unconstrained().data *= 1.3
-    pyro.param('svgd_particles').unconstrained().data += 0.7
+    pyro.param("svgd_particles").unconstrained().data *= 1.3
+    pyro.param("svgd_particles").unconstrained().data += 0.7
 
     for step in range(n_steps):
-        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
+        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (
+            bandwidth_end - bandwidth_start
+        )
         squared_gradients = svgd.step()
         if step % 125 == 0:
             print("[step %03d] " % step, squared_gradients)
 
-    final_particles = svgd.get_named_particles()['z']
+    final_particles = svgd.get_named_particles()["z"]
 
     if verbose:
-        print("[mean]: actual, expected = ", final_particles.mean(0).data.numpy(),
-              latent_dist.mean.data.numpy())
-        print("[var]: actual, expected = ", final_particles.var(0).data.numpy(),
-              latent_dist.variance.data.numpy())
+        print(
+            "[mean]: actual, expected = ",
+            final_particles.mean(0).data.numpy(),
+            latent_dist.mean.data.numpy(),
+        )
+        print(
+            "[var]: actual, expected = ",
+            final_particles.var(0).data.numpy(),
+            latent_dist.variance.data.numpy(),
+        )
 
     assert_equal(final_particles.mean(0), latent_dist.mean, prec=0.01)
-    prec = 0.05 if mode == 'multivariate' else 0.02
+    prec = 0.05 if mode == "multivariate" else 0.02
     assert_equal(final_particles.var(0), latent_dist.variance, prec=prec)
 
 
@@ -77,12 +90,12 @@ def test_shapes(shape, stein_kernel):
         svgd.step()
 
     particles = svgd.get_named_particles()
-    assert particles['z1'].shape == (num_particles,) + shape1
-    assert particles['z2'].shape == (num_particles,) + shape2
+    assert particles["z1"].shape == (num_particles,) + shape1
+    assert particles["z2"].shape == (num_particles,) + shape2
 
     for particle in range(num_particles):
-        assert_equal(particles['z1'][particle, ...], mean_init1.exp(), prec=1.0e-6)
-        assert_equal(particles['z2'][particle, ...], mean_init2, prec=1.0e-6)
+        assert_equal(particles["z1"][particle, ...], mean_init1.exp(), prec=1.0e-6)
+        assert_equal(particles["z2"][particle, ...], mean_init2, prec=1.0e-6)
 
 
 @pytest.mark.parametrize("mode", ["univariate", "multivariate"])
@@ -92,12 +105,11 @@ def test_conjugate(mode, stein_kernel, verbose=False):
     alpha0 = torch.tensor([1.0, 1.8, 2.3])
     beta0 = torch.tensor([2.3, 1.5, 1.2])
     alpha_n = alpha0 + data.sum(0)  # posterior alpha
-    beta_n = beta0 + data.size(0)   # posterior beta
+    beta_n = beta0 + data.size(0)  # posterior beta
 
     def model():
         with pyro.plate("rates", alpha0.size(0)):
-            latent = pyro.sample("latent",
-                                 dist.Gamma(alpha0, beta0))
+            latent = pyro.sample("latent", dist.Gamma(alpha0, beta0))
             with pyro.plate("data", data.size(0)):
                 pyro.sample("obs", dist.Poisson(latent), obs=data)
 
@@ -110,20 +122,28 @@ def test_conjugate(mode, stein_kernel, verbose=False):
     n_steps = 451
 
     for step in range(n_steps):
-        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
+        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (
+            bandwidth_end - bandwidth_start
+        )
         squared_gradients = svgd.step()
         if step % 150 == 0:
             print("[step %03d] " % step, squared_gradients)
 
-    final_particles = svgd.get_named_particles()['latent']
+    final_particles = svgd.get_named_particles()["latent"]
     posterior_dist = dist.Gamma(alpha_n, beta_n)
 
     if verbose:
-        print("[mean]: actual, expected = ", final_particles.mean(0).data.numpy(),
-              posterior_dist.mean.data.numpy())
-        print("[var]: actual, expected = ", final_particles.var(0).data.numpy(),
-              posterior_dist.variance.data.numpy())
+        print(
+            "[mean]: actual, expected = ",
+            final_particles.mean(0).data.numpy(),
+            posterior_dist.mean.data.numpy(),
+        )
+        print(
+            "[var]: actual, expected = ",
+            final_particles.var(0).data.numpy(),
+            posterior_dist.variance.data.numpy(),
+        )
 
     assert_equal(final_particles.mean(0)[0], posterior_dist.mean, prec=0.02)
-    prec = 0.05 if mode == 'multivariate' else 0.02
+    prec = 0.05 if mode == "multivariate" else 0.02
     assert_equal(final_particles.var(0)[0], posterior_dist.variance, prec=prec)

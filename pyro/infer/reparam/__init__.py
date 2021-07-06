@@ -12,6 +12,7 @@ from .projected_normal import ProjectedNormalReparam
 from .softmax import GumbelSoftmaxReparam
 from .split import SplitReparam
 from .stable import LatentStableReparam, StableReparam, SymmetricStableReparam
+from .structured import StructuredReparam
 from .studentt import StudentTReparam
 from .transform import TransformReparam
 from .unit_jacobian import UnitJacobianReparam
@@ -28,6 +29,7 @@ __all__ = [
     "ProjectedNormalReparam",
     "SplitReparam",
     "StableReparam",
+    "StructuredReparam",
     "StudentTReparam",
     "SymmetricStableReparam",
     "TransformReparam",

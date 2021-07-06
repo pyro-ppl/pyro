@@ -73,9 +73,15 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
         optimizer.step()
         batch_idx = batch_idx + 1
         if batch_idx % args.log_interval == 0:
-            print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
-                  .format(epoch, batch_idx * len(data), len(train_loader.dataset),
-                          100. * batch_idx / len(train_loader), loss))
+            print(
+                "Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}".format(
+                    epoch,
+                    batch_idx * len(data),
+                    len(train_loader.dataset),
+                    100.0 * batch_idx / len(train_loader),
+                    loss,
+                )
+            )
 
 
 def test(args, test_loader, gpmodule):
@@ -93,24 +99,35 @@ def test(args, test_loader, gpmodule):
         # compare prediction and target to count accuracy
         correct += pred.eq(target).long().cpu().sum().item()
 
-    print("\nTest set: Accuracy: {}/{} ({:.2f}%)\n"
-          .format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
+    print(
+        "\nTest set: Accuracy: {}/{} ({:.2f}%)\n".format(
+            correct,
+            len(test_loader.dataset),
+            100.0 * correct / len(test_loader.dataset),
+        )
+    )
 
 
 def main(args):
-    data_dir = args.data_dir if args.data_dir is not None else get_data_directory(__file__)
-    train_loader = get_data_loader(dataset_name='MNIST',
-                                   data_dir=data_dir,
-                                   batch_size=args.batch_size,
-                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
-                                   is_training_set=True,
-                                   shuffle=True)
-    test_loader = get_data_loader(dataset_name='MNIST',
-                                  data_dir=data_dir,
-                                  batch_size=args.test_batch_size,
-                                  dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
-                                  is_training_set=False,
-                                  shuffle=False)
+    data_dir = (
+        args.data_dir if args.data_dir is not None else get_data_directory(__file__)
+    )
+    train_loader = get_data_loader(
+        dataset_name="MNIST",
+        data_dir=data_dir,
+        batch_size=args.batch_size,
+        dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
+        is_training_set=True,
+        shuffle=True,
+    )
+    test_loader = get_data_loader(
+        dataset_name="MNIST",
+        data_dir=data_dir,
+        batch_size=args.test_batch_size,
+        dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
+        is_training_set=False,
+        shuffle=False,
+    )
     if args.cuda:
         train_loader.num_workers = 1
         test_loader.num_workers = 1
@@ -130,7 +147,7 @@ def main(args):
         batches.append(data)
         if i >= ((args.num_inducing - 1) // args.batch_size):
             break
-    Xu = torch.cat(batches)[:args.num_inducing].clone()
+    Xu = torch.cat(batches)[: args.num_inducing].clone()
 
     if args.binary:
         likelihood = gp.likelihoods.Binary()
@@ -144,9 +161,17 @@ def main(args):
         latent_shape = torch.Size([10])
 
     # Turns on "whiten" flag will help optimization for variational models.
-    gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=deep_kernel, Xu=Xu,
-                                             likelihood=likelihood, latent_shape=latent_shape,
-                                             num_data=60000, whiten=True, jitter=2e-6)
+    gpmodule = gp.models.VariationalSparseGP(
+        X=Xu,
+        y=None,
+        kernel=deep_kernel,
+        Xu=Xu,
+        likelihood=likelihood,
+        latent_shape=latent_shape,
+        num_data=60000,
+        whiten=True,
+        jitter=2e-6,
+    )
     if args.cuda:
         gpmodule.cuda()
 
@@ -160,35 +185,77 @@ def main(args):
         train(args, train_loader, gpmodule, optimizer, loss_fn, epoch)
         with torch.no_grad():
             test(args, test_loader, gpmodule)
-        print("Amount of time spent for epoch {}: {}s\n"
-              .format(epoch, int(time.time() - start_time)))
+        print(
+            "Amount of time spent for epoch {}: {}s\n".format(
+                epoch, int(time.time() - start_time)
+            )
+        )
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
-    parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
-    parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
-                        help='default directory to cache MNIST data')
-    parser.add_argument('--num-inducing', type=int, default=70, metavar='N',
-                        help='number of inducing input (default: 70)')
-    parser.add_argument('--binary', action='store_true', default=False,
-                        help='do binary classification')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                        help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                        help='learning rate (default: 0.01)')
-    parser.add_argument('--cuda', action='store_true', default=False,
-                        help='enables CUDA training')
-    parser.add_argument('--jit', action='store_true', default=False,
-                        help='enables PyTorch jit')
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
-                        help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
+    parser = argparse.ArgumentParser(description="Pyro GP MNIST Example")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="default directory to cache MNIST data",
+    )
+    parser.add_argument(
+        "--num-inducing",
+        type=int,
+        default=70,
+        metavar="N",
+        help="number of inducing input (default: 70)",
+    )
+    parser.add_argument(
+        "--binary", action="store_true", default=False, help="do binary classification"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        metavar="N",
+        help="input batch size for training (default: 64)",
+    )
+    parser.add_argument(
+        "--test-batch-size",
+        type=int,
+        default=1000,
+        metavar="N",
+        help="input batch size for testing (default: 1000)",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10,
+        metavar="N",
+        help="number of epochs to train (default: 10)",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=0.01,
+        metavar="LR",
+        help="learning rate (default: 0.01)",
+    )
+    parser.add_argument(
+        "--cuda", action="store_true", default=False, help="enables CUDA training"
+    )
+    parser.add_argument(
+        "--jit", action="store_true", default=False, help="enables PyTorch jit"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=1, metavar="S", help="random seed (default: 1)"
+    )
+    parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=10,
+        metavar="N",
+        help="how many batches to wait before logging training status",
+    )
     args = parser.parse_args()
 
     pyro.set_rng_seed(args.seed)

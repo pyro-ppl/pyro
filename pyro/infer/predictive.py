@@ -19,57 +19,92 @@ def _guess_max_plate_nesting(model, args, kwargs):
     """
     with poutine.block():
         model_trace = poutine.trace(model).get_trace(*args, **kwargs)
-    sites = [site for site in model_trace.nodes.values()
-             if site["type"] == "sample"]
+    sites = [site for site in model_trace.nodes.values() if site["type"] == "sample"]
 
-    dims = [frame.dim
-            for site in sites
-            for frame in site["cond_indep_stack"]
-            if frame.vectorized]
+    dims = [
+        frame.dim
+        for site in sites
+        for frame in site["cond_indep_stack"]
+        if frame.vectorized
+    ]
     max_plate_nesting = -min(dims) if dims else 0
     return max_plate_nesting
 
 
-def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
-                           num_samples, return_site_shapes, return_trace=False):
+def _predictive_sequential(
+    model,
+    posterior_samples,
+    model_args,
+    model_kwargs,
+    num_samples,
+    return_site_shapes,
+    return_trace=False,
+):
     collected = []
-    samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
+    samples = [
+        {k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)
+    ]
     for i in range(num_samples):
-        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs)
+        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(
+            *model_args, **model_kwargs
+        )
         if return_trace:
             collected.append(trace)
         else:
-            collected.append({site: trace.nodes[site]['value'] for site in return_site_shapes})
+            collected.append(
+                {site: trace.nodes[site]["value"] for site in return_site_shapes}
+            )
 
     if return_trace:
         return collected
     else:
-        return {site: torch.stack([s[site] for s in collected]).reshape(shape)
-                for site, shape in return_site_shapes.items()}
+        return {
+            site: torch.stack([s[site] for s in collected]).reshape(shape)
+            for site, shape in return_site_shapes.items()
+        }
 
 
-def _predictive(model, posterior_samples, num_samples, return_sites=(),
-                return_trace=False, parallel=False, model_args=(), model_kwargs={}):
+def _predictive(
+    model,
+    posterior_samples,
+    num_samples,
+    return_sites=(),
+    return_trace=False,
+    parallel=False,
+    model_args=(),
+    model_kwargs={},
+):
     model = torch.no_grad()(poutine.mask(model, mask=False))
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
-    vectorize = pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1)
-    model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*model_args, **model_kwargs))
+    vectorize = pyro.plate(
+        "_num_predictive_samples", num_samples, dim=-max_plate_nesting - 1
+    )
+    model_trace = prune_subsample_sites(
+        poutine.trace(model).get_trace(*model_args, **model_kwargs)
+    )
     reshaped_samples = {}
 
     for name, sample in posterior_samples.items():
         sample_shape = sample.shape[1:]
-        sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
+        sample = sample.reshape(
+            (num_samples,)
+            + (1,) * (max_plate_nesting - len(sample_shape))
+            + sample_shape
+        )
         reshaped_samples[name] = sample
 
     if return_trace:
-        trace = poutine.trace(poutine.condition(vectorize(model), reshaped_samples))\
-            .get_trace(*model_args, **model_kwargs)
+        trace = poutine.trace(
+            poutine.condition(vectorize(model), reshaped_samples)
+        ).get_trace(*model_args, **model_kwargs)
         return trace
 
     return_site_shapes = {}
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
         append_ndim = max_plate_nesting - len(model_trace.nodes[site]["fn"].batch_shape)
-        site_shape = (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]['value'].shape
+        site_shape = (
+            (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]["value"].shape
+        )
         # non-empty return-sites
         if return_sites:
             if site in return_sites:
@@ -83,21 +118,29 @@ def _predictive(model, posterior_samples, num_samples, return_sites=(),
             return_site_shapes[site] = site_shape
 
     # handle _RETURN site
-    if return_sites is not None and '_RETURN' in return_sites:
-        value = model_trace.nodes['_RETURN']['value']
+    if return_sites is not None and "_RETURN" in return_sites:
+        value = model_trace.nodes["_RETURN"]["value"]
         shape = (num_samples,) + value.shape if torch.is_tensor(value) else None
-        return_site_shapes['_RETURN'] = shape
+        return_site_shapes["_RETURN"] = shape
 
     if not parallel:
-        return _predictive_sequential(model, posterior_samples, model_args, model_kwargs, num_samples,
-                                      return_site_shapes, return_trace=False)
+        return _predictive_sequential(
+            model,
+            posterior_samples,
+            model_args,
+            model_kwargs,
+            num_samples,
+            return_site_shapes,
+            return_trace=False,
+        )
 
-    trace = poutine.trace(poutine.condition(vectorize(model), reshaped_samples))\
-        .get_trace(*model_args, **model_kwargs)
+    trace = poutine.trace(
+        poutine.condition(vectorize(model), reshaped_samples)
+    ).get_trace(*model_args, **model_kwargs)
     predictions = {}
     for site, shape in return_site_shapes.items():
-        value = trace.nodes[site]['value']
-        if site == '_RETURN' and shape is None:
+        value = trace.nodes[site]["value"]
+        if site == "_RETURN" and shape is None:
             predictions[site] = value
             continue
         if value.numel() < reduce((lambda x, y: x * y), shape):
@@ -133,12 +176,22 @@ class Predictive(torch.nn.Module):
         in an outermost `plate` messenger. Note that this requires that the model has
         all batch dims correctly annotated via :class:`~pyro.plate`. Default is `False`.
     """
-    def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
-                 return_sites=(), parallel=False):
+
+    def __init__(
+        self,
+        model,
+        posterior_samples=None,
+        guide=None,
+        num_samples=None,
+        return_sites=(),
+        parallel=False,
+    ):
         super().__init__()
         if posterior_samples is None:
             if num_samples is None:
-                raise ValueError("Either posterior_samples or num_samples must be specified.")
+                raise ValueError(
+                    "Either posterior_samples or num_samples must be specified."
+                )
             posterior_samples = {}
 
         for name, sample in posterior_samples.items():
@@ -146,16 +199,24 @@ class Predictive(torch.nn.Module):
             if num_samples is None:
                 num_samples = batch_size
             elif num_samples != batch_size:
-                warnings.warn("Sample's leading dimension size {} is different from the "
-                              "provided {} num_samples argument. Defaulting to {}."
-                              .format(batch_size, num_samples, batch_size), UserWarning)
+                warnings.warn(
+                    "Sample's leading dimension size {} is different from the "
+                    "provided {} num_samples argument. Defaulting to {}.".format(
+                        batch_size, num_samples, batch_size
+                    ),
+                    UserWarning,
+                )
                 num_samples = batch_size
 
         if num_samples is None:
-            raise ValueError("No sample sites in posterior samples to infer `num_samples`.")
+            raise ValueError(
+                "No sample sites in posterior samples to infer `num_samples`."
+            )
 
         if guide is not None and posterior_samples:
-            raise ValueError("`posterior_samples` cannot be provided with the `guide` argument.")
+            raise ValueError(
+                "`posterior_samples` cannot be provided with the `guide` argument."
+            )
 
         if return_sites is not None:
             assert isinstance(return_sites, (list, tuple, set))
@@ -200,14 +261,30 @@ class Predictive(torch.nn.Module):
         if self.guide is not None:
             # return all sites by default if a guide is provided.
             return_sites = None if not return_sites else return_sites
-            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples, return_sites=None,
-                                            parallel=self.parallel, model_args=args, model_kwargs=kwargs)
-        return _predictive(self.model, posterior_samples, self.num_samples, return_sites=return_sites,
-                           parallel=self.parallel, model_args=args, model_kwargs=kwargs)
+            posterior_samples = _predictive(
+                self.guide,
+                posterior_samples,
+                self.num_samples,
+                return_sites=None,
+                parallel=self.parallel,
+                model_args=args,
+                model_kwargs=kwargs,
+            )
+        return _predictive(
+            self.model,
+            posterior_samples,
+            self.num_samples,
+            return_sites=return_sites,
+            parallel=self.parallel,
+            model_args=args,
+            model_kwargs=kwargs,
+        )
 
     def get_samples(self, *args, **kwargs):
-        warnings.warn("The method `.get_samples` has been deprecated in favor of `.forward`.",
-                      DeprecationWarning)
+        warnings.warn(
+            "The method `.get_samples` has been deprecated in favor of `.forward`.",
+            DeprecationWarning,
+        )
         return self.forward(*args, **kwargs)
 
     def get_vectorized_trace(self, *args, **kwargs):
@@ -220,7 +297,19 @@ class Predictive(torch.nn.Module):
         """
         posterior_samples = self.posterior_samples
         if self.guide is not None:
-            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
-                                            parallel=self.parallel, model_args=args, model_kwargs=kwargs)
-        return _predictive(self.model, posterior_samples, self.num_samples,
-                           return_trace=True, model_args=args, model_kwargs=kwargs)
+            posterior_samples = _predictive(
+                self.guide,
+                posterior_samples,
+                self.num_samples,
+                parallel=self.parallel,
+                model_args=args,
+                model_kwargs=kwargs,
+            )
+        return _predictive(
+            self.model,
+            posterior_samples,
+            self.num_samples,
+            return_trace=True,
+            model_args=args,
+            model_kwargs=kwargs,
+        )

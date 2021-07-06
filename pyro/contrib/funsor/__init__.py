@@ -26,14 +26,17 @@ def plate(*args, **kwargs):
     return _plate(None, *args, **kwargs)
 
 
-pyroapi.register_backend('contrib.funsor', {
-    'distributions': 'pyro.distributions',
-    'handlers': 'pyro.contrib.funsor.handlers',
-    'infer': 'pyro.contrib.funsor.infer',
-    'ops': 'torch',
-    'optim': 'pyro.optim',
-    'pyro': 'pyro.contrib.funsor',
-})
+pyroapi.register_backend(
+    "contrib.funsor",
+    {
+        "distributions": "pyro.distributions",
+        "handlers": "pyro.contrib.funsor.handlers",
+        "infer": "pyro.contrib.funsor.infer",
+        "ops": "torch",
+        "optim": "pyro.optim",
+        "pyro": "pyro.contrib.funsor",
+    },
+)
 
 __all__ = [
     "clear_param_store",

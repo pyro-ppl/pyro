@@ -46,7 +46,7 @@ def test_gamma_poisson(sample_shape, batch_shape):
     concentration = torch.randn(batch_shape).exp()
     rate = torch.randn(batch_shape).exp()
     nobs = 5
-    obs = dist.Poisson(10.).sample((nobs,) + sample_shape + batch_shape).sum(0)
+    obs = dist.Poisson(10.0).sample((nobs,) + sample_shape + batch_shape).sum(0)
 
     f = dist.Gamma(concentration, rate)
     g = dist.Gamma(1 + obs, nobs)

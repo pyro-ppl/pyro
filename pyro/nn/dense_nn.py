@@ -34,12 +34,13 @@ class ConditionalDenseNN(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            input_dim,
-            context_dim,
-            hidden_dims,
-            param_dims=[1, 1],
-            nonlinearity=torch.nn.ReLU()):
+        self,
+        input_dim,
+        context_dim,
+        hidden_dims,
+        param_dims=[1, 1],
+        nonlinearity=torch.nn.ReLU(),
+    ):
         super().__init__()
 
         self.input_dim = input_dim
@@ -55,7 +56,7 @@ class ConditionalDenseNN(torch.nn.Module):
         self.param_slices = [slice(s.item(), e.item()) for s, e in zip(starts, ends)]
 
         # Create masked layers
-        layers = [torch.nn.Linear(input_dim+context_dim, hidden_dims[0])]
+        layers = [torch.nn.Linear(input_dim + context_dim, hidden_dims[0])]
         for i in range(1, len(hidden_dims)):
             layers.append(torch.nn.Linear(hidden_dims[i - 1], hidden_dims[i]))
         layers.append(torch.nn.Linear(hidden_dims[-1], self.output_multiplier))
@@ -66,7 +67,7 @@ class ConditionalDenseNN(torch.nn.Module):
 
     def forward(self, x, context):
         # We must be able to broadcast the size of the context over the input
-        context = context.expand(x.size()[:-1]+(context.size(-1),))
+        context = context.expand(x.size()[:-1] + (context.size(-1),))
 
         x = torch.cat([context, x], dim=-1)
         return self._forward(x)
@@ -121,17 +122,10 @@ class DenseNN(ConditionalDenseNN):
     """
 
     def __init__(
-            self,
-            input_dim,
-            hidden_dims,
-            param_dims=[1, 1],
-            nonlinearity=torch.nn.ReLU()):
+        self, input_dim, hidden_dims, param_dims=[1, 1], nonlinearity=torch.nn.ReLU()
+    ):
         super(DenseNN, self).__init__(
-            input_dim,
-            0,
-            hidden_dims,
-            param_dims=param_dims,
-            nonlinearity=nonlinearity
+            input_dim, 0, hidden_dims, param_dims=param_dims, nonlinearity=nonlinearity
         )
 
     def forward(self, x):

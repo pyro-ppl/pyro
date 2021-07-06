@@ -178,17 +178,23 @@ class ParamStoreDict:
         return self._params.items()
 
     def get_all_param_names(self):
-        warnings.warn("ParamStore.get_all_param_names() is deprecated; use .keys() instead.",
-                      DeprecationWarning)
+        warnings.warn(
+            "ParamStore.get_all_param_names() is deprecated; use .keys() instead.",
+            DeprecationWarning,
+        )
         return self.keys()
 
     def replace_param(self, param_name, new_param, old_param):
-        warnings.warn("ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
-                      DeprecationWarning)
+        warnings.warn(
+            "ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
+            DeprecationWarning,
+        )
         assert self._params[param_name] is old_param.unconstrained()
         self[param_name] = new_param
 
-    def get_param(self, name, init_tensor=None, constraint=constraints.real, event_dim=None):
+    def get_param(
+        self, name, init_tensor=None, constraint=constraints.real, event_dim=None
+    ):
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -234,8 +240,8 @@ class ParamStoreDict:
         Get the ParamStore state.
         """
         state = {
-            'params': self._params,
-            'constraints': self._constraints,
+            "params": self._params,
+            "constraints": self._constraints,
         }
         return state
 
@@ -244,14 +250,15 @@ class ParamStoreDict:
         Set the ParamStore state using state from a previous get_state() call
         """
         assert isinstance(state, dict), "malformed ParamStore state"
-        assert set(state.keys()) == set(['params', 'constraints']), \
-            "malformed ParamStore keys {}".format(state.keys())
+        assert set(state.keys()) == set(
+            ["params", "constraints"]
+        ), "malformed ParamStore keys {}".format(state.keys())
 
-        for param_name, param in state['params'].items():
+        for param_name, param in state["params"].items():
             self._params[param_name] = param
             self._param_to_name[param] = param_name
 
-        for param_name, constraint in state['constraints'].items():
+        for param_name, constraint in state["constraints"].items():
             if isinstance(constraint, type(constraints.real)):
                 # Work around lack of hash & equality comparison on constraints.
                 constraint = constraints.real
@@ -305,3 +312,7 @@ def user_param_name(param_name):
     if _MODULE_NAMESPACE_DIVIDER in param_name:
         return param_name.split(_MODULE_NAMESPACE_DIVIDER)[1]
     return param_name
+
+
+def normalize_param_name(name):
+    return name.replace(_MODULE_NAMESPACE_DIVIDER, ".")

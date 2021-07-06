@@ -34,13 +34,20 @@ class MaskedBCELoss(nn.Module):
 
     def forward(self, input, target):
         target = target.view(input.shape)
-        loss = F.binary_cross_entropy(input, target, reduction='none')
+        loss = F.binary_cross_entropy(input, target, reduction="none")
         loss[target == self.masked_with] = 0
         return loss.sum()
 
 
-def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
-          early_stop_patience, model_path):
+def train(
+    device,
+    dataloaders,
+    dataset_sizes,
+    learning_rate,
+    num_epochs,
+    early_stop_patience,
+    model_path,
+):
 
     # Train baseline
     baseline_net = BaselineNet(500, 500)
@@ -51,8 +58,8 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
     early_stop_count = 0
 
     for epoch in range(num_epochs):
-        for phase in ['train', 'val']:
-            if phase == 'train':
+        for phase in ["train", "val"]:
+            if phase == "train":
                 baseline_net.train()
             else:
                 baseline_net.eval()
@@ -60,30 +67,33 @@ def train(device, dataloaders, dataset_sizes, learning_rate, num_epochs,
             running_loss = 0.0
             num_preds = 0
 
-            bar = tqdm(dataloaders[phase],
-                       desc='NN Epoch {} {}'.format(epoch, phase).ljust(20))
+            bar = tqdm(
+                dataloaders[phase], desc="NN Epoch {} {}".format(epoch, phase).ljust(20)
+            )
             for i, batch in enumerate(bar):
-                inputs = batch['input'].to(device)
-                outputs = batch['output'].to(device)
+                inputs = batch["input"].to(device)
+                outputs = batch["output"].to(device)
 
                 optimizer.zero_grad()
 
-                with torch.set_grad_enabled(phase == 'train'):
+                with torch.set_grad_enabled(phase == "train"):
                     preds = baseline_net(inputs)
                     loss = criterion(preds, outputs) / inputs.size(0)
-                    if phase == 'train':
+                    if phase == "train":
                         loss.backward()
                         optimizer.step()
 
                 running_loss += loss.item()
                 num_preds += 1
                 if i % 10 == 0:
-                    bar.set_postfix(loss='{:.2f}'.format(running_loss / num_preds),
-                                    early_stop_count=early_stop_count)
+                    bar.set_postfix(
+                        loss="{:.2f}".format(running_loss / num_preds),
+                        early_stop_count=early_stop_count,
+                    )
 
             epoch_loss = running_loss / dataset_sizes[phase]
             # deep copy the model
-            if phase == 'val':
+            if phase == "val":
                 if epoch_loss < best_loss:
                     best_loss = epoch_loss
                     best_model_wts = copy.deepcopy(baseline_net.state_dict())

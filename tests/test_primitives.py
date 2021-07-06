@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 
-pytestmark = pytest.mark.stage('unit')
+pytestmark = pytest.mark.stage("unit")
 
 
 def test_sample_ok():
@@ -18,17 +18,16 @@ def test_sample_ok():
 
 def test_observe_warn():
     with pytest.warns(RuntimeWarning):
-        pyro.sample("x", dist.Normal(0, 1),
-                    obs=torch.tensor(0.))
+        pyro.sample("x", dist.Normal(0, 1), obs=torch.tensor(0.0))
 
 
 def test_param_ok():
-    x = pyro.param("x", torch.tensor(0.))
+    x = pyro.param("x", torch.tensor(0.0))
     assert isinstance(x, torch.Tensor)
     assert x.shape == ()
 
 
 def test_deterministic_ok():
-    x = pyro.deterministic("x", torch.tensor(0.))
+    x = pyro.deterministic("x", torch.tensor(0.0))
     assert isinstance(x, torch.Tensor)
     assert x.shape == ()

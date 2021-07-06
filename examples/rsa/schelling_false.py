@@ -38,7 +38,7 @@ def alice_fb(preference, depth):
     """
     alice_prior = location(preference)
     with poutine.block():
-        bob_marginal = HashingMarginal(Search(bob).run(preference, depth-1))
+        bob_marginal = HashingMarginal(Search(bob).run(preference, depth - 1))
     pyro.sample("bob_choice", bob_marginal, obs=alice_prior)
     return 1 - alice_prior
 
@@ -76,24 +76,30 @@ def main(args):
 
     # We sample Alice's true choice of location
     # by marginalizing over her decision process
-    alice_decision = HashingMarginal(Search(alice_fb).run(shared_preference, alice_depth))
+    alice_decision = HashingMarginal(
+        Search(alice_fb).run(shared_preference, alice_depth)
+    )
 
     # draw num_samples samples from Alice's decision process
     # and use those to estimate the marginal probability
     # that Alice chooses their preferred location
-    alice_prob = sum([alice_decision()
-                      for i in range(num_samples)]) / float(num_samples)
+    alice_prob = sum([alice_decision() for i in range(num_samples)]) / float(
+        num_samples
+    )
 
-    print("Empirical frequency of Alice choosing their favored location " +
-          "given preference {} and recursion depth {}: {}"
-          .format(shared_preference, alice_depth, alice_prob))
+    print(
+        "Empirical frequency of Alice choosing their favored location "
+        + "given preference {} and recursion depth {}: {}".format(
+            shared_preference, alice_depth, alice_prob
+        )
+    )
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-samples', default=10, type=int)
-    parser.add_argument('--depth', default=3, type=int)
-    parser.add_argument('--preference', default=0.55, type=float)
+    parser.add_argument("-n", "--num-samples", default=10, type=int)
+    parser.add_argument("--depth", default=3, type=int)
+    parser.add_argument("--preference", default=0.55, type=float)
     args = parser.parse_args()
     main(args)

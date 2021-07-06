@@ -32,8 +32,7 @@ def test_inner_outer(Elbo):
         with pyro.plate("outer", 3, dim=-1):
             x = pyro.sample("x", dist.Normal(0, 1))
             with pyro.plate("inner", 2, dim=-2):
-                pyro.sample("y", dist.Normal(x, 1),
-                            obs=data)
+                pyro.sample("y", dist.Normal(x, 1), obs=data)
 
     def guide():
         with pyro.plate("outer", 3, dim=-1):
@@ -50,8 +49,7 @@ def test_outer_inner(Elbo):
         with pyro.plate("outer", 2, dim=-2):
             x = pyro.sample("x", dist.Normal(0, 1))
             with pyro.plate("inner", 3, dim=-1):
-                pyro.sample("y", dist.Normal(x, 1),
-                            obs=data)
+                pyro.sample("y", dist.Normal(x, 1), obs=data)
 
     def guide():
         with pyro.plate("outer", 2, dim=-2):

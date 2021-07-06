@@ -36,89 +36,52 @@ X = torch.tensor([[1.0, 0.0, 1.0], [2.0, 1.0, 3.0]])
 Z = torch.tensor([[4.0, 5.0, 6.0], [3.0, 1.0, 7.0], [3.0, 1.0, 2.0]])
 
 TEST_CASES = [
-    T(
-        Constant(3, variance),
-        X=X, Z=Z, K_sum=18
-    ),
+    T(Constant(3, variance), X=X, Z=Z, K_sum=18),
     T(
         Brownian(1, variance),
         # only work on 1D input
-        X=X[:, 0], Z=Z[:, 0], K_sum=27
+        X=X[:, 0],
+        Z=Z[:, 0],
+        K_sum=27,
     ),
-    T(
-        Cosine(3, variance, lengthscale),
-        X=X, Z=Z, K_sum=-0.193233
-    ),
-    T(
-        Linear(3, variance),
-        X=X, Z=Z, K_sum=291
-    ),
-    T(
-        Exponential(3, variance, lengthscale),
-        X=X, Z=Z, K_sum=2.685679
-    ),
-    T(
-        Matern32(3, variance, lengthscale),
-        X=X, Z=Z, K_sum=3.229314
-    ),
-    T(
-        Matern52(3, variance, lengthscale),
-        X=X, Z=Z, K_sum=3.391847
-    ),
-    T(
-        Periodic(3, variance, lengthscale, period=torch.ones(1)),
-        X=X, Z=Z, K_sum=18
-    ),
-    T(
-        Polynomial(3, variance, degree=2),
-        X=X, Z=Z, K_sum=7017
-    ),
+    T(Cosine(3, variance, lengthscale), X=X, Z=Z, K_sum=-0.193233),
+    T(Linear(3, variance), X=X, Z=Z, K_sum=291),
+    T(Exponential(3, variance, lengthscale), X=X, Z=Z, K_sum=2.685679),
+    T(Matern32(3, variance, lengthscale), X=X, Z=Z, K_sum=3.229314),
+    T(Matern52(3, variance, lengthscale), X=X, Z=Z, K_sum=3.391847),
+    T(Periodic(3, variance, lengthscale, period=torch.ones(1)), X=X, Z=Z, K_sum=18),
+    T(Polynomial(3, variance, degree=2), X=X, Z=Z, K_sum=7017),
     T(
         RationalQuadratic(3, variance, lengthscale, scale_mixture=torch.ones(1)),
-        X=X, Z=Z, K_sum=5.684670
+        X=X,
+        Z=Z,
+        K_sum=5.684670,
     ),
-    T(
-        RBF(3, variance, lengthscale),
-        X=X, Z=Z, K_sum=3.681117
-    ),
-    T(
-        WhiteNoise(3, variance, lengthscale),
-        X=X, Z=Z, K_sum=0
-    ),
-    T(
-        WhiteNoise(3, variance, lengthscale),
-        X=X, Z=None, K_sum=6
-    ),
+    T(RBF(3, variance, lengthscale), X=X, Z=Z, K_sum=3.681117),
+    T(WhiteNoise(3, variance, lengthscale), X=X, Z=Z, K_sum=0),
+    T(WhiteNoise(3, variance, lengthscale), X=X, Z=None, K_sum=6),
     T(
         Coregionalize(3, components=torch.eye(3, 3)),
-        X=torch.tensor([[1., 0., 0.],
-                        [0.5, 0., 0.5]]),
-        Z=torch.tensor([[1., 0., 0.],
-                        [0., 1., 0.]]),
+        X=torch.tensor([[1.0, 0.0, 0.0], [0.5, 0.0, 0.5]]),
+        Z=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
         K_sum=2.25,
     ),
     T(
         Coregionalize(3, rank=2),
-        X=torch.tensor([[1., 0., 0.],
-                        [0.5, 0., 0.5]]),
-        Z=torch.tensor([[1., 0., 0.],
-                        [0., 1., 0.]]),
+        X=torch.tensor([[1.0, 0.0, 0.0], [0.5, 0.0, 0.5]]),
+        Z=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
         K_sum=None,  # kernel is randomly initialized
     ),
     T(
         Coregionalize(3),
-        X=torch.tensor([[1., 0., 0.],
-                        [0.5, 0., 0.5]]),
-        Z=torch.tensor([[1., 0., 0.],
-                        [0., 1., 0.]]),
+        X=torch.tensor([[1.0, 0.0, 0.0], [0.5, 0.0, 0.5]]),
+        Z=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
         K_sum=None,  # kernel is randomly initialized
     ),
     T(
         Coregionalize(3, rank=2, diagonal=0.01 * torch.ones(3)),
-        X=torch.tensor([[1., 0., 0.],
-                        [0.5, 0., 0.5]]),
-        Z=torch.tensor([[1., 0., 0.],
-                        [0., 1., 0.]]),
+        X=torch.tensor([[1.0, 0.0, 0.0], [0.5, 0.0, 0.5]]),
+        Z=torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
         K_sum=None,  # kernel is randomly initialized
     ),
 ]
@@ -133,7 +96,9 @@ def test_kernel_forward(kernel, X, Z, K_sum):
     if K_sum is not None:
         assert_equal(K.sum().item(), K_sum)
     assert_equal(kernel(X).diag(), kernel(X, diag=True))
-    if not isinstance(kernel, WhiteNoise):  # WhiteNoise avoids computing a delta function by assuming X != Z
+    if not isinstance(
+        kernel, WhiteNoise
+    ):  # WhiteNoise avoids computing a delta function by assuming X != Z
         assert_equal(kernel(X), kernel(X, X))
     if Z is not None:
         assert_equal(kernel(X, Z), kernel(Z, X).t())
@@ -141,7 +106,7 @@ def test_kernel_forward(kernel, X, Z, K_sum):
 
 def test_combination():
     k0 = TEST_CASES[0][0]
-    k5 = TEST_CASES[5][0]   # TEST_CASES[1] is Brownian, only work for 1D
+    k5 = TEST_CASES[5][0]  # TEST_CASES[1] is Brownian, only work for 1D
     k2 = TEST_CASES[2][0]
     k3 = TEST_CASES[3][0]
     k4 = TEST_CASES[4][0]
@@ -172,7 +137,7 @@ def test_transforming():
         return x.sum(dim=1)
 
     def iwarping_fn(x):
-        return x**2
+        return x ** 2
 
     owarping_coef = [2, 0, 1, 3, 0]
 

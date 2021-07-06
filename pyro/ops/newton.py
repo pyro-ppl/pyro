@@ -60,7 +60,9 @@ def newton_step(loss, x, trust_radius=None):
     :rtype: tuple
     """
     if x.dim() < 1:
-        raise ValueError('Expected x to have at least one dimension, actual shape {}'.format(x.shape))
+        raise ValueError(
+            "Expected x to have at least one dimension, actual shape {}".format(x.shape)
+        )
     dim = x.shape[-1]
     if dim == 1:
         return newton_step_1d(loss, x, trust_radius)
@@ -69,7 +71,7 @@ def newton_step(loss, x, trust_radius=None):
     elif dim == 3:
         return newton_step_3d(loss, x, trust_radius)
     else:
-        raise NotImplementedError('newton_step_nd is not implemented')
+        raise NotImplementedError("newton_step_nd is not implemented")
 
 
 def newton_step_1d(loss, x, trust_radius=None):
@@ -91,15 +93,19 @@ def newton_step_1d(loss, x, trust_radius=None):
     :rtype: tuple
     """
     if loss.shape != ():
-        raise ValueError('Expected loss to be a scalar, actual shape {}'.format(loss.shape))
+        raise ValueError(
+            "Expected loss to be a scalar, actual shape {}".format(loss.shape)
+        )
     if x.dim() < 1 or x.shape[-1] != 1:
-        raise ValueError('Expected x to have rightmost size 1, actual shape {}'.format(x.shape))
+        raise ValueError(
+            "Expected x to have rightmost size 1, actual shape {}".format(x.shape)
+        )
 
     # compute derivatives
     g = grad(loss, [x], create_graph=True)[0]
     H = grad(g.sum(), [x], create_graph=True)[0]
-    warn_if_nan(g, 'g')
-    warn_if_nan(H, 'H')
+    warn_if_nan(g, "g")
+    warn_if_nan(H, "H")
     Hinv = H.clamp(min=1e-8).reciprocal()
     dx = -g * Hinv
     dx[~(dx == dx)] = 0
@@ -131,31 +137,44 @@ def newton_step_2d(loss, x, trust_radius=None):
     :rtype: tuple
     """
     if loss.shape != ():
-        raise ValueError('Expected loss to be a scalar, actual shape {}'.format(loss.shape))
+        raise ValueError(
+            "Expected loss to be a scalar, actual shape {}".format(loss.shape)
+        )
     if x.dim() < 1 or x.shape[-1] != 2:
-        raise ValueError('Expected x to have rightmost size 2, actual shape {}'.format(x.shape))
+        raise ValueError(
+            "Expected x to have rightmost size 2, actual shape {}".format(x.shape)
+        )
 
     # compute derivatives
     g = grad(loss, [x], create_graph=True)[0]
-    H = torch.stack([grad(g[..., 0].sum(), [x], create_graph=True)[0],
-                     grad(g[..., 1].sum(), [x], create_graph=True)[0]], -1)
+    H = torch.stack(
+        [
+            grad(g[..., 0].sum(), [x], create_graph=True)[0],
+            grad(g[..., 1].sum(), [x], create_graph=True)[0],
+        ],
+        -1,
+    )
     assert g.shape[-1:] == (2,)
     assert H.shape[-2:] == (2, 2)
-    warn_if_nan(g, 'g')
-    warn_if_nan(H, 'H')
+    warn_if_nan(g, "g")
+    warn_if_nan(H, "H")
 
     if trust_radius is not None:
         # regularize to keep update within ball of given trust_radius
         detH = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
         mean_eig = (H[..., 0, 0] + H[..., 1, 1]) / 2
         min_eig = mean_eig - (mean_eig ** 2 - detH).clamp(min=0).sqrt()
-        regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
-        warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(2, dtype=H.dtype, device=H.device)
+        regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(
+            min=1e-8
+        )
+        warn_if_nan(regularizer, "regularizer")
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(
+            2, dtype=H.dtype, device=H.device
+        )
 
     # compute newton update
     Hinv = rinverse(H, sym=True)
-    warn_if_nan(Hinv, 'Hinv')
+    warn_if_nan(Hinv, "Hinv")
 
     # apply update
     x_new = x.detach() - (Hinv * g.unsqueeze(-2)).sum(-1)
@@ -182,31 +201,44 @@ def newton_step_3d(loss, x, trust_radius=None):
     :rtype: tuple
     """
     if loss.shape != ():
-        raise ValueError('Expected loss to be a scalar, actual shape {}'.format(loss.shape))
+        raise ValueError(
+            "Expected loss to be a scalar, actual shape {}".format(loss.shape)
+        )
     if x.dim() < 1 or x.shape[-1] != 3:
-        raise ValueError('Expected x to have rightmost size 3, actual shape {}'.format(x.shape))
+        raise ValueError(
+            "Expected x to have rightmost size 3, actual shape {}".format(x.shape)
+        )
 
     # compute derivatives
     g = grad(loss, [x], create_graph=True)[0]
-    H = torch.stack([grad(g[..., 0].sum(), [x], create_graph=True)[0],
-                     grad(g[..., 1].sum(), [x], create_graph=True)[0],
-                     grad(g[..., 2].sum(), [x], create_graph=True)[0]], -1)
+    H = torch.stack(
+        [
+            grad(g[..., 0].sum(), [x], create_graph=True)[0],
+            grad(g[..., 1].sum(), [x], create_graph=True)[0],
+            grad(g[..., 2].sum(), [x], create_graph=True)[0],
+        ],
+        -1,
+    )
     assert g.shape[-1:] == (3,)
     assert H.shape[-2:] == (3, 3)
-    warn_if_nan(g, 'g')
-    warn_if_nan(H, 'H')
+    warn_if_nan(g, "g")
+    warn_if_nan(H, "H")
 
     if trust_radius is not None:
         # regularize to keep update within ball of given trust_radius
         # calculate eigenvalues of symmetric matrix
         min_eig, _, _ = eig_3d(H)
-        regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
-        warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(3, dtype=H.dtype, device=H.device)
+        regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(
+            min=1e-8
+        )
+        warn_if_nan(regularizer, "regularizer")
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(
+            3, dtype=H.dtype, device=H.device
+        )
 
     # compute newton update
     Hinv = rinverse(H, sym=True)
-    warn_if_nan(Hinv, 'Hinv')
+    warn_if_nan(Hinv, "Hinv")
 
     # apply update
     x_new = x.detach() - (Hinv * g.unsqueeze(-2)).sum(-1)

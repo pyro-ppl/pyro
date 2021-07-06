@@ -32,7 +32,9 @@ class Importance(TracePosterior):
         super().__init__()
         if num_samples is None:
             num_samples = 10
-            warnings.warn("num_samples not provided, defaulting to {}".format(num_samples))
+            warnings.warn(
+                "num_samples not provided, defaulting to {}".format(num_samples)
+            )
         if guide is None:
             # propose from the prior by making a guide from the model by hiding observes
             guide = poutine.block(model, hide_types=["observe"])
@@ -47,7 +49,8 @@ class Importance(TracePosterior):
         for i in range(self.num_samples):
             guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(
-                poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+                poutine.replay(self.model, trace=guide_trace)
+            ).get_trace(*args, **kwargs)
             log_weight = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
             yield (model_trace, log_weight)
 
@@ -59,10 +62,12 @@ class Importance(TracePosterior):
         # ensure list is not empty
         if self.log_weights:
             log_w = torch.tensor(self.log_weights)
-            log_num_samples = torch.log(torch.tensor(self.num_samples * 1.))
+            log_num_samples = torch.log(torch.tensor(self.num_samples * 1.0))
             return torch.logsumexp(log_w - log_num_samples, 0)
         else:
-            warnings.warn("The log_weights list is empty, can not compute normalizing constant estimate.")
+            warnings.warn(
+                "The log_weights list is empty, can not compute normalizing constant estimate."
+            )
 
     def get_normalized_weights(self, log_scale=False):
         """
@@ -73,7 +78,9 @@ class Importance(TracePosterior):
             log_w_norm = log_w - torch.logsumexp(log_w, 0)
             return log_w_norm if log_scale else torch.exp(log_w_norm)
         else:
-            warnings.warn("The log_weights list is empty. There is nothing to normalize.")
+            warnings.warn(
+                "The log_weights list is empty. There is nothing to normalize."
+            )
 
     def get_ESS(self):
         """
@@ -81,9 +88,11 @@ class Importance(TracePosterior):
         """
         if self.log_weights:
             log_w_norm = self.get_normalized_weights(log_scale=True)
-            ess = torch.exp(-torch.logsumexp(2*log_w_norm, 0))
+            ess = torch.exp(-torch.logsumexp(2 * log_w_norm, 0))
         else:
-            warnings.warn("The log_weights list is empty, effective sample size is zero.")
+            warnings.warn(
+                "The log_weights list is empty, effective sample size is zero."
+            )
             ess = 0
         return ess
 
@@ -116,12 +125,16 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
 
     def vectorize(fn):
         def _fn(*args, **kwargs):
-            with pyro.plate("num_particles_vectorized", num_samples, dim=-max_plate_nesting):
+            with pyro.plate(
+                "num_particles_vectorized", num_samples, dim=-max_plate_nesting
+            ):
                 return fn(*args, **kwargs)
+
         return _fn
 
     model_trace, guide_trace = get_importance_trace(
-        "flat", max_plate_nesting, vectorize(model), vectorize(guide), args, kwargs)
+        "flat", max_plate_nesting, vectorize(model), vectorize(guide), args, kwargs
+    )
 
     guide_trace.pack_tensors()
     model_trace.pack_tensors(guide_trace.plate_to_symbol)
@@ -130,18 +143,22 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
         log_weights = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
     else:
         wd = guide_trace.plate_to_symbol["num_particles_vectorized"]
-        log_weights = 0.
+        log_weights = 0.0
         for site in model_trace.nodes.values():
             if site["type"] != "sample":
                 continue
-            log_weights += torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                                        [site["packed"]["log_prob"]])
+            log_weights += torch.einsum(
+                site["packed"]["log_prob"]._pyro_dims + "->" + wd,
+                [site["packed"]["log_prob"]],
+            )
 
         for site in guide_trace.nodes.values():
             if site["type"] != "sample":
                 continue
-            log_weights -= torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                                        [site["packed"]["log_prob"]])
+            log_weights -= torch.einsum(
+                site["packed"]["log_prob"]._pyro_dims + "->" + wd,
+                [site["packed"]["log_prob"]],
+            )
 
     if normalized:
         log_weights = log_weights - torch.logsumexp(log_weights)
@@ -190,28 +207,42 @@ def psis_diagnostic(model, guide, *args, **kwargs):
     :returns float: the PSIS diagnostic k
     """
 
-    num_particles = kwargs.pop('num_particles', 1000)
-    max_simultaneous_particles = kwargs.pop('max_simultaneous_particles', num_particles)
-    max_plate_nesting = kwargs.pop('max_plate_nesting', 7)
+    num_particles = kwargs.pop("num_particles", 1000)
+    max_simultaneous_particles = kwargs.pop("max_simultaneous_particles", num_particles)
+    max_plate_nesting = kwargs.pop("max_plate_nesting", 7)
 
     if num_particles % max_simultaneous_particles != 0:
-        raise ValueError("num_particles must be divisible by max_simultaneous_particles.")
+        raise ValueError(
+            "num_particles must be divisible by max_simultaneous_particles."
+        )
 
     N = num_particles // max_simultaneous_particles
-    log_weights = [vectorized_importance_weights(model, guide, num_samples=max_simultaneous_particles,
-                                                 max_plate_nesting=max_plate_nesting,
-                                                 *args, **kwargs)[0] for _ in range(N)]
+    log_weights = [
+        vectorized_importance_weights(
+            model,
+            guide,
+            num_samples=max_simultaneous_particles,
+            max_plate_nesting=max_plate_nesting,
+            *args,
+            **kwargs,
+        )[0]
+        for _ in range(N)
+    ]
     log_weights = torch.cat(log_weights)
     log_weights -= log_weights.max()
     log_weights = torch.sort(log_weights, descending=False)[0]
 
-    cutoff_index = - int(math.ceil(min(0.2 * num_particles, 3.0 * math.sqrt(num_particles)))) - 1
+    cutoff_index = (
+        -int(math.ceil(min(0.2 * num_particles, 3.0 * math.sqrt(num_particles)))) - 1
+    )
     lw_cutoff = max(math.log(1.0e-15), log_weights[cutoff_index])
     lw_tail = log_weights[log_weights > lw_cutoff]
 
     if len(lw_tail) < 10:
-        warnings.warn("Not enough tail samples to compute PSIS diagnostic; increase num_particles.")
-        k = float('inf')
+        warnings.warn(
+            "Not enough tail samples to compute PSIS diagnostic; increase num_particles."
+        )
+        k = float("inf")
     else:
         k, _ = fit_generalized_pareto(lw_tail.exp() - math.exp(lw_cutoff))
 

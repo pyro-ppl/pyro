@@ -10,6 +10,8 @@ make docs
 pip install -r requirements.txt
 ```
 
+Note that you will need to install [graphviz](https://www.graphviz.org/) separately.
+
 ## Workflow ##
 To change the documentation, update the `*.rst` files in `source`.
 

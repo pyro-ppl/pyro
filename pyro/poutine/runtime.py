@@ -22,6 +22,7 @@ class _DimAllocator:
 
     Note that dimensions are indexed from the right, e.g. -1, -2.
     """
+
     def __init__(self):
         self._stack = []  # in reverse orientation of log_prob.shape
 
@@ -39,15 +40,26 @@ class _DimAllocator:
             while -dim <= len(self._stack) and self._stack[-1 - dim] is not None:
                 dim -= 1
         elif dim >= 0:
-            raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
+            raise ValueError(
+                "Expected dim < 0 to index from the right, actual {}".format(dim)
+            )
 
         # Allocate the requested dimension.
         while dim < -len(self._stack):
             self._stack.append(None)
         if self._stack[-1 - dim] is not None:
-            raise ValueError('\n'.join([
-                'at plates "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
-                '\nTry moving the dim of one plate to the left, e.g. dim={}'.format(dim - 1)]))
+            raise ValueError(
+                "\n".join(
+                    [
+                        'at plates "{}" and "{}", collide at dim={}'.format(
+                            name, self._stack[-1 - dim], dim
+                        ),
+                        "\nTry moving the dim of one plate to the left, e.g. dim={}".format(
+                            dim - 1
+                        ),
+                    ]
+                )
+            )
         self._stack[-1 - dim] = name
         return dim
 
@@ -74,6 +86,7 @@ class _EnumAllocator:
     Note that dimensions are indexed from the right, e.g. -1, -2.
     Note that ids are simply nonnegative integers here.
     """
+
     def set_first_available_dim(self, first_available_dim):
         """
         Set the first available dim, which should be to the left of all
@@ -105,8 +118,10 @@ class _EnumAllocator:
         self.next_available_id += 1
 
         dim = self.next_available_dim
-        if dim == -float('inf'):
-            raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
+        if dim == -float("inf"):
+            raise ValueError(
+                "max_plate_nesting must be set to a finite value for parallel enumeration"
+            )
         if scope_dims is None:
             # allocate a new global dimension
             self.next_available_dim -= 1
@@ -129,6 +144,7 @@ class NonlocalExit(Exception):
 
     Used by poutine.EscapeMessenger to return site information.
     """
+
     def __init__(self, site, *args, **kwargs):
         """
         :param site: message at a pyro site constructor.
@@ -265,6 +281,7 @@ def effectful(fn=None, type=None):
             # apply the stack and return its return value
             apply_stack(msg)
             return msg["value"]
+
     _fn._is_effectful = True
     return _fn
 

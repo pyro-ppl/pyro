@@ -29,22 +29,22 @@ def test_ewma(alpha, NS=10000, D=1):
 
 def test_ewma_log():
     ewma_log = EwmaLog(alpha=0.5)
-    input1 = torch.tensor(2.)
-    ewma_log(input1, torch.tensor(0.))
+    input1 = torch.tensor(2.0)
+    ewma_log(input1, torch.tensor(0.0))
     assert_equal(ewma_log.ewma, input1)
-    input2 = torch.tensor(3.)
-    ewma_log(input2, torch.tensor(0.))
-    assert_equal(ewma_log.ewma, torch.tensor(8./3))
+    input2 = torch.tensor(3.0)
+    ewma_log(input2, torch.tensor(0.0))
+    assert_equal(ewma_log.ewma, torch.tensor(8.0 / 3))
 
 
 def test_ewma_log_with_s():
     ewma_log = EwmaLog(alpha=0.5)
-    input1 = torch.tensor(-1.)
-    s1 = torch.tensor(210.)
+    input1 = torch.tensor(-1.0)
+    s1 = torch.tensor(210.0)
     ewma_log(input1, s1)
     assert_equal(ewma_log.ewma, input1)
-    input2 = torch.tensor(-1.)
+    input2 = torch.tensor(-1.0)
     s2 = torch.tensor(210.5)
     ewma_log(input2, s2)
-    true_ewma = (1./3)*(torch.exp(s1 - s2)*input1 + 2*input2)
+    true_ewma = (1.0 / 3) * (torch.exp(s1 - s2) * input1 + 2 * input2)
     assert_equal(ewma_log.ewma, true_ewma)

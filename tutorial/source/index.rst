@@ -81,6 +81,7 @@ List of Tutorials
    svi_part_i
    svi_part_ii
    svi_part_iii
+   svi_part_iv
 
 .. toctree::
    :maxdepth: 1
@@ -173,6 +174,14 @@ List of Tutorials
 
 .. toctree::
    :maxdepth: 1
+   :caption: Application: Biological sequences
+   :name: biological-sequences
+
+   mue_profile
+   mue_factor
+
+.. toctree::
+   :maxdepth: 1
    :caption: Application: Experimental Design
    :name: optimal-experiment-design
 
@@ -199,6 +208,7 @@ List of Tutorials
    inclined_plane
    RSA-implicature
    RSA-hyperbole
+   predictive_deterministic
 
 .. toctree::
    :maxdepth: 1

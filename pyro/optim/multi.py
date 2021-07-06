@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Dict, List
+
 import torch
 
 from pyro.ops.newton import newton_step
@@ -29,7 +31,8 @@ class MultiOptimizer:
                   if site['type'] == 'param'}
         optim.step(loss, params)
     """
-    def step(self, loss, params):
+
+    def step(self, loss: torch.Tensor, params: Dict) -> None:
         """
         Performs an in-place optimization step on parameters given a
         differentiable ``loss`` tensor.
@@ -47,7 +50,7 @@ class MultiOptimizer:
                 # we need to detach because updated_value may depend on value
                 value.copy_(updated_values[name].detach())
 
-    def get_step(self, loss, params):
+    def get_step(self, loss: torch.Tensor, params: Dict) -> Dict:
         """
         Computes an optimization step of parameters given a differentiable
         ``loss`` tensor, returning the updated values.
@@ -70,14 +73,17 @@ class PyroMultiOptimizer(MultiOptimizer):
     Facade to wrap :class:`~pyro.optim.optim.PyroOptim` objects
     in a :class:`MultiOptimizer` interface.
     """
-    def __init__(self, optim):
+
+    def __init__(self, optim: PyroOptim) -> None:
         if not isinstance(optim, PyroOptim):
-            raise TypeError('Expected a PyroOptim object but got a {}'.format(type(optim)))
+            raise TypeError(
+                "Expected a PyroOptim object but got a {}".format(type(optim))
+            )
         self.optim = optim
 
-    def step(self, loss, params):
+    def step(self, loss: torch.Tensor, params: Dict) -> None:
         values = params.values()
-        grads = torch.autograd.grad(loss, values, create_graph=True)
+        grads = torch.autograd.grad(loss, values, create_graph=True)  # type: ignore
         for x, g in zip(values, grads):
             x.grad = g
         self.optim(values)
@@ -88,7 +94,8 @@ class TorchMultiOptimizer(PyroMultiOptimizer):
     Facade to wrap :class:`~torch.optim.Optimizer` objects
     in a :class:`MultiOptimizer` interface.
     """
-    def __init__(self, optim_constructor, optim_args):
+
+    def __init__(self, optim_constructor: torch.optim.Optimizer, optim_args: Dict):
         optim = PyroOptim(optim_constructor, optim_args)
         super().__init__(optim)
 
@@ -105,28 +112,32 @@ class MixedMultiOptimizer(MultiOptimizer):
         partition up all desired parameters to optimize.
     :raises ValueError: if any name is optimized by multiple optimizers.
     """
-    def __init__(self, parts):
-        optim_dict = {}
+
+    def __init__(self, parts: List) -> None:
+        optim_dict: Dict = {}
         self.parts = []
         for names_part, optim in parts:
             if isinstance(optim, PyroOptim):
                 optim = PyroMultiOptimizer(optim)
             for name in names_part:
                 if name in optim_dict:
-                    raise ValueError("Attempted to optimize parameter '{}' by two different optimizers: "
-                                     "{} vs {}" .format(name, optim_dict[name], optim))
+                    raise ValueError(
+                        "Attempted to optimize parameter '{}' by two different optimizers: "
+                        "{} vs {}".format(name, optim_dict[name], optim)
+                    )
                 optim_dict[name] = optim
             self.parts.append((names_part, optim))
 
-    def step(self, loss, params):
+    def step(self, loss: torch.Tensor, params: Dict):
         for names_part, optim in self.parts:
             optim.step(loss, {name: params[name] for name in names_part})
 
-    def get_step(self, loss, params):
+    def get_step(self, loss: torch.Tensor, params: Dict) -> Dict:
         updated_values = {}
         for names_part, optim in self.parts:
             updated_values.update(
-                optim.get_step(loss, {name: params[name] for name in names_part}))
+                optim.get_step(loss, {name: params[name] for name in names_part})
+            )
         return updated_values
 
 
@@ -144,13 +155,14 @@ class Newton(MultiOptimizer):
         region. Missing names will use unregularized Newton update, equivalent
         to infinite trust radius.
     """
-    def __init__(self, trust_radii={}):
+
+    def __init__(self, trust_radii: Dict = {}):
         self.trust_radii = trust_radii
 
-    def get_step(self, loss, params):
+    def get_step(self, loss: torch.Tensor, params: Dict):
         updated_values = {}
         for name, value in params.items():
-            trust_radius = self.trust_radii.get(name)
+            trust_radius = self.trust_radii.get(name)  # type: ignore
             updated_value, cov = newton_step(loss, value, trust_radius)
             updated_values[name] = updated_value
         return updated_values

@@ -20,15 +20,15 @@ def main(args):
     # Define a basic model with a single Normal latent random variable `loc`
     # and a batch of Normally distributed observations.
     def model(data):
-        loc = pyro.sample("loc", dist.Normal(0., 1.))
+        loc = pyro.sample("loc", dist.Normal(0.0, 1.0))
         with pyro.plate("data", len(data), dim=-1):
-            pyro.sample("obs", dist.Normal(loc, 1.), obs=data)
+            pyro.sample("obs", dist.Normal(loc, 1.0), obs=data)
 
     # Define a guide (i.e. variational distribution) with a Normal
     # distribution over the latent random variable `loc`.
     def guide(data):
-        guide_loc = pyro.param("guide_loc", torch.tensor(0.))
-        guide_scale = ops.exp(pyro.param("guide_scale_log", torch.tensor(0.)))
+        guide_loc = pyro.param("guide_loc", torch.tensor(0.0))
+        guide_scale = ops.exp(pyro.param("guide_scale_log", torch.tensor(0.0)))
         pyro.sample("loc", dist.Normal(guide_loc, guide_scale))
 
     # Generate some data.
@@ -65,7 +65,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.6.0')
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
     parser.add_argument("-b", "--backend", default="minipyro")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)

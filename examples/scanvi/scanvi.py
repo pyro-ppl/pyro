@@ -146,7 +146,16 @@ class Classifier(nn.Module):
 
 # Encompasses the scANVI model and guide as a PyTorch nn.Module
 class SCANVI(nn.Module):
-    def __init__(self, num_genes, num_labels, l_loc, l_scale, latent_dim=10, alpha=0.01, scale_factor=1.0):
+    def __init__(
+        self,
+        num_genes,
+        num_labels,
+        l_loc,
+        l_scale,
+        latent_dim=10,
+        alpha=0.01,
+        scale_factor=1.0,
+    ):
         assert isinstance(num_genes, int)
         self.num_genes = num_genes
 
@@ -173,13 +182,27 @@ class SCANVI(nn.Module):
         super().__init__()
 
         # Setup the various neural networks used in the model and guide
-        self.z2_decoder = Z2Decoder(z1_dim=self.latent_dim, y_dim=self.num_labels,
-                                    z2_dim=self.latent_dim, hidden_dims=[50])
-        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[100], z2_dim=self.latent_dim)
-        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[100])
-        self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[50], num_labels=num_labels)
-        self.z1_encoder = Z1Encoder(num_labels=num_labels, z1_dim=self.latent_dim,
-                                    z2_dim=self.latent_dim, hidden_dims=[50])
+        self.z2_decoder = Z2Decoder(
+            z1_dim=self.latent_dim,
+            y_dim=self.num_labels,
+            z2_dim=self.latent_dim,
+            hidden_dims=[50],
+        )
+        self.x_decoder = XDecoder(
+            num_genes=num_genes, hidden_dims=[100], z2_dim=self.latent_dim
+        )
+        self.z2l_encoder = Z2LEncoder(
+            num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[100]
+        )
+        self.classifier = Classifier(
+            z2_dim=self.latent_dim, hidden_dims=[50], num_labels=num_labels
+        )
+        self.z1_encoder = Z1Encoder(
+            num_labels=num_labels,
+            z1_dim=self.latent_dim,
+            z2_dim=self.latent_dim,
+            hidden_dims=[50],
+        )
 
         self.epsilon = 5.0e-3
 
@@ -188,17 +211,23 @@ class SCANVI(nn.Module):
         pyro.module("scanvi", self)
 
         # This gene-level parameter modulates the variance of the observation distribution
-        theta = pyro.param("inverse_dispersion", 10.0 * x.new_ones(self.num_genes),
-                           constraint=constraints.positive)
+        theta = pyro.param(
+            "inverse_dispersion",
+            10.0 * x.new_ones(self.num_genes),
+            constraint=constraints.positive,
+        )
 
         # We scale all sample statements by scale_factor so that the ELBO is normalized
         # wrt the number of datapoints and genes
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
-            z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
+            z1 = pyro.sample(
+                "z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1)
+            )
             # Note that if y is None (i.e. y is unobserved) then y will be sampled;
             # otherwise y will be treated as observed.
-            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)),
-                            obs=y)
+            y = pyro.sample(
+                "y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)), obs=y
+            )
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
@@ -213,8 +242,9 @@ class SCANVI(nn.Module):
             # from failure to success parametrization;
             # see https://github.com/pytorch/pytorch/issues/42449
             nb_logits = (l * mu + self.epsilon).log() - (theta + self.epsilon).log()
-            x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta,
-                                                       logits=nb_logits)
+            x_dist = dist.ZeroInflatedNegativeBinomial(
+                gate_logits=gate_logits, total_count=theta, logits=nb_logits
+            )
             # Observe the datapoint x using the observation distribution x_dist
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
@@ -249,12 +279,18 @@ def main(args):
     # Enable optional validation warnings
 
     # Load and pre-process data
-    dataloader, num_genes, l_mean, l_scale, anndata = get_data(dataset=args.dataset, batch_size=args.batch_size,
-                                                               cuda=args.cuda)
+    dataloader, num_genes, l_mean, l_scale, anndata = get_data(
+        dataset=args.dataset, batch_size=args.batch_size, cuda=args.cuda
+    )
 
     # Instantiate instance of model/guide and various neural networks
-    scanvi = SCANVI(num_genes=num_genes, num_labels=4, l_loc=l_mean, l_scale=l_scale,
-                    scale_factor=1.0 / (args.batch_size * num_genes))
+    scanvi = SCANVI(
+        num_genes=num_genes,
+        num_labels=4,
+        l_loc=l_mean,
+        l_scale=l_scale,
+        scale_factor=1.0 / (args.batch_size * num_genes),
+    )
 
     if args.cuda:
         scanvi.cuda()
@@ -262,10 +298,14 @@ def main(args):
     # Setup an optimizer (Adam) and learning rate scheduler.
     # By default we start with a moderately high learning rate (0.005)
     # and reduce by a factor of 5 after 20 epochs.
-    scheduler = MultiStepLR({'optimizer': Adam,
-                             'optim_args': {'lr': args.learning_rate},
-                             'milestones': [20],
-                             'gamma': 0.2})
+    scheduler = MultiStepLR(
+        {
+            "optimizer": Adam,
+            "optim_args": {"lr": args.learning_rate},
+            "milestones": [20],
+            "gamma": 0.2,
+        }
+    )
 
     # Tell Pyro to enumerate out y when y is unobserved
     guide = config_enumerate(scanvi.guide, "parallel", expand=True)
@@ -295,7 +335,7 @@ def main(args):
     scanvi.eval()
 
     # Now that we're done training we'll inspect the latent representations we've learned
-    if args.plot and args.dataset == 'pbmc':
+    if args.plot and args.dataset == "pbmc":
         import scanpy as sc
 
         # Compute latent representation (z2_loc) for each cell in the dataset
@@ -310,55 +350,88 @@ def main(args):
         anndata.obsm["X_scANVI"] = latent_rep.data.cpu().numpy()
         sc.pp.neighbors(anndata, use_rep="X_scANVI")
         sc.tl.umap(anndata)
-        umap1, umap2 = anndata.obsm['X_umap'][:, 0], anndata.obsm['X_umap'][:, 1]
+        umap1, umap2 = anndata.obsm["X_umap"][:, 0], anndata.obsm["X_umap"][:, 1]
 
         # Construct plots; all plots are scatterplots depicting the two-dimensional UMAP embedding
         # and only differ in how points are colored
 
         # The topmost plot depicts the 200 hand-curated seed labels in our dataset
         fig, axes = plt.subplots(3, 2)
-        seed_marker_sizes = anndata.obs['seed_marker_sizes']
-        axes[0, 0].scatter(umap1, umap2, s=seed_marker_sizes, c=anndata.obs['seed_colors'], marker='.', alpha=0.7)
-        axes[0, 0].set_title('Hand-Curated Seed Labels')
-        patch1 = Patch(color='lightcoral', label='CD8-Naive')
-        patch2 = Patch(color='limegreen', label='CD4-Naive')
-        patch3 = Patch(color='deepskyblue', label='CD4-Memory')
-        patch4 = Patch(color='mediumorchid', label='CD4-Regulatory')
-        axes[0, 1].legend(loc='center left', handles=[patch1, patch2, patch3, patch4])
+        seed_marker_sizes = anndata.obs["seed_marker_sizes"]
+        axes[0, 0].scatter(
+            umap1,
+            umap2,
+            s=seed_marker_sizes,
+            c=anndata.obs["seed_colors"],
+            marker=".",
+            alpha=0.7,
+        )
+        axes[0, 0].set_title("Hand-Curated Seed Labels")
+        patch1 = Patch(color="lightcoral", label="CD8-Naive")
+        patch2 = Patch(color="limegreen", label="CD4-Naive")
+        patch3 = Patch(color="deepskyblue", label="CD4-Memory")
+        patch4 = Patch(color="mediumorchid", label="CD4-Regulatory")
+        axes[0, 1].legend(loc="center left", handles=[patch1, patch2, patch3, patch4])
         axes[0, 1].get_xaxis().set_visible(False)
         axes[0, 1].get_yaxis().set_visible(False)
         axes[0, 1].set_frame_on(False)
 
         # The remaining plots depict the inferred cell type probability for each of the four cell types
-        s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 0], marker='.', alpha=0.7)
-        axes[1, 0].set_title('Inferred CD8-Naive probability')
+        s10 = axes[1, 0].scatter(
+            umap1, umap2, s=1, c=y_probs[:, 0], marker=".", alpha=0.7
+        )
+        axes[1, 0].set_title("Inferred CD8-Naive probability")
         fig.colorbar(s10, ax=axes[1, 0])
-        s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 1], marker='.', alpha=0.7)
-        axes[1, 1].set_title('Inferred CD4-Naive probability')
+        s11 = axes[1, 1].scatter(
+            umap1, umap2, s=1, c=y_probs[:, 1], marker=".", alpha=0.7
+        )
+        axes[1, 1].set_title("Inferred CD4-Naive probability")
         fig.colorbar(s11, ax=axes[1, 1])
-        s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 2], marker='.', alpha=0.7)
-        axes[2, 0].set_title('Inferred CD4-Memory probability')
+        s20 = axes[2, 0].scatter(
+            umap1, umap2, s=1, c=y_probs[:, 2], marker=".", alpha=0.7
+        )
+        axes[2, 0].set_title("Inferred CD4-Memory probability")
         fig.colorbar(s20, ax=axes[2, 0])
-        s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 3], marker='.', alpha=0.7)
-        axes[2, 1].set_title('Inferred CD4-Regulatory probability')
+        s21 = axes[2, 1].scatter(
+            umap1, umap2, s=1, c=y_probs[:, 3], marker=".", alpha=0.7
+        )
+        axes[2, 1].set_title("Inferred CD4-Regulatory probability")
         fig.colorbar(s21, ax=axes[2, 1])
 
         fig.tight_layout()
-        plt.savefig('scanvi.pdf')
+        plt.savefig("scanvi.pdf")
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.6.0')
+    assert pyro.__version__.startswith("1.7.0")
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="single-cell ANnotation using Variational Inference")
-    parser.add_argument('-s', '--seed', default=0, type=int, help='rng seed')
-    parser.add_argument('-n', '--num-epochs', default=60, type=int, help='number of training epochs')
-    parser.add_argument('-d', '--dataset', default='pbmc', type=str,
-                        help='which dataset to use', choices=['pbmc', 'mock'])
-    parser.add_argument('-bs', '--batch-size', default=100, type=int, help='mini-batch size')
-    parser.add_argument('-lr', '--learning-rate', default=0.005, type=float, help='learning rate')
-    parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
-    parser.add_argument('--plot', action='store_true', default=False, help='whether to make a plot')
+    parser = argparse.ArgumentParser(
+        description="single-cell ANnotation using Variational Inference"
+    )
+    parser.add_argument("-s", "--seed", default=0, type=int, help="rng seed")
+    parser.add_argument(
+        "-n", "--num-epochs", default=60, type=int, help="number of training epochs"
+    )
+    parser.add_argument(
+        "-d",
+        "--dataset",
+        default="pbmc",
+        type=str,
+        help="which dataset to use",
+        choices=["pbmc", "mock"],
+    )
+    parser.add_argument(
+        "-bs", "--batch-size", default=100, type=int, help="mini-batch size"
+    )
+    parser.add_argument(
+        "-lr", "--learning-rate", default=0.005, type=float, help="learning rate"
+    )
+    parser.add_argument(
+        "--cuda", action="store_true", default=False, help="whether to use cuda"
+    )
+    parser.add_argument(
+        "--plot", action="store_true", default=False, help="whether to make a plot"
+    )
     args = parser.parse_args()
 
     main(args)

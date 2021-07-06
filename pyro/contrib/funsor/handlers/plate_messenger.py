@@ -31,18 +31,23 @@ class IndepMessenger(GlobalNamedMessenger):
     Vectorized plate implementation using :func:`~pyro.contrib.funsor.to_data` instead of
     :class:`~pyro.poutine.runtime._DimAllocator`.
     """
+
     def __init__(self, name=None, size=None, dim=None, indices=None):
         assert dim is None or dim < 0
         super().__init__()
         # without a name or dim, treat as a "vectorize" effect and allocate a non-visible dim
-        self.dim_type = DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
+        self.dim_type = (
+            DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
+        )
         self.name = name if name is not None else funsor.interpreter.gensym("PLATE")
         self.size = size
         self.dim = dim
         if not hasattr(self, "_full_size"):
             self._full_size = size
         if indices is None:
-            indices = funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size)
+            indices = funsor.ops.new_arange(
+                funsor.tensor.get_default_prototype(), self.size
+            )
         assert len(indices) == size
 
         self._indices = funsor.Tensor(
@@ -68,11 +73,19 @@ class IndepMessenger(GlobalNamedMessenger):
 
 @copy_docs_from(OrigSubsampleMessenger)
 class SubsampleMessenger(IndepMessenger):
-
-    def __init__(self, name=None, size=None, subsample_size=None, subsample=None, dim=None,
-                 use_cuda=None, device=None):
+    def __init__(
+        self,
+        name=None,
+        size=None,
+        subsample_size=None,
+        subsample=None,
+        dim=None,
+        use_cuda=None,
+        device=None,
+    ):
         size, subsample_size, indices = OrigSubsampleMessenger._subsample(
-            name, size, subsample_size, subsample, use_cuda, device)
+            name, size, subsample_size, subsample, use_cuda, device
+        )
         self.subsample_size = subsample_size
         self._full_size = size
         self._scale = float(size) / subsample_size
@@ -88,8 +101,12 @@ class SubsampleMessenger(IndepMessenger):
         msg["scale"] = msg["scale"] * self._scale
 
     def _subsample_site_value(self, value, event_dim=None):
-        if self.dim is not None and event_dim is not None and self.subsample_size < self._full_size:
-            event_shape = value.shape[len(value.shape) - event_dim:]
+        if (
+            self.dim is not None
+            and event_dim is not None
+            and self.subsample_size < self._full_size
+        ):
+            event_shape = value.shape[len(value.shape) - event_dim :]
             funsor_value = to_funsor(value, output=funsor.Reals[event_shape])
             if self.name in funsor_value.inputs:
                 return to_data(funsor_value(**{self.name: self._indices}))
@@ -122,6 +139,7 @@ class PlateMessenger(SubsampleMessenger):
     :class:`pyro.poutine.BroadcastMessenger`. Should eventually be a drop-in
     replacement for :class:`pyro.plate`.
     """
+
     def __enter__(self):
         super().__enter__()
         return self.indices  # match pyro.plate behavior
@@ -131,13 +149,18 @@ class PlateMessenger(SubsampleMessenger):
         BroadcastMessenger._pyro_sample(msg)
 
     def __iter__(self):
-        return iter(_SequentialPlateMessenger(self.name, self.size, self._indices.data.squeeze(), self._scale))
+        return iter(
+            _SequentialPlateMessenger(
+                self.name, self.size, self._indices.data.squeeze(), self._scale
+            )
+        )
 
 
 class _SequentialPlateMessenger(Messenger):
     """
     Implementation of sequential plate. Should not be used directly.
     """
+
     def __init__(self, name, size, indices, scale):
         self.name = name
         self.size = size
@@ -269,6 +292,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
     :return: Returns both :class:`int` and 1-dimensional :class:`torch.Tensor` indices:
         ``(0, ..., history-1, torch.arange(size-history), ..., torch.arange(history, size))``.
     """
+
     def __init__(self, name=None, size=None, dim=None, history=1):
         self.name = name
         self.size = size
@@ -290,8 +314,12 @@ class VectorizedMarkovMessenger(NamedMessenger):
         :return: step information
         :rtype: frozenset
         """
-        chain = frozenset({tuple("{}{}".format(var, suffix) for suffix in suffixes)
-                          for var in markov_vars})
+        chain = frozenset(
+            {
+                tuple("{}{}".format(var, suffix) for suffix in suffixes)
+                for var in markov_vars
+            }
+        )
         return chain
 
     def __iter__(self):
@@ -302,13 +330,20 @@ class VectorizedMarkovMessenger(NamedMessenger):
             self._suffixes.append(self._suffix)
             yield self._suffix
         with self:
-            with IndepMessenger(name=self.name, size=self.size-self.history, dim=self.dim) as time:
-                time_indices = [time.indices+i for i in range(self.history+1)]
-                time_slices = [slice(i, self.size-self.history+i) for i in range(self.history+1)]
+            with IndepMessenger(
+                name=self.name, size=self.size - self.history, dim=self.dim
+            ) as time:
+                time_indices = [time.indices + i for i in range(self.history + 1)]
+                time_slices = [
+                    slice(i, self.size - self.history + i)
+                    for i in range(self.history + 1)
+                ]
                 self._suffixes.extend(time_slices)
                 for self._suffix, self._indices in zip(time_slices, time_indices):
                     yield self._indices
-        self._markov_chain(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
+        self._markov_chain(
+            name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes
+        )
 
     def _pyro_sample(self, msg):
         if type(msg["fn"]).__name__ == "_Subsample":
@@ -317,7 +352,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
         # replace tensor suffix with a nice slice suffix
         if isinstance(self._suffix, slice):
             assert msg["name"].endswith(str(self._indices))
-            msg["name"] = msg["name"][:-len(str(self._indices))] + str(self._suffix)
+            msg["name"] = msg["name"][: -len(str(self._indices))] + str(self._suffix)
         if str(self._suffix) != str(self._suffixes[-1]):
             # _do_not_score: record these sites when tracing for use with replay,
             # but do not include them in ELBO computation.
@@ -325,7 +360,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
             # map auxiliary var to markov var name prefix
             # assuming that site name has a format: "markov_var{}".format(_suffix)
             # is there a better way?
-            markov_var = msg["name"][:-len(str(self._suffix))]
+            markov_var = msg["name"][: -len(str(self._suffix))]
             self._auxiliary_to_markov[msg["name"]] = markov_var
 
     def _pyro_post_sample(self, msg):
@@ -336,8 +371,11 @@ class VectorizedMarkovMessenger(NamedMessenger):
             return
         # if last step in the for loop
         if str(self._suffix) == str(self._suffixes[-1]):
-            funsor_log_prob = msg["funsor"]["log_prob"] if "log_prob" in msg.get("funsor", {}) else \
-                to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
+            funsor_log_prob = (
+                msg["funsor"]["log_prob"]
+                if "log_prob" in msg.get("funsor", {})
+                else to_funsor(msg["fn"].log_prob(msg["value"]), output=funsor.Real)
+            )
             # for auxiliary sites in the log_prob
             for name in set(funsor_log_prob.inputs) & set(self._auxiliary_to_markov):
                 # add markov var name prefix to self._markov_vars

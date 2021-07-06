@@ -22,7 +22,9 @@ def cleannb(nbfile):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Clean kernelspec metadata of a notebook")
+    parser = argparse.ArgumentParser(
+        description="Clean kernelspec metadata of a notebook"
+    )
     parser.add_argument("nbfiles", nargs="*", help="Files to clean kernelspec metadata")
     args = parser.parse_args()
 

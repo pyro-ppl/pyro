@@ -16,7 +16,8 @@ class Unit(TorchDistribution):
 
     This is used for :func:`pyro.factor` statements.
     """
-    arg_constraints = {'log_factor': constraints.real}
+
+    arg_constraints = {"log_factor": constraints.real}
     support = constraints.real
 
     def __init__(self, log_factor, validate_args=None):
