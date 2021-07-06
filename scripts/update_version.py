@@ -12,6 +12,7 @@ with open(os.path.join(root, "pyro", "__init__.py")) as f:
     for line in f:
         if line.startswith("version_prefix ="):
             new_version = line.strip().split()[-1]
+            new_version = new_version.replace('"', "'")  # for jupyter notebooks
 
 # Collect potential files.
 filenames = []
