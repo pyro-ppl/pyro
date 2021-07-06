@@ -28,7 +28,7 @@ def mean_field_entropy(model, args, whitelist=None):
     sites are included.
     """
     trace = poutine.trace(model).get_trace(*args)
-    entropy = 0.
+    entropy = 0.0
     for name, site in trace.nodes.items():
         if site["type"] == "sample":
             if not poutine.util.site_is_subsample(site):
@@ -51,12 +51,14 @@ def helpful_support_errors(site):
                 "https://pyro.ai/examples/enumeration.html . "
                 "If you are already enumerating, take care to hide this site when "
                 "constructing an autoguide, e.g. "
-                f"guide = AutoNormal(poutine.block(model, hide=['{name}'])).")
+                f"guide = AutoNormal(poutine.block(model, hide=['{name}']))."
+            )
         if "sphere" in support_name:
             name = site["name"]
             raise ValueError(
                 f"Continuous inference cannot handle spherical sample site '{name}'. "
                 "Consider using ProjectedNormal distribution together with "
                 "a reparameterizer, e.g. "
-                f"poutine.reparam(config={{'{name}': ProjectedNormalReparam()}}).")
+                f"poutine.reparam(config={{'{name}': ProjectedNormalReparam()}})."
+            )
         raise e from None

@@ -87,18 +87,20 @@ class Polynomial(TransformModule):
 
         # Vector of powers of input dimension
         powers = torch.arange(1, count_degree + 2, dtype=torch.get_default_dtype())
-        self.register_buffer('powers', powers)
+        self.register_buffer("powers", powers)
 
         # Build mask of constants
-        mask = self.powers + torch.arange(count_degree + 1).unsqueeze(-1).type_as(powers)
+        mask = self.powers + torch.arange(count_degree + 1).unsqueeze(-1).type_as(
+            powers
+        )
         power_mask = mask
         mask = mask.reciprocal()
 
-        self.register_buffer('power_mask', power_mask)
-        self.register_buffer('mask', mask)
+        self.register_buffer("power_mask", power_mask)
+        self.register_buffer("mask", mask)
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.c.size(0))
+        stdv = 1.0 / math.sqrt(self.c.size(0))
         self.c.data.uniform_(-stdv, stdv)
 
     def _call(self, x):
@@ -124,12 +126,16 @@ class Polynomial(TransformModule):
 
         # Eq (8) from the paper, expanding the squared term and integrating
         # NOTE: The view_as is necessary because the batch dimensions were collapsed previously
-        y = self.c + (coefs * x_pow_matrix * self.mask.unsqueeze(-1)).sum((1, 2, 3)).view_as(x)
+        y = self.c + (coefs * x_pow_matrix * self.mask.unsqueeze(-1)).sum(
+            (1, 2, 3)
+        ).view_as(x)
 
         # log(|det(J)|) is calculated by the fundamental theorem of calculus, i.e. remove the constant
         # term and the integral from eq (8) (the equation for this isn't given in the paper)
         x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1) - 1).unsqueeze(-4)
-        self._cached_logDetJ = torch.log((coefs * x_pow_matrix).sum((1, 2, 3)).view_as(x) + 1e-8).sum(-1)
+        self._cached_logDetJ = torch.log(
+            (coefs * x_pow_matrix).sum((1, 2, 3)).view_as(x) + 1e-8
+        ).sum(-1)
 
         return y
 
@@ -144,7 +150,9 @@ class Polynomial(TransformModule):
         cached on the forward call)
         """
 
-        raise KeyError("Polynomial object expected to find key in intermediates cache but didn't")
+        raise KeyError(
+            "Polynomial object expected to find key in intermediates cache but didn't"
+        )
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -176,5 +184,9 @@ def polynomial(input_dim, hidden_dims=None):
     count_sum = 3
     if hidden_dims is None:
         hidden_dims = [input_dim * 10]
-    arn = AutoRegressiveNN(input_dim, hidden_dims, param_dims=[(count_degree + 1) * count_sum])
-    return Polynomial(arn, input_dim=input_dim, count_degree=count_degree, count_sum=count_sum)
+    arn = AutoRegressiveNN(
+        input_dim, hidden_dims, param_dims=[(count_degree + 1) * count_sum]
+    )
+    return Polynomial(
+        arn, input_dim=input_dim, count_degree=count_degree, count_sum=count_sum
+    )

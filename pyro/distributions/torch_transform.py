@@ -24,6 +24,7 @@ class ComposeTransformModule(torch.distributions.ComposeTransform, torch.nn.Modu
     so that transform parameters are automatically registered by Pyro's param
     store when used in :class:`~pyro.nn.module.PyroModule` instances.
     """
+
     def __init__(self, parts):
         super().__init__(parts)
         for part in parts:

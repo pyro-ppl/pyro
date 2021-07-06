@@ -9,11 +9,15 @@ import pyro.distributions as dist
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("constraint", [
-    constraints.real,
-    constraints.positive,
-    constraints.unit_interval,
-], ids=str)
+@pytest.mark.parametrize(
+    "constraint",
+    [
+        constraints.real,
+        constraints.positive,
+        constraints.unit_interval,
+    ],
+    ids=str,
+)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("event_shape", [(), (4,), (3, 2)], ids=str)
 def test_improper_uniform(constraint, batch_shape, event_shape):

@@ -1,8 +1,12 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+from contextlib import ExitStack
+
+import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.autoguide.guides import AutoStructured
+from pyro.poutine.plate_messenger import block_plate
 
 from .reparam import Reparam
 
@@ -57,13 +61,31 @@ class StructuredReparam(Reparam):
     def reparam(self, fn=None):
         return poutine.reparam(fn, config=self._reparam_config)
 
-    def __call__(self, name, fn, obs):
-        assert obs is None, "StructuredReparam does not support observe statements"
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
+        if name not in self.guide.prototype_trace.nodes:
+            return {"fn": fn, "value": value, "is_observed": is_observed}
+        if is_observed:
+            raise NotImplementedError(
+                f"At pyro.sample({repr(name)},...), "
+                "StructuredReparam does not support observe statements"
+            )
+
         if name not in self.deltas:  # On first sample site.
-            self.deltas = self.guide.get_deltas()
+            with ExitStack() as stack:
+                for plate in self.guide.plates.values():
+                    stack.enter_context(block_plate(dim=plate.dim, strict=False))
+                self.deltas = self.guide.get_deltas()
         new_fn = self.deltas.pop(name)
         value = new_fn.v
-        return new_fn, value
+
+        if poutine.get_mask() is not False:
+            log_density = new_fn.log_density + fn.log_prob(value)
+            new_fn = dist.Delta(value, log_density, new_fn.event_dim)
+        return {"fn": new_fn, "value": value, "is_observed": True}
 
     def transform_samples(self, aux_samples, save_params=None):
         """

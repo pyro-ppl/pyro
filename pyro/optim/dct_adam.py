@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from typing import Callable, Dict, Optional, Tuple
 
 import torch
 from torch.nn.functional import pad
@@ -10,7 +11,7 @@ from torch.optim.optimizer import Optimizer
 from pyro.ops.tensor_utils import dct, idct, next_fast_len
 
 
-def _transform_forward(x, dim, duration):
+def _transform_forward(x: torch.Tensor, dim: int, duration: int) -> torch.Tensor:
     assert not x.requires_grad
     assert dim < 0
     assert duration == x.size(dim)
@@ -24,7 +25,7 @@ def _transform_forward(x, dim, duration):
     return torch.cat([time_domain, freq_domain], dim=dim)
 
 
-def _transform_inverse(x, dim, duration):
+def _transform_inverse(x: torch.Tensor, dim: int, duration: int):
     assert not x.requires_grad
     assert dim < 0
     dots = (slice(None),) * (x.dim() + dim)
@@ -72,13 +73,28 @@ class DCTAdam(Optimizer):
     :param bool subsample_aware: whether to update gradient statistics only for
         those elements that appear in a subsample (default: False).
     """
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
-                 clip_norm=10.0, lrd=1.0, subsample_aware=False):
-        defaults = dict(lr=lr, betas=betas, eps=eps, clip_norm=clip_norm, lrd=lrd,
-                        subsample_aware=subsample_aware)
+
+    def __init__(
+        self,
+        params,
+        lr: float = 1e-3,
+        betas: Tuple = (0.9, 0.999),
+        eps: float = 1e-8,
+        clip_norm: float = 10.0,
+        lrd: float = 1.0,
+        subsample_aware: bool = False,
+    ):
+        defaults = dict(
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            clip_norm=clip_norm,
+            lrd=lrd,
+            subsample_aware=subsample_aware,
+        )
         super().__init__(params, defaults)
 
-    def step(self, closure=None):
+    def step(self, closure: Optional[Callable] = None) -> Optional[float]:
         """
         :param closure: An optional closure that reevaluates the model and returns the loss.
 
@@ -89,23 +105,23 @@ class DCTAdam(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
-            group['lr'] *= group['lrd']
+            group["lr"] *= group["lrd"]
 
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
 
                 subsample = getattr(p, "_pyro_subsample", {})
-                if subsample and group['subsample_aware']:
+                if subsample and group["subsample_aware"]:
                     self._step_param_subsample(group, p, subsample)
                 else:
                     self._step_param(group, p)
 
         return loss
 
-    def _step_param(self, group, p):
+    def _step_param(self, group: Dict, p) -> None:
         grad = p.grad.data
-        grad.clamp_(-group['clip_norm'], group['clip_norm'])
+        grad.clamp_(-group["clip_norm"], group["clip_norm"])
 
         # Transform selected parameters via dct.
         time_dim = getattr(p, "_pyro_dct_dim", None)
@@ -117,26 +133,26 @@ class DCTAdam(Optimizer):
 
         # State initialization
         if len(state) == 0:
-            state['step'] = 0
+            state["step"] = 0
             # Exponential moving average of gradient values
-            state['exp_avg'] = torch.zeros_like(grad)
+            state["exp_avg"] = torch.zeros_like(grad)
             # Exponential moving average of squared gradient values
-            state['exp_avg_sq'] = torch.zeros_like(grad)
+            state["exp_avg_sq"] = torch.zeros_like(grad)
 
-        exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
-        beta1, beta2 = group['betas']
+        exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+        beta1, beta2 = group["betas"]
 
-        state['step'] += 1
+        state["step"] += 1
 
         # Decay the first and second moment running average coefficient
         exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
         exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
-        denom = exp_avg_sq.sqrt().add_(group['eps'])
+        denom = exp_avg_sq.sqrt().add_(group["eps"])
 
-        bias_correction1 = 1 - beta1 ** state['step']
-        bias_correction2 = 1 - beta2 ** state['step']
-        step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
+        bias_correction1 = 1 - beta1 ** state["step"]
+        bias_correction2 = 1 - beta2 ** state["step"]
+        step_size = group["lr"] * math.sqrt(bias_correction2) / bias_correction1
 
         if time_dim is None:
             p.data.addcdiv_(exp_avg, denom, value=-step_size)
@@ -144,11 +160,11 @@ class DCTAdam(Optimizer):
             step = _transform_inverse(exp_avg / denom, time_dim, duration)
             p.data.add_(step.mul_(-step_size))
 
-    def _step_param_subsample(self, group, p, subsample):
+    def _step_param_subsample(self, group: Dict, p, subsample) -> None:
         mask = _get_mask(p, subsample)
 
         grad = p.grad.data.masked_select(mask)
-        grad.clamp_(-group['clip_norm'], group['clip_norm'])
+        grad.clamp_(-group["clip_norm"], group["clip_norm"])
 
         # Transform selected parameters via dct.
         time_dim = getattr(p, "_pyro_dct_dim", None)
@@ -160,29 +176,36 @@ class DCTAdam(Optimizer):
 
         # State initialization
         if len(state) == 0:
-            state['step'] = torch.zeros_like(p)
+            state["step"] = torch.zeros_like(p)
             # Exponential moving average of gradient values
-            state['exp_avg'] = torch.zeros_like(p)
+            state["exp_avg"] = torch.zeros_like(p)
             # Exponential moving average of squared gradient values
-            state['exp_avg_sq'] = torch.zeros_like(p)
+            state["exp_avg_sq"] = torch.zeros_like(p)
 
-        beta1, beta2 = group['betas']
+        beta1, beta2 = group["betas"]
 
-        state_step = state['step'].masked_select(mask).add_(1)
-        state['step'].masked_scatter_(mask, state_step)
+        state_step = state["step"].masked_select(mask).add_(1)
+        state["step"].masked_scatter_(mask, state_step)
 
         # Decay the first and second moment running average coefficient
-        exp_avg = state['exp_avg'].masked_select(mask).mul_(beta1).add_(grad, alpha=1 - beta1)
-        state['exp_avg'].masked_scatter_(mask, exp_avg)
+        exp_avg = (
+            state["exp_avg"].masked_select(mask).mul_(beta1).add_(grad, alpha=1 - beta1)
+        )
+        state["exp_avg"].masked_scatter_(mask, exp_avg)
 
-        exp_avg_sq = state['exp_avg_sq'].masked_select(mask).mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
-        state['exp_avg_sq'].masked_scatter_(mask, exp_avg_sq)
+        exp_avg_sq = (
+            state["exp_avg_sq"]
+            .masked_select(mask)
+            .mul_(beta2)
+            .addcmul_(grad, grad, value=1 - beta2)
+        )
+        state["exp_avg_sq"].masked_scatter_(mask, exp_avg_sq)
 
-        denom = exp_avg_sq.sqrt_().add_(group['eps'])
+        denom = exp_avg_sq.sqrt_().add_(group["eps"])
 
         bias_correction1 = 1 - beta1 ** state_step
         bias_correction2 = 1 - beta2 ** state_step
-        step_size = bias_correction2.sqrt_().div_(bias_correction1).mul_(group['lr'])
+        step_size = bias_correction2.sqrt_().div_(bias_correction1).mul_(group["lr"])
 
         step = exp_avg.div_(denom)
         if time_dim is not None:

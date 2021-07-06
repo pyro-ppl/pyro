@@ -47,11 +47,15 @@ class ConjugateReparam(Reparam):
         implementation.
     :type guide: ~pyro.distributions.Distribution or callable
     """
+
     def __init__(self, guide):
         self.guide = guide
 
-    def __call__(self, name, fn, obs):
-        assert obs is None, "PosteriorReparam does not support observe statements"
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        value = msg["value"]
+        is_observed = msg["is_observed"]
 
         # Compute a guide distribution, either static or dependent.
         guide_dist = self.guide
@@ -66,10 +70,20 @@ class ConjugateReparam(Reparam):
         if not fn.has_rsample:
             # Note supporting non-reparameterized sites would require more delicate
             # handling of traced sites than the crude _do_not_trace flag below.
-            raise NotImplementedError("ConjugateReparam inference supports only reparameterized "
-                                      "distributions, but got {}".format(type(fn)))
-        value = pyro.sample("{}_updated".format(name), fn,
-                            infer={"is_auxiliary": True, "_do_not_trace": True})
+            raise NotImplementedError(
+                "ConjugateReparam inference supports only reparameterized "
+                "distributions, but got {}".format(type(fn))
+            )
+        value = pyro.sample(
+            f"{name}_updated",
+            fn,
+            obs=value,
+            infer={
+                "is_observed": is_observed,
+                "is_auxiliary": True,
+                "_do_not_trace": True,
+            },
+        )
 
         # Compute importance weight. Let p(z) be the original fn, q(z|x) be
         # the guide, and u(z) be the conjugate_updated distribution. Then
@@ -91,4 +105,4 @@ class ConjugateReparam(Reparam):
 
         # Return an importance-weighted point estimate.
         new_fn = dist.Delta(value, log_density=log_density, event_dim=fn.event_dim)
-        return new_fn, value
+        return {"fn": new_fn, "value": value, "is_observed": True}

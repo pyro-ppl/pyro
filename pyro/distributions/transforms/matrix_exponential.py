@@ -21,7 +21,7 @@ class ConditionedMatrixExponential(Transform):
     codomain = constraints.real_vector
     bijective = True
 
-    def __init__(self, weights=None, iterations=8, normalization='none', bound=None):
+    def __init__(self, weights=None, iterations=8, normalization="none", bound=None):
         super().__init__(cache_size=1)
         assert iterations > 0
         self.weights = weights
@@ -31,10 +31,10 @@ class ConditionedMatrixExponential(Transform):
 
         # Currently, weight and spectral normalization are unimplemented. This doesn't effect the validity of the
         # bijection, although applying these norms should improve the numerical conditioning of the approximation.
-        if normalization == 'weight' or normalization == 'spectral':
-            raise NotImplementedError('Normalization is currently not implemented.')
-        elif normalization != 'none':
-            raise ValueError('Unknown normalization method: {}'.format(normalization))
+        if normalization == "weight" or normalization == "spectral":
+            raise NotImplementedError("Normalization is currently not implemented.")
+        elif normalization != "none":
+            raise ValueError("Unknown normalization method: {}".format(normalization))
 
     def _exp(self, x, M):
         """
@@ -151,14 +151,16 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
     codomain = constraints.real_vector
     bijective = True
 
-    def __init__(self, input_dim, iterations=8, normalization='none', bound=None):
-        super().__init__(iterations=iterations, normalization=normalization, bound=bound)
+    def __init__(self, input_dim, iterations=8, normalization="none", bound=None):
+        super().__init__(
+            iterations=iterations, normalization=normalization, bound=bound
+        )
 
         self.weights = nn.Parameter(torch.Tensor(input_dim, input_dim))
         self.reset_parameters()
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.weights.size(0))
+        stdv = 1.0 / math.sqrt(self.weights.size(0))
         self.weights.data.uniform_(-stdv, stdv)
 
 
@@ -230,7 +232,7 @@ class ConditionalMatrixExponential(ConditionalTransformModule):
     codomain = constraints.real_vector
     bijective = True
 
-    def __init__(self, input_dim, nn, iterations=8, normalization='none', bound=None):
+    def __init__(self, input_dim, nn, iterations=8, normalization="none", bound=None):
         super().__init__()
         self.input_dim = input_dim
         self.nn = nn
@@ -248,11 +250,16 @@ class ConditionalMatrixExponential(ConditionalTransformModule):
         def weights():
             w = cond_nn()
             return w.view(w.shape[:-1] + (self.input_dim, self.input_dim))
-        return ConditionedMatrixExponential(weights, iterations=self.iterations, normalization=self.normalization,
-                                            bound=self.bound)
+
+        return ConditionedMatrixExponential(
+            weights,
+            iterations=self.iterations,
+            normalization=self.normalization,
+            bound=self.bound,
+        )
 
 
-def matrix_exponential(input_dim, iterations=8, normalization='none', bound=None):
+def matrix_exponential(input_dim, iterations=8, normalization="none", bound=None):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.MatrixExponential` object for consistency
@@ -277,11 +284,19 @@ def matrix_exponential(input_dim, iterations=8, normalization='none', bound=None
 
     """
 
-    return MatrixExponential(input_dim, iterations=iterations, normalization=normalization, bound=bound)
+    return MatrixExponential(
+        input_dim, iterations=iterations, normalization=normalization, bound=bound
+    )
 
 
-def conditional_matrix_exponential(input_dim, context_dim, hidden_dims=None, iterations=8, normalization='none',
-                                   bound=None):
+def conditional_matrix_exponential(
+    input_dim,
+    context_dim,
+    hidden_dims=None,
+    iterations=8,
+    normalization="none",
+    bound=None,
+):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.ConditionalMatrixExponential` object for
@@ -314,4 +329,6 @@ def conditional_matrix_exponential(input_dim, context_dim, hidden_dims=None, ite
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
     nn = DenseNN(context_dim, hidden_dims, param_dims=[input_dim * input_dim])
-    return ConditionalMatrixExponential(input_dim, nn, iterations=iterations, normalization=normalization, bound=bound)
+    return ConditionalMatrixExponential(
+        input_dim, nn, iterations=iterations, normalization=normalization, bound=bound
+    )

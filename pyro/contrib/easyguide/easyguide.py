@@ -42,6 +42,7 @@ class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
 
     :param callable model: A Pyro model.
     """
+
     def __init__(self, model):
         super().__init__()
         self._pyro_name = type(self).__name__
@@ -58,12 +59,16 @@ class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
         model = poutine.block(InitMessenger(self.init)(self.model), prototype_hide_fn)
-        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
+        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(
+            *args, **kwargs
+        )
 
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if not frame.vectorized:
-                    raise NotImplementedError("EasyGuide does not support sequential pyro.plate")
+                    raise NotImplementedError(
+                        "EasyGuide does not support sequential pyro.plate"
+                    )
                 self.frames[frame.name] = frame
 
     @abstractmethod
@@ -100,14 +105,18 @@ class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
         self.plates.clear()
         return result
 
-    def plate(self, name, size=None, subsample_size=None, subsample=None, *args, **kwargs):
+    def plate(
+        self, name, size=None, subsample_size=None, subsample=None, *args, **kwargs
+    ):
         """
         A wrapper around :class:`pyro.plate` to allow `EasyGuide` to
         automatically construct plates. You should use this rather than
         :class:`pyro.plate` inside your :meth:`guide` implementation.
         """
         if name not in self.plates:
-            self.plates[name] = pyro.plate(name, size, subsample_size, subsample, *args, **kwargs)
+            self.plates[name] = pyro.plate(
+                name, size, subsample_size, subsample, *args, **kwargs
+            )
         return self.plates[name]
 
     def group(self, match=".*"):
@@ -119,12 +128,17 @@ class EasyGuide(PyroModule, metaclass=_EasyGuideMeta):
         :rtype: Group
         """
         if match not in self.groups:
-            sites = [site
-                     for name, site in self.prototype_trace.iter_stochastic_nodes()
-                     if re.match(match, name)]
+            sites = [
+                site
+                for name, site in self.prototype_trace.iter_stochastic_nodes()
+                if re.match(match, name)
+            ]
             if not sites:
-                raise ValueError("EasyGuide.group() pattern {} matched no model sites"
-                                 .format(repr(match)))
+                raise ValueError(
+                    "EasyGuide.group() pattern {} matched no model sites".format(
+                        repr(match)
+                    )
+                )
             self.groups[match] = Group(self, sites)
         return self.groups[match]
 
@@ -171,6 +185,7 @@ class Group:
     :param EasyGuide guide: An easyguide instance.
     :param list sites: A list of model sites.
     """
+
     def __init__(self, guide, sites):
         assert isinstance(sites, list)
         assert sites
@@ -181,10 +196,13 @@ class Group:
 
         # A group is in a frame only if all its sample sites are in that frame.
         # Thus a group can be subsampled only if all its sites can be subsampled.
-        self.common_frames = frozenset.intersection(*(
-            frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            for site in sites))
-        rightmost_common_dim = -float('inf')
+        self.common_frames = frozenset.intersection(
+            *(
+                frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+                for site in sites
+            )
+        )
+        rightmost_common_dim = -float("inf")
         if self.common_frames:
             rightmost_common_dim = max(f.dim for f in self.common_frames)
 
@@ -202,8 +220,10 @@ class Group:
             if len(site_batch_shape) > -rightmost_common_dim:
                 raise ValueError(
                     "Group expects all per-site plates to be right of all common plates, "
-                    "but found a per-site plate {} on left at site {}"
-                    .format(-len(site_batch_shape), repr(site["name"])))
+                    "but found a per-site plate {} on left at site {}".format(
+                        -len(site_batch_shape), repr(site["name"])
+                    )
+                )
             site_batch_shape = torch.Size(site_batch_shape)
             self._site_batch_shapes[site["name"]] = site_batch_shape
             self._site_sizes[site["name"]] = site_batch_shape.numel() * site_event_numel
@@ -211,7 +231,7 @@ class Group:
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['_guide'] = state['_guide']()  # weakref -> ref
+        state["_guide"] = state["_guide"]()  # weakref -> ref
         return state
 
     def __setstate__(self, state):
@@ -237,8 +257,11 @@ class Group:
         """
         # Sample a packed tensor.
         if fn.event_shape != self.event_shape:
-            raise ValueError("Invalid fn.event_shape for group: expected {}, actual {}"
-                             .format(tuple(self.event_shape), tuple(fn.event_shape)))
+            raise ValueError(
+                "Invalid fn.event_shape for group: expected {}, actual {}".format(
+                    tuple(self.event_shape), tuple(fn.event_shape)
+                )
+            )
         if infer is None:
             infer = {}
         infer["is_auxiliary"] = True
@@ -253,8 +276,10 @@ class Group:
 
             # Extract slice from packed sample.
             size = self._site_sizes[name]
-            batch_shape = broadcast_shape(common_batch_shape, self._site_batch_shapes[name])
-            unconstrained_z = guide_z[..., pos: pos + size]
+            batch_shape = broadcast_shape(
+                common_batch_shape, self._site_batch_shapes[name]
+            )
+            unconstrained_z = guide_z[..., pos : pos + size]
             unconstrained_z = unconstrained_z.reshape(batch_shape + fn.event_shape)
             pos += size
 
@@ -262,7 +287,9 @@ class Group:
             transform = biject_to(fn.support)
             z = transform(unconstrained_z)
             log_density = transform.inv.log_abs_det_jacobian(z, unconstrained_z)
-            log_density = sum_rightmost(log_density, log_density.dim() - z.dim() + fn.event_dim)
+            log_density = sum_rightmost(
+                log_density, log_density.dim() - z.dim() + fn.event_dim
+            )
             delta_dist = dist.Delta(z, log_density=log_density, event_dim=fn.event_dim)
 
             # Replay model sample statement.
@@ -282,8 +309,10 @@ class Group:
         :return: A dict mapping model site name to sampled value.
         :rtype: dict
         """
-        return {site["name"]: self.guide.map_estimate(site["name"])
-                for site in self.prototype_sites}
+        return {
+            site["name"]: self.guide.map_estimate(site["name"])
+            for site in self.prototype_sites
+        }
 
 
 def easy_guide(model):

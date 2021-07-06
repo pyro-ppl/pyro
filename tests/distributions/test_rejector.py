@@ -18,8 +18,8 @@ from tests.common import assert_equal
 SIZES = list(map(torch.Size, [[], [1], [2], [3], [1, 1], [1, 2], [2, 3, 4]]))
 
 
-@pytest.mark.parametrize('sample_shape', SIZES)
-@pytest.mark.parametrize('batch_shape', filter(bool, SIZES))
+@pytest.mark.parametrize("sample_shape", SIZES)
+@pytest.mark.parametrize("batch_shape", filter(bool, SIZES))
 def test_rejection_standard_gamma_sample_shape(sample_shape, batch_shape):
     alphas = torch.ones(batch_shape)
     dist = RejectionStandardGamma(alphas)
@@ -27,8 +27,8 @@ def test_rejection_standard_gamma_sample_shape(sample_shape, batch_shape):
     assert x.shape == sample_shape + batch_shape
 
 
-@pytest.mark.parametrize('sample_shape', SIZES)
-@pytest.mark.parametrize('batch_shape', filter(bool, SIZES))
+@pytest.mark.parametrize("sample_shape", SIZES)
+@pytest.mark.parametrize("batch_shape", filter(bool, SIZES))
 def test_rejection_exponential_sample_shape(sample_shape, batch_shape):
     rates = torch.ones(batch_shape)
     factors = torch.ones(batch_shape) * 0.5
@@ -46,8 +46,8 @@ def compute_elbo_grad(model, guide, variables):
     return grad(surrogate_elbo.sum(), variables, create_graph=True)
 
 
-@pytest.mark.parametrize('rate', [0.5, 1.0, 2.0])
-@pytest.mark.parametrize('factor', [0.25, 0.5, 1.0])
+@pytest.mark.parametrize("rate", [0.5, 1.0, 2.0])
+@pytest.mark.parametrize("factor", [0.25, 0.5, 1.0])
 def test_rejector(rate, factor):
     num_samples = 100000
     rates = torch.tensor(rate).expand(num_samples, 1)
@@ -57,13 +57,13 @@ def test_rejector(rate, factor):
     dist2 = RejectionExponential(rates, factors)  # implemented using Rejector
     x1 = dist1.rsample()
     x2 = dist2.rsample()
-    assert_equal(x1.mean(), x2.mean(), prec=0.02, msg='bug in .rsample()')
-    assert_equal(x1.std(), x2.std(), prec=0.02, msg='bug in .rsample()')
-    assert_equal(dist1.log_prob(x1), dist2.log_prob(x1), msg='bug in .log_prob()')
+    assert_equal(x1.mean(), x2.mean(), prec=0.02, msg="bug in .rsample()")
+    assert_equal(x1.std(), x2.std(), prec=0.02, msg="bug in .rsample()")
+    assert_equal(dist1.log_prob(x1), dist2.log_prob(x1), msg="bug in .log_prob()")
 
 
-@pytest.mark.parametrize('rate', [0.5, 1.0, 2.0])
-@pytest.mark.parametrize('factor', [0.25, 0.5, 1.0])
+@pytest.mark.parametrize("rate", [0.5, 1.0, 2.0])
+@pytest.mark.parametrize("factor", [0.25, 0.5, 1.0])
 def test_exponential_elbo(rate, factor):
     num_samples = 100000
     rates = torch.full((num_samples, 1), rate).requires_grad_()
@@ -76,13 +76,13 @@ def test_exponential_elbo(rate, factor):
     for guide in [guide1, guide2]:
         grads.append(compute_elbo_grad(model, guide, [rates])[0])
     expected, actual = grads
-    assert_equal(actual.mean(), expected.mean(), prec=0.05, msg='bad grad for rate')
+    assert_equal(actual.mean(), expected.mean(), prec=0.05, msg="bad grad for rate")
 
     actual = compute_elbo_grad(model, guide2, [factors])[0]
-    assert_equal(actual.mean().item(), 0.0, prec=0.05, msg='bad grad for factor')
+    assert_equal(actual.mean().item(), 0.0, prec=0.05, msg="bad grad for factor")
 
 
-@pytest.mark.parametrize('alpha', [1.0, 2.0, 5.0])
+@pytest.mark.parametrize("alpha", [1.0, 2.0, 5.0])
 def test_standard_gamma_elbo(alpha):
     num_samples = 100000
     alphas = torch.full((num_samples, 1), alpha).requires_grad_()
@@ -96,11 +96,11 @@ def test_standard_gamma_elbo(alpha):
     for guide in [guide1, guide2]:
         grads.append(compute_elbo_grad(model, guide, [alphas])[0].data)
     expected, actual = grads
-    assert_equal(actual.mean(), expected.mean(), prec=0.01, msg='bad grad for alpha')
+    assert_equal(actual.mean(), expected.mean(), prec=0.01, msg="bad grad for alpha")
 
 
-@pytest.mark.parametrize('alpha', [1.0, 2.0, 5.0])
-@pytest.mark.parametrize('beta', [0.2, 0.5, 1.0, 2.0, 5.0])
+@pytest.mark.parametrize("alpha", [1.0, 2.0, 5.0])
+@pytest.mark.parametrize("beta", [0.2, 0.5, 1.0, 2.0, 5.0])
 def test_gamma_elbo(alpha, beta):
     num_samples = 100000
     alphas = torch.full((num_samples, 1), alpha).requires_grad_()
@@ -117,12 +117,19 @@ def test_gamma_elbo(alpha, beta):
     expected = [g.mean() for g in expected]
     actual = [g.mean() for g in actual]
     scale = [(1 + abs(g)) for g in expected]
-    assert_equal(actual[0] / scale[0], expected[0] / scale[0], prec=0.01, msg='bad grad for alpha')
-    assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.01, msg='bad grad for beta')
+    assert_equal(
+        actual[0] / scale[0],
+        expected[0] / scale[0],
+        prec=0.01,
+        msg="bad grad for alpha",
+    )
+    assert_equal(
+        actual[1] / scale[1], expected[1] / scale[1], prec=0.01, msg="bad grad for beta"
+    )
 
 
-@pytest.mark.parametrize('alpha', [0.2, 0.5, 1.0, 2.0, 5.0])
-@pytest.mark.parametrize('beta', [0.2, 0.5, 1.0, 2.0, 5.0])
+@pytest.mark.parametrize("alpha", [0.2, 0.5, 1.0, 2.0, 5.0])
+@pytest.mark.parametrize("beta", [0.2, 0.5, 1.0, 2.0, 5.0])
 def test_shape_augmented_gamma_elbo(alpha, beta):
     num_samples = 100000
     alphas = torch.full((num_samples, 1), alpha).requires_grad_()
@@ -139,12 +146,19 @@ def test_shape_augmented_gamma_elbo(alpha, beta):
     expected = [g.mean() for g in expected]
     actual = [g.mean() for g in actual]
     scale = [(1 + abs(g)) for g in expected]
-    assert_equal(actual[0] / scale[0], expected[0] / scale[0], prec=0.05, msg='bad grad for alpha')
-    assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.05, msg='bad grad for beta')
+    assert_equal(
+        actual[0] / scale[0],
+        expected[0] / scale[0],
+        prec=0.05,
+        msg="bad grad for alpha",
+    )
+    assert_equal(
+        actual[1] / scale[1], expected[1] / scale[1], prec=0.05, msg="bad grad for beta"
+    )
 
 
-@pytest.mark.parametrize('alpha', [0.5, 1.0, 4.0])
-@pytest.mark.parametrize('beta', [0.5, 1.0, 4.0])
+@pytest.mark.parametrize("alpha", [0.5, 1.0, 4.0])
+@pytest.mark.parametrize("beta", [0.5, 1.0, 4.0])
 def test_shape_augmented_beta(alpha, beta):
     num_samples = 10000
     alphas = torch.full((num_samples, 1), alpha).requires_grad_()
@@ -157,5 +171,7 @@ def test_shape_augmented_beta(alpha, beta):
     mean_beta_grad = betas.grad.mean().item()
     expected_alpha_grad = beta / (alpha + beta) ** 2
     expected_beta_grad = -alpha / (alpha + beta) ** 2
-    assert_equal(mean_alpha_grad, expected_alpha_grad, prec=0.02, msg='bad grad for alpha')
-    assert_equal(mean_beta_grad, expected_beta_grad, prec=0.02, msg='bad grad for beta')
+    assert_equal(
+        mean_alpha_grad, expected_alpha_grad, prec=0.02, msg="bad grad for alpha"
+    )
+    assert_equal(mean_beta_grad, expected_beta_grad, prec=0.02, msg="bad grad for beta")

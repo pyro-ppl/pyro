@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 def test_multi_nested():
-
     @scope
     def model1(r=True):
         model2()
@@ -29,25 +28,25 @@ def test_multi_nested():
     def model2():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 
-    true_samples = ["model1/model2/y",
-                    "model1/model2__1/y",
-                    "model1/inter/model2/y",
-                    "model1/inter/model1/model2/y",
-                    "model1/inter/model1/model2__1/y",
-                    "model1/inter/model1/inter/model2/y",
-                    "model1/inter/model1/model2__2/y",
-                    "model1/model2__2/y"]
+    true_samples = [
+        "model1/model2/y",
+        "model1/model2__1/y",
+        "model1/inter/model2/y",
+        "model1/inter/model1/model2/y",
+        "model1/inter/model1/model2__1/y",
+        "model1/inter/model1/inter/model2/y",
+        "model1/inter/model1/model2__2/y",
+        "model1/model2__2/y",
+    ]
 
     tr = poutine.trace(name_count(model1)).get_trace(r=True)
 
-    samples = [name for name, node in tr.nodes.items()
-               if node["type"] == "sample"]
+    samples = [name for name, node in tr.nodes.items() if node["type"] == "sample"]
     logger.debug(samples)
     assert true_samples == samples
 
 
 def test_recur_multi():
-
     @scope(inner=True)
     def model1(r=True):
         model2()
@@ -61,23 +60,23 @@ def test_recur_multi():
     def model2():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 
-    true_samples = ["model1/model2/y",
-                    "model1/inter/model2/y",
-                    "model1/inter/model1/model2/y",
-                    "model1/inter/model1/inter/model2/y",
-                    "model1/inter/model1/model2/y__1",
-                    "model1/model2/y__1"]
+    true_samples = [
+        "model1/model2/y",
+        "model1/inter/model2/y",
+        "model1/inter/model1/model2/y",
+        "model1/inter/model1/inter/model2/y",
+        "model1/inter/model1/model2/y__1",
+        "model1/model2/y__1",
+    ]
 
     tr = poutine.trace(name_count(model1)).get_trace()
 
-    samples = [name for name, node in tr.nodes.items()
-               if node["type"] == "sample"]
+    samples = [name for name, node in tr.nodes.items() if node["type"] == "sample"]
     logger.debug(samples)
     assert true_samples == samples
 
 
 def test_only_withs():
-
     def model1():
         with scope(prefix="a"):
             with scope(prefix="b"):
@@ -91,14 +90,13 @@ def test_only_withs():
 
 
 def test_mutual_recur():
-
     @scope
     def model1(n):
         pyro.sample("a", dist.Bernoulli(0.5))
         if n <= 0:
             return
         else:
-            return model2(n-1)
+            return model2(n - 1)
 
     @scope
     def model2(n):
@@ -108,14 +106,14 @@ def test_mutual_recur():
         else:
             model1(n)
 
-    names = set(["_INPUT", "_RETURN",
-                 "model2/b", "model2/model1/a", "model2/model1/model2/b"])
+    names = set(
+        ["_INPUT", "_RETURN", "model2/b", "model2/model1/a", "model2/model1/model2/b"]
+    )
     tr_names = set([name for name in poutine.trace(name_count(model2)).get_trace(1)])
     assert names == tr_names
 
 
 def test_simple_recur():
-
     @scope
     def geometric(p):
         x = pyro.sample("x", dist.Bernoulli(p))
@@ -134,7 +132,6 @@ def test_simple_recur():
 
 
 def test_basic_scope():
-
     @scope
     def f1():
         return pyro.sample("x", dist.Bernoulli(0.5))
@@ -153,7 +150,6 @@ def test_basic_scope():
 
 
 def test_nested_traces():
-
     @scope
     def f1():
         return pyro.sample("x", dist.Bernoulli(0.5))
@@ -167,8 +163,9 @@ def test_nested_traces():
 
     expected_names = ["f2/f1/x", "f2/f1__1/x", "f2/f1__2/x", "f2/y"]
     tr2 = poutine.trace(name_count(name_count(f2))).get_trace()
-    actual_names = [name for name, node in tr2.nodes.items()
-                    if node['type'] == "sample"]
+    actual_names = [
+        name for name, node in tr2.nodes.items() if node["type"] == "sample"
+    ]
     assert expected_names == actual_names
 
 
@@ -183,7 +180,8 @@ def test_no_param():
 
     expected_names = ["a", "model/b"]
     tr = poutine.trace(model).get_trace()
-    actual_names = [name for name, node in tr.nodes.items()
-                    if node['type'] in ('param', 'sample')]
+    actual_names = [
+        name for name, node in tr.nodes.items() if node["type"] in ("param", "sample")
+    ]
 
     assert expected_names == actual_names

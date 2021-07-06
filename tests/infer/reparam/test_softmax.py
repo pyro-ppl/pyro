@@ -11,6 +11,8 @@ from pyro import poutine
 from pyro.infer.reparam import GumbelSoftmaxReparam
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 # Test helper to extract a few central moments from samples.
 def get_moments(x):
@@ -31,8 +33,9 @@ def test_gumbel_softmax(temperature, shape, dim):
     def model():
         with pyro.plate_stack("plates", shape):
             with pyro.plate("particles", 10000):
-                pyro.sample("x", dist.RelaxedOneHotCategorical(temperature,
-                                                               logits=logits))
+                pyro.sample(
+                    "x", dist.RelaxedOneHotCategorical(temperature, logits=logits)
+                )
 
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = get_moments(value)
@@ -46,3 +49,19 @@ def test_gumbel_softmax(temperature, shape, dim):
         expected_grad = grad(expected_m, [logits], retain_graph=True)
         actual_grad = grad(actual_m, [logits], retain_graph=True)
         assert_close(actual_grad, expected_grad, atol=0.05)
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("temperature", [0.01, 0.1, 1.0])
+@pytest.mark.parametrize("dim", [2, 3])
+def test_init(temperature, shape, dim):
+    temperature = torch.tensor(temperature)
+    logits = torch.randn(shape + (dim,)).requires_grad_()
+
+    def model():
+        with pyro.plate_stack("plates", shape):
+            return pyro.sample(
+                "x", dist.RelaxedOneHotCategorical(temperature, logits=logits)
+            )
+
+    check_init_reparam(model, GumbelSoftmaxReparam())

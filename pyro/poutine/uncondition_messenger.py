@@ -9,6 +9,7 @@ class UnconditionMessenger(Messenger):
     Messenger to force the value of observed nodes to be sampled from their
     distribution, ignoring observations.
     """
+
     def __init__(self):
         super().__init__()
 

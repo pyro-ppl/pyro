@@ -78,8 +78,20 @@ class VariationalSparseGP(GPModel):
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     """
-    def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
-                 latent_shape=None, num_data=None, whiten=False, jitter=1e-6):
+
+    def __init__(
+        self,
+        X,
+        y,
+        kernel,
+        Xu,
+        likelihood,
+        mean_function=None,
+        latent_shape=None,
+        num_data=None,
+        whiten=False,
+        jitter=1e-6,
+    ):
         super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
@@ -106,22 +118,37 @@ class VariationalSparseGP(GPModel):
 
         M = self.Xu.size(0)
         Kuu = self.kernel(self.Xu).contiguous()
-        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.cholesky()
+        Kuu.view(-1)[:: M + 1] += self.jitter  # add jitter to the diagonal
+        Luu = torch.linalg.cholesky(Kuu)
 
         zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:
             identity = eye_like(self.Xu, M)
-            pyro.sample(self._pyro_get_fullname("u"),
-                        dist.MultivariateNormal(zero_loc, scale_tril=identity)
-                            .to_event(zero_loc.dim() - 1))
+            pyro.sample(
+                self._pyro_get_fullname("u"),
+                dist.MultivariateNormal(zero_loc, scale_tril=identity).to_event(
+                    zero_loc.dim() - 1
+                ),
+            )
         else:
-            pyro.sample(self._pyro_get_fullname("u"),
-                        dist.MultivariateNormal(zero_loc, scale_tril=Luu)
-                            .to_event(zero_loc.dim() - 1))
+            pyro.sample(
+                self._pyro_get_fullname("u"),
+                dist.MultivariateNormal(zero_loc, scale_tril=Luu).to_event(
+                    zero_loc.dim() - 1
+                ),
+            )
 
-        f_loc, f_var = conditional(self.X, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
-                                   Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
+        f_loc, f_var = conditional(
+            self.X,
+            self.Xu,
+            self.kernel,
+            self.u_loc,
+            self.u_scale_tril,
+            Luu,
+            full_cov=False,
+            whiten=self.whiten,
+            jitter=self.jitter,
+        )
 
         f_loc = f_loc + self.mean_function(self.X)
         if self.y is None:
@@ -137,9 +164,12 @@ class VariationalSparseGP(GPModel):
         self.set_mode("guide")
         self._load_pyro_samples()
 
-        pyro.sample(self._pyro_get_fullname("u"),
-                    dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril)
-                        .to_event(self.u_loc.dim()-1))
+        pyro.sample(
+            self._pyro_get_fullname("u"),
+            dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril).to_event(
+                self.u_loc.dim() - 1
+            ),
+        )
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -163,6 +193,14 @@ class VariationalSparseGP(GPModel):
         self._check_Xnew_shape(Xnew)
         self.set_mode("guide")
 
-        loc, cov = conditional(Xnew, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
-                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
+        loc, cov = conditional(
+            Xnew,
+            self.Xu,
+            self.kernel,
+            self.u_loc,
+            self.u_scale_tril,
+            full_cov=full_cov,
+            whiten=self.whiten,
+            jitter=self.jitter,
+        )
         return loc + self.mean_function(Xnew), cov

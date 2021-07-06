@@ -23,11 +23,9 @@ a simple model of a noisy harmonic oscillator of the form:
 
 
 class SimpleHarmonicModel:
-
     def __init__(self, process_noise, measurement_noise):
-        self.A = torch.tensor([[0., 1.],
-                               [-1., 0.]])
-        self.B = torch.tensor([3., 3.])
+        self.A = torch.tensor([[0.0, 1.0], [-1.0, 0.0]])
+        self.B = torch.tensor([3.0, 3.0])
         self.sigma_z = torch.tensor(process_noise)
         self.sigma_y = torch.tensor(measurement_noise)
 
@@ -39,15 +37,15 @@ class SimpleHarmonicModel:
         self.t += 1
         state["z"] = pyro.sample(
             "z_{}".format(self.t),
-            dist.Normal(state["z"].matmul(self.A), self.B*self.sigma_z).to_event(1))
-        y = pyro.sample("y_{}".format(self.t),
-                        dist.Normal(state["z"][..., 0], self.sigma_y),
-                        obs=y)
+            dist.Normal(state["z"].matmul(self.A), self.B * self.sigma_z).to_event(1),
+        )
+        y = pyro.sample(
+            "y_{}".format(self.t), dist.Normal(state["z"][..., 0], self.sigma_y), obs=y
+        )
         return state["z"], y
 
 
 class SimpleHarmonicModel_Guide:
-
     def __init__(self, model):
         self.model = model
 
@@ -61,14 +59,17 @@ class SimpleHarmonicModel_Guide:
         # Proposal distribution
         pyro.sample(
             "z_{}".format(self.t),
-            dist.Normal(state["z"].matmul(self.model.A), torch.tensor([1., 1.])).to_event(1))
+            dist.Normal(
+                state["z"].matmul(self.model.A), torch.tensor([1.0, 1.0])
+            ).to_event(1),
+        )
 
 
 def generate_data(args):
     model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
 
     state = {}
-    initial = torch.tensor([1., 0.])
+    initial = torch.tensor([1.0, 0.0])
     model.init(state, initial=initial)
     zs = [initial]
     ys = [None]
@@ -93,7 +94,7 @@ def main(args):
 
     logging.info("Filtering")
 
-    smc.init(initial=torch.tensor([1., 0.]))
+    smc.init(initial=torch.tensor([1.0, 0.0]))
     for y in ys[1:]:
         smc.step(y)
 
@@ -105,11 +106,13 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Simple Harmonic Oscillator w/ SMC Filtering Inference")
+    parser = argparse.ArgumentParser(
+        description="Simple Harmonic Oscillator w/ SMC Filtering Inference"
+    )
     parser.add_argument("-n", "--num-timesteps", default=500, type=int)
     parser.add_argument("-p", "--num-particles", default=100, type=int)
-    parser.add_argument("--process-noise", default=1., type=float)
-    parser.add_argument("--measurement-noise", default=1., type=float)
+    parser.add_argument("--process-noise", default=1.0, type=float)
+    parser.add_argument("--measurement-noise", default=1.0, type=float)
     parser.add_argument("--seed", default=0, type=int)
     args = parser.parse_args()
     main(args)

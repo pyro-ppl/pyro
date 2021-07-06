@@ -23,6 +23,7 @@ class LowerCholeskyAffine(Transform):
     :type scale_tril: torch.tensor
 
     """
+
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True
@@ -32,9 +33,11 @@ class LowerCholeskyAffine(Transform):
         super().__init__(cache_size=cache_size)
         self.loc = loc
         self.scale_tril = scale_tril
-        assert loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2), \
-            "loc and scale_tril must be of size D and D x D, respectively (instead: {}, {})".format(loc.shape,
-                                                                                                    scale_tril.shape)
+        assert (
+            loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2)
+        ), "loc and scale_tril must be of size D and D x D, respectively (instead: {}, {})".format(
+            loc.shape, scale_tril.shape
+        )
 
     def _call(self, x):
         """
@@ -54,16 +57,19 @@ class LowerCholeskyAffine(Transform):
 
         Inverts y => x.
         """
-        return torch.triangular_solve((y - self.loc).unsqueeze(-1), self.scale_tril,
-                                      upper=False, transpose=False)[0].squeeze(-1)
+        return torch.triangular_solve(
+            (y - self.loc).unsqueeze(-1), self.scale_tril, upper=False, transpose=False
+        )[0].squeeze(-1)
 
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log Jacobian, i.e.
         log(abs(dy/dx)).
         """
-        return torch.ones(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device) * \
-            self.scale_tril.diag().log().sum()
+        return (
+            torch.ones(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
+            * self.scale_tril.diag().log().sum()
+        )
 
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:

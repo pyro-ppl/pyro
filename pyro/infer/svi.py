@@ -34,23 +34,32 @@ class SVI(TracePosterior):
     commonly used loss is ``loss=Trace_ELBO()``. See the tutorial
     `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for a discussion.
     """
-    def __init__(self,
-                 model,
-                 guide,
-                 optim,
-                 loss,
-                 loss_and_grads=None,
-                 num_samples=0,
-                 num_steps=0,
-                 **kwargs):
+
+    def __init__(
+        self,
+        model,
+        guide,
+        optim,
+        loss,
+        loss_and_grads=None,
+        num_samples=0,
+        num_steps=0,
+        **kwargs
+    ):
         if num_steps:
-            warnings.warn('The `num_steps` argument to SVI is deprecated and will be removed in '
-                          'a future release. Use `SVI.step` directly to control the '
-                          'number of iterations.', FutureWarning)
+            warnings.warn(
+                "The `num_steps` argument to SVI is deprecated and will be removed in "
+                "a future release. Use `SVI.step` directly to control the "
+                "number of iterations.",
+                FutureWarning,
+            )
         if num_samples:
-            warnings.warn('The `num_samples` argument to SVI is deprecated and will be removed in '
-                          'a future release. Use `pyro.infer.Predictive` class to draw '
-                          'samples from the posterior.', FutureWarning)
+            warnings.warn(
+                "The `num_samples` argument to SVI is deprecated and will be removed in "
+                "a future release. Use `pyro.infer.Predictive` class to draw "
+                "samples from the posterior.",
+                FutureWarning,
+            )
 
         self.model = model
         self.guide = guide
@@ -60,18 +69,22 @@ class SVI(TracePosterior):
         super().__init__(**kwargs)
 
         if not isinstance(optim, pyro.optim.PyroOptim):
-            raise ValueError("Optimizer should be an instance of pyro.optim.PyroOptim class.")
+            raise ValueError(
+                "Optimizer should be an instance of pyro.optim.PyroOptim class."
+            )
 
         if isinstance(loss, ELBO):
             self.loss = loss.loss
             self.loss_and_grads = loss.loss_and_grads
         else:
             if loss_and_grads is None:
+
                 def _loss_and_grads(*args, **kwargs):
                     loss_val = loss(*args, **kwargs)
-                    if getattr(loss_val, 'requires_grad', False):
+                    if getattr(loss_val, "requires_grad", False):
                         loss_val.backward(retain_graph=True)
                     return loss_val
+
                 loss_and_grads = _loss_and_grads
             self.loss = loss
             self.loss_and_grads = loss_and_grads
@@ -83,10 +96,12 @@ class SVI(TracePosterior):
             For inference, use :meth:`step` directly, and for predictions,
             use the :class:`~pyro.infer.predictive.Predictive` class.
         """
-        warnings.warn('The `SVI.run` method is deprecated and will be removed in a '
-                      'future release. For inference, use `SVI.step` directly, '
-                      'and for predictions, use the `pyro.infer.Predictive` class.',
-                      FutureWarning)
+        warnings.warn(
+            "The `SVI.run` method is deprecated and will be removed in a "
+            "future release. For inference, use `SVI.step` directly, "
+            "and for predictions, use the `pyro.infer.Predictive` class.",
+            FutureWarning,
+        )
         if self.num_steps > 0:
             with poutine.block():
                 for i in range(self.num_steps):
@@ -96,7 +111,9 @@ class SVI(TracePosterior):
     def _traces(self, *args, **kwargs):
         for i in range(self.num_samples):
             guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(
+                poutine.replay(self.model, trace=guide_trace)
+            ).get_trace(*args, **kwargs)
             yield model_trace, 1.0
 
     def evaluate_loss(self, *args, **kwargs):
@@ -127,8 +144,9 @@ class SVI(TracePosterior):
         with poutine.trace(param_only=True) as param_capture:
             loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
 
-        params = set(site["value"].unconstrained()
-                     for site in param_capture.trace.nodes.values())
+        params = set(
+            site["value"].unconstrained() for site in param_capture.trace.nodes.values()
+        )
 
         # actually perform gradient steps
         # torch.optim objects gets instantiated for any params that haven't been seen yet

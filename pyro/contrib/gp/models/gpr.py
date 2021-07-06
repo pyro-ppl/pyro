@@ -65,10 +65,11 @@ class GPRegression(GPModel):
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
     """
+
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
         super().__init__(X, y, kernel, mean_function, jitter)
 
-        noise = self.X.new_tensor(1.) if noise is None else noise
+        noise = self.X.new_tensor(1.0) if noise is None else noise
         self.noise = PyroParam(noise, constraints.positive)
 
     @pyro_method
@@ -77,8 +78,8 @@ class GPRegression(GPModel):
 
         N = self.X.size(0)
         Kff = self.kernel(self.X)
-        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
-        Lff = Kff.cholesky()
+        Kff.view(-1)[:: N + 1] += self.jitter + self.noise  # add noise to diagonal
+        Lff = torch.linalg.cholesky(Kff)
 
         zero_loc = self.X.new_zeros(self.X.size(0))
         f_loc = zero_loc + self.mean_function(self.X)
@@ -86,11 +87,13 @@ class GPRegression(GPModel):
             f_var = Lff.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
-            return pyro.sample(self._pyro_get_fullname("y"),
-                               dist.MultivariateNormal(f_loc, scale_tril=Lff)
-                                   .expand_by(self.y.shape[:-1])
-                                   .to_event(self.y.dim() - 1),
-                               obs=self.y)
+            return pyro.sample(
+                self._pyro_get_fullname("y"),
+                dist.MultivariateNormal(f_loc, scale_tril=Lff)
+                .expand_by(self.y.shape[:-1])
+                .to_event(self.y.dim() - 1),
+                obs=self.y,
+            )
 
     @pyro_method
     def guide(self):
@@ -122,17 +125,25 @@ class GPRegression(GPModel):
 
         N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
-        Lff = Kff.cholesky()
+        Kff.view(-1)[:: N + 1] += self.jitter + self.noise  # add noise to the diagonal
+        Lff = torch.linalg.cholesky(Kff)
 
         y_residual = self.y - self.mean_function(self.X)
-        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, Lff,
-                               full_cov, jitter=self.jitter)
+        loc, cov = conditional(
+            Xnew,
+            self.X,
+            self.kernel,
+            y_residual,
+            None,
+            Lff,
+            full_cov,
+            jitter=self.jitter,
+        )
 
         if full_cov and not noiseless:
             M = Xnew.size(0)
             cov = cov.contiguous()
-            cov.view(-1, M * M)[:, ::M + 1] += self.noise  # add noise to the diagonal
+            cov.view(-1, M * M)[:, :: M + 1] += self.noise  # add noise to the diagonal
         if not full_cov and not noiseless:
             cov = cov + self.noise
 
@@ -165,7 +176,7 @@ class GPRegression(GPModel):
         y = self.y.clone().detach()
         N = X.size(0)
         Kff = self.kernel(X).contiguous()
-        Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
+        Kff.view(-1)[:: N + 1] += noise  # add noise to the diagonal
 
         outside_vars = {"X": X, "y": y, "N": N, "Kff": Kff}
 
@@ -179,20 +190,23 @@ class GPRegression(GPModel):
             X, y, Kff = outside_vars["X"], outside_vars["y"], outside_vars["Kff"]
 
             # Compute Cholesky decomposition of kernel matrix
-            Lff = Kff.cholesky()
+            Lff = torch.linalg.cholesky(Kff)
             y_residual = y - self.mean_function(X)
 
             # Compute conditional mean and variance
-            loc, cov = conditional(xnew, X, self.kernel, y_residual, None, Lff,
-                                   False, jitter=self.jitter)
+            loc, cov = conditional(
+                xnew, X, self.kernel, y_residual, None, Lff, False, jitter=self.jitter
+            )
             if not noiseless:
                 cov = cov + noise
 
-            ynew = torchdist.Normal(loc + self.mean_function(xnew), cov.sqrt()).rsample()
+            ynew = torchdist.Normal(
+                loc + self.mean_function(xnew), cov.sqrt()
+            ).rsample()
 
             # Update kernel matrix
             N = outside_vars["N"]
-            Kffnew = Kff.new_empty(N+1, N+1)
+            Kffnew = Kff.new_empty(N + 1, N + 1)
             Kffnew[:N, :N] = Kff
             cross = self.kernel(X, xnew).squeeze()
             end = self.kernel(xnew, xnew).squeeze()
@@ -201,7 +215,7 @@ class GPRegression(GPModel):
             # No noise, just jitter for numerical stability
             Kffnew[N, N] = end + self.jitter
             # Heuristic to avoid adding degenerate points
-            if Kffnew.logdet() > -15.:
+            if Kffnew.logdet() > -15.0:
                 outside_vars["Kff"] = Kffnew
                 outside_vars["N"] += 1
                 outside_vars["X"] = torch.cat((X, xnew))

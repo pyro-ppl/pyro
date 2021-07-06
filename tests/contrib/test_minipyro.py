@@ -36,8 +36,10 @@ def assert_error(model, guide, elbo, match=None):
     Assert that inference fails with an error.
     """
     inference = build_svi(model, guide, elbo)
-    with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError),
-                       match=match):
+    with pytest.raises(
+        (NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError),
+        match=match,
+    ):
         inference.step()
 
 
@@ -49,14 +51,16 @@ def assert_warning(model, guide, elbo):
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         inference.step()
-        assert len(w), 'No warnings were raised'
+        assert len(w), "No warnings were raised"
         for warning in w:
             print(warning)
 
 
 def constrained_model(data):
     locs = pyro.param("locs", torch.randn(3), constraint=constraints.real)
-    scales = pyro.param("scales", ops.exp(torch.randn(3)), constraint=constraints.positive)
+    scales = pyro.param(
+        "scales", ops.exp(torch.randn(3)), constraint=constraints.positive
+    )
     p = torch.tensor([0.5, 0.3, 0.2])
     x = pyro.sample("x", dist.Categorical(p))
     pyro.sample("obs", dist.Normal(locs[x], scales[x]), obs=data)
@@ -69,7 +73,6 @@ def guide_constrained_model(data):
 
 @pytest.mark.parametrize("backend", ["pyro", "minipyro"])
 def test_generate_data(backend):
-
     def model(data=None):
         loc = pyro.param("loc", torch.tensor(2.0))
         scale = pyro.param("scale", torch.tensor(1.0))
@@ -103,15 +106,14 @@ def test_generate_data_plate(backend):
 @pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
 @pytest.mark.parametrize("backend", ["pyro", "minipyro"])
 def test_nonempty_model_empty_guide_ok(backend, jit):
-
     def model(data):
         loc = pyro.param("loc", torch.tensor(0.0))
-        pyro.sample("x", dist.Normal(loc, 1.), obs=data)
+        pyro.sample("x", dist.Normal(loc, 1.0), obs=data)
 
     def guide(data):
         pass
 
-    data = torch.tensor(2.)
+    data = torch.tensor(2.0)
     with pyro_backend(backend):
         Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
         elbo = Elbo(ignore_jit_warnings=True)
@@ -129,7 +131,7 @@ def test_plate_ok(backend, jit):
         p = torch.tensor([0.2, 0.3, 0.5])
         with pyro.plate("plate", len(data), dim=-1):
             x = pyro.sample("x", dist.Categorical(p))
-            pyro.sample("obs", dist.Normal(locs[x], 1.), obs=data)
+            pyro.sample("obs", dist.Normal(locs[x], 1.0), obs=data)
 
     def guide():
         p = pyro.param("p", torch.tensor([0.5, 0.3, 0.2]))
@@ -150,13 +152,13 @@ def test_nested_plate_plate_ok(backend, jit):
     def model():
         loc = torch.tensor(3.0)
         with pyro.plate("plate_outer", data.size(-1), dim=-1):
-            x = pyro.sample("x", dist.Normal(loc, 1.))
+            x = pyro.sample("x", dist.Normal(loc, 1.0))
             with pyro.plate("plate_inner", data.size(-2), dim=-2):
-                pyro.sample("y", dist.Normal(x, 1.), obs=data)
+                pyro.sample("y", dist.Normal(x, 1.0), obs=data)
 
     def guide():
-        loc = pyro.param("loc", torch.tensor(0.))
-        scale = pyro.param("scale", torch.tensor(1.))
+        loc = pyro.param("loc", torch.tensor(0.0))
+        scale = pyro.param("scale", torch.tensor(1.0))
         with pyro.plate("plate_outer", data.size(-1), dim=-1):
             pyro.sample("x", dist.Normal(loc, scale))
 
@@ -167,18 +169,21 @@ def test_nested_plate_plate_ok(backend, jit):
 
 
 @pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
-@pytest.mark.parametrize("backend", [
-    "pyro",
-    xfail_param("minipyro", reason="not implemented"),
-])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "pyro",
+        xfail_param("minipyro", reason="not implemented"),
+    ],
+)
 def test_local_param_ok(backend, jit):
     data = torch.randn(10)
 
     def model():
-        locs = pyro.param("locs", torch.tensor([-1., 0., 1.]))
+        locs = pyro.param("locs", torch.tensor([-1.0, 0.0, 1.0]))
         with pyro.plate("plate", len(data), dim=-1):
             x = pyro.sample("x", dist.Categorical(torch.ones(3) / 3))
-            pyro.sample("obs", dist.Normal(locs[x], 1.), obs=data)
+            pyro.sample("obs", dist.Normal(locs[x], 1.0), obs=data)
 
     def guide():
         with pyro.plate("plate", len(data), dim=-1):
@@ -226,7 +231,9 @@ def test_elbo_jit(backend):
     elbo_test_case(backend, jit=True, expected_elbo=0.4780, data=data, steps=15)
 
 
-@pytest.mark.parametrize(["backend", "jit"], [("pyro", True), ("pyro", False), ("minipyro", False)])
+@pytest.mark.parametrize(
+    ["backend", "jit"], [("pyro", True), ("pyro", False), ("minipyro", False)]
+)
 def test_elbo_equivalence(backend, jit):
     """
     Given model and guide
@@ -246,4 +253,6 @@ def elbo_test_case(backend, jit, expected_elbo, data, steps=None):
         if backend == "pyro":
             # TODO: this is a difference between the two implementations
             elbo = elbo.loss
-        assert elbo(constrained_model, guide_constrained_model, data) == approx(expected_elbo, rel=0.1)
+        with torch.no_grad():
+            actual = elbo(constrained_model, guide_constrained_model, data)
+        assert actual == approx(expected_elbo, rel=0.1)

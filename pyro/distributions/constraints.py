@@ -21,6 +21,7 @@ class _Integer(Constraint):
     """
     Constrain to integers.
     """
+
     is_discrete = True
 
     def check(self, value):
@@ -34,8 +35,9 @@ class _Sphere(Constraint):
     """
     Constrain to the Euclidean sphere of any dimension.
     """
+
     event_dim = 1
-    reltol = 10.  # Relative to finfo.eps.
+    reltol = 10.0  # Relative to finfo.eps.
 
     def check(self, value):
         eps = torch.finfo(value.dtype).eps
@@ -51,11 +53,14 @@ class _CorrMatrix(Constraint):
     """
     Constrains to a correlation matrix.
     """
+
     event_dim = 2
 
     def check(self, value):
         # check for diagonal equal to 1
-        unit_variance = torch.all(torch.abs(torch.diagonal(value, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1)
+        unit_variance = torch.all(
+            torch.abs(torch.diagonal(value, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1
+        )
         # TODO: fix upstream - positive_definite has an extra dimension in front of output shape
         return positive_definite.check(value) & unit_variance
 
@@ -65,6 +70,7 @@ class _OrderedVector(Constraint):
     Constrains to a real-valued tensor where the elements are monotonically
     increasing along the `event_shape` dimension.
     """
+
     event_dim = 1
 
     def check(self, value):
@@ -105,14 +111,14 @@ softplus_lower_cholesky = _SoftplusLowerCholesky()
 corr_cholesky_constraint = corr_cholesky  # noqa: F405 DEPRECATED
 
 __all__ = [
-    'corr_cholesky_constraint',
-    'corr_matrix',
-    'integer',
-    'ordered_vector',
-    'positive_ordered_vector',
-    'softplus_lower_cholesky',
-    'softplus_positive',
-    'sphere',
+    "corr_cholesky_constraint",
+    "corr_matrix",
+    "integer",
+    "ordered_vector",
+    "positive_ordered_vector",
+    "softplus_lower_cholesky",
+    "softplus_positive",
+    "sphere",
 ]
 
 __all__.extend(torch_constraints)
@@ -125,17 +131,22 @@ __doc__ = """
     Pyro's constraints library extends
     :mod:`torch.distributions.constraints`.
 """
-__doc__ += "\n".join([
-    """
+__doc__ += "\n".join(
+    [
+        """
     {}
     ----------------------------------------------------------------
     {}
     """.format(
-        _name,
-        "alias of :class:`torch.distributions.constraints.{}`".format(_name)
-        if globals()[_name].__module__.startswith("torch") else
-        ".. autoclass:: {}".format(_name if type(globals()[_name]) is type else
-                                   type(globals()[_name]).__name__)
-    )
-    for _name in sorted(__all__)
-])
+            _name,
+            "alias of :class:`torch.distributions.constraints.{}`".format(_name)
+            if globals()[_name].__module__.startswith("torch")
+            else ".. autoclass:: {}".format(
+                _name
+                if type(globals()[_name]) is type
+                else type(globals()[_name]).__name__
+            ),
+        )
+        for _name in sorted(__all__)
+    ]
+)

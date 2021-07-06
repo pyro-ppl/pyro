@@ -27,24 +27,37 @@ class EKFDistribution(TorchDistribution):
     :param dt: time step
     :type dt: torch.Tensor
     """
-    arg_constraints = {'measurement_cov': constraints.positive_definite,
-                       'P0': constraints.positive_definite,
-                       'x0': constraints.real_vector}
+    arg_constraints = {
+        "measurement_cov": constraints.positive_definite,
+        "P0": constraints.positive_definite,
+        "x0": constraints.real_vector,
+    }
     has_rsample = True
 
-    def __init__(self, x0, P0, dynamic_model, measurement_cov, time_steps=1, dt=1., validate_args=None):
+    def __init__(
+        self,
+        x0,
+        P0,
+        dynamic_model,
+        measurement_cov,
+        time_steps=1,
+        dt=1.0,
+        validate_args=None,
+    ):
         self.x0 = x0
         self.P0 = P0
         self.dynamic_model = dynamic_model
         self.measurement_cov = measurement_cov
         self.dt = dt
-        assert not x0.shape[-1] % 2, 'position and velocity vectors must be the same dimension'
+        assert (
+            not x0.shape[-1] % 2
+        ), "position and velocity vectors must be the same dimension"
         batch_shape = x0.shape[:-1]
         event_shape = (time_steps, x0.shape[-1] // 2)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def rsample(self, sample_shape=torch.Size()):
-        raise NotImplementedError('TODO: implement forward filter backward sample')
+        raise NotImplementedError("TODO: implement forward filter backward sample")
 
     def filter_states(self, value):
         """
@@ -54,13 +67,14 @@ class EKFDistribution(TorchDistribution):
         :type value: torch.Tensor
         """
         states = []
-        state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.)
+        state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.0)
         assert value.shape[-1] == self.event_shape[-1]
         for i, measurement_mean in enumerate(value):
             if i:
                 state = state.predict(self.dt)
-            measurement = PositionMeasurement(measurement_mean, self.measurement_cov,
-                                              time=state.time)
+            measurement = PositionMeasurement(
+                measurement_mean, self.measurement_cov, time=state.time
+            )
             state, (dz, S) = state.update(measurement)
             states.append(state)
         return states
@@ -72,15 +86,16 @@ class EKFDistribution(TorchDistribution):
         :param value: measurement means of shape `(time_steps, event_shape)`
         :type value: torch.Tensor
         """
-        state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.)
-        result = 0.
+        state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.0)
+        result = 0.0
         assert value.shape == self.event_shape
         zero = torch.zeros(self.event_shape[-1], dtype=value.dtype, device=value.device)
         for i, measurement_mean in enumerate(value):
             if i:
                 state = state.predict(self.dt)
-            measurement = PositionMeasurement(measurement_mean, self.measurement_cov,
-                                              time=state.time)
+            measurement = PositionMeasurement(
+                measurement_mean, self.measurement_cov, time=state.time
+            )
             state, (dz, S) = state.update(measurement)
             result = result + dist.MultivariateNormal(dz, S).log_prob(zero)
         return result

@@ -47,22 +47,26 @@ class DoMessenger(Messenger):
     :param data: a ``dict`` mapping sample site names to interventions
     :returns: stochastic function decorated with a :class:`~pyro.poutine.do_messenger.DoMessenger`
     """
+
     def __init__(self, data):
         super().__init__()
         self.data = data
         self._intervener_id = str(id(self))
 
     def _pyro_sample(self, msg):
-        if msg.get('_intervener_id', None) != self._intervener_id and \
-                self.data.get(msg['name']) is not None:
+        if (
+            msg.get("_intervener_id", None) != self._intervener_id
+            and self.data.get(msg["name"]) is not None
+        ):
 
-            if msg.get('_intervener_id', None) is not None:
+            if msg.get("_intervener_id", None) is not None:
                 warnings.warn(
                     "Attempting to intervene on variable {} multiple times,"
-                    "this is almost certainly incorrect behavior".format(msg['name']),
-                    RuntimeWarning)
+                    "this is almost certainly incorrect behavior".format(msg["name"]),
+                    RuntimeWarning,
+                )
 
-            msg['_intervener_id'] = self._intervener_id
+            msg["_intervener_id"] = self._intervener_id
 
             # split node, avoid reapplying self recursively to new node
             new_msg = msg.copy()
@@ -70,15 +74,18 @@ class DoMessenger(Messenger):
             apply_stack(new_msg)
 
             # apply intervention
-            intervention = self.data[msg['name']]
-            msg['name'] = msg['name'] + "__CF"  # mangle old name
+            intervention = self.data[msg["name"]]
+            msg["name"] = msg["name"] + "__CF"  # mangle old name
 
             if isinstance(intervention, (numbers.Number, torch.Tensor)):
-                msg['value'] = intervention
-                msg['is_observed'] = True
-                msg['stop'] = True
+                msg["value"] = intervention
+                msg["is_observed"] = True
+                msg["stop"] = True
             else:
                 raise NotImplementedError(
-                    "Interventions of type {} not implemented (yet)".format(type(intervention)))
+                    "Interventions of type {} not implemented (yet)".format(
+                        type(intervention)
+                    )
+                )
 
         return None

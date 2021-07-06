@@ -27,7 +27,7 @@ def random_phylo_logits(num_leaves, dtype):
     # Convert to a one-two-matching problem.
     ids = torch.arange(len(times))
     root = times.min(0).indices.item()
-    sources = torch.cat([ids[:root], ids[root+1:]])
+    sources = torch.cat([ids[:root], ids[root + 1 :]])
     destins = ids[num_leaves:]
     dt = times[sources][:, None] - times[destins]
     dt = dt * 10 / dt.detach().std()
@@ -73,22 +73,24 @@ def test_log_prob_full(num_destins, dtype, bp_iters):
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(f"log_total = {log_total:0.3g}, " +
-                 f"log_Z = {d.log_partition_function:0.3g}")
-    assert_close(log_total, 0., atol=1.0)
+    logging.info(
+        f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}"
+    )
+    assert_close(log_total, 0.0, atol=1.0)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_log_prob_hard(dtype, bp_iters):
-    logits = [[0., 0.], [0., 0.], [0., 0.], [0., -math.inf]]
+    logits = [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, -math.inf]]
     logits = torch.tensor(logits, dtype=dtype)
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(f"log_total = {log_total:0.3g}, " +
-                 f"log_Z = {d.log_partition_function:0.3g}")
-    assert_close(log_total, 0., atol=0.5)
+    logging.info(
+        f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}"
+    )
+    assert_close(log_total, 0.0, atol=0.5)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
@@ -99,9 +101,10 @@ def test_log_prob_phylo(num_leaves, dtype, bp_iters):
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(f"log_total = {log_total:0.3g}, " +
-                 f"log_Z = {d.log_partition_function:0.3g}")
-    assert_close(log_total, 0., atol=1.0)
+    logging.info(
+        f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}"
+    )
+    assert_close(log_total, 0.0, atol=1.0)
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
@@ -117,7 +120,6 @@ def test_log_prob_phylo_smoke(num_leaves, dtype):
 
 
 def assert_grads_ok(logits, bp_iters=None):
-
     def fn(logits):
         d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
         return d.log_partition_function
@@ -130,8 +132,9 @@ def assert_grads_agree(logits):
     d2 = dist.OneTwoMatching(logits, bp_iters=BP_ITERS)
     expected = torch.autograd.grad(d1.log_partition_function, [logits])[0]
     actual = torch.autograd.grad(d2.log_partition_function, [logits])[0]
-    assert torch.allclose(actual, expected, atol=0.2, rtol=1e-3), \
-        f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
+    assert torch.allclose(
+        actual, expected, atol=0.2, rtol=1e-3
+    ), f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
 
 
 @pytest.mark.parametrize("num_destins", [2, 3, 4, 5])
