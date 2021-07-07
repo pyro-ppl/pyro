@@ -46,7 +46,7 @@ class ConditionedHouseholder(Transform):
         u = self.u()
         for idx in range(u.size(-2)):
             projection = (u[..., idx, :] * y).sum(dim=-1, keepdim=True) * u[..., idx, :]
-            y = y - 2. * projection
+            y = y - 2.0 * projection
         return y
 
     def _inverse(self, y):
@@ -64,7 +64,7 @@ class ConditionedHouseholder(Transform):
         for jdx in reversed(range(u.size(-2))):
             # NOTE: Need to apply transforms in reverse order from forward operation!
             projection = (u[..., jdx, :] * x).sum(dim=-1, keepdim=True) * u[..., jdx, :]
-            x = x - 2. * projection
+            x = x - 2.0 * projection
         return x
 
     def log_abs_det_jacobian(self, x, y):
@@ -73,7 +73,9 @@ class ConditionedHouseholder(Transform):
         is measure preserving, so :math:`\log(|detJ|) = 0`
         """
 
-        return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
+        return torch.zeros(
+            x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device
+        )
 
 
 @copy_docs_from(TransformModule)
@@ -131,16 +133,23 @@ class Householder(ConditionedHouseholder, TransformModule):
 
         self.input_dim = input_dim
         if count_transforms < 1:
-            raise ValueError('Number of Householder transforms, {}, is less than 1!'.format(count_transforms))
+            raise ValueError(
+                "Number of Householder transforms, {}, is less than 1!".format(
+                    count_transforms
+                )
+            )
         elif count_transforms > input_dim:
             warnings.warn(
                 "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
-over-parametrization!".format(count_transforms, input_dim))
+over-parametrization!".format(
+                    count_transforms, input_dim
+                )
+            )
         self.u_unnormed = nn.Parameter(torch.Tensor(count_transforms, input_dim))
         self.reset_parameters()
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.u_unnormed.size(-1))
+        stdv = 1.0 / math.sqrt(self.u_unnormed.size(-1))
         self.u_unnormed.data.uniform_(-stdv, stdv)
 
 
@@ -210,11 +219,18 @@ class ConditionalHouseholder(ConditionalTransformModule):
         self.nn = nn
         self.input_dim = input_dim
         if count_transforms < 1:
-            raise ValueError('Number of Householder transforms, {}, is less than 1!'.format(count_transforms))
+            raise ValueError(
+                "Number of Householder transforms, {}, is less than 1!".format(
+                    count_transforms
+                )
+            )
         elif count_transforms > input_dim:
             warnings.warn(
                 "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
-over-parametrization!".format(count_transforms, input_dim))
+over-parametrization!".format(
+                    count_transforms, input_dim
+                )
+            )
         self.count_transforms = count_transforms
 
     def _u_unnormed(self, context):
@@ -251,7 +267,9 @@ def householder(input_dim, count_transforms=None):
     return Householder(input_dim, count_transforms=count_transforms)
 
 
-def conditional_householder(input_dim, context_dim, hidden_dims=None, count_transforms=1):
+def conditional_householder(
+    input_dim, context_dim, hidden_dims=None, count_transforms=1
+):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.ConditionalHouseholder` object that takes

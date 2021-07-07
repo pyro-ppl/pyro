@@ -16,6 +16,7 @@ class NameCountMessenger(Messenger):
     """
     ``NameCountMessenger`` is the implementation of :func:`pyro.contrib.autoname.name_count`
     """
+
     def __enter__(self):
         self._names = set()
         return super().__enter__()
@@ -47,6 +48,7 @@ class ScopeMessenger(Messenger):
     """
     ``ScopeMessenger`` is the implementation of :func:`pyro.contrib.autoname.scope`
     """
+
     def __init__(self, prefix=None, inner=None):
         super().__init__()
         self.prefix = prefix
@@ -76,6 +78,7 @@ class ScopeMessenger(Messenger):
         def _fn(*args, **kwargs):
             with type(self)(prefix=self.prefix, inner=self.inner):
                 return fn(*args, **kwargs)
+
         return _fn
 
     def _pyro_scope(self, msg):

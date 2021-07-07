@@ -38,9 +38,14 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         y = torch.cat([self.gpmodel.y, y])
         self.gpmodel.set_data(X, y)
         optimizer = torch.optim.Adam(self.gpmodel.parameters(), lr=0.001)
-        gp.util.train(self.gpmodel, optimizer,
-                      loss_fn=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
-                      retain_graph=True)
+        gp.util.train(
+            self.gpmodel,
+            optimizer,
+            loss_fn=TraceEnum_ELBO(
+                strict_enumeration_warning=False
+            ).differentiable_loss,
+            retain_graph=True,
+        )
 
     def find_a_candidate(self, differentiable, x_init):
         """Given a starting point, `x_init`, takes one LBFGS step
@@ -59,12 +64,13 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
 
         def closure():
             minimizer.zero_grad()
-            if (torch.log(torch.abs(unconstrained_x)) > 25.).any():
-                return torch.tensor(float('inf'))
+            if (torch.log(torch.abs(unconstrained_x)) > 25.0).any():
+                return torch.tensor(float("inf"))
             x = transform_to(self.constraints)(unconstrained_x)
             y = differentiable(x)
-            autograd.backward(unconstrained_x,
-                              autograd.grad(y, unconstrained_x, retain_graph=True))
+            autograd.backward(
+                unconstrained_x, autograd.grad(y, unconstrained_x, retain_graph=True)
+            )
             return y
 
         minimizer.step(closure)
@@ -89,8 +95,9 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         candidates = []
         values = []
         for j in range(num_candidates):
-            x_init = (torch.empty(1, dtype=self.gpmodel.X.dtype, device=self.gpmodel.X.device)
-                      .uniform_(self.constraints.lower_bound, self.constraints.upper_bound))
+            x_init = torch.empty(
+                1, dtype=self.gpmodel.X.dtype, device=self.gpmodel.X.device
+            ).uniform_(self.constraints.lower_bound, self.constraints.upper_bound)
             x, y = self.find_a_candidate(differentiable, x_init)
             if torch.isnan(y):
                 continue

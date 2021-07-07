@@ -20,7 +20,11 @@ def _hash(value, allow_id):
         if isinstance(value, list):
             return tuple(_hash(x, allow_id) for x in value)
         elif isinstance(value, dict):
-            return tuple(sorted((_hash(x, allow_id), _hash(y, allow_id)) for x, y in value.items()))
+            return tuple(
+                sorted(
+                    (_hash(x, allow_id), _hash(y, allow_id)) for x, y in value.items()
+                )
+            )
         elif isinstance(value, set):
             return frozenset(_hash(x, allow_id) for x in value)
         elif isinstance(value, argparse.Namespace):
@@ -51,12 +55,13 @@ class CompiledFunction:
     The actual PyTorch compilation artifact is stored in :attr:`compiled`.
     Call diagnostic methods on this attribute.
     """
+
     def __init__(self, fn, ignore_warnings=False, jit_options=None):
         self.fn = fn
         self.compiled = {}  # len(args) -> callable
         self.ignore_warnings = ignore_warnings
         self.jit_options = {} if jit_options is None else jit_options
-        self.jit_options.setdefault('check_trace', False)
+        self.jit_options.setdefault("check_trace", False)
         self.compile_time = None
         self._param_names = None
 
@@ -71,33 +76,43 @@ class CompiledFunction:
                     self.fn(*args, **kwargs)
 
             self._param_names = list(set(first_param_capture.trace.nodes.keys()))
-            unconstrained_params = tuple(pyro.param(name).unconstrained()
-                                         for name in self._param_names)
+            unconstrained_params = tuple(
+                pyro.param(name).unconstrained() for name in self._param_names
+            )
             params_and_args = unconstrained_params + args
             weakself = weakref.ref(self)
 
             def compiled(*params_and_args):
                 self = weakself()
-                unconstrained_params = params_and_args[:len(self._param_names)]
-                args = params_and_args[len(self._param_names):]
+                unconstrained_params = params_and_args[: len(self._param_names)]
+                args = params_and_args[len(self._param_names) :]
                 constrained_params = {}
-                for name, unconstrained_param in zip(self._param_names, unconstrained_params):
-                    constrained_param = pyro.param(name)  # assume param has been initialized
+                for name, unconstrained_param in zip(
+                    self._param_names, unconstrained_params
+                ):
+                    constrained_param = pyro.param(
+                        name
+                    )  # assume param has been initialized
                     assert constrained_param.unconstrained() is unconstrained_param
                     constrained_params[name] = constrained_param
-                return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
+                return poutine.replay(self.fn, params=constrained_params)(
+                    *args, **kwargs
+                )
 
             if self.ignore_warnings:
                 compiled = ignore_jit_warnings()(compiled)
             with pyro.validation_enabled(False):
                 time_compilation = self.jit_options.pop("time_compilation", False)
                 with optional(timed(), time_compilation) as t:
-                    self.compiled[key] = torch.jit.trace(compiled, params_and_args, **self.jit_options)
+                    self.compiled[key] = torch.jit.trace(
+                        compiled, params_and_args, **self.jit_options
+                    )
                 if time_compilation:
                     self.compile_time = t.elapsed
         else:
-            unconstrained_params = [pyro.param(name).unconstrained()
-                                    for name in self._param_names]
+            unconstrained_params = [
+                pyro.param(name).unconstrained() for name in self._param_names
+            ]
             params_and_args = unconstrained_params + list(args)
 
         with poutine.block(hide=self._param_names):
@@ -106,8 +121,10 @@ class CompiledFunction:
 
         for name in param_capture.trace.nodes.keys():
             if name not in self._param_names:
-                raise NotImplementedError('pyro.ops.jit.trace assumes all params are created on '
-                                          'first invocation, but found new param: {}'.format(name))
+                raise NotImplementedError(
+                    "pyro.ops.jit.trace assumes all params are created on "
+                    "first invocation, but found new param: {}".format(name)
+                )
 
         return ret
 
@@ -138,5 +155,9 @@ def trace(fn=None, ignore_warnings=False, jit_options=None):
         :func:`torch.jit.trace` , e.g. ``{"optimize": False}``.
     """
     if fn is None:
-        return lambda fn: trace(fn, ignore_warnings=ignore_warnings, jit_options=jit_options)
-    return CompiledFunction(fn, ignore_warnings=ignore_warnings, jit_options=jit_options)
+        return lambda fn: trace(
+            fn, ignore_warnings=ignore_warnings, jit_options=jit_options
+        )
+    return CompiledFunction(
+        fn, ignore_warnings=ignore_warnings, jit_options=jit_options
+    )

@@ -30,6 +30,7 @@ class ConditionMessenger(Messenger):
     :param data: a dict or a :class:`~pyro.poutine.Trace`
     :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
+
     def __init__(self, data):
         """
         :param data: a dict or a Trace

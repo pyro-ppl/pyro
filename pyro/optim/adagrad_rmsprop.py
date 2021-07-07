@@ -33,21 +33,23 @@ class AdagradRMSProp(Optimizer):
     :type delta: float
     """
 
-    def __init__(self, params, eta: float = 1.0, delta: float = 1.0e-16, t: float = 0.1):
+    def __init__(
+        self, params, eta: float = 1.0, delta: float = 1.0e-16, t: float = 0.1
+    ):
         defaults = dict(eta=eta, delta=delta, t=t)
         super().__init__(params, defaults)
 
         for group in self.param_groups:
-            for p in group['params']:
+            for p in group["params"]:
                 state = self.state[p]
-                state['step'] = 0
-                state['sum'] = torch.zeros_like(p.data)
+                state["step"] = 0
+                state["sum"] = torch.zeros_like(p.data)
 
     def share_memory(self) -> None:
         for group in self.param_groups:
-            for p in group['params']:
+            for p in group["params"]:
                 state = self.state[p]
-                state['sum'].share_memory_()
+                state["sum"].share_memory_()
 
     def step(self, closure: Optional[Callable] = None) -> Optional[Any]:
         """
@@ -60,7 +62,7 @@ class AdagradRMSProp(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
 
@@ -70,16 +72,16 @@ class AdagradRMSProp(Optimizer):
                     raise NotImplementedError
 
                 state = self.state[p]
-                state['step'] += 1
-                if state['step'] == 1:
+                state["step"] += 1
+                if state["step"] == 1:
                     # if first step, initialize variance bit to grad^2
-                    state['sum'] = grad * grad
+                    state["sum"] = grad * grad
                 else:
-                    state['sum'] *= (1.0 - group['t'])
-                    state['sum'] += group['t'] * grad * grad
+                    state["sum"] *= 1.0 - group["t"]
+                    state["sum"] += group["t"] * grad * grad
 
-                lr = group['eta'] * (state['step'] ** (-0.5 + group['delta']))
-                std = state['sum'].sqrt()
+                lr = group["eta"] * (state["step"] ** (-0.5 + group["delta"]))
+                std = state["sum"].sqrt()
                 p.data.addcdiv_(grad, 1.0 + std, value=-lr)
 
         return loss

@@ -26,6 +26,7 @@ class MarkovMessenger(ReentrantMessenger):
         :func:`pyro.markov` sites between models and guides.
         Interface stub, behavior not yet implemented.
     """
+
     def __init__(self, history=1, keep=False, dim=None, name=None):
         assert history >= 0
         self.history = history
@@ -34,10 +35,12 @@ class MarkovMessenger(ReentrantMessenger):
         self.name = name
         if dim is not None:
             raise NotImplementedError(
-                "vectorized markov not yet implemented, try setting dim to None")
+                "vectorized markov not yet implemented, try setting dim to None"
+            )
         if name is not None:
             raise NotImplementedError(
-                "vectorized markov not yet implemented, try setting name to None")
+                "vectorized markov not yet implemented, try setting name to None"
+            )
         self._iterable = None
         self._pos = -1
         self._stack = []
@@ -74,7 +77,9 @@ class MarkovMessenger(ReentrantMessenger):
         # This accounting can be done by users of these fields,
         # e.g. EnumMessenger.
         infer = msg["infer"]
-        scope = infer.setdefault("_markov_scope", Counter())  # site name -> markov depth
+        scope = infer.setdefault(
+            "_markov_scope", Counter()
+        )  # site name -> markov depth
         for pos in range(max(0, self._pos - self.history), self._pos + 1):
             scope.update(self._stack[pos])
         infer["_markov_depth"] = 1 + infer.get("_markov_depth", 0)

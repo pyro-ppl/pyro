@@ -36,42 +36,51 @@ class MissingDataDiscreteHMM(TorchDistribution):
         dimension of the categorical output, and be broadcastable
         to ``(batch_size, state_dim, categorical_size)``.
     """
-    arg_constraints = {"initial_logits": constraints.real_vector,
-                       "transition_logits": constraints.independent(
-                                                    constraints.real, 2),
-                       "observation_logits": constraints.independent(
-                                                    constraints.real, 2)}
+
+    arg_constraints = {
+        "initial_logits": constraints.real_vector,
+        "transition_logits": constraints.independent(constraints.real, 2),
+        "observation_logits": constraints.independent(constraints.real, 2),
+    }
     support = constraints.independent(constraints.nonnegative_integer, 2)
 
-    def __init__(self, initial_logits, transition_logits, observation_logits,
-                 validate_args=None):
+    def __init__(
+        self, initial_logits, transition_logits, observation_logits, validate_args=None
+    ):
         if initial_logits.dim() < 1:
             raise ValueError(
-                    "expected initial_logits to have at least one dim, "
-                    "actual shape = {}".format(initial_logits.shape))
+                "expected initial_logits to have at least one dim, "
+                "actual shape = {}".format(initial_logits.shape)
+            )
         if transition_logits.dim() < 2:
             raise ValueError(
-                    "expected transition_logits to have at least two dims, "
-                    "actual shape = {}".format(transition_logits.shape))
+                "expected transition_logits to have at least two dims, "
+                "actual shape = {}".format(transition_logits.shape)
+            )
         if observation_logits.dim() < 2:
             raise ValueError(
-                    "expected observation_logits to have at least two dims, "
-                    "actual shape = {}".format(transition_logits.shape))
-        shape = broadcast_shape(initial_logits.shape[:-1],
-                                transition_logits.shape[:-2],
-                                observation_logits.shape[:-2])
+                "expected observation_logits to have at least two dims, "
+                "actual shape = {}".format(transition_logits.shape)
+            )
+        shape = broadcast_shape(
+            initial_logits.shape[:-1],
+            transition_logits.shape[:-2],
+            observation_logits.shape[:-2],
+        )
         if len(shape) == 0:
             shape = torch.Size([1])
         batch_shape = shape
         event_shape = (1, observation_logits.shape[-1])
-        self.initial_logits = (initial_logits -
-                               initial_logits.logsumexp(-1, True))
-        self.transition_logits = (transition_logits -
-                                  transition_logits.logsumexp(-1, True))
-        self.observation_logits = (observation_logits -
-                                   observation_logits.logsumexp(-1, True))
+        self.initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
+        self.transition_logits = transition_logits - transition_logits.logsumexp(
+            -1, True
+        )
+        self.observation_logits = observation_logits - observation_logits.logsumexp(
+            -1, True
+        )
         super(MissingDataDiscreteHMM, self).__init__(
-            batch_shape, event_shape, validate_args=validate_args)
+            batch_shape, event_shape, validate_args=validate_args
+        )
 
     def log_prob(self, value):
         """
@@ -89,16 +98,15 @@ class MissingDataDiscreteHMM(TorchDistribution):
 
         # Combine observation and transition factors.
         value_logits = torch.matmul(
-                value, torch.transpose(self.observation_logits, -2, -1))
-        result = (self.transition_logits.unsqueeze(-3) +
-                  value_logits[..., 1:, None, :])
+            value, torch.transpose(self.observation_logits, -2, -1)
+        )
+        result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
 
         # Eliminate time dimension.
         result = _sequential_logmatmulexp(result)
 
         # Combine initial factor.
-        result = (self.initial_logits + value_logits[..., 0, :]
-                  + result.logsumexp(-1))
+        result = self.initial_logits + value_logits[..., 0, :] + result.logsumexp(-1)
 
         # Marginalize out final state.
         result = result.logsumexp(-1)

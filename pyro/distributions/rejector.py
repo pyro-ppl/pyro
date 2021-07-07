@@ -18,11 +18,13 @@ class Rejector(TorchDistribution):
         proposals and returns a batch of log acceptance probabilities.
     :param log_scale: Total log probability of acceptance.
     """
+
     arg_constraints = {}
     has_rsample = True
 
-    def __init__(self, propose, log_prob_accept, log_scale, *,
-                 batch_shape=None, event_shape=None):
+    def __init__(
+        self, propose, log_prob_accept, log_scale, *, batch_shape=None, event_shape=None
+    ):
         self.propose = propose
         self.log_prob_accept = log_prob_accept
         self._log_scale = log_scale

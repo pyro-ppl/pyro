@@ -12,20 +12,21 @@ from tests.common import assert_equal
 
 
 def checker_mask(shape):
-    mask = tensor(0.)
+    mask = tensor(0.0)
     for size in shape:
         mask = mask.unsqueeze(-1) + torch.arange(float(size))
     return mask.fmod(2).bool()
 
 
-@pytest.mark.parametrize('batch_dim,mask_dim',
-                         [(b, m) for b in range(3) for m in range(1 + b)])
-@pytest.mark.parametrize('event_dim', [0, 1, 2])
+@pytest.mark.parametrize(
+    "batch_dim,mask_dim", [(b, m) for b in range(3) for m in range(1 + b)]
+)
+@pytest.mark.parametrize("event_dim", [0, 1, 2])
 def test_mask(batch_dim, event_dim, mask_dim):
     # Construct base distribution.
-    shape = torch.Size([2, 3, 4, 5, 6][:batch_dim + event_dim])
+    shape = torch.Size([2, 3, 4, 5, 6][: batch_dim + event_dim])
     batch_shape = shape[:batch_dim]
-    mask_shape = batch_shape[batch_dim - mask_dim:]
+    mask_shape = batch_shape[batch_dim - mask_dim :]
     base_dist = Bernoulli(0.1).expand_by(shape).to_event(event_dim)
 
     # Construct masked distribution.
@@ -42,14 +43,24 @@ def test_mask(batch_dim, event_dim, mask_dim):
     # Check values.
     assert_equal(dist.mean, base_dist.mean)
     assert_equal(dist.variance, base_dist.variance)
-    assert_equal(dist.log_prob(sample),
-                 scale_and_mask(base_dist.log_prob(sample), mask=mask))
-    assert_equal(dist.score_parts(sample),
-                 base_dist.score_parts(sample).scale_and_mask(mask=mask), prec=0)
+    assert_equal(
+        dist.log_prob(sample), scale_and_mask(base_dist.log_prob(sample), mask=mask)
+    )
+    assert_equal(
+        dist.score_parts(sample),
+        base_dist.score_parts(sample).scale_and_mask(mask=mask),
+        prec=0,
+    )
     if not dist.event_shape:
         assert_equal(dist.enumerate_support(), base_dist.enumerate_support())
-        assert_equal(dist.enumerate_support(expand=True), base_dist.enumerate_support(expand=True))
-        assert_equal(dist.enumerate_support(expand=False), base_dist.enumerate_support(expand=False))
+        assert_equal(
+            dist.enumerate_support(expand=True),
+            base_dist.enumerate_support(expand=True),
+        )
+        assert_equal(
+            dist.enumerate_support(expand=False),
+            base_dist.enumerate_support(expand=False),
+        )
 
 
 @pytest.mark.parametrize("mask", [False, True, torch.tensor(False), torch.tensor(True)])
@@ -77,7 +88,7 @@ def test_mask_type(mask):
 @pytest.mark.parametrize("mask_shape", [(), (3,), (2, 1), (2, 3)])
 def test_broadcast(event_shape, dist_shape, mask_shape):
     mask = torch.empty(torch.Size(mask_shape)).bernoulli_(0.5).bool()
-    base_dist = Normal(torch.zeros(dist_shape + event_shape), 1.)
+    base_dist = Normal(torch.zeros(dist_shape + event_shape), 1.0)
     base_dist = base_dist.to_event(len(event_shape))
     assert base_dist.batch_shape == dist_shape
     assert base_dist.event_shape == event_shape
@@ -93,27 +104,32 @@ def test_kl_divergence():
     p = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     q = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     expected = kl_divergence(p.to_event(2), q.to_event(2))
-    actual = (kl_divergence(p.mask(mask).to_event(2),
-                            q.mask(mask).to_event(2)) +
-              kl_divergence(p.mask(~mask).to_event(2),
-                            q.mask(~mask).to_event(2)))
+    actual = kl_divergence(
+        p.mask(mask).to_event(2), q.mask(mask).to_event(2)
+    ) + kl_divergence(p.mask(~mask).to_event(2), q.mask(~mask).to_event(2))
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize("p_mask", [False, True, torch.tensor(False), torch.tensor(True)])
-@pytest.mark.parametrize("q_mask", [False, True, torch.tensor(False), torch.tensor(True)])
+@pytest.mark.parametrize(
+    "p_mask", [False, True, torch.tensor(False), torch.tensor(True)]
+)
+@pytest.mark.parametrize(
+    "q_mask", [False, True, torch.tensor(False), torch.tensor(True)]
+)
 def test_kl_divergence_type(p_mask, q_mask):
     p = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     q = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
-    mask = ((torch.tensor(p_mask) if isinstance(p_mask, bool) else p_mask) &
-            (torch.tensor(q_mask) if isinstance(q_mask, bool) else q_mask)).expand(2, 2)
+    mask = (
+        (torch.tensor(p_mask) if isinstance(p_mask, bool) else p_mask)
+        & (torch.tensor(q_mask) if isinstance(q_mask, bool) else q_mask)
+    ).expand(2, 2)
 
     expected = kl_divergence(p, q)
     expected[~mask] = 0
 
     actual = kl_divergence(p.mask(p_mask), q.mask(q_mask))
     if p_mask is False or q_mask is False:
-        assert isinstance(actual, float) and actual == 0.
+        assert isinstance(actual, float) and actual == 0.0
     else:
         assert_equal(actual, expected)
 

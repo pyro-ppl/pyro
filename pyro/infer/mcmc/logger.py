@@ -55,19 +55,35 @@ class ProgressBar:
         If multiple bars are initialized, they need to be separately
         updated via the ``pos`` kwarg.
     """
-    def __init__(self, warmup_steps, num_samples, min_width=80, max_width=120,
-                 disable=False, num_bars=1):
+
+    def __init__(
+        self,
+        warmup_steps,
+        num_samples,
+        min_width=80,
+        max_width=120,
+        disable=False,
+        num_bars=1,
+    ):
         total_steps = warmup_steps + num_samples
         # Disable progress bar in "CI"
         # (see https://github.com/travis-ci/travis-ci/issues/1337).
         disable = disable or "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
-        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
+        bar_format = (
+            "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
+        )
         pbar_cls = tqdm_nb if num_bars > 1 and ipython_env else tqdm
         self.progress_bars = []
         for i in range(num_bars):
             description = "Warmup" if num_bars == 1 else "Warmup [{}]".format(i + 1)
-            pbar = pbar_cls(total=total_steps, desc=description, bar_format=bar_format,
-                            position=i, file=sys.stderr, disable=disable)
+            pbar = pbar_cls(
+                total=total_steps,
+                desc=description,
+                bar_format=bar_format,
+                position=i,
+                file=sys.stderr,
+                disable=disable,
+            )
             # Assume reasonable values when terminal width not available
             if getattr(pbar, "ncols", None) is not None:
                 pbar.ncols = max(min_width, pbar.ncols)
@@ -169,6 +185,7 @@ class TqdmHandler(logging.StreamHandler):
     Handler that synchronizes the log output with the
     :class:`~tqdm.tqdm` progress bar.
     """
+
     def emit(self, record):
         try:
             msg = self.format(record)
@@ -191,6 +208,7 @@ class MCMCLoggingHandler(logging.Handler):
     :param progress_bar: If provided, diagnostic information
         is updated using the bar.
     """
+
     def __init__(self, log_handler, progress_bar=None):
         logging.Handler.__init__(self)
         self.log_handler = log_handler
@@ -199,8 +217,9 @@ class MCMCLoggingHandler(logging.Handler):
     def emit(self, record):
         try:
             if self.progress_bar and record.msg_type == DIAGNOSTIC_MSG:
-                diagnostics = json.loads(record.getMessage(),
-                                         object_pairs_hook=OrderedDict)
+                diagnostics = json.loads(
+                    record.getMessage(), object_pairs_hook=OrderedDict
+                )
                 self.progress_bar.set_postfix(diagnostics, refresh=False)
                 self.progress_bar.update()
             else:
@@ -216,6 +235,7 @@ class MetadataFilter(logging.Filter):
     Adds auxiliary information to log records, like `logger_id` and
     `msg_type`.
     """
+
     def __init__(self, logger_id):
         self.logger_id = logger_id
         super().__init__()
@@ -247,8 +267,7 @@ def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):
         format = "%(levelname).1s \t %(message)s"
         handler = TqdmHandler()
     else:
-        raise ValueError("Logger cannot be initialized without a "
-                         "valid handler.")
+        raise ValueError("Logger cannot be initialized without a " "valid handler.")
     handler.setFormatter(logging.Formatter(format))
     logging_handler = MCMCLoggingHandler(handler, progress_bar)
     logging_handler.addFilter(MetadataFilter(logger_id))

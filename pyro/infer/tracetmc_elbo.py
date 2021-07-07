@@ -59,10 +59,12 @@ def _compute_tmc_factors(model_trace, guide_trace):
     for name, site in model_trace.nodes.items():
         if site["type"] != "sample":
             continue
-        if site["name"] not in guide_trace and \
-                not site["is_observed"] and \
-                site["infer"].get("enumerate", None) == "parallel" and \
-                site["infer"].get("num_samples", -1) > 0:
+        if (
+            site["name"] not in guide_trace
+            and not site["is_observed"]
+            and site["infer"].get("enumerate", None) == "parallel"
+            and site["infer"].get("num_samples", -1) > 0
+        ):
             # site was sampled from the prior
             log_proposal = packed.neg(site["packed"]["log_prob"])
             log_factors.append(log_proposal)
@@ -80,15 +82,23 @@ def _compute_tmc_estimate(model_trace, guide_trace):
     log_factors += _compute_dice_factors(model_trace, guide_trace)
 
     if not log_factors:
-        return 0.
+        return 0.0
 
     # loss
     eqn = ",".join([f._pyro_dims for f in log_factors]) + "->"
-    plates = "".join(frozenset().union(list(model_trace.plate_to_symbol.values()),
-                                       list(guide_trace.plate_to_symbol.values())))
-    tmc, = einsum(eqn, *log_factors, plates=plates,
-                  backend="pyro.ops.einsum.torch_log",
-                  modulo_total=False)
+    plates = "".join(
+        frozenset().union(
+            list(model_trace.plate_to_symbol.values()),
+            list(guide_trace.plate_to_symbol.values()),
+        )
+    )
+    (tmc,) = einsum(
+        eqn,
+        *log_factors,
+        plates=plates,
+        backend="pyro.ops.einsum.torch_log",
+        modulo_total=False
+    )
     return tmc
 
 
@@ -126,21 +136,26 @@ class TraceTMC_ELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, args, kwargs)
+            "flat", self.max_plate_nesting, model, guide, args, kwargs
+        )
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
 
-            has_enumerated_sites = any(site["infer"].get("enumerate")
-                                       for trace in (guide_trace, model_trace)
-                                       for name, site in trace.nodes.items()
-                                       if site["type"] == "sample")
+            has_enumerated_sites = any(
+                site["infer"].get("enumerate")
+                for trace in (guide_trace, model_trace)
+                for name, site in trace.nodes.items()
+                if site["type"] == "sample"
+            )
 
             if self.strict_enumeration_warning and not has_enumerated_sites:
-                warnings.warn('Found no sample sites configured for enumeration. '
-                              'If you want to enumerate sites, you need to @config_enumerate or set '
-                              'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
-                              'If you do not want to enumerate, consider using Trace_ELBO instead.')
+                warnings.warn(
+                    "Found no sample sites configured for enumeration. "
+                    "If you want to enumerate sites, you need to @config_enumerate or set "
+                    'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
+                    "If you do not want to enumerate, consider using Trace_ELBO instead."
+                )
 
         model_trace.compute_score_parts()
         guide_trace.pack_tensors()
@@ -152,7 +167,7 @@ class TraceTMC_ELBO(ELBO):
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
-        if self.max_plate_nesting == float('inf'):
+        if self.max_plate_nesting == float("inf"):
             self._guess_max_plate_nesting(model, guide, args, kwargs)
         if self.vectorize_particles:
             guide = self._vectorized_num_particles(guide)
@@ -167,9 +182,9 @@ class TraceTMC_ELBO(ELBO):
         model = model_enum(model)
 
         q = queue.LifoQueue()
-        guide = poutine.queue(guide, q,
-                              escape_fn=iter_discrete_escape,
-                              extend_fn=iter_discrete_extend)
+        guide = poutine.queue(
+            guide, q, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
+        )
         for i in range(1 if self.vectorize_particles else self.num_particles):
             q.put(poutine.Trace())
             while not q.empty():

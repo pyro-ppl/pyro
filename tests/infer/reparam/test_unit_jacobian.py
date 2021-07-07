@@ -12,6 +12,8 @@ from pyro.distributions.transforms import Permute
 from pyro.infer.reparam import UnitJacobianReparam
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 # Test helper to extract central moments from samples.
 def get_moments(x):
@@ -27,7 +29,7 @@ def get_moments(x):
 
 @pytest.mark.parametrize("shape", [(6,), (4, 5), (2, 1, 3)], ids=str)
 def test_normal(shape):
-    loc = torch.empty(shape).uniform_(-1., 1.).requires_grad_()
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
     scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
 
     def model():
@@ -53,3 +55,17 @@ def test_normal(shape):
         actual_grads = grad(actual_m.sum(), [loc, scale], retain_graph=True)
         assert_close(actual_grads[0], expected_grads[0], atol=0.05)
         assert_close(actual_grads[1], expected_grads[1], atol=0.05)
+
+
+@pytest.mark.parametrize("shape", [(6,), (4, 5), (2, 1, 3)], ids=str)
+def test_init(shape):
+    loc = torch.empty(shape).uniform_(-1.0, 1.0).requires_grad_()
+    scale = torch.empty(shape).uniform_(0.5, 1.5).requires_grad_()
+
+    def model():
+        with pyro.plate_stack("plates", shape[:-1]):
+            return pyro.sample("x", dist.Normal(loc, scale).to_event(1))
+
+    transform = Permute(torch.randperm(shape[-1]))
+    rep = UnitJacobianReparam(transform)
+    check_init_reparam(model, rep)

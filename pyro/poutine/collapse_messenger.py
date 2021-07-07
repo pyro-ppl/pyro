@@ -88,12 +88,14 @@ class CollapseMessenger(TraceMessenger):
         context, you should manually declare ``max_plate_nesting`` to your
         inference algorithm (e.g. ``Trace_ELBO(max_plate_nesting=1)``).
     """
+
     _coerce = None
 
     def __init__(self, *args, **kwargs):
         if CollapseMessenger._coerce is None:
             import funsor
             from funsor.distribution import CoerceDistributionToFunsor
+
             funsor.set_backend("torch")
             CollapseMessenger._coerce = CoerceDistributionToFunsor("torch")
         self._block = False
@@ -149,8 +151,9 @@ class CollapseMessenger(TraceMessenger):
         msg["value"] = value
 
     def __enter__(self):
-        self.preserved_plates = {h.dim: h.name for h in _PYRO_STACK
-                                 if isinstance(h, pyro.plate)}
+        self.preserved_plates = {
+            h.dim: h.name for h in _PYRO_STACK if isinstance(h, pyro.plate)
+        }
         COERCIONS.append(self._coerce)
         return super().__enter__()
 
@@ -159,8 +162,7 @@ class CollapseMessenger(TraceMessenger):
         assert _coerce is self._coerce
         super().__exit__(*args)
 
-        if any(site["type"] == "sample"
-               for site in self.trace.nodes.values()):
+        if any(site["type"] == "sample" for site in self.trace.nodes.values()):
             name, log_prob, _, _ = self._get_log_prob()
             pyro.factor(name, log_prob.data)
 
@@ -173,8 +175,9 @@ class CollapseMessenger(TraceMessenger):
             if not site["is_observed"]:
                 reduced_vars.append(name)
             log_prob_terms.append(site["fn"](value=site["value"]))
-            plates |= frozenset(f.name for f in site["cond_indep_stack"]
-                                if f.vectorized)
+            plates |= frozenset(
+                f.name for f in site["cond_indep_stack"] if f.vectorized
+            )
         name = reduced_vars[0]
         reduced_vars = frozenset(reduced_vars)
         assert log_prob_terms, "nothing to collapse"

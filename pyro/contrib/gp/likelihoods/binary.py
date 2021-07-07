@@ -20,9 +20,12 @@ class Binary(Likelihood):
     :param callable response_function: A mapping to correct domain for Binary
         likelihood.
     """
+
     def __init__(self, response_function=None):
         super().__init__()
-        self.response_function = torch.sigmoid if response_function is None else response_function
+        self.response_function = (
+            torch.sigmoid if response_function is None else response_function
+        )
 
     def forward(self, f_loc, f_var, y=None):
         r"""
@@ -48,5 +51,5 @@ class Binary(Likelihood):
             f_res = self.response_function(f)
             y_dist = dist.Bernoulli(f_res)
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f.dim()]).to_event(y.dim())
+            y_dist = y_dist.expand_by(y.shape[: -f.dim()]).to_event(y.dim())
         return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)
