@@ -160,28 +160,41 @@ def write(x, alphabet, file, truncate_stop=False, append=False, scores=None):
     :param bool append: If True, sequences are appended to the end of the
         output file. If False, the file is first erased.
     """
-    print_alphabet = np.array(list(alphabet) + [''])
+    print_alphabet = np.array(list(alphabet) + [""])
     x = torch.cat([x, torch.zeros(list(x.shape[:2]) + [1])], -1)
     if truncate_stop:
-        mask = (torch.cumsum(torch.matmul(
-                        x, torch.tensor(print_alphabet == '*',
-                                        dtype=torch.double)), -1) > 0
-                ).to(torch.double)
+        mask = (
+            torch.cumsum(
+                torch.matmul(
+                    x, torch.tensor(print_alphabet == "*", dtype=torch.double)
+                ),
+                -1,
+            )
+            > 0
+        ).to(torch.double)
         x = x * (1 - mask).unsqueeze(-1)
         x[:, :, -1] = mask
     else:
         x[:, :, -1] = (torch.sum(x, -1) < 0.5).to(torch.double)
-    index = torch.matmul(x, torch.arange(x.shape[-1], dtype=torch.double)
-                         ).to(torch.long).cpu().numpy()
+    index = (
+        torch.matmul(x, torch.arange(x.shape[-1], dtype=torch.double))
+        .to(torch.long)
+        .cpu()
+        .numpy()
+    )
     if scores is None:
-        seqs = ['>{}\n'.format(j) + ''.join(elem) + '\n' for j, elem in
-                enumerate(print_alphabet[index])]
+        seqs = [
+            ">{}\n".format(j) + "".join(elem) + "\n"
+            for j, elem in enumerate(print_alphabet[index])
+        ]
     else:
-        seqs = ['>{}\n'.format(j) + ''.join(elem) + '\n' for j, elem in
-                zip(scores, print_alphabet[index])]
+        seqs = [
+            ">{}\n".format(j) + "".join(elem) + "\n"
+            for j, elem in zip(scores, print_alphabet[index])
+        ]
     if append:
-        open_flag = 'a'
+        open_flag = "a"
     else:
-        open_flag = 'w'
+        open_flag = "w"
     with open(file, open_flag) as fw:
-        fw.write(''.join(seqs))
+        fw.write("".join(seqs))

@@ -69,9 +69,9 @@ def main(args):
 
     # Load dataset.
     if args.cpu_data or not args.cuda:
-        device = torch.device('cpu')
+        device = torch.device("cpu")
     else:
-        device = torch.device('cuda')
+        device = torch.device("cuda")
     if args.test:
         dataset = generate_data(args.small, args.include_stop, device)
     else:
@@ -90,9 +90,9 @@ def main(args):
         # Specific data split seed, for comparability across models and
         # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
-        indices = torch.randperm(sum(data_lengths),
-                                 generator=torch.Generator(device=device)
-                                 ).tolist()
+        indices = torch.randperm(
+            sum(data_lengths), generator=torch.Generator(device=device)
+        ).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
             for offset, length in zip(
@@ -126,8 +126,9 @@ def main(args):
         }
     )
     n_epochs = args.n_epochs
-    losses = model.fit_svi(dataset, n_epochs, args.batch_size, scheduler,
-                           args.jit, device)
+    losses = model.fit_svi(
+        dataset, n_epochs, args.batch_size, scheduler, args.jit, device
+    )
 
     # Evaluate.
     train_lp, test_lp, train_perplex, test_perplex = model.evaluate(
@@ -188,17 +189,17 @@ def main(args):
         with open(
             os.path.join(
                 args.out_folder,
-                "ProfileHMM_results.evaluation_{}.txt".format(time_stamp)
+                "ProfileHMM_results.evaluation_{}.txt".format(time_stamp),
             ),
             "w",
         ) as ow:
             ow.write("train_lp,test_lp,train_perplex,test_perplex\n")
-            ow.write("{},{},{},{}\n".format(train_lp, test_lp, train_perplex,
-                                            test_perplex))
+            ow.write(
+                "{},{},{},{}\n".format(train_lp, test_lp, train_perplex, test_perplex)
+            )
         with open(
             os.path.join(
-                args.out_folder,
-                "ProfileHMM_results.input_{}.txt".format(time_stamp)
+                args.out_folder, "ProfileHMM_results.input_{}.txt".format(time_stamp)
             ),
             "w",
         ) as ow:
@@ -206,7 +207,7 @@ def main(args):
             args.latent_seq_length = model.latent_seq_length
             for elem in list(args.__dict__.keys()):
                 ow.write("{} = {}\n".format(elem, args.__getattribute__(elem)))
-            ow.write("alphabet_str = {}\n".format(''.join(dataset.alphabet)))
+            ow.write("alphabet_str = {}\n".format("".join(dataset.alphabet)))
             ow.write("max_length = {}\n".format(dataset.max_length))
 
 

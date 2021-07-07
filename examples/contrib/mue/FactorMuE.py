@@ -63,9 +63,9 @@ def main(args):
 
     # Load dataset.
     if args.cpu_data or not args.cuda:
-        device = torch.device('cpu')
+        device = torch.device("cpu")
     else:
-        device = torch.device('cuda')
+        device = torch.device("cuda")
     if args.test:
         dataset = generate_data(args.small, args.include_stop, device)
     else:
@@ -84,9 +84,9 @@ def main(args):
         # Specific data split seed, for comparability across models and
         # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
-        indices = torch.randperm(sum(data_lengths),
-                                 generator=torch.Generator(device=device)
-                                 ).tolist()
+        indices = torch.randperm(
+            sum(data_lengths), generator=torch.Generator(device=device)
+        ).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
             for offset, length in zip(
@@ -133,8 +133,13 @@ def main(args):
     )
     n_epochs = args.n_epochs
     losses = model.fit_svi(
-        dataset_train, n_epochs, args.anneal, args.batch_size, scheduler,
-        args.jit, device
+        dataset_train,
+        n_epochs,
+        args.anneal,
+        args.batch_size,
+        scheduler,
+        args.jit,
+        device,
     )
 
     # Evaluate.
@@ -229,7 +234,8 @@ def main(args):
         )
         np.savetxt(
             os.path.join(
-                args.out_folder, "FactorMuE_results.embed_scale_{}.txt".format(time_stamp)
+                args.out_folder,
+                "FactorMuE_results.embed_scale_{}.txt".format(time_stamp),
             ),
             z_scales.cpu().numpy(),
         )
@@ -245,7 +251,7 @@ def main(args):
             args.latent_alphabet = model.latent_alphabet_length
             for elem in list(args.__dict__.keys()):
                 ow.write("{} = {}\n".format(elem, args.__getattribute__(elem)))
-            ow.write("alphabet_str = {}\n".format(''.join(dataset.alphabet)))
+            ow.write("alphabet_str = {}\n".format("".join(dataset.alphabet)))
             ow.write("max_length = {}\n".format(dataset.max_length))
 
 

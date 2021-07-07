@@ -157,9 +157,7 @@ class ProfileHMM(nn.Module):
         insert_q_mn = pyro.param(
             "insert_q_mn", torch.ones(self.indel_shape) * self.indel_prior
         )
-        insert_q_sd = pyro.param(
-            "insert_q_sd", torch.zeros(self.indel_shape)
-        )
+        insert_q_sd = pyro.param("insert_q_sd", torch.zeros(self.indel_shape))
         pyro.sample(
             "insert",
             dist.Normal(insert_q_mn, softplus(insert_q_sd)).to_event(3),
@@ -167,16 +165,21 @@ class ProfileHMM(nn.Module):
         delete_q_mn = pyro.param(
             "delete_q_mn", torch.ones(self.indel_shape) * self.indel_prior
         )
-        delete_q_sd = pyro.param(
-            "delete_q_sd", torch.zeros(self.indel_shape)
-        )
+        delete_q_sd = pyro.param("delete_q_sd", torch.zeros(self.indel_shape))
         pyro.sample(
             "delete",
             dist.Normal(delete_q_mn, softplus(delete_q_sd)).to_event(3),
         )
 
-    def fit_svi(self, dataset, epochs=2, batch_size=1, scheduler=None,
-                jit=False, device=torch.device('cpu')):
+    def fit_svi(
+        self,
+        dataset,
+        epochs=2,
+        batch_size=1,
+        scheduler=None,
+        jit=False,
+        device=torch.device("cpu"),
+    ):
         """
         Infer approximate posterior with stochastic variational inference.
 
@@ -205,9 +208,13 @@ class ProfileHMM(nn.Module):
             )
         # Initialize guide.
         self.guide(None, None)
-        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True,
-                              pin_memory=self.pin_memory,
-                              generator=torch.Generator(device=device))
+        dataload = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            pin_memory=self.pin_memory,
+            generator=torch.Generator(device=device),
+        )
         # Setup stochastic variational inference.
         if jit:
             elbo = JitTrace_ELBO(ignore_jit_warnings=True)
@@ -667,15 +674,21 @@ class FactorMuE(nn.Module):
             # Scale log likelihood to account for mini-batching.
             with poutine.scale(scale=local_scale * local_prior_scale):
                 # Sample.
-                if self.z_prior_distribution == 'Normal':
-                    pyro.sample("latent",
-                                dist.Normal(z_loc, z_scale).to_event(1))
-                elif self.z_prior_distribution == 'Laplace':
-                    pyro.sample("latent",
-                                dist.Laplace(z_loc, z_scale).to_event(1))
+                if self.z_prior_distribution == "Normal":
+                    pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
+                elif self.z_prior_distribution == "Laplace":
+                    pyro.sample("latent", dist.Laplace(z_loc, z_scale).to_event(1))
 
-    def fit_svi(self, dataset, epochs=2, anneal_length=1., batch_size=None,
-                scheduler=None, jit=False, device=torch.device('cpu')):
+    def fit_svi(
+        self,
+        dataset,
+        epochs=2,
+        anneal_length=1.0,
+        batch_size=None,
+        scheduler=None,
+        jit=False,
+        device=torch.device("cpu"),
+    ):
         """
         Infer approximate posterior with stochastic variational inference.
 
@@ -697,13 +710,21 @@ class FactorMuE(nn.Module):
         if batch_size is not None:
             self.batch_size = batch_size
         if scheduler is None:
-            scheduler = MultiStepLR({'optimizer': Adam,
-                                     'optim_args': {'lr': 0.01},
-                                     'milestones': [],
-                                     'gamma': 0.5})
-        dataload = DataLoader(dataset, batch_size=batch_size, shuffle=True,
-                              pin_memory=self.pin_memory,
-                              generator=torch.Generator(device=device))
+            scheduler = MultiStepLR(
+                {
+                    "optimizer": Adam,
+                    "optim_args": {"lr": 0.01},
+                    "milestones": [],
+                    "gamma": 0.5,
+                }
+            )
+        dataload = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            pin_memory=self.pin_memory,
+            generator=torch.Generator(device=device),
+        )
         # Initialize guide.
         for seq_data, L_data in dataload:
             if self.is_cuda:

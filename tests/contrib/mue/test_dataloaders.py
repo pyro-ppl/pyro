@@ -75,33 +75,44 @@ T
 def test_write():
 
     # Define dataset.
-    seqs = ['AATC*C', 'CA*', 'T**']
-    dataset = BiosequenceDataset(seqs, 'list', 'ACGT*',
-                                 include_stop=False)
+    seqs = ["AATC*C", "CA*", "T**"]
+    dataset = BiosequenceDataset(seqs, "list", "ACGT*", include_stop=False)
     # With truncation at stop symbol.
     # Write.
-    with open('test_seqs.fasta', 'w') as fw:
-        fw.write('')
-    write(dataset.seq_data, dataset.alphabet, 'test_seqs.fasta',
-          truncate_stop=True, append=True)
+    with open("test_seqs.fasta", "w") as fw:
+        fw.write("")
+    write(
+        dataset.seq_data,
+        dataset.alphabet,
+        "test_seqs.fasta",
+        truncate_stop=True,
+        append=True,
+    )
 
     # Reload.
-    dataset2 = BiosequenceDataset('test_seqs.fasta', 'fasta', 'dna',
-                                  include_stop=True)
+    dataset2 = BiosequenceDataset("test_seqs.fasta", "fasta", "dna", include_stop=True)
     to_stop_lens = [4, 2, 1]
     for j, to_stop_len in enumerate(to_stop_lens):
-        assert torch.allclose(dataset.seq_data[j, :to_stop_len],
-                              dataset2.seq_data[j, :to_stop_len])
-        assert torch.allclose(dataset2.seq_data[j, (to_stop_len+1):],
-                              torch.tensor(0.))
+        assert torch.allclose(
+            dataset.seq_data[j, :to_stop_len], dataset2.seq_data[j, :to_stop_len]
+        )
+        assert torch.allclose(
+            dataset2.seq_data[j, (to_stop_len + 1) :], torch.tensor(0.0)
+        )
 
     # Without truncation at stop symbol.
     # Write.
-    write(dataset.seq_data, dataset.alphabet, 'test_seqs.fasta',
-          truncate_stop=False, append=False)
+    write(
+        dataset.seq_data,
+        dataset.alphabet,
+        "test_seqs.fasta",
+        truncate_stop=False,
+        append=False,
+    )
 
     # Reload.
-    dataset2 = BiosequenceDataset('test_seqs.fasta', 'fasta', 'ACGT*',
-                                  include_stop=False)
+    dataset2 = BiosequenceDataset(
+        "test_seqs.fasta", "fasta", "ACGT*", include_stop=False
+    )
     for j, to_stop_len in enumerate(to_stop_lens):
         assert torch.allclose(dataset.seq_data, dataset2.seq_data)
