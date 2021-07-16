@@ -6,7 +6,6 @@ import logging
 import pytest
 import torch
 
-from pyro.distributions.testing import fakes
 from tests.common import assert_equal
 
 # put all funsor-related imports here, so test collection works without funsor
@@ -62,7 +61,7 @@ def test_particle_gradient(Elbo, backend):
 
         # Elbo gradient estimator
         pyro.set_rng_seed(0)
-        loss = elbo.loss_and_grads(model, guide)
+        elbo.loss_and_grads(model, guide)
         params = dict(pyro.get_param_store().named_parameters())
         actual_grads = {
             name: param.grad.detach().cpu() for name, param in params.items()
@@ -74,7 +73,6 @@ def test_particle_gradient(Elbo, backend):
         model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
         guide_tr.compute_log_prob()
         model_tr.compute_log_prob()
-        x = data
         z = guide_tr.nodes["z"]["value"].data
         rate = pyro.param("rate").data
 

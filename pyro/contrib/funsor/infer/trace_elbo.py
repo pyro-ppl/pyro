@@ -29,7 +29,6 @@ class Trace_ELBO(ELBO):
 
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
-        breakpoint()
 
         with funsor.terms.eager:
             costs = model_terms["log_factors"] + [
@@ -82,16 +81,9 @@ class Trace_ELBO(ELBO):
                     funsor.ops.add, plate_vars & frozenset(cost.inputs)
                 )
 
-            #  elbo = to_funsor(0.0)
-            #  for cost in costs:
-            #      elbo += cost.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
-
-            #  return -to_data(elbo)
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.interpretations.memoize():
-            result = -to_data(apply_optimizer(elbo))
-            return result
-            # return -to_data(apply_optimizer(elbo))
+            return -to_data(apply_optimizer(elbo))
 
 
 class JitTrace_ELBO(Jit_ELBO, Trace_ELBO):
