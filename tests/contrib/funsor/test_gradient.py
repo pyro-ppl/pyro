@@ -27,43 +27,31 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize(
-    "reparameterized,has_rsample",
-    [(True, None), (True, False), (True, True), (False, None)],
-    ids=["reparam", "reparam-False", "reparam-True", "nonreparam"],
-)
-@pytest.mark.parametrize(
-    "Elbo",
+    "Elbo,backend",
     [
-        "Trace_ELBO",
-        "TraceEnum_ELBO",
+        ("TraceEnum_ELBO", "pyro"),
+        ("Trace_ELBO", "contrib.funsor"),
     ],
 )
-@pytest.mark.parametrize(
-    "backend",
-    [
-        "pyro",
-        "contrib.funsor",
-    ],
-)
-def test_particle_gradient(Elbo, reparameterized, has_rsample, backend):
+def test_particle_gradient(Elbo, backend):
     with pyro_backend(backend):
         pyro.clear_param_store()
         data = torch.tensor([-0.5, 2.0])
-        Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+        # Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
         def model():
             with pyro.plate("data", len(data)) as ind:
                 x = data[ind]
-                z = pyro.sample("z", Normal(0, 1))
-                pyro.sample("x", Normal(z, 1), obs=x)
+                z = pyro.sample("z", dist.Poisson(3))
+                pyro.sample("x", dist.Normal(z, 1), obs=x)
 
         def guide():
-            scale = pyro.param("scale", lambda: torch.tensor([1.0]))
+            # scale = pyro.param("scale", lambda: torch.tensor([1.0]))
             with pyro.plate("data", len(data)):
-                loc = pyro.param("loc", lambda: torch.zeros(len(data)), event_dim=0)
-                z_dist = Normal(loc, scale)
-                if has_rsample is not None:
-                    z_dist.has_rsample_(has_rsample)
+                rate = pyro.param("rate", lambda: torch.tensor([3.5, 1.5]), event_dim=0)
+                z_dist = dist.Poisson(rate)
+                #  if has_rsample is not None:
+                #      z_dist.has_rsample_(has_rsample)
                 pyro.sample("z", z_dist)
 
         elbo = getattr(infer, Elbo)(
@@ -74,7 +62,7 @@ def test_particle_gradient(Elbo, reparameterized, has_rsample, backend):
 
         # Elbo gradient estimator
         pyro.set_rng_seed(0)
-        elbo.loss_and_grads(model, guide)
+        loss = elbo.loss_and_grads(model, guide)
         params = dict(pyro.get_param_store().named_parameters())
         actual_grads = {
             name: param.grad.detach().cpu() for name, param in params.items()
@@ -88,39 +76,17 @@ def test_particle_gradient(Elbo, reparameterized, has_rsample, backend):
         model_tr.compute_log_prob()
         x = data
         z = guide_tr.nodes["z"]["value"].data
-        loc = pyro.param("loc").data
-        scale = pyro.param("scale").data
+        rate = pyro.param("rate").data
 
-        # expected grads
-        if reparameterized and has_rsample is not False:
-            # pathwise gradient estimator
-            expected_grads = {
-                "scale": -(-z * (z - loc) + (x - z) * (z - loc) + 1).sum(
-                    0, keepdim=True
-                )
-                / scale,
-                "loc": -(-z + (x - z)),
-            }
-        else:
-            # score function gradient estimator
-            elbo = (
-                model_tr.nodes["x"]["log_prob"].data
-                + model_tr.nodes["z"]["log_prob"].data
-                - guide_tr.nodes["z"]["log_prob"].data
-            )
-            dlogq_dloc = (z - loc) / scale ** 2
-            dlogq_dscale = (z - loc) ** 2 / scale ** 3 - 1 / scale
-            if Elbo == "TraceEnum_ELBO":
-                expected_grads = {
-                    "scale": -(dlogq_dscale * elbo - dlogq_dscale).sum(0, keepdim=True),
-                    "loc": -(dlogq_dloc * elbo - dlogq_dloc),
-                }
-            elif Elbo == "Trace_ELBO":
-                # expected value of dlogq_dscale and dlogq_dloc is zero
-                expected_grads = {
-                    "scale": -(dlogq_dscale * elbo).sum(0, keepdim=True),
-                    "loc": -(dlogq_dloc * elbo),
-                }
+        loss_i = (
+            model_tr.nodes["x"]["log_prob"].data
+            + model_tr.nodes["z"]["log_prob"].data
+            - guide_tr.nodes["z"]["log_prob"].data
+        )
+        dlogq_drate = z / rate - 1
+        expected_grads = {
+            "rate": -(dlogq_drate * loss_i - dlogq_drate),
+        }
 
         for name in sorted(params):
             logger.info("expected {} = {}".format(name, expected_grads[name]))
