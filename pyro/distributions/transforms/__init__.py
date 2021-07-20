@@ -67,6 +67,7 @@ from .ordered import OrderedTransform
 from .permute import Permute, permute
 from .planar import ConditionalPlanar, Planar, conditional_planar, planar
 from .polynomial import Polynomial, polynomial
+from .power import PositivePowerTransform
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
 from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
@@ -180,6 +181,7 @@ __all__ = [
     "Permute",
     "Planar",
     "Polynomial",
+    "PositivePowerTransform",
     "Radial",
     "SoftplusLowerCholeskyTransform",
     "SoftplusTransform",
