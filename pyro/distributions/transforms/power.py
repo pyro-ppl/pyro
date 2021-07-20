@@ -8,7 +8,8 @@ from torch.distributions.transforms import Transform
 
 class PositivePowerTransform(Transform):
     r"""
-    Transform via the mapping :math:`y = x^{\text{exponent}}`.
+    Transform via the mapping
+    :math:`y=\operatorname{sign}(x)|x|^{\text{exponent}}`.
 
     Whereas :class:`~torch.distributions.transforms.PowerTransform` allows
     arbitrary ``exponent`` and restricts domain and codomain to postive values,
