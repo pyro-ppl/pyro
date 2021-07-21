@@ -216,6 +216,16 @@ jobs:
   finish:
     needs: [unit, examples, integration_1, integration_2, funsor]
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        python-version: [3.6]
     steps:
-    - name: Coveralls Finished
-      run: coveralls --service=github --finish
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Coveralls Finished
+        run: |
+          pip install --upgrade coveralls
+          coveralls --service=github --finish
