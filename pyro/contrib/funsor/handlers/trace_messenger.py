@@ -3,6 +3,7 @@
 
 import funsor
 import torch
+from funsor.torch import MetadataTensor
 
 from pyro.contrib.funsor.handlers.primitives import to_funsor
 from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
@@ -38,6 +39,7 @@ class TraceMessenger(OrigTraceMessenger):
             msg["funsor"] = {}
         if isinstance(msg["fn"], _Subsample):
             return super()._pyro_post_sample(msg)
+        # msg["value"] = MetadataTensor(msg["value"], metadata=frozenset({msg["name"]}))
         if self.pack_online:
             if "fn" not in msg["funsor"]:
                 fn_masked = _mask_fn(msg["fn"], msg["mask"])

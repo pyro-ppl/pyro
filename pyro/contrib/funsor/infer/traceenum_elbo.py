@@ -3,8 +3,10 @@
 
 import contextlib
 
+import torch
 import funsor
 from funsor.adjoint import AdjointTape
+from funsor.constant import Constant
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
@@ -186,7 +188,7 @@ class TraceEnum_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
 
         # build up a lazy expression for the elbo
-        with funsor.terms.lazy:
+        with funsor.terms.eager:
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
@@ -220,15 +222,19 @@ class TraceEnum_ELBO(ELBO):
             for cost in costs:
                 input_vars = frozenset(cost.inputs)
                 if input_vars not in targets:
-                    targets[input_vars] = funsor.Tensor(
-                        funsor.ops.new_zeros(
-                            funsor.tensor.get_default_prototype(),
-                            tuple(v.size for v in cost.inputs.values()),
-                        ),
-                        cost.inputs,
-                        cost.dtype,
+                    targets[input_vars] = Constant(
+                        cost.input_vars, funsor.Tensor(torch.tensor(0))
                     )
+                    # targets[input_vars] = funsor.Tensor(
+                    #      funsor.ops.new_zeros(
+                    #          funsor.tensor.get_default_prototype(),
+                    #          tuple(v.size for v in cost.inputs.values()),
+                    #      ),
+                    #      cost.inputs,
+                    #      cost.dtype,
+                    #  )
             with AdjointTape() as tape:
+                # breakpoint()
                 logzq = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp,
                     funsor.ops.add,
