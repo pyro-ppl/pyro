@@ -12,8 +12,6 @@ env:
   # See coveralls-python - Github Actions support:
   # https://github.com/TheKevJames/coveralls-python/blob/master/docs/usage/configuration.rst#github-actions-support
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  COVERALLS_PARALLEL: true
-  COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
   COVERALLS_SERVICE_NAME: github
 
 
@@ -93,6 +91,9 @@ jobs:
           pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
       - name: Submit to coveralls
         run: coveralls --service=github
+        env:
+          COVERALLS_PARALLEL: true
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
   examples:
     runs-on: ubuntu-20.04
     needs: docs
@@ -124,6 +125,9 @@ jobs:
                             | CI=1 xargs pytest -vx --nbval-lax --current-env
       - name: Submit to coveralls
         run: coveralls --service=github
+        env:
+          COVERALLS_PARALLEL: true
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
   integration_1:
     runs-on: ubuntu-20.04
     needs: docs
@@ -153,6 +157,9 @@ jobs:
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
       - name: Submit to coveralls
         run: coveralls --service=github
+        env:
+          COVERALLS_PARALLEL: true
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
   integration_2:
     runs-on: ubuntu-20.04
     needs: docs
@@ -182,6 +189,9 @@ jobs:
           pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
       - name: Submit to coveralls
         run: coveralls --service=github
+        env:
+          COVERALLS_PARALLEL: true
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
   funsor:
     runs-on: ubuntu-20.04
     needs: docs
@@ -213,6 +223,9 @@ jobs:
           CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10 -k funsor
       - name: Submit to coveralls
         run: coveralls --service=github
+        env:
+          COVERALLS_PARALLEL: true
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
   finish:
     needs: [unit, examples, integration_1, integration_2, funsor]
     runs-on: ubuntu-20.04
