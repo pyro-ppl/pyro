@@ -718,12 +718,16 @@ class FactorMuE(nn.Module):
                     "gamma": 0.5,
                 }
             )
+        if self.is_cuda:
+            device = torch.device('cuda')
+        else:
+            device = torch.device('cpu')
         dataload = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=True,
             pin_memory=self.pin_memory,
-            generator=torch.Generator(device=torch.device('cuda')),
+            generator=torch.Generator(device=device),
         )
         # Initialize guide.
         for seq_data, L_data in dataload:
