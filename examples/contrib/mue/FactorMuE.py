@@ -85,7 +85,7 @@ def main(args):
         # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
         indices = torch.randperm(
-            sum(data_lengths), generator=torch.Generator(device=device)
+            sum(data_lengths), device=device
         ).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
