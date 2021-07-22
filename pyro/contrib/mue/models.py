@@ -722,8 +722,8 @@ class FactorMuE(nn.Module):
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            pin_memory=self.pin_memory,
-            generator=torch.Generator(device=device),
+            pin_memory=self.pin_memory # ,
+            # generator=torch.Generator(device=device),
         )
         # Initialize guide.
         for seq_data, L_data in dataload:
