@@ -90,9 +90,7 @@ def main(args):
         # Specific data split seed, for comparability across models and
         # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
-        indices = torch.randperm(
-            sum(data_lengths), generator=torch.Generator(device=device)
-        ).tolist()
+        indices = torch.randperm(sum(data_lengths), device=device).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
             for offset, length in zip(
@@ -126,9 +124,7 @@ def main(args):
         }
     )
     n_epochs = args.n_epochs
-    losses = model.fit_svi(
-        dataset, n_epochs, args.batch_size, scheduler, args.jit, device
-    )
+    losses = model.fit_svi(dataset, n_epochs, args.batch_size, scheduler, args.jit)
 
     # Evaluate.
     train_lp, test_lp, train_perplex, test_perplex = model.evaluate(

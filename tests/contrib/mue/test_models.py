@@ -32,7 +32,7 @@ def test_ProfileHMM_smoke(jit):
     n_epochs = 5
     batch_size = 2
     losses = model.fit_svi(
-        dataset, n_epochs, batch_size, scheduler, jit, device=dataset.device
+        dataset, n_epochs, batch_size, scheduler, jit
     )
 
     assert not np.isnan(losses[-1])
@@ -83,7 +83,7 @@ def test_FactorMuE_smoke(
     anneal_length = 2
     batch_size = 2
     losses = model.fit_svi(
-        dataset, n_epochs, anneal_length, batch_size, scheduler, jit, dataset.device
+        dataset, n_epochs, anneal_length, batch_size, scheduler, jit
     )
 
     # Reconstruct.

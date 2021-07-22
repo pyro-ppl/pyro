@@ -178,7 +178,6 @@ class ProfileHMM(nn.Module):
         batch_size=1,
         scheduler=None,
         jit=False,
-        device=torch.device("cpu"),
     ):
         """
         Infer approximate posterior with stochastic variational inference.
@@ -206,6 +205,10 @@ class ProfileHMM(nn.Module):
                     "gamma": 0.5,
                 }
             )
+        if self.is_cuda:
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
         # Initialize guide.
         self.guide(None, None)
         dataload = DataLoader(
@@ -687,7 +690,6 @@ class FactorMuE(nn.Module):
         batch_size=None,
         scheduler=None,
         jit=False,
-        device=torch.device("cpu"),
     ):
         """
         Infer approximate posterior with stochastic variational inference.
@@ -719,9 +721,9 @@ class FactorMuE(nn.Module):
                 }
             )
         if self.is_cuda:
-            device = torch.device('cuda')
+            device = torch.device("cuda")
         else:
-            device = torch.device('cpu')
+            device = torch.device("cpu")
         dataload = DataLoader(
             dataset,
             batch_size=batch_size,
