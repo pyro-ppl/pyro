@@ -81,9 +81,9 @@ def test_profile_alternate_imp(M, batch_size, substitute):
         c = c[None, :, :] * torch.ones([batch_size, 1, 1])
         if substitute:
             ll = ll.unsqueeze(0)
-    chk_a = torch.zeros((batch_dim_size, K, K))
-    chk_a0 = torch.zeros((batch_dim_size, K))
-    chk_e = torch.zeros((batch_dim_size, K, 4))
+    expected_a = torch.zeros((batch_dim_size, K, K))
+    expected_a0 = torch.zeros((batch_dim_size, K))
+    expected_e = torch.zeros((batch_dim_size, K, 4))
     for b in range(batch_dim_size):
         m, g = -1, 0
         u1[b][-1] = 1e-32
@@ -91,11 +91,11 @@ def test_profile_alternate_imp(M, batch_size, substitute):
             for mp in range(M + gp):
                 kp = mg2k(mp, gp, M)
                 if m + 1 - g == mp and gp == 0:
-                    chk_a0[b, kp] = (1 - r1[b, m + 1 - g, g]) * (
+                    expected_a0[b, kp] = (1 - r1[b, m + 1 - g, g]) * (
                         1 - u1[b, m + 1 - g, g]
                     )
                 elif m + 1 - g < mp and gp == 0:
-                    chk_a0[b, kp] = (
+                    expected_a0[b, kp] = (
                         (1 - r1[b, m + 1 - g, g])
                         * u1[b, m + 1 - g, g]
                         * simpleprod(
@@ -108,9 +108,9 @@ def test_profile_alternate_imp(M, batch_size, substitute):
                         * (1 - u1[b, mp, 2])
                     )
                 elif m + 1 - g == mp and gp == 1:
-                    chk_a0[b, kp] = r1[b, m + 1 - g, g]
+                    expected_a0[b, kp] = r1[b, m + 1 - g, g]
                 elif m + 1 - g < mp and gp == 1:
-                    chk_a0[b, kp] = (
+                    expected_a0[b, kp] = (
                         (1 - r1[b, m + 1 - g, g])
                         * u1[b, m + 1 - g, g]
                         * simpleprod(
@@ -128,11 +128,11 @@ def test_profile_alternate_imp(M, batch_size, substitute):
                     for mp in range(M + gp):
                         kp = mg2k(mp, gp, M)
                         if m + 1 - g == mp and gp == 0:
-                            chk_a[b, k, kp] = (1 - r1[b, m + 1 - g, g]) * (
+                            expected_a[b, k, kp] = (1 - r1[b, m + 1 - g, g]) * (
                                 1 - u1[b, m + 1 - g, g]
                             )
                         elif m + 1 - g < mp and gp == 0:
-                            chk_a[b, k, kp] = (
+                            expected_a[b, k, kp] = (
                                 (1 - r1[b, m + 1 - g, g])
                                 * u1[b, m + 1 - g, g]
                                 * simpleprod(
@@ -145,9 +145,9 @@ def test_profile_alternate_imp(M, batch_size, substitute):
                                 * (1 - u1[b, mp, 2])
                             )
                         elif m + 1 - g == mp and gp == 1:
-                            chk_a[b, k, kp] = r1[b, m + 1 - g, g]
+                            expected_a[b, k, kp] = r1[b, m + 1 - g, g]
                         elif m + 1 - g < mp and gp == 1:
-                            chk_a[b, k, kp] = (
+                            expected_a[b, k, kp] = (
                                 (1 - r1[b, m + 1 - g, g])
                                 * u1[b, m + 1 - g, g]
                                 * simpleprod(
@@ -159,23 +159,23 @@ def test_profile_alternate_imp(M, batch_size, substitute):
                                 * r1[b, mp, 2]
                             )
                         elif m == M and mp == M and g == 0 and gp == 0:
-                            chk_a[b, k, kp] = 1.0
+                            expected_a[b, k, kp] = 1.0
 
         for g in range(2):
             for m in range(M + g):
                 k = mg2k(m, g, M)
                 if g == 0:
-                    chk_e[b, k, :] = s[b, m, :]
+                    expected_e[b, k, :] = s[b, m, :]
                 else:
-                    chk_e[b, k, :] = c[b, m, :]
+                    expected_e[b, k, :] = c[b, m, :]
     if substitute:
-        chk_e = torch.matmul(chk_e, ll)
+        expected_e = torch.matmul(expected_e, ll)
 
     # --- Check ---
     if batch_size is None:
-        chk_a = chk_a.squeeze()
-        chk_a0 = chk_a0.squeeze()
-        chk_e = chk_e.squeeze()
+        expected_a = expected_a.squeeze()
+        expected_a0 = expected_a0.squeeze()
+        expected_e = expected_e.squeeze()
 
         assert torch.allclose(
             torch.sum(torch.exp(a0ln)), torch.tensor(1.0), atol=1e-3, rtol=1e-3
@@ -186,9 +186,9 @@ def test_profile_alternate_imp(M, batch_size, substitute):
             atol=1e-3,
             rtol=1e-3,
         )
-    assert torch.allclose(chk_a0, torch.exp(a0ln))
-    assert torch.allclose(chk_a, torch.exp(aln))
-    assert torch.allclose(chk_e, torch.exp(eln))
+    assert torch.allclose(expected_a0, torch.exp(a0ln))
+    assert torch.allclose(expected_a, torch.exp(aln))
+    assert torch.allclose(expected_e, torch.exp(eln))
 
 
 @pytest.mark.parametrize("batch_ancestor_seq", [False, True])

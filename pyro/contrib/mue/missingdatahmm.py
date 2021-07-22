@@ -287,7 +287,7 @@ class MissingDataDiscreteHMM(TorchDistribution):
             ).squeeze(-1)
         return map_states
 
-    def conditional(self, states):
+    def given_states(self, states):
         """
         Distribution conditional on the state variable.
 
@@ -305,7 +305,7 @@ class MissingDataDiscreteHMM(TorchDistribution):
         logits = torch.gather(obs_logits, -2, states_index)
         return OneHotCategorical(logits=logits)
 
-    def conditional_sample(self, states):
+    def sample_given_states(self, states):
         """
         Sample an observation conditional on the state variable.
 
@@ -313,5 +313,5 @@ class MissingDataDiscreteHMM(TorchDistribution):
             integer-valued (long) and broadcastable to
             ``(batch_size, num_steps)``.
         """
-        conditional = self.conditional(states)
+        conditional = self.given_states(states)
         return conditional.sample()
