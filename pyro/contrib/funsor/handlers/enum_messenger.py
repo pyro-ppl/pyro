@@ -191,6 +191,7 @@ class EnumMessenger(NamedMessenger):
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
             value=msg["name"]
         )
+        msg["funsor"]["unsampled_log_measure"] = unsampled_log_measure
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
         msg["funsor"]["value"] = _get_support_value(
             msg["funsor"]["log_measure"],
@@ -200,7 +201,7 @@ class EnumMessenger(NamedMessenger):
         # msg["value"] = to_data(msg["funsor"]["value"])
         msg["value"] = ProvenanceTensor(
             to_data(msg["funsor"]["value"]),
-            provenance=frozenset({(msg["name"], funsor.Real)})
+            provenance=frozenset({(msg["name"], funsor.Real)}),
         )
         msg["done"] = True
 

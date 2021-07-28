@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+from collections import OrderedDict
 
 import funsor
 import torch
 from funsor.adjoint import AdjointTape
 from funsor.constant import Constant
+from funsor.montecarlo import MonteCarlo
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
@@ -51,19 +53,11 @@ class Trace_ELBO(ELBO):
                     targets[input_vars] = Constant(
                         const_inputs, funsor.Tensor(torch.tensor(0))
                     )
-                    #  targets[input_vars] = funsor.Tensor(
-                    #      funsor.ops.new_zeros(
-                    #          funsor.tensor.get_default_prototype(),
-                    #          tuple(v.size for v in cost.inputs.values()),
-                    #      ),
-                    #      cost.inputs,
-                    #      cost.dtype,
-                    #  )
             with AdjointTape() as tape:
                 logzq = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp,
                     funsor.ops.add,
-                    guide_terms["log_measures"] + list(targets.values()),
+                    guide_terms["unsampled_log_measures"] + list(targets.values()),
                     plates=plate_vars,
                     eliminate=(plate_vars | guide_terms["measure_vars"]),
                 )
@@ -74,20 +68,23 @@ class Trace_ELBO(ELBO):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[frozenset(cost.inputs)]
+                marginal = marginals[target]
                 #  logzq_local = marginals[target].reduce(
                 #      funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
                 #  )
-                logzq_local = guide_terms["log_measures"][0].reduce(
-                    funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
-                )
-                # breakpoint()
-                log_prob = marginals[target] - logzq + logzq_local
+                #  logzq_local = guide_terms["log_measures"][0].reduce(
+                #      funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
+                #  )
+                # log_prob = marginal.sample(frozenset(cost.inputs)-plate_vars)  # - logzq + logzq_local
                 # log_prob = guide_terms["log_measures"][0]
-                elbo_term = funsor.Integrate(
-                    log_prob,
-                    cost,
-                    guide_terms["measure_vars"] & frozenset(log_prob.inputs),
-                )
+                measure_vars = frozenset(cost.inputs) - plate_vars
+                _raw_value = {var: guide_tr.nodes[var]["value"]._t for var in measure_vars}
+                with MonteCarlo(raw_value=_raw_value):
+                    elbo_term = funsor.Integrate(
+                        marginal,
+                        cost,
+                        guide_terms["measure_vars"] & frozenset(marginal.inputs),
+                    )
                 elbo += elbo_term.reduce(
                     funsor.ops.add, plate_vars & frozenset(cost.inputs)
                 )
