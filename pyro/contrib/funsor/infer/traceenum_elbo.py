@@ -3,8 +3,8 @@
 
 import contextlib
 
-import torch
 import funsor
+import torch
 from funsor.adjoint import AdjointTape
 from funsor.constant import Constant
 
@@ -225,7 +225,7 @@ class TraceEnum_ELBO(ELBO):
                     targets[input_vars] = Constant(
                         cost.input_vars, funsor.Tensor(torch.tensor(0))
                     )
-                    # targets[input_vars] = funsor.Tensor(
+                    #  targets[input_vars] = funsor.Tensor(
                     #      funsor.ops.new_zeros(
                     #          funsor.tensor.get_default_prototype(),
                     #          tuple(v.size for v in cost.inputs.values()),
@@ -234,7 +234,6 @@ class TraceEnum_ELBO(ELBO):
                     #      cost.dtype,
                     #  )
             with AdjointTape() as tape:
-                # breakpoint()
                 logzq = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp,
                     funsor.ops.add,

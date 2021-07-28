@@ -4,7 +4,9 @@
 import contextlib
 
 import funsor
+import torch
 from funsor.adjoint import AdjointTape
+from funsor.constant import Constant
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
@@ -45,14 +47,18 @@ class Trace_ELBO(ELBO):
             for cost in costs:
                 input_vars = frozenset(cost.inputs)
                 if input_vars not in targets:
-                    targets[input_vars] = funsor.Tensor(
-                        funsor.ops.new_zeros(
-                            funsor.tensor.get_default_prototype(),
-                            tuple(v.size for v in cost.inputs.values()),
-                        ),
-                        cost.inputs,
-                        cost.dtype,
+                    const_inputs = tuple((v.name, v.output) for v in cost.input_vars)
+                    targets[input_vars] = Constant(
+                        const_inputs, funsor.Tensor(torch.tensor(0))
                     )
+                    #  targets[input_vars] = funsor.Tensor(
+                    #      funsor.ops.new_zeros(
+                    #          funsor.tensor.get_default_prototype(),
+                    #          tuple(v.size for v in cost.inputs.values()),
+                    #      ),
+                    #      cost.inputs,
+                    #      cost.dtype,
+                    #  )
             with AdjointTape() as tape:
                 logzq = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp,
@@ -68,10 +74,15 @@ class Trace_ELBO(ELBO):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[frozenset(cost.inputs)]
-                logzq_local = marginals[target].reduce(
+                #  logzq_local = marginals[target].reduce(
+                #      funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
+                #  )
+                logzq_local = guide_terms["log_measures"][0].reduce(
                     funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
                 )
-                log_prob = marginals[target] - logzq_local
+                # breakpoint()
+                log_prob = marginals[target] - logzq + logzq_local
+                # log_prob = guide_terms["log_measures"][0]
                 elbo_term = funsor.Integrate(
                     log_prob,
                     cost,

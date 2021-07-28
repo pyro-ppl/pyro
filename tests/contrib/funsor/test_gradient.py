@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize(
     "Elbo,backend",
     [
-        ("TraceEnum_ELBO", "pyro"),
+        # ("TraceEnum_ELBO", "pyro"),
         ("Trace_ELBO", "contrib.funsor"),
     ],
 )
@@ -41,14 +41,14 @@ def test_particle_gradient(Elbo, backend):
         def model():
             with pyro.plate("data", len(data)) as ind:
                 x = data[ind]
-                z = pyro.sample("z", dist.Poisson(3))
+                z = pyro.sample("z", dist.Poisson(3, validate_args=False))
                 pyro.sample("x", dist.Normal(z, 1), obs=x)
 
         def guide():
             # scale = pyro.param("scale", lambda: torch.tensor([1.0]))
             with pyro.plate("data", len(data)):
                 rate = pyro.param("rate", lambda: torch.tensor([3.5, 1.5]), event_dim=0)
-                z_dist = dist.Poisson(rate)
+                z_dist = dist.Poisson(rate, validate_args=False)
                 #  if has_rsample is not None:
                 #      z_dist.has_rsample_(has_rsample)
                 pyro.sample("z", z_dist)

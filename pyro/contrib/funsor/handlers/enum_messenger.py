@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 import funsor
 import torch
+from funsor.torch.provenance import ProvenanceTensor
 
 import pyro.poutine.runtime
 import pyro.poutine.util
@@ -196,7 +197,11 @@ class EnumMessenger(NamedMessenger):
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )
-        msg["value"] = to_data(msg["funsor"]["value"])
+        # msg["value"] = to_data(msg["funsor"]["value"])
+        msg["value"] = ProvenanceTensor(
+            to_data(msg["funsor"]["value"]),
+            provenance=frozenset({(msg["name"], funsor.Real)})
+        )
         msg["done"] = True
 
 
