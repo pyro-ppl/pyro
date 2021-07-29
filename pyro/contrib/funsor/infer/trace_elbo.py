@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
-from collections import OrderedDict
 
 import funsor
 import torch
@@ -35,23 +34,19 @@ class Trace_ELBO(ELBO):
         guide_terms = terms_from_trace(guide_tr)
 
         with funsor.terms.eager:
+            # cost terms
             costs = model_terms["log_factors"] + [
                 -f for f in guide_terms["log_factors"]
             ]
 
-            # compute expected cost
-            # Cf. pyro.infer.util.Dice.compute_expectation()
-            # https://github.com/pyro-ppl/pyro/blob/0.3.0/pyro/infer/util.py#L212
-            # TODO Replace this with funsor.Expectation
             plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
-            # compute the marginal logq in the guide corresponding to each cost term
+            # compute log_measures corresponding to each cost term
+            # the goal is to achieve full Rao-Blackwellization
             targets = dict()
             for cost in costs:
-                input_vars = frozenset(cost.inputs)
-                if input_vars not in targets:
-                    const_inputs = tuple((v.name, v.output) for v in cost.input_vars)
-                    targets[input_vars] = Constant(
-                        const_inputs, funsor.Tensor(torch.tensor(0))
+                if cost.input_vars not in targets:
+                    targets[cost.input_vars] = Constant(
+                        cost.inputs, funsor.Tensor(torch.tensor(0))
                     )
             with AdjointTape() as tape:
                 logzq = funsor.sum_product.sum_product(
@@ -61,29 +56,24 @@ class Trace_ELBO(ELBO):
                     plates=plate_vars,
                     eliminate=(plate_vars | guide_terms["measure_vars"]),
                 )
-            marginals = tape.adjoint(
+            log_measures = tape.adjoint(
                 funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values())
             )
             # finally, integrate out guide variables in the elbo and all plates
+            # Dice factors are included in MonteCarlo samples
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
-                target = targets[frozenset(cost.inputs)]
-                marginal = marginals[target]
-                #  logzq_local = marginals[target].reduce(
-                #      funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
-                #  )
-                #  logzq_local = guide_terms["log_measures"][0].reduce(
-                #      funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
-                #  )
-                # log_prob = marginal.sample(frozenset(cost.inputs)-plate_vars)  # - logzq + logzq_local
-                # log_prob = guide_terms["log_measures"][0]
+                target = targets[cost.input_vars]
+                log_measure = log_measures[target]
                 measure_vars = frozenset(cost.inputs) - plate_vars
-                _raw_value = {var: guide_tr.nodes[var]["value"]._t for var in measure_vars}
+                _raw_value = {
+                    var: guide_tr.nodes[var]["value"]._t for var in measure_vars
+                }
                 with MonteCarlo(raw_value=_raw_value):
                     elbo_term = funsor.Integrate(
-                        marginal,
+                        log_measure,
                         cost,
-                        guide_terms["measure_vars"] & frozenset(marginal.inputs),
+                        measure_vars,
                     )
                 elbo += elbo_term.reduce(
                     funsor.ops.add, plate_vars & frozenset(cost.inputs)

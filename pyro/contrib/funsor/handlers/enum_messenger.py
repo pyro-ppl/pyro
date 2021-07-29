@@ -11,7 +11,6 @@ from collections import OrderedDict
 
 import funsor
 import torch
-from funsor.torch.provenance import ProvenanceTensor
 
 import pyro.poutine.runtime
 import pyro.poutine.util
@@ -193,16 +192,16 @@ class EnumMessenger(NamedMessenger):
         )
         msg["funsor"]["unsampled_log_measure"] = unsampled_log_measure
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
-        msg["funsor"]["value"] = _get_support_value(
+        support_value = _get_support_value(
             msg["funsor"]["log_measure"],
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )
-        # msg["value"] = to_data(msg["funsor"]["value"])
-        msg["value"] = ProvenanceTensor(
-            to_data(msg["funsor"]["value"]),
-            provenance=frozenset({(msg["name"], funsor.Real)}),
+        msg["funsor"]["value"] = funsor.constant.Constant(
+            OrderedDict(((msg["name"], funsor.Real),)),
+            support_value,
         )
+        msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
 
 

@@ -4,9 +4,7 @@
 import contextlib
 
 import funsor
-import torch
 from funsor.adjoint import AdjointTape
-from funsor.constant import Constant
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
@@ -65,7 +63,9 @@ def terms_from_trace(tr):
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
-            terms["unsampled_log_measures"].append(node["funsor"]["unsampled_log_measure"])
+            terms["unsampled_log_measures"].append(
+                node["funsor"]["unsampled_log_measure"]
+            )
             # sum (measure) variables: the fresh non-plate variables at a site
             terms["measure_vars"] |= (
                 frozenset(node["funsor"]["value"].inputs) | {name}
@@ -190,7 +190,7 @@ class TraceEnum_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
 
         # build up a lazy expression for the elbo
-        with funsor.terms.eager:
+        with funsor.terms.lazy:
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
@@ -224,17 +224,14 @@ class TraceEnum_ELBO(ELBO):
             for cost in costs:
                 input_vars = frozenset(cost.inputs)
                 if input_vars not in targets:
-                    targets[input_vars] = Constant(
-                        cost.input_vars, funsor.Tensor(torch.tensor(0))
+                    targets[input_vars] = funsor.Tensor(
+                        funsor.ops.new_zeros(
+                            funsor.tensor.get_default_prototype(),
+                            tuple(v.size for v in cost.inputs.values()),
+                        ),
+                        cost.inputs,
+                        cost.dtype,
                     )
-                    #  targets[input_vars] = funsor.Tensor(
-                    #      funsor.ops.new_zeros(
-                    #          funsor.tensor.get_default_prototype(),
-                    #          tuple(v.size for v in cost.inputs.values()),
-                    #      ),
-                    #      cost.inputs,
-                    #      cost.dtype,
-                    #  )
             with AdjointTape() as tape:
                 logzq = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp,

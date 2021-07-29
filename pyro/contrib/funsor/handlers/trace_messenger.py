@@ -44,8 +44,7 @@ class TraceMessenger(OrigTraceMessenger):
                 msg["funsor"]["fn"] = to_funsor(fn_masked, funsor.Real)(
                     value=msg["name"]
                 )
-            # if "value" not in msg["funsor"]:
-            if True:
+            if "value" not in msg["funsor"]:
                 # value_output = funsor.Reals[getattr(msg["fn"], "event_shape", ())]
                 msg["funsor"]["value"] = to_funsor(
                     msg["value"], msg["funsor"]["fn"].inputs[msg["name"]]

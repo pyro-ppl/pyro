@@ -5,7 +5,6 @@ import logging
 
 import pytest
 import torch
-from torch.distributions import constraints
 
 from tests.common import assert_equal
 
@@ -149,8 +148,7 @@ def test_particle_gradient_1(Elbo, backend):
         dlogqb_drate = b / rate[a.long()] - 1
 
         loss_a = (
-            model_tr.nodes["a"]["log_prob"].data
-            - guide_tr.nodes["a"]["log_prob"].data
+            model_tr.nodes["a"]["log_prob"].data - guide_tr.nodes["a"]["log_prob"].data
         )
         loss_bc = (
             model_tr.nodes["b"]["log_prob"].data
