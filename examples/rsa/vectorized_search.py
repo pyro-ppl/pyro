@@ -53,7 +53,7 @@ class VectoredHashingMarginal(dist.Distribution):
         log_probs = [(log_prob[idx] if log_prob.ndim > 0 else log_prob) for log_prob in log_probs]
         return torch.Tensor(log_probs)
 
-    @memoize(maxsize=10)
+    @memoize(maxsize=100)
     def _dist_and_values(self) -> Tuple[dist.Distribution, OrderedDict]:
         # XXX currently this whole object is very inefficient
         vmap, logits = OrderedDict(), OrderedDict()
