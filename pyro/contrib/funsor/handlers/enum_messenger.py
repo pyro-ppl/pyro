@@ -190,7 +190,6 @@ class EnumMessenger(NamedMessenger):
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
             value=msg["name"]
         )
-        msg["funsor"]["unsampled_log_measure"] = unsampled_log_measure
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
         support_value = _get_support_value(
             msg["funsor"]["log_measure"],

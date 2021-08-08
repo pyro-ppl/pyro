@@ -7,7 +7,6 @@ import funsor
 import torch
 from funsor.adjoint import AdjointTape
 from funsor.constant import Constant
-from funsor.montecarlo import MonteCarlo
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
@@ -33,48 +32,41 @@ class Trace_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
 
-        with funsor.terms.eager:
-            # cost terms
-            costs = model_terms["log_factors"] + [
-                -f for f in guide_terms["log_factors"]
-            ]
+        # cost terms
+        costs = model_terms["log_factors"] + [-f for f in guide_terms["log_factors"]]
 
-            plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
-            # compute log_measures corresponding to each cost term
-            # the goal is to achieve full Rao-Blackwellization
-            targets = dict()
-            for cost in costs:
-                if cost.input_vars not in targets:
-                    targets[cost.input_vars] = Constant(
-                        cost.inputs, funsor.Tensor(torch.tensor(0))
-                    )
-            with AdjointTape() as tape:
-                logzq = funsor.sum_product.sum_product(
-                    funsor.ops.logaddexp,
-                    funsor.ops.add,
-                    guide_terms["unsampled_log_measures"] + list(targets.values()),
-                    plates=plate_vars,
-                    eliminate=(plate_vars | guide_terms["measure_vars"]),
+        plate_vars = guide_terms["plate_vars"] | model_terms["plate_vars"]
+        # compute log_measures corresponding to each cost term
+        # the goal is to achieve fine-grained Rao-Blackwellization
+        targets = dict()
+        for cost in costs:
+            if cost.input_vars not in targets:
+                targets[cost.input_vars] = Constant(
+                    cost.inputs, funsor.Tensor(torch.tensor(0.0))
                 )
-            log_measures = tape.adjoint(
-                funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values())
+        with AdjointTape() as tape:
+            logzq = funsor.sum_product.sum_product(
+                funsor.ops.logaddexp,
+                funsor.ops.add,
+                guide_terms["log_measures"] + list(targets.values()),
+                plates=plate_vars,
+                eliminate=(plate_vars | guide_terms["measure_vars"]),
             )
+        log_measures = tape.adjoint(
+            funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values())
+        )
+        with funsor.terms.eager:
             # finally, integrate out guide variables in the elbo and all plates
-            # Dice factors are included in MonteCarlo samples
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[cost.input_vars]
                 log_measure = log_measures[target]
                 measure_vars = frozenset(cost.inputs) - plate_vars
-                _raw_value = {
-                    var: guide_tr.nodes[var]["value"]._t for var in measure_vars
-                }
-                with MonteCarlo(raw_value=_raw_value):
-                    elbo_term = funsor.Integrate(
-                        log_measure,
-                        cost,
-                        measure_vars,
-                    )
+                elbo_term = funsor.Integrate(
+                    log_measure,
+                    cost,
+                    measure_vars,
+                )
                 elbo += elbo_term.reduce(
                     funsor.ops.add, plate_vars & frozenset(cost.inputs)
                 )

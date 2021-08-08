@@ -31,7 +31,6 @@ def terms_from_trace(tr):
     terms = {
         "log_factors": [],
         "log_measures": [],
-        "unsampled_log_measures": [],
         "scale": to_funsor(1.0),
         "plate_vars": frozenset(),
         "measure_vars": frozenset(),
@@ -63,9 +62,6 @@ def terms_from_trace(tr):
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
-            terms["unsampled_log_measures"].append(
-                node["funsor"]["unsampled_log_measure"]
-            )
             # sum (measure) variables: the fresh non-plate variables at a site
             terms["measure_vars"] |= (
                 frozenset(node["funsor"]["value"].inputs) | {name}
