@@ -5,8 +5,6 @@ import contextlib
 import numbers
 import os
 import re
-import shutil
-import tempfile
 import warnings
 from itertools import product
 
