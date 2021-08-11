@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 
 import pytest
@@ -62,12 +63,14 @@ class OptimTests(TestCase):
         adam_initial_step_count = list(adam.get_state()["loc_q"]["state"].items())[0][
             1
         ]["step"]
-        adam.save("adam.unittest.save")
-        svi.step()
-        adam_final_step_count = list(adam.get_state()["loc_q"]["state"].items())[0][1][
-            "step"
-        ]
-        adam2.load("adam.unittest.save")
+        with TemporaryDirectory() as tempdir:
+            filename = os.path.join(tempdir, "adam.save")
+            adam.save(filename)
+            svi.step()
+            adam_final_step_count = list(
+                adam.get_state()["loc_q"]["state"].items()
+            )[0][1]["step"]
+            adam2.load(filename)
         svi2.step()
         adam2_step_count_after_load_and_step = list(
             adam2.get_state()["loc_q"]["state"].items()

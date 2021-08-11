@@ -58,17 +58,6 @@ def suppress_warnings(fn):
     return wrapper
 
 
-# backport of Python 3's context manager
-@contextlib.contextmanager
-def TemporaryDirectory():
-    try:
-        path = tempfile.mkdtemp()
-        yield path
-    finally:
-        if os.path.exists(path):
-            shutil.rmtree(path)
-
-
 requires_cuda = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="cuda is not available"
 )
