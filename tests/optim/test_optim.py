@@ -372,8 +372,9 @@ def test_name_preserved_by_to_pyro_module():
 )
 def test_checkpoint(Optim, config):
     def model():
-        x_scale = pyro.param("x_scale", torch.tensor(1.0),
-                             constraint=constraints.positive)
+        x_scale = pyro.param(
+            "x_scale", torch.tensor(1.0), constraint=constraints.positive
+        )
         z = pyro.sample("z", Normal(0, 1))
         return pyro.sample("x", Normal(z, x_scale), obs=torch.tensor(0.1))
 
