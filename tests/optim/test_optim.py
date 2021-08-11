@@ -387,8 +387,18 @@ def test_checkpoint(Optim, config):
 
     store = pyro.get_param_store()
 
-    def get_snapshot():
-        return {k: v.data.clone() for k, v in store.items()}
+    def step(svi, optimizer):
+        svi.step()
+        if hasattr(optimizer, "step"):
+            if issubclass(
+                optimizer.pt_scheduler_constructor,
+                torch.optim.lr_scheduler.ReduceLROnPlateau,
+            ):
+                optimizer.step(1.0)
+            else:
+                optimizer.step()
+        snapshot = {k: v.data.clone() for k, v in store.items()}
+        return snapshot
 
     # Try without a checkpoint.
     expected = []
@@ -397,8 +407,7 @@ def test_checkpoint(Optim, config):
     optimizer = Optim(config.copy())
     svi = SVI(model, guide, optimizer, Trace_ELBO())
     for _ in range(5 + 10):
-        svi.step()
-        expected.append(get_snapshot())
+        expected.append(step(svi, optimizer))
     del svi, optimizer
 
     # Try with a checkpoint.
@@ -408,8 +417,7 @@ def test_checkpoint(Optim, config):
     optimizer = Optim(config.copy())
     svi = SVI(model, guide, optimizer, Trace_ELBO())
     for _ in range(5):
-        svi.step()
-        actual.append(get_snapshot())
+        actual.append(step(svi, optimizer))
     # checkpoint
     with TemporaryDirectory() as tempdir:
         optim_filename = os.path.join(tempdir, "optimizer_state.pt")
@@ -425,7 +433,6 @@ def test_checkpoint(Optim, config):
         optimizer.load(optim_filename)
     svi = SVI(model, guide, optimizer, Trace_ELBO())
     for _ in range(10):
-        svi.step()
-        actual.append(get_snapshot())
+        actual.append(step(svi, optimizer))
 
     assert_equal(actual, expected)
