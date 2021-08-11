@@ -343,7 +343,7 @@ def test_name_preserved_by_to_pyro_module():
             {
                 "optimizer": torch.optim.SGD,
                 "optim_args": {"lr": 0.01},
-                "lr_lambda": lambda epoch: 2.0 ** epoch,
+                "lr_lambda": lambda epoch: 0.9 ** epoch,
             },
         ),
         (
@@ -351,13 +351,13 @@ def test_name_preserved_by_to_pyro_module():
             {
                 "optimizer": torch.optim.SGD,
                 "optim_args": {"lr": 0.01},
-                "gamma": 2,
+                "gamma": 0.9,
                 "step_size": 1,
             },
         ),
         (
             optim.ExponentialLR,
-            {"optimizer": torch.optim.SGD, "optim_args": {"lr": 0.01}, "gamma": 2},
+            {"optimizer": torch.optim.SGD, "optim_args": {"lr": 0.01}, "gamma": 0.9},
         ),
         (
             optim.ReduceLROnPlateau,
