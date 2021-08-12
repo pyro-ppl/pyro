@@ -16,6 +16,7 @@ from pyro import poutine
 from pyro.distributions import Normal, Uniform
 from pyro.infer import SVI, Trace_ELBO, TraceGraph_ELBO
 from pyro.nn.module import PyroModule, PyroParam, to_pyro_module_
+from pyro.optim.optim import is_scheduler
 from tests.common import assert_equal
 
 
@@ -389,7 +390,7 @@ def test_checkpoint(Optim, config):
 
     def step(svi, optimizer):
         svi.step()
-        if hasattr(optimizer, "step"):
+        if is_scheduler(optimizer):
             if issubclass(
                 optimizer.pt_scheduler_constructor,
                 torch.optim.lr_scheduler.ReduceLROnPlateau,
