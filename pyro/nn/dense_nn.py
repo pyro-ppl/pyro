@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import List, Union, Tuple
+
 import torch
 
 
@@ -34,13 +36,13 @@ class ConditionalDenseNN(torch.nn.Module):
     """
 
     def __init__(
-        self,
-        input_dim,
-        context_dim,
-        hidden_dims,
-        param_dims=[1, 1],
-        nonlinearity=torch.nn.ReLU(),
-    ):
+            self,
+            input_dim:int,
+            context_dim:int,
+            hidden_dims: List[int],
+            param_dims: List[int] = [1, 1],
+            nonlinearity: torch.nn.Module = torch.nn.ReLU()):
+
         super().__init__()
 
         self.input_dim = input_dim
@@ -65,14 +67,14 @@ class ConditionalDenseNN(torch.nn.Module):
         # Save the nonlinearity
         self.f = nonlinearity
 
-    def forward(self, x, context):
+    def forward(self, x:torch.Tensor, context:torch.Tensor) -> Union[torch.Tensor,Tuple[torch.Tensor]]:
         # We must be able to broadcast the size of the context over the input
         context = context.expand(x.size()[:-1] + (context.size(-1),))
 
         x = torch.cat([context, x], dim=-1)
         return self._forward(x)
 
-    def _forward(self, x):
+    def _forward(self, x:torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor]]:
         """
         The forward method
         """
@@ -122,11 +124,15 @@ class DenseNN(ConditionalDenseNN):
     """
 
     def __init__(
-        self, input_dim, hidden_dims, param_dims=[1, 1], nonlinearity=torch.nn.ReLU()
-    ):
+            self,
+            input_dim: int,
+            hidden_dims: List[int],
+            param_dims: List[int] = [1, 1],
+            nonlinearity: torch.nn.module = torch.nn.ReLU()) ->  None:
+      
         super(DenseNN, self).__init__(
             input_dim, 0, hidden_dims, param_dims=param_dims, nonlinearity=nonlinearity
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         return self._forward(x)

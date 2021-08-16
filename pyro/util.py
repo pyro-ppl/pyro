@@ -11,6 +11,7 @@ import warnings
 from collections import defaultdict
 from contextlib import contextmanager
 from itertools import zip_longest
+from typing import Dict, Optional
 
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ import torch
 from pyro.poutine.util import site_is_subsample
 
 
-def set_rng_seed(rng_seed):
+def set_rng_seed(rng_seed : int) -> None:
     """
     Sets seeds of `torch` and `torch.cuda` (if available).
 
@@ -29,15 +30,12 @@ def set_rng_seed(rng_seed):
     np.random.seed(rng_seed)
 
 
-def get_rng_state():
-    return {
-        "torch": torch.get_rng_state(),
-        "random": random.getstate(),
-        "numpy": np.random.get_state(),
-    }
+
+def get_rng_state() -> Dict:
+    return {'torch': torch.get_rng_state(), 'random': random.getstate(), 'numpy': np.random.get_state()}
 
 
-def set_rng_state(state):
+def set_rng_state(state:Dict) -> Dict:
     torch.set_rng_state(state["torch"])
     random.setstate(state["random"])
     if "numpy" in state:
@@ -46,7 +44,7 @@ def set_rng_state(state):
         np.random.set_state(state["numpy"])
 
 
-def torch_isnan(x):
+def torch_isnan(x : torch.Tensor) -> torch.Tensor:
     """
     A convenient function to check if a Tensor contains any nan; also works with numbers
     """
@@ -55,7 +53,7 @@ def torch_isnan(x):
     return torch.isnan(x).any()
 
 
-def torch_isinf(x):
+def torch_isinf(x : torch.Tensor) -> torch.Tensor:
     """
     A convenient function to check if a Tensor contains any +inf; also works with numbers
     """
@@ -64,7 +62,7 @@ def torch_isinf(x):
     return (x == math.inf).any() or (x == -math.inf).any()
 
 
-def warn_if_nan(value, msg="", *, filename=None, lineno=None):
+def warn_if_nan(value, msg : str="", *, filename :Optional[str] = None, lineno: Optional[bool]=None) -> torch.Tensor:
     """
     A convenient function to warn if a Tensor or its grad contains any nan,
     also works with numbers.
@@ -97,9 +95,9 @@ def warn_if_nan(value, msg="", *, filename=None, lineno=None):
     return value
 
 
-def warn_if_inf(
-    value, msg="", allow_posinf=False, allow_neginf=False, *, filename=None, lineno=None
-):
+
+def warn_if_inf(value:torch.Tensor, msg : str="", allow_posinf:bool=False, allow_neginf:bool=False, *,
+                filename : str =None, lineno=None) -> torch.Tensor:
     """
     A convenient function to warn if a Tensor or its grad contains any inf,
     also works with numbers.

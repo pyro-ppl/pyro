@@ -3,12 +3,14 @@
 
 import warnings
 
+from typing import Union, List, Optional
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
 
-def sample_mask_indices(input_dim, hidden_dim, simple=True):
+def sample_mask_indices(input_dim: int, hidden_dim: int, simple: bool=True) ->  Union[int,torch.Tensor]:
     """
     Samples the indices assigned to hidden units during the construction of MADE masks
 
@@ -32,9 +34,7 @@ def sample_mask_indices(input_dim, hidden_dim, simple=True):
         return ints
 
 
-def create_mask(
-    input_dim, context_dim, hidden_dims, permutation, output_dim_multiplier
-):
+def create_mask(input_dim: int , context_dim: int, hidden_dims: List[int], permutation: torch.LongTensor, output_dim_multiplier: int):
     """
     Creates MADE masks for a conditional distribution
 
@@ -109,7 +109,7 @@ class MaskedLinear(nn.Linear):
     :type bias: bool
     """
 
-    def __init__(self, in_features, out_features, mask, bias=True):
+    def __init__(self, in_features: int, out_features: int, mask: torch.Tensor, bias: bool=True):
         super().__init__(in_features, out_features, bias)
         self.register_buffer("mask", mask.data)
 
@@ -165,15 +165,15 @@ class ConditionalAutoRegressiveNN(nn.Module):
     """
 
     def __init__(
-        self,
-        input_dim,
-        context_dim,
-        hidden_dims,
-        param_dims=[1, 1],
-        permutation=None,
-        skip_connections=False,
-        nonlinearity=nn.ReLU(),
-    ):
+            self,
+            input_dim: int,
+            context_dim: int,
+            hidden_dims: List[int],
+            param_dims: List[int]=[1, 1],
+            permutation: Optional[torch.LongTensor]=None,
+            skip_connections: bool=False,
+            nonlinearity=nn.ReLU()):
+      
         super().__init__()
         if input_dim == 1:
             warnings.warn(
@@ -327,14 +327,13 @@ class AutoRegressiveNN(ConditionalAutoRegressiveNN):
     """
 
     def __init__(
-        self,
-        input_dim,
-        hidden_dims,
-        param_dims=[1, 1],
-        permutation=None,
-        skip_connections=False,
-        nonlinearity=nn.ReLU(),
-    ):
+            self,
+            input_dim: int,
+            hidden_dims: List[int],
+            param_dims: List=[1, 1],
+            permutation: torch.LongTensor=None,
+            skip_connections: bool=False,
+            nonlinearity=nn.ReLU()):
         super(AutoRegressiveNN, self).__init__(
             input_dim,
             0,

@@ -119,7 +119,7 @@ class DCTAdam(Optimizer):
 
         return loss
 
-    def _step_param(self, group: Dict, p) -> None:
+    def _step_param(self, group: Dict, p: torch.Tensor) -> None:
         grad = p.grad.data
         grad.clamp_(-group["clip_norm"], group["clip_norm"])
 
@@ -160,7 +160,7 @@ class DCTAdam(Optimizer):
             step = _transform_inverse(exp_avg / denom, time_dim, duration)
             p.data.add_(step.mul_(-step_size))
 
-    def _step_param_subsample(self, group: Dict, p, subsample) -> None:
+    def _step_param_subsample(self, group: Dict, p: torch.Tensor, subsample) -> None:
         mask = _get_mask(p, subsample)
 
         grad = p.grad.data.masked_select(mask)
