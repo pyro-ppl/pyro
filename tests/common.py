@@ -5,8 +5,6 @@ import contextlib
 import numbers
 import os
 import re
-import shutil
-import tempfile
 import warnings
 from itertools import product
 
@@ -56,17 +54,6 @@ def suppress_warnings(fn):
             fn(*args, **kwargs)
 
     return wrapper
-
-
-# backport of Python 3's context manager
-@contextlib.contextmanager
-def TemporaryDirectory():
-    try:
-        path = tempfile.mkdtemp()
-        yield path
-    finally:
-        if os.path.exists(path):
-            shutil.rmtree(path)
 
 
 requires_cuda = pytest.mark.skipif(

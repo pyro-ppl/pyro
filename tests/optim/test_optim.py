@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 
 import pytest
@@ -12,8 +14,9 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro import poutine
 from pyro.distributions import Normal, Uniform
-from pyro.infer import SVI, TraceGraph_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceGraph_ELBO
 from pyro.nn.module import PyroModule, PyroParam, to_pyro_module_
+from pyro.optim.optim import is_scheduler
 from tests.common import assert_equal
 
 
@@ -62,12 +65,14 @@ class OptimTests(TestCase):
         adam_initial_step_count = list(adam.get_state()["loc_q"]["state"].items())[0][
             1
         ]["step"]
-        adam.save("adam.unittest.save")
-        svi.step()
-        adam_final_step_count = list(adam.get_state()["loc_q"]["state"].items())[0][1][
-            "step"
-        ]
-        adam2.load("adam.unittest.save")
+        with TemporaryDirectory() as tempdir:
+            filename = os.path.join(tempdir, "optimizer_state.pt")
+            adam.save(filename)
+            svi.step()
+            adam_final_step_count = list(adam.get_state()["loc_q"]["state"].items())[0][
+                1
+            ]["step"]
+            adam2.load(filename)
         svi2.step()
         adam2_step_count_after_load_and_step = list(
             adam2.get_state()["loc_q"]["state"].items()
@@ -324,3 +329,111 @@ def test_name_preserved_by_to_pyro_module():
 
     assert actual_param_names == {"scale", "loc.weight", "loc.bias"}
     assert actual_param_names == expected_param_names
+
+
+@pytest.mark.parametrize(
+    "Optim, config",
+    [
+        (optim.Adam, {"lr": 0.01}),
+        (optim.ClippedAdam, {"lr": 0.01}),
+        (optim.DCTAdam, {"lr": 0.01}),
+        (optim.RMSprop, {"lr": 0.01}),
+        (optim.SGD, {"lr": 0.01}),
+        (
+            optim.LambdaLR,
+            {
+                "optimizer": torch.optim.SGD,
+                "optim_args": {"lr": 0.01},
+                "lr_lambda": lambda epoch: 0.9 ** epoch,
+            },
+        ),
+        (
+            optim.StepLR,
+            {
+                "optimizer": torch.optim.SGD,
+                "optim_args": {"lr": 0.01},
+                "gamma": 0.9,
+                "step_size": 1,
+            },
+        ),
+        (
+            optim.ExponentialLR,
+            {"optimizer": torch.optim.SGD, "optim_args": {"lr": 0.01}, "gamma": 0.9},
+        ),
+        (
+            optim.ReduceLROnPlateau,
+            {
+                "optimizer": torch.optim.SGD,
+                "optim_args": {"lr": 1.0},
+                "factor": 0.1,
+                "patience": 1,
+            },
+        ),
+    ],
+)
+def test_checkpoint(Optim, config):
+    def model():
+        x_scale = pyro.param(
+            "x_scale", torch.tensor(1.0), constraint=constraints.positive
+        )
+        z = pyro.sample("z", Normal(0, 1))
+        return pyro.sample("x", Normal(z, x_scale), obs=torch.tensor(0.1))
+
+    def guide():
+        z_loc = pyro.param("z_loc", torch.tensor(0.0))
+        z_scale = pyro.param(
+            "z_scale", torch.tensor(0.5), constraint=constraints.positive
+        )
+        pyro.sample("z", Normal(z_loc, z_scale))
+
+    store = pyro.get_param_store()
+
+    def step(svi, optimizer):
+        svi.step()
+        if is_scheduler(optimizer):
+            if issubclass(
+                optimizer.pt_scheduler_constructor,
+                torch.optim.lr_scheduler.ReduceLROnPlateau,
+            ):
+                optimizer.step(1.0)
+            else:
+                optimizer.step()
+        snapshot = {k: v.data.clone() for k, v in store.items()}
+        return snapshot
+
+    # Try without a checkpoint.
+    expected = []
+    store.clear()
+    pyro.set_rng_seed(20210811)
+    optimizer = Optim(config.copy())
+    svi = SVI(model, guide, optimizer, Trace_ELBO())
+    for _ in range(5 + 10):
+        expected.append(step(svi, optimizer))
+    del svi, optimizer
+
+    # Try with a checkpoint.
+    actual = []
+    store.clear()
+    pyro.set_rng_seed(20210811)
+    optimizer = Optim(config.copy())
+    svi = SVI(model, guide, optimizer, Trace_ELBO())
+    for _ in range(5):
+        actual.append(step(svi, optimizer))
+    # checkpoint
+    with TemporaryDirectory() as tempdir:
+        optim_filename = os.path.join(tempdir, "optimizer_state.pt")
+        param_filename = os.path.join(tempdir, "param_store.pt")
+
+        optimizer.save(optim_filename)
+        store.save(param_filename)
+        del optimizer, svi
+        store.clear()
+
+        store.load(param_filename)
+        optimizer = Optim(config.copy())
+        optimizer.load(optim_filename)
+    svi = SVI(model, guide, optimizer, Trace_ELBO())
+    for _ in range(10):
+        actual.append(step(svi, optimizer))
+
+    assert_equal(actual, expected)

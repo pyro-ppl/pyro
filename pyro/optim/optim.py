@@ -30,6 +30,45 @@ from pyro.params.param_store import (
 )
 
 
+def is_scheduler(optimizer) -> bool:
+    """
+    Helper method to determine whether a PyTorch object is either a PyTorch
+    optimizer (return false) or a optimizer wrapped in an LRScheduler e.g. a
+    ``ReduceLROnPlateau`` or subclasses of ``_LRScheduler`` (return true).
+    """
+    # This uses duck typing rather than isinstance() because (1) PyTorch
+    # provides no comprehensive class hierarchy, and (2) the base class
+    # _LRScheduler of the majority of schedulers is private.
+    return hasattr(optimizer, "optimizer")
+
+
+def _get_state_dict(optimizer) -> dict:
+    """
+    Helper to get the state dict for either a raw optimizer or an optimizer
+    wrapped in an LRScheduler.
+    """
+    if is_scheduler(optimizer):
+        state = {
+            "scheduler": optimizer.state_dict(),
+            "optimizer": optimizer.optimizer.state_dict(),
+        }
+    else:
+        state = optimizer.state_dict()
+    return state
+
+
+def _load_state_dict(optimizer, state: dict) -> None:
+    """
+    Helper to load the state dict into either a raw optimizer or an optimizer
+    wrapped in an LRScheduler.
+    """
+    if is_scheduler(optimizer):
+        optimizer.load_state_dict(state["scheduler"])
+        optimizer.optimizer.load_state_dict(state["optimizer"])
+    else:
+        optimizer.load_state_dict(state)
+
+
 class PyroOptim:
     """
     A wrapper for torch.optim.Optimizer objects that helps with managing dynamically generated parameters.
@@ -87,14 +126,14 @@ class PyroOptim:
             # if we have not seen this param before, we instantiate an optim object to deal with it
             if p not in self.optim_objs:
                 # create a single optim object for that param
-                self.optim_objs[p] = self._get_optim(p)
+                optimizer = self.optim_objs[p] = self._get_optim(p)
                 # create a gradient clipping function if specified
                 self.grad_clip[p] = self._get_grad_clip(p)
                 # set state from _state_waiting_to_be_consumed if present
                 param_name = pyro.get_param_store().param_name(p)
-                if param_name in self._state_waiting_to_be_consumed:
-                    state = self._state_waiting_to_be_consumed.pop(param_name)
-                    self.optim_objs[p].load_state_dict(state)
+                state = self._state_waiting_to_be_consumed.pop(param_name, None)
+                if state is not None:
+                    _load_state_dict(optimizer, state)
 
             if self.grad_clip[p] is not None:
                 self.grad_clip[p](p)
@@ -117,7 +156,7 @@ class PyroOptim:
         state_dict = {}
         for param in self.optim_objs:
             param_name = pyro.get_param_store().param_name(param)
-            state_dict[param_name] = self.optim_objs[param].state_dict()
+            state_dict[param_name] = _get_state_dict(self.optim_objs[param])
         return state_dict
 
     def set_state(self, state_dict: Dict) -> None:
@@ -125,7 +164,7 @@ class PyroOptim:
         Set the state associated with all the optimizers using the state obtained
         from a previous call to get_state()
         """
-        self._state_waiting_to_be_consumed = state_dict
+        self._state_waiting_to_be_consumed.update(state_dict)
 
     def save(self, filename: str) -> None:
         """
