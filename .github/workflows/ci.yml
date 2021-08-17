@@ -241,4 +241,4 @@ jobs:
       - name: Coveralls Finished
         run: |
           pip install --upgrade coveralls
-          coveralls --service=github --finish
+          coveralls --service=github --finish || true
