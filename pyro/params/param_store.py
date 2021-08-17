@@ -4,6 +4,7 @@
 import re
 import warnings
 import weakref
+from contextlib import contextmanager
 
 import torch
 from torch.distributions import constraints, transform_to
@@ -235,7 +236,10 @@ class ParamStoreDict:
         """
         return self._param_to_name.get(p)
 
-    def get_state(self):
+    # -------------------------------------------------------------------------------
+    # Persistence interface
+
+    def get_state(self) -> dict:
         """
         Get the ParamStore state.
         """
@@ -245,7 +249,7 @@ class ParamStoreDict:
         }
         return state
 
-    def set_state(self, state):
+    def set_state(self, state: dict):
         """
         Set the ParamStore state using state from a previous get_state() call
         """
@@ -254,6 +258,7 @@ class ParamStoreDict:
             ["params", "constraints"]
         ), "malformed ParamStore keys {}".format(state.keys())
 
+        self.clear()
         for param_name, param in state["params"].items():
             self._params[param_name] = param
             self._param_to_name[param] = param_name
@@ -294,6 +299,41 @@ class ParamStoreDict:
         with open(filename, "rb") as input_file:
             state = torch.load(input_file, map_location)
         self.set_state(state)
+
+    @contextmanager
+    def scope(self, state=None) -> dict:
+        """
+        Context manager for using multiple parameter stores within the same process.
+
+        This is a thin wrapper around :meth:`get_state`, :meth:`clear`, and
+        :meth:`set_state`. For large models where memory space is limiting, you
+        may want to instead manually use :meth:`save`, :meth:`clear`, and
+        :meth:`load`.
+
+        Example usage::
+
+            param_store = pyro.get_param_store()
+
+            # Train multiple models, while avoiding param name conflicts.
+            with param_store.scope() as scope1:
+                # ...Train one model,guide pair...
+            with param_store.scope() as scope2:
+                # ...Train another model,guide pair...
+
+            # Now evaluate each, still avoiding name conflicts.
+            with param_store.scope(scope1):  # loads the first model's scope
+               # ...evaluate the first model...
+            with param_store.scope(scope2):  # loads the second model's scope
+               # ...evaluate the second model...
+        """
+        if state is None:
+            state = {"params": {}, "constraints": {}}
+        old_state = self.get_state()
+        try:
+            self.set_state(state)
+            yield state
+        finally:
+            self.set_state(old_state)
 
 
 # used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
