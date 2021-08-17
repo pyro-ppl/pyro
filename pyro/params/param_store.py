@@ -244,21 +244,20 @@ class ParamStoreDict:
         Get the ParamStore state.
         """
         state = {
-            "params": self._params,
-            "constraints": self._constraints,
+            "params": self._params.copy(),
+            "constraints": self._constraints.copy(),
         }
         return state
 
     def set_state(self, state: dict):
         """
-        Set the ParamStore state using state from a previous get_state() call
+        Set the ParamStore state using state from a previous :meth:`get_state` call
         """
         assert isinstance(state, dict), "malformed ParamStore state"
         assert set(state.keys()) == set(
             ["params", "constraints"]
         ), "malformed ParamStore keys {}".format(state.keys())
 
-        self.clear()
         for param_name, param in state["params"].items():
             self._params[param_name] = param
             self._param_to_name[param] = param_name
@@ -271,7 +270,7 @@ class ParamStoreDict:
 
     def save(self, filename):
         """
-        Save parameters to disk
+        Save parameters to file
 
         :param filename: file name to save to
         :type filename: str
@@ -281,7 +280,7 @@ class ParamStoreDict:
 
     def load(self, filename, map_location=None):
         """
-        Loads parameters from disk
+        Loads parameters from file
 
         .. note::
 
@@ -330,9 +329,12 @@ class ParamStoreDict:
             state = {"params": {}, "constraints": {}}
         old_state = self.get_state()
         try:
+            self.clear()
             self.set_state(state)
             yield state
+            state.update(self.get_state())
         finally:
+            self.clear()
             self.set_state(old_state)
 
 
