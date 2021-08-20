@@ -107,6 +107,37 @@ def test_iter_discrete_traces_vector(expand, graph_type):
     assert len(traces) == 2 * probs.size(-1)
 
 
+def test_enumerate_sequential_guide():
+    values = []
+
+    def model():
+        x = pyro.sample("x", dist.Bernoulli(0.5))
+        values.append(float(x))
+
+    def guide():
+        pyro.sample("x", dist.Bernoulli(0.5), infer={"enumerate": "sequential"})
+
+    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+    elbo.loss(model, guide)
+    assert len(values) == 2, values
+
+
+def test_enumerate_sequential_model():
+    values = []
+
+    def model():
+        x = pyro.sample("x", dist.Bernoulli(0.5), infer={"enumerate": "sequential"})
+        values.append(float(x))
+
+    def guide():
+        pass
+
+    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+
+    elbo.loss(model, guide)
+    assert len(values) == 2, values
+
+
 # The usual dist.Bernoulli avoids NANs by clamping log prob. This unsafe version
 # allows us to test additional NAN avoidance in _compute_dice_elbo().
 class UnsafeBernoulli(dist.Bernoulli):
