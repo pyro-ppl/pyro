@@ -1575,7 +1575,7 @@ def test_enum_sequential_in_model_error():
         model,
         guide,
         TraceEnum_ELBO(max_plate_nesting=0),
-        match="Found vars in model but not guide",
+        match="At site .*, model-side sequential enumeration is not implemented",
     )
 
 
