@@ -129,6 +129,38 @@ def detach(obj):
     return copy.deepcopy(obj, memo)
 
 
+class _DeepToMemo(dict):
+    def __init__(self, to_args, to_kwargs):
+        super().__init__()
+        self._to_args = to_args
+        self._to_kwargs = to_kwargs
+
+    def get(self, key, default=None):
+        result = super().get(key, default)
+        if result is default:
+            # Assume key is the id of another object, and look up that object.
+            old = ctypes.cast(key, ctypes.py_object).value
+            if isinstance(old, (torch.Tensor, torch.nn.Module)):
+                self[key] = result = old.to(*self._to_args, **self._to_kwargs)
+        return result
+
+
+def deep_to(obj, *args, **kwargs):
+    r"""
+    Create a deep copy of an arbitrary Python object, calling ``.to(*args,
+    **kwargs)`` on all :class:`torch.Tensor` s and :class:`torch.nn.Module` s
+    in that object.
+
+    :param obj: Any python object.
+    :param \*args:
+    :param \*\*kwargs: See :meth:`torch.Tensor.to`.
+    :returns: A deep copy of ``obj`` with all :class:`torch.Tensor` s and
+        :class:`torch.nn.Module` s mapped.
+    """
+    memo = _DeepToMemo(args, kwargs)
+    return copy.deepcopy(obj, memo)
+
+
 # Import a lazy jit.script decorator only if available.
 torch_jit_script_if_tracing = getattr(
     torch.jit,
