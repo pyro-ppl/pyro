@@ -307,6 +307,34 @@ def test_deep_to_transformed(shape, dtype):
     assert not d2.transforms[0].scale.requires_grad
 
 
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+def test_deep_to_structure(dtype):
+    data = [
+        None,
+        True,
+        "foo",
+        1.0,
+        {False},
+        torch.tensor(0.0),
+        (torch.tensor(1.0), torch.tensor([2.0, 3.0])),
+        [torch.tensor(4.0)],
+        {"bar": torch.tensor(5.0)},
+    ]
+    actual = deep_to(data)
+    expected = [
+        None,
+        True,
+        "foo",
+        1.0,
+        {False},
+        torch.tensor(0.0).to(dtype),
+        (torch.tensor(1.0).to(dtype), torch.tensor([2.0, 3.0]).to(dtype)),
+        [torch.tensor(4.0).to(dtype)],
+        {"bar": torch.tensor(5.0).to(dtype)},
+    ]
+    assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize("shape", [None, (), (4,), (3, 2)], ids=str)
 def test_deep_to_jit(shape):
     loc = torch.tensor(0.0, requires_grad=True)
