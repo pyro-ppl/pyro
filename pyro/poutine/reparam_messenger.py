@@ -1,9 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import functools
 import warnings
-from typing import Callable, Dict, Optional, Union
+from typing import Callable, Dict, Union
 
 import torch
 
@@ -14,35 +13,6 @@ from .runtime import effectful
 @effectful(type="get_init_messengers")
 def _get_init_messengers():
     return []
-
-
-_STRATEGIES: Dict[str, Callable] = {}
-
-
-def register_reparam_strategy(name: str, fn: Optional[Callable] = None):
-    """
-    Registers a named reparametrization strategy.
-
-    Example::
-
-        @register_reparam_strategy("custom")
-        def my_strategy(msg):
-            ...
-
-        with poutine.reparam(config="custom"):
-            ...
-
-    See :mod:`pyro.infer.reparam.auto` for built-in strategies.
-
-    :param str name: Name of the strategy.
-    :param callable fn: The function. If missing, this returns a decorator.
-    """
-    assert isinstance(name, str)
-    if fn is None:
-        return functools.partial(register_reparam_strategy, name)
-    assert callable(fn)
-    _STRATEGIES[name] = fn
-    return fn
 
 
 class ReparamMessenger(Messenger):
@@ -63,18 +33,15 @@ class ReparamMessenger(Messenger):
         https://arxiv.org/pdf/1906.03028.pdf
 
     :param config: Configuration, either a dict mapping site name to
-        :class:`~pyro.infer.reparam.reparam.Reparameterizer` ,
-        a function mapping site to
-        :class:`~pyro.infer.reparam.reparam.Reparameterizer` or None,
-        or the name of a registered reparam strategy e.g. "auto" or "minimal".
-        See :mod:`pyro.infer.reparam.auto` for built-in strategies.
+        :class:`~pyro.infer.reparam.reparam.Reparameterizer` , or a function
+        mapping site to :class:`~pyro.infer.reparam.reparam.Reparameterizer` or
+        None. See :mod:`pyro.infer.reparam.strategies` for built-in
+        configuration strategies.
     :type config: dict or callable
     """
 
-    def __init__(self, config: Union[dict, Callable, str]):
+    def __init__(self, config: Union[Dict[str, object], Callable]):
         super().__init__()
-        if isinstance(config, str):
-            config = _STRATEGIES[config]
         assert isinstance(config, dict) or callable(config)
         self.config = config
         self._args_kwargs = None
@@ -160,6 +127,7 @@ class ReparamHandler(object):
     def __init__(self, msngr, fn):
         self.msngr = msngr
         self.fn = fn
+        super().__init__()
 
     def __call__(self, *args, **kwargs):
         # This saves args,kwargs for optional use by reparameterizers.

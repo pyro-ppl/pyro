@@ -12,12 +12,14 @@ from .projected_normal import ProjectedNormalReparam
 from .softmax import GumbelSoftmaxReparam
 from .split import SplitReparam
 from .stable import LatentStableReparam, StableReparam, SymmetricStableReparam
+from .strategies import AutoReparam, MinimalReparam
 from .structured import StructuredReparam
 from .studentt import StudentTReparam
 from .transform import TransformReparam
 from .unit_jacobian import UnitJacobianReparam
 
 __all__ = [
+    "AutoReparam",
     "ConjugateReparam",
     "DiscreteCosineReparam",
     "GumbelSoftmaxReparam",
@@ -25,6 +27,7 @@ __all__ = [
     "LatentStableReparam",
     "LinearHMMReparam",
     "LocScaleReparam",
+    "MinimalReparam",
     "NeuTraReparam",
     "ProjectedNormalReparam",
     "SplitReparam",

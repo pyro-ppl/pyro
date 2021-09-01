@@ -16,7 +16,7 @@ shaped. These can be used with a variety of inference algorithms, e.g.
 
 Automatic Strategies
 --------------------
-.. automodule:: pyro.infer.reparam.auto
+.. automodule:: pyro.infer.reparam.strategies
     :members:
     :member-order: bysource
 

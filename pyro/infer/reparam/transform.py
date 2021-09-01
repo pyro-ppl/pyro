@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
+
 import pyro
 import pyro.distributions as dist
 
@@ -26,7 +28,7 @@ class TransformReparam(Reparam):
         is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.TransformedDistribution)
+        assert isinstance(fn, torch.distributions.TransformedDistribution)
 
         # Differentiably invert transform.
         value_base = value
