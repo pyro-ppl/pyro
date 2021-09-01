@@ -85,9 +85,6 @@ def _minimal_reparam(fn, is_observed):
         else:
             return SymmetricStableReparam()
 
-    if is_observed:
-        return None
-
     if isinstance(fn, dist.ProjectedNormal):
         return ProjectedNormalReparam()
 
@@ -118,7 +115,7 @@ class MinimalReparam(Strategy):
         return _minimal_reparam(msg["fn"], msg["is_observed"])
 
 
-def _try_loc_scale(name, fn):
+def _loc_scale_reparam(name, fn):
     if "_decentered" in name:
         return  # Avoid infinite recursion.
 
@@ -164,9 +161,9 @@ class AutoReparam(Strategy):
 
     def configure(self, msg: dict) -> Optional[Reparam]:
         # Focus on tricks for latent sites.
+        fn = msg["fn"]
         if not msg["is_observed"]:
             # Unwrap Independent, Masked, Transformed etc.
-            fn = msg["fn"]
             while hasattr(fn, "base_dist"):
                 if isinstance(fn, torch.distributions.RelaxedOneHotCategorical):
                     return GumbelSoftmaxReparam()
@@ -175,9 +172,9 @@ class AutoReparam(Strategy):
                 fn = fn.base_dist
 
             # Apply a learnable LocScaleReparam.
-            result = _try_loc_scale(msg["name"], fn)
+            result = _loc_scale_reparam(msg["name"], fn)
             if result is not None:
                 return result
 
         # Apply minimal reparametrizers.
-        return _minimal_reparam(msg["fn"], msg["is_observed"])
+        return _minimal_reparam(fn, msg["is_observed"])
