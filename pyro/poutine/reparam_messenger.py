@@ -50,6 +50,8 @@ class ReparamMessenger(Messenger):
         return ReparamHandler(self, fn)
 
     def _pyro_sample(self, msg):
+        if type(msg["fn"]).__name__ == "_Subsample":
+            return
         if isinstance(self.config, dict):
             reparam = self.config.get(msg["name"])
         else:

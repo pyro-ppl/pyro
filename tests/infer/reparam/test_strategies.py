@@ -1,12 +1,16 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.infer import SVI, Predictive, Trace_ELBO
+from pyro.infer.autoguide import AutoNormal
 from pyro.infer.reparam import AutoReparam, MinimalReparam
+from pyro.optim import Adam
 
 
 def trace_name_is_observed(model):
@@ -14,7 +18,7 @@ def trace_name_is_observed(model):
     return [
         (name, site["is_observed"])
         for name, site in trace.nodes.items()
-        if site["type"] == "sample"
+        if site["type"] == "sample" and type(site["fn"]).__name__ != "_Subsample"
     ]
 
 
@@ -28,7 +32,10 @@ def normal_model():
     f = pyro.sample("f", dist.LogNormal(zero, b).to_event(1))
     g = pyro.sample("g", dist.Normal(0, 1), obs=a)
     h = pyro.sample("h", dist.LogNormal(0, 1), obs=b)
-    return a, b, c, d, e, f, g, h
+    with pyro.plate("plate", 5):
+        i = pyro.sample("i", dist.Normal(a, b))
+        j = pyro.sample("j", dist.LogNormal(a, b))
+    return a, b, c, d, e, f, g, h, i, j
 
 
 def test_normal_minimal():
@@ -43,12 +50,15 @@ def test_normal_minimal():
         ("f", False),
         ("g", True),
         ("h", True),
+        ("i", False),
+        ("j", False),
     ]
     assert actual == expected
 
 
 def test_normal_auto():
-    model = AutoReparam()(normal_model)
+    strategy = AutoReparam()
+    model = strategy(normal_model)
     actual = trace_name_is_observed(model)
     expected = [
         ("a_decentered", False),
@@ -68,7 +78,19 @@ def test_normal_auto():
         ("f", True),
         ("g", True),
         ("h", True),
+        ("i_decentered", False),
+        ("i", True),
+        ("j_base_decentered", False),
+        ("j_base", True),
+        ("j", True),
     ]
+    assert actual == expected
+
+    # Also check that the config dict has been constructed.
+    config = strategy.config
+    assert isinstance(config, dict)
+    model = poutine.reparam(normal_model, config)
+    actual = trace_name_is_observed(model)
     assert actual == expected
 
 
@@ -209,3 +231,19 @@ def test_stable_auto():
         ("l", True),
     ]
     assert actual == expected
+
+
+@pytest.mark.filterwarnings(
+    "ignore:.*falling back to default initialization.*:RuntimeWarning"
+)
+def test_autoguide_svi_smoke():
+    # Test training.
+    model = AutoReparam()(stable_model)
+    guide = AutoNormal(model)
+    svi = SVI(model, guide, Adam({"lr": 1e-9}), Trace_ELBO())
+    for step in range(3):
+        svi.step()
+
+    # Test prediction.
+    predictive = Predictive(model, guide=guide, num_samples=2)
+    predictive()
