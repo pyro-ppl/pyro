@@ -233,12 +233,84 @@ def test_stable_auto():
     assert actual == expected
 
 
+def projected_normal_model():
+    a = pyro.sample("a", dist.MultivariateNormal(torch.zeros(3), torch.eye(3)))
+    b = pyro.sample("b", dist.ProjectedNormal(a))
+    c = pyro.sample("c", dist.ProjectedNormal(torch.ones(3)))
+    return a, b, c
+
+
+def test_projected_normal_minimal():
+    model = MinimalReparam()(projected_normal_model)
+    actual = trace_name_is_observed(model)
+    expected = [
+        ("a", False),
+        ("b_normal", False),
+        ("b", True),
+        ("c_normal", False),
+        ("c", True),
+    ]
+    assert actual == expected
+
+
+def test_projected_normal_auto():
+    strategy = AutoReparam()
+    model = strategy(projected_normal_model)
+    actual = trace_name_is_observed(model)
+    expected = [
+        ("a", False),
+        ("b_normal_decentered", False),
+        ("b_normal", True),
+        ("b", True),
+        ("c_normal_decentered", False),
+        ("c_normal", True),
+        ("c", True),
+    ]
+    assert actual == expected
+
+
+def softmax_model():
+    a = pyro.sample("a", dist.Dirichlet(torch.ones(6)))
+    b = pyro.sample("b", dist.RelaxedOneHotCategorical(probs=a, temperature=2.0))
+    c = pyro.sample("c", dist.Normal(torch.ones(7), 1).to_event(1))
+    d = pyro.sample("d", dist.RelaxedOneHotCategorical(logits=c, temperature=1.0))
+    e = pyro.sample(
+        "e", dist.RelaxedOneHotCategorical(logits=c, temperature=0.5), obs=d.round()
+    )
+    return a, b, c, d, e
+
+
+def test_softmax_minimal():
+    model = MinimalReparam()(softmax_model)
+    actual = trace_name_is_observed(model)
+    expected = [("a", False), ("b", False), ("c", False), ("d", False), ("e", True)]
+    assert actual == expected
+
+
+def test_softmax_auto():
+    strategy = AutoReparam()
+    model = strategy(softmax_model)
+    actual = trace_name_is_observed(model)
+    expected = [
+        ("a", False),
+        ("b_uniform", False),
+        ("b", True),
+        ("c_decentered", False),
+        ("c", True),
+        ("d_uniform", False),
+        ("d", True),
+        ("e", True),
+    ]
+    assert actual == expected
+
+
 @pytest.mark.filterwarnings(
     "ignore:.*falling back to default initialization.*:RuntimeWarning"
 )
-def test_autoguide_svi_smoke():
+@pytest.mark.parametrize("model", [normal_model, stable_model, projected_normal_model])
+def test_end_to_end(model):
     # Test training.
-    model = AutoReparam()(stable_model)
+    model = AutoReparam()(model)
     guide = AutoNormal(model)
     svi = SVI(model, guide, Adam({"lr": 1e-9}), Trace_ELBO())
     for step in range(3):
@@ -246,4 +318,5 @@ def test_autoguide_svi_smoke():
 
     # Test prediction.
     predictive = Predictive(model, guide=guide, num_samples=2)
-    predictive()
+    samples = predictive()
+    assert set("abc").issubset(samples.keys())

@@ -85,7 +85,7 @@ def _minimal_reparam(fn, is_observed):
         else:
             return SymmetricStableReparam()
 
-    if not is_observed:
+    if is_observed:
         return None
 
     if isinstance(fn, dist.ProjectedNormal):
@@ -168,6 +168,8 @@ class AutoReparam(Strategy):
             # Unwrap Independent, Masked, Transformed etc.
             fn = msg["fn"]
             while hasattr(fn, "base_dist"):
+                if isinstance(fn, torch.distributions.RelaxedOneHotCategorical):
+                    return GumbelSoftmaxReparam()
                 if isinstance(fn, torch.distributions.TransformedDistribution):
                     return TransformReparam()  # Then reparametrize new sites.
                 fn = fn.base_dist
@@ -176,10 +178,6 @@ class AutoReparam(Strategy):
             result = _try_loc_scale(msg["name"], fn)
             if result is not None:
                 return result
-
-            # Apply SoftmaxReparam.
-            if isinstance(fn, torch.distributions.RelaxedOneHotCategorical):
-                return GumbelSoftmaxReparam()
 
         # Apply minimal reparametrizers.
         return _minimal_reparam(msg["fn"], msg["is_observed"])
