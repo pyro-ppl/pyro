@@ -1,6 +1,13 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+"""
+These reparametrization strategies are registered with
+:func:`~pyro.poutine.reparam_messenger.register_reparam_strategy` and are
+accessed by name via ``poutine.reparam(config=name_of_strategy)`` .
+See :func:`~pyro.poutine.handlers.reparam` for usage.
+"""
+
 from typing import Optional
 
 import torch
@@ -8,10 +15,10 @@ import torch
 import pyro.distributions as dist
 from pyro.poutine.reparam_messenger import register_reparam_strategy
 
-from .circular import CircularReparam
 from .loc_scale import LocScaleReparam
 from .projected_normal import ProjectedNormalReparam
 from .reparam import Reparam
+from .softmax import GumbelSoftmaxReparam
 from .stable import StableReparam
 from .transform import TransformReparam
 
@@ -23,75 +30,89 @@ def _get_base_dist(fn):
 def _can_apply_loc_scale(fn):
     if not {"loc", "scale"}.issubset(fn.arg_constraints):
         return False
+    shape_params = sorted(set(fn.arg_constraints) - {"loc", "scale"})
+
     for name in fn.arg_constraints:
         if getattr(fn, name).requires_grad:
             return False
     return True
 
 
+def _minimal_reparam(fn, is_observed):
+    # Unwrap Independent, Masked, Transformed etc.
+    while hasattr(fn, "base_dist"):
+        if isinstance(fn, torch.distributions.TransformedDistribution):
+            if _minimal_reparam(fn.base_dist) is None:
+                return None  # No need to reparametrize.
+            else:
+                return TransformReparam()  # Then reparametrize new sites.
+        fn = fn.base_dist
+
+    if isinstance(fn, dist.Stable):
+        return StableReparam()
+
+    if not is_observed:
+        return None
+
+    if isinstance(fn, dist.ProjectedNormal):
+        return ProjectedNormalReparam()
+
+    # TODO apply CircularReparam for VonMises
+
+
 @register_reparam_strategy("minimal")
 def minimal_reparam(msg: dict) -> Optional[Reparam]:
     """
     Minimal reparametrization strategy that reparametrizes only those sites
-    that would otherwise lead to error.
+    that would otherwise lead to error, e.g.
+    :class:`~pyro.distributions.Stable` and
+    :class:`~pyro.distributions.ProjectedNormal` random variables.
+
+    Example::
+
+        @poutine.reparam(config="minimal")
+        def model(...):
+            ...
     """
-    # TODO wrap result
-    base_dist = _get_base_dist(msg["fn"])
-
-    if isinstance(base_dist, dist.Stable):
-        # TODO
-        return StableReparam()
-
-    if msg["value"] is not None:
-        return None
-
-    if isinstance(base_dist, dist.ProjectedNormal):
-        return ProjectedNormalReparam()
-
-    if isinstance(base_dist, torch.distributions.VonMises):
-        return CircularReparam()
+    return _minimal_reparam(msg["fn"], msg["is_observed"])
 
 
 @register_reparam_strategy("auto")
 def auto_reparam(msg: dict) -> Optional[Reparam]:
-    """ """
-    # Apply necessary reparameterizations.
+    """
+    Applies a recommended set of reparametrizers. These currently include:
+    :func:`minimal_reparam`,
+    :class:`~pyro.infer.reparam.transform.TransformReparam`, a fully-learnable
+    :class:`~pyro.infer.reparam.loc_scale.LocScaleReparam`, and
+    :class:`~pyro.infer.reparam.softmax.GumbelSoftmaxReparam`.
+
+    Example::
+
+        @poutine.reparam(config="auto")
+        def model(...):
+            ...
+    """
+    # Apply minimal reparametrizers.
     result = minimal_reparam(msg)
     if result is not None:
         return result
 
-    if msg["value"] is not None:
+    # Ignore likelihoods.
+    if msg["is_observed"]:
         return None
 
-    if _can_apply_loc_scale(msg["fn"]):
-        return LocScaleReparam()
+    # Unwrap Independent, Masked, Transformed etc.
+    fn = msg["fn"]
+    while hasattr(fn, "base_dist"):
+        if isinstance(fn, torch.distributions.TransformedDistribution):
+            return TransformReparam()  # Then reparametrize new sites.
+        fn = fn.base_dist
 
-    # Apply learnable LocScaleRepram wherever possible.
-    raise NotImplementedError("TODO")
+    # Apply a learnable LocScaleReparam.
+    if {"loc", "scale"}.issubset(fn.arg_constraints):
+        shape_params = sorted(set(fn.arg_constraints) - {"loc", "scale"})
+        return LocScaleReparam(shape_params=shape_params)
 
-
-@register_reparam_strategy("full")
-def full_reparam(msg: dict) -> Optional[Reparam]:
-    """
-    Attempts to fully reparametrize a model such that all remaining samples
-    msgs are parameter-free.
-
-    :raises ValueError: In case no reparametrization strategy is available.
-    """
-    fn = msg["fn"]  # TODO unwrap MaskedDistribution, Independent, Expanded, etc.
-    params = set(fn.arg_constraints)
-
-    # If distribution is parameter-free, do nothing.
-    if all(not getattr(fn, name).requires_grad for name in params):
-        return None
-
-    # Unwrap transforms.
-    if isinstance(fn, torch.distributions.TransformedDistribution):
-        return TransformReparam()
-
-    # Try to fully decenter the distribution.
-    if params.issuperset({"loc", "scale"}):
-        for name in params - {"loc", "scale"}:
-            if getattr(fn, name).requires_grad:
-                raise NotImplementedError
-        return LocScaleReparam(0)
+    # Apply SoftmaxReparam.
+    if isinstance(fn, torch.distributions.RelaxedOneHotCategorical):
+        return GumbelSoftmaxReparam()

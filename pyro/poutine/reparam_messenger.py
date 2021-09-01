@@ -32,6 +32,8 @@ def register_reparam_strategy(name: str, fn: Optional[Callable] = None):
         with poutine.reparam(config="custom"):
             ...
 
+    See :mod:`pyro.infer.reparam.auto` for built-in strategies.
+
     :param str name: Name of the strategy.
     :param callable fn: The function. If missing, this returns a decorator.
     """
@@ -40,6 +42,7 @@ def register_reparam_strategy(name: str, fn: Optional[Callable] = None):
         return functools.partial(register_reparam_strategy, name)
     assert callable(fn)
     _STRATEGIES[name] = fn
+    return fn
 
 
 class ReparamMessenger(Messenger):
@@ -61,8 +64,10 @@ class ReparamMessenger(Messenger):
 
     :param config: Configuration, either a dict mapping site name to
         :class:`~pyro.infer.reparam.reparam.Reparameterizer` ,
-        or a function mapping site to
-        :class:`~pyro.infer.reparam.reparam.Reparameterizer` or None.
+        a function mapping site to
+        :class:`~pyro.infer.reparam.reparam.Reparameterizer` or None,
+        or the name of a registered reparam strategy e.g. "auto" or "minimal".
+        See :mod:`pyro.infer.reparam.auto` for built-in strategies.
     :type config: dict or callable
     """
 
