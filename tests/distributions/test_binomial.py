@@ -26,8 +26,8 @@ def test_binomial_approx_sample(total_count, prob):
 
 
 @pytest.mark.parametrize("total_count", [10, 100, 1000, 4000])
-@pytest.mark.parametrize("concentration1", [0.1, 1.0, 10.])
-@pytest.mark.parametrize("concentration0", [0.1, 1.0, 10.])
+@pytest.mark.parametrize("concentration1", [0.1, 1.0, 10.0])
+@pytest.mark.parametrize("concentration0", [0.1, 1.0, 10.0])
 def test_beta_binomial_approx_sample(concentration1, concentration0, total_count):
     sample_shape = (10000,)
     d = dist.BetaBinomial(concentration1, concentration0, total_count)
@@ -39,13 +39,25 @@ def test_beta_binomial_approx_sample(concentration1, concentration0, total_count
     assert_close(expected.std(), actual.std(), rtol=0.1)
 
 
-@pytest.mark.parametrize("tol", [
-    1e-8, 1e-6, 1e-4, 1e-2, 0.02, 0.05, 0.1, 0.2, 0.1, 1.,
-])
+@pytest.mark.parametrize(
+    "tol",
+    [
+        1e-8,
+        1e-6,
+        1e-4,
+        1e-2,
+        0.02,
+        0.05,
+        0.1,
+        0.2,
+        0.1,
+        1.0,
+    ],
+)
 def test_binomial_approx_log_prob(tol):
-    logits = torch.linspace(-10., 10., 100)
-    k = torch.arange(100.).unsqueeze(-1)
-    n_minus_k = torch.arange(100.).unsqueeze(-1).unsqueeze(-1)
+    logits = torch.linspace(-10.0, 10.0, 100)
+    k = torch.arange(100.0).unsqueeze(-1)
+    n_minus_k = torch.arange(100.0).unsqueeze(-1).unsqueeze(-1)
     n = k + n_minus_k
 
     expected = torch.distributions.Binomial(n, logits=logits).log_prob(k)

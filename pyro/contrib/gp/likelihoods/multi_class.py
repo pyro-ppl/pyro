@@ -25,10 +25,13 @@ class MultiClass(Likelihood):
     :param callable response_function: A mapping to correct domain for MultiClass
         likelihood.
     """
+
     def __init__(self, num_classes, response_function=None):
         super().__init__()
         self.num_classes = num_classes
-        self.response_function = _softmax if response_function is None else response_function
+        self.response_function = (
+            _softmax if response_function is None else response_function
+        )
 
     def forward(self, f_loc, f_var, y=None):
         r"""
@@ -49,21 +52,26 @@ class MultiClass(Likelihood):
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
         f = dist.Normal(f_loc, f_var.sqrt())()
         if f.dim() < 2:
-            raise ValueError("Latent function output should have at least 2 "
-                             "dimensions: one for number of classes and one for "
-                             "number of data.")
+            raise ValueError(
+                "Latent function output should have at least 2 "
+                "dimensions: one for number of classes and one for "
+                "number of data."
+            )
 
         # swap class dimension and data dimension
         f_swap = f.transpose(-2, -1)  # -> num_data x num_classes
         if f_swap.size(-1) != self.num_classes:
-            raise ValueError("Number of Gaussian processes should be equal to the "
-                             "number of classes. Expected {} but got {}."
-                             .format(self.num_classes, f_swap.size(-1)))
+            raise ValueError(
+                "Number of Gaussian processes should be equal to the "
+                "number of classes. Expected {} but got {}.".format(
+                    self.num_classes, f_swap.size(-1)
+                )
+            )
         if self.response_function is _softmax:
             y_dist = dist.Categorical(logits=f_swap)
         else:
             f_res = self.response_function(f_swap)
             y_dist = dist.Categorical(f_res)
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f.dim() + 1]).to_event(y.dim())
+            y_dist = y_dist.expand_by(y.shape[: -f.dim() + 1]).to_event(y.dim())
         return pyro.sample(self._pyro_get_fullname("y"), y_dist, obs=y)

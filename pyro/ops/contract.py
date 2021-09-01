@@ -15,9 +15,12 @@ from pyro.util import ignore_jit_warnings
 
 def _check_plates_are_sensible(output_dims, nonoutput_ordinal):
     if output_dims and nonoutput_ordinal:
-        raise ValueError(u"It is nonsensical to preserve a plated dim without preserving "
-                         u"all of that dim's plates, but found '{}' without '{}'"
-                         .format(output_dims, ','.join(nonoutput_ordinal)))
+        raise ValueError(
+            u"It is nonsensical to preserve a plated dim without preserving "
+            u"all of that dim's plates, but found '{}' without '{}'".format(
+                output_dims, ",".join(nonoutput_ordinal)
+            )
+        )
 
 
 def _check_tree_structure(parent, leaf):
@@ -26,8 +29,10 @@ def _check_tree_structure(parent, leaf):
             "Expected tree-structured plate nesting, but found "
             "dependencies on independent plates [{}]. "
             "Try converting one of the vectorized plates to a sequential plate (but beware "
-            "exponential cost in the size of the sequence)"
-            .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
+            "exponential cost in the size of the sequence)".format(
+                ", ".join(getattr(f, "name", str(f)) for f in leaf)
+            )
+        )
 
 
 def _partition_terms(ring, terms, dims):
@@ -64,7 +69,9 @@ def _partition_terms(ring, terms, dims):
         # Split this connected component into tensors and dims.
         component_terms = [v for v in component if isinstance(v, torch.Tensor)]
         if component_terms:
-            component_dims = set(v for v in component if not isinstance(v, torch.Tensor))
+            component_dims = set(
+                v for v in component if not isinstance(v, torch.Tensor)
+            )
             components.append((component_terms, component_dims))
     return components
 
@@ -122,12 +129,16 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
                 parent = leaf
             else:
                 pending_dims = sum_dims.intersection(term._pyro_dims)
-                parent = frozenset.union(*(t for t, d in dims_tree.items() if d & pending_dims))
+                parent = frozenset.union(
+                    *(t for t, d in dims_tree.items() if d & pending_dims)
+                )
                 _check_tree_structure(parent, leaf)
                 contract_frames = leaf - parent
                 contract_dims = dims & local_dims
                 if contract_dims:
-                    term, local_term = ring.global_local(term, contract_dims, contract_frames)
+                    term, local_term = ring.global_local(
+                        term, contract_dims, contract_frames
+                    )
                     local_terms.append(local_term)
                     local_dims |= sum_dims.intersection(local_term._pyro_dims)
                     local_ordinal |= leaf
@@ -192,8 +203,9 @@ def contract_tensor_tree(tensor_tree, sum_dims, cache=None, ring=None):
     return contracted_tree
 
 
-def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=None,
-                       cache=None, ring=None):
+def contract_to_tensor(
+    tensor_tree, sum_dims, target_ordinal=None, target_dims=None, cache=None, ring=None
+):
     """
     Contract out ``sum_dims`` in a tree of tensors, via message
     passing. This reduces all terms down to a single tensor in the plate
@@ -244,8 +256,9 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
 
         # Contract this connected component down to a single tensor.
         ordinal, term = _contract_component(ring, component, dims, target_dims & dims)
-        _check_plates_are_sensible(target_dims.intersection(term._pyro_dims),
-                                   ordinal - target_ordinal)
+        _check_plates_are_sensible(
+            target_dims.intersection(term._pyro_dims), ordinal - target_ordinal
+        )
 
         # Eliminate extra plate dims via product contractions.
         contract_frames = ordinal - target_ordinal
@@ -342,28 +355,33 @@ def einsum(equation, *operands, **kwargs):
         the size of any input tensor.
     """
     # Extract kwargs.
-    cache = kwargs.pop('cache', None)
-    plates = kwargs.pop('plates', '')
-    backend = kwargs.pop('backend', 'torch')
-    modulo_total = kwargs.pop('modulo_total', False)
+    cache = kwargs.pop("cache", None)
+    plates = kwargs.pop("plates", "")
+    backend = kwargs.pop("backend", "torch")
+    modulo_total = kwargs.pop("modulo_total", False)
     try:
         Ring = BACKEND_TO_RING[backend]
     except KeyError as e:
-        raise NotImplementedError('\n'.join(
-            ['Only the following pyro backends are currently implemented:'] +
-            list(BACKEND_TO_RING))) from e
+        raise NotImplementedError(
+            "\n".join(
+                ["Only the following pyro backends are currently implemented:"]
+                + list(BACKEND_TO_RING)
+            )
+        ) from e
 
     # Parse generalized einsum equation.
-    if '.' in equation:
-        raise NotImplementedError('ubsersum does not yet support ellipsis notation')
-    inputs, outputs = equation.split('->')
-    inputs = inputs.split(',')
-    outputs = outputs.split(',')
+    if "." in equation:
+        raise NotImplementedError("ubsersum does not yet support ellipsis notation")
+    inputs, outputs = equation.split("->")
+    inputs = inputs.split(",")
+    outputs = outputs.split(",")
     assert len(inputs) == len(operands)
     assert all(isinstance(x, torch.Tensor) for x in operands)
     if not modulo_total and any(outputs):
-        raise NotImplementedError('Try setting modulo_total=True and ensuring that your use case '
-                                  'allows an arbitrary scale factor on each result plate.')
+        raise NotImplementedError(
+            "Try setting modulo_total=True and ensuring that your use case "
+            "allows an arbitrary scale factor on each result plate."
+        )
     if len(operands) != len(set(operands)):
         operands = [x[...] for x in operands]  # ensure tensors are unique
 
@@ -374,8 +392,11 @@ def einsum(equation, *operands, **kwargs):
             for dim, size in zip(dims, map(int, term.shape)):
                 old = dim_to_size.setdefault(dim, size)
                 if old != size:
-                    raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
-                                     .format(dim, size, old))
+                    raise ValueError(
+                        u"Dimension size mismatch at dim '{}': {} vs {}".format(
+                            dim, size, old
+                        )
+                    )
 
     # Construct a tensor tree shared by all outputs.
     tensor_tree = OrderedDict()
@@ -392,10 +413,13 @@ def einsum(equation, *operands, **kwargs):
         ring = Ring(cache, dim_to_size=dim_to_size)
         for output in outputs:
             sum_dims = set(output).union(*inputs) - set(plates)
-            term = contract_to_tensor(tensor_tree, sum_dims,
-                                      target_ordinal=plates.intersection(output),
-                                      target_dims=sum_dims.intersection(output),
-                                      ring=ring)
+            term = contract_to_tensor(
+                tensor_tree,
+                sum_dims,
+                target_ordinal=plates.intersection(output),
+                target_dims=sum_dims.intersection(output),
+                ring=ring,
+            )
             if term._pyro_dims != output:
                 term = term.permute(*map(term._pyro_dims.index, output))
                 term._pyro_dims = output
@@ -407,13 +431,16 @@ def ubersum(equation, *operands, **kwargs):
     """
     Deprecated, use :func:`einsum` instead.
     """
-    warnings.warn("'ubersum' is deprecated, use 'pyro.ops.contract.einsum' instead",
-                  DeprecationWarning)
-    if 'batch_dims' in kwargs:
-        warnings.warn("'batch_dims' is deprecated, use 'plates' instead",
-                      DeprecationWarning)
-        kwargs['plates'] = kwargs.pop('batch_dims')
-    kwargs.setdefault('backend', 'pyro.ops.einsum.torch_log')
+    warnings.warn(
+        "'ubersum' is deprecated, use 'pyro.ops.contract.einsum' instead",
+        DeprecationWarning,
+    )
+    if "batch_dims" in kwargs:
+        warnings.warn(
+            "'batch_dims' is deprecated, use 'plates' instead", DeprecationWarning
+        )
+        kwargs["plates"] = kwargs.pop("batch_dims")
+    kwargs.setdefault("backend", "pyro.ops.einsum.torch_log")
     return einsum(equation, *operands, **kwargs)
 
 
@@ -430,8 +457,11 @@ class _DimUnroller:
     :param dict dim_to_ordinal: a mapping from contraction dim to the set of
         plates over which the contraction dim is plated.
     """
+
     def __init__(self, dim_to_ordinal):
-        self._plates = {d: tuple(sorted(ordinal)) for d, ordinal in dim_to_ordinal.items()}
+        self._plates = {
+            d: tuple(sorted(ordinal)) for d, ordinal in dim_to_ordinal.items()
+        }
         self._symbols = map(opt_einsum.get_symbol, itertools.count())
         self._map = {}
 
@@ -463,17 +493,19 @@ def naive_ubersum(equation, *operands, **kwargs):
     :func:`ubersum` does not raise ``NotImplementedError``.
     """
     # Parse equation, without loss of generality assuming a single output.
-    inputs, outputs = equation.split('->')
-    outputs = outputs.split(',')
+    inputs, outputs = equation.split("->")
+    outputs = outputs.split(",")
     if len(outputs) > 1:
-        return tuple(naive_ubersum(inputs + '->' + output, *operands, **kwargs)[0]
-                     for output in outputs)
-    output, = outputs
-    inputs = inputs.split(',')
-    backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
+        return tuple(
+            naive_ubersum(inputs + "->" + output, *operands, **kwargs)[0]
+            for output in outputs
+        )
+    (output,) = outputs
+    inputs = inputs.split(",")
+    backend = kwargs.pop("backend", "pyro.ops.einsum.torch_log")
 
     # Split dims into plate dims, contraction dims, and dims to keep.
-    plates = set(kwargs.pop('plates', ''))
+    plates = set(kwargs.pop("plates", ""))
     if not plates:
         result = opt_einsum.contract(equation, *operands, backend=backend)
         return (result,)
@@ -485,8 +517,11 @@ def naive_ubersum(equation, *operands, **kwargs):
         for dim, size in zip(input_, operand.shape):
             old = sizes.setdefault(dim, size)
             if old != size:
-                raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
-                                 .format(dim, size, old))
+                raise ValueError(
+                    u"Dimension size mismatch at dim '{}': {} vs {}".format(
+                        dim, size, old
+                    )
+                )
 
     # Compute plate context for each non-plate dim, by convention the
     # intersection over all plate contexts of tensors in which the dim appears.
@@ -506,20 +541,33 @@ def naive_ubersum(equation, *operands, **kwargs):
         local_dims = [d for d in input_ if d in plates]
         offsets = [input_.index(d) - len(input_) for d in local_dims]
         for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
-            flat_inputs.append(''.join(unroll_dim(d, dict(zip(local_dims, index)))
-                                       for d in input_ if d not in plates))
+            flat_inputs.append(
+                "".join(
+                    unroll_dim(d, dict(zip(local_dims, index)))
+                    for d in input_
+                    if d not in plates
+                )
+            )
             flat_operands.append(_select(operand, offsets, index))
 
     # Defer to unplated einsum.
-    result = torch.empty(torch.Size(sizes[d] for d in output),
-                         dtype=operands[0].dtype, device=operands[0].device)
+    result = torch.empty(
+        torch.Size(sizes[d] for d in output),
+        dtype=operands[0].dtype,
+        device=operands[0].device,
+    )
     local_dims = [d for d in output if d in plates]
     offsets = [output.index(d) - len(output) for d in local_dims]
     for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
-        flat_output = ''.join(unroll_dim(d, dict(zip(local_dims, index)))
-                              for d in output if d not in plates)
-        flat_equation = ','.join(flat_inputs) + '->' + flat_output
-        flat_result = opt_einsum.contract(flat_equation, *flat_operands, backend=backend)
+        flat_output = "".join(
+            unroll_dim(d, dict(zip(local_dims, index)))
+            for d in output
+            if d not in plates
+        )
+        flat_equation = ",".join(flat_inputs) + "->" + flat_output
+        flat_result = opt_einsum.contract(
+            flat_equation, *flat_operands, backend=backend
+        )
         if not local_dims:
             result = flat_result
             break

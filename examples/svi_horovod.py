@@ -56,8 +56,7 @@ class Model(PyroModule):
         # identical subsamples.
         with pyro.plate("data", self.size, len(covariates)):
             loc = bias + coeff * covariates
-            return pyro.sample("obs", dist.Normal(loc, scale),
-                               obs=data)
+            return pyro.sample("obs", dist.Normal(loc, scale), obs=data)
 
 
 # The following is a standard training loop. To emphasize the Horovod-specific
@@ -73,6 +72,7 @@ def main(args):
     if args.horovod:
         # Initialize Horovod and set PyTorch globals.
         import horovod.torch as hvd
+
         hvd.init()
         torch.set_num_threads(1)
         if args.cuda:
@@ -100,7 +100,8 @@ def main(args):
     if args.horovod:
         # Horovod requires a distributed sampler.
         sampler = torch.utils.data.distributed.DistributedSampler(
-            dataset, hvd.size(), hvd.rank())
+            dataset, hvd.size(), hvd.rank()
+        )
     else:
         sampler = torch.utils.data.RandomSampler(dataset)
     config = {"batch_size": args.batch_size, "sampler": sampler}
@@ -108,8 +109,11 @@ def main(args):
         config["num_workers"] = 1
         config["pin_memory"] = True
         # Try to use forkserver to spawn workers instead of fork.
-        if (hasattr(mp, "_supports_context") and mp._supports_context and
-                "forkserver" in mp.get_all_start_methods()):
+        if (
+            hasattr(mp, "_supports_context")
+            and mp._supports_context
+            and "forkserver" in mp.get_all_start_methods()
+        ):
             config["multiprocessing_context"] = "forkserver"
     dataloader = torch.utils.data.DataLoader(dataset, **config)
 
@@ -150,7 +154,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.6.0')
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="Distributed training via Horovod")
     parser.add_argument("-o", "--outfile")
     parser.add_argument("-s", "--size", default=1000000, type=int)

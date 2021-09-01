@@ -55,14 +55,19 @@ class GPLVM(Parameterized):
         model object. Note that ``base_model.X`` will be the initial value for the
         variational parameter ``X_loc``.
     """
+
     def __init__(self, base_model):
         super().__init__()
         if base_model.X.dim() != 2:
-            raise ValueError("GPLVM model only works with 2D latent X, but got "
-                             "X.dim() = {}.".format(base_model.X.dim()))
+            raise ValueError(
+                "GPLVM model only works with 2D latent X, but got "
+                "X.dim() = {}.".format(base_model.X.dim())
+            )
         self.base_model = base_model
 
-        self.X = PyroSample(dist.Normal(base_model.X.new_zeros(base_model.X.shape), 1.).to_event())
+        self.X = PyroSample(
+            dist.Normal(base_model.X.new_zeros(base_model.X.shape), 1.0).to_event()
+        )
         self.autoguide("X", dist.Normal)
         self.X_loc.data = base_model.X
 

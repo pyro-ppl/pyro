@@ -20,6 +20,7 @@ class BatchDataLoader(object):
     This custom DataLoader serves mini-batches that are either fully-observed (i.e. labeled)
     or partially-observed (i.e. unlabeled) but never mixed.
     """
+
     def __init__(self, data_x, data_y, batch_size, num_classes=4, missing_label=-1):
         super().__init__()
         self.data_x = data_x
@@ -53,11 +54,11 @@ class BatchDataLoader(object):
         slices = []
 
         for i in range(self.num_unlabeled_batches):
-            _slice = unlabeled_idx[i * self.batch_size: (i + 1) * self.batch_size]
+            _slice = unlabeled_idx[i * self.batch_size : (i + 1) * self.batch_size]
             slices.append((_slice, False))
 
         for i in range(self.num_labeled_batches):
-            _slice = labeled_idx[i * self.batch_size: (i + 1) * self.batch_size]
+            _slice = labeled_idx[i * self.batch_size : (i + 1) * self.batch_size]
             slices.append((_slice, True))
 
         return slices, batch_order
@@ -69,8 +70,9 @@ class BatchDataLoader(object):
             _slice = slices[batch_order[i]]
             if _slice[1]:
                 # labeled
-                yield self.data_x[_slice[0]], \
-                      nn.functional.one_hot(self.data_y[_slice[0]], num_classes=self.num_classes)
+                yield self.data_x[_slice[0]], nn.functional.one_hot(
+                    self.data_y[_slice[0]], num_classes=self.num_classes
+                )
             else:
                 # unlabeled
                 yield self.data_x[_slice[0]], None
@@ -81,10 +83,10 @@ def _get_score(normalized_adata, gene_set):
     Returns the score per cell given a dictionary of + and - genes
     """
     score = np.zeros(normalized_adata.n_obs)
-    for gene in gene_set['positive']:
+    for gene in gene_set["positive"]:
         expression = np.array(normalized_adata[:, gene].X)
         score += expression.flatten()
-    for gene in gene_set['negative']:
+    for gene in gene_set["negative"]:
         expression = np.array(normalized_adata[:, gene].X)
         score -= expression.flatten()
     return score
@@ -106,13 +108,15 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     """
     Does the necessary preprocessing and returns a BatchDataLoader for the PBMC dataset.
     """
-    assert dataset in ['pbmc', 'mock']
+    assert dataset in ["pbmc", "mock"]
 
     # create mock dataset for CI
-    if dataset == 'mock':
+    if dataset == "mock":
         num_genes = 17
         num_data = 200
-        X = torch.distributions.Poisson(rate=10.0).sample(sample_shape=(num_data, num_genes))
+        X = torch.distributions.Poisson(rate=10.0).sample(
+            sample_shape=(num_data, num_genes)
+        )
         Y = torch.zeros(num_data, dtype=torch.long)
         Y[50:100] = 1
         Y[100:] = -1
@@ -124,11 +128,25 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
 
     import scanpy as sc
     import scvi
-    adata = scvi.data.purified_pbmc_dataset(subset_datasets=["regulatory_t", "naive_t",
-                                                             "memory_t", "naive_cytotoxic"])
 
-    gene_subset = ["CD4", "FOXP3", "TNFRSF18", "IL2RA", "CTLA4", "CD44", "TCF7",
-                   "CD8B", "CCR7", "CD69", "PTPRC", "S100A4"]
+    adata = scvi.data.purified_pbmc_dataset(
+        subset_datasets=["regulatory_t", "naive_t", "memory_t", "naive_cytotoxic"]
+    )
+
+    gene_subset = [
+        "CD4",
+        "FOXP3",
+        "TNFRSF18",
+        "IL2RA",
+        "CTLA4",
+        "CD44",
+        "TCF7",
+        "CD8B",
+        "CCR7",
+        "CD69",
+        "PTPRC",
+        "S100A4",
+    ]
 
     normalized = adata.copy()
     sc.pp.normalize_total(normalized, target_sum=1e4)
@@ -138,10 +156,19 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     sc.pp.scale(normalized)
 
     # hand curated list of genes for identifying ground truth
-    cd4_reg_geneset = {"positive": ["TNFRSF18", "CTLA4", "FOXP3", "IL2RA"], "negative": ["S100A4", "PTPRC", "CD8B"]}
+    cd4_reg_geneset = {
+        "positive": ["TNFRSF18", "CTLA4", "FOXP3", "IL2RA"],
+        "negative": ["S100A4", "PTPRC", "CD8B"],
+    }
     cd8_naive_geneset = {"positive": ["CD8B", "CCR7"], "negative": ["CD4"]}
-    cd4_naive_geneset = {"positive": ["CCR7", "CD4"], "negative": ["S100A4", "PTPRC", "FOXP3", "IL2RA", "CD69"]}
-    cd4_mem_geneset = {"positive": ["S100A4"], "negative": ["IL2RA", "FOXP3", "TNFRSF18", "CCR7"]}
+    cd4_naive_geneset = {
+        "positive": ["CCR7", "CD4"],
+        "negative": ["S100A4", "PTPRC", "FOXP3", "IL2RA", "CD69"],
+    }
+    cd4_mem_geneset = {
+        "positive": ["S100A4"],
+        "negative": ["IL2RA", "FOXP3", "TNFRSF18", "CCR7"],
+    }
 
     cd4_reg_mask = _get_cell_mask(normalized, cd4_reg_geneset)
     cd8_naive_mask = _get_cell_mask(normalized, cd8_naive_geneset)
@@ -152,27 +179,27 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     seed_labels = -np.ones(cd4_mem_mask.shape[0])
     seed_labels[cd8_naive_mask] = 0  # "CD8 Naive T cell"
     seed_labels[cd4_naive_mask] = 1  # "CD4 Naive T cell"
-    seed_labels[cd4_mem_mask] = 2    # "CD4 Memory T cell"
-    seed_labels[cd4_reg_mask] = 3    # "CD4 Regulatory T cell"
+    seed_labels[cd4_mem_mask] = 2  # "CD4 Memory T cell"
+    seed_labels[cd4_reg_mask] = 3  # "CD4 Regulatory T cell"
 
     # this metadata will be used for plotting
-    seed_colors = ['lightgray'] * seed_labels.shape[0]
+    seed_colors = ["lightgray"] * seed_labels.shape[0]
     seed_sizes = [0.05] * seed_labels.shape[0]
     for i in range(len(seed_colors)):
         if seed_labels[i] == 0:
-            seed_colors[i] = 'lightcoral'
+            seed_colors[i] = "lightcoral"
         elif seed_labels[i] == 1:
-            seed_colors[i] = 'limegreen'
+            seed_colors[i] = "limegreen"
         elif seed_labels[i] == 2:
-            seed_colors[i] = 'deepskyblue'
+            seed_colors[i] = "deepskyblue"
         elif seed_labels[i] == 3:
-            seed_colors[i] = 'mediumorchid'
+            seed_colors[i] = "mediumorchid"
         if seed_labels[i] != -1:
             seed_sizes[i] = 25
 
-    adata.obs['seed_labels'] = seed_labels
-    adata.obs['seed_colors'] = seed_colors
-    adata.obs['seed_marker_sizes'] = seed_sizes
+    adata.obs["seed_labels"] = seed_labels
+    adata.obs["seed_colors"] = seed_colors
+    adata.obs["seed_marker_sizes"] = seed_sizes
 
     Y = torch.from_numpy(seed_labels).long()
     X = torch.from_numpy(sparse.csr_matrix.todense(adata.X)).float()
@@ -197,4 +224,10 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     adata = adata[idx.data.cpu().numpy()]
     adata.raw = adata
 
-    return BatchDataLoader(X[idx], Y[idx], batch_size), num_genes, l_mean, l_scale, adata
+    return (
+        BatchDataLoader(X[idx], Y[idx], batch_size),
+        num_genes,
+        l_mean,
+        l_scale,
+        adata,
+    )

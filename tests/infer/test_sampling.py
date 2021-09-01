@@ -14,7 +14,6 @@ from tests.common import assert_equal
 
 
 class HMMSamplingTestCase(TestCase):
-
     def setUp(self):
 
         # simple Gaussian-emission HMM
@@ -27,13 +26,23 @@ class HMMSamplingTestCase(TestCase):
             for t in range(self.model_steps):
 
                 latents.append(
-                    pyro.sample("latent_{}".format(str(t)),
-                                Bernoulli(torch.index_select(p_latent, 0, latents[-1].view(-1).long()))))
+                    pyro.sample(
+                        "latent_{}".format(str(t)),
+                        Bernoulli(
+                            torch.index_select(p_latent, 0, latents[-1].view(-1).long())
+                        ),
+                    )
+                )
 
                 observes.append(
-                    pyro.sample("observe_{}".format(str(t)),
-                                Bernoulli(torch.index_select(p_obs, 0, latents[-1].view(-1).long())),
-                                obs=self.data[t]))
+                    pyro.sample(
+                        "observe_{}".format(str(t)),
+                        Bernoulli(
+                            torch.index_select(p_obs, 0, latents[-1].view(-1).long())
+                        ),
+                        obs=self.data[t],
+                    )
+                )
             return torch.sum(torch.cat(latents))
 
         self.model_steps = 3
@@ -42,21 +51,18 @@ class HMMSamplingTestCase(TestCase):
 
 
 class NormalNormalSamplingTestCase(TestCase):
-
     def setUp(self):
 
         pyro.clear_param_store()
 
         def model():
-            loc = pyro.sample("loc", Normal(torch.zeros(1),
-                                            torch.ones(1)))
+            loc = pyro.sample("loc", Normal(torch.zeros(1), torch.ones(1)))
             xd = Normal(loc, torch.ones(1))
             pyro.sample("xs", xd, obs=self.data)
             return loc
 
         def guide():
-            return pyro.sample("loc", Normal(torch.zeros(1),
-                                             torch.ones(1)))
+            return pyro.sample("loc", Normal(torch.zeros(1), torch.ones(1)))
 
         # data
         self.data = torch.zeros(50, 1)
@@ -69,17 +75,24 @@ class NormalNormalSamplingTestCase(TestCase):
 
 
 class ImportanceTest(NormalNormalSamplingTestCase):
-
     @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
-        posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=5000).run()
+        posterior = pyro.infer.Importance(
+            self.model, guide=self.guide, num_samples=5000
+        ).run()
         marginal = EmpiricalMarginal(posterior)
         assert_equal(0, torch.norm(marginal.mean - self.loc_mean).item(), prec=0.01)
-        assert_equal(0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1)
+        assert_equal(
+            0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1
+        )
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_prior(self):
-        posterior = pyro.infer.Importance(self.model, guide=None, num_samples=10000).run()
+        posterior = pyro.infer.Importance(
+            self.model, guide=None, num_samples=10000
+        ).run()
         marginal = EmpiricalMarginal(posterior)
         assert_equal(0, torch.norm(marginal.mean - self.loc_mean).item(), prec=0.01)
-        assert_equal(0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1)
+        assert_equal(
+            0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1
+        )

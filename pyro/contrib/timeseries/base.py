@@ -8,6 +8,7 @@ class TimeSeriesModel(PyroModule):
     """
     Base class for univariate and multivariate time series models.
     """
+
     @pyro_method
     def log_prob(self, targets):
         """

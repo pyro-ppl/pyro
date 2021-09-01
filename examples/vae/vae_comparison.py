@@ -26,8 +26,8 @@ The PyTorch VAE example is taken (with minor modification) from pytorch/examples
 Source: https://github.com/pytorch/examples/tree/master/vae
 """
 
-TRAIN = 'train'
-TEST = 'test'
+TRAIN = "train"
+TEST = "test"
 OUTPUT_DIR = RESULTS_DIR
 
 
@@ -115,8 +115,11 @@ class VAE(object, metaclass=ABCMeta):
         for batch_idx, (x, _) in enumerate(self.train_loader):
             loss = self.compute_loss_and_gradient(x)
             train_loss += loss
-        print('====> Epoch: {} \nTraining loss: {:.4f}'.format(
-            epoch, train_loss / len(self.train_loader.dataset)))
+        print(
+            "====> Epoch: {} \nTraining loss: {:.4f}".format(
+                epoch, train_loss / len(self.train_loader.dataset)
+            )
+        )
 
     def test(self, epoch):
         self.set_train(is_train=False)
@@ -127,14 +130,17 @@ class VAE(object, metaclass=ABCMeta):
                 test_loss += self.compute_loss_and_gradient(x)
             if i == 0:
                 n = min(x.size(0), 8)
-                comparison = torch.cat([x[:n],
-                                        recon_x.reshape(self.args.batch_size, 1, 28, 28)[:n]])
-                save_image(comparison.detach().cpu(),
-                           os.path.join(OUTPUT_DIR, 'reconstruction_' + str(epoch) + '.png'),
-                           nrow=n)
+                comparison = torch.cat(
+                    [x[:n], recon_x.reshape(self.args.batch_size, 1, 28, 28)[:n]]
+                )
+                save_image(
+                    comparison.detach().cpu(),
+                    os.path.join(OUTPUT_DIR, "reconstruction_" + str(epoch) + ".png"),
+                    nrow=n,
+                )
 
         test_loss /= len(self.test_loader.dataset)
-        print('Test set loss: {:.4f}'.format(test_loss))
+        print("Test set loss: {:.4f}".format(test_loss))
 
 
 class PyTorchVAEImpl(VAE):
@@ -150,7 +156,9 @@ class PyTorchVAEImpl(VAE):
     def compute_loss_and_gradient(self, x):
         self.optimizer.zero_grad()
         recon_x, z_mean, z_var = self.model_eval(x)
-        binary_cross_entropy = functional.binary_cross_entropy(recon_x, x.reshape(-1, 784))
+        binary_cross_entropy = functional.binary_cross_entropy(
+            recon_x, x.reshape(-1, 784)
+        )
         # Uses analytical KL divergence expression for D_kl(q(z|x) || p(z))
         # Refer to Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -164,7 +172,9 @@ class PyTorchVAEImpl(VAE):
         return loss.item()
 
     def initialize_optimizer(self, lr=1e-3):
-        model_params = itertools.chain(self.vae_encoder.parameters(), self.vae_decoder.parameters())
+        model_params = itertools.chain(
+            self.vae_encoder.parameters(), self.vae_decoder.parameters()
+        )
         return torch.optim.Adam(model_params, lr)
 
 
@@ -180,20 +190,22 @@ class PyroVAEImpl(VAE):
         self.optimizer = self.initialize_optimizer(lr=1e-3)
 
     def model(self, data):
-        decoder = pyro.module('decoder', self.vae_decoder)
+        decoder = pyro.module("decoder", self.vae_decoder)
         z_mean, z_std = torch.zeros([data.size(0), 20]), torch.ones([data.size(0), 20])
-        with pyro.plate('data', data.size(0)):
-            z = pyro.sample('latent', Normal(z_mean, z_std).to_event(1))
+        with pyro.plate("data", data.size(0)):
+            z = pyro.sample("latent", Normal(z_mean, z_std).to_event(1))
             img = decoder.forward(z)
-            pyro.sample('obs',
-                        Bernoulli(img, validate_args=False).to_event(1),
-                        obs=data.reshape(-1, 784))
+            pyro.sample(
+                "obs",
+                Bernoulli(img, validate_args=False).to_event(1),
+                obs=data.reshape(-1, 784),
+            )
 
     def guide(self, data):
-        encoder = pyro.module('encoder', self.vae_encoder)
-        with pyro.plate('data', data.size(0)):
+        encoder = pyro.module("encoder", self.vae_encoder)
+        with pyro.plate("data", data.size(0)):
             z_mean, z_var = encoder.forward(data)
-            pyro.sample('latent', Normal(z_mean, z_var.sqrt()).to_event(1))
+            pyro.sample("latent", Normal(z_mean, z_var.sqrt()).to_event(1))
 
     def compute_loss_and_gradient(self, x):
         if self.mode == TRAIN:
@@ -204,23 +216,27 @@ class PyroVAEImpl(VAE):
         return loss
 
     def initialize_optimizer(self, lr):
-        optimizer = Adam({'lr': lr})
+        optimizer = Adam({"lr": lr})
         elbo = JitTrace_ELBO() if self.args.jit else Trace_ELBO()
         return SVI(self.model, self.guide, optimizer, loss=elbo)
 
 
 def setup(args):
     pyro.set_rng_seed(args.rng_seed)
-    train_loader = util.get_data_loader(dataset_name='MNIST',
-                                        data_dir=DATA_DIR,
-                                        batch_size=args.batch_size,
-                                        is_training_set=True,
-                                        shuffle=True)
-    test_loader = util.get_data_loader(dataset_name='MNIST',
-                                       data_dir=DATA_DIR,
-                                       batch_size=args.batch_size,
-                                       is_training_set=False,
-                                       shuffle=True)
+    train_loader = util.get_data_loader(
+        dataset_name="MNIST",
+        data_dir=DATA_DIR,
+        batch_size=args.batch_size,
+        is_training_set=True,
+        shuffle=True,
+    )
+    test_loader = util.get_data_loader(
+        dataset_name="MNIST",
+        data_dir=DATA_DIR,
+        batch_size=args.batch_size,
+        is_training_set=False,
+        shuffle=True,
+    )
     global OUTPUT_DIR
     OUTPUT_DIR = os.path.join(RESULTS_DIR, args.impl)
     if not os.path.exists(OUTPUT_DIR):
@@ -231,29 +247,29 @@ def setup(args):
 
 def main(args):
     train_loader, test_loader = setup(args)
-    if args.impl == 'pyro':
+    if args.impl == "pyro":
         vae = PyroVAEImpl(args, train_loader, test_loader)
-        print('Running Pyro VAE implementation')
-    elif args.impl == 'pytorch':
+        print("Running Pyro VAE implementation")
+    elif args.impl == "pytorch":
         vae = PyTorchVAEImpl(args, train_loader, test_loader)
-        print('Running PyTorch VAE implementation')
+        print("Running PyTorch VAE implementation")
     else:
-        raise ValueError('Incorrect implementation specified: {}'.format(args.impl))
+        raise ValueError("Incorrect implementation specified: {}".format(args.impl))
     for i in range(args.num_epochs):
         vae.train(i)
         if not args.skip_eval:
             vae.test(i)
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
-    parser = argparse.ArgumentParser(description='VAE using MNIST dataset')
-    parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
-    parser.add_argument('--batch_size', nargs='?', default=128, type=int)
-    parser.add_argument('--rng_seed', nargs='?', default=0, type=int)
-    parser.add_argument('--impl', nargs='?', default='pyro', type=str)
-    parser.add_argument('--skip_eval', action='store_true')
-    parser.add_argument('--jit', action='store_true')
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
+    parser = argparse.ArgumentParser(description="VAE using MNIST dataset")
+    parser.add_argument("-n", "--num-epochs", nargs="?", default=10, type=int)
+    parser.add_argument("--batch_size", nargs="?", default=128, type=int)
+    parser.add_argument("--rng_seed", nargs="?", default=0, type=int)
+    parser.add_argument("--impl", nargs="?", default="pyro", type=str)
+    parser.add_argument("--skip_eval", action="store_true")
+    parser.add_argument("--jit", action="store_true")
     parser.set_defaults(skip_eval=False)
     args = parser.parse_args()
     main(args)

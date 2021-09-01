@@ -20,12 +20,14 @@ from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 
-Model = namedtuple('TestModel', ['model', 'model_args', 'model_id'])
+Model = namedtuple("TestModel", ["model", "model_args", "model_id"])
 
 
 TEST_MODELS = []
 MODEL_IDS = []
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+ROOT_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)
+)
 PROF_DIR = os.path.join(ROOT_DIR, ".benchmarks")
 if not os.path.exists(PROF_DIR):
     os.makedirs(PROF_DIR)
@@ -38,13 +40,26 @@ def register_model(**model_kwargs):
         TEST_MODELS.append(test_model)
         MODEL_IDS.append(model_id)
         return model
+
     return register_fn
 
 
-@register_model(reparameterized=True, Elbo=TraceGraph_ELBO, id='PoissonGamma::reparam=True_TraceGraph')
-@register_model(reparameterized=True, Elbo=Trace_ELBO, id='PoissonGamma::reparam=True_Trace')
-@register_model(reparameterized=False, Elbo=TraceGraph_ELBO, id='PoissonGamma::reparam=False_TraceGraph')
-@register_model(reparameterized=False, Elbo=Trace_ELBO, id='PoissonGamma::reparam=False_Trace')
+@register_model(
+    reparameterized=True,
+    Elbo=TraceGraph_ELBO,
+    id="PoissonGamma::reparam=True_TraceGraph",
+)
+@register_model(
+    reparameterized=True, Elbo=Trace_ELBO, id="PoissonGamma::reparam=True_Trace"
+)
+@register_model(
+    reparameterized=False,
+    Elbo=TraceGraph_ELBO,
+    id="PoissonGamma::reparam=False_TraceGraph",
+)
+@register_model(
+    reparameterized=False, Elbo=Trace_ELBO, id="PoissonGamma::reparam=False_Trace"
+)
 def poisson_gamma_model(reparameterized, Elbo):
     pyro.set_rng_seed(0)
     alpha0 = torch.tensor(1.0)
@@ -72,18 +87,20 @@ def poisson_gamma_model(reparameterized, Elbo):
         alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
         pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
-    adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
+    adam = optim.Adam({"lr": 0.0002, "betas": (0.97, 0.999)})
     svi = SVI(model, guide, adam, loss=Elbo())
     for k in range(3000):
         svi.step()
 
 
-@register_model(kernel=NUTS, step_size=0.02, num_samples=300, id='BernoulliBeta::NUTS')
-@register_model(kernel=HMC, step_size=0.02, num_steps=3, num_samples=1000, id='BernoulliBeta::HMC')
+@register_model(kernel=NUTS, step_size=0.02, num_samples=300, id="BernoulliBeta::NUTS")
+@register_model(
+    kernel=HMC, step_size=0.02, num_steps=3, num_samples=1000, id="BernoulliBeta::HMC"
+)
 def bernoulli_beta_hmc(**kwargs):
     def model(data):
-        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
-        beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
+        alpha = pyro.param("alpha", torch.tensor([1.1, 1.1]))
+        beta = pyro.param("beta", torch.tensor([1.1, 1.1]))
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
         pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
@@ -91,32 +108,33 @@ def bernoulli_beta_hmc(**kwargs):
     pyro.set_rng_seed(0)
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    kernel = kwargs.pop('kernel')
-    num_samples = kwargs.pop('num_samples')
+    kernel = kwargs.pop("kernel")
+    num_samples = kwargs.pop("num_samples")
     mcmc_kernel = kernel(model, **kwargs)
     mcmc = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)
     mcmc.run(data)
-    return mcmc.get_samples()['p_latent']
+    return mcmc.get_samples()["p_latent"]
 
 
-@register_model(num_steps=2000, whiten=False, id='VSGP::MultiClass_whiten=False')
-@register_model(num_steps=2000, whiten=True, id='VSGP::MultiClass_whiten=True')
+@register_model(num_steps=2000, whiten=False, id="VSGP::MultiClass_whiten=False")
+@register_model(num_steps=2000, whiten=True, id="VSGP::MultiClass_whiten=True")
 def vsgp_multiclass(num_steps, whiten):
     # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
     pyro.set_rng_seed(0)
     X = torch.rand(100, 1)
     K = (-0.5 * (X - X.t()).pow(2) / 0.01).exp() + torch.eye(100) * 1e-6
-    f = K.cholesky().matmul(torch.randn(100, 3))
+    f = torch.linalg.cholesky(K).matmul(torch.randn(100, 3))
     y = f.argmax(dim=-1)
 
-    kernel = gp.kernels.Sum(gp.kernels.Matern32(1),
-                            gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
+    kernel = gp.kernels.Sum(
+        gp.kernels.Matern32(1), gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01))
+    )
     likelihood = gp.likelihoods.MultiClass(num_classes=3)
     Xu = X[::5].clone()
 
-    gpmodule = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
-                                             latent_shape=torch.Size([3]),
-                                             whiten=whiten)
+    gpmodule = gp.models.VariationalSparseGP(
+        X, y, kernel, Xu, likelihood, latent_shape=torch.Size([3]), whiten=whiten
+    )
 
     gpmodule.Xu.requires_grad_(False)
     gpmodule.kernel.kern1.variance_unconstrained.requires_grad_(False)
@@ -125,7 +143,7 @@ def vsgp_multiclass(num_steps, whiten):
     gp.util.train(gpmodule, optimizer, num_steps=num_steps)
 
 
-@pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
+@pytest.mark.parametrize("model, model_args, id", TEST_MODELS, ids=MODEL_IDS)
 @pytest.mark.benchmark(
     min_rounds=5,
     disable_gc=True,
@@ -139,6 +157,7 @@ def test_benchmark(benchmark, model, model_args, id):
 def profile_fn(test_model):
     def wrapped():
         test_model.model(**test_model.model_args)
+
     return wrapped
 
 
@@ -147,12 +166,24 @@ if __name__ == "__main__":
     This script is invoked to run cProfile on one of the models specified above.
     """
     parser = argparse.ArgumentParser(description="Profiling different Pyro models.")
-    parser.add_argument("-m", "--models", nargs="*",
-                        help="model name to match against model id, partial match (e.g. *NAME*) is acceptable.")
-    parser.add_argument("-b", "--suffix", default="current_branch",
-                        help="suffix to append to the cprofile output dump.")
-    parser.add_argument("-d", "--benchmark_dir", default=PROF_DIR,
-                        help="directory to save profiling benchmarks.")
+    parser.add_argument(
+        "-m",
+        "--models",
+        nargs="*",
+        help="model name to match against model id, partial match (e.g. *NAME*) is acceptable.",
+    )
+    parser.add_argument(
+        "-b",
+        "--suffix",
+        default="current_branch",
+        help="suffix to append to the cprofile output dump.",
+    )
+    parser.add_argument(
+        "-d",
+        "--benchmark_dir",
+        default=PROF_DIR,
+        help="directory to save profiling benchmarks.",
+    )
     args = parser.parse_args()
     search_regexp = [re.compile(".*" + m + ".*") for m in args.models]
     profile_ids = []
@@ -168,6 +199,8 @@ if __name__ == "__main__":
         pr = cProfile.Profile()
         fn = profile_fn(test_model)
         pr.runctx("fn()", globals(), locals())
-        profile_file = os.path.join(args.benchmark_dir, test_model.model_id + "#" + args.suffix + ".prof")
+        profile_file = os.path.join(
+            args.benchmark_dir, test_model.model_id + "#" + args.suffix + ".prof"
+        )
         pr.dump_stats(profile_file)
         print("Results in - {}".format(profile_file))

@@ -29,21 +29,29 @@ from pyro.contrib.examples.util import get_data_directory
 
 dset = namedtuple("dset", ["name", "url", "filename"])
 
-JSB_CHORALES = dset("jsb_chorales",
-                    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/jsb_chorales.pickle",
-                    "jsb_chorales.pkl")
+JSB_CHORALES = dset(
+    "jsb_chorales",
+    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/jsb_chorales.pickle",
+    "jsb_chorales.pkl",
+)
 
-PIANO_MIDI = dset("piano_midi",
-                  "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/piano_midi.pickle",
-                  "piano_midi.pkl")
+PIANO_MIDI = dset(
+    "piano_midi",
+    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/piano_midi.pickle",
+    "piano_midi.pkl",
+)
 
-MUSE_DATA = dset("muse_data",
-                 "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/muse_data.pickle",
-                 "muse_data.pkl")
+MUSE_DATA = dset(
+    "muse_data",
+    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/muse_data.pickle",
+    "muse_data.pkl",
+)
 
-NOTTINGHAM = dset("nottingham",
-                  "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/nottingham.pickle",
-                  "nottingham.pkl")
+NOTTINGHAM = dset(
+    "nottingham",
+    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/nottingham.pickle",
+    "nottingham.pkl",
+)
 
 
 # this function processes the raw data; in particular it unsparsifies it
@@ -64,18 +72,20 @@ def process_data(base_path, dataset, min_note=21, note_range=88):
     for split, data_split in data.items():
         processed_dataset[split] = {}
         n_seqs = len(data_split)
-        processed_dataset[split]['sequence_lengths'] = torch.zeros(n_seqs, dtype=torch.long)
-        processed_dataset[split]['sequences'] = []
+        processed_dataset[split]["sequence_lengths"] = torch.zeros(
+            n_seqs, dtype=torch.long
+        )
+        processed_dataset[split]["sequences"] = []
         for seq in range(n_seqs):
             seq_length = len(data_split[seq])
-            processed_dataset[split]['sequence_lengths'][seq] = seq_length
+            processed_dataset[split]["sequence_lengths"][seq] = seq_length
             processed_sequence = torch.zeros((seq_length, note_range))
             for t in range(seq_length):
                 note_slice = torch.tensor(list(data_split[seq][t])) - min_note
                 slice_length = len(note_slice)
                 if slice_length > 0:
                     processed_sequence[t, note_slice] = torch.ones(slice_length)
-            processed_dataset[split]['sequences'].append(processed_sequence)
+            processed_dataset[split]["sequences"].append(processed_sequence)
     pickle.dump(processed_dataset, open(output, "wb"), pickle.HIGHEST_PROTOCOL)
     print("dumped processed data to %s" % output)
 
@@ -95,8 +105,12 @@ def load_data(dataset):
         dset = pickle.load(f)
         for k, v in dset.items():
             sequences = v["sequences"]
-            dset[k]["sequences"] = pad_sequence(sequences, batch_first=True).type(torch.Tensor)
-            dset[k]["sequence_lengths"] = v["sequence_lengths"].to(device=torch.Tensor().device)
+            dset[k]["sequences"] = pad_sequence(sequences, batch_first=True).type(
+                torch.Tensor
+            )
+            dset[k]["sequence_lengths"] = v["sequence_lengths"].to(
+                device=torch.Tensor().device
+            )
     return dset
 
 
@@ -125,7 +139,7 @@ def pad_and_reverse(rnn_output, seq_lengths):
 def get_mini_batch_mask(mini_batch, seq_lengths):
     mask = torch.zeros(mini_batch.shape[0:2])
     for b in range(mini_batch.shape[0]):
-        mask[b, 0:seq_lengths[b]] = torch.ones(seq_lengths[b])
+        mask[b, 0 : seq_lengths[b]] = torch.ones(seq_lengths[b])
     return mask
 
 
@@ -159,8 +173,8 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
         mini_batch_reversed = mini_batch_reversed.cuda()
 
     # do sequence packing
-    mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(mini_batch_reversed,
-                                                            sorted_seq_lengths,
-                                                            batch_first=True)
+    mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(
+        mini_batch_reversed, sorted_seq_lengths, batch_first=True
+    )
 
     return mini_batch, mini_batch_reversed, mini_batch_mask, sorted_seq_lengths

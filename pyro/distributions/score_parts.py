@@ -6,11 +6,14 @@ from collections import namedtuple
 from pyro.distributions.util import scale_and_mask
 
 
-class ScoreParts(namedtuple('ScoreParts', ['log_prob', 'score_function', 'entropy_term'])):
+class ScoreParts(
+    namedtuple("ScoreParts", ["log_prob", "score_function", "entropy_term"])
+):
     """
     This data structure stores terms used in stochastic gradient estimators that
     combine the pathwise estimator and the score function estimator.
     """
+
     def scale_and_mask(self, scale=1.0, mask=None):
         """
         Scale and mask appropriate terms of a gradient estimator by a data multiplicity factor.

@@ -12,17 +12,17 @@ from pyro.ops import packed
 from tests.common import assert_equal
 
 EXAMPLE_DIMS = [
-    ''.join(dims)
+    "".join(dims)
     for num_dims in range(5)
-    for dims in itertools.permutations('abcd'[:num_dims])
+    for dims in itertools.permutations("abcd"[:num_dims])
 ]
 
 
-@pytest.mark.parametrize('dims', EXAMPLE_DIMS)
+@pytest.mark.parametrize("dims", EXAMPLE_DIMS)
 def test_unpack_pack(dims):
     dim_to_symbol = {}
     symbol_to_dim = {}
-    for symbol, dim in zip('abcd', range(-1, -5, -1)):
+    for symbol, dim in zip("abcd", range(-1, -5, -1)):
         dim_to_symbol[dim] = symbol
         symbol_to_dim[symbol] = dim
     shape = tuple(range(2, 2 + len(dims)))
@@ -32,7 +32,7 @@ def test_unpack_pack(dims):
     unpack_pack_x = packed.unpack(pack_x, symbol_to_dim)
     assert_equal(unpack_pack_x, x)
 
-    sort_dims = ''.join(sorted(dims))
+    sort_dims = "".join(sorted(dims))
     if sort_dims != pack_x._pyro_dims:
         sort_pack_x = pack_x.permute(*(pack_x._pyro_dims.index(d) for d in sort_dims))
         sort_pack_x._pyro_dims = sort_dims
@@ -56,13 +56,13 @@ def make_inputs(shapes, num_numbers=0):
         inputs.append(random.random())
     dim_to_symbol = {}
     symbol_to_dim = {}
-    for dim, symbol in zip(range(-num_symbols, 0), 'abcdefghijklmnopqrstuvwxyz'):
+    for dim, symbol in zip(range(-num_symbols, 0), "abcdefghijklmnopqrstuvwxyz"):
         dim_to_symbol[dim] = symbol
         symbol_to_dim[symbol] = dim
     return inputs, dim_to_symbol, symbol_to_dim
 
 
-@pytest.mark.parametrize('shapes', EXAMPLE_SHAPES)
+@pytest.mark.parametrize("shapes", EXAMPLE_SHAPES)
 def test_broadcast_all(shapes):
     inputs, dim_to_symbol, symbol_to_dim = make_inputs(shapes)
     packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]

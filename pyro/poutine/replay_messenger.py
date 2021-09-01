@@ -61,8 +61,7 @@ class ReplayMessenger(Messenger):
             guide_msg = self.trace.nodes[name]
             if msg["is_observed"]:
                 return None
-            if guide_msg["type"] != "sample" or \
-                    guide_msg["is_observed"]:
+            if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sampled in trace".format(name))
             msg["done"] = True
             msg["value"] = guide_msg["value"]
@@ -72,8 +71,9 @@ class ReplayMessenger(Messenger):
     def _pyro_param(self, msg):
         name = msg["name"]
         if self.params is not None and name in self.params:
-            assert hasattr(self.params[name], "unconstrained"), \
-                "param {} must be constrained value".format(name)
+            assert hasattr(
+                self.params[name], "unconstrained"
+            ), "param {} must be constrained value".format(name)
             msg["done"] = True
             msg["value"] = self.params[name]
         return None

@@ -57,19 +57,23 @@ class ELBO(object, metaclass=ABCMeta):
     Rajesh Ranganath, Sean Gerrish, David M. Blei
     """
 
-    def __init__(self,
-                 num_particles=1,
-                 max_plate_nesting=float('inf'),
-                 max_iarange_nesting=None,  # DEPRECATED
-                 vectorize_particles=False,
-                 strict_enumeration_warning=True,
-                 ignore_jit_warnings=False,
-                 jit_options=None,
-                 retain_graph=None,
-                 tail_adaptive_beta=-1.0):
+    def __init__(
+        self,
+        num_particles=1,
+        max_plate_nesting=float("inf"),
+        max_iarange_nesting=None,  # DEPRECATED
+        vectorize_particles=False,
+        strict_enumeration_warning=True,
+        ignore_jit_warnings=False,
+        jit_options=None,
+        retain_graph=None,
+        tail_adaptive_beta=-1.0,
+    ):
         if max_iarange_nesting is not None:
-            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
-                          DeprecationWarning)
+            warnings.warn(
+                "max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                DeprecationWarning,
+            )
             max_plate_nesting = max_iarange_nesting
         self.max_plate_nesting = max_plate_nesting
         self.num_particles = num_particles
@@ -92,13 +96,16 @@ class ELBO(object, metaclass=ABCMeta):
         with poutine.block():
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(
-                poutine.replay(model, trace=guide_trace)).get_trace(*args, **kwargs)
+                poutine.replay(model, trace=guide_trace)
+            ).get_trace(*args, **kwargs)
         guide_trace = prune_subsample_sites(guide_trace)
         model_trace = prune_subsample_sites(model_trace)
-        sites = [site
-                 for trace in (model_trace, guide_trace)
-                 for site in trace.nodes.values()
-                 if site["type"] == "sample"]
+        sites = [
+            site
+            for trace in (model_trace, guide_trace)
+            for site in trace.nodes.values()
+            if site["type"] == "sample"
+        ]
 
         # Validate shapes now, since shape constraints will be weaker once
         # max_plate_nesting is changed from float('inf') to some finite value.
@@ -108,16 +115,18 @@ class ELBO(object, metaclass=ABCMeta):
             guide_trace.compute_log_prob()
             model_trace.compute_log_prob()
             for site in sites:
-                check_site_shape(site, max_plate_nesting=float('inf'))
+                check_site_shape(site, max_plate_nesting=float("inf"))
 
-        dims = [frame.dim
-                for site in sites
-                for frame in site["cond_indep_stack"]
-                if frame.vectorized]
+        dims = [
+            frame.dim
+            for site in sites
+            for frame in site["cond_indep_stack"]
+            if frame.vectorized
+        ]
         self.max_plate_nesting = -min(dims) if dims else 0
         if self.vectorize_particles and self.num_particles > 1:
             self.max_plate_nesting += 1
-        logging.info('Guessed max_plate_nesting = {}'.format(self.max_plate_nesting))
+        logging.info("Guessed max_plate_nesting = {}".format(self.max_plate_nesting))
 
     def _vectorized_num_particles(self, fn):
         """
@@ -133,7 +142,11 @@ class ELBO(object, metaclass=ABCMeta):
         def wrapped_fn(*args, **kwargs):
             if self.num_particles == 1:
                 return fn(*args, **kwargs)
-            with pyro.plate("num_particles_vectorized", self.num_particles, dim=-self.max_plate_nesting):
+            with pyro.plate(
+                "num_particles_vectorized",
+                self.num_particles,
+                dim=-self.max_plate_nesting,
+            ):
                 return fn(*args, **kwargs)
 
         return wrapped_fn
@@ -144,9 +157,12 @@ class ELBO(object, metaclass=ABCMeta):
         ``num_particles``, and returns a single trace from the wrapped model
         and guide.
         """
-        return self._get_trace(self._vectorized_num_particles(model),
-                               self._vectorized_num_particles(guide),
-                               args, kwargs)
+        return self._get_trace(
+            self._vectorized_num_particles(model),
+            self._vectorized_num_particles(guide),
+            args,
+            kwargs,
+        )
 
     @abstractmethod
     def _get_trace(self, model, guide, args, kwargs):
@@ -162,7 +178,7 @@ class ELBO(object, metaclass=ABCMeta):
         the result packaged as a trace generator.
         """
         if self.vectorize_particles:
-            if self.max_plate_nesting == float('inf'):
+            if self.max_plate_nesting == float("inf"):
                 self._guess_max_plate_nesting(model, guide, args, kwargs)
             yield self._get_vectorized_trace(model, guide, args, kwargs)
         else:

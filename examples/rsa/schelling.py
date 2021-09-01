@@ -68,19 +68,21 @@ def main(args):
     # draw num_samples samples from Bob's decision process
     # and use those to estimate the marginal probability
     # that Bob chooses their preferred location
-    bob_prob = sum([bob_decision()
-                    for i in range(num_samples)]) / float(num_samples)
+    bob_prob = sum([bob_decision() for i in range(num_samples)]) / float(num_samples)
 
-    print("Empirical frequency of Bob choosing their favored location " +
-          "given preference {} and recursion depth {}: {}"
-          .format(shared_preference, bob_depth, bob_prob))
+    print(
+        "Empirical frequency of Bob choosing their favored location "
+        + "given preference {} and recursion depth {}: {}".format(
+            shared_preference, bob_depth, bob_prob
+        )
+    )
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-samples', default=10, type=int)
-    parser.add_argument('--depth', default=2, type=int)
-    parser.add_argument('--preference', default=0.6, type=float)
+    parser.add_argument("-n", "--num-samples", default=10, type=int)
+    parser.add_argument("--depth", default=2, type=int)
+    parser.add_argument("--preference", default=0.6, type=float)
     args = parser.parse_args()
     main(args)

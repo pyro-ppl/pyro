@@ -43,10 +43,12 @@ def _kl_independent_mvn(p, q):
         dim = q.event_shape[0]
         p_cov = p.base_dist.scale ** 2
         q_precision = q.precision_matrix.diagonal(dim1=-2, dim2=-1)
-        return (0.5 * (p_cov * q_precision).sum(-1)
-                - 0.5 * dim * (1 + math.log(2 * math.pi))
-                - q.log_prob(p.base_dist.loc)
-                - p.base_dist.scale.log().sum(-1))
+        return (
+            0.5 * (p_cov * q_precision).sum(-1)
+            - 0.5 * dim * (1 + math.log(2 * math.pi))
+            - q.log_prob(p.base_dist.loc)
+            - p.base_dist.scale.log().sum(-1)
+        )
 
     raise NotImplementedError
 

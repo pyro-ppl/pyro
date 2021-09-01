@@ -64,7 +64,7 @@ except ImportError:
 from pyroapi import distributions as dist
 from pyroapi import handlers, infer, optim, pyro, pyro_backend
 
-logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.DEBUG)
+logging.basicConfig(format="%(relativeCreated) 9d %(message)s", level=logging.DEBUG)
 
 # Add another handler for logging debugging events (e.g. for profiling)
 # in a separate stream that can be captured.
@@ -98,16 +98,17 @@ def model_0(sequences, lengths, args, batch_size=None, include_prior=True):
         # Our prior on transition probabilities will be:
         # stay in the same state with 90% probability; uniformly jump to another
         # state with 10% probability.
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .to_event(1))
+        probs_x = pyro.sample(
+            "probs_x",
+            dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1).to_event(1),
+        )
         # We put a weak prior on the conditional probability of a tone sounding.
         # We know that on average about 4 of 88 tones are active, so we'll set a
         # rough weak prior of 10% of the notes being active at any one time.
-        probs_y = pyro.sample("probs_y",
-                              dist.Beta(0.1, 0.9)
-                                  .expand([args.hidden_dim, data_dim])
-                                  .to_event(2))
+        probs_y = pyro.sample(
+            "probs_y",
+            dist.Beta(0.1, 0.9).expand([args.hidden_dim, data_dim]).to_event(2),
+        )
     # In this first model we'll sequentially iterate over sequences in a
     # minibatch; this will make it easy to reason about tensor shapes.
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
@@ -119,11 +120,19 @@ def model_0(sequences, lengths, args, batch_size=None, include_prior=True):
             # On the next line, we'll overwrite the value of x with an updated
             # value. If we wanted to record all x values, we could instead
             # write x[t] = pyro.sample(...x[t-1]...).
-            x = pyro.sample("x_{}_{}".format(i, t), dist.Categorical(probs_x[x]),
-                            infer={"enumerate": "parallel"})
+            x = pyro.sample(
+                "x_{}_{}".format(i, t),
+                dist.Categorical(probs_x[x]),
+                infer={"enumerate": "parallel"},
+            )
             with tones_plate:
-                pyro.sample("y_{}_{}".format(i, t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
-                            obs=sequence[t])
+                pyro.sample(
+                    "y_{}_{}".format(i, t),
+                    dist.Bernoulli(probs_y[x.squeeze(-1)]),
+                    obs=sequence[t],
+                )
+
+
 # To see how enumeration changes the shapes of these sample sites, we can use
 # the Trace.format_shapes() to print shapes at each site:
 # $ python examples/hmm.py -m 0 -n 1 -b 1 -t 5 --print-shapes
@@ -182,13 +191,14 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
     with handlers.mask(mask=include_prior):
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .to_event(1))
-        probs_y = pyro.sample("probs_y",
-                              dist.Beta(0.1, 0.9)
-                                  .expand([args.hidden_dim, data_dim])
-                                  .to_event(2))
+        probs_x = pyro.sample(
+            "probs_x",
+            dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1).to_event(1),
+        )
+        probs_y = pyro.sample(
+            "probs_y",
+            dist.Beta(0.1, 0.9).expand([args.hidden_dim, data_dim]).to_event(2),
+        )
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     # We subsample batch_size items out of num_sequences items. Note that since
     # we're using dim=-1 for the notes plate, we need to batch over a different
@@ -204,11 +214,19 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
         # need to trigger a new jit compile stage.
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
             with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
-                x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                infer={"enumerate": "parallel"})
+                x = pyro.sample(
+                    "x_{}".format(t),
+                    dist.Categorical(probs_x[x]),
+                    infer={"enumerate": "parallel"},
+                )
                 with tones_plate:
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
-                                obs=sequences[batch, t])
+                    pyro.sample(
+                        "y_{}".format(t),
+                        dist.Bernoulli(probs_y[x.squeeze(-1)]),
+                        obs=sequences[batch, t],
+                    )
+
+
 # Let's see how batching changes the shapes of sample sites:
 # $ python examples/hmm.py -m 1 -n 1 -t 5 --batch-size=10 --print-shapes
 # ...
@@ -260,27 +278,34 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
     with handlers.mask(mask=include_prior):
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .to_event(1))
-        probs_y = pyro.sample("probs_y",
-                              dist.Beta(0.1, 0.9)
-                                  .expand([args.hidden_dim, 2, data_dim])
-                                  .to_event(3))
+        probs_x = pyro.sample(
+            "probs_x",
+            dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1).to_event(1),
+        )
+        probs_y = pyro.sample(
+            "probs_y",
+            dist.Beta(0.1, 0.9).expand([args.hidden_dim, 2, data_dim]).to_event(3),
+        )
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", num_sequences, batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x, y = 0, 0
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
             with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
-                x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                infer={"enumerate": "parallel"})
+                x = pyro.sample(
+                    "x_{}".format(t),
+                    dist.Categorical(probs_x[x]),
+                    infer={"enumerate": "parallel"},
+                )
                 # Note the broadcasting tricks here: to index probs_y on tensors x and y,
                 # we also need a final tensor for the tones dimension. This is conveniently
                 # provided by the plate associated with that dimension.
                 with tones_plate as tones:
-                    y = pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x, y, tones]),
-                                    obs=sequences[batch, t]).long()
+                    y = pyro.sample(
+                        "y_{}".format(t),
+                        dist.Bernoulli(probs_y[x, y, tones]),
+                        obs=sequences[batch, t],
+                    ).long()
 
 
 # Next consider a Factorial HMM with two hidden states.
@@ -305,29 +330,38 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
     with handlers.mask(mask=include_prior):
-        probs_w = pyro.sample("probs_w",
-                              dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-                                  .to_event(1))
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-                                  .to_event(1))
-        probs_y = pyro.sample("probs_y",
-                              dist.Beta(0.1, 0.9)
-                                  .expand([hidden_dim, hidden_dim, data_dim])
-                                  .to_event(3))
+        probs_w = pyro.sample(
+            "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
+        )
+        probs_x = pyro.sample(
+            "probs_x", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
+        )
+        probs_y = pyro.sample(
+            "probs_y",
+            dist.Beta(0.1, 0.9).expand([hidden_dim, hidden_dim, data_dim]).to_event(3),
+        )
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", num_sequences, batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         w, x = 0, 0
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
             with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
-                w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
-                                infer={"enumerate": "parallel"})
-                x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                infer={"enumerate": "parallel"})
+                w = pyro.sample(
+                    "w_{}".format(t),
+                    dist.Categorical(probs_w[w]),
+                    infer={"enumerate": "parallel"},
+                )
+                x = pyro.sample(
+                    "x_{}".format(t),
+                    dist.Categorical(probs_x[x]),
+                    infer={"enumerate": "parallel"},
+                )
                 with tones_plate as tones:
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
-                                obs=sequences[batch, t])
+                    pyro.sample(
+                        "y_{}".format(t),
+                        dist.Bernoulli(probs_y[w, x, tones]),
+                        obs=sequences[batch, t],
+                    )
 
 
 # By adding a dependency of x on w, we generalize to a
@@ -351,17 +385,19 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
     with handlers.mask(mask=include_prior):
-        probs_w = pyro.sample("probs_w",
-                              dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-                                  .to_event(1))
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-                                  .expand_by([hidden_dim])
-                                  .to_event(2))
-        probs_y = pyro.sample("probs_y",
-                              dist.Beta(0.1, 0.9)
-                                  .expand([hidden_dim, hidden_dim, data_dim])
-                                  .to_event(3))
+        probs_w = pyro.sample(
+            "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
+        )
+        probs_x = pyro.sample(
+            "probs_x",
+            dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
+            .expand_by([hidden_dim])
+            .to_event(2),
+        )
+        probs_y = pyro.sample(
+            "probs_y",
+            dist.Beta(0.1, 0.9).expand([hidden_dim, hidden_dim, data_dim]).to_event(3),
+        )
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", num_sequences, batch_size, dim=-2) as batch:
         lengths = lengths[batch]
@@ -371,14 +407,22 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         w = x = torch.tensor(0, dtype=torch.long)
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
             with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
-                w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
-                                infer={"enumerate": "parallel"})
-                x = pyro.sample("x_{}".format(t),
-                                dist.Categorical(Vindex(probs_x)[w, x]),
-                                infer={"enumerate": "parallel"})
+                w = pyro.sample(
+                    "w_{}".format(t),
+                    dist.Categorical(probs_w[w]),
+                    infer={"enumerate": "parallel"},
+                )
+                x = pyro.sample(
+                    "x_{}".format(t),
+                    dist.Categorical(Vindex(probs_x)[w, x]),
+                    infer={"enumerate": "parallel"},
+                )
                 with tones_plate as tones:
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
-                                obs=sequences[batch, t])
+                    pyro.sample(
+                        "y_{}".format(t),
+                        dist.Bernoulli(probs_y[w, x, tones]),
+                        obs=sequences[batch, t],
+                    )
 
 
 # Next let's consider a neural HMM model.
@@ -405,8 +449,12 @@ class TonesGenerator(nn.Module):
         # a bernoulli variable y. Whereas x will typically be enumerated, y will be observed.
         # We apply x_to_hidden independently from y_to_hidden, then broadcast the non-enumerated
         # y part up to the enumerated x part in the + operation.
-        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(-1, x, 1)
-        y_conv = self.relu(self.conv(y.reshape(-1, 1, self.data_dim))).reshape(y.shape[:-1] + (-1,))
+        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(
+            -1, x, 1
+        )
+        y_conv = self.relu(self.conv(y.reshape(-1, 1, self.data_dim))).reshape(
+            y.shape[:-1] + (-1,)
+        )
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
         return self.hidden_to_logits(h)
 
@@ -431,23 +479,29 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
     pyro.module("tones_generator", tones_generator)
 
     with handlers.mask(mask=include_prior):
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .to_event(1))
+        probs_x = pyro.sample(
+            "probs_x",
+            dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1).to_event(1),
+        )
     with pyro.plate("sequences", num_sequences, batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x = 0
         y = torch.zeros(data_dim)
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
             with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
-                x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                infer={"enumerate": "parallel"})
+                x = pyro.sample(
+                    "x_{}".format(t),
+                    dist.Categorical(probs_x[x]),
+                    infer={"enumerate": "parallel"},
+                )
                 # Note that since each tone depends on all tones at a previous time step
                 # the tones at different time steps now need to live in separate plates.
                 with pyro.plate("tones_{}".format(t), data_dim, dim=-1):
-                    y = pyro.sample("y_{}".format(t),
-                                    dist.Bernoulli(logits=tones_generator(x, y)),
-                                    obs=sequences[batch, t])
+                    y = pyro.sample(
+                        "y_{}".format(t),
+                        dist.Bernoulli(logits=tones_generator(x, y)),
+                        obs=sequences[batch, t],
+                    )
 
 
 # Next let's consider a second-order HMM model
@@ -474,24 +528,38 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
     if not args.raftery_parameterization:
         # Explicitly parameterize the full tensor of transition probabilities, which
         # has hidden_dim cubed entries.
-        probs_x = pyro.param("probs_x", torch.rand(hidden_dim, hidden_dim, hidden_dim),
-                             constraint=constraints.simplex)
+        probs_x = pyro.param(
+            "probs_x",
+            torch.rand(hidden_dim, hidden_dim, hidden_dim),
+            constraint=constraints.simplex,
+        )
     else:
         # Use the more parsimonious "Raftery" parameterization of
         # the tensor of transition probabilities. See reference:
         # Raftery, A. E. A model for high-order markov chains.
         # Journal of the Royal Statistical Society. 1985.
-        probs_x1 = pyro.param("probs_x1", torch.rand(hidden_dim, hidden_dim),
-                              constraint=constraints.simplex)
-        probs_x2 = pyro.param("probs_x2", torch.rand(hidden_dim, hidden_dim),
-                              constraint=constraints.simplex)
-        mix_lambda = pyro.param("mix_lambda", torch.tensor(0.5), constraint=constraints.unit_interval)
+        probs_x1 = pyro.param(
+            "probs_x1",
+            torch.rand(hidden_dim, hidden_dim),
+            constraint=constraints.simplex,
+        )
+        probs_x2 = pyro.param(
+            "probs_x2",
+            torch.rand(hidden_dim, hidden_dim),
+            constraint=constraints.simplex,
+        )
+        mix_lambda = pyro.param(
+            "mix_lambda", torch.tensor(0.5), constraint=constraints.unit_interval
+        )
         # we use broadcasting to combine two tensors of shape (hidden_dim, hidden_dim) and
         # (hidden_dim, 1, hidden_dim) to obtain a tensor of shape (hidden_dim, hidden_dim, hidden_dim)
         probs_x = mix_lambda * probs_x1 + (1.0 - mix_lambda) * probs_x2.unsqueeze(-2)
 
-    probs_y = pyro.param("probs_y", torch.rand(hidden_dim, data_dim),
-                         constraint=constraints.unit_interval)
+    probs_y = pyro.param(
+        "probs_y",
+        torch.rand(hidden_dim, data_dim),
+        constraint=constraints.unit_interval,
+    )
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", num_sequences, batch_size, dim=-2) as batch:
         lengths = lengths[batch]
@@ -501,12 +569,18 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
         for t in pyro.markov(range(lengths.max()), history=2):
             with handlers.mask(mask=(t < lengths).unsqueeze(-1)):
                 probs_x_t = Vindex(probs_x)[x_prev, x_curr]
-                x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs_x_t),
-                                                     infer={"enumerate": "parallel"})
+                x_prev, x_curr = x_curr, pyro.sample(
+                    "x_{}".format(t),
+                    dist.Categorical(probs_x_t),
+                    infer={"enumerate": "parallel"},
+                )
                 with tones_plate:
                     probs_y_t = probs_y[x_curr.squeeze(-1)]
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y_t),
-                                obs=sequences[batch, t])
+                    pyro.sample(
+                        "y_{}".format(t),
+                        dist.Bernoulli(probs_y_t),
+                        obs=sequences[batch, t],
+                    )
 
 
 # Let's go back to our initial model and make it even faster: we'll support
@@ -519,13 +593,14 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
     with handlers.mask(mask=include_prior):
-        probs_x = pyro.sample("probs_x",
-                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .to_event(1))
-        probs_y = pyro.sample("probs_y",
-                              dist.Beta(0.1, 0.9)
-                                  .expand([args.hidden_dim, data_dim])
-                                  .to_event(2))
+        probs_x = pyro.sample(
+            "probs_x",
+            dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1).to_event(1),
+        )
+        probs_y = pyro.sample(
+            "probs_y",
+            dist.Beta(0.1, 0.9).expand([args.hidden_dim, data_dim]).to_event(2),
+        )
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     # Note that since we're using dim=-2 for the time dimension, we need
     # to batch sequences over a different dimension, here dim=-3.
@@ -536,13 +611,23 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
         # To vectorize time dimension we use pyro.vectorized_markov(name=...).
         # With the help of Vindex and additional unsqueezes we can ensure that
         # dimensions line up properly.
-        for t in pyro.vectorized_markov(name="time", size=int(max_length if args.jit else lengths.max()), dim=-2):
+        for t in pyro.vectorized_markov(
+            name="time", size=int(max_length if args.jit else lengths.max()), dim=-2
+        ):
             with handlers.mask(mask=(t < lengths.unsqueeze(-1)).unsqueeze(-1)):
-                x_curr = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x_prev]),
-                                     infer={"enumerate": "parallel"})
+                x_curr = pyro.sample(
+                    "x_{}".format(t),
+                    dist.Categorical(probs_x[x_prev]),
+                    infer={"enumerate": "parallel"},
+                )
                 with tones_plate:
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
-                                obs=Vindex(sequences)[batch, t])
+                    pyro.sample(
+                        "y_{}".format(t),
+                        dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
+                        obs=Vindex(sequences)[batch, t],
+                    )
+
+
 # Let's see how vectorizing time dimension changes the shapes of sample sites:
 # $ python examples/hmm.py -m 7 --funsor -n 1 --batch-size=10 --print-shapes
 # ...
@@ -574,33 +659,38 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
 # finally vectorized t_curr (torch.arange(1, 72)).
 
 
-models = {name[len('model_'):]: model
-          for name, model in globals().items()
-          if name.startswith('model_')}
+models = {
+    name[len("model_") :]: model
+    for name, model in globals().items()
+    if name.startswith("model_")
+}
 
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
-    logging.info('Loading data')
+    logging.info("Loading data")
     data = poly.load_data(poly.JSB_CHORALES)
 
-    logging.info('-' * 40)
+    logging.info("-" * 40)
     model = models[args.model]
-    logging.info('Training {} on {} sequences'.format(
-        model.__name__, len(data['train']['sequences'])))
-    sequences = data['train']['sequences']
-    lengths = data['train']['sequence_lengths']
+    logging.info(
+        "Training {} on {} sequences".format(
+            model.__name__, len(data["train"]["sequences"])
+        )
+    )
+    sequences = data["train"]["sequences"]
+    lengths = data["train"]["sequence_lengths"]
 
     # find all the notes that are present at least once in the training set
-    present_notes = ((sequences == 1).sum(0).sum(0) > 0)
+    present_notes = (sequences == 1).sum(0).sum(0) > 0
     # remove notes that are never played (we remove 37/88 notes)
     sequences = sequences[..., present_notes]
 
     if args.truncate:
         lengths = lengths.clamp(max=args.truncate)
-        sequences = sequences[:, :args.truncate]
+        sequences = sequences[:, : args.truncate]
     num_observations = float(lengths.sum())
     pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
@@ -609,7 +699,9 @@ def main(args):
     # out the hidden state x. This is accomplished via an automatic guide that
     # learns point estimates of all of our conditional probability tables,
     # named probs_*.
-    guide = AutoDelta(handlers.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_")))
+    guide = AutoDelta(
+        handlers.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_"))
+    )
 
     # To help debug our tensor shapes, let's print the shape of each site's
     # distribution, value, and log_prob tensor. Note this information is
@@ -622,10 +714,11 @@ def main(args):
         else:
             first_available_dim = -3
         guide_trace = handlers.trace(guide).get_trace(
-            sequences, lengths, args=args, batch_size=args.batch_size)
+            sequences, lengths, args=args, batch_size=args.batch_size
+        )
         model_trace = handlers.trace(
-            handlers.replay(handlers.enum(model, first_available_dim), guide_trace)).get_trace(
-            sequences, lengths, args=args, batch_size=args.batch_size)
+            handlers.replay(handlers.enum(model, first_available_dim), guide_trace)
+        ).get_trace(sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info(model_trace.format_shapes())
 
     # Bind non-PyTorch parameters to make these functions jittable.
@@ -634,7 +727,7 @@ def main(args):
 
     # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
     # All of our models have two plates: "data" and "tones".
-    optimizer = optim.Adam({'lr': args.learning_rate})
+    optimizer = optim.Adam({"lr": args.learning_rate})
     if args.tmc:
         if args.jit and not args.funsor:
             raise NotImplementedError("jit support not yet added for TraceTMC_ELBO")
@@ -642,12 +735,19 @@ def main(args):
         elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2)
         tmc_model = handlers.infer_config(
             model,
-            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
+            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False}
+            if msg["infer"].get("enumerate", None) == "parallel"
+            else {},
+        )  # noqa: E501
         svi = infer.SVI(tmc_model, guide, optimizer, elbo)
     else:
         if args.model == "7":
             assert args.funsor
-            Elbo = infer.JitTraceMarkovEnum_ELBO if args.jit else infer.TraceMarkovEnum_ELBO
+            Elbo = (
+                infer.JitTraceMarkovEnum_ELBO
+                if args.jit
+                else infer.TraceMarkovEnum_ELBO
+            )
         else:
             Elbo = infer.JitTraceEnum_ELBO if args.jit else infer.TraceEnum_ELBO
         if args.model == "0":
@@ -656,30 +756,43 @@ def main(args):
             max_plate_nesting = 3
         else:
             max_plate_nesting = 2
-        elbo = Elbo(max_plate_nesting=max_plate_nesting,
-                    strict_enumeration_warning=True,
-                    jit_options={"time_compilation": args.time_compilation})
+        elbo = Elbo(
+            max_plate_nesting=max_plate_nesting,
+            strict_enumeration_warning=True,
+            jit_options={"time_compilation": args.time_compilation},
+        )
         svi = infer.SVI(model, guide, optimizer, elbo)
 
     # We'll train on small minibatches.
-    logging.info('Step\tLoss')
+    logging.info("Step\tLoss")
     for step in range(args.num_steps):
         loss = svi.step(sequences, lengths, batch_size=args.batch_size)
-        logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
+        logging.info("{: >5d}\t{}".format(step, loss / num_observations))
 
     if args.jit and args.time_compilation:
-        logging.debug('time to compile: {} s.'.format(elbo._differentiable_loss.compile_time))
+        logging.debug(
+            "time to compile: {} s.".format(elbo._differentiable_loss.compile_time)
+        )
 
     # We evaluate on the entire training dataset,
     # excluding the prior term so our results are comparable across models.
-    train_loss = elbo.loss(model, guide, sequences, lengths, batch_size=sequences.shape[0], include_prior=False)
-    logging.info('training loss = {}'.format(train_loss / num_observations))
+    train_loss = elbo.loss(
+        model,
+        guide,
+        sequences,
+        lengths,
+        batch_size=sequences.shape[0],
+        include_prior=False,
+    )
+    logging.info("training loss = {}".format(train_loss / num_observations))
 
     # Finally we evaluate on the test dataset.
-    logging.info('-' * 40)
-    logging.info('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
-    sequences = data['test']['sequences'][..., present_notes]
-    lengths = data['test']['sequence_lengths']
+    logging.info("-" * 40)
+    logging.info(
+        "Evaluating on {} test sequences".format(len(data["test"]["sequences"]))
+    )
+    sequences = data["test"]["sequences"][..., present_notes]
+    lengths = data["test"]["sequence_lengths"]
     if args.truncate:
         lengths = lengths.clamp(max=args.truncate)
     num_observations = float(lengths.sum())
@@ -687,21 +800,36 @@ def main(args):
     # note that since we removed unseen notes above (to make the problem a bit easier and for
     # numerical stability) this test loss may not be directly comparable to numbers
     # reported on this dataset elsewhere.
-    test_loss = elbo.loss(model, guide, sequences, lengths, batch_size=sequences.shape[0], include_prior=False)
-    logging.info('test loss = {}'.format(test_loss / num_observations))
+    test_loss = elbo.loss(
+        model,
+        guide,
+        sequences,
+        lengths,
+        batch_size=sequences.shape[0],
+        include_prior=False,
+    )
+    logging.info("test loss = {}".format(test_loss / num_observations))
 
     # We expect models with higher capacity to perform better,
     # but eventually overfit to the training set.
-    capacity = sum(value.reshape(-1).size(0)
-                   for value in pyro.get_param_store().values())
-    logging.info('model_{} capacity = {} parameters'.format(args.model, capacity))
+    capacity = sum(
+        value.reshape(-1).size(0) for value in pyro.get_param_store().values()
+    )
+    logging.info("model_{} capacity = {} parameters".format(args.model, capacity))
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
-    parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
-    parser.add_argument("-m", "--model", default="1", type=str,
-                        help="one of: {}".format(", ".join(sorted(models.keys()))))
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
+    parser = argparse.ArgumentParser(
+        description="MAP Baum-Welch learning Bach Chorales"
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        default="1",
+        type=str,
+        help="one of: {}".format(", ".join(sorted(models.keys()))),
+    )
     parser.add_argument("-n", "--num-steps", default=50, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
     parser.add_argument("-d", "--hidden-dim", default=16, type=int)
@@ -711,21 +839,25 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--truncate", type=int)
     parser.add_argument("-p", "--print-shapes", action="store_true")
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument('--cuda', action='store_true')
-    parser.add_argument('--jit', action='store_true')
-    parser.add_argument('--time-compilation', action='store_true')
-    parser.add_argument('-rp', '--raftery-parameterization', action='store_true')
-    parser.add_argument('--tmc', action='store_true',
-                        help="Use Tensor Monte Carlo instead of exact enumeration "
-                             "to estimate the marginal likelihood. You probably don't want to do this, "
-                             "except to see that TMC makes Monte Carlo gradient estimation feasible "
-                             "even with very large numbers of non-reparametrized variables.")
-    parser.add_argument('--tmc-num-samples', default=10, type=int)
-    parser.add_argument('--funsor', action='store_true')
+    parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--jit", action="store_true")
+    parser.add_argument("--time-compilation", action="store_true")
+    parser.add_argument("-rp", "--raftery-parameterization", action="store_true")
+    parser.add_argument(
+        "--tmc",
+        action="store_true",
+        help="Use Tensor Monte Carlo instead of exact enumeration "
+        "to estimate the marginal likelihood. You probably don't want to do this, "
+        "except to see that TMC makes Monte Carlo gradient estimation feasible "
+        "even with very large numbers of non-reparametrized variables.",
+    )
+    parser.add_argument("--tmc-num-samples", default=10, type=int)
+    parser.add_argument("--funsor", action="store_true")
     args = parser.parse_args()
 
     if args.funsor:
         import funsor
+
         funsor.set_backend("torch")
         PYRO_BACKEND = "contrib.funsor"
     else:

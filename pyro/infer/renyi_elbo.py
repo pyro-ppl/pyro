@@ -49,26 +49,34 @@ class RenyiELBO(ELBO):
         Yuri Burda, Roger Grosse, Ruslan Salakhutdinov
     """
 
-    def __init__(self,
-                 alpha=0,
-                 num_particles=2,
-                 max_plate_nesting=float('inf'),
-                 max_iarange_nesting=None,  # DEPRECATED
-                 vectorize_particles=False,
-                 strict_enumeration_warning=True):
+    def __init__(
+        self,
+        alpha=0,
+        num_particles=2,
+        max_plate_nesting=float("inf"),
+        max_iarange_nesting=None,  # DEPRECATED
+        vectorize_particles=False,
+        strict_enumeration_warning=True,
+    ):
         if max_iarange_nesting is not None:
-            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
-                          DeprecationWarning)
+            warnings.warn(
+                "max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                DeprecationWarning,
+            )
             max_plate_nesting = max_iarange_nesting
 
         if alpha == 1:
-            raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
-                             "for the case alpha = 1.")
+            raise ValueError(
+                "The order alpha should not be equal to 1. Please use Trace_ELBO class"
+                "for the case alpha = 1."
+            )
         self.alpha = alpha
-        super().__init__(num_particles=num_particles,
-                         max_plate_nesting=max_plate_nesting,
-                         vectorize_particles=vectorize_particles,
-                         strict_enumeration_warning=strict_enumeration_warning)
+        super().__init__(
+            num_particles=num_particles,
+            max_plate_nesting=max_plate_nesting,
+            vectorize_particles=vectorize_particles,
+            strict_enumeration_warning=strict_enumeration_warning,
+        )
 
     def _get_trace(self, model, guide, args, kwargs):
         """
@@ -76,7 +84,8 @@ class RenyiELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, args, kwargs)
+            "flat", self.max_plate_nesting, model, guide, args, kwargs
+        )
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -94,7 +103,7 @@ class RenyiELBO(ELBO):
 
         # grab a vectorized trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-            elbo_particle = 0.
+            elbo_particle = 0.0
             sum_dims = get_dependent_plate_dims(model_trace.nodes.values())
 
             # compute elbo
@@ -116,9 +125,11 @@ class RenyiELBO(ELBO):
         else:
             elbo_particles = torch.stack(elbo_particles)
 
-        log_weights = (1. - self.alpha) * elbo_particles
-        log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
-        elbo = log_mean_weight.sum().item() / (1. - self.alpha)
+        log_weights = (1.0 - self.alpha) * elbo_particles
+        log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(
+            self.num_particles
+        )
+        elbo = log_mean_weight.sum().item() / (1.0 - self.alpha)
 
         loss = -elbo
         warn_if_nan(loss, "loss")
@@ -165,8 +176,10 @@ class RenyiELBO(ELBO):
                             raise NotImplementedError
 
                     if not is_identically_zero(score_function_term):
-                        surrogate_elbo_particle = (surrogate_elbo_particle +
-                                                   (self.alpha / (1. - self.alpha)) * log_prob_sum)
+                        surrogate_elbo_particle = (
+                            surrogate_elbo_particle
+                            + (self.alpha / (1.0 - self.alpha)) * log_prob_sum
+                        )
 
             if is_identically_zero(elbo_particle):
                 if tensor_holder is not None:
@@ -184,7 +197,7 @@ class RenyiELBO(ELBO):
             surrogate_elbo_particles.append(surrogate_elbo_particle)
 
         if tensor_holder is None:
-            return 0.
+            return 0.0
 
         if is_vectorized:
             elbo_particles = elbo_particles[0]
@@ -193,18 +206,26 @@ class RenyiELBO(ELBO):
             elbo_particles = torch.stack(elbo_particles)
             surrogate_elbo_particles = torch.stack(surrogate_elbo_particles)
 
-        log_weights = (1. - self.alpha) * elbo_particles
-        log_mean_weight = torch.logsumexp(log_weights, dim=0, keepdim=True) - math.log(self.num_particles)
-        elbo = log_mean_weight.sum().item() / (1. - self.alpha)
+        log_weights = (1.0 - self.alpha) * elbo_particles
+        log_mean_weight = torch.logsumexp(log_weights, dim=0, keepdim=True) - math.log(
+            self.num_particles
+        )
+        elbo = log_mean_weight.sum().item() / (1.0 - self.alpha)
 
         # collect parameters to train from model and guide
-        trainable_params = any(site["type"] == "param"
-                               for trace in (model_trace, guide_trace)
-                               for site in trace.nodes.values())
+        trainable_params = any(
+            site["type"] == "param"
+            for trace in (model_trace, guide_trace)
+            for site in trace.nodes.values()
+        )
 
-        if trainable_params and getattr(surrogate_elbo_particles, 'requires_grad', False):
+        if trainable_params and getattr(
+            surrogate_elbo_particles, "requires_grad", False
+        ):
             normalized_weights = (log_weights - log_mean_weight).exp()
-            surrogate_elbo = (normalized_weights * surrogate_elbo_particles).sum() / self.num_particles
+            surrogate_elbo = (
+                normalized_weights * surrogate_elbo_particles
+            ).sum() / self.num_particles
             surrogate_loss = -surrogate_elbo
             surrogate_loss.backward()
         loss = -elbo

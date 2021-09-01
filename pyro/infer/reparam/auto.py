@@ -54,9 +54,7 @@ def minimal_reparam(msg: dict) -> Optional[Reparam]:
 
 @register_reparam_strategy("auto")
 def auto_reparam(msg: dict) -> Optional[Reparam]:
-    """
-
-    """
+    """ """
     # Apply necessary reparameterizations.
     result = minimal_reparam(msg)
     if result is not None:

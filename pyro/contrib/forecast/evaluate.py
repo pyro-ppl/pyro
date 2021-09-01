@@ -68,19 +68,24 @@ DEFAULT_METRICS = {
 }
 
 
-def backtest(data, covariates, model_fn, *,
-             forecaster_fn=Forecaster,
-             metrics=None,
-             transform=None,
-             train_window=None,
-             min_train_window=1,
-             test_window=None,
-             min_test_window=1,
-             stride=1,
-             seed=1234567890,
-             num_samples=100,
-             batch_size=None,
-             forecaster_options={}):
+def backtest(
+    data,
+    covariates,
+    model_fn,
+    *,
+    forecaster_fn=Forecaster,
+    metrics=None,
+    transform=None,
+    train_window=None,
+    min_train_window=1,
+    test_window=None,
+    min_test_window=1,
+    stride=1,
+    seed=1234567890,
+    num_samples=100,
+    batch_size=None,
+    forecaster_options={},
+):
     """
     Backtest a forecasting model on a moving window of (train,test) data.
 
@@ -141,11 +146,15 @@ def backtest(data, covariates, model_fn, *,
     if callable(forecaster_options):
         forecaster_options_fn = forecaster_options
     else:
+
         def forecaster_options_fn(*args, **kwargs):
             return forecaster_options
+
     if train_window is not None and forecaster_options_fn().get("warm_start"):
-        raise ValueError("Cannot warm start with moving training window; "
-                         "either set warm_start=False or train_window=None")
+        raise ValueError(
+            "Cannot warm start with moving training window; "
+            "either set warm_start=False or train_window=None"
+        )
 
     duration = data.size(-2)
     if test_window is None:
@@ -163,8 +172,11 @@ def backtest(data, covariates, model_fn, *,
         t0 = 0 if train_window is None else t1 - train_window
         t2 = duration if test_window is None else t1 + test_window
         assert 0 <= t0 < t1 < t2 <= duration
-        logger.info("Training on window [{t0}:{t1}], testing on window [{t1}:{t2}]"
-                    .format(t0=t0, t1=t1, t2=t2))
+        logger.info(
+            "Training on window [{t0}:{t1}], testing on window [{t1}:{t2}]".format(
+                t0=t0, t1=t1, t2=t2
+            )
+        )
 
         # Train a forecaster on the training window.
         pyro.set_rng_seed(seed)
@@ -175,8 +187,9 @@ def backtest(data, covariates, model_fn, *,
         train_covariates = covariates[..., t0:t1, :]
         start_time = default_timer()
         model = model_fn()
-        forecaster = forecaster_fn(model, train_data, train_covariates,
-                                   **forecaster_options)
+        forecaster = forecaster_fn(
+            model, train_data, train_covariates, **forecaster_options
+        )
         train_walltime = default_timer() - start_time
 
         # Forecast forward to testing window.
@@ -185,14 +198,20 @@ def backtest(data, covariates, model_fn, *,
         # Gradually reduce batch_size to avoid OOM errors.
         while True:
             try:
-                pred = forecaster(train_data, test_covariates, num_samples=num_samples,
-                                  batch_size=batch_size)
+                pred = forecaster(
+                    train_data,
+                    test_covariates,
+                    num_samples=num_samples,
+                    batch_size=batch_size,
+                )
                 break
             except RuntimeError as e:
                 if "out of memory" in str(e) and batch_size > 1:
                     batch_size = (batch_size + 1) // 2
-                    warnings.warn("out of memory, decreasing batch_size to {}"
-                                  .format(batch_size), RuntimeWarning)
+                    warnings.warn(
+                        "out of memory, decreasing batch_size to {}".format(batch_size),
+                        RuntimeWarning,
+                    )
                 else:
                     raise
         test_walltime = default_timer() - start_time

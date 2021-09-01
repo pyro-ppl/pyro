@@ -8,8 +8,8 @@ from pyro.contrib.epidemiology.util import cat2, clamp
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("min", [None, 0., (), (2,)], ids=str)
-@pytest.mark.parametrize("max", [None, 1., (), (2,)], ids=str)
+@pytest.mark.parametrize("min", [None, 0.0, (), (2,)], ids=str)
+@pytest.mark.parametrize("max", [None, 1.0, (), (2,)], ids=str)
 @pytest.mark.parametrize("shape", [(2,), (3, 2)], ids=str)
 def test_clamp(shape, min, max):
     tensor = torch.randn(shape)

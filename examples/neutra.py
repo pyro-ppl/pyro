@@ -40,7 +40,7 @@ from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoNormalizingFlow
 from pyro.infer.reparam import NeuTraReparam
 
-logging.basicConfig(format='%(message)s', level=logging.INFO)
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
 class BananaShaped(dist.TorchDistribution):
@@ -49,8 +49,10 @@ class BananaShaped(dist.TorchDistribution):
 
     def __init__(self, a, b, rho=0.9):
         self.a, self.b, self.rho = broadcast_all(a, b, rho)
-        self.mvn = dist.MultivariateNormal(torch.tensor([0., 0.]),
-                                           covariance_matrix=torch.tensor([[1., self.rho], [self.rho, 1.]]))
+        self.mvn = dist.MultivariateNormal(
+            torch.tensor([0.0, 0.0]),
+            covariance_matrix=torch.tensor([[1.0, self.rho], [self.rho, 1.0]]),
+        )
         super().__init__(event_shape=(2,))
 
     def sample(self, sample_shape=()):
@@ -70,12 +72,12 @@ class BananaShaped(dist.TorchDistribution):
 
 
 def model(a, b, rho=0.9):
-    pyro.sample('x', BananaShaped(a, b, rho))
+    pyro.sample("x", BananaShaped(a, b, rho))
 
 
 def fit_guide(guide, args):
     pyro.clear_param_store()
-    adam = optim.Adam({'lr': args.learning_rate})
+    adam = optim.Adam({"lr": args.learning_rate})
     svi = SVI(model, guide, adam, Trace_ELBO())
     for i in range(args.num_steps):
         loss = svi.step(args.param_a, args.param_b)
@@ -103,8 +105,8 @@ def main(args):
     ax6 = fig.add_subplot(gs[1, 1])
     ax7 = fig.add_subplot(gs[2, 1])
     ax8 = fig.add_subplot(gs[3, 1])
-    xlim = tuple(int(x) for x in args.x_lim.strip().split(','))
-    ylim = tuple(int(x) for x in args.y_lim.strip().split(','))
+    xlim = tuple(int(x) for x in args.x_lim.strip().split(","))
+    ylim = tuple(int(x) for x in args.y_lim.strip().split(","))
     assert len(xlim) == 2
     assert len(ylim) == 2
 
@@ -112,102 +114,169 @@ def main(args):
     x1, x2 = torch.meshgrid([torch.linspace(*xlim, 100), torch.linspace(*ylim, 100)])
     d = BananaShaped(args.param_a, args.param_b)
     p = torch.exp(d.log_prob(torch.stack([x1, x2], dim=-1)))
-    ax1.contourf(x1, x2, p, cmap='OrRd',)
-    ax1.set(xlabel='x0', ylabel='x1', xlim=xlim, ylim=ylim,
-            title='BananaShaped distribution: \nlog density')
+    ax1.contourf(
+        x1,
+        x2,
+        p,
+        cmap="OrRd",
+    )
+    ax1.set(
+        xlabel="x0",
+        ylabel="x1",
+        xlim=xlim,
+        ylim=ylim,
+        title="BananaShaped distribution: \nlog density",
+    )
 
     # 2. Run vanilla HMC
-    logging.info('\nDrawing samples using vanilla HMC ...')
+    logging.info("\nDrawing samples using vanilla HMC ...")
     mcmc = run_hmc(args, model)
-    vanilla_samples = mcmc.get_samples()['x'].cpu().numpy()
-    ax2.contourf(x1, x2, p, cmap='OrRd')
-    ax2.set(xlabel='x0', ylabel='x1', xlim=xlim, ylim=ylim,
-            title='Posterior \n(vanilla HMC)')
+    vanilla_samples = mcmc.get_samples()["x"].cpu().numpy()
+    ax2.contourf(x1, x2, p, cmap="OrRd")
+    ax2.set(
+        xlabel="x0",
+        ylabel="x1",
+        xlim=xlim,
+        ylim=ylim,
+        title="Posterior \n(vanilla HMC)",
+    )
     sns.kdeplot(vanilla_samples[:, 0], vanilla_samples[:, 1], ax=ax2)
 
     # 3(a). Fit a diagonal normal autoguide
-    logging.info('\nFitting a DiagNormal autoguide ...')
+    logging.info("\nFitting a DiagNormal autoguide ...")
     guide = AutoDiagonalNormal(model, init_scale=0.05)
     fit_guide(guide, args)
-    with pyro.plate('N', args.num_samples):
-        guide_samples = guide()['x'].detach().cpu().numpy()
+    with pyro.plate("N", args.num_samples):
+        guide_samples = guide()["x"].detach().cpu().numpy()
 
-    ax3.contourf(x1, x2, p, cmap='OrRd')
-    ax3.set(xlabel='x0', ylabel='x1', xlim=xlim, ylim=ylim,
-            title='Posterior \n(DiagNormal autoguide)')
+    ax3.contourf(x1, x2, p, cmap="OrRd")
+    ax3.set(
+        xlabel="x0",
+        ylabel="x1",
+        xlim=xlim,
+        ylim=ylim,
+        title="Posterior \n(DiagNormal autoguide)",
+    )
     sns.kdeplot(guide_samples[:, 0], guide_samples[:, 1], ax=ax3)
 
     # 3(b). Draw samples using NeuTra HMC
-    logging.info('\nDrawing samples using DiagNormal autoguide + NeuTra HMC ...')
+    logging.info("\nDrawing samples using DiagNormal autoguide + NeuTra HMC ...")
     neutra = NeuTraReparam(guide.requires_grad_(False))
     neutra_model = poutine.reparam(model, config=lambda _: neutra)
     mcmc = run_hmc(args, neutra_model)
-    zs = mcmc.get_samples()['x_shared_latent']
+    zs = mcmc.get_samples()["x_shared_latent"]
     sns.scatterplot(zs[:, 0], zs[:, 1], alpha=0.2, ax=ax4)
-    ax4.set(xlabel='x0', ylabel='x1',
-            title='Posterior (warped) samples \n(DiagNormal + NeuTra HMC)')
+    ax4.set(
+        xlabel="x0",
+        ylabel="x1",
+        title="Posterior (warped) samples \n(DiagNormal + NeuTra HMC)",
+    )
 
     samples = neutra.transform_sample(zs)
-    samples = samples['x'].cpu().numpy()
-    ax5.contourf(x1, x2, p, cmap='OrRd')
-    ax5.set(xlabel='x0', ylabel='x1', xlim=xlim, ylim=ylim,
-            title='Posterior (transformed) \n(DiagNormal + NeuTra HMC)')
+    samples = samples["x"].cpu().numpy()
+    ax5.contourf(x1, x2, p, cmap="OrRd")
+    ax5.set(
+        xlabel="x0",
+        ylabel="x1",
+        xlim=xlim,
+        ylim=ylim,
+        title="Posterior (transformed) \n(DiagNormal + NeuTra HMC)",
+    )
     sns.kdeplot(samples[:, 0], samples[:, 1], ax=ax5)
 
     # 4(a). Fit a BNAF autoguide
-    logging.info('\nFitting a BNAF autoguide ...')
-    guide = AutoNormalizingFlow(model, partial(iterated, args.num_flows, block_autoregressive))
+    logging.info("\nFitting a BNAF autoguide ...")
+    guide = AutoNormalizingFlow(
+        model, partial(iterated, args.num_flows, block_autoregressive)
+    )
     fit_guide(guide, args)
-    with pyro.plate('N', args.num_samples):
-        guide_samples = guide()['x'].detach().cpu().numpy()
+    with pyro.plate("N", args.num_samples):
+        guide_samples = guide()["x"].detach().cpu().numpy()
 
-    ax6.contourf(x1, x2, p, cmap='OrRd')
-    ax6.set(xlabel='x0', ylabel='x1', xlim=xlim, ylim=ylim,
-            title='Posterior \n(BNAF autoguide)')
+    ax6.contourf(x1, x2, p, cmap="OrRd")
+    ax6.set(
+        xlabel="x0",
+        ylabel="x1",
+        xlim=xlim,
+        ylim=ylim,
+        title="Posterior \n(BNAF autoguide)",
+    )
     sns.kdeplot(guide_samples[:, 0], guide_samples[:, 1], ax=ax6)
 
     # 4(b). Draw samples using NeuTra HMC
-    logging.info('\nDrawing samples using BNAF autoguide + NeuTra HMC ...')
+    logging.info("\nDrawing samples using BNAF autoguide + NeuTra HMC ...")
     neutra = NeuTraReparam(guide.requires_grad_(False))
     neutra_model = poutine.reparam(model, config=lambda _: neutra)
     mcmc = run_hmc(args, neutra_model)
-    zs = mcmc.get_samples()['x_shared_latent']
+    zs = mcmc.get_samples()["x_shared_latent"]
     sns.scatterplot(zs[:, 0], zs[:, 1], alpha=0.2, ax=ax7)
-    ax7.set(xlabel='x0', ylabel='x1', title='Posterior (warped) samples \n(BNAF + NeuTra HMC)')
+    ax7.set(
+        xlabel="x0",
+        ylabel="x1",
+        title="Posterior (warped) samples \n(BNAF + NeuTra HMC)",
+    )
 
     samples = neutra.transform_sample(zs)
-    samples = samples['x'].cpu().numpy()
-    ax8.contourf(x1, x2, p, cmap='OrRd')
-    ax8.set(xlabel='x0', ylabel='x1', xlim=xlim, ylim=ylim,
-            title='Posterior (transformed) \n(BNAF + NeuTra HMC)')
+    samples = samples["x"].cpu().numpy()
+    ax8.contourf(x1, x2, p, cmap="OrRd")
+    ax8.set(
+        xlabel="x0",
+        ylabel="x1",
+        xlim=xlim,
+        ylim=ylim,
+        title="Posterior (transformed) \n(BNAF + NeuTra HMC)",
+    )
     sns.kdeplot(samples[:, 0], samples[:, 1], ax=ax8)
 
-    plt.savefig(os.path.join(os.path.dirname(__file__), 'neutra.pdf'))
+    plt.savefig(os.path.join(os.path.dirname(__file__), "neutra.pdf"))
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
-    parser = argparse.ArgumentParser(description='Example illustrating NeuTra Reparametrizer')
-    parser.add_argument('-n', '--num-steps', default=10000, type=int,
-                        help='number of SVI steps')
-    parser.add_argument('-lr', '--learning-rate', default=1e-2, type=float,
-                        help='learning rate for the Adam optimizer')
-    parser.add_argument('--rng-seed', default=1, type=int,
-                        help='RNG seed')
-    parser.add_argument('--num-warmup', default=500, type=int,
-                        help='number of warmup steps for NUTS')
-    parser.add_argument('--num-samples', default=1000, type=int,
-                        help='number of samples to be drawn from NUTS')
-    parser.add_argument('--param-a', default=1.15, type=float,
-                        help='parameter `a` of BananaShaped distribution')
-    parser.add_argument('--param-b', default=1., type=float,
-                        help='parameter `b` of BananaShaped distribution')
-    parser.add_argument('--num-flows', default=1, type=int,
-                        help='number of flows in the BNAF autoguide')
-    parser.add_argument('--x-lim', default='-3,3', type=str,
-                        help='x limits for the plots')
-    parser.add_argument('--y-lim', default='0,8', type=str,
-                        help='y limits for the plots')
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
+    parser = argparse.ArgumentParser(
+        description="Example illustrating NeuTra Reparametrizer"
+    )
+    parser.add_argument(
+        "-n", "--num-steps", default=10000, type=int, help="number of SVI steps"
+    )
+    parser.add_argument(
+        "-lr",
+        "--learning-rate",
+        default=1e-2,
+        type=float,
+        help="learning rate for the Adam optimizer",
+    )
+    parser.add_argument("--rng-seed", default=1, type=int, help="RNG seed")
+    parser.add_argument(
+        "--num-warmup", default=500, type=int, help="number of warmup steps for NUTS"
+    )
+    parser.add_argument(
+        "--num-samples",
+        default=1000,
+        type=int,
+        help="number of samples to be drawn from NUTS",
+    )
+    parser.add_argument(
+        "--param-a",
+        default=1.15,
+        type=float,
+        help="parameter `a` of BananaShaped distribution",
+    )
+    parser.add_argument(
+        "--param-b",
+        default=1.0,
+        type=float,
+        help="parameter `b` of BananaShaped distribution",
+    )
+    parser.add_argument(
+        "--num-flows", default=1, type=int, help="number of flows in the BNAF autoguide"
+    )
+    parser.add_argument(
+        "--x-lim", default="-3,3", type=str, help="x limits for the plots"
+    )
+    parser.add_argument(
+        "--y-lim", default="0,8", type=str, help="y limits for the plots"
+    )
 
     args = parser.parse_args()
     main(args)

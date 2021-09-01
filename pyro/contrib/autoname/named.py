@@ -77,6 +77,7 @@ class Object:
         not be mutated or removed. Trying to mutate this data structure may
         result in silent errors.
     """
+
     def __init__(self, name):
         super().__setattr__("_name", name)
         super().__setattr__("_is_placeholder", True)
@@ -91,7 +92,8 @@ class Object:
             name = "{}.{}".format(self, key)
             value = Object(name)
             super(Object, value).__setattr__(
-                "_set_value", lambda value: super(Object, self).__setattr__(key, value))
+                "_set_value", lambda value: super(Object, self).__setattr__(key, value)
+            )
             super().__setattr__(key, value)
             super().__setattr__("_is_placeholder", False)
             return value
@@ -108,7 +110,9 @@ class Object:
     @functools.wraps(pyro.sample)
     def sample_(self, fn, *args, **kwargs):
         if not self._is_placeholder:
-            raise RuntimeError("Cannot .sample_ an initialized named.Object {}".format(self))
+            raise RuntimeError(
+                "Cannot .sample_ an initialized named.Object {}".format(self)
+            )
         value = pyro.sample(str(self), fn, *args, **kwargs)
         self._set_value(value)
         return value
@@ -139,6 +143,7 @@ class List(list):
         not be mutated or removed. Trying to mutate this data structure may
         result in silent errors.
     """
+
     def __init__(self, name=None):
         self._name = name
 
@@ -160,18 +165,25 @@ class List(list):
         :rtype: named.Object
         """
         if self._name is None:
-            raise RuntimeError("Cannot .add() to a named.List before storing it in a named.Object")
+            raise RuntimeError(
+                "Cannot .add() to a named.List before storing it in a named.Object"
+            )
         i = len(self)
         value = Object("{}[{}]".format(self._name, i))
         super(Object, value).__setattr__(
-            "_set_value", lambda value, i=i: self.__setitem__(i, value))
+            "_set_value", lambda value, i=i: self.__setitem__(i, value)
+        )
         self.append(value)
         return value
 
     def __setitem__(self, pos, value):
         name = "{}[{}]".format(self._name, pos)
         if isinstance(value, Object):
-            raise RuntimeError("Cannot store named.Object {} in named.Dict {}".format(value, self._name))
+            raise RuntimeError(
+                "Cannot store named.Object {} in named.Dict {}".format(
+                    value, self._name
+                )
+            )
         elif isinstance(value, (List, Dict)):
             value._set_name(name)
         old = self[pos]
@@ -197,6 +209,7 @@ class Dict(dict):
         not be mutated or removed. Trying to mutate this data structure may
         result in silent errors.
     """
+
     def __init__(self, name=None):
         self._name = name
 
@@ -218,7 +231,8 @@ class Dict(dict):
                 raise RuntimeError("Cannot access an unnamed named.Dict") from e
             value = Object("{}[{!r}]".format(self._name, key))
             super(Object, value).__setattr__(
-                "_set_value", lambda value: self.__setitem__(key, value))
+                "_set_value", lambda value: self.__setitem__(key, value)
+            )
             super().__setitem__(key, value)
             return value
 
@@ -229,7 +243,11 @@ class Dict(dict):
             if not isinstance(old, Object) or not old._is_placeholder:
                 raise RuntimeError("Cannot overwrite {}".format(name))
         if isinstance(value, Object):
-            raise RuntimeError("Cannot store named.Object {} in named.Dict {}".format(value, self._name))
+            raise RuntimeError(
+                "Cannot store named.Object {} in named.Dict {}".format(
+                    value, self._name
+                )
+            )
         elif isinstance(value, (List, Dict)):
             value._set_name(name)
         super().__setitem__(key, value)

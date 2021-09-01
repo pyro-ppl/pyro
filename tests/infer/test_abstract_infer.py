@@ -18,7 +18,7 @@ pytestmark = pytest.mark.filterwarnings("ignore::PendingDeprecationWarning")
 
 def model(num_trials):
     with pyro.plate("data", num_trials.size(0)):
-        phi_prior = dist.Uniform(num_trials.new_tensor(0.), num_trials.new_tensor(1.))
+        phi_prior = dist.Uniform(num_trials.new_tensor(0.0), num_trials.new_tensor(1.0))
         success_prob = pyro.sample("phi", phi_prior)
         return pyro.sample("obs", dist.Binomial(num_trials, success_prob))
 
@@ -41,11 +41,30 @@ def test_nesting():
 
 
 # TODO: Make this available directly in `SVI` if needed.
-@pytest.mark.filterwarnings('ignore::FutureWarning')
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_information_criterion():
     # milk dataset: https://github.com/rmcelreath/rethinking/blob/master/data/milk.csv
-    kcal = torch.tensor([0.49, 0.47, 0.56, 0.89, 0.92, 0.8, 0.46, 0.71, 0.68,
-                         0.97, 0.84, 0.62, 0.54, 0.49, 0.48, 0.55, 0.71])
+    kcal = torch.tensor(
+        [
+            0.49,
+            0.47,
+            0.56,
+            0.89,
+            0.92,
+            0.8,
+            0.46,
+            0.71,
+            0.68,
+            0.97,
+            0.84,
+            0.62,
+            0.54,
+            0.49,
+            0.48,
+            0.55,
+            0.71,
+        ]
+    )
     kcal_mean = kcal.mean()
     kcal_logstd = kcal.std().log()
 
@@ -57,8 +76,14 @@ def test_information_criterion():
 
     delta_guide = AutoLaplaceApproximation(model)
 
-    svi = SVI(model, delta_guide, optim.Adam({"lr": 0.05}), loss=Trace_ELBO(),
-              num_steps=0, num_samples=3000)
+    svi = SVI(
+        model,
+        delta_guide,
+        optim.Adam({"lr": 0.05}),
+        loss=Trace_ELBO(),
+        num_steps=0,
+        num_samples=3000,
+    )
     for i in range(100):
         svi.step()
 

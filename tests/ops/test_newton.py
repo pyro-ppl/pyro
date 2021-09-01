@@ -24,15 +24,15 @@ def random_inside_unit_circle(shape, requires_grad=False):
     return x
 
 
-@pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (10,), (3, 2), (2, 3)])
-@pytest.mark.parametrize('trust_radius', [None, 2.0, 100.0])
-@pytest.mark.parametrize('dims', [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (1,), (2,), (10,), (3, 2), (2, 3)])
+@pytest.mark.parametrize("trust_radius", [None, 2.0, 100.0])
+@pytest.mark.parametrize("dims", [1, 2, 3])
 def test_newton_step(batch_shape, trust_radius, dims):
     batch_shape = torch.Size(batch_shape)
     mode = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
     x = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
     if trust_radius is not None:
-        assert trust_radius >= 2, '(x, mode) may be farther apart than trust_radius'
+        assert trust_radius >= 2, "(x, mode) may be farther apart than trust_radius"
 
     # create a quadratic loss function
     flat_x = x.reshape(-1, dims)
@@ -51,30 +51,40 @@ def test_newton_step(batch_shape, trust_radius, dims):
     assert cov.shape == hessian.shape
 
     # check values
-    assert_equal(x_updated, mode, prec=1e-6,
-                 msg='{} vs {}'.format(x_updated, mode))
+    assert_equal(x_updated, mode, prec=1e-6, msg="{} vs {}".format(x_updated, mode))
     flat_cov = cov.reshape(flat_hessian.shape)
-    assert_equal(flat_cov, flat_cov.transpose(-1, -2),
-                 msg='covariance is not symmetric: {}'.format(flat_cov))
+    assert_equal(
+        flat_cov,
+        flat_cov.transpose(-1, -2),
+        msg="covariance is not symmetric: {}".format(flat_cov),
+    )
     actual_eye = torch.bmm(flat_cov, flat_hessian)
     expected_eye = torch.eye(dims).expand(actual_eye.shape)
-    assert_equal(actual_eye, expected_eye, prec=1e-4,
-                 msg='bad covariance {}'.format(actual_eye))
+    assert_equal(
+        actual_eye, expected_eye, prec=1e-4, msg="bad covariance {}".format(actual_eye)
+    )
 
     # check gradients
     for i in itertools.product(*map(range, mode.shape)):
         expected_grad = torch.zeros(mode.shape)
         expected_grad[i] = 1
         actual_grad = grad(x_updated[i], [mode], create_graph=True)[0]
-        assert_equal(actual_grad, expected_grad, prec=1e-5, msg='\n'.join([
-            'bad gradient at index {}'.format(i),
-            'expected {}'.format(expected_grad),
-            'actual   {}'.format(actual_grad),
-        ]))
+        assert_equal(
+            actual_grad,
+            expected_grad,
+            prec=1e-5,
+            msg="\n".join(
+                [
+                    "bad gradient at index {}".format(i),
+                    "expected {}".format(expected_grad),
+                    "actual   {}".format(actual_grad),
+                ]
+            ),
+        )
 
 
-@pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-@pytest.mark.parametrize('dims', [1, 2, 3])
+@pytest.mark.parametrize("trust_radius", [None, 0.1, 1.0, 10.0])
+@pytest.mark.parametrize("dims", [1, 2, 3])
 def test_newton_step_trust(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
@@ -96,13 +106,15 @@ def test_newton_step_trust(trust_radius, dims):
 
     # check values
     if trust_radius is None:
-        assert ((x - x_updated).pow(2).sum(-1) > 1.0).any(), 'test is too weak'
+        assert ((x - x_updated).pow(2).sum(-1) > 1.0).any(), "test is too weak"
     else:
-        assert ((x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius**2).all(), 'trust region violated'
+        assert (
+            (x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius ** 2
+        ).all(), "trust region violated"
 
 
-@pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-@pytest.mark.parametrize('dims', [1, 2, 3])
+@pytest.mark.parametrize("trust_radius", [None, 0.1, 1.0, 10.0])
+@pytest.mark.parametrize("dims", [1, 2, 3])
 def test_newton_step_converges(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
@@ -124,6 +136,6 @@ def test_newton_step_converges(trust_radius, dims):
         loss = loss_fn(x)
         x, cov = newton_step(loss, x, trust_radius=trust_radius)
         if ((x - mode).pow(2).sum(-1) < 1e-4).all():
-            logger.debug('Newton iteration converged after {} steps'.format(2 + i))
+            logger.debug("Newton iteration converged after {} steps".format(2 + i))
             return
-    pytest.fail('Newton iteration did not converge')
+    pytest.fail("Newton iteration did not converge")

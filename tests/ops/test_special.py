@@ -20,14 +20,26 @@ def test_safe_log():
     assert_equal(grad(actual.sum(), [x])[0], grad(expected.sum(), [x])[0])
 
     # Test gradients.
-    x = torch.tensor(0., requires_grad=True)
+    x = torch.tensor(0.0, requires_grad=True)
     assert not torch.isfinite(grad(x.log(), [x])[0])
     assert torch.isfinite(grad(safe_log(x), [x])[0])
 
 
-@pytest.mark.parametrize("tol", [
-    1e-8, 1e-6, 1e-4, 1e-2, 0.02, 0.05, 0.1, 0.2, 0.1, 1.,
-])
+@pytest.mark.parametrize(
+    "tol",
+    [
+        1e-8,
+        1e-6,
+        1e-4,
+        1e-2,
+        0.02,
+        0.05,
+        0.1,
+        0.2,
+        0.1,
+        1.0,
+    ],
+)
 def test_log_beta_stirling(tol):
     x = torch.logspace(-5, 5, 200)
     y = x.unsqueeze(-1)
@@ -39,11 +51,23 @@ def test_log_beta_stirling(tol):
     assert (expected < actual + tol).all()
 
 
-@pytest.mark.parametrize("tol", [
-    1e-8, 1e-6, 1e-4, 1e-2, 0.02, 0.05, 0.1, 0.2, 0.1, 1.,
-])
+@pytest.mark.parametrize(
+    "tol",
+    [
+        1e-8,
+        1e-6,
+        1e-4,
+        1e-2,
+        0.02,
+        0.05,
+        0.1,
+        0.2,
+        0.1,
+        1.0,
+    ],
+)
 def test_log_binomial_stirling(tol):
-    k = torch.arange(200.)
+    k = torch.arange(200.0)
     n_minus_k = k.unsqueeze(-1)
     n = k + n_minus_k
 
@@ -54,8 +78,8 @@ def test_log_binomial_stirling(tol):
     assert (actual - expected).abs().max() < tol
 
 
-@pytest.mark.parametrize('order', [0, 1, 5, 10, 20])
-@pytest.mark.parametrize('value', [0.01, .1, 1., 10., 100.])
+@pytest.mark.parametrize("order", [0, 1, 5, 10, 20])
+@pytest.mark.parametrize("value", [0.01, 0.1, 1.0, 10.0, 100.0])
 def test_log_I1(order, value):
     value = tensor([value])
     expected = torch.tensor([iv(i, value.numpy()) for i in range(order + 1)]).log()
@@ -64,8 +88,8 @@ def test_log_I1(order, value):
 
 
 def test_log_I1_shapes():
-    assert_equal(log_I1(10, tensor(.6)).shape, torch.Size([11, 1]))
-    assert_equal(log_I1(10, tensor([.6])).shape, torch.Size([11, 1]))
-    assert_equal(log_I1(10, tensor([[.6]])).shape, torch.Size([11, 1, 1]))
-    assert_equal(log_I1(10, tensor([.6, .2])).shape, torch.Size([11, 2]))
-    assert_equal(log_I1(0, tensor(.6)).shape, torch.Size((1, 1)))
+    assert_equal(log_I1(10, tensor(0.6)).shape, torch.Size([11, 1]))
+    assert_equal(log_I1(10, tensor([0.6])).shape, torch.Size([11, 1]))
+    assert_equal(log_I1(10, tensor([[0.6]])).shape, torch.Size([11, 1, 1]))
+    assert_equal(log_I1(10, tensor([0.6, 0.2])).shape, torch.Size([11, 2]))
+    assert_equal(log_I1(0, tensor(0.6)).shape, torch.Size((1, 1)))

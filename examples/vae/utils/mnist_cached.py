@@ -19,7 +19,7 @@ from pyro.contrib.examples.util import MNIST, get_data_directory
 # transformations for MNIST data
 def fn_x_mnist(x, use_cuda):
     # normalize pixel values of the image to be in [0,1] instead of [0,255]
-    xp = x * (1. / 255)
+    xp = x * (1.0 / 255)
 
     # transform x to a linear tensor from bx * a1 * a2 * ... --> bs * A
     xp_1d_size = reduce(lambda a, b: a * b, xp.size()[1:])
@@ -65,7 +65,7 @@ def get_ss_indices_per_class(y, sup_per_class):
     for j in range(10):
         np.random.shuffle(idxs_per_class[j])
         idxs_sup.extend(idxs_per_class[j][:sup_per_class])
-        idxs_unsup.extend(idxs_per_class[j][sup_per_class:len(idxs_per_class[j])])
+        idxs_unsup.extend(idxs_per_class[j][sup_per_class : len(idxs_per_class[j])])
 
     return idxs_sup, idxs_unsup
 
@@ -142,44 +142,62 @@ class MNISTCached(MNIST):
 
         self.mode = mode
 
-        assert mode in ["sup", "unsup", "test", "valid"], "invalid train/test option values"
+        assert mode in [
+            "sup",
+            "unsup",
+            "test",
+            "valid",
+        ], "invalid train/test option values"
 
         if mode in ["sup", "unsup", "valid"]:
 
             # transform the training data if transformations are provided
             if transform is not None:
-                self.data = (transform(self.data.float()))
+                self.data = transform(self.data.float())
             if target_transform is not None:
-                self.targets = (target_transform(self.targets))
+                self.targets = target_transform(self.targets)
 
             if MNISTCached.train_data_sup is None:
                 if sup_num is None:
                     assert mode == "unsup"
-                    MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup = \
-                        self.data, self.targets
+                    MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup = (
+                        self.data,
+                        self.targets,
+                    )
                 else:
-                    MNISTCached.train_data_sup, MNISTCached.train_labels_sup, \
-                        MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup, \
-                        MNISTCached.data_valid, MNISTCached.labels_valid = \
-                        split_sup_unsup_valid(self.data, self.targets, sup_num)
+                    (
+                        MNISTCached.train_data_sup,
+                        MNISTCached.train_labels_sup,
+                        MNISTCached.train_data_unsup,
+                        MNISTCached.train_labels_unsup,
+                        MNISTCached.data_valid,
+                        MNISTCached.labels_valid,
+                    ) = split_sup_unsup_valid(self.data, self.targets, sup_num)
 
             if mode == "sup":
-                self.data, self.targets = MNISTCached.train_data_sup, MNISTCached.train_labels_sup
+                self.data, self.targets = (
+                    MNISTCached.train_data_sup,
+                    MNISTCached.train_labels_sup,
+                )
             elif mode == "unsup":
                 self.data = MNISTCached.train_data_unsup
 
                 # making sure that the unsupervised labels are not available to inference
-                self.targets = (torch.Tensor(
-                    MNISTCached.train_labels_unsup.shape[0]).view(-1, 1)) * np.nan
+                self.targets = (
+                    torch.Tensor(MNISTCached.train_labels_unsup.shape[0]).view(-1, 1)
+                ) * np.nan
             else:
-                self.data, self.targets = MNISTCached.data_valid, MNISTCached.labels_valid
+                self.data, self.targets = (
+                    MNISTCached.data_valid,
+                    MNISTCached.labels_valid,
+                )
 
         else:
             # transform the testing data if transformations are provided
             if transform is not None:
-                self.data = (transform(self.data.float()))
+                self.data = transform(self.data.float())
             if target_transform is not None:
-                self.targets = (target_transform(self.targets))
+                self.targets = target_transform(self.targets)
 
     def __getitem__(self, index):
         """
@@ -195,7 +213,9 @@ class MNISTCached(MNIST):
         return img, target
 
 
-def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root=None, download=True, **kwargs):
+def setup_data_loaders(
+    dataset, use_cuda, batch_size, sup_num=None, root=None, download=True, **kwargs
+):
     """
         helper function for setting up pytorch data loaders for a semi-supervised dataset
     :param dataset: the data to use
@@ -210,8 +230,8 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root=None, d
     # instantiate the dataset as training/testing sets
     if root is None:
         root = get_data_directory(__file__)
-    if 'num_workers' not in kwargs:
-        kwargs = {'num_workers': 0, 'pin_memory': False}
+    if "num_workers" not in kwargs:
+        kwargs = {"num_workers": 0, "pin_memory": False}
 
     cached_data = {}
     loaders = {}
@@ -219,9 +239,12 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root=None, d
         if sup_num is None and mode == "sup":
             # in this special case, we do not want "sup" and "valid" data loaders
             return loaders["unsup"], loaders["test"]
-        cached_data[mode] = dataset(root=root, mode=mode, download=download,
-                                    sup_num=sup_num, use_cuda=use_cuda)
-        loaders[mode] = DataLoader(cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs)
+        cached_data[mode] = dataset(
+            root=root, mode=mode, download=download, sup_num=sup_num, use_cuda=use_cuda
+        )
+        loaders[mode] = DataLoader(
+            cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs
+        )
 
     return loaders
 
@@ -237,5 +260,5 @@ def mkdir_p(path):
 
 
 EXAMPLE_DIR = os.path.dirname(os.path.abspath(os.path.join(__file__, os.pardir)))
-DATA_DIR = os.path.join(EXAMPLE_DIR, 'data')
-RESULTS_DIR = os.path.join(EXAMPLE_DIR, 'results')
+DATA_DIR = os.path.join(EXAMPLE_DIR, "data")
+RESULTS_DIR = os.path.join(EXAMPLE_DIR, "results")

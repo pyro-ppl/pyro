@@ -36,24 +36,32 @@ WINDOWS = [
 ]
 
 
-@pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
+@pytest.mark.parametrize(
+    "train_window,min_train_window,test_window,min_test_window,stride", WINDOWS
+)
 @pytest.mark.parametrize("warm_start", [False, True], ids=["cold", "warm"])
-def test_simple(train_window, min_train_window, test_window, min_test_window, stride, warm_start):
+def test_simple(
+    train_window, min_train_window, test_window, min_test_window, stride, warm_start
+):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
     data = torch.randn(duration, obs_dim) + 4
     forecaster_options = {"num_steps": 2, "warm_start": warm_start}
 
-    expect_error = (warm_start and train_window is not None)
+    expect_error = warm_start and train_window is not None
     with optional(pytest.raises(ValueError), expect_error):
-        windows = backtest(data, covariates, Model,
-                           train_window=train_window,
-                           min_train_window=min_train_window,
-                           test_window=test_window,
-                           min_test_window=min_test_window,
-                           stride=stride,
-                           forecaster_options=forecaster_options)
+        windows = backtest(
+            data,
+            covariates,
+            Model,
+            train_window=train_window,
+            min_train_window=min_train_window,
+            test_window=test_window,
+            min_test_window=min_test_window,
+            stride=stride,
+            forecaster_options=forecaster_options,
+        )
     if not expect_error:
         assert any(window["t0"] == 0 for window in windows)
         if stride == 1:
@@ -66,9 +74,13 @@ def test_simple(train_window, min_train_window, test_window, min_test_window, st
                 assert 0 < window[name] < math.inf
 
 
-@pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
+@pytest.mark.parametrize(
+    "train_window,min_train_window,test_window,min_test_window,stride", WINDOWS
+)
 @pytest.mark.parametrize("engine", ["svi", "hmc"])
-def test_poisson(train_window, min_train_window, test_window, min_test_window, stride, engine):
+def test_poisson(
+    train_window, min_train_window, test_window, min_test_window, stride, engine
+):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
@@ -90,15 +102,19 @@ def test_poisson(train_window, min_train_window, test_window, min_test_window, s
         forecaster_fn = HMCForecaster
         forecaster_options = {"num_warmup": 1, "num_samples": 1}
 
-    windows = backtest(data, covariates, Model,
-                       forecaster_fn=forecaster_fn,
-                       transform=transform,
-                       train_window=train_window,
-                       min_train_window=min_train_window,
-                       test_window=test_window,
-                       min_test_window=min_test_window,
-                       stride=stride,
-                       forecaster_options=forecaster_options)
+    windows = backtest(
+        data,
+        covariates,
+        Model,
+        forecaster_fn=forecaster_fn,
+        transform=transform,
+        train_window=train_window,
+        min_train_window=min_train_window,
+        test_window=test_window,
+        min_test_window=min_test_window,
+        stride=stride,
+        forecaster_options=forecaster_options,
+    )
 
     assert any(window["t0"] == 0 for window in windows)
     if stride == 1:
@@ -123,7 +139,11 @@ def test_custom_warm_start():
         else:
             return {"num_steps": 0, "warm_start": True}
 
-    backtest(data, covariates, Model,
-             min_train_window=min_train_window,
-             test_window=10,
-             forecaster_options=forecaster_options)
+    backtest(
+        data,
+        covariates,
+        Model,
+        min_train_window=min_train_window,
+        test_window=10,
+        forecaster_options=forecaster_options,
+    )

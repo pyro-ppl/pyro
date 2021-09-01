@@ -38,7 +38,7 @@ class _LeafBackward(Backward):
 
     def process(self, message):
         target = self.target()
-        assert message is not target, 'memory leak'
+        assert message is not target, "memory leak"
         target._pyro_backward_result = message
         return ()
 
@@ -68,9 +68,9 @@ class _TransposeBackward(Backward):
 # this requires https://github.com/dgasmith/opt_einsum/pull/74
 def transpose(a, axes):
     result = a.permute(axes)
-    if hasattr(a, '_pyro_backward'):
+    if hasattr(a, "_pyro_backward"):
         result._pyro_backward = _TransposeBackward(a, axes)
-        result._pyro_name = getattr(a, '_pyro_name', '?') + "'"
+        result._pyro_name = getattr(a, "_pyro_name", "?") + "'"
     return result
 
 
@@ -105,7 +105,7 @@ def einsum_backward_sample(operands, sample1, sample2):
 
     # Select sample dimensions to pass on to downstream sites.
     for x in operands:
-        if not hasattr(x, '_pyro_backward'):
+        if not hasattr(x, "_pyro_backward"):
             continue
         if sample is None:
             yield x._pyro_backward, None
@@ -117,9 +117,10 @@ def einsum_backward_sample(operands, sample1, sample2):
         if x_sample_dims == set(sample._pyro_sample_dims):
             yield x._pyro_backward, sample
             continue
-        x_sample_dims = ''.join(sorted(x_sample_dims))
-        x_sample = sample[[sample._pyro_sample_dims.index(dim)
-                           for dim in x_sample_dims]]
+        x_sample_dims = "".join(sorted(x_sample_dims))
+        x_sample = sample[
+            [sample._pyro_sample_dims.index(dim) for dim in x_sample_dims]
+        ]
         x_sample._pyro_dims = sample._pyro_dims
         x_sample._pyro_sample_dims = x_sample_dims
         assert x_sample.dim() == len(x_sample._pyro_dims)
