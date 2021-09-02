@@ -19,6 +19,7 @@ class Cosine(Isotropy):
 
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """
+
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
         super().__init__(input_dim, variance, lengthscale, active_dims)
 
@@ -46,16 +47,19 @@ class Periodic(Kernel):
     :param torch.Tensor lengthscale: Length scale parameter of this kernel.
     :param torch.Tensor period: Period parameter of this kernel.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, period=None, active_dims=None):
+
+    def __init__(
+        self, input_dim, variance=None, lengthscale=None, period=None, active_dims=None
+    ):
         super().__init__(input_dim, active_dims)
 
-        variance = torch.tensor(1.) if variance is None else variance
+        variance = torch.tensor(1.0) if variance is None else variance
         self.variance = PyroParam(variance, constraints.positive)
 
-        lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
+        lengthscale = torch.tensor(1.0) if lengthscale is None else lengthscale
         self.lengthscale = PyroParam(lengthscale, constraints.positive)
 
-        period = torch.tensor(1.) if period is None else period
+        period = torch.tensor(1.0) if period is None else period
         self.period = PyroParam(period, constraints.positive)
 
     def forward(self, X, Z=None, diag=False):

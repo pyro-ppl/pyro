@@ -40,28 +40,41 @@ def discretize_beta_pdf(bins, gamma, delta):
     discretized version of the Beta pdf used for approximately integrating via Search
     """
     shape_alpha = gamma * delta
-    shape_beta = (1.-gamma) * delta
+    shape_beta = (1.0 - gamma) * delta
     return torch.tensor(
-        list(map(lambda x: (x ** (shape_alpha-1)) * ((1.-x)**(shape_beta-1)), bins)))
+        list(
+            map(
+                lambda x: (x ** (shape_alpha - 1)) * ((1.0 - x) ** (shape_beta - 1)),
+                bins,
+            )
+        )
+    )
 
 
 @Marginal
 def structured_prior_model(params):
-    propertyIsPresent = pyro.sample("propertyIsPresent",
-                                    dist.Bernoulli(params.theta)).item() == 1
+    propertyIsPresent = (
+        pyro.sample("propertyIsPresent", dist.Bernoulli(params.theta)).item() == 1
+    )
     if propertyIsPresent:
         # approximately integrate over a beta by enumerating over bins
         beta_bins = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]
-        ix = pyro.sample("bin", dist.Categorical(
-            probs=discretize_beta_pdf(beta_bins, params.gamma, params.delta)))
+        ix = pyro.sample(
+            "bin",
+            dist.Categorical(
+                probs=discretize_beta_pdf(beta_bins, params.gamma, params.delta)
+            ),
+        )
         return beta_bins[ix]
     else:
         return 0
 
 
 def threshold_prior():
-    threshold_bins = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    ix = pyro.sample("threshold", dist.Categorical(logits=torch.zeros(len(threshold_bins))))
+    threshold_bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    ix = pyro.sample(
+        "threshold", dist.Categorical(logits=torch.zeros(len(threshold_bins)))
+    )
     return threshold_bins[ix]
 
 
@@ -93,13 +106,13 @@ def meaning(utterance, state, threshold):
 def listener0(utterance, threshold, prior):
     state = pyro.sample("state", prior)
     m = meaning(utterance, state, threshold)
-    pyro.factor("listener0_true", 0. if m else -99999.)
+    pyro.factor("listener0_true", 0.0 if m else -99999.0)
     return state
 
 
 @Marginal
 def speaker1(state, threshold, prior):
-    s1Optimality = 5.
+    s1Optimality = 5.0
     utterance = utterance_prior()
     L0 = listener0(utterance, threshold, prior)
     with poutine.scale(scale=torch.tensor(s1Optimality)):
@@ -125,18 +138,22 @@ def speaker2(prevalence, prior):
 
 
 def main(args):
-    hasWingsERP = structured_prior_model(Params(theta=0.5, gamma=0.99, delta=10.))
-    laysEggsERP = structured_prior_model(Params(theta=0.5, gamma=0.5, delta=10.))
-    carriesMalariaERP = structured_prior_model(Params(theta=0.1, gamma=0.01, delta=2.))
-    areFemaleERP = structured_prior_model(Params(theta=0.99, gamma=0.5, delta=50.))
+    hasWingsERP = structured_prior_model(Params(theta=0.5, gamma=0.99, delta=10.0))
+    laysEggsERP = structured_prior_model(Params(theta=0.5, gamma=0.5, delta=10.0))
+    carriesMalariaERP = structured_prior_model(Params(theta=0.1, gamma=0.01, delta=2.0))
+    areFemaleERP = structured_prior_model(Params(theta=0.99, gamma=0.5, delta=50.0))
 
     # listener interpretation of generics
     wingsPosterior = listener1("generic is true", hasWingsERP)
     malariaPosterior = listener1("generic is true", carriesMalariaERP)
     eggsPosterior = listener1("generic is true", laysEggsERP)
     femalePosterior = listener1("generic is true", areFemaleERP)
-    listeners = {"wings": wingsPosterior, "malaria": malariaPosterior,
-                 "eggs": eggsPosterior, "female": femalePosterior}
+    listeners = {
+        "wings": wingsPosterior,
+        "malaria": malariaPosterior,
+        "eggs": eggsPosterior,
+        "female": femalePosterior,
+    }
 
     for name, listener in listeners.items():
         for elt in listener.enumerate_support():
@@ -147,8 +164,12 @@ def main(args):
     eggSpeaker = speaker2(0.6, laysEggsERP)
     femaleSpeaker = speaker2(0.5, areFemaleERP)
     lionSpeaker = speaker2(0.01, laysEggsERP)
-    speakers = {"malaria": malariaSpeaker, "egg": eggSpeaker,
-                "female": femaleSpeaker, "lion": lionSpeaker}
+    speakers = {
+        "malaria": malariaSpeaker,
+        "egg": eggSpeaker,
+        "female": femaleSpeaker,
+        "lion": lionSpeaker,
+    }
 
     for name, speaker in speakers.items():
         for elt in speaker.enumerate_support():
@@ -156,8 +177,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.6.0')
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-samples', default=10, type=int)
+    parser.add_argument("-n", "--num-samples", default=10, type=int)
     args = parser.parse_args()
     main(args)

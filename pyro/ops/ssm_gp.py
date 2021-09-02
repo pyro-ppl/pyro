@@ -32,9 +32,14 @@ class MaternKernel(PyroModule):
     [2] `Stochastic Differential Equation Methods for Spatio-Temporal Gaussian Process Regression`,
         Arno Solin.
     """
-    def __init__(self, nu=1.5, num_gps=1, length_scale_init=None, kernel_scale_init=None):
+
+    def __init__(
+        self, nu=1.5, num_gps=1, length_scale_init=None, kernel_scale_init=None
+    ):
         if nu not in [0.5, 1.5, 2.5]:
-            raise NotImplementedError("The only supported values of nu are 0.5, 1.5 and 2.5")
+            raise NotImplementedError(
+                "The only supported values of nu are 0.5, 1.5 and 2.5"
+            )
         self.nu = nu
         self.state_dim = {0.5: 1, 1.5: 2, 2.5: 3}[nu]
         self.num_gps = num_gps
@@ -49,8 +54,12 @@ class MaternKernel(PyroModule):
 
         super().__init__()
 
-        self.length_scale = PyroParam(length_scale_init, constraint=constraints.positive)
-        self.kernel_scale = PyroParam(kernel_scale_init, constraint=constraints.positive)
+        self.length_scale = PyroParam(
+            length_scale_init, constraint=constraints.positive
+        )
+        self.kernel_scale = PyroParam(
+            kernel_scale_init, constraint=constraints.positive
+        )
 
         if self.state_dim > 1:
             for x in range(self.state_dim):
@@ -78,10 +87,12 @@ class MaternKernel(PyroModule):
         elif self.nu == 1.5:
             rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
             dt_rho = dt / rho
-            trans = (1.0 + root_three * dt_rho) * self.mask00 + \
-                (-3.0 * dt_rho / rho) * self.mask01 + \
-                dt * self.mask10 + \
-                (1.0 - root_three * dt_rho) * self.mask11
+            trans = (
+                (1.0 + root_three * dt_rho) * self.mask00
+                + (-3.0 * dt_rho / rho) * self.mask01
+                + dt * self.mask10
+                + (1.0 - root_three * dt_rho) * self.mask11
+            )
             return torch.exp(-root_three * dt_rho) * trans
         elif self.nu == 2.5:
             rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
@@ -90,15 +101,17 @@ class MaternKernel(PyroModule):
             dt_rho_cu = dt_rho.pow(3.0)
             dt_rho_qu = dt_rho.pow(4.0)
             dt_sq = dt ** 2.0
-            trans = (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00 + \
-                (-0.5 * dt_rho_cu / dt) * self.mask01 + \
-                ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask02 + \
-                ((dt_rho + 1.0) * dt) * self.mask10 + \
-                (1.0 + dt_rho - dt_rho_sq) * self.mask11 + \
-                ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask12 + \
-                (0.5 * dt_sq) * self.mask20 + \
-                ((1.0 - 0.5 * dt_rho) * dt) * self.mask21 + \
-                (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
+            trans = (
+                (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00
+                + (-0.5 * dt_rho_cu / dt) * self.mask01
+                + ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask02
+                + ((dt_rho + 1.0) * dt) * self.mask10
+                + (1.0 + dt_rho - dt_rho_sq) * self.mask11
+                + ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask12
+                + (0.5 * dt_sq) * self.mask20
+                + ((1.0 - 0.5 * dt_rho) * dt) * self.mask21
+                + (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
+            )
             return torch.exp(-dt_rho) * trans
 
     @pyro_method
@@ -121,9 +134,11 @@ class MaternKernel(PyroModule):
             sigmasq = self.kernel_scale.pow(2).unsqueeze(-1).unsqueeze(-1)
             rhosq = self.length_scale.pow(2).unsqueeze(-1).unsqueeze(-1)
             p_infinity = 0.0
-            p_infinity = self.mask00 + \
-                (five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20) + \
-                (25.0 / rhosq.pow(2.0)) * self.mask22
+            p_infinity = (
+                self.mask00
+                + (five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20)
+                + (25.0 / rhosq.pow(2.0)) * self.mask22
+            )
             return sigmasq * p_infinity
 
     @pyro_method

@@ -60,23 +60,23 @@ def main(args):
     data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     k = 2
 
-    print('Step\tLoss')
+    print("Step\tLoss")
     loss = 0.0
     for step in range(args.num_epochs):
         if step and step % 10 == 0:
-            print('{}\t{:0.5g}'.format(step, loss))
+            print("{}\t{:0.5g}".format(step, loss))
             loss = 0.0
         loss += inference.step(data, k=k)
 
-    print('Parameters:')
+    print("Parameters:")
     for name, value in sorted(pyro.get_param_store().items()):
-        print('{} = {}'.format(name, value.detach().cpu().numpy()))
+        print("{} = {}".format(name, value.detach().cpu().numpy()))
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=200, type=int)
-    parser.add_argument('--jit', action='store_true')
+    parser.add_argument("-n", "--num-epochs", default=200, type=int)
+    parser.add_argument("--jit", action="store_true")
     args = parser.parse_args()
     main(args)

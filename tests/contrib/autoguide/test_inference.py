@@ -40,9 +40,13 @@ class AutoGaussianChain(GaussianChain):
         self.target_auto_diag_cov[-1] = 1.0 / self.lambda_posts[-1].item()
         for n in range(N - 1, 0, -1):
             self.target_auto_mus[n] += self.target_mus[n].item()
-            self.target_auto_mus[n] += self.target_kappas[n].item() * self.target_auto_mus[n + 1]
+            self.target_auto_mus[n] += (
+                self.target_kappas[n].item() * self.target_auto_mus[n + 1]
+            )
             self.target_auto_diag_cov[n] += 1.0 / self.lambda_posts[n].item()
-            self.target_auto_diag_cov[n] += (self.target_kappas[n].item() ** 2) * self.target_auto_diag_cov[n + 1]
+            self.target_auto_diag_cov[n] += (
+                self.target_kappas[n].item() ** 2
+            ) * self.target_auto_diag_cov[n + 1]
 
     def test_multivariatate_normal_auto(self):
         self.do_test_auto(3, reparameterized=True, n_steps=10001)
@@ -54,13 +58,19 @@ class AutoGaussianChain(GaussianChain):
         self.setup_chain(N)
         self.compute_target(N)
         self.guide = AutoMultivariateNormal(self.model)
-        logger.debug("target auto_loc: {}"
-                     .format(self.target_auto_mus[1:].detach().cpu().numpy()))
-        logger.debug("target auto_diag_cov: {}"
-                     .format(self.target_auto_diag_cov[1:].detach().cpu().numpy()))
+        logger.debug(
+            "target auto_loc: {}".format(
+                self.target_auto_mus[1:].detach().cpu().numpy()
+            )
+        )
+        logger.debug(
+            "target auto_diag_cov: {}".format(
+                self.target_auto_diag_cov[1:].detach().cpu().numpy()
+            )
+        )
 
         # TODO speed up with parallel num_particles > 1
-        adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
+        adam = optim.Adam({"lr": 0.001, "betas": (0.95, 0.999)})
         svi = SVI(self.model, self.guide, adam, loss=Trace_ELBO())
 
         for k in range(n_steps):
@@ -68,22 +78,43 @@ class AutoGaussianChain(GaussianChain):
             assert np.isfinite(loss), loss
 
             if k % 1000 == 0 and k > 0 or k == n_steps - 1:
-                logger.debug("[step {}] guide mean parameter: {}"
-                             .format(k, self.guide.loc.detach().cpu().numpy()))
+                logger.debug(
+                    "[step {}] guide mean parameter: {}".format(
+                        k, self.guide.loc.detach().cpu().numpy()
+                    )
+                )
                 L = self.guide.scale_tril
                 diag_cov = torch.mm(L, L.t()).diag()
-                logger.debug("[step {}] auto_diag_cov: {}"
-                             .format(k, diag_cov.detach().cpu().numpy()))
+                logger.debug(
+                    "[step {}] auto_diag_cov: {}".format(
+                        k, diag_cov.detach().cpu().numpy()
+                    )
+                )
 
-        assert_equal(self.guide.loc.detach(), self.target_auto_mus[1:], prec=0.05,
-                     msg="guide mean off")
-        assert_equal(diag_cov, self.target_auto_diag_cov[1:], prec=0.07,
-                     msg="guide covariance off")
+        assert_equal(
+            self.guide.loc.detach(),
+            self.target_auto_mus[1:],
+            prec=0.05,
+            msg="guide mean off",
+        )
+        assert_equal(
+            diag_cov,
+            self.target_auto_diag_cov[1:],
+            prec=0.07,
+            msg="guide covariance off",
+        )
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
-                                        AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
-@pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
+@pytest.mark.parametrize(
+    "auto_class",
+    [
+        AutoDiagonalNormal,
+        AutoMultivariateNormal,
+        AutoLowRankMultivariateNormal,
+        AutoLaplaceApproximation,
+    ],
+)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_diagonal_gaussians(auto_class, Elbo):
     n_steps = 3001
 
@@ -95,8 +126,9 @@ def test_auto_diagonal_gaussians(auto_class, Elbo):
         guide = auto_class(model, rank=1)
     else:
         guide = auto_class(model)
-    adam = optim.ClippedAdam({"lr": .01, "betas": (0.95, 0.999),
-                              "lrd": 0.1 ** (1 / n_steps)})
+    adam = optim.ClippedAdam(
+        {"lr": 0.01, "betas": (0.95, 0.999), "lrd": 0.1 ** (1 / n_steps)}
+    )
     svi = SVI(model, guide, adam, loss=Elbo())
 
     for k in range(n_steps):
@@ -109,21 +141,44 @@ def test_auto_diagonal_gaussians(auto_class, Elbo):
     loc, scale = guide._loc_scale()
 
     expected_loc = torch.tensor([-0.2, 0.2])
-    assert_equal(loc.detach(), expected_loc, prec=0.05,
-                 msg="\n".join(["Incorrect guide loc. Expected:",
-                                str(expected_loc.cpu().numpy()),
-                                "Actual:",
-                                str(loc.detach().cpu().numpy())]))
+    assert_equal(
+        loc.detach(),
+        expected_loc,
+        prec=0.05,
+        msg="\n".join(
+            [
+                "Incorrect guide loc. Expected:",
+                str(expected_loc.cpu().numpy()),
+                "Actual:",
+                str(loc.detach().cpu().numpy()),
+            ]
+        ),
+    )
     expected_scale = torch.tensor([1.2, 0.7])
-    assert_equal(scale.detach(), expected_scale, prec=0.08,
-                 msg="\n".join(["Incorrect guide scale. Expected:",
-                                str(expected_scale.cpu().numpy()),
-                                "Actual:",
-                                str(scale.detach().cpu().numpy())]))
+    assert_equal(
+        scale.detach(),
+        expected_scale,
+        prec=0.08,
+        msg="\n".join(
+            [
+                "Incorrect guide scale. Expected:",
+                str(expected_scale.cpu().numpy()),
+                "Actual:",
+                str(scale.detach().cpu().numpy()),
+            ]
+        ),
+    )
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
-                                        AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
+@pytest.mark.parametrize(
+    "auto_class",
+    [
+        AutoDiagonalNormal,
+        AutoMultivariateNormal,
+        AutoLowRankMultivariateNormal,
+        AutoLaplaceApproximation,
+    ],
+)
 def test_auto_transform(auto_class):
     n_steps = 3500
 
@@ -134,7 +189,7 @@ def test_auto_transform(auto_class):
         guide = auto_class(model, rank=1)
     else:
         guide = auto_class(model)
-    adam = optim.Adam({"lr": .001, "betas": (0.90, 0.999)})
+    adam = optim.Adam({"lr": 0.001, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
     for k in range(n_steps):
@@ -145,21 +200,24 @@ def test_auto_transform(auto_class):
         guide = guide.laplace_approximation()
 
     loc, scale = guide._loc_scale()
-    assert_equal(loc.detach(), torch.tensor([0.2]), prec=0.04,
-                 msg="guide mean off")
-    assert_equal(scale.detach(), torch.tensor([0.7]), prec=0.04,
-                 msg="guide covariance off")
+    assert_equal(loc.detach(), torch.tensor([0.2]), prec=0.04, msg="guide mean off")
+    assert_equal(
+        scale.detach(), torch.tensor([0.7]), prec=0.04, msg="guide covariance off"
+    )
 
 
-@pytest.mark.parametrize('auto_class', [
-    AutoDiagonalNormal,
-    AutoIAFNormal,
-    AutoMultivariateNormal,
-    AutoLowRankMultivariateNormal,
-    AutoLaplaceApproximation,
-    lambda m: AutoNormalizingFlow(m, partial(iterated, 2, block_autoregressive)),
-])
-@pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
+@pytest.mark.parametrize(
+    "auto_class",
+    [
+        AutoDiagonalNormal,
+        AutoIAFNormal,
+        AutoMultivariateNormal,
+        AutoLowRankMultivariateNormal,
+        AutoLaplaceApproximation,
+        lambda m: AutoNormalizingFlow(m, partial(iterated, 2, block_autoregressive)),
+    ],
+)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_dirichlet(auto_class, Elbo):
     num_steps = 2000
     prior = torch.tensor([0.5, 1.0, 1.5, 3.0])
@@ -172,7 +230,7 @@ def test_auto_dirichlet(auto_class, Elbo):
             pyro.sample("data", dist.Categorical(p).expand_by(data.shape), obs=data)
 
     guide = auto_class(model)
-    svi = SVI(model, guide, optim.Adam({"lr": .003}), loss=Elbo())
+    svi = SVI(model, guide, optim.Adam({"lr": 0.003}), loss=Elbo())
 
     for _ in range(num_steps):
         loss = svi.step(data)
@@ -184,6 +242,14 @@ def test_auto_dirichlet(auto_class, Elbo):
     else:
         loc = guide.loc
     actual_mean = biject_to(constraints.simplex)(loc)
-    assert_equal(actual_mean, expected_mean, prec=0.2, msg=''.join([
-        '\nexpected {}'.format(expected_mean.detach().cpu().numpy()),
-        '\n  actual {}'.format(actual_mean.detach().cpu().numpy())]))
+    assert_equal(
+        actual_mean,
+        expected_mean,
+        prec=0.2,
+        msg="".join(
+            [
+                "\nexpected {}".format(expected_mean.detach().cpu().numpy()),
+                "\n  actual {}".format(actual_mean.detach().cpu().numpy()),
+            ]
+        ),
+    )

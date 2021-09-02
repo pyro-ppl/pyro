@@ -23,7 +23,7 @@ from pyro.contrib.epidemiology.models import (
     SuperspreadingSIRModel,
 )
 
-logging.basicConfig(format='%(message)s', level=logging.INFO)
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
 def Model(args, data):
@@ -35,14 +35,17 @@ def Model(args, data):
     elif args.incubation_time > 0:
         assert args.incubation_time > 1
         if args.concentration < math.inf:
-            return SuperspreadingSEIRModel(args.population, args.incubation_time,
-                                           args.recovery_time, data)
+            return SuperspreadingSEIRModel(
+                args.population, args.incubation_time, args.recovery_time, data
+            )
         elif args.overdispersion > 0:
-            return OverdispersedSEIRModel(args.population, args.incubation_time,
-                                          args.recovery_time, data)
+            return OverdispersedSEIRModel(
+                args.population, args.incubation_time, args.recovery_time, data
+            )
         else:
-            return SimpleSEIRModel(args.population, args.incubation_time,
-                                   args.recovery_time, data)
+            return SimpleSEIRModel(
+                args.population, args.incubation_time, args.recovery_time, data
+            )
     else:
         if args.concentration < math.inf:
             return SuperspreadingSIRModel(args.population, args.recovery_time, data)
@@ -57,31 +60,44 @@ def generate_data(args):
     model = Model(args, extended_data)
     logging.info("Simulating from a {}".format(type(model).__name__))
     for attempt in range(100):
-        samples = model.generate({"R0": args.basic_reproduction_number,
-                                  "rho": args.response_rate,
-                                  "k": args.concentration,
-                                  "od": args.overdispersion})
-        obs = samples["obs"][:args.duration]
+        samples = model.generate(
+            {
+                "R0": args.basic_reproduction_number,
+                "rho": args.response_rate,
+                "k": args.concentration,
+                "od": args.overdispersion,
+            }
+        )
+        obs = samples["obs"][: args.duration]
         new_I = samples.get("S2I", samples.get("E2I"))
 
         obs_sum = int(obs.sum())
-        new_I_sum = int(new_I[:args.duration].sum())
+        new_I_sum = int(new_I[: args.duration].sum())
         assert 0 <= args.min_obs_portion < args.max_obs_portion <= 1
         min_obs = int(math.ceil(args.min_obs_portion * args.population))
         max_obs = int(math.floor(args.max_obs_portion * args.population))
         if min_obs <= obs_sum <= max_obs:
-            logging.info("Observed {:d}/{:d} infections:\n{}".format(
-                obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)))
+            logging.info(
+                "Observed {:d}/{:d} infections:\n{}".format(
+                    obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)
+                )
+            )
             return {"new_I": new_I, "obs": obs}
 
     if obs_sum < min_obs:
-        raise ValueError("Failed to generate >={} observations. "
-                         "Try decreasing --min-obs-portion (currently {})."
-                         .format(min_obs, args.min_obs_portion))
+        raise ValueError(
+            "Failed to generate >={} observations. "
+            "Try decreasing --min-obs-portion (currently {}).".format(
+                min_obs, args.min_obs_portion
+            )
+        )
     else:
-        raise ValueError("Failed to generate <={} observations. "
-                         "Try increasing --max-obs-portion (currently {})."
-                         .format(max_obs, args.max_obs_portion))
+        raise ValueError(
+            "Failed to generate <={} observations. "
+            "Try increasing --max-obs-portion (currently {}).".format(
+                max_obs, args.max_obs_portion
+            )
+        )
 
 
 def infer_mcmc(args, model):
@@ -94,23 +110,26 @@ def infer_mcmc(args, model):
         if args.verbose:
             logging.info("potential = {:0.6g}".format(e))
 
-    mcmc = model.fit_mcmc(heuristic_num_particles=args.smc_particles,
-                          heuristic_ess_threshold=args.ess_threshold,
-                          warmup_steps=args.warmup_steps,
-                          num_samples=args.num_samples,
-                          num_chains=args.num_chains,
-                          mp_context="spawn" if parallel else None,
-                          max_tree_depth=args.max_tree_depth,
-                          arrowhead_mass=args.arrowhead_mass,
-                          num_quant_bins=args.num_bins,
-                          haar=args.haar,
-                          haar_full_mass=args.haar_full_mass,
-                          jit_compile=args.jit,
-                          hook_fn=None if parallel else hook_fn)
+    mcmc = model.fit_mcmc(
+        heuristic_num_particles=args.smc_particles,
+        heuristic_ess_threshold=args.ess_threshold,
+        warmup_steps=args.warmup_steps,
+        num_samples=args.num_samples,
+        num_chains=args.num_chains,
+        mp_context="spawn" if parallel else None,
+        max_tree_depth=args.max_tree_depth,
+        arrowhead_mass=args.arrowhead_mass,
+        num_quant_bins=args.num_bins,
+        haar=args.haar,
+        haar_full_mass=args.haar_full_mass,
+        jit_compile=args.jit,
+        hook_fn=None if parallel else hook_fn,
+    )
 
     mcmc.summary()
     if args.plot and energies:
         import matplotlib.pyplot as plt
+
         plt.figure(figsize=(6, 3))
         plt.plot(energies)
         plt.xlabel("MCMC step")
@@ -122,16 +141,19 @@ def infer_mcmc(args, model):
 
 
 def infer_svi(args, model):
-    losses = model.fit_svi(heuristic_num_particles=args.smc_particles,
-                           heuristic_ess_threshold=args.ess_threshold,
-                           num_samples=args.num_samples,
-                           num_steps=args.svi_steps,
-                           num_particles=args.svi_particles,
-                           haar=args.haar,
-                           jit=args.jit)
+    losses = model.fit_svi(
+        heuristic_num_particles=args.smc_particles,
+        heuristic_ess_threshold=args.ess_threshold,
+        num_samples=args.num_samples,
+        num_steps=args.svi_steps,
+        num_particles=args.svi_particles,
+        haar=args.haar,
+        jit=args.jit,
+    )
 
     if args.plot:
         import matplotlib.pyplot as plt
+
         plt.figure(figsize=(6, 3))
         plt.plot(losses)
         plt.xlabel("SVI step")
@@ -154,8 +176,11 @@ def evaluate(args, model, samples):
     for name, key in names.items():
         mean = samples[key].mean().item()
         std = samples[key].std().item()
-        logging.info("{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}"
-                     .format(key, getattr(args, name), mean, std))
+        logging.info(
+            "{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}".format(
+                key, getattr(args, name), mean, std
+            )
+        )
 
     # Optionally plot histograms and pairwise correlations.
     if args.plot:
@@ -191,8 +216,13 @@ def evaluate(args, model, samples):
                 ax = axes[i][j]
                 ax.set_xticks(())
                 ax.set_yticks(())
-                ax.scatter(covariates[j][1], -covariates[i][1],
-                           lw=0, color="darkblue", alpha=0.3)
+                ax.scatter(
+                    covariates[j][1],
+                    -covariates[i][1],
+                    lw=0,
+                    color="darkblue",
+                    alpha=0.3,
+                )
         plt.tight_layout()
         plt.subplots_adjust(wspace=0, hspace=0)
 
@@ -204,10 +234,10 @@ def evaluate(args, model, samples):
         covariates = [("R1", unconstrain(constraints.positive, samples["R0"]))]
         if not args.heterogeneous:
             covariates.append(
-                ("rho", unconstrain(constraints.unit_interval, samples["rho"])))
+                ("rho", unconstrain(constraints.unit_interval, samples["rho"]))
+            )
         if "k" in samples:
-            covariates.append(
-                ("k", unconstrain(constraints.positive, samples["k"])))
+            covariates.append(("k", unconstrain(constraints.positive, samples["k"])))
         constraint = constraints.interval(-0.5, model.population + 0.5)
         for name, aux in zip(model.compartments, samples["auxiliary"].unbind(-2)):
             covariates.append((name, unconstrain(constraint, aux)))
@@ -235,19 +265,23 @@ def predict(args, model, truth):
 
     new_I = samples.get("S2I", samples.get("E2I"))
     median = new_I.median(dim=0).values
-    logging.info("Median prediction of new infections (starting on day 0):\n{}"
-                 .format(" ".join(map(str, map(int, median)))))
+    logging.info(
+        "Median prediction of new infections (starting on day 0):\n{}".format(
+            " ".join(map(str, map(int, median)))
+        )
+    )
 
     # Optionally plot the latent and forecasted series of new infections.
     if args.plot:
         import matplotlib.pyplot as plt
+
         plt.figure()
         time = torch.arange(args.duration + args.forecast)
         p05 = new_I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
         p95 = new_I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
         plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
         plt.plot(time, median, "r-", label="median")
-        plt.plot(time[:args.duration], obs, "k.", label="observed")
+        plt.plot(time[: args.duration], obs, "k.", label="observed")
         if truth is not None:
             plt.plot(time, truth, "k--", label="truth")
         plt.axvline(args.duration - 0.5, color="gray", lw=1)
@@ -268,7 +302,7 @@ def predict(args, model, truth):
             p95 = Re.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
             plt.fill_between(time, p05, p95, color="red", alpha=0.3, label="90% CI")
             plt.plot(time, median, "r-", label="median")
-            plt.plot(time[:args.duration], obs, "k.", label="observed")
+            plt.plot(time[: args.duration], obs, "k.", label="observed")
             plt.axvline(args.duration - 0.5, color="gray", lw=1)
             plt.xlim(0, len(time) - 1)
             plt.ylim(0, None)
@@ -300,9 +334,10 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.6.0')
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(
-        description="Compartmental epidemiology modeling using HMC")
+        description="Compartmental epidemiology modeling using HMC"
+    )
     parser.add_argument("-p", "--population", default=1000, type=float)
     parser.add_argument("-m", "--min-obs-portion", default=0.01, type=float)
     parser.add_argument("-M", "--max-obs-portion", default=0.99, type=float)
@@ -310,12 +345,22 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--forecast", default=10, type=int)
     parser.add_argument("-R0", "--basic-reproduction-number", default=1.5, type=float)
     parser.add_argument("-tau", "--recovery-time", default=7.0, type=float)
-    parser.add_argument("-e", "--incubation-time", default=0.0, type=float,
-                        help="If zero, use SIR model; if > 1 use SEIR model.")
-    parser.add_argument("-k", "--concentration", default=math.inf, type=float,
-                        help="If finite, use a superspreader model.")
+    parser.add_argument(
+        "-e",
+        "--incubation-time",
+        default=0.0,
+        type=float,
+        help="If zero, use SIR model; if > 1 use SEIR model.",
+    )
+    parser.add_argument(
+        "-k",
+        "--concentration",
+        default=math.inf,
+        type=float,
+        help="If finite, use a superspreader model.",
+    )
     parser.add_argument("-rho", "--response-rate", default=0.5, type=float)
-    parser.add_argument("-o", "--overdispersion", default=0., type=float)
+    parser.add_argument("-o", "--overdispersion", default=0.0, type=float)
     parser.add_argument("-hg", "--heterogeneous", action="store_true")
     parser.add_argument("--infer", default="mcmc")
     parser.add_argument("--mcmc", action="store_const", const="mcmc", dest="infer")
@@ -357,4 +402,5 @@ if __name__ == "__main__":
 
     if args.plot:
         import matplotlib.pyplot as plt
+
         plt.show()

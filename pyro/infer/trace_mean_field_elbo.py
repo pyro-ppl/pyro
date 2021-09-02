@@ -23,17 +23,27 @@ def _check_mean_field_requirement(model_trace, guide_trace):
     Checks that the guide and model sample sites are ordered identically.
     This is sufficient but not necessary for correctness.
     """
-    model_sites = [name for name, site in model_trace.nodes.items()
-                   if site["type"] == "sample" and name in guide_trace.nodes]
-    guide_sites = [name for name, site in guide_trace.nodes.items()
-                   if site["type"] == "sample" and name in model_trace.nodes]
+    model_sites = [
+        name
+        for name, site in model_trace.nodes.items()
+        if site["type"] == "sample" and name in guide_trace.nodes
+    ]
+    guide_sites = [
+        name
+        for name, site in guide_trace.nodes.items()
+        if site["type"] == "sample" and name in model_trace.nodes
+    ]
     assert set(model_sites) == set(guide_sites)
     if model_sites != guide_sites:
-        warnings.warn("Failed to verify mean field restriction on the guide. "
-                      "To eliminate this warning, ensure model and guide sites "
-                      "occur in the same order.\n" +
-                      "Model sites:\n  " + "\n  ".join(model_sites) +
-                      "Guide sites:\n  " + "\n  ".join(guide_sites))
+        warnings.warn(
+            "Failed to verify mean field restriction on the guide. "
+            "To eliminate this warning, ensure model and guide sites "
+            "occur in the same order.\n"
+            + "Model sites:\n  "
+            + "\n  ".join(model_sites)
+            + "Guide sites:\n  "
+            + "\n  ".join(guide_sites)
+        )
 
 
 class TraceMeanField_ELBO(Trace_ELBO):
@@ -67,9 +77,9 @@ class TraceMeanField_ELBO(Trace_ELBO):
     condition is always satisfied if the model and guide have identical
     dependency structures.
     """
+
     def _get_trace(self, model, guide, args, kwargs):
-        model_trace, guide_trace = super()._get_trace(
-            model, guide, args, kwargs)
+        model_trace, guide_trace = super()._get_trace(model, guide, args, kwargs)
         if is_validation_enabled():
             _check_mean_field_requirement(model_trace, guide_trace)
         return model_trace, guide_trace
@@ -83,7 +93,9 @@ class TraceMeanField_ELBO(Trace_ELBO):
         """
         loss = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-            loss_particle, _ = self._differentiable_loss_particle(model_trace, guide_trace)
+            loss_particle, _ = self._differentiable_loss_particle(
+                model_trace, guide_trace
+            )
             loss = loss + loss_particle / self.num_particles
 
         warn_if_nan(loss, "loss")
@@ -104,16 +116,24 @@ class TraceMeanField_ELBO(Trace_ELBO):
                     # use kl divergence if available, else fall back on sampling
                     try:
                         kl_qp = kl_divergence(guide_site["fn"], model_site["fn"])
-                        kl_qp = scale_and_mask(kl_qp, scale=guide_site["scale"], mask=guide_site["mask"])
+                        kl_qp = scale_and_mask(
+                            kl_qp, scale=guide_site["scale"], mask=guide_site["mask"]
+                        )
                         if torch.is_tensor(kl_qp):
                             assert kl_qp.shape == guide_site["fn"].batch_shape
                             kl_qp_sum = kl_qp.sum()
                         else:
-                            kl_qp_sum = kl_qp * torch.Size(guide_site["fn"].batch_shape).numel()
+                            kl_qp_sum = (
+                                kl_qp * torch.Size(guide_site["fn"].batch_shape).numel()
+                            )
                         elbo_particle = elbo_particle - kl_qp_sum
                     except NotImplementedError:
                         entropy_term = guide_site["score_parts"].entropy_term
-                        elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
+                        elbo_particle = (
+                            elbo_particle
+                            + model_site["log_prob_sum"]
+                            - entropy_term.sum()
+                        )
 
         # handle auxiliary sites in the guide
         for name, guide_site in guide_trace.nodes.items():
@@ -124,7 +144,11 @@ class TraceMeanField_ELBO(Trace_ELBO):
                 entropy_term = guide_site["score_parts"].entropy_term
                 elbo_particle = elbo_particle - entropy_term.sum()
 
-        loss = -(elbo_particle.detach() if torch._C._get_tracing_state() else torch_item(elbo_particle))
+        loss = -(
+            elbo_particle.detach()
+            if torch._C._get_tracing_state()
+            else torch_item(elbo_particle)
+        )
         surrogate_loss = -elbo_particle
         return loss, surrogate_loss
 
@@ -143,22 +167,28 @@ class JitTraceMeanField_ELBO(TraceMeanField_ELBO):
         ``**kwargs``, and compilation will be triggered once per unique
         ``**kwargs``.
     """
+
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        kwargs['_pyro_model_id'] = id(model)
-        kwargs['_pyro_guide_id'] = id(guide)
-        if getattr(self, '_loss_and_surrogate_loss', None) is None:
+        kwargs["_pyro_model_id"] = id(model)
+        kwargs["_pyro_guide_id"] = id(guide)
+        if getattr(self, "_loss_and_surrogate_loss", None) is None:
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings,
-                                jit_options=self.jit_options)
+            @pyro.ops.jit.trace(
+                ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options
+            )
             def differentiable_loss(*args, **kwargs):
-                kwargs.pop('_pyro_model_id')
-                kwargs.pop('_pyro_guide_id')
+                kwargs.pop("_pyro_model_id")
+                kwargs.pop("_pyro_guide_id")
                 self = weakself()
                 loss = 0.0
-                for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-                    _, loss_particle = self._differentiable_loss_particle(model_trace, guide_trace)
+                for model_trace, guide_trace in self._get_traces(
+                    model, guide, args, kwargs
+                ):
+                    _, loss_particle = self._differentiable_loss_particle(
+                        model_trace, guide_trace
+                    )
                     loss = loss + loss_particle / self.num_particles
                 return loss
 

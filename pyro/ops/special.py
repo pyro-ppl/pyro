@@ -16,7 +16,7 @@ class _SafeLog(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad):
-        x, = ctx.saved_tensors
+        (x,) = ctx.saved_tensors
         return grad / x.clamp(min=torch.finfo(x.dtype).eps)
 
 
@@ -28,7 +28,7 @@ def safe_log(x):
     return _SafeLog.apply(x)
 
 
-def log_beta(x, y, tol=0.):
+def log_beta(x, y, tol=0.0):
     """
     Computes log Beta function.
 
@@ -76,12 +76,17 @@ def log_beta(x, y, tol=0.):
 
     log_factor = functools.reduce(operator.mul, factors).log()
 
-    return (log_factor + (x - 0.5) * x.log() + (y - 0.5) * y.log()
-            - (xy - 0.5) * xy.log() + (math.log(2 * math.pi) / 2 - shift))
+    return (
+        log_factor
+        + (x - 0.5) * x.log()
+        + (y - 0.5) * y.log()
+        - (xy - 0.5) * xy.log()
+        + (math.log(2 * math.pi) / 2 - shift)
+    )
 
 
 @torch.no_grad()
-def log_binomial(n, k, tol=0.):
+def log_binomial(n, k, tol=0.0):
     """
     Computes log binomial coefficient.
 
@@ -99,3 +104,50 @@ def log_binomial(n, k, tol=0.):
         return n_plus_1.lgamma() - (k + 1).lgamma() - (n_plus_1 - k).lgamma()
 
     return -n_plus_1.log() - log_beta(k + 1, n_plus_1 - k, tol=tol)
+
+
+def log_I1(orders: int, value: torch.Tensor, terms=250):
+    r"""Compute first n log modified bessel function of first kind
+    .. math ::
+
+        \log(I_v(z)) = v*\log(z/2) + \log(\sum_{k=0}^\inf \exp\left[2*k*\log(z/2) - \sum_kk^k log(kk)
+        - \lgamma(v + k + 1)\right])
+
+    :param orders: orders of the log modified bessel function.
+    :param value: values to compute modified bessel function for
+    :param terms: truncation of summation
+    :return: 0 to orders modified bessel function
+    """
+    orders = orders + 1
+    if len(value.size()) == 0:
+        vshape = torch.Size([1])
+    else:
+        vshape = value.shape
+    value = value.reshape(-1, 1)
+
+    k = torch.arange(terms, device=value.device)
+    lgammas_all = torch.lgamma(torch.arange(1, terms + orders + 1, device=value.device))
+    assert lgammas_all.shape == (orders + terms,)  # lgamma(0) = inf => start from 1
+
+    lvalues = torch.log(value / 2) * k.view(1, -1)
+    assert lvalues.shape == (vshape.numel(), terms)
+
+    lfactorials = lgammas_all[:terms]
+    assert lfactorials.shape == (terms,)
+
+    lgammas = lgammas_all.repeat(orders).view(orders, -1)
+    assert lgammas.shape == (orders, terms + orders)  # lgamma(0) = inf => start from 1
+
+    indices = k[:orders].view(-1, 1) + k.view(1, -1)
+    assert indices.shape == (orders, terms)
+
+    seqs = (
+        2 * lvalues[None, :, :]
+        - lfactorials[None, None, :]
+        - lgammas.gather(1, indices)[:, None, :]
+    ).logsumexp(-1)
+    assert seqs.shape == (orders, vshape.numel())
+
+    i1s = lvalues[..., :orders].T + seqs
+    assert i1s.shape == (orders, vshape.numel())
+    return i1s.view(-1, *vshape)

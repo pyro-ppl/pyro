@@ -41,7 +41,7 @@ def jit_prob(equation, *operands, **kwargs):
 
     This is cheap but less numerically stable than using the torch_log backend.
     """
-    key = 'prob', equation, kwargs['plates']
+    key = "prob", equation, kwargs["plates"]
     if key not in _CACHE:
 
         # This simply wraps einsum for jit compilation.
@@ -59,12 +59,14 @@ def jit_logprob(equation, *operands, **kwargs):
 
     This simulates evaluating an undirected graphical model.
     """
-    key = 'logprob', equation, kwargs['plates']
+    key = "logprob", equation, kwargs["plates"]
     if key not in _CACHE:
 
         # This simply wraps einsum for jit compilation.
         def _einsum(*operands):
-            return einsum(equation, *operands, backend='pyro.ops.einsum.torch_log', **kwargs)
+            return einsum(
+                equation, *operands, backend="pyro.ops.einsum.torch_log", **kwargs
+            )
 
         _CACHE[key] = torch.jit.trace(_einsum, operands, check_trace=False)
 
@@ -77,12 +79,14 @@ def jit_gradient(equation, *operands, **kwargs):
 
     This is simulates training an undirected graphical model.
     """
-    key = 'gradient', equation, kwargs['plates']
+    key = "gradient", equation, kwargs["plates"]
     if key not in _CACHE:
 
         # This wraps einsum for jit compilation, but we will call backward on the result.
         def _einsum(*operands):
-            return einsum(equation, *operands, backend='pyro.ops.einsum.torch_log', **kwargs)
+            return einsum(
+                equation, *operands, backend="pyro.ops.einsum.torch_log", **kwargs
+            )
 
         _CACHE[key] = torch.jit.trace(_einsum, operands, check_trace=False)
 
@@ -95,8 +99,9 @@ def jit_gradient(equation, *operands, **kwargs):
         losses = (losses,)
 
     # Run backward pass.
-    grads = tuple(grad(loss, operands, retain_graph=True, allow_unused=True)
-                  for loss in losses)
+    grads = tuple(
+        grad(loss, operands, retain_graph=True, allow_unused=True) for loss in losses
+    )
     return grads
 
 
@@ -106,8 +111,8 @@ def _jit_adjoint(equation, *operands, **kwargs):
 
     This simulates serving predictions from an undirected graphical model.
     """
-    backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_sample')
-    key = backend, equation, tuple(x.shape for x in operands), kwargs['plates']
+    backend = kwargs.pop("backend", "pyro.ops.einsum.torch_sample")
+    key = backend, equation, tuple(x.shape for x in operands), kwargs["plates"]
     if key not in _CACHE:
 
         # This wraps a complete adjoint algorithm call.
@@ -141,19 +146,25 @@ def _jit_adjoint(equation, *operands, **kwargs):
 
 
 def jit_map(equation, *operands, **kwargs):
-    return _jit_adjoint(equation, *operands, backend='pyro.ops.einsum.torch_map', **kwargs)
+    return _jit_adjoint(
+        equation, *operands, backend="pyro.ops.einsum.torch_map", **kwargs
+    )
 
 
 def jit_sample(equation, *operands, **kwargs):
-    return _jit_adjoint(equation, *operands, backend='pyro.ops.einsum.torch_sample', **kwargs)
+    return _jit_adjoint(
+        equation, *operands, backend="pyro.ops.einsum.torch_sample", **kwargs
+    )
 
 
 def jit_marginal(equation, *operands, **kwargs):
-    return _jit_adjoint(equation, *operands, backend='pyro.ops.einsum.torch_marginal', **kwargs)
+    return _jit_adjoint(
+        equation, *operands, backend="pyro.ops.einsum.torch_marginal", **kwargs
+    )
 
 
 def time_fn(fn, equation, *operands, **kwargs):
-    iters = kwargs.pop('iters')
+    iters = kwargs.pop("iters")
     _CACHE.clear()  # Avoid memory leaks.
     fn(equation, *operands, **kwargs)
 
@@ -167,45 +178,55 @@ def time_fn(fn, equation, *operands, **kwargs):
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
     else:
-        torch.set_default_tensor_type('torch.FloatTensor')
+        torch.set_default_tensor_type("torch.FloatTensor")
 
-    if args.method == 'all':
-        for method in ['prob', 'logprob', 'gradient', 'marginal', 'map', 'sample']:
+    if args.method == "all":
+        for method in ["prob", "logprob", "gradient", "marginal", "map", "sample"]:
             args.method = method
             main(args)
         return
 
-    print('Plate size  Time per iteration of {} (ms)'.format(args.method))
-    fn = globals()['jit_{}'.format(args.method)]
+    print("Plate size  Time per iteration of {} (ms)".format(args.method))
+    fn = globals()["jit_{}".format(args.method)]
     equation = args.equation
     plates = args.plates
-    inputs, outputs = equation.split('->')
-    inputs = inputs.split(',')
+    inputs, outputs = equation.split("->")
+    inputs = inputs.split(",")
 
     # Vary all plate sizes at the same time.
     for plate_size in range(8, 1 + args.max_plate_size, 8):
         operands = []
         for dims in inputs:
-            shape = torch.Size([plate_size if d in plates else args.dim_size
-                                for d in dims])
+            shape = torch.Size(
+                [plate_size if d in plates else args.dim_size for d in dims]
+            )
             operands.append((torch.empty(shape).uniform_() + 0.5).requires_grad_())
 
-        time = time_fn(fn, equation, *operands, plates=plates, modulo_total=True,
-                       iters=args.iters)
-        print('{: <11s} {:0.4g}'.format('{} ** {}'.format(plate_size, len(args.plates)), time * 1e3))
+        time = time_fn(
+            fn, equation, *operands, plates=plates, modulo_total=True, iters=args.iters
+        )
+        print(
+            "{: <11s} {:0.4g}".format(
+                "{} ** {}".format(plate_size, len(args.plates)), time * 1e3
+            )
+        )
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='plated einsum profiler')
-    parser.add_argument('-e', '--equation', default='a,abi,bcij,adj,deij->')
-    parser.add_argument('-p', '--plates', default='ij')
-    parser.add_argument('-d', '--dim-size', default=32, type=int)
-    parser.add_argument('-s', '--max-plate-size', default=32, type=int)
-    parser.add_argument('-n', '--iters', default=10, type=int)
-    parser.add_argument('--cuda', action='store_true')
-    parser.add_argument('-m', '--method', default='all',
-                        help='one of: prob, logprob, gradient, marginal, map, sample')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="plated einsum profiler")
+    parser.add_argument("-e", "--equation", default="a,abi,bcij,adj,deij->")
+    parser.add_argument("-p", "--plates", default="ij")
+    parser.add_argument("-d", "--dim-size", default=32, type=int)
+    parser.add_argument("-s", "--max-plate-size", default=32, type=int)
+    parser.add_argument("-n", "--iters", default=10, type=int)
+    parser.add_argument("--cuda", action="store_true")
+    parser.add_argument(
+        "-m",
+        "--method",
+        default="all",
+        help="one of: prob, logprob, gradient, marginal, map, sample",
+    )
     args = parser.parse_args()
     main(args)

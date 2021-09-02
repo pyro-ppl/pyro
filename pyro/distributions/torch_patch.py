@@ -7,18 +7,18 @@ import weakref
 
 import torch
 
-assert torch.__version__.startswith('1.')
+assert torch.__version__.startswith("1.")
 
 
 def patch_dependency(target, root_module=torch):
-    parts = target.split('.')
+    parts = target.split(".")
     assert parts[0] == root_module.__name__
     module = root_module
     for part in parts[1:-1]:
         module = getattr(module, part)
     name = parts[-1]
     old_fn = getattr(module, name, None)
-    old_fn = getattr(old_fn, '_pyro_unpatched', old_fn)  # ensure patching is idempotent
+    old_fn = getattr(old_fn, "_pyro_unpatched", old_fn)  # ensure patching is idempotent
 
     def decorator(new_fn):
         try:
@@ -35,7 +35,7 @@ def patch_dependency(target, root_module=torch):
 
 
 # TODO: Move upstream to allow for pickle serialization of transforms
-@patch_dependency('torch.distributions.transforms.Transform.__getstate__')
+@patch_dependency("torch.distributions.transforms.Transform.__getstate__")
 def _Transform__getstate__(self):
     attrs = {}
     for k, v in self.__dict__.items():
@@ -47,50 +47,52 @@ def _Transform__getstate__(self):
 
 
 # TODO move upstream
-@patch_dependency('torch.distributions.transforms.Transform.clear_cache')
+@patch_dependency("torch.distributions.transforms.Transform.clear_cache")
 def _Transform_clear_cache(self):
     if self._cache_size == 1:
         self._cached_x_y = None, None
 
 
 # TODO move upstream
-@patch_dependency('torch.distributions.TransformedDistribution.clear_cache')
+@patch_dependency("torch.distributions.TransformedDistribution.clear_cache")
 def _TransformedDistribution_clear_cache(self):
     for t in self.transforms:
         t.clear_cache()
 
 
 # TODO fix https://github.com/pytorch/pytorch/issues/48054 upstream
-@patch_dependency('torch.distributions.HalfCauchy.log_prob')
+@patch_dependency("torch.distributions.HalfCauchy.log_prob")
 def _HalfCauchy_logprob(self, value):
     if self._validate_args:
         self._validate_sample(value)
-    value = torch.as_tensor(value, dtype=self.base_dist.scale.dtype,
-                            device=self.base_dist.scale.device)
+    value = torch.as_tensor(
+        value, dtype=self.base_dist.scale.dtype, device=self.base_dist.scale.device
+    )
     log_prob = self.base_dist.log_prob(value) + math.log(2)
     log_prob.masked_fill_(value.expand(log_prob.shape) < 0, -float("inf"))
     return log_prob
 
 
 # TODO fix batch_shape have an extra singleton dimension upstream
-@patch_dependency('torch.distributions.constraints._PositiveDefinite.check')
+@patch_dependency("torch.distributions.constraints._PositiveDefinite.check")
 def _PositiveDefinite_check(self, value):
     matrix_shape = value.shape[-2:]
     batch_shape = value.shape[:-2]
     flattened_value = value.reshape((-1,) + matrix_shape)
-    return torch.stack([v.symeig(eigenvectors=False)[0][:1] > 0.0
-                        for v in flattened_value]).view(batch_shape)
+    return torch.stack(
+        [torch.linalg.eigvalsh(v)[:1] > 0.0 for v in flattened_value]
+    ).view(batch_shape)
 
 
-@patch_dependency('torch.distributions.constraints._CorrCholesky.check')
+@patch_dependency("torch.distributions.constraints._CorrCholesky.check")
 def _CorrCholesky_check(self, value):
     row_norm = torch.linalg.norm(value.detach(), dim=-1)
-    unit_row_norm = (row_norm - 1.).abs().le(1e-4).all(dim=-1)
+    unit_row_norm = (row_norm - 1.0).abs().le(1e-4).all(dim=-1)
     return torch.distributions.constraints.lower_cholesky.check(value) & unit_row_norm
 
 
 # This adds a __call__ method to satisfy sphinx.
-@patch_dependency('torch.distributions.utils.lazy_property.__call__')
+@patch_dependency("torch.distributions.utils.lazy_property.__call__")
 def _lazy_property__call__(self):
     raise NotImplementedError
 

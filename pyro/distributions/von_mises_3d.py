@@ -28,13 +28,17 @@ class VonMises3D(TorchDistribution):
         vector. The direction of this vector is the location, and its
         magnitude is the concentration.
     """
-    arg_constraints = {'concentration': constraints.real}
+
+    arg_constraints = {"concentration": constraints.real}
     support = constraints.sphere
 
     def __init__(self, concentration, validate_args=None):
         if concentration.dim() < 1 or concentration.shape[-1] != 3:
-            raise ValueError('Expected concentration to have rightmost dim 3, actual shape = {}'.format(
-                concentration.shape))
+            raise ValueError(
+                "Expected concentration to have rightmost dim 3, actual shape = {}".format(
+                    concentration.shape
+                )
+            )
         self.concentration = concentration
         batch_shape, event_shape = concentration.shape[:-1], concentration.shape[-1:]
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
@@ -42,10 +46,13 @@ class VonMises3D(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             if value.dim() < 1 or value.shape[-1] != 3:
-                raise ValueError('Expected value to have rightmost dim 3, actual shape = {}'.format(
-                    value.shape))
+                raise ValueError(
+                    "Expected value to have rightmost dim 3, actual shape = {}".format(
+                        value.shape
+                    )
+                )
             if not (torch.abs(value.norm(2, -1) - 1) < 1e-6).all():
-                raise ValueError('direction vectors are not normalized')
+                raise ValueError("direction vectors are not normalized")
         scale = self.concentration.norm(2, -1)
         log_normalizer = scale.log() - scale.sinh().log() - math.log(4 * math.pi)
         return (self.concentration * value).sum(-1) + log_normalizer
@@ -54,6 +61,6 @@ class VonMises3D(TorchDistribution):
         try:
             return super().expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('_validate_args')
+            validate_args = self.__dict__.get("_validate_args")
             concentration = self.concentration.expand(torch.Size(batch_shape) + (3,))
             return type(self)(concentration, validate_args=validate_args)

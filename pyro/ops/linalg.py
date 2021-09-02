@@ -15,9 +15,9 @@ def rinverse(M, sym=False):
     """
     assert M.shape[-1] == M.shape[-2]
     if M.shape[-1] == 1:
-        return 1./M
+        return 1.0 / M
     elif M.shape[-1] == 2:
-        det = M[..., 0, 0]*M[..., 1, 1] - M[..., 1, 0]*M[..., 0, 1]
+        det = M[..., 0, 0] * M[..., 1, 1] - M[..., 1, 0] * M[..., 0, 1]
         inv = torch.empty_like(M)
         inv[..., 0, 0] = M[..., 1, 1]
         inv[..., 1, 1] = M[..., 0, 0]
@@ -34,9 +34,11 @@ def determinant_3d(H):
     """
     Returns the determinants of a batched 3-D matrix
     """
-    detH = (H[..., 0, 0] * (H[..., 1, 1] * H[..., 2, 2] - H[..., 2, 1] * H[..., 1, 2]) +
-            H[..., 0, 1] * (H[..., 1, 2] * H[..., 2, 0] - H[..., 1, 0] * H[..., 2, 2]) +
-            H[..., 0, 2] * (H[..., 1, 0] * H[..., 2, 1] - H[..., 2, 0] * H[..., 1, 1]))
+    detH = (
+        H[..., 0, 0] * (H[..., 1, 1] * H[..., 2, 2] - H[..., 2, 1] * H[..., 1, 2])
+        + H[..., 0, 1] * (H[..., 1, 2] * H[..., 2, 0] - H[..., 1, 0] * H[..., 2, 2])
+        + H[..., 0, 2] * (H[..., 1, 0] * H[..., 2, 1] - H[..., 2, 0] * H[..., 1, 1])
+    )
     return detH
 
 
@@ -46,16 +48,23 @@ def eig_3d(H):
     """
     p1 = H[..., 0, 1].pow(2) + H[..., 0, 2].pow(2) + H[..., 1, 2].pow(2)
     q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
-    p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
+    p2 = (
+        (H[..., 0, 0] - q).pow(2)
+        + (H[..., 1, 1] - q).pow(2)
+        + (H[..., 2, 2] - q).pow(2)
+        + 2 * p1
+    )
     p = torch.sqrt(p2 / 6)
-    B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
+    B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (
+        H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3)
+    )
     r = determinant_3d(B) / 2
     phi = (r.acos() / 3).unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3)).clone()
     phi[r < -1 + 1e-6] = math.pi / 3
-    phi[r > 1 - 1e-6] = 0.
+    phi[r > 1 - 1e-6] = 0.0
 
     eig1 = q + 2 * p * torch.cos(phi[..., 0, 0])
-    eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * math.pi/3))
+    eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * math.pi / 3))
     eig3 = 3 * q - eig1 - eig2
     # eig2 <= eig3 <= eig1
     return eig2, eig3, eig1

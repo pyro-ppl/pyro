@@ -17,6 +17,7 @@ class _bound_partial(partial):
     Converts a (possibly) bound method into a partial function to
     support class methods as arguments to handlers.
     """
+
     def __get__(self, instance, owner):
         if instance is None:
             return self
@@ -41,7 +42,10 @@ class Messenger:
     def __call__(self, fn):
         if not callable(fn):
             raise ValueError(
-                "{} is not callable, did you mean to pass it as a keyword arg?".format(fn))
+                "{} is not callable, did you mean to pass it as a keyword arg?".format(
+                    fn
+                )
+            )
         wraps = _bound_partial(partial(_context_wrap, self, fn))
         return wraps
 

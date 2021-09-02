@@ -34,10 +34,11 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
 
     with funsor.interpretations.lazy:
         log_prob = funsor.sum_product.sum_product(
-            sum_op, prod_op,
+            sum_op,
+            prod_op,
             terms["log_factors"] + terms["log_measures"],
             eliminate=terms["measure_vars"] | terms["plate_vars"],
-            plates=terms["plate_vars"]
+            plates=terms["plate_vars"],
         )
         log_prob = funsor.optimizer.apply_optimizer(log_prob)
 
@@ -56,8 +57,12 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
             # TODO this should really be handled entirely under the hood by adjoint
             node["funsor"] = {"value": node["funsor"]["value"](**sample_subs)}
         else:
-            node["funsor"]["log_measure"] = approx_factors[node["funsor"]["log_measure"]]
-            node["funsor"]["value"] = _get_support_value(node["funsor"]["log_measure"], name)
+            node["funsor"]["log_measure"] = approx_factors[
+                node["funsor"]["log_measure"]
+            ]
+            node["funsor"]["value"] = _get_support_value(
+                node["funsor"]["log_measure"], name
+            )
             sample_subs[name] = node["funsor"]["value"]
 
     with replay(trace=sample_tr):

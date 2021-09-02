@@ -27,6 +27,7 @@ class Ring(object, metaclass=ABCMeta):
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
     """
+
     def __init__(self, cache=None):
         self._cache = {} if cache is None else cache
 
@@ -36,7 +37,7 @@ class Ring(object, metaclass=ABCMeta):
         used as a key in the cache without risk of the id being recycled.
         """
         result = id(tensor)
-        assert self._cache.setdefault(('tensor', result), tensor) is tensor
+        assert self._cache.setdefault(("tensor", result), tensor) is tensor
         return result
 
     @abstractmethod
@@ -70,9 +71,9 @@ class Ring(object, metaclass=ABCMeta):
         :param frozenset ordinal: an ordinal specifying plates
         """
         dims = term._pyro_dims
-        missing_dims = ''.join(sorted(set(ordinal) - set(dims)))
+        missing_dims = "".join(sorted(set(ordinal) - set(dims)))
         if missing_dims:
-            key = 'broadcast', self._hash_by_id(term), missing_dims
+            key = "broadcast", self._hash_by_id(term), missing_dims
             if key in self._cache:
                 term = self._cache[key]
             else:
@@ -107,8 +108,8 @@ class Ring(object, metaclass=ABCMeta):
         :return: a tuple ``(global_part, local_part)`` as defined above
         :rtype: tuple
         """
-        assert dims, 'dims was empty, use .product() instead'
-        key = 'global_local', self._hash_by_id(term), frozenset(dims), ordinal
+        assert dims, "dims was empty, use .product() instead"
+        key = "global_local", self._hash_by_id(term), frozenset(dims), ordinal
         if key in self._cache:
             return self._cache[key]
 
@@ -130,7 +131,8 @@ class LinearRing(Ring):
     ``._pyro_dims`` attribute, which is a string of dimension names aligned
     with the tensor's shape.
     """
-    _backend = 'torch'
+
+    _backend = "torch"
 
     def __init__(self, cache=None, dim_to_size=None):
         super().__init__(cache=cache)
@@ -138,8 +140,8 @@ class LinearRing(Ring):
 
     def sumproduct(self, terms, dims):
         inputs = [term._pyro_dims for term in terms]
-        output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
-        equation = ','.join(inputs) + '->' + output
+        output = "".join(sorted(set("".join(inputs)) - set(dims)))
+        equation = ",".join(inputs) + "->" + output
         term = contract(equation, *terms, backend=self._backend)
         term._pyro_dims = output
         return term
@@ -149,23 +151,25 @@ class LinearRing(Ring):
         for dim in sorted(ordinal, reverse=True):
             pos = dims.find(dim)
             if pos != -1:
-                key = 'product', self._hash_by_id(term), dim
+                key = "product", self._hash_by_id(term), dim
                 if key in self._cache:
                     term = self._cache[key]
                 else:
                     term = term.prod(pos)
-                    dims = dims.replace(dim, '')
+                    dims = dims.replace(dim, "")
                     self._cache[key] = term
                     term._pyro_dims = dims
         return term
 
     def inv(self, term):
-        key = 'inv', self._hash_by_id(term)
+        key = "inv", self._hash_by_id(term)
         if key in self._cache:
             return self._cache[key]
 
         result = term.reciprocal()
-        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf / inf
+        result = result.clamp(
+            max=torch.finfo(result.dtype).max
+        )  # avoid nan due to inf / inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
@@ -181,7 +185,8 @@ class LogRing(Ring):
     ``._pyro_dims`` attribute, which is a string of dimension names aligned
     with the tensor's shape.
     """
-    _backend = 'pyro.ops.einsum.torch_log'
+
+    _backend = "pyro.ops.einsum.torch_log"
 
     def __init__(self, cache=None, dim_to_size=None):
         super().__init__(cache=cache)
@@ -189,8 +194,8 @@ class LogRing(Ring):
 
     def sumproduct(self, terms, dims):
         inputs = [term._pyro_dims for term in terms]
-        output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
-        equation = ','.join(inputs) + '->' + output
+        output = "".join(sorted(set("".join(inputs)) - set(dims)))
+        equation = ",".join(inputs) + "->" + output
         term = contract(equation, *terms, backend=self._backend)
         term._pyro_dims = output
         return term
@@ -200,23 +205,25 @@ class LogRing(Ring):
         for dim in sorted(ordinal, reverse=True):
             pos = dims.find(dim)
             if pos != -1:
-                key = 'product', self._hash_by_id(term), dim
+                key = "product", self._hash_by_id(term), dim
                 if key in self._cache:
                     term = self._cache[key]
                 else:
                     term = term.sum(pos)
-                    dims = dims.replace(dim, '')
+                    dims = dims.replace(dim, "")
                     self._cache[key] = term
                     term._pyro_dims = dims
         return term
 
     def inv(self, term):
-        key = 'inv', self._hash_by_id(term)
+        key = "inv", self._hash_by_id(term)
         if key in self._cache:
             return self._cache[key]
 
         result = -term
-        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf - inf
+        result = result.clamp(
+            max=torch.finfo(result.dtype).max
+        )  # avoid nan due to inf - inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
@@ -230,6 +237,7 @@ class _SampleProductBackward(Backward):
     :class:`MapRing` (temperature 0 sampling) and :class:`SampleRing`
     (temperature 1 sampling).
     """
+
     def __init__(self, ring, term, ordinal):
         self.ring = ring
         self.term = term
@@ -240,7 +248,7 @@ class _SampleProductBackward(Backward):
             sample_dims = message._pyro_sample_dims
             message = self.ring.broadcast(message, self.ordinal)
             if message._pyro_dims.index(SAMPLE_SYMBOL) != 0:
-                dims = SAMPLE_SYMBOL + message._pyro_dims.replace(SAMPLE_SYMBOL, '')
+                dims = SAMPLE_SYMBOL + message._pyro_dims.replace(SAMPLE_SYMBOL, "")
                 message = message.permute(tuple(map(message._pyro_dims.find, dims)))
                 message._pyro_dims = dims
                 assert message.dim() == len(message._pyro_dims)
@@ -253,11 +261,12 @@ class MapRing(LogRing):
     """
     Ring of forward-maxsum backward-argmax operations.
     """
-    _backend = 'pyro.ops.einsum.torch_map'
+
+    _backend = "pyro.ops.einsum.torch_map"
 
     def product(self, term, ordinal):
         result = super().product(term, ordinal)
-        if hasattr(term, '_pyro_backward'):
+        if hasattr(term, "_pyro_backward"):
             result._pyro_backward = _SampleProductBackward(self, term, ordinal)
         return result
 
@@ -266,11 +275,12 @@ class SampleRing(LogRing):
     """
     Ring of forward-sumproduct backward-sample operations in log space.
     """
-    _backend = 'pyro.ops.einsum.torch_sample'
+
+    _backend = "pyro.ops.einsum.torch_sample"
 
     def product(self, term, ordinal):
         result = super().product(term, ordinal)
-        if hasattr(term, '_pyro_backward'):
+        if hasattr(term, "_pyro_backward"):
             result._pyro_backward = _SampleProductBackward(self, term, ordinal)
         return result
 
@@ -279,6 +289,7 @@ class _MarginalProductBackward(Backward):
     """
     Backward-marginal implementation of product, using inclusion-exclusion.
     """
+
     def __init__(self, ring, term, ordinal, result):
         self.ring = ring
         self.term = term
@@ -306,19 +317,22 @@ class MarginalRing(LogRing):
     """
     Ring of forward-sumproduct backward-marginal operations in log space.
     """
-    _backend = 'pyro.ops.einsum.torch_marginal'
+
+    _backend = "pyro.ops.einsum.torch_marginal"
 
     def product(self, term, ordinal):
         result = super().product(term, ordinal)
-        if hasattr(term, '_pyro_backward'):
-            result._pyro_backward = _MarginalProductBackward(self, term, ordinal, result)
+        if hasattr(term, "_pyro_backward"):
+            result._pyro_backward = _MarginalProductBackward(
+                self, term, ordinal, result
+            )
         return result
 
 
 BACKEND_TO_RING = {
-    'torch': LinearRing,
-    'pyro.ops.einsum.torch_log': LogRing,
-    'pyro.ops.einsum.torch_map': MapRing,
-    'pyro.ops.einsum.torch_sample': SampleRing,
-    'pyro.ops.einsum.torch_marginal': MarginalRing,
+    "torch": LinearRing,
+    "pyro.ops.einsum.torch_log": LogRing,
+    "pyro.ops.einsum.torch_map": MapRing,
+    "pyro.ops.einsum.torch_sample": SampleRing,
+    "pyro.ops.einsum.torch_marginal": MarginalRing,
 }

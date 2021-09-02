@@ -25,7 +25,7 @@ def main(args):
     if not args.test:
         download_data()
         T_forecast = 349
-        data = np.loadtxt('eeg.dat', delimiter=',', skiprows=19)
+        data = np.loadtxt("eeg.dat", delimiter=",", skiprows=19)
         print("[raw data shape] {}".format(data.shape))
         data = torch.tensor(data[::20, :-1]).double()
         print("[data shape after thinning] {}".format(data.shape))
@@ -47,18 +47,29 @@ def main(args):
 
     # set up model
     if args.model == "imgp":
-        gp = IndependentMaternGP(nu=1.5, obs_dim=obs_dim,
-                                 length_scale_init=1.5 * torch.ones(obs_dim)).double()
+        gp = IndependentMaternGP(
+            nu=1.5, obs_dim=obs_dim, length_scale_init=1.5 * torch.ones(obs_dim)
+        ).double()
     elif args.model == "lcmgp":
         num_gps = 9
-        gp = LinearlyCoupledMaternGP(nu=1.5, obs_dim=obs_dim, num_gps=num_gps,
-                                     length_scale_init=1.5 * torch.ones(num_gps)).double()
+        gp = LinearlyCoupledMaternGP(
+            nu=1.5,
+            obs_dim=obs_dim,
+            num_gps=num_gps,
+            length_scale_init=1.5 * torch.ones(num_gps),
+        ).double()
 
     # set up optimizer
-    adam = torch.optim.Adam(gp.parameters(), lr=args.init_learning_rate,
-                            betas=(args.beta1, 0.999), amsgrad=True)
+    adam = torch.optim.Adam(
+        gp.parameters(),
+        lr=args.init_learning_rate,
+        betas=(args.beta1, 0.999),
+        amsgrad=True,
+    )
     # we decay the learning rate over the course of training
-    gamma = (args.final_learning_rate / args.init_learning_rate) ** (1.0 / args.num_steps)
+    gamma = (args.final_learning_rate / args.init_learning_rate) ** (
+        1.0 / args.num_steps
+    )
     scheduler = torch.optim.lr_scheduler.ExponentialLR(adam, gamma=gamma)
 
     report_frequency = 10
@@ -82,30 +93,37 @@ def main(args):
 
         # do rolling prediction
         print("doing one-step-ahead forecasting...")
-        onestep_means, onestep_stds = np.zeros((T_onestep, obs_dim)), np.zeros((T_onestep, obs_dim))
+        onestep_means, onestep_stds = np.zeros((T_onestep, obs_dim)), np.zeros(
+            (T_onestep, obs_dim)
+        )
         for t in range(T_onestep):
             # predict one step into the future, conditioning on all previous data.
             # note that each call to forecast() conditions on more data than the previous call
             dts = torch.tensor([1.0]).double()
-            pred_dist = gp.forecast(data[0:T_train + t, :], dts)
+            pred_dist = gp.forecast(data[0 : T_train + t, :], dts)
             onestep_means[t, :] = pred_dist.loc.data.numpy()
             if args.model == "imgp":
                 onestep_stds[t, :] = pred_dist.scale.data.numpy()
             elif args.model == "lcmgp":
-                onestep_stds[t, :] = pred_dist.covariance_matrix.diagonal(dim1=-1, dim2=-2).data.numpy()
+                onestep_stds[t, :] = pred_dist.covariance_matrix.diagonal(
+                    dim1=-1, dim2=-2
+                ).data.numpy()
 
         # do (non-rolling) multi-step forecasting
         print("doing multi-step forecasting...")
         dts = (1 + torch.arange(T_multistep)).double()
-        pred_dist = gp.forecast(data[0:T_train + T_onestep, :], dts)
+        pred_dist = gp.forecast(data[0 : T_train + T_onestep, :], dts)
         multistep_means = pred_dist.loc.data.numpy()
         if args.model == "imgp":
             multistep_stds = pred_dist.scale.data.numpy()
         elif args.model == "lcmgp":
-            multistep_stds = pred_dist.covariance_matrix.diagonal(dim1=-1, dim2=-2).data.numpy()
+            multistep_stds = pred_dist.covariance_matrix.diagonal(
+                dim1=-1, dim2=-2
+            ).data.numpy()
 
         import matplotlib
-        matplotlib.use('Agg')  # noqa: E402
+
+        matplotlib.use("Agg")  # noqa: E402
         import matplotlib.pyplot as plt
 
         f, axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
@@ -116,46 +134,70 @@ def main(args):
             which = [0, 4, 10][k]
 
             # plot raw data
-            ax.plot(to_seconds * np.arange(T), data[:, which], 'ko', markersize=2, label='Data')
+            ax.plot(
+                to_seconds * np.arange(T),
+                data[:, which],
+                "ko",
+                markersize=2,
+                label="Data",
+            )
 
             # plot mean predictions for one-step-ahead forecasts
-            ax.plot(to_seconds * (T_train + np.arange(T_onestep)),
-                    onestep_means[:, which], ls='solid', color='b', label='One-step')
+            ax.plot(
+                to_seconds * (T_train + np.arange(T_onestep)),
+                onestep_means[:, which],
+                ls="solid",
+                color="b",
+                label="One-step",
+            )
             # plot 90% confidence intervals for one-step-ahead forecasts
-            ax.fill_between(to_seconds * (T_train + np.arange(T_onestep)),
-                            onestep_means[:, which] - 1.645 * onestep_stds[:, which],
-                            onestep_means[:, which] + 1.645 * onestep_stds[:, which],
-                            color='b', alpha=0.20)
+            ax.fill_between(
+                to_seconds * (T_train + np.arange(T_onestep)),
+                onestep_means[:, which] - 1.645 * onestep_stds[:, which],
+                onestep_means[:, which] + 1.645 * onestep_stds[:, which],
+                color="b",
+                alpha=0.20,
+            )
 
             # plot mean predictions for multi-step-ahead forecasts
-            ax.plot(to_seconds * (T_train + T_onestep + np.arange(T_multistep)),
-                    multistep_means[:, which], ls='solid', color='r', label='Multi-step')
+            ax.plot(
+                to_seconds * (T_train + T_onestep + np.arange(T_multistep)),
+                multistep_means[:, which],
+                ls="solid",
+                color="r",
+                label="Multi-step",
+            )
             # plot 90% confidence intervals for multi-step-ahead forecasts
-            ax.fill_between(to_seconds * (T_train + T_onestep + np.arange(T_multistep)),
-                            multistep_means[:, which] - 1.645 * multistep_stds[:, which],
-                            multistep_means[:, which] + 1.645 * multistep_stds[:, which],
-                            color='r', alpha=0.20)
+            ax.fill_between(
+                to_seconds * (T_train + T_onestep + np.arange(T_multistep)),
+                multistep_means[:, which] - 1.645 * multistep_stds[:, which],
+                multistep_means[:, which] + 1.645 * multistep_stds[:, which],
+                color="r",
+                alpha=0.20,
+            )
 
             ax.set_ylabel("$y_{%d}$" % (which + 1), fontsize=20)
-            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.tick_params(axis="both", which="major", labelsize=14)
             if k == 1:
-                ax.legend(loc='upper left', fontsize=16)
+                ax.legend(loc="upper left", fontsize=16)
 
         plt.tight_layout(pad=0.7)
-        plt.savefig('eeg.{}.pdf'.format(args.model))
+        plt.savefig("eeg.{}.pdf".format(args.model))
 
 
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.6.0')
+if __name__ == "__main__":
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="contrib.timeseries example usage")
     parser.add_argument("-n", "--num-steps", default=300, type=int)
     parser.add_argument("-s", "--seed", default=0, type=int)
-    parser.add_argument("-m", "--model", default="imgp", type=str, choices=["imgp", "lcmgp"])
+    parser.add_argument(
+        "-m", "--model", default="imgp", type=str, choices=["imgp", "lcmgp"]
+    )
     parser.add_argument("-ilr", "--init-learning-rate", default=0.01, type=float)
     parser.add_argument("-flr", "--final-learning-rate", default=0.0003, type=float)
     parser.add_argument("-b1", "--beta1", default=0.50, type=float)
-    parser.add_argument("--test", action='store_true')
-    parser.add_argument("--plot", action='store_true')
+    parser.add_argument("--test", action="store_true")
+    parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
 
     main(args)

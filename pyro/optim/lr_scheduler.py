@@ -1,6 +1,10 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any, Dict, Iterable, List, Optional, Union, ValuesView
+
+from torch import Tensor
+
 from pyro.optim.optim import PyroOptim
 
 
@@ -25,24 +29,32 @@ class PyroLRScheduler(PyroOptim):
                 svi.step(minibatch)
             scheduler.step()
     """
-    def __init__(self, scheduler_constructor, optim_args, clip_args=None):
+
+    def __init__(
+        self,
+        scheduler_constructor,
+        optim_args: Union[Dict],
+        clip_args: Optional[Union[Dict]] = None,
+    ):
         # pytorch scheduler
         self.pt_scheduler_constructor = scheduler_constructor
         # torch optimizer
-        pt_optim_constructor = optim_args.pop('optimizer')
+        pt_optim_constructor = optim_args.pop("optimizer")
         # kwargs for the torch optimizer
-        optim_kwargs = optim_args.pop('optim_args')
+        optim_kwargs = optim_args.pop("optim_args")
         self.kwargs = optim_args
         super().__init__(pt_optim_constructor, optim_kwargs, clip_args)
 
-    def __call__(self, params, *args, **kwargs):
+    def __call__(self, params: Union[List, ValuesView], *args, **kwargs) -> None:
         super().__call__(params, *args, **kwargs)
 
-    def _get_optim(self, params):
+    def _get_optim(
+        self, params: Union[Tensor, Iterable[Tensor], Iterable[Dict[Any, Any]]]
+    ):
         optim = super()._get_optim(params)
         return self.pt_scheduler_constructor(optim, **self.kwargs)
 
-    def step(self, *args, **kwargs):
+    def step(self, *args, **kwargs) -> None:
         """
         Takes the same arguments as the PyTorch scheduler
         (e.g. optional ``loss`` for ``ReduceLROnPlateau``)

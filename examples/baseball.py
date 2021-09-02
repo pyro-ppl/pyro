@@ -51,7 +51,7 @@ hyper-parameters) of running HMC on different problems.
     path lengths in Hamiltonian Monte Carlo", (https://arxiv.org/abs/1111.4246)
 """
 
-logging.basicConfig(format='%(message)s', level=logging.INFO)
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 DATA_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
@@ -106,7 +106,9 @@ def partially_pooled(at_bats, hits):
     """
     num_players = at_bats.shape[0]
     m = pyro.sample("m", Uniform(scalar_like(at_bats, 0), scalar_like(at_bats, 1)))
-    kappa = pyro.sample("kappa", Pareto(scalar_like(at_bats, 1), scalar_like(at_bats, 1.5)))
+    kappa = pyro.sample(
+        "kappa", Pareto(scalar_like(at_bats, 1), scalar_like(at_bats, 1.5))
+    )
     with pyro.plate("num_players", num_players):
         phi_prior = Beta(m * kappa, (1 - m) * kappa)
         phi = pyro.sample("phi", phi_prior)
@@ -136,7 +138,14 @@ def partially_pooled_with_logit(at_bats, hits):
 # ===================================
 
 
-def get_summary_table(posterior, sites, player_names, transforms={}, diagnostics=False, group_by_chain=False):
+def get_summary_table(
+    posterior,
+    sites,
+    player_names,
+    transforms={},
+    diagnostics=False,
+    group_by_chain=False,
+):
     """
     Return summarized statistics for each of the ``sites`` in the
     traces corresponding to the approximate posterior.
@@ -149,7 +158,9 @@ def get_summary_table(posterior, sites, player_names, transforms={}, diagnostics
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
 
-        site_summary = summary({site_name: marginal_site}, prob=0.5, group_by_chain=group_by_chain)[site_name]
+        site_summary = summary(
+            {site_name: marginal_site}, prob=0.5, group_by_chain=group_by_chain
+        )[site_name]
         if site_summary["mean"].shape:
             site_df = pd.DataFrame(site_summary, index=player_names)
         else:
@@ -167,11 +178,19 @@ def train_test_split(pd_dataframe):
     Validation data - Full season at-bats and hits for each player.
     """
     device = torch.Tensor().device
-    train_data = torch.tensor(pd_dataframe[["At-Bats", "Hits"]].values, dtype=torch.float, device=device)
-    test_data = torch.tensor(pd_dataframe[["SeasonAt-Bats", "SeasonHits"]].values, dtype=torch.float, device=device)
+    train_data = torch.tensor(
+        pd_dataframe[["At-Bats", "Hits"]].values, dtype=torch.float, device=device
+    )
+    test_data = torch.tensor(
+        pd_dataframe[["SeasonAt-Bats", "SeasonHits"]].values,
+        dtype=torch.float,
+        device=device,
+    )
     first_name = pd_dataframe["FirstName"].values
     last_name = pd_dataframe["LastName"].values
-    player_names = [" ".join([first, last]) for first, last in zip(first_name, last_name)]
+    player_names = [
+        " ".join([first, last]) for first, last in zip(first_name, last_name)
+    ]
     return train_data, test_data, player_names
 
 
@@ -193,19 +212,21 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset):
     logging.info("-----------------------------")
     # set hits=None to convert it from observation node to sample node
     train_predict = Predictive(model, posterior_samples)(at_bats, None)
-    train_summary = get_summary_table(train_predict,
-                                      sites=["obs"],
-                                      player_names=player_names)["obs"]
+    train_summary = get_summary_table(
+        train_predict, sites=["obs"], player_names=player_names
+    )["obs"]
     train_summary = train_summary.assign(ActualHits=baseball_dataset[["Hits"]].values)
     logging.info(train_summary)
     logging.info("\nHit Rate - Season Predictions")
     logging.info("-----------------------------")
     with ignore_experimental_warning():
         test_predict = Predictive(model, posterior_samples)(at_bats_season, None)
-    test_summary = get_summary_table(test_predict,
-                                     sites=["obs"],
-                                     player_names=player_names)["obs"]
-    test_summary = test_summary.assign(ActualHits=baseball_dataset[["SeasonHits"]].values)
+    test_summary = get_summary_table(
+        test_predict, sites=["obs"], player_names=player_names
+    )["obs"]
+    test_summary = test_summary.assign(
+        ActualHits=baseball_dataset[["SeasonHits"]].values
+    )
     logging.info(test_summary)
 
 
@@ -216,7 +237,9 @@ def evaluate_pointwise_pred_density(model, posterior_samples, baseball_dataset):
     """
     _, test, player_names = train_test_split(baseball_dataset)
     at_bats_season, hits_season = test[:, 0], test[:, 1]
-    trace = Predictive(model, posterior_samples).get_vectorized_trace(at_bats_season, hits_season)
+    trace = Predictive(model, posterior_samples).get_vectorized_trace(
+        at_bats_season, hits_season
+    )
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     trace.compute_log_prob()
@@ -238,46 +261,64 @@ def main(args):
     # (1) Full Pooling Model
     # In this model, we illustrate how to use MCMC with general potential_fn.
     init_params, potential_fn, transforms, _ = initialize_model(
-        fully_pooled, model_args=(at_bats, hits), num_chains=args.num_chains,
-        jit_compile=args.jit, skip_jit_warnings=True)
+        fully_pooled,
+        model_args=(at_bats, hits),
+        num_chains=args.num_chains,
+        jit_compile=args.jit,
+        skip_jit_warnings=True,
+    )
     nuts_kernel = NUTS(potential_fn=potential_fn)
-    mcmc = MCMC(nuts_kernel,
-                num_samples=args.num_samples,
-                warmup_steps=args.warmup_steps,
-                num_chains=args.num_chains,
-                initial_params=init_params,
-                transforms=transforms)
+    mcmc = MCMC(
+        nuts_kernel,
+        num_samples=args.num_samples,
+        warmup_steps=args.warmup_steps,
+        num_chains=args.num_chains,
+        initial_params=init_params,
+        transforms=transforms,
+    )
     mcmc.run(at_bats, hits)
     samples_fully_pooled = mcmc.get_samples()
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
-    logging.info(get_summary_table(mcmc.get_samples(group_by_chain=True),
-                                   sites=["phi"],
-                                   player_names=player_names,
-                                   diagnostics=True,
-                                   group_by_chain=True)["phi"])
+    logging.info(
+        get_summary_table(
+            mcmc.get_samples(group_by_chain=True),
+            sites=["phi"],
+            player_names=player_names,
+            diagnostics=True,
+            group_by_chain=True,
+        )["phi"]
+    )
     num_divergences = sum(map(len, mcmc.diagnostics()["divergences"].values()))
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
     sample_posterior_predictive(fully_pooled, samples_fully_pooled, baseball_dataset)
-    evaluate_pointwise_pred_density(fully_pooled, samples_fully_pooled, baseball_dataset)
+    evaluate_pointwise_pred_density(
+        fully_pooled, samples_fully_pooled, baseball_dataset
+    )
 
     # (2) No Pooling Model
     nuts_kernel = NUTS(not_pooled, jit_compile=args.jit, ignore_jit_warnings=True)
-    mcmc = MCMC(nuts_kernel,
-                num_samples=args.num_samples,
-                warmup_steps=args.warmup_steps,
-                num_chains=args.num_chains)
+    mcmc = MCMC(
+        nuts_kernel,
+        num_samples=args.num_samples,
+        warmup_steps=args.warmup_steps,
+        num_chains=args.num_chains,
+    )
     mcmc.run(at_bats, hits)
     samples_not_pooled = mcmc.get_samples()
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
-    logging.info(get_summary_table(mcmc.get_samples(group_by_chain=True),
-                                   sites=["phi"],
-                                   player_names=player_names,
-                                   diagnostics=True,
-                                   group_by_chain=True)["phi"])
+    logging.info(
+        get_summary_table(
+            mcmc.get_samples(group_by_chain=True),
+            sites=["phi"],
+            player_names=player_names,
+            diagnostics=True,
+            group_by_chain=True,
+        )["phi"]
+    )
     num_divergences = sum(map(len, mcmc.diagnostics()["divergences"].values()))
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
     sample_posterior_predictive(not_pooled, samples_not_pooled, baseball_dataset)
@@ -285,61 +326,83 @@ def main(args):
 
     # (3) Partially Pooled Model
     nuts_kernel = NUTS(partially_pooled, jit_compile=args.jit, ignore_jit_warnings=True)
-    mcmc = MCMC(nuts_kernel,
-                num_samples=args.num_samples,
-                warmup_steps=args.warmup_steps,
-                num_chains=args.num_chains)
+    mcmc = MCMC(
+        nuts_kernel,
+        num_samples=args.num_samples,
+        warmup_steps=args.warmup_steps,
+        num_chains=args.num_chains,
+    )
     mcmc.run(at_bats, hits)
     samples_partially_pooled = mcmc.get_samples()
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
     logging.info("\nphi:")
-    logging.info(get_summary_table(mcmc.get_samples(group_by_chain=True),
-                                   sites=["phi"],
-                                   player_names=player_names,
-                                   diagnostics=True,
-                                   group_by_chain=True)["phi"])
+    logging.info(
+        get_summary_table(
+            mcmc.get_samples(group_by_chain=True),
+            sites=["phi"],
+            player_names=player_names,
+            diagnostics=True,
+            group_by_chain=True,
+        )["phi"]
+    )
     num_divergences = sum(map(len, mcmc.diagnostics()["divergences"].values()))
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
-    sample_posterior_predictive(partially_pooled, samples_partially_pooled, baseball_dataset)
-    evaluate_pointwise_pred_density(partially_pooled, samples_partially_pooled, baseball_dataset)
+    sample_posterior_predictive(
+        partially_pooled, samples_partially_pooled, baseball_dataset
+    )
+    evaluate_pointwise_pred_density(
+        partially_pooled, samples_partially_pooled, baseball_dataset
+    )
 
     # (4) Partially Pooled with Logit Model
-    nuts_kernel = NUTS(partially_pooled_with_logit, jit_compile=args.jit, ignore_jit_warnings=True)
-    mcmc = MCMC(nuts_kernel,
-                num_samples=args.num_samples,
-                warmup_steps=args.warmup_steps,
-                num_chains=args.num_chains)
+    nuts_kernel = NUTS(
+        partially_pooled_with_logit, jit_compile=args.jit, ignore_jit_warnings=True
+    )
+    mcmc = MCMC(
+        nuts_kernel,
+        num_samples=args.num_samples,
+        warmup_steps=args.warmup_steps,
+        num_chains=args.num_chains,
+    )
     mcmc.run(at_bats, hits)
     samples_partially_pooled_logit = mcmc.get_samples()
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
     logging.info("\nSigmoid(alpha):")
-    logging.info(get_summary_table(mcmc.get_samples(group_by_chain=True),
-                                   sites=["alpha"],
-                                   player_names=player_names,
-                                   transforms={"alpha": torch.sigmoid},
-                                   diagnostics=True,
-                                   group_by_chain=True)["alpha"])
+    logging.info(
+        get_summary_table(
+            mcmc.get_samples(group_by_chain=True),
+            sites=["alpha"],
+            player_names=player_names,
+            transforms={"alpha": torch.sigmoid},
+            diagnostics=True,
+            group_by_chain=True,
+        )["alpha"]
+    )
     num_divergences = sum(map(len, mcmc.diagnostics()["divergences"].values()))
     logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
-    sample_posterior_predictive(partially_pooled_with_logit, samples_partially_pooled_logit,
-                                baseball_dataset)
-    evaluate_pointwise_pred_density(partially_pooled_with_logit, samples_partially_pooled_logit,
-                                    baseball_dataset)
+    sample_posterior_predictive(
+        partially_pooled_with_logit, samples_partially_pooled_logit, baseball_dataset
+    )
+    evaluate_pointwise_pred_density(
+        partially_pooled_with_logit, samples_partially_pooled_logit, baseball_dataset
+    )
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('1.6.0')
+    assert pyro.__version__.startswith("1.7.0")
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
-    parser.add_argument("--num-chains", nargs='?', default=4, type=int)
-    parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
-    parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
-    parser.add_argument("--jit", action="store_true", default=False,
-                        help="use PyTorch jit")
-    parser.add_argument("--cuda", action="store_true", default=False,
-                        help="run this example in GPU")
+    parser.add_argument("--num-chains", nargs="?", default=4, type=int)
+    parser.add_argument("--warmup-steps", nargs="?", default=100, type=int)
+    parser.add_argument("--rng_seed", nargs="?", default=0, type=int)
+    parser.add_argument(
+        "--jit", action="store_true", default=False, help="use PyTorch jit"
+    )
+    parser.add_argument(
+        "--cuda", action="store_true", default=False, help="run this example in GPU"
+    )
     args = parser.parse_args()
 
     # work around the error "CUDA error: initialization error"

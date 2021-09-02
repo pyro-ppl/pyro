@@ -19,26 +19,28 @@ from tests.common import assert_equal
 
 
 def test_svi_smoke():
-
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
             self.loc = nn.Parameter(torch.zeros(2))
             self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
-            self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
+            self.z = PyroSample(
+                lambda self: dist.Normal(self.loc, self.scale).to_event(1)
+            )
 
         def forward(self, data):
             loc, log_scale = self.z.unbind(-1)
             with pyro.plate("data"):
-                pyro.sample("obs", dist.Cauchy(loc, log_scale.exp()),
-                            obs=data)
+                pyro.sample("obs", dist.Cauchy(loc, log_scale.exp()), obs=data)
 
     class Guide(PyroModule):
         def __init__(self):
             super().__init__()
             self.loc = nn.Parameter(torch.zeros(2))
             self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
-            self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
+            self.z = PyroSample(
+                lambda self: dist.Normal(self.loc, self.scale).to_event(1)
+            )
 
         def forward(self, *args, **kwargs):
             return self.z
@@ -65,17 +67,16 @@ def test_svi_smoke():
 
 
 def test_names():
-
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
-            self.x = nn.Parameter(torch.tensor(0.))
-            self.y = PyroParam(torch.tensor(1.), constraint=constraints.positive)
+            self.x = nn.Parameter(torch.tensor(0.0))
+            self.y = PyroParam(torch.tensor(1.0), constraint=constraints.positive)
             self.m = nn.Module()
             self.m.u = nn.Parameter(torch.tensor(2.0))
             self.p = PyroModule()
-            self.p.v = nn.Parameter(torch.tensor(3.))
-            self.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+            self.p.v = nn.Parameter(torch.tensor(3.0))
+            self.p.w = PyroParam(torch.tensor(4.0), constraint=constraints.positive)
 
         def forward(self):
             # trigger .__getattr__()
@@ -102,8 +103,11 @@ def test_names():
     expected = {"x", "y", "m$$$u", "p.v", "p.w"}
     with poutine.trace(param_only=True) as param_capture:
         model()
-    actual = {name for name, site in param_capture.trace.nodes.items()
-              if site["type"] == "param"}
+    actual = {
+        name
+        for name, site in param_capture.trace.nodes.items()
+        if site["type"] == "param"
+    }
     assert actual == expected
 
     # Check pyro_parameters method
@@ -114,7 +118,7 @@ def test_names():
 
 def test_delete():
     m = PyroModule()
-    m.a = PyroParam(torch.tensor(1.))
+    m.a = PyroParam(torch.tensor(1.0))
     del m.a
     m.a = PyroParam(torch.tensor(0.1))
     assert_equal(m.a.detach(), torch.tensor(0.1))
@@ -129,12 +133,12 @@ def test_nested():
     class Family(PyroModule):
         def __init__(self):
             super().__init__()
-            self.child1 = Child(torch.tensor(1.))
-            self.child2 = Child(torch.tensor(2.))
+            self.child1 = Child(torch.tensor(1.0))
+            self.child2 = Child(torch.tensor(2.0))
 
     f = Family()
-    assert_equal(f.child1.a.detach(), torch.tensor(1.))
-    assert_equal(f.child2.a.detach(), torch.tensor(2.))
+    assert_equal(f.child1.a.detach(), torch.tensor(1.0))
+    assert_equal(f.child2.a.detach(), torch.tensor(2.0))
 
 
 def test_module_cache():
@@ -155,10 +159,10 @@ def test_module_cache():
             return self.c.a
 
     f = Family()
-    assert_equal(f().detach(), torch.tensor(1.))
-    f.c = Child(3.)
-    assert_equal(f().detach(), torch.tensor(3.))
-    assert_equal(f.c().detach(), torch.tensor(3.))
+    assert_equal(f().detach(), torch.tensor(1.0))
+    f.c = Child(3.0)
+    assert_equal(f().detach(), torch.tensor(3.0))
+    assert_equal(f.c().detach(), torch.tensor(3.0))
 
 
 def test_submodule_contains_torch_module():
@@ -194,10 +198,16 @@ SHAPE_CONSTRAINT = [
     ((4,), constraints.positive),
     ((3, 2), constraints.positive),
     ((5,), constraints.simplex),
-    ((2, 5,), constraints.simplex),
+    (
+        (
+            2,
+            5,
+        ),
+        constraints.simplex,
+    ),
     ((5, 5), constraints.lower_cholesky),
     ((2, 5, 5), constraints.lower_cholesky),
-    ((10, ), constraints.greater_than(-torch.randn(10).exp())),
+    ((10,), constraints.greater_than(-torch.randn(10).exp())),
     ((4, 10), constraints.greater_than(-torch.randn(10).exp())),
     ((4, 10), constraints.greater_than(-torch.randn(4, 10).exp())),
     ((3, 2, 10), constraints.greater_than(-torch.randn(10).exp())),
@@ -205,20 +215,23 @@ SHAPE_CONSTRAINT = [
     ((3, 2, 10), constraints.greater_than(-torch.randn(3, 1, 10).exp())),
     ((3, 2, 10), constraints.greater_than(-torch.randn(3, 2, 10).exp())),
     ((5,), constraints.real_vector),
-    ((2, 5,), constraints.real_vector),
+    (
+        (
+            2,
+            5,
+        ),
+        constraints.real_vector,
+    ),
     ((), constraints.unit_interval),
-    ((4, ), constraints.unit_interval),
+    ((4,), constraints.unit_interval),
     ((3, 2), constraints.unit_interval),
-    ((10,), constraints.interval(-torch.randn(10).exp(),
-                                 torch.randn(10).exp())),
-    ((4, 10), constraints.interval(-torch.randn(10).exp(),
-                                   torch.randn(10).exp())),
-    ((3, 2, 10), constraints.interval(-torch.randn(10).exp(),
-                                      torch.randn(10).exp())),
+    ((10,), constraints.interval(-torch.randn(10).exp(), torch.randn(10).exp())),
+    ((4, 10), constraints.interval(-torch.randn(10).exp(), torch.randn(10).exp())),
+    ((3, 2, 10), constraints.interval(-torch.randn(10).exp(), torch.randn(10).exp())),
 ]
 
 
-@pytest.mark.parametrize('shape,constraint_', SHAPE_CONSTRAINT)
+@pytest.mark.parametrize("shape,constraint_", SHAPE_CONSTRAINT)
 def test_constraints(shape, constraint_):
     module = PyroModule()
     module.x = PyroParam(torch.full(shape, 1e-4), constraint_)
@@ -240,22 +253,21 @@ def test_constraints(shape, constraint_):
     assert constraint_.check(module.x).all()
 
     del module.x
-    assert 'x' not in module._pyro_params
-    assert not hasattr(module, 'x')
-    assert not hasattr(module, 'x_unconstrained')
+    assert "x" not in module._pyro_params
+    assert not hasattr(module, "x")
+    assert not hasattr(module, "x_unconstrained")
 
 
 def test_clear():
-
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
-            self.x = nn.Parameter(torch.tensor(0.))
+            self.x = nn.Parameter(torch.tensor(0.0))
             self.m = torch.nn.Linear(2, 3)
-            self.m.weight.data.fill_(1.)
-            self.m.bias.data.fill_(2.)
+            self.m.weight.data.fill_(1.0)
+            self.m.bias.data.fill_(2.0)
             self.p = PyroModule()
-            self.p.x = nn.Parameter(torch.tensor(3.))
+            self.p.x = nn.Parameter(torch.tensor(3.0))
 
         def forward(self):
             return [x.clone() for x in [self.x, self.m.weight, self.m.bias, self.p.x]]
@@ -285,25 +297,25 @@ def test_clear():
 
 
 def test_sample():
-
     class Model(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.weight = PyroSample(
                 lambda self: dist.Normal(0, 1)
-                                 .expand([self.out_features,
-                                          self.in_features])
-                                 .to_event(2))
+                .expand([self.out_features, self.in_features])
+                .to_event(2)
+            )
 
     class Guide(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.loc = PyroParam(torch.zeros_like(self.weight))
-            self.scale = PyroParam(torch.ones_like(self.weight),
-                                   constraint=constraints.positive)
+            self.scale = PyroParam(
+                torch.ones_like(self.weight), constraint=constraints.positive
+            )
             self.weight = PyroSample(
-                lambda self: dist.Normal(self.loc, self.scale)
-                                 .to_event(2))
+                lambda self: dist.Normal(self.loc, self.scale).to_event(2)
+            )
 
     data = torch.randn(8)
     model = Model(8, 2)
@@ -331,12 +343,12 @@ def test_cache():
             }
 
     module = MyModule()
-    module.a = nn.Parameter(torch.tensor(0.))
-    module.b = PyroParam(torch.tensor(1.), constraint=constraints.positive)
+    module.a = nn.Parameter(torch.tensor(0.0))
+    module.b = PyroParam(torch.tensor(1.0), constraint=constraints.positive)
     module.c = PyroSample(dist.Normal(0, 1))
     module.p = PyroModule()
-    module.p.d = nn.Parameter(torch.tensor(3.))
-    module.p.e = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+    module.p.d = nn.Parameter(torch.tensor(3.0))
+    module.p.e = PyroParam(torch.tensor(4.0), constraint=constraints.positive)
     module.p.f = PyroSample(dist.Normal(0, 1))
 
     assert module._pyro_context is module.p._pyro_context
@@ -358,9 +370,9 @@ class AttributeModel(PyroModule):
         super().__init__()
         self.x = PyroParam(torch.zeros(size))
         self.y = PyroParam(lambda: torch.randn(size))
-        self.z = PyroParam(torch.ones(size),
-                           constraint=constraints.positive,
-                           event_dim=1)
+        self.z = PyroParam(
+            torch.ones(size), constraint=constraints.positive, event_dim=1
+        )
         self.s = PyroSample(dist.Normal(0, 1))
         self.t = PyroSample(lambda self: dist.Normal(self.s, self.z))
 
@@ -505,9 +517,16 @@ def test_to_pyro_module_():
     def randomize(model):
         for m in model.modules():
             for name, value in list(m.named_parameters(recurse=False)):
-                setattr(m, name, PyroSample(prior=dist.Normal(0, 1)
-                                                      .expand(value.shape)
-                                                      .to_event(value.dim())))
+                setattr(
+                    m,
+                    name,
+                    PyroSample(
+                        prior=dist.Normal(0, 1)
+                        .expand(value.shape)
+                        .to_event(value.dim())
+                    ),
+                )
+
     randomize(actual)
     randomize(expected)
     assert_identical(actual, expected)

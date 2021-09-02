@@ -10,9 +10,7 @@ from pyro.util import optional
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
-                                                (1000, 7),
-                                                (1, 1)])
+@pytest.mark.parametrize("n_samples,dim_size", [(1000, 1), (1000, 7), (1, 1)])
 @pytest.mark.init(rng_seed=7)
 def test_welford_diagonal(n_samples, dim_size):
     w = WelfordCovariance(diagonal=True)
@@ -32,9 +30,7 @@ def test_welford_diagonal(n_samples, dim_size):
         assert_equal(estimates, sample_variance)
 
 
-@pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
-                                                (1000, 7),
-                                                (1, 1)])
+@pytest.mark.parametrize("n_samples,dim_size", [(1000, 1), (1000, 7), (1, 1)])
 @pytest.mark.init(rng_seed=7)
 def test_welford_dense(n_samples, dim_size):
     w = WelfordCovariance(diagonal=False)
@@ -52,13 +48,11 @@ def test_welford_dense(n_samples, dim_size):
         assert_equal(estimates, sample_cov)
 
 
-@pytest.mark.parametrize('n_samples,dim_size,head_size', [
-    (1000, 5, 0),
-    (1000, 5, 1),
-    (1000, 5, 4),
-    (1000, 5, 5)
-])
-@pytest.mark.parametrize('regularize', [True, False])
+@pytest.mark.parametrize(
+    "n_samples,dim_size,head_size",
+    [(1000, 5, 0), (1000, 5, 1), (1000, 5, 4), (1000, 5, 5)],
+)
+@pytest.mark.parametrize("regularize", [True, False])
 def test_welford_arrowhead(n_samples, dim_size, head_size, regularize):
     adapt_scheme = WelfordArrowheadCovariance(head_size=head_size)
     loc = torch.zeros(dim_size)
@@ -70,14 +64,18 @@ def test_welford_arrowhead(n_samples, dim_size, head_size, regularize):
     for sample in samples:
         adapt_scheme.update(sample)
     top, bottom_diag = adapt_scheme.get_covariance(regularize=regularize)
-    actual = torch.cat([top, torch.cat([top[:, head_size:].t(), bottom_diag.diag()], -1)])
+    actual = torch.cat(
+        [top, torch.cat([top[:, head_size:].t(), bottom_diag.diag()], -1)]
+    )
 
     mask = torch.ones(dim_size, dim_size)
-    mask[head_size:, head_size:] = 0.
-    mask.view(-1)[::dim_size + 1][head_size:] = 1.
+    mask[head_size:, head_size:] = 0.0
+    mask.view(-1)[:: dim_size + 1][head_size:] = 1.0
     expected = np.cov(samples.cpu().numpy(), bias=False, rowvar=False)
     expected = torch.from_numpy(expected).type_as(mask)
     if regularize:
-        expected = (expected * n_samples + 1e-3 * torch.eye(dim_size) * 5) / (n_samples + 5)
+        expected = (expected * n_samples + 1e-3 * torch.eye(dim_size) * 5) / (
+            n_samples + 5
+        )
     expected = expected * mask
     assert_equal(actual, expected)

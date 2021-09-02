@@ -34,15 +34,16 @@ class HashingMarginal(dist.Distribution):
     Turns a TracePosterior object into a Distribution
     over the return values of the TracePosterior's model.
     """
+
     def __init__(self, trace_dist, sites=None):
-        assert isinstance(trace_dist, TracePosterior), \
-            "trace_dist must be trace posterior distribution object"
+        assert isinstance(
+            trace_dist, TracePosterior
+        ), "trace_dist must be trace posterior distribution object"
 
         if sites is None:
             sites = "_RETURN"
 
-        assert isinstance(sites, (str, list)), \
-            "sites must be either '_RETURN' or list"
+        assert isinstance(sites, (str, list)), "sites must be either '_RETURN' or list"
 
         self.sites = sites
         super().__init__()
@@ -54,8 +55,7 @@ class HashingMarginal(dist.Distribution):
     def _dist_and_values(self):
         # XXX currently this whole object is very inefficient
         values_map, logits = collections.OrderedDict(), collections.OrderedDict()
-        for tr, logit in zip(self.trace_dist.exec_traces,
-                             self.trace_dist.log_weights):
+        for tr, logit in zip(self.trace_dist.exec_traces, self.trace_dist.log_weights):
             if isinstance(self.sites, str):
                 value = tr.nodes[self.sites]["value"]
             else:
@@ -71,7 +71,9 @@ class HashingMarginal(dist.Distribution):
                 value_hash = hash(value)
             if value_hash in logits:
                 # Value has already been seen.
-                logits[value_hash] = logsumexp(torch.stack([logits[value_hash], logit]), dim=-1)
+                logits[value_hash] = logsumexp(
+                    torch.stack([logits[value_hash], logit]), dim=-1
+                )
             else:
                 logits[value_hash] = logit
                 values_map[value_hash] = value
@@ -133,10 +135,12 @@ class HashingMarginal(dist.Distribution):
 # Exact Search inference
 ########################
 
+
 class Search(TracePosterior):
     """
     Exact inference by enumerating over all possible executions
     """
+
     def __init__(self, model, max_tries=int(1e6), **kwargs):
         self.model = model
         self.max_tries = max_tries
@@ -145,8 +149,7 @@ class Search(TracePosterior):
     def _traces(self, *args, **kwargs):
         q = queue.Queue()
         q.put(poutine.Trace())
-        p = poutine.trace(
-            poutine.queue(self.model, queue=q, max_tries=self.max_tries))
+        p = poutine.trace(poutine.queue(self.model, queue=q, max_tries=self.max_tries))
         while not q.empty():
             tr = p.get_trace(*args, **kwargs)
             yield tr, tr.log_prob_sum()
@@ -158,30 +161,38 @@ class Search(TracePosterior):
 
 
 def pqueue(fn, queue):
-
     def sample_escape(tr, site):
-        return (site["name"] not in tr) and \
-            (site["type"] == "sample") and \
-            (not site["is_observed"])
+        return (
+            (site["name"] not in tr)
+            and (site["type"] == "sample")
+            and (not site["is_observed"])
+        )
 
     def _fn(*args, **kwargs):
 
         for i in range(int(1e6)):
-            assert not queue.empty(), \
-                "trying to get() from an empty queue will deadlock"
+            assert (
+                not queue.empty()
+            ), "trying to get() from an empty queue will deadlock"
 
             priority, next_trace = queue.get()
             try:
-                ftr = poutine.trace(poutine.escape(poutine.replay(fn, next_trace),
-                                                   functools.partial(sample_escape,
-                                                                     next_trace)))
+                ftr = poutine.trace(
+                    poutine.escape(
+                        poutine.replay(fn, next_trace),
+                        functools.partial(sample_escape, next_trace),
+                    )
+                )
                 return ftr(*args, **kwargs)
             except NonlocalExit as site_container:
                 site_container.reset_stack()
-                for tr in poutine.util.enum_extend(ftr.trace.copy(),
-                                                   site_container.site):
+                for tr in poutine.util.enum_extend(
+                    ftr.trace.copy(), site_container.site
+                ):
                     # add a little bit of noise to the priority to break ties...
-                    queue.put((tr.log_prob_sum().item() - torch.rand(1).item() * 1e-2, tr))
+                    queue.put(
+                        (tr.log_prob_sum().item() - torch.rand(1).item() * 1e-2, tr)
+                    )
 
         raise ValueError("max tries ({}) exceeded".format(str(1e6)))
 
@@ -193,6 +204,7 @@ class BestFirstSearch(TracePosterior):
     Inference by enumerating executions ordered by their probabilities.
     Exact (and results equivalent to Search) if all executions are enumerated.
     """
+
     def __init__(self, model, num_samples=None, **kwargs):
         if num_samples is None:
             num_samples = 100

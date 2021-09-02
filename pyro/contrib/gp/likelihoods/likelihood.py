@@ -11,6 +11,7 @@ class Likelihood(Parameterized):
     Every inherited class should implement a forward pass which
     takes an input :math:`f` and returns a sample :math:`y`.
     """
+
     def __init__(self):
         super().__init__()
 

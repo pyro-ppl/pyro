@@ -78,7 +78,9 @@ def split_gelman_rubin(input, chain_dim=0, sample_dim=1):
     new_input = torch.stack([input[:, :N_half], input[:, -N_half:]], dim=1)
     new_input = new_input.reshape((-1, N_half) + input.shape[2:])
     split_rhat = gelman_rubin(new_input)
-    return split_rhat.squeeze(max(sample_dim, chain_dim)).squeeze(min(sample_dim, chain_dim))
+    return split_rhat.squeeze(max(sample_dim, chain_dim)).squeeze(
+        min(sample_dim, chain_dim)
+    )
 
 
 def autocorrelation(input, dim=0):
@@ -92,8 +94,9 @@ def autocorrelation(input, dim=0):
     :returns torch.Tensor: autocorrelation of ``input``.
     """
     if (not input.is_cuda) and (not torch.backends.mkl.is_available()):
-        raise NotImplementedError("For CPU tensor, this method is only supported "
-                                  "with MKL installed.")
+        raise NotImplementedError(
+            "For CPU tensor, this method is only supported " "with MKL installed."
+        )
 
     # Adapted from Stan implementation
     # https://github.com/stan-dev/math/blob/develop/stan/math/prim/mat/fun/autocorrelation.hpp
@@ -116,7 +119,9 @@ def autocorrelation(input, dim=0):
 
     # truncate and normalize the result, then transpose back to original shape
     autocorr = autocorr[..., :N]
-    autocorr = autocorr / torch.tensor(range(N, 0, -1), dtype=input.dtype, device=input.device)
+    autocorr = autocorr / torch.tensor(
+        range(N, 0, -1), dtype=input.dtype, device=input.device
+    )
     autocorr = autocorr / autocorr[..., :1]
     return autocorr.transpose(dim, -1)
 
@@ -142,8 +147,11 @@ def _cummin(input):
     # FIXME: is there a better trick to find accumulate min of a sequence?
     N = input.size(0)
     input_tril = input.unsqueeze(0).repeat((N,) + (1,) * input.dim())
-    triu_mask = (torch.ones(N, N, dtype=input.dtype, device=input.device)
-                 .triu(diagonal=1).reshape((N, N) + (1,) * (input.dim() - 1)))
+    triu_mask = (
+        torch.ones(N, N, dtype=input.dtype, device=input.device)
+        .triu(diagonal=1)
+        .reshape((N, N) + (1,) * (input.dim() - 1))
+    )
     triu_mask = triu_mask.expand((N, N) + input.shape[1:]) > 0.5
     input_tril.masked_fill_(triu_mask, input.max())
     return input_tril.min(dim=1)[0]
@@ -279,9 +287,13 @@ def hpdi(input, prob, dim=0):
     mass = input.size(dim)
     index_length = int(prob * mass)
     intervals_left = sorted_input.index_select(
-        dim, torch.tensor(range(mass - index_length), dtype=torch.long, device=input.device))
+        dim,
+        torch.tensor(range(mass - index_length), dtype=torch.long, device=input.device),
+    )
     intervals_right = sorted_input.index_select(
-        dim, torch.tensor(range(index_length, mass), dtype=torch.long, device=input.device))
+        dim,
+        torch.tensor(range(index_length, mass), dtype=torch.long, device=input.device),
+    )
     intervals_length = intervals_right - intervals_left
     index_start = intervals_length.argmin(dim)
     indices = torch.stack([index_start, index_start + index_length], dim)
@@ -298,8 +310,10 @@ def _weighted_mean(input, log_weights, dim=0, keepdim=False):
 
 def _weighted_variance(input, log_weights, dim=0, keepdim=False, unbiased=True):
     # Ref: https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Frequency_weights
-    deviation_squared = (input - _weighted_mean(input, log_weights, dim, keepdim=True)).pow(2)
-    correction = log_weights.size(0) / (log_weights.size(0) - 1.) if unbiased else 1.
+    deviation_squared = (
+        input - _weighted_mean(input, log_weights, dim, keepdim=True)
+    ).pow(2)
+    correction = log_weights.size(0) / (log_weights.size(0) - 1.0) if unbiased else 1.0
     return _weighted_mean(deviation_squared, log_weights, dim, keepdim) * correction
 
 
@@ -319,7 +333,9 @@ def waic(input, log_weights=None, pointwise=False, dim=0):
     :returns tuple: tuple of WAIC and effective number of parameters.
     """
     if log_weights is None:
-        log_weights = torch.zeros(input.size(dim), dtype=input.dtype, device=input.device)
+        log_weights = torch.zeros(
+            input.size(dim), dtype=input.dtype, device=input.device
+        )
 
     # computes log pointwise predictive density: formula (3) of [1]
     dim = input.dim() + dim if dim < 0 else dim
@@ -362,7 +378,7 @@ def fit_generalized_pareto(X):
 
     # b = k / sigma
     bs = 1.0 - math.sqrt(M) / (torch.arange(1, M + 1, dtype=torch.double) - 0.5).sqrt()
-    bs /= 3.0 * X[int(N/4 - 0.5)]
+    bs /= 3.0 * X[int(N / 4 - 0.5)]
     bs += 1 / X[-1]
 
     ks = torch.log1p(-bs.unsqueeze(-1) * X).mean(-1)
@@ -410,8 +426,10 @@ def crps_empirical(pred, truth):
     :rtype: torch.Tensor
     """
     if pred.shape[1:] != (1,) * (pred.dim() - truth.dim() - 1) + truth.shape:
-        raise ValueError("Expected pred to have one extra sample dim on left. "
-                         "Actual shapes: {} versus {}".format(pred.shape, truth.shape))
+        raise ValueError(
+            "Expected pred to have one extra sample dim on left. "
+            "Actual shapes: {} versus {}".format(pred.shape, truth.shape)
+        )
     opts = dict(device=pred.device, dtype=pred.dtype)
     num_samples = pred.size(0)
     if num_samples == 1:
@@ -419,8 +437,9 @@ def crps_empirical(pred, truth):
 
     pred = pred.sort(dim=0).values
     diff = pred[1:] - pred[:-1]
-    weight = (torch.arange(1, num_samples, **opts) *
-              torch.arange(num_samples - 1, 0, -1, **opts))
+    weight = torch.arange(1, num_samples, **opts) * torch.arange(
+        num_samples - 1, 0, -1, **opts
+    )
     weight = weight.reshape(weight.shape + (1,) * (diff.dim() - 1))
 
-    return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2
+    return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples ** 2

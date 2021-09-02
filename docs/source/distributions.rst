@@ -57,6 +57,13 @@ AffineBeta
     :undoc-members:
     :show-inheritance:
 
+AsymmetricLaplace
+---------------------
+.. autoclass:: pyro.distributions.AsymmetricLaplace
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 AVFMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.AVFMultivariateNormal
@@ -225,6 +232,13 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
+Logistic
+--------
+.. autoclass:: pyro.distributions.Logistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 MaskedDistribution
 ------------------
 .. autoclass:: pyro.distributions.MaskedDistribution
@@ -312,6 +326,34 @@ RelaxedOneHotCategoricalStraightThrough
 Rejector
 --------
 .. autoclass:: pyro.distributions.Rejector
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SineBivariateVonMises
+---------------------
+.. autoclass:: pyro.distributions.SineBivariateVonMises
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SineSkewed
+----------
+.. autoclass:: pyro.distributions.SineSkewed
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SkewLogistic
+------------
+.. autoclass:: pyro.distributions.SkewLogistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+SoftAsymmetricLaplace
+---------------------
+.. autoclass:: pyro.distributions.SoftAsymmetricLaplace
     :members:
     :undoc-members:
     :show-inheritance:
@@ -462,6 +504,13 @@ OrderedTransform
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PositivePowerTransform
+----------------------
+.. autoclass:: pyro.distributions.transforms.PositivePowerTransform
     :members:
     :undoc-members:
     :show-inheritance:

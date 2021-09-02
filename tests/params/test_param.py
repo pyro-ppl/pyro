@@ -15,7 +15,6 @@ from tests.common import assert_equal
 
 
 class ParamStoreDictTests(TestCase):
-
     def setUp(self):
         pyro.clear_param_store()
         self.linear_module = nn.Linear(3, 2)
@@ -31,7 +30,7 @@ class ParamStoreDictTests(TestCase):
         cost = torch.sum(torch.pow(lin(x), 2.0)) * torch.pow(myparam, 4.0)
         cost.backward()
         params = list(self.linear_module.parameters()) + [myparam]
-        optim = torch.optim.Adam(params, lr=.01)
+        optim = torch.optim.Adam(params, lr=0.01)
         myparam_copy_stale = copy(pyro.param("myparam").detach().cpu().numpy())
 
         optim.step()
@@ -42,25 +41,39 @@ class ParamStoreDictTests(TestCase):
         assert len(list(param_store_params.keys())) == 5
         assert len(list(param_store_param_to_name.values())) == 5
 
-        pyro.get_param_store().save('paramstore.unittest.out')
+        pyro.get_param_store().save("paramstore.unittest.out")
         pyro.clear_param_store()
         assert len(list(pyro.get_param_store()._params)) == 0
         assert len(list(pyro.get_param_store()._param_to_name)) == 0
-        pyro.get_param_store().load('paramstore.unittest.out')
+        pyro.get_param_store().load("paramstore.unittest.out")
 
         def modules_are_equal():
-            weights_equal = np.sum(np.fabs(self.linear_module3.weight.detach().cpu().numpy() -
-                                   self.linear_module.weight.detach().cpu().numpy())) == 0.0
-            bias_equal = np.sum(np.fabs(self.linear_module3.bias.detach().cpu().numpy() -
-                                self.linear_module.bias.detach().cpu().numpy())) == 0.0
-            return (weights_equal and bias_equal)
+            weights_equal = (
+                np.sum(
+                    np.fabs(
+                        self.linear_module3.weight.detach().cpu().numpy()
+                        - self.linear_module.weight.detach().cpu().numpy()
+                    )
+                )
+                == 0.0
+            )
+            bias_equal = (
+                np.sum(
+                    np.fabs(
+                        self.linear_module3.bias.detach().cpu().numpy()
+                        - self.linear_module.bias.detach().cpu().numpy()
+                    )
+                )
+                == 0.0
+            )
+            return weights_equal and bias_equal
 
         assert not modules_are_equal()
         pyro.module("mymodule", self.linear_module3, update_module_params=False)
-        assert id(self.linear_module3.weight) != id(pyro.param('mymodule$$$weight'))
+        assert id(self.linear_module3.weight) != id(pyro.param("mymodule$$$weight"))
         assert not modules_are_equal()
         pyro.module("mymodule", self.linear_module3, update_module_params=True)
-        assert id(self.linear_module3.weight) == id(pyro.param('mymodule$$$weight'))
+        assert id(self.linear_module3.weight) == id(pyro.param("mymodule$$$weight"))
         assert modules_are_equal()
 
         myparam = pyro.param("myparam")
@@ -68,7 +81,9 @@ class ParamStoreDictTests(TestCase):
         assert myparam_copy_stale != myparam.detach().cpu().numpy()
         assert myparam_copy == myparam.detach().cpu().numpy()
         assert sorted(param_store_params.keys()) == sorted(store._params.keys())
-        assert sorted(param_store_param_to_name.values()) == sorted(store._param_to_name.values())
+        assert sorted(param_store_param_to_name.values()) == sorted(
+            store._param_to_name.values()
+        )
         assert sorted(store._params.keys()) == sorted(store._param_to_name.values())
 
 
@@ -79,58 +94,152 @@ def test_dict_interface():
     param_store.clear()
     assert not param_store
     assert len(param_store) == 0
-    assert 'x' not in param_store
-    assert 'y' not in param_store
+    assert "x" not in param_store
+    assert "y" not in param_store
     assert list(param_store.items()) == []
     assert list(param_store.keys()) == []
     assert list(param_store.values()) == []
 
     # add x
-    param_store['x'] = torch.zeros(1, 2, 3)
+    param_store["x"] = torch.zeros(1, 2, 3)
     assert param_store
     assert len(param_store) == 1
-    assert 'x' in param_store
-    assert 'y' not in param_store
-    assert list(param_store.keys()) == ['x']
-    assert [key for key, value in param_store.items()] == ['x']
+    assert "x" in param_store
+    assert "y" not in param_store
+    assert list(param_store.keys()) == ["x"]
+    assert [key for key, value in param_store.items()] == ["x"]
     assert len(list(param_store.values())) == 1
-    assert param_store['x'].shape == (1, 2, 3)
-    assert_equal(param_store.setdefault('x', torch.ones(1, 2, 3)), torch.zeros(1, 2, 3))
-    assert param_store['x'].unconstrained() is param_store['x']
+    assert param_store["x"].shape == (1, 2, 3)
+    assert_equal(param_store.setdefault("x", torch.ones(1, 2, 3)), torch.zeros(1, 2, 3))
+    assert param_store["x"].unconstrained() is param_store["x"]
 
     # add y
-    param_store.setdefault('y', torch.ones(4, 5), constraint=constraints.positive)
+    param_store.setdefault("y", torch.ones(4, 5), constraint=constraints.positive)
     assert param_store
     assert len(param_store) == 2
-    assert 'x' in param_store
-    assert 'y' in param_store
-    assert sorted(param_store.keys()) == ['x', 'y']
-    assert sorted(key for key, value in param_store.items()) == ['x', 'y']
+    assert "x" in param_store
+    assert "y" in param_store
+    assert sorted(param_store.keys()) == ["x", "y"]
+    assert sorted(key for key, value in param_store.items()) == ["x", "y"]
     assert len(list(param_store.values())) == 2
-    assert param_store['x'].shape == (1, 2, 3)
-    assert param_store['y'].shape == (4, 5)
-    assert_equal(param_store.setdefault('y', torch.zeros(4, 5)), torch.ones(4, 5))
-    assert_equal(param_store['y'].unconstrained(), torch.zeros(4, 5))
+    assert param_store["x"].shape == (1, 2, 3)
+    assert param_store["y"].shape == (4, 5)
+    assert_equal(param_store.setdefault("y", torch.zeros(4, 5)), torch.ones(4, 5))
+    assert_equal(param_store["y"].unconstrained(), torch.zeros(4, 5))
 
     # remove x
-    del param_store['x']
+    del param_store["x"]
     assert param_store
     assert len(param_store) == 1
-    assert 'x' not in param_store
-    assert 'y' in param_store
-    assert list(param_store.keys()) == ['y']
-    assert list(key for key, value in param_store.items()) == ['y']
+    assert "x" not in param_store
+    assert "y" in param_store
+    assert list(param_store.keys()) == ["y"]
+    assert list(key for key, value in param_store.items()) == ["y"]
     assert len(list(param_store.values())) == 1
-    assert param_store['y'].shape == (4, 5)
-    assert_equal(param_store.setdefault('y', torch.zeros(4, 5)), torch.ones(4, 5))
-    assert_equal(param_store['y'].unconstrained(), torch.zeros(4, 5))
+    assert param_store["y"].shape == (4, 5)
+    assert_equal(param_store.setdefault("y", torch.zeros(4, 5)), torch.ones(4, 5))
+    assert_equal(param_store["y"].unconstrained(), torch.zeros(4, 5))
 
     # remove y
-    del param_store['y']
+    del param_store["y"]
     assert not param_store
     assert len(param_store) == 0
-    assert 'x' not in param_store
-    assert 'y' not in param_store
+    assert "x" not in param_store
+    assert "y" not in param_store
     assert list(param_store.keys()) == []
     assert list(key for key, value in param_store.items()) == []
     assert len(list(param_store.values())) == 0
+
+
+def test_scope():
+    x0 = torch.randn(())
+    z0 = torch.randn(5).exp()
+    x1 = torch.randn(3)
+    y1 = torch.randn(2, 1).exp()
+    y2 = torch.randn(2, 1).exp()
+    z2 = torch.randn(1, 4).exp()
+    z2 /= z2.sum()
+
+    constraint_table = {
+        "z0": constraints.positive,
+        "y1": constraints.positive,
+        "y2": constraints.positive,
+        "z2": constraints.simplex,
+    }
+
+    def check_constraint(name):
+        expected = constraint_table.get(name, constraints.real)
+        actual = param_store._constraints[name[:1]]
+        assert actual == expected
+
+    param_store = pyro.get_param_store()
+
+    # Create base scope.
+    assert not param_store
+    pyro.param("x", x0)
+    pyro.param("z", z0, constraint=constraints.positive)
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Create scope1.
+    with param_store.scope() as scope1:
+        assert not param_store
+        pyro.param("x", x1)
+        pyro.param("y", y1, constraint=constraints.positive)
+        assert set(param_store) == {"x", "y"}
+        assert_equal(pyro.param("x"), x1)
+        assert_equal(pyro.param("y"), y1)
+        check_constraint("x1")
+        check_constraint("y1")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Create scope2.
+    with param_store.scope() as scope2:
+        assert not param_store
+        pyro.param("y", y2, constraint=constraints.positive)
+        pyro.param("z", z2, constraint=constraints.simplex)
+        assert set(param_store) == {"y", "z"}
+        assert_equal(pyro.param("y"), y2)
+        assert_equal(pyro.param("z"), z2)
+        check_constraint("y2")
+        check_constraint("z2")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Reload scope1.
+    with param_store.scope(scope1) as s:
+        assert s is scope1
+        assert set(param_store) == {"x", "y"}
+        assert_equal(pyro.param("x"), x1)
+        assert_equal(pyro.param("y"), y1)
+        check_constraint("x1")
+        check_constraint("y1")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Reload scope2.
+    with param_store.scope(scope2) as s:
+        assert s is scope2
+        assert set(param_store) == {"y", "z"}
+        assert_equal(pyro.param("y"), y2)
+        assert_equal(pyro.param("z"), z2)
+        check_constraint("y2")
+        check_constraint("z2")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")

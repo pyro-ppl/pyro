@@ -40,6 +40,7 @@ class ImproperUniform(TorchDistribution):
     :param torch.Size batch_shape: The batch shape.
     :param torch.Size event_shape: The event shape.
     """
+
     arg_constraints = {}
 
     def __init__(self, support, batch_shape, event_shape):
@@ -59,7 +60,7 @@ class ImproperUniform(TorchDistribution):
         return new
 
     def log_prob(self, value):
-        batch_shape = value.shape[:value.dim() - self.event_dim]
+        batch_shape = value.shape[: value.dim() - self.event_dim]
         batch_shape = broadcast_shape(batch_shape, self.batch_shape)
         return torch.zeros(()).expand(batch_shape)
 

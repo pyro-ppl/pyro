@@ -71,6 +71,7 @@ class Index:
     :param torch.Tensor tensor: A tensor to be indexed.
     :return: An object with a special :meth:`__getitem__` method.
     """
+
     def __init__(self, tensor):
         self._tensor = tensor
 
@@ -208,6 +209,7 @@ class Vindex:
     :param torch.Tensor tensor: A tensor to be indexed.
     :return: An object with a special :meth:`__getitem__` method.
     """
+
     def __init__(self, tensor):
         self._tensor = tensor
 

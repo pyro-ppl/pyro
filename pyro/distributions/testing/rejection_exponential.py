@@ -12,8 +12,7 @@ from pyro.distributions.util import copy_docs_from, weakmethod
 
 @copy_docs_from(Exponential)
 class RejectionExponential(Rejector):
-    arg_constraints = {"rate": constraints.positive,
-                       "factor": constraints.positive}
+    arg_constraints = {"rate": constraints.positive, "factor": constraints.positive}
     support = constraints.positive
 
     def __init__(self, rate, factor):

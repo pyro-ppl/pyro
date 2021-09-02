@@ -14,18 +14,20 @@ BATCH_TEST_DATA_IDX = [-1]
 
 
 class Fixture:
-    def __init__(self,
-                 pyro_dist=None,
-                 scipy_dist=None,
-                 examples=None,
-                 scipy_arg_fn=None,
-                 prec=0.05,
-                 min_samples=None,
-                 is_discrete=False,
-                 expected_support_non_vec=None,
-                 expected_support=None,
-                 test_data_indices=None,
-                 batch_data_indices=None):
+    def __init__(
+        self,
+        pyro_dist=None,
+        scipy_dist=None,
+        examples=None,
+        scipy_arg_fn=None,
+        prec=0.05,
+        min_samples=None,
+        is_discrete=False,
+        expected_support_non_vec=None,
+        expected_support=None,
+        test_data_indices=None,
+        batch_data_indices=None,
+    ):
         self.pyro_dist = pyro_dist
         self.scipy_dist = scipy_dist
         self.dist_params, self.test_data = self._extract_fixture_data(examples)
@@ -54,7 +56,7 @@ class Fixture:
     def _extract_fixture_data(self, examples):
         dist_params, test_data = [], []
         for ex in examples:
-            test_data.append(ex.pop('test_data'))
+            test_data.append(ex.pop("test_data"))
             dist_params.append(ex)
         return dist_params, test_data
 
@@ -62,7 +64,9 @@ class Fixture:
         return len(self.test_data)
 
     def get_samples(self, num_samples, **dist_params):
-        return self.pyro_dist(**dist_params).sample(sample_shape=torch.Size((num_samples,)))
+        return self.pyro_dist(**dist_params).sample(
+            sample_shape=torch.Size((num_samples,))
+        )
 
     def get_test_data(self, idx, wrap_tensor=True):
         if not wrap_tensor:
@@ -75,11 +79,14 @@ class Fixture:
         return tensor_wrap(**self.dist_params[idx])
 
     def _convert_logits_to_ps(self, dist_params):
-        if 'logits' in dist_params:
-            logits = torch.tensor(dist_params.pop('logits'))
-            is_multidimensional = self.get_test_distribution_name() not in ['Bernoulli', 'Geometric']
+        if "logits" in dist_params:
+            logits = torch.tensor(dist_params.pop("logits"))
+            is_multidimensional = self.get_test_distribution_name() not in [
+                "Bernoulli",
+                "Geometric",
+            ]
             probs = logits_to_probs(logits, is_binary=not is_multidimensional)
-            dist_params['probs'] = list(probs.detach().cpu().numpy())
+            dist_params["probs"] = list(probs.detach().cpu().numpy())
         return dist_params
 
     def get_scipy_logpdf(self, idx):
@@ -89,9 +96,13 @@ class Fixture:
         dist_params = self._convert_logits_to_ps(dist_params)
         args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
-            log_prob = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+            log_prob = self.scipy_dist.logpmf(
+                self.get_test_data(idx, wrap_tensor=False), *args, **kwargs
+            )
         else:
-            log_prob = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+            log_prob = self.scipy_dist.logpdf(
+                self.get_test_data(idx, wrap_tensor=False), *args, **kwargs
+            )
         return np.sum(log_prob)
 
     def get_scipy_batch_logpdf(self, idx):
@@ -102,7 +113,9 @@ class Fixture:
         dist_params = self._convert_logits_to_ps(dist_params)
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
-        shape = broadcast_shape(self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size())
+        shape = broadcast_shape(
+            self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size()
+        )
         log_prob = []
         for i in range(len(test_data)):
             batch_params = {}
@@ -137,7 +150,9 @@ class Fixture:
         try:
             fourth_moment = np.max(self.scipy_dist.moment(4, *args, **kwargs))
             var = np.max(self.scipy_dist.var(*args, **kwargs))
-            min_computed_samples = int(math.ceil((fourth_moment - math.pow(var, 2)) / required_precision))
+            min_computed_samples = int(
+                math.ceil((fourth_moment - math.pow(var, 2)) / required_precision)
+            )
         except (AttributeError, ValueError):
             return min_samples
         return max(min_samples, min_computed_samples)

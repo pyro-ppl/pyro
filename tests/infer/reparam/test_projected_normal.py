@@ -11,6 +11,8 @@ from pyro import poutine
 from pyro.infer.reparam import ProjectedNormalReparam
 from tests.common import assert_close
 
+from .util import check_init_reparam
+
 
 # Test helper to extract a few central moments from samples.
 def get_moments(x):
@@ -45,3 +47,15 @@ def test_projected_normal(shape, dim):
         expected_grad = grad(expected_m, [concentration], retain_graph=True)
         actual_grad = grad(actual_m, [concentration], retain_graph=True)
         assert_close(actual_grad, expected_grad, atol=0.1)
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("dim", [2, 3, 4])
+def test_init(shape, dim):
+    concentration = torch.randn(shape + (dim,)).requires_grad_()
+
+    def model():
+        with pyro.plate_stack("plates", shape):
+            return pyro.sample("x", dist.ProjectedNormal(concentration))
+
+    check_init_reparam(model, ProjectedNormalReparam())
