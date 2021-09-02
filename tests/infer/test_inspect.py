@@ -306,6 +306,13 @@ def test_plate_dependency():
 
 
 def test_nested_plate_collider():
+    # a a       b b
+    #  a a     b b
+    #    \\   //
+    #      c c
+    #       |
+    #       d
+
     def model():
         plate_i = pyro.plate("i", 2, dim=-1)
         plate_j = pyro.plate("j", 3, dim=-2)
