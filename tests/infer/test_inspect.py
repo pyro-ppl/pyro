@@ -58,24 +58,40 @@ def test_get_dependencies():
 
 
 def test_docstring_example_1():
-    def model(data):
+    def model_1():
         a = pyro.sample("a", dist.Normal(0, 1))
-        b = pyro.sample("b", dist.Normal(a, 1))
-        with pyro.plate("data", len(data)):
-            c = pyro.sample("c", dist.Normal(b, 1))
-            pyro.sample("d", dist.Normal(c, 1), obs=data)
+        pyro.sample("b", dist.Normal(a, 1), obs=torch.tensor(0.0))
 
-    data = torch.randn(3)
-    actual = get_dependencies(model, (data,))
+    actual = get_dependencies(model_1)
     expected = {
         "prior_dependencies": {
             "a": {"a": set()},
             "b": {"a": set(), "b": set()},
-            "c": {"b": set(), "c": set()},
-            "d": {"c": set(), "d": set()},
         },
         "posterior_dependencies": {
             "a": {"a": set(), "b": set()},
+        },
+    }
+    assert actual == expected
+
+
+def test_docstring_example_2():
+    def model_2():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.LogNormal(0, 1))
+        c = pyro.sample("c", dist.Normal(a, b))
+        pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
+
+    actual = get_dependencies(model_2)
+    expected = {
+        "prior_dependencies": {
+            "a": {"a": set()},
+            "b": {"b": set()},
+            "c": {"a": set(), "b": set(), "c": set()},
+            "d": {"c": set(), "d": set()},
+        },
+        "posterior_dependencies": {
+            "a": {"a": set(), "b": set(), "c": set()},
             "b": {"b": set(), "c": set()},
             "c": {"c": set(), "d": set()},
         },
@@ -83,27 +99,20 @@ def test_docstring_example_1():
     assert actual == expected
 
 
-def test_docstring_example_2():
-    def model(data):
-        a = pyro.sample("a", dist.Normal(0, 1))
-        with pyro.plate("data", len(data)):
-            b = pyro.sample("b", dist.Normal(a, 1))
-            c = pyro.sample("c", dist.Normal(b, 1))
-        pyro.sample("d", dist.Normal(c.sum(), 1), obs=data.sum())
+def test_docstring_example_3():
+    def model_3():
+        with pyro.plate("p", 5):
+            a = pyro.sample("a", dist.Normal(0, 1))
+        pyro.sample("b", dist.Normal(a.sum(), 1), obs=torch.tensor(0.0))
 
-    data = torch.randn(3)
-    actual = get_dependencies(model, (data,))
+    actual = get_dependencies(model_3)
     expected = {
         "prior_dependencies": {
             "a": {"a": set()},
             "b": {"a": set(), "b": set()},
-            "c": {"b": set(), "c": set()},
-            "d": {"c": set(), "d": set()},
         },
         "posterior_dependencies": {
-            "a": {"a": set(), "b": set()},
-            "b": {"b": set(), "c": set()},
-            "c": {"c": {"data"}, "d": set()},
+            "a": {"a": {"p"}, "b": set()},
         },
     }
     assert actual == expected
@@ -308,7 +317,7 @@ def test_nested_plate_collider():
             with plate_k:
                 b = pyro.sample("b", dist.Normal(0, 1))
             c = pyro.sample("c", dist.Normal(a.sum(0) + b.sum([0, 1]), 1))
-        d = pyro.sample("d", dist.Normal(c.sum(), 1), obs=torch.zeros(()))
+        pyro.sample("d", dist.Normal(c.sum(), 1), obs=torch.zeros(()))
 
     actual = get_dependencies(model)
     _ = set()

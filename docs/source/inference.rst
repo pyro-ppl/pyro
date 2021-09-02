@@ -19,3 +19,4 @@ See `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion of
    mcmc
    infer.autoguide
    infer.reparam
+   infer.util

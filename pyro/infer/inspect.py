@@ -50,69 +50,101 @@ def get_dependencies(
     model_kwargs: Optional[dict] = None,
 ) -> Dict[str, object]:
     r"""
-    Infers metadata about a conditioned model. Metadata includes
+    EXPERIMENTAL Infers dependency structure about a conditioned model.
+
+    This returns a nested dictionary with structure like::
+
+        {
+            "prior_dependencies": {
+                "variable1": {"variable1": set()},
+                "variable2": {"variable1": set(), "variable2": set()},
+                ...
+            },
+            "posterior_dependencies": {
+                "variable1": {"variable1": {"plate1"}, "variable2": set()},
+                ...
+            },
+        }
+
+    where
 
     -   `prior_dependencies` is a dict mapping downstream latent and observed
-        sites to dictionaries mapping upstream latent sites on which they
-        depend to sets of plates inducing full dependencies.
+        variables to dictionaries mapping upstream latent variables on which
+        they depend to sets of plates inducing full dependencies.
         That is, included plates introduce quadratically many dependencies as
         in complete-bipartite graphs, whereas excluded plates introduce only
         linearly many dependencies as in independent sets of parallel edges.
         Prior dependencies follow the original model order.
-    -   `posterior_dependencies` is a similar dict, but mapping latent sites to
-        the latent or observed sits on which they depend in the posterior.
-        Posterior dependencies are reversed from the model order.
+    -   `posterior_dependencies` is a similar dict, but mapping latent
+        variables to the latent or observed sits on which they depend in the
+        posterior. Posterior dependencies are reversed from the model order.
 
     Dependencies elide ``pyro.deterministic`` sites and ``pyro.sample(...,
     Delta(...))`` sites.
 
-    Example 1::
+    **Examples**
 
-        def model_1(data):
+    Here is a simple example with no plates. We see every node depends on
+    itself, and only the latent variables appear in the posterior::
+
+        def model_1():
             a = pyro.sample("a", dist.Normal(0, 1))
-            b = pyro.sample("b", dist.Normal(a, 1))
-            with pyro.plate("data", len(data)):
-                c = pyro.sample("c", dist.Normal(b, 1))
-                pyro.sample("d", dist.Normal(c, 1),
-                            obs=data)
+            pyro.sample("b", dist.Normal(a, 1), obs=torch.tensor(0.0))
 
-        data = torch.randn(3)
-        assert get_dependencies(model_1, (data,)) == {
+        assert get_dependencies(model_1) == {
             "prior_dependencies": {
                 "a": {"a": set()},
                 "b": {"a": set(), "b": set()},
-                "c": {"b": set(), "c": set()},
-                "d": {"c": set(), "d": set()},
             },
             "posterior_dependencies": {
                 "a": {"a": set(), "b": set()},
+            },
+        }
+
+    Here is an example where two variables ``a`` and ``b`` start out
+    conditionally independent in the prior, but become conditionally dependent
+    in the posterior do the so-called collider variable ``c`` on which they
+    both depend. This is called "moralization" in the graphical model
+    literature::
+
+        def model_2():
+            a = pyro.sample("a", dist.Normal(0, 1))
+            b = pyro.sample("b", dist.LogNormal(0, 1))
+            c = pyro.sample("c", dist.Normal(a, b))
+            pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.))
+
+        assert get_dependencies(model_2) == {
+            "prior_dependencies": {
+                "a": {"a": set()},
+                "b": {"b": set()},
+                "c": {"a": set(), "b": set(), "c": set()},
+                "d": {"c": set(), "d": set()},
+            },
+            "posterior_dependencies": {
+                "a": {"a": set(), "b": set(), "c": set()},
                 "b": {"b": set(), "c": set()},
                 "c": {"c": set(), "d": set()},
             },
         }
 
-    Example 2::
+    Dependencies can be more complex in the presence of plates. So far all the
+    dict values have been empty sets of plates, but in the following posterior
+    we see that ``c`` depends on itself across the plate ``p``. This means
+    that, among the elements of ``c``, e.g. ``c[0]`` depends on ``c[1]`` (this
+    is why we explicitly allow variables to depend on themselves)::
 
-        def model_2(data):
-            a = pyro.sample("a", dist.Normal(0, 1))
-            with pyro.plate("data", len(data)):
-                b = pyro.sample("b", dist.Normal(a, 1))
-                c = pyro.sample("c", dist.Normal(b, 1))
-            pyro.sample("d", dist.Normal(c.sum(), 1),
-                        obs=data.sum())
+        def model_3():
+            with pyro.plate("p", 5):
+                a = pyro.sample("a", dist.Normal(0, 1))
+            pyro.sample("b", dist.Normal(a.sum(), 1), obs=torch.tensor(0.0))
 
-        data = torch.randn(3)
-        assert get_dependencies(model_2, (data,)) == {
+        assert get_dependencies(model_3) == {
             "prior_dependencies": {
                 "a": {"a": set()},
                 "b": {"a": set(), "b": set()},
-                "c": {"b": set(), "c": set()},
-                "d": {"c": set(), "d": set()},
             },
             "posterior_dependencies": {
-                "a": {"a": set(), "b": set()},
-                "b": {"b": set(), "c": set()},
-                "c": {"c": {"data"}, "d": set()},
+                "a": {"a": {"p"}, "b": set()},
             },
         }
 
@@ -162,6 +194,7 @@ def get_dependencies(
             downstream["fn"].log_prob(downstream["value"]).sum(),
             [u["value"] for u in upstreams],
             allow_unused=True,
+            retain_graph=True,
         )
         for upstream, grad in zip(upstreams, grads):
             if grad is not None:
@@ -182,6 +215,7 @@ def get_dependencies(
                 d["fn"].log_prob(d["value"]).sum(),
                 [u["value"]],
                 allow_unused=True,
+                retain_graph=True,
             )[0]
             if grad is None:
                 prior_dependencies[d["name"]].pop(u["name"])
