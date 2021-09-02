@@ -9,6 +9,7 @@ import torch
 from torch.autograd import grad
 
 import pyro.distributions as dist
+from pyro.distributions import constraints
 from pyro.distributions.util import (
     broadcast_shape,
     deep_to,
@@ -17,6 +18,7 @@ from pyro.distributions.util import (
     sum_rightmost,
     weakmethod,
 )
+from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from tests.common import assert_equal
 
 INF = float("inf")
@@ -364,3 +366,53 @@ def test_deep_to_jit(shape):
     expected_grads = grad(actual.sum(), [loc, scale])
     for a, e in zip(actual_grads, expected_grads):
         assert_equal(a, e)
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+def test_deep_to_module(dtype):
+    class ExampleModule(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.a = torch.nn.Parameter(torch.zeros(2))
+            self.register_buffer("b", torch.zeros(3))
+            self.c = torch.randn(4)  # this wouldn't work with torch.nn.Module.to()
+            self.d = dist.Normal(0, 1)
+
+    module = ExampleModule()
+    module = deep_to(module, dtype=dtype)
+    assert isinstance(module, ExampleModule)
+    assert module.a.dtype == dtype
+    assert module.b.dtype == dtype
+    assert module.c.dtype == dtype
+    assert module.d.loc.dtype == dtype
+    assert module.d.scale.dtype == dtype
+
+
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
+def test_deep_to_pyro_module(dtype):
+    class ExampleModule(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.a = torch.nn.Parameter(torch.zeros(2))
+            self.register_buffer("b", torch.zeros(3))
+            self.c = torch.randn(4)  # this wouldn't work with torch.nn.Module.to()
+            self.d = dist.Normal(0, 1)
+            self.e = PyroParam(
+                torch.randn(()),
+                constraint=constraints.greater_than(torch.tensor(0.5)),
+            )
+            self.f = PyroSample(dist.Normal(0, 1))
+            self.g = PyroSample(lambda self: dist.Normal(self.f, 1))
+
+    module = ExampleModule()
+    module = deep_to(module, dtype=dtype)
+    assert isinstance(module, ExampleModule)
+    assert module.a.dtype == dtype
+    assert module.b.dtype == dtype
+    assert module.c.dtype == dtype
+    assert module.d.loc.dtype == dtype
+    assert module.d.scale.dtype == dtype
+    assert module._pyro_params["e"][0].lower_bound.dtype == dtype
+    assert module.e.dtype == dtype
+    assert module.f.dtype == dtype
+    assert module.g.dtype == dtype

@@ -140,8 +140,10 @@ class _DeepToMemo(dict):
         if result is default:
             # Assume key is the id of another object, and look up that object.
             old = ctypes.cast(key, ctypes.py_object).value
-            if isinstance(old, (torch.Tensor, torch.nn.Module)):
+            if isinstance(old, torch.Tensor):
                 self[key] = result = old.to(*self._to_args, **self._to_kwargs)
+            elif isinstance(old, torch.nn.Module):
+                old.to(*self._to_args, **self._to_kwargs)
         return result
 
 
@@ -150,6 +152,11 @@ def deep_to(obj, *args, **kwargs):
     Create a deep copy of an arbitrary Python object, calling ``.to(*args,
     **kwargs)`` on all :class:`torch.Tensor` s and :class:`torch.nn.Module` s
     in that object.
+
+    Like :meth:`torch.Tensor.to` but unlike :meth:`torch.nn.Module.to`, this
+    creates new objects. For compatibility with existing PyTorch module
+    behavior, this first calls :meth:`torch.nn.Module.to` in-place, then
+    creates a deep copy of the module.
 
     :param obj: Any python object.
     :param \*args:
