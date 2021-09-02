@@ -1350,7 +1350,7 @@ class AutoStructured(AutoGuide):
         distribution (such callables typically call ``pyro.param()`` and
         ``pyro.sample()`` internally).
     :param dependencies: Dependency type, or a dict mapping each site name to a
-        dict mapping its upstream dependencies to dependency types. Only a
+        dict mapping its upstream dependencies to dependency types. If only a
         dependecy type is provided, dependency structure will be inferred. A
         dependency type is either the string "linear" or a callable that maps a
         *flattened* upstream perturbation to *flattened* downstream
@@ -1400,7 +1400,7 @@ class AutoStructured(AutoGuide):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
         self._init_scale = init_scale
-        self._original_model = model,
+        self._original_model = (model,)
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, create_plates=create_plates)
 
@@ -1421,7 +1421,8 @@ class AutoStructured(AutoGuide):
             dependencies = defaultdict(dict)
             for d, upstreams in meta["posterior_dependencies"].items():
                 assert d in sample_sites
-                for u in upstreams:
+                for u, plates in upstreams.items():
+                    # TODO use plates to reduce dimension of dependency.
                     if u in sample_sites:
                         if prior_order[u] > prior_order[d]:
                             dependencies[u][d] = self.dependencies

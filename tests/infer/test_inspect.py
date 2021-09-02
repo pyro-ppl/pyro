@@ -10,7 +10,6 @@ from pyro.infer.inspect import get_dependencies
 
 
 def test_get_dependencies():
-
     def model(data):
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", NonreparameterizedNormal(a, 0))
@@ -19,16 +18,14 @@ def test_get_dependencies():
 
         e = pyro.sample("e", dist.Normal(0, 1))
         f = pyro.sample("f", dist.Normal(0, 1))
-        g = pyro.sample("g", dist.Bernoulli(logits=e + f),
-                        obs=torch.tensor(0.))
+        g = pyro.sample("g", dist.Bernoulli(logits=e + f), obs=torch.tensor(0.0))
 
         with pyro.plate("p", len(data)):
             d_ = d.detach()  # this results in a known failure
             h = pyro.sample("h", dist.Normal(c, d_.exp()))
             i = pyro.deterministic("i", h + 1)
             j = pyro.sample("j", dist.Delta(h + 1), obs=h + 1)
-            k = pyro.sample("k", dist.Normal(a, j.exp()),
-                            obs=data)
+            k = pyro.sample("k", dist.Normal(a, j.exp()), obs=data)
 
         return [a, b, c, d, e, f, g, h, i, j, k]
 
@@ -60,33 +57,56 @@ def test_get_dependencies():
     assert actual == expected
 
 
-def test_docstring_example():
-
+def test_docstring_example_1():
     def model(data):
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(a, 1))
-        c = pyro.sample("c", dist.Normal(b, 1))
         with pyro.plate("data", len(data)):
-            d = pyro.sample("d", dist.Normal(c, 1))
-            pyro.sample("e", dist.Normal(d, 1),
-                        obs=data)
+            c = pyro.sample("c", dist.Normal(b, 1))
+            pyro.sample("d", dist.Normal(c, 1), obs=data)
 
     data = torch.randn(3)
-    assert get_dependencies(model, (data,)) == {
+    actual = get_dependencies(model, (data,))
+    expected = {
         "prior_dependencies": {
             "a": {"a": set()},
             "b": {"a": set(), "b": set()},
             "c": {"b": set(), "c": set()},
             "d": {"c": set(), "d": set()},
-            "e": {"d": set(), "e": set()},
         },
         "posterior_dependencies": {
             "a": {"a": set(), "b": set()},
             "b": {"b": set(), "c": set()},
             "c": {"c": set(), "d": set()},
-            "d": {"d": set(), "e": set()},
         },
     }
+    assert actual == expected
+
+
+def test_docstring_example_2():
+    def model(data):
+        a = pyro.sample("a", dist.Normal(0, 1))
+        with pyro.plate("data", len(data)):
+            b = pyro.sample("b", dist.Normal(a, 1))
+            c = pyro.sample("c", dist.Normal(b, 1))
+        pyro.sample("d", dist.Normal(c.sum(), 1), obs=data.sum())
+
+    data = torch.randn(3)
+    actual = get_dependencies(model, (data,))
+    expected = {
+        "prior_dependencies": {
+            "a": {"a": set()},
+            "b": {"a": set(), "b": set()},
+            "c": {"b": set(), "c": set()},
+            "d": {"c": set(), "d": set()},
+        },
+        "posterior_dependencies": {
+            "a": {"a": set(), "b": set()},
+            "b": {"b": set(), "c": set()},
+            "c": {"c": {"data"}, "d": set()},
+        },
+    }
+    assert actual == expected
 
 
 def test_plate_coupling():
@@ -103,8 +123,7 @@ def test_plate_coupling():
     def model(data):
         with pyro.plate("p", len(data)):
             x = pyro.sample("x", dist.Normal(0, 1))
-        pyro.sample("y", dist.Normal(x.sum(), 1),
-                    obs=data.sum())
+        pyro.sample("y", dist.Normal(x.sum(), 1), obs=data.sum())
 
     data = torch.randn(2)
     actual = get_dependencies(model, (data,))
@@ -138,8 +157,7 @@ def test_plate_coupling_2():
         with pyro.plate("p", len(data)):
             x = pyro.sample("x", dist.Normal(0, 1))
             y = pyro.sample("y", dist.Normal(0, 1))
-        pyro.sample("z", dist.Normal(x.sum(), y.sum().exp()),
-                    obs=data.sum())
+        pyro.sample("z", dist.Normal(x.sum(), y.sum().exp()), obs=data.sum())
 
     data = torch.randn(2)
     actual = get_dependencies(model, (data,))
@@ -176,11 +194,9 @@ def test_plate_coupling_3():
         with i_plate, j_plate:
             x = pyro.sample("x", dist.Normal(0, 1))
         with i_plate:
-            pyro.sample("y", dist.Normal(x.sum(-1, True), 1),
-                        obs=data.sum(-1, True))
+            pyro.sample("y", dist.Normal(x.sum(-1, True), 1), obs=data.sum(-1, True))
         with j_plate:
-            pyro.sample("z", dist.Normal(x.sum(-2, True), 1),
-                        obs=data.sum(-2, True))
+            pyro.sample("z", dist.Normal(x.sum(-2, True), 1), obs=data.sum(-2, True))
 
     data = torch.randn(3, 2)
     actual = get_dependencies(model, (data,))
@@ -219,8 +235,7 @@ def test_plate_collider():
         with j_plate:
             y = pyro.sample("y", dist.Normal(0, 1))
         with i_plate, j_plate:
-            pyro.sample("z", dist.Normal(x, y.exp()),
-                        obs=data)
+            pyro.sample("z", dist.Normal(x, y.exp()), obs=data)
 
     data = torch.randn(3, 2)
     actual = get_dependencies(model, (data,))
@@ -234,7 +249,7 @@ def test_plate_collider():
         "posterior_dependencies": {
             "x": {"x": _, "y": _, "z": _},
             "y": {"y": _, "z": _},
-        }
+        },
     }
     assert actual == expected
 
@@ -260,8 +275,7 @@ def test_plate_dependency():
         with pyro.plate("p", len(data)):
             x = pyro.sample("x", dist.Normal(0, 1))
             y = pyro.sample("y", dist.Normal(0, 1))
-            pyro.sample("z", dist.Normal(w + x + y, 1),
-                        obs=data)
+            pyro.sample("z", dist.Normal(w + x + y, 1), obs=data)
 
     data = torch.rand(2)
     actual = get_dependencies(model, (data,))
@@ -269,14 +283,46 @@ def test_plate_dependency():
     expected = {
         "prior_dependencies": {
             "w": {"w": _},
-            "x": {"x": {"p"}},
-            "y": {"y": {"p"}},
+            "x": {"x": _},
+            "y": {"y": _},
             "z": {"w": _, "x": _, "y": _, "z": _},
         },
         "posterior_dependencies": {
             "w": {"w": _, "x": _, "y": _, "z": _},
             "x": {"x": _, "y": _, "z": _},
             "y": {"y": _, "z": _},
+        },
+    }
+    assert actual == expected
+
+
+def test_nested_plate_collider():
+    def model():
+        plate_i = pyro.plate("i", 2, dim=-1)
+        plate_j = pyro.plate("j", 3, dim=-2)
+        plate_k = pyro.plate("k", 3, dim=-2)
+
+        with plate_i:
+            with plate_j:
+                a = pyro.sample("a", dist.Normal(0, 1))
+            with plate_k:
+                b = pyro.sample("b", dist.Normal(0, 1))
+            c = pyro.sample("c", dist.Normal(a.sum(0) + b.sum([0, 1]), 1))
+        d = pyro.sample("d", dist.Normal(c.sum(), 1), obs=torch.zeros(()))
+
+    actual = get_dependencies(model)
+    _ = set()
+    expected = {
+        "prior_dependencies": {
+            "a": {"a": _},
+            "b": {"b": _},
+            "c": {"c": _, "a": _, "b": _},
+            "d": {"d": _, "c": _},
+        },
+        "posterior_dependencies": {
+            "a": {"a": {"j"}, "b": _, "c": _},
+            "b": {"b": {"k"}, "c": _},
+            "c": {"c": {"i"}, "d": _},
         },
     }
     assert actual == expected

@@ -53,9 +53,12 @@ def get_dependencies(
     Infers metadata about a conditioned model. Metadata includes
 
     -   `prior_dependencies` is a dict mapping downstream latent and observed
-        sites to the dictionaries mapping upstream latent sites on which the
-        depend to sets of plates over which dependencies are independent.
-        Dependencies follow the original model order.
+        sites to dictionaries mapping upstream latent sites on which they
+        depend to sets of plates inducing full dependencies.
+        That is, included plates introduce quadratically many dependencies as
+        in complete-bipartite graphs, whereas excluded plates introduce only
+        linearly many dependencies as in independent sets of parallel edges.
+        Prior dependencies follow the original model order.
     -   `posterior_dependencies` is a similar dict, but mapping latent sites to
         the latent or observed sits on which they depend in the posterior.
         Posterior dependencies are reversed from the model order.
@@ -63,31 +66,53 @@ def get_dependencies(
     Dependencies elide ``pyro.deterministic`` sites and ``pyro.sample(...,
     Delta(...))`` sites.
 
-    Example::
+    Example 1::
 
-        def model(data):
+        def model_1(data):
             a = pyro.sample("a", dist.Normal(0, 1))
             b = pyro.sample("b", dist.Normal(a, 1))
-            c = pyro.sample("c", dist.Normal(b, 1))
             with pyro.plate("data", len(data)):
-                d = pyro.sample("d", dist.Normal(c, 1))
-                pyro.sample("e", dist.Normal(d, 1),
+                c = pyro.sample("c", dist.Normal(b, 1))
+                pyro.sample("d", dist.Normal(c, 1),
                             obs=data)
 
         data = torch.randn(3)
-        assert get_dependencies(model, (data,)) == {
+        assert get_dependencies(model_1, (data,)) == {
             "prior_dependencies": {
                 "a": {"a": set()},
                 "b": {"a": set(), "b": set()},
                 "c": {"b": set(), "c": set()},
-                "d": {"c": set(), "d": {"data"}},
-                "e": {"d": {"data"}, "e": {"data"}},
+                "d": {"c": set(), "d": set()},
             },
             "posterior_dependencies": {
                 "a": {"a": set(), "b": set()},
                 "b": {"b": set(), "c": set()},
                 "c": {"c": set(), "d": set()},
-                "d": {"d": {"data"}, "e": {"data"}},
+            },
+        }
+
+    Example 2::
+
+        def model_2(data):
+            a = pyro.sample("a", dist.Normal(0, 1))
+            with pyro.plate("data", len(data)):
+                b = pyro.sample("b", dist.Normal(a, 1))
+                c = pyro.sample("c", dist.Normal(b, 1))
+            pyro.sample("d", dist.Normal(c.sum(), 1),
+                        obs=data.sum())
+
+        data = torch.randn(3)
+        assert get_dependencies(model_2, (data,)) == {
+            "prior_dependencies": {
+                "a": {"a": set()},
+                "b": {"a": set(), "b": set()},
+                "c": {"b": set(), "c": set()},
+                "d": {"c": set(), "d": set()},
+            },
+            "posterior_dependencies": {
+                "a": {"a": set(), "b": set()},
+                "b": {"b": set(), "c": set()},
+                "c": {"c": {"data"}, "d": set()},
             },
         }
 
@@ -104,7 +129,7 @@ def get_dependencies(
 
     :param callable model: A model.
     :param tuple model_args: Optional tuple of model args.
-    :param dict model_kwargs: Optional tuple of model args.
+    :param dict model_kwargs: Optional dict of model kwargs.
     :returns: A dictionary of metadata (see above).
     :rtype: dict
     """
@@ -146,7 +171,7 @@ def get_dependencies(
 
     # Then refine to direct dependencies among latent and observed sites.
     for i, downstream in enumerate(sample_sites):
-        for j, upstream in enumerate(sample_sites[:max(0, i - 1)]):
+        for j, upstream in enumerate(sample_sites[: max(0, i - 1)]):
             if upstream["name"] not in prior_dependencies[downstream["name"]]:
                 continue
             names = {upstream["name"], downstream["name"]}
@@ -168,7 +193,7 @@ def get_dependencies(
             if u not in observed:
                 # Note the folowing reverses:
                 # u is henceforth downstream and d is henceforth upstream.
-                posterior_dependencies[u][d] = set()
+                posterior_dependencies[u][d] = p.copy()
 
     # Moralize: add dependencies among latent variables in each Markov blanket.
     # This assumes all latents are eventually observed, at least indirectly.
@@ -179,7 +204,9 @@ def get_dependencies(
             for u2, p2 in upstreams.items():
                 if order[u1] <= order[u2]:
                     p12 = posterior_dependencies[u2].setdefault(u1, set())
-                    p12 |= p1 & p2 - plates[d]
+                    p12 |= plates[u1] & plates[u2] - plates[d]
+                    p12 |= plates[u2] & p1
+                    p12 |= plates[u1] & p2
 
     return {
         "prior_dependencies": prior_dependencies,
