@@ -116,6 +116,13 @@ class Stable(TorchDistribution):
         with poutine.reparam(config={"x": StableReparam()}):
             pyro.sample("x", Stable(stability, skew, scale, loc))
 
+    or simply wrap in :class:`~pyro.infer.reparam.strategies.MinimalReparam` or
+    :class:`~pyro.infer.reparam.strategies.AutoReparam` , e.g.::
+
+        @MinimalReparam()
+        def model():
+            ...
+
     [1] S. Borak, W. Hardle, R. Weron (2005).
         Stable distributions.
         https://edoc.hu-berlin.de/bitstream/handle/18452/4526/8.pdf

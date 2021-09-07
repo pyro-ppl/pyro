@@ -56,34 +56,53 @@ def test_normal_minimal():
     assert actual == expected
 
 
-def test_normal_auto():
-    strategy = AutoReparam()
+@pytest.mark.parametrize("centered", [None, 0.0, 1.0])
+def test_normal_auto(centered):
+    strategy = AutoReparam(centered=centered)
     model = strategy(normal_model)
     actual = trace_name_is_observed(model)
-    expected = [
-        ("a_decentered", False),
-        ("a", True),
-        ("b_base_decentered", False),
-        ("b_base", True),
-        ("b", True),
-        ("c_decentered", False),
-        ("c", True),
-        ("d_base_decentered", False),
-        ("d_base", True),
-        ("d", True),
-        ("e_decentered", False),
-        ("e", True),
-        ("f_base_decentered", False),
-        ("f_base", True),
-        ("f", True),
-        ("g", True),
-        ("h", True),
-        ("i_decentered", False),
-        ("i", True),
-        ("j_base_decentered", False),
-        ("j_base", True),
-        ("j", True),
-    ]
+    if centered == 1.0:  # i.e. no decentering
+        expected = [
+            ("a", False),
+            ("b_base", False),
+            ("b", True),
+            ("c", False),
+            ("d_base", False),
+            ("d", True),
+            ("e", False),
+            ("f_base", False),
+            ("f", True),
+            ("g", True),
+            ("h", True),
+            ("i", False),
+            ("j_base", False),
+            ("j", True),
+        ]
+    else:
+        expected = [
+            ("a_decentered", False),
+            ("a", True),
+            ("b_base_decentered", False),
+            ("b_base", True),
+            ("b", True),
+            ("c_decentered", False),
+            ("c", True),
+            ("d_base_decentered", False),
+            ("d_base", True),
+            ("d", True),
+            ("e_decentered", False),
+            ("e", True),
+            ("f_base_decentered", False),
+            ("f_base", True),
+            ("f", True),
+            ("g", True),
+            ("h", True),
+            ("i_decentered", False),
+            ("i", True),
+            ("j_base_decentered", False),
+            ("j_base", True),
+            ("j", True),
+        ]
     assert actual == expected
 
     # Also check that the config dict has been constructed.

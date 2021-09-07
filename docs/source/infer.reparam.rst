@@ -18,7 +18,10 @@ Automatic Strategies
 --------------------
 .. automodule:: pyro.infer.reparam.strategies
     :members:
+    :undoc-members:
     :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
 
 Conjugate Updating
 ------------------
