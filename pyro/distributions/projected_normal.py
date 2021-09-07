@@ -29,6 +29,13 @@ class ProjectedNormal(TorchDistribution):
                                     ProjectedNormal(torch.zeros(3)))
             ...
 
+    or simply wrap in :class:`~pyro.infer.reparam.strategies.MinimalReparam` or
+    :class:`~pyro.infer.reparam.strategies.AutoReparam` , e.g.::
+
+        @MinimalReparam()
+        def model():
+            ...
+
     .. note:: This implements :meth:`log_prob` only for dimensions {2,3}.
 
     [1] D. Hernandez-Stumpfhauser, F.J. Breidt, M.J. van der Woerd (2017)
