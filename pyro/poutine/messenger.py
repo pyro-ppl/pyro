@@ -39,9 +39,6 @@ class Messenger:
     Most inference operations are implemented in subclasses of this.
     """
 
-    def __init__(self):
-        pass
-
     def __call__(self, fn):
         if not callable(fn):
             raise ValueError(

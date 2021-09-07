@@ -181,6 +181,7 @@ class AutoStructured_shapes(AutoStructured):
         AutoLowRankMultivariateNormal,
         AutoIAFNormal,
         AutoLaplaceApproximation,
+        AutoStructured,
         AutoStructured_shapes,
     ],
 )
@@ -329,6 +330,7 @@ class AutoStructured_median(AutoStructured):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+        AutoStructured,
         AutoStructured_median,
     ],
 )
@@ -376,6 +378,7 @@ def test_median(auto_class, Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+        AutoStructured,
         AutoStructured_median,
     ],
 )
@@ -834,6 +837,7 @@ class AutoStructured_predictive(AutoStructured):
         AutoLaplaceApproximation,
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+        AutoStructured,
         AutoStructured_predictive,
     ],
 )
