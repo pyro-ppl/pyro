@@ -181,7 +181,7 @@ class PyroOptim:
         :param filename: file name to load from
         :type filename: str
         :param map_location: torch.load() map_location parameter
-        :type map_location: function, torch.device, string or a dict 
+        :type map_location: function, torch.device, string or a dict
 
         Load optimizer state from disk
         """
