@@ -176,15 +176,17 @@ class PyroOptim:
         with open(filename, "wb") as output_file:
             torch.save(self.get_state(), output_file)
 
-    def load(self, filename: str) -> None:
+    def load(self, filename: str, map_location: Optional[str] = None) -> None:
         """
         :param filename: file name to load from
         :type filename: str
+        :param map_location: torch.load() map_location parameter
+        :type map_location: str
 
         Load optimizer state from disk
         """
         with open(filename, "rb") as input_file:
-            state = torch.load(input_file)
+            state = torch.load(input_file, map_location=map_location)
         self.set_state(state)
 
     def _get_optim(self, param: Union[Iterable[Tensor], Iterable[Dict[Any, Any]]]):
