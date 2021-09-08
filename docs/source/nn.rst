@@ -40,3 +40,10 @@ ConditionalDenseNN
     :members:
     :undoc-members:
     :show-inheritance:
+
+FlatBatchLinear
+---------------
+.. autoclass:: pyro.nn.linear.FlatBatchLinear
+    :members:
+    :undoc-members:
+    :show-inheritance:

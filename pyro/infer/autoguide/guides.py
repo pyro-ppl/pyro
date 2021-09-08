@@ -20,6 +20,7 @@ import operator
 import warnings
 import weakref
 from collections import OrderedDict, defaultdict
+from collections.abc import Container
 from contextlib import ExitStack
 from types import SimpleNamespace
 from typing import Callable, Dict, Optional, Union
@@ -42,6 +43,7 @@ from pyro.infer.autoguide.initialization import (
 from pyro.infer.enum import config_enumerate
 from pyro.infer.inspect import get_dependencies
 from pyro.nn import PyroModule, PyroParam
+from pyro.nn.linear import FlatBatchLinear
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
@@ -1372,7 +1374,7 @@ class AutoStructured(AutoGuide):
 
     def __init__(
         self,
-        model,
+        model: Callable,
         *,
         conditionals: Union[str, Dict[str, Union[str, Callable]]] = "mvn",
         dependencies: Union[str, Dict[str, Dict[str, Union[str, Callable]]]] = "linear",
@@ -1404,7 +1406,9 @@ class AutoStructured(AutoGuide):
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, create_plates=create_plates)
 
-    def _auto_config(self, sample_sites, args, kwargs):
+    def _auto_config(
+        self, sample_sites: OrderedDict, args: tuple, kwargs: dict
+    ) -> None:
         # Instantiate conditionals as dictionaries.
         if not isinstance(self.conditionals, dict):
             self.conditionals = {
@@ -1422,15 +1426,14 @@ class AutoStructured(AutoGuide):
             for d, upstreams in meta["posterior_dependencies"].items():
                 assert d in sample_sites
                 for u, plates in upstreams.items():
-                    # TODO use plates to reduce dimension of dependency.
                     if u in sample_sites:
                         if prior_order[u] > prior_order[d]:
-                            dependencies[u][d] = self.dependencies
+                            dependencies[u][d] = plates
                         elif prior_order[d] > prior_order[u]:
-                            dependencies[d][u] = self.dependencies
+                            dependencies[d][u] = plates
             self.dependencies = dict(dependencies)
 
-    def _setup_prototype(self, *args, **kwargs):
+    def _setup_prototype(self, *args, **kwargs) -> None:
         super()._setup_prototype(*args, **kwargs)
 
         self.locs = PyroModule()
@@ -1445,18 +1448,23 @@ class AutoStructured(AutoGuide):
 
         # Collect unconstrained shapes.
         init_locs = {}
+        shapes = {}
         numel = {}
+        plates = {}
         for name, site in sample_sites.items():
             with helpful_support_errors(site):
                 init_loc = (
                     biject_to(site["fn"].support).inv(site["value"].detach()).detach()
                 )
-            self._batch_shapes[name] = site["fn"].batch_shape
-            self._unconstrained_event_shapes[name] = init_loc.shape[
-                len(site["fn"].batch_shape) :
-            ]
+            batch_shape = site["fn"].batch_shape
+            assert init_loc.shape[: len(batch_shape)] == batch_shape
+            event_shape = init_loc.shape[len(batch_shape) :]
+            self._batch_shapes[name] = batch_shape
+            self._unconstrained_event_shapes[name] = event_shape
+            shapes[name] = batch_shape + event_shape
             numel[name] = init_loc.numel()
             init_locs[name] = init_loc.reshape(-1)
+            plates[name] = {f.name for f in site["cond_indep_stack"] if f.vectorized}
 
         # Initialize guide params.
         children = defaultdict(list)
@@ -1497,9 +1505,26 @@ class AutoStructured(AutoGuide):
                 if isinstance(dep, str) and dep == "linear":
                     dep = torch.nn.Linear(numel[upstream], numel[name], bias=False)
                     dep.weight.data.zero_()
+                elif isinstance(dep, set):
+                    # Create a linear dependency batched over the plates in dep.
+                    shared_plates = plates[name] & plates[upstream]
+                    assert dep.issubset(shared_plates)
+                    batch_dims = {
+                        self.plates[plate_name].dim
+                        for plate_name in shared_plates - dep
+                    }
+                    shift_in = len(self._batch_shapes[upstream])
+                    shift_out = len(self._batch_shapes[name])
+                    dep = FlatBatchLinear(
+                        shape_in=shapes[upstream],
+                        shape_out=shapes[name],
+                        batch_dims_in={d + shift_in for d in batch_dims},
+                        batch_dims_out={d + shift_out for d in batch_dims},
+                    )
                 elif not callable(dep):
                     raise ValueError(
-                        f"Expected either the string 'linear' or a callable, but got {dep}"
+                        "Expected either the string 'linear' or a callable"
+                        f", but got {dep}"
                     )
                 _deep_setattr(deps, upstream, dep)
 
@@ -1520,7 +1545,7 @@ class AutoStructured(AutoGuide):
             site.clear()
 
     @staticmethod
-    def _compress_site(site):
+    def _compress_site(site: Dict[str, object]) -> Dict[str, object]:
         # Save memory by retaining only necessary parts of the site.
         return {
             "name": site["name"],
@@ -1533,7 +1558,9 @@ class AutoStructured(AutoGuide):
         }
 
     @poutine.infer_config(config_fn=_config_auxiliary)
-    def get_deltas(self, save_params=None):
+    def get_deltas(
+        self, save_params: Optional[Container] = None
+    ) -> Dict[str, dist.Delta]:
         deltas = {}
         aux_values = {}
         compute_density = poutine.get_mask() is not False
@@ -1617,7 +1644,7 @@ class AutoStructured(AutoGuide):
 
         return deltas
 
-    def forward(self, *args, **kwargs):
+    def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
@@ -1634,7 +1661,7 @@ class AutoStructured(AutoGuide):
         return result
 
     @torch.no_grad()
-    def median(self, *args, **kwargs):
+    def median(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         result = {}
         for name, site in self._sorted_sites:
             loc = _deep_getattr(self.locs, name).detach()
