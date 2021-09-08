@@ -43,7 +43,7 @@ from pyro.infer.autoguide.initialization import (
 from pyro.infer.enum import config_enumerate
 from pyro.infer.inspect import get_dependencies
 from pyro.nn import PyroModule, PyroParam
-from pyro.nn.linear import FlatBatchLinear
+from pyro.nn.linear import FlatRank2Linear
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
@@ -1356,8 +1356,11 @@ class AutoStructured(AutoGuide):
         dependecy type is provided, dependency structure will be inferred. A
         dependency type is either the string "linear" or a callable that maps a
         *flattened* upstream perturbation to *flattened* downstream
-        perturbation. The string "linear" is equivalent to
+        perturbation. Dictionary keys "linear" are equivalent to
         ``nn.Linear(upstream.numel(), downstream.numel(), bias=False)``.
+        If the entire dictionary is inferred, "linear" instead constructs
+        a collection of :class:`~pyro.nn.linear.FlatRank2Linear` modules
+        with sparsity determined by plate structure.
         Dependencies must not contain cycles or self-loops.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
@@ -1451,6 +1454,7 @@ class AutoStructured(AutoGuide):
         shapes = {}
         numel = {}
         plates = {}
+        plate_dims = {}
         for name, site in sample_sites.items():
             with helpful_support_errors(site):
                 init_loc = (
@@ -1465,6 +1469,8 @@ class AutoStructured(AutoGuide):
             numel[name] = init_loc.numel()
             init_locs[name] = init_loc.reshape(-1)
             plates[name] = {f.name for f in site["cond_indep_stack"] if f.vectorized}
+            for f in site["cond_indep_stack"]:
+                plate_dims[f.name] = f.dim
 
         # Initialize guide params.
         children = defaultdict(list)
@@ -1510,12 +1516,11 @@ class AutoStructured(AutoGuide):
                     shared_plates = plates[name] & plates[upstream]
                     assert dep.issubset(shared_plates)
                     batch_dims = {
-                        self.plates[plate_name].dim
-                        for plate_name in shared_plates - dep
+                        plate_dims[plate_name] for plate_name in shared_plates - dep
                     }
                     shift_in = len(self._batch_shapes[upstream])
                     shift_out = len(self._batch_shapes[name])
-                    dep = FlatBatchLinear(
+                    dep = FlatRank2Linear(
                         shape_in=shapes[upstream],
                         shape_out=shapes[name],
                         batch_dims_in={d + shift_in for d in batch_dims},

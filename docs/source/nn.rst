@@ -41,9 +41,9 @@ ConditionalDenseNN
     :undoc-members:
     :show-inheritance:
 
-FlatBatchLinear
----------------
-.. autoclass:: pyro.nn.linear.FlatBatchLinear
+Structured Linear Layers
+------------------------
+.. automodule:: pyro.nn.linear
     :members:
     :undoc-members:
     :show-inheritance:

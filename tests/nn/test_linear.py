@@ -4,7 +4,7 @@
 import pytest
 import torch
 
-from pyro.nn.linear import FlatBatchLinear
+from pyro.nn.linear import FlatBatchLinear, FlatRank2Linear
 
 
 def check_num_parameters(module):
@@ -23,13 +23,15 @@ def check_num_parameters(module):
 
 @pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("batch_dims_in", [{}, {0}, {1}, {0, 1}], ids=str)
-def test_1(sample_shape, batch_dims_in):
+@pytest.mark.parametrize("cls", [FlatBatchLinear, FlatRank2Linear])
+def test_1(cls, batch_dims_in, sample_shape):
     shape_in = torch.Size((4, 3, 2))
     shape_out = torch.Size((5, 4, 3))
     batch_dims_out = {i + 1 for i in batch_dims_in}
 
-    f = FlatBatchLinear(shape_in, shape_out, batch_dims_in, batch_dims_out)
-    check_num_parameters(f)
+    f = cls(shape_in, shape_out, batch_dims_in, batch_dims_out)
+    if cls == FlatBatchLinear:
+        check_num_parameters(f)
 
     x = torch.randn(sample_shape + (shape_in.numel(),))
     y = f(x)
@@ -38,13 +40,15 @@ def test_1(sample_shape, batch_dims_in):
 
 @pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("batch_dims_in", [{}, {2}, {4}, {2, 4}], ids=str)
-def test_2(sample_shape, batch_dims_in):
+@pytest.mark.parametrize("cls", [FlatBatchLinear, FlatRank2Linear])
+def test_2(cls, batch_dims_in, sample_shape):
     shape_in = torch.Size((5, 1, 3, 1, 1))
     shape_out = torch.Size((4, 3, 2, 1))
     batch_dims_out = {i - 1 for i in batch_dims_in}
 
-    f = FlatBatchLinear(shape_in, shape_out, batch_dims_in, batch_dims_out)
-    check_num_parameters(f)
+    f = cls(shape_in, shape_out, batch_dims_in, batch_dims_out)
+    if cls == FlatBatchLinear:
+        check_num_parameters(f)
 
     x = torch.randn(sample_shape + (shape_in.numel(),))
     y = f(x)
