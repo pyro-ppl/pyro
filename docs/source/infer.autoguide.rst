@@ -117,6 +117,22 @@ AutoStructured
     :special-members: __call__
     :show-inheritance:
 
+AutoWrap
+--------
+.. autoclass:: pyro.infer.autoguide.AutoWrap
+    :members:
+    :undoc-members:
+    :special-members: _sample, _setup_prototype
+    :show-inheritance:
+
+AutoWrapFull
+------------
+.. autoclass:: pyro.infer.autoguide.AutoWrapFull
+    :members:
+    :undoc-members:
+    :special-members: _sample, _setup_prototype
+    :show-inheritance:
+
 .. _autoguide-initialization:
 
 Initialization

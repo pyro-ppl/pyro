@@ -34,11 +34,6 @@ import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import eye_like, is_identically_zero, sum_rightmost
-from pyro.infer.autoguide.initialization import (
-    InitMessenger,
-    init_to_feasible,
-    init_to_median,
-)
 from pyro.infer.enum import config_enumerate
 from pyro.infer.inspect import get_dependencies
 from pyro.nn import PyroModule, PyroParam
@@ -46,33 +41,8 @@ from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
 
-from .utils import _product, helpful_support_errors
-
-
-def _deep_setattr(obj, key, val):
-    """
-    Set an attribute `key` on the object. If any of the prefix attributes do
-    not exist, they are set to :class:`~pyro.nn.PyroModule`.
-    """
-
-    def _getattr(obj, attr):
-        obj_next = getattr(obj, attr, None)
-        if obj_next is not None:
-            return obj_next
-        setattr(obj, attr, PyroModule())
-        return getattr(obj, attr)
-
-    lpart, _, rpart = key.rpartition(".")
-    # Recursive getattr while setting any prefix attributes to PyroModule
-    if lpart:
-        obj = functools.reduce(_getattr, [obj] + lpart.split("."))
-    setattr(obj, rpart, val)
-
-
-def _deep_getattr(obj, key):
-    for part in key.split("."):
-        obj = getattr(obj, part)
-    return obj
+from .initialization import InitMessenger, init_to_feasible, init_to_median
+from .utils import _product, deep_getattr, deep_setattr, helpful_support_errors
 
 
 def prototype_hide_fn(msg):
@@ -392,7 +362,7 @@ class AutoDelta(AutoGuide):
 
             value = PyroParam(value, site["fn"].support, event_dim)
             with helpful_support_errors(site):
-                _deep_setattr(self, name, value)
+                deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
         """
@@ -503,18 +473,18 @@ class AutoNormal(AutoGuide):
                     init_loc = periodic_repeat(init_loc, full_size, dim).contiguous()
             init_scale = torch.full_like(init_loc, self._init_scale)
 
-            _deep_setattr(
+            deep_setattr(
                 self.locs, name, PyroParam(init_loc, constraints.real, event_dim)
             )
-            _deep_setattr(
+            deep_setattr(
                 self.scales,
                 name,
                 PyroParam(init_scale, self.scale_constraint, event_dim),
             )
 
     def _get_loc_and_scale(self, name):
-        site_loc = _deep_getattr(self.locs, name)
-        site_scale = _deep_getattr(self.scales, name)
+        site_loc = deep_getattr(self.locs, name)
+        site_scale = deep_getattr(self.scales, name)
         return site_loc, site_scale
 
     def forward(self, *args, **kwargs):
@@ -1250,7 +1220,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             for param_name, param_init, param_constraint in param_spec:
-                _deep_setattr(
+                deep_setattr(
                     self,
                     "{}_{}".format(name, param_name),
                     PyroParam(param_init, constraint=param_constraint),
@@ -1464,23 +1434,23 @@ class AutoStructured(AutoGuide):
         for name, site in sample_sites.items():
             # Initialize location parameters.
             init_loc = init_locs[name]
-            _deep_setattr(self.locs, name, PyroParam(init_loc))
+            deep_setattr(self.locs, name, PyroParam(init_loc))
 
             # Initialize parameters of conditional distributions.
             conditional = self.conditionals[name]
             if callable(conditional):
-                _deep_setattr(self.conds, name, conditional)
+                deep_setattr(self.conds, name, conditional)
             else:
                 if conditional not in ("delta", "normal", "mvn"):
                     raise ValueError(f"Unsupported conditional type: {conditional}")
                 if conditional in ("normal", "mvn"):
                     init_scale = torch.full_like(init_loc, self._init_scale)
-                    _deep_setattr(
+                    deep_setattr(
                         self.scales, name, PyroParam(init_scale, self.scale_constraint)
                     )
                 if conditional == "mvn":
                     init_scale_tril = eye_like(init_loc, init_loc.numel())
-                    _deep_setattr(
+                    deep_setattr(
                         self.scale_trils,
                         name,
                         PyroParam(init_scale_tril, self.scale_tril_constraint),
@@ -1489,7 +1459,7 @@ class AutoStructured(AutoGuide):
             # Initialize dependencies on upstream variables.
             num_pending[name] = 0
             deps = PyroModule()
-            _deep_setattr(self.deps, name, deps)
+            deep_setattr(self.deps, name, deps)
             for upstream, dep in self.dependencies.get(name, {}).items():
                 assert upstream in sample_sites
                 children[upstream].append(name)
@@ -1501,7 +1471,7 @@ class AutoStructured(AutoGuide):
                     raise ValueError(
                         f"Expected either the string 'linear' or a callable, but got {dep}"
                     )
-                _deep_setattr(deps, upstream, dep)
+                deep_setattr(deps, upstream, dep)
 
         # Topologically sort sites.
         # TODO should we choose a more optimal structure?
@@ -1543,11 +1513,11 @@ class AutoStructured(AutoGuide):
 
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
             log_density = 0.0
-            loc = _deep_getattr(self.locs, name)
+            loc = deep_getattr(self.locs, name)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
             if callable(conditional):
-                aux_value = _deep_getattr(self.conds, name)()
+                aux_value = deep_getattr(self.conds, name)()
             elif conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
@@ -1556,7 +1526,7 @@ class AutoStructured(AutoGuide):
                     dist.Normal(zero, 1).to_event(1),
                     infer={"is_auxiliary": True},
                 )
-                scale = _deep_getattr(self.scales, name)
+                scale = deep_getattr(self.scales, name)
                 aux_value = aux_value * scale
                 if compute_density:
                     log_density = (-scale.log()).expand_as(aux_value)
@@ -1568,8 +1538,8 @@ class AutoStructured(AutoGuide):
                     dist.Normal(zero, 1).to_event(1),
                     infer={"is_auxiliary": True},
                 )
-                scale = _deep_getattr(self.scales, name)
-                scale_tril = _deep_getattr(self.scale_trils, name)
+                scale = deep_getattr(self.scales, name)
+                scale_tril = deep_getattr(self.scale_trils, name)
                 aux_value = aux_value @ scale_tril.T * scale
                 if compute_density:
                     log_density = (
@@ -1587,9 +1557,9 @@ class AutoStructured(AutoGuide):
             # Note: these shear transforms have no effect on the Jacobian
             # determinant, and can therefore be excluded from the log_density
             # computation below, even for nonlinear dep().
-            deps = _deep_getattr(self.deps, name)
+            deps = deep_getattr(self.deps, name)
             for upstream in self.dependencies.get(name, {}):
-                dep = _deep_getattr(deps, upstream)
+                dep = deep_getattr(deps, upstream)
                 aux_value = aux_value + dep(aux_values[upstream])
             aux_values[name] = aux_value
 
@@ -1637,7 +1607,7 @@ class AutoStructured(AutoGuide):
     def median(self, *args, **kwargs):
         result = {}
         for name, site in self._sorted_sites:
-            loc = _deep_getattr(self.locs, name).detach()
+            loc = deep_getattr(self.locs, name).detach()
             shape = self._batch_shapes[name] + self._unconstrained_event_shapes[name]
             loc = loc.reshape(shape)
             result[name] = biject_to(site["fn"].support)(loc)

@@ -27,6 +27,7 @@ from pyro.infer.autoguide.initialization import (
     init_to_value,
 )
 from pyro.infer.autoguide.utils import mean_field_entropy
+from pyro.infer.autoguide.wrap import AutoWrap, AutoWrapFull
 
 __all__ = [
     "AutoCallable",
@@ -43,6 +44,8 @@ __all__ = [
     "AutoNormal",
     "AutoNormalizingFlow",
     "AutoStructured",
+    "AutoWrap",
+    "AutoWrapFull",
     "init_to_feasible",
     "init_to_generated",
     "init_to_mean",
