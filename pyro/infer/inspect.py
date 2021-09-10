@@ -40,7 +40,7 @@ class RequiresGradMessenger(Messenger):
         if is_sample_site(msg):
             if self.predicate(msg):
                 msg["value"].requires_grad_()
-            elif not msg["is_observed"] and msg["value"].requires_grad:
+            elif msg["value"].requires_grad:
                 msg["value"] = msg["value"].detach()
 
 
@@ -55,6 +55,8 @@ def get_dependencies(
     This returns a nested dictionary with structure like::
 
         {
+            "latent": {"variable1", "variable2"},
+            "observed": {"variable3"},
             "prior_dependencies": {
                 "variable1": {"variable1": set()},
                 "variable2": {"variable1": set(), "variable2": set()},
@@ -184,10 +186,10 @@ def get_dependencies(
         for msg in sample_sites
     }
 
-    # First find transitive dependencies among latent and observed sites
+    # First find transitive dependencies.
     prior_dependencies = {n: {n: set()} for n in plates}  # no deps yet
     for i, downstream in enumerate(sample_sites):
-        upstreams = [u for u in sample_sites[:i] if not u["is_observed"]]
+        upstreams = sample_sites[:i]
         if not upstreams:
             continue
         grads = torch.autograd.grad(
@@ -202,7 +204,7 @@ def get_dependencies(
                 u = upstream["name"]
                 prior_dependencies[d][u] = set()
 
-    # Then refine to direct dependencies among latent and observed sites.
+    # Then refine to direct dependencies.
     for i, downstream in enumerate(sample_sites):
         for j, upstream in enumerate(sample_sites[: max(0, i - 1)]):
             if upstream["name"] not in prior_dependencies[downstream["name"]]:
@@ -229,15 +231,18 @@ def get_dependencies(
                 # u is henceforth downstream and d is henceforth upstream.
                 posterior_dependencies[u][d] = p.copy()
 
-    # Moralize: add dependencies among latent variables in each Markov blanket.
-    # This assumes all latents are eventually observed, at least indirectly.
-    order = {msg["name"]: i for i, msg in enumerate(reversed(sample_sites))}
+    # Moralize: add dependencies to latent variables in each Markov blanket.
+    order = {
+        msg["name"]: (msg["is_observed"], i)
+        for i, msg in enumerate(reversed(sample_sites))
+    }
     for d, upstreams in prior_dependencies.items():
-        upstreams = {u: p for u, p in upstreams.items() if u not in observed}
         for u1, p1 in upstreams.items():
+            if u1 in observed:
+                continue
             for u2, p2 in upstreams.items():
-                if order[u1] <= order[u2]:
-                    p12 = posterior_dependencies[u2].setdefault(u1, set())
+                if order[u1] >= order[u2]:
+                    p12 = posterior_dependencies[u1].setdefault(u2, set())
                     p12 |= plates[u1] & plates[u2] - plates[d]
                     p12 |= plates[u2] & p1
                     p12 |= plates[u1] & p2

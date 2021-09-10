@@ -342,3 +342,36 @@ def test_nested_plate_collider():
         },
     }
     assert actual == expected
+
+
+def test_deterministic():
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.LogNormal(0, 1))
+        c = pyro.sample("c", dist.Normal(a, b))
+        d_decentered = pyro.sample("d_decentered", dist.Normal(0, 1))
+        d = pyro.deterministic("d", a + b * d_decentered)
+        e = pyro.sample("e", dist.Normal(d + c, 1), obs=torch.zeros(()))
+        return a, b, c, d_decentered, d, e
+
+    actual = get_dependencies(model)
+    _ = set()
+    expected = {
+        "prior_dependencies": {
+            "a": {"a": _},
+            "b": {"b": _},
+            "c": {"c": _, "a": _, "b": _},
+            "d_decentered": {"d_decentered": _},
+            "d": {"d_decentered": _, "a": _, "b": _},
+            "e": {"e": _, "c": _, "d": _},
+        },
+        "posterior_dependencies": {
+            "a": {"a": _, "b": _, "c": _},
+            "b": {"b": _, "c": _},
+            "c": {"c": _, "d": _},
+            "d_decentered": {"d": _, "e": _},
+        },
+    }
+    assert actual == expected
+
+
