@@ -21,6 +21,7 @@ from pyro.infer.autoguide import (
     AutoDelta,
     AutoDiagonalNormal,
     AutoDiscreteParallel,
+    AutoGaussian,
     AutoGuide,
     AutoGuideList,
     AutoIAFNormal,
@@ -34,7 +35,7 @@ from pyro.infer.autoguide import (
     init_to_median,
     init_to_sample,
 )
-from pyro.infer.reparam import ProjectedNormalReparam
+from pyro.infer.reparam import LocScaleReparam, ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
 from pyro.poutine.util import prune_subsample_sites
@@ -183,6 +184,7 @@ class AutoStructured_shapes(AutoStructured):
         AutoLaplaceApproximation,
         AutoStructured,
         AutoStructured_shapes,
+        AutoGaussian,
     ],
 )
 @pytest.mark.filterwarnings("ignore::FutureWarning")
@@ -332,6 +334,7 @@ class AutoStructured_median(AutoStructured):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
         AutoStructured,
         AutoStructured_median,
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -380,6 +383,7 @@ def test_median(auto_class, Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
         AutoStructured,
         AutoStructured_median,
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -839,6 +843,7 @@ class AutoStructured_predictive(AutoStructured):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoStructured,
         AutoStructured_predictive,
+        AutoGaussian,
     ],
 )
 def test_predictive(auto_class):
@@ -1216,3 +1221,164 @@ def test_exact_batch(Guide):
         actual_std = samples.std(0)
         assert_close(actual_mean, expected_mean, atol=0.05)
         assert_close(actual_std, expected_std, rtol=0.05)
+
+
+# Simplified from https://github.com/pyro-cov/tree/master/pyrocov/mutrans.py
+def pyrocov_model(dataset):
+    # Tensor shapes are commented at at the end of some lines.
+    features = dataset["features"]
+    local_time = dataset["local_time"][..., None]  # [T, P, 1]
+    T, P, _ = local_time.shape
+    S, F = features.shape
+    weekly_strains = dataset["weekly_strains"]
+    assert weekly_strains.shape == (T, P, S)
+
+    # Configure reparametrization (which does not affect model density).
+    local_time = local_time + pyro.param(
+        "local_time", lambda: torch.zeros(P, S)
+    )  # [T, P, S]
+
+    # Sample global random variables.
+    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))[..., None]
+    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))[..., None]
+    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))[..., None]
+    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))[..., None]
+
+    # Assume relative growth rate depends strongly on mutations and weakly on place.
+    coef_loc = torch.zeros(F)
+    coef = pyro.sample("coef", dist.Logistic(coef_loc, coef_scale).to_event(1))  # [F]
+    rate_loc = pyro.deterministic(
+        "rate_loc", 0.01 * coef @ features.T, event_dim=1
+    )  # [S]
+
+    # Assume initial infections depend strongly on strain and place.
+    init_loc = pyro.sample(
+        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
+    )  # [S]
+    with pyro.plate("place", P, dim=-1):
+        rate = pyro.sample(
+            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
+        )  # [P, S]
+        init = pyro.sample(
+            "init", dist.Normal(init_loc, init_scale).to_event(1)
+        )  # [P, S]
+
+        # Finally observe counts.
+        with pyro.plate("time", T, dim=-2):
+            logits = init + rate * local_time  # [T, P, S]
+            pyro.sample(
+                "obs",
+                dist.Multinomial(logits=logits, validate_args=False),
+                obs=weekly_strains,
+            )
+
+
+@pytest.mark.parametrize("backend", ["smoke_test"])
+def test_autogaussian_pyrocov(backend):
+    T, P, S, F = 3, 4, 5, 6
+    dataset = {
+        "features": torch.randn(S, F),
+        "local_time": torch.randn(T, P),
+        "weekly_strains": torch.randn(T, P, S).exp().round(),
+    }
+
+    guide = AutoGaussian(pyrocov_model, backend=backend)
+    with poutine.mask(mask=False):
+        guide(dataset)  # initialize guide
+
+    # Check automatically determined dependencies.
+    # Without reparametrization the posterior dependencies are sparse.
+    _ = set()
+    expected_dependencies = {
+        "coef": {
+            "coef_scale": _,  # direct
+            "rate_scale": _,  # moralized
+        },
+        "init_loc": {
+            "init_loc_scale": _,  # direct
+            "init_scale": _,  # moralized
+        },
+        "rate": {
+            "coef": _,  # direct
+            "rate_scale": _,  # direct
+        },
+        "init": {
+            "init_loc": _,  # direct
+            "init_scale": _,  # direct
+            "rate": _,  # moralized
+        },
+    }
+    assert guide.dependencies == expected_dependencies
+
+
+@pytest.mark.parametrize("backend", ["smoke_test"])
+def test_structured_pyrocov_reparam(backend):
+    T, P, S, F = 3, 4, 5, 6
+    dataset = {
+        "features": torch.randn(S, F),
+        "local_time": torch.randn(T, P),
+        "weekly_strains": torch.randn(T, P, S).exp().round(),
+    }
+
+    # Reparametrize the model.
+    config = {
+        "coef": LocScaleReparam(),
+        "rate": LocScaleReparam(),
+        "init_loc": LocScaleReparam(),
+        "init": LocScaleReparam(),
+    }
+    model = poutine.reparam(pyrocov_model, config)
+    guide = AutoGaussian(model, backend=backend)
+    with poutine.mask(mask=False):
+        guide(dataset)  # initialize guide
+
+    # Check automatically determined dependencies.
+    # With reparametrization the posterior dependencies are dense.
+    _ = set()
+    expected_dependencies = {
+        "rate_scale": {
+            "coef_scale": _,  # reparam moralized
+        },
+        "init_loc_scale": {
+            "coef_scale": _,  # reparam moralized
+            "rate_scale": _,  # reparam moralized
+        },
+        "init_scale": {
+            "coef_scale": _,  # reparam moralized
+            "rate_scale": _,  # reparam moralized
+            "init_loc_scale": _,  # reparam moralized
+        },
+        "coef_decentered": {
+            "coef_scale": _,  # direct
+            "rate_scale": _,  # moralized
+            "init_loc_scale": _,  # reparam moralized
+            "init_scale": _,  # reparam moralized
+        },
+        "init_loc_decentered": {
+            "init_loc_scale": _,  # direct
+            "init_scale": _,  # moralized
+            "coef_scale": _,  # reparam moralized
+            "rate_scale": _,  # reparam moralized
+            "coef_decentered": _,  # reparam moralized
+        },
+        "rate_decentered": {
+            "coef_decentered": _,  # direct
+            "coef_scale": _,  # reparam direct
+            "rate_scale": _,  # direct
+            "rate_scale": _,  # reparam direct
+            "init_loc_scale": _,  # reparam moralized
+            "init_scale": _,  # reparam moralized
+            "init_loc_decentered": _,  # reparam moralized
+        },
+        "init_decentered": {
+            "init_loc_decentered": _,  # direct
+            "init_scale": _,  # direct
+            "rate_decentered": _,  # moralized
+            "init_loc_scale": _,  # reparam direct
+            "coef_scale": _,  # reparam moralized
+            "rate_scale": _,  # reparam moralized
+            "coef_decentered": _,  # reparam moralized
+            "rate_decentered": _,  # reparam moralized
+        },
+    }
+    assert guide.dependencies == expected_dependencies

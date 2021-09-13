@@ -22,7 +22,7 @@ import weakref
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
 from types import SimpleNamespace
-from typing import Callable, Dict, Optional, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -44,6 +44,7 @@ from pyro.infer.inspect import get_dependencies
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
+from pyro.poutine.runtime import am_i_wrapped
 from pyro.poutine.util import site_is_subsample
 
 from .utils import _product, helpful_support_errors
@@ -1642,3 +1643,181 @@ class AutoStructured(AutoGuide):
             loc = loc.reshape(shape)
             result[name] = biject_to(site["fn"].support)(loc)
         return result
+
+
+class AutoGaussian(AutoGuide):
+    """
+    EXPERIMENTAL Gaussian Markov random field guide.
+
+    This is equivalent to a full rank :class:`AutoMultivariateNormal` guide,
+    but with a sparse precision matrix determined by dependencies and plates in
+    the model. This can be orders of magnitude cheaper than the naive
+    :class:`AutoMultivariateNormal` in terms of space, time, number of
+    parameters, and statistical complexity. This also parametrizes correlations
+    via precision matrices rather than Cholesky factors, and therefore is less
+    susceptible to variable ordering in the model.
+
+    The guide currently does not depend on the model's ``*args, **kwargs``.
+
+    Usage::
+
+        guide = AutoGaussian(model)
+        svi = SVI(model, guide, ...)
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
+    :param callable create_plates: An optional function inputing the same
+        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
+        or iterable of plates. Plates not returned will be created
+        automatically as usual. This is useful for data subsampling.
+    :param str backend: Back end for performing Gaussian tensor variable
+        elimination. Currently only the experimental "funsor" backend is supported,
+        and this requires the optional ``funsor`` dependency, installed via
+        ``pip install pyro-ppl[funsor]``.
+    """
+
+    def __init__(
+        self,
+        model: Callable,
+        *,
+        init_loc_fn: Callable = init_to_feasible,
+        init_scale: float = 0.1,
+        create_plates: Optional[Callable] = None,
+        backend="funsor",
+    ):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
+        self._init_scale = init_scale
+        self._original_model = (model,)
+        model = InitMessenger(init_loc_fn)(model)
+        super().__init__(model, create_plates=create_plates)
+        self.backend = backend
+
+    def _setup_prototype(self, *args, **kwargs) -> None:
+        super()._setup_prototype(*args, **kwargs)
+
+        self.locs = PyroModule()
+        self.scales = PyroModule()
+        self.precisions = PyroModule()
+        self._plates = {}
+        self._unconstrained_event_shapes = {}
+
+        model = self._original_model[0]
+        meta = poutine.block(get_dependencies)(model, args, kwargs)
+        self.dependencies = meta["posterior_dependencies"]
+        order = {d: i for i, d in enumerate(self.dependencies)}
+        for d, upstreams in self.dependencies.items():
+            site = self.prototype_trace.nodes[d]
+            init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
+            batch_shape = site["fn"].batch_shape
+            self._unconstrained_event_shapes[d] = init_loc.shape[len(batch_shape) :]
+            event_dim = len(self._unconstrained_event_shapes[d])
+            _deep_setattr(self.locs, d, PyroParam(init_loc, event_dim=event_dim))
+            _deep_setattr(
+                self.scales,
+                d,
+                PyroParam(
+                    torch.full_like(init_loc, self._init_scale),
+                    constraint=constraints.softplus_positive,
+                    event_dim=event_dim,
+                ),
+            )
+            self._plates[d] = frozenset(site["cond_indep_stack"])
+            for f in site["cond_indep_stack"]:
+                self._plates[f.name] = f
+            for u, dep_plate_names in upstreams.items():
+                if u not in order or order[u] > order[d]:
+                    continue
+                dep_plates = frozenset(self._plates[p] for p in dep_plate_names)
+                indep_plates = self._plates[u] | self._plates[d] - dep_plates
+                shape = torch.Size(
+                    tuple(f.size for f in indep_plates)
+                    + tuple(f.size for f in dep_plates)
+                    + self._unconstrained_event_shapes[u]
+                    + self._unconstrained_event_shapes[d]
+                )
+                _deep_setattr(
+                    self.precisions,
+                    f"{d}.{u}",
+                    torch.nn.Parameter(init_loc.new_zeros(shape)),
+                )
+
+    def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        aux_values, log_density_1 = self._sample_aux_values()
+        values, log_density_2 = self._transform_values(aux_values)
+        log_density = log_density_1 + log_density_2
+
+        # Replay via Pyro primitives.
+        compute_density = am_i_wrapped() and poutine.get_mask() is not False
+        plates = self._create_plates(*args, **kwargs)
+        for name in self.dependencies:
+            site = self.prototype_trace.nodes[name]
+            if compute_density:
+                scale = _deep_getattr(self.scales, name)
+                log_density = log_density + scale.log().sum()
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(plates[frame.name])
+                pyro.sample(
+                    name, dist.Delta(values[name], event_dim=site["fn"].event_dim)
+                )
+        if compute_density:
+            pyro.factor("AutoGaussian_log_density", log_density)
+        return values
+
+    @torch.no_grad()
+    def median(self) -> Dict[str, torch.Tensor]:
+        with poutine.mask(mask=False):
+            aux_values = {name: 0.0 for name in self.dependencies}
+            values, _ = self._transform_values(aux_values)
+        return values
+
+    def _sample_aux_values(
+        self,
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.tensor]]:
+        # Sample auxiliary values via Gaussian tensor variable elimination.
+        aux_values = {}
+        log_density = 0.0
+
+        if self.backend == "funsor":
+            raise NotImplementedError("TODO")
+        elif self.backend == "smoke_test":
+            # The following should be equivalent to AutoNormal.
+            for name in self.dependencies:
+                site = self.prototype_trace.nodes[name]
+                aux_values[name] = pyro.sample(
+                    name + "_aux",
+                    dist.Normal(
+                        torch.zeros_like(_deep_getattr(self.locs, name)), 1
+                    ).to_event(site["fn"].event_dim),
+                    infer={"is_auxiliary": True},
+                )
+        else:
+            raise ValueError(f"Unknown backend: {self.backend}")
+
+        return aux_values, log_density
+
+    def _transform_values(
+        self,
+        aux_values: Dict[str, torch.Tensor],
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
+        # Learnably transform auxiliary values to user-facing values.
+        compute_density = am_i_wrapped() and poutine.get_mask() is not False
+        values = {}
+        log_density = 0.0
+        for name in self.dependencies:
+            site = self.prototype_trace.nodes[name]
+            loc = _deep_getattr(self.locs, name)
+            scale = _deep_getattr(self.scales, name)
+            values[name] = biject_to(site["fn"].support)(aux_values[name] * scale + loc)
+            if compute_density:
+                log_density = log_density + scale.log().sum()
+
+        return values, log_density
