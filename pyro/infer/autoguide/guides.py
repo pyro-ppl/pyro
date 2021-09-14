@@ -1679,6 +1679,8 @@ class AutoGaussian(AutoGuide):
         ``pip install pyro-ppl[funsor]``.
     """
 
+    scale_constraint = constraints.softplus_positive
+
     def __init__(
         self,
         model: Callable,
@@ -1702,48 +1704,69 @@ class AutoGaussian(AutoGuide):
         self.locs = PyroModule()
         self.scales = PyroModule()
         self.precisions = PyroModule()
-        self._plates = {}
         self._unconstrained_event_shapes = {}
 
         model = self._original_model[0]
         meta = poutine.block(get_dependencies)(model, args, kwargs)
-        self.dependencies = meta["posterior_dependencies"]
-        order = {d: i for i, d in enumerate(self.dependencies)}
-        for d, upstreams in self.dependencies.items():
-            site = self.prototype_trace.nodes[d]
-            init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
-            batch_shape = site["fn"].batch_shape
-            self._unconstrained_event_shapes[d] = init_loc.shape[len(batch_shape) :]
-            event_dim = len(self._unconstrained_event_shapes[d])
-            _deep_setattr(self.locs, d, PyroParam(init_loc, event_dim=event_dim))
+        self.dependencies = meta["prior_dependencies"]
+        self.latents = {
+            name: site
+            for name, site in self.prototype_trace.nodes.items()
+            if site["type"] == "sample"
+            if not site_is_subsample(site)
+        }
+        for d, site in self.latents.items():
+            precision_size = 0
+            precision_plates = set()
+            if not site["is_observed"]:
+                # Initialize latent variable location-scale parameters.
+                init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
+                init_scale = torch.full_like(init_loc, self._init_scale)
+                batch_shape = site["fn"].batch_shape
+                event_shape = init_loc.shape[len(batch_shape) :]
+                self._unconstrained_event_shapes[d] = event_shape
+                event_dim = len(event_shape)
+                _deep_setattr(self.locs, d, PyroParam(init_loc, event_dim=event_dim))
+                _deep_setattr(
+                    self.scales,
+                    d,
+                    PyroParam(
+                        init_scale,
+                        constraint=self.scale_constraint,
+                        event_dim=event_dim,
+                    ),
+                )
+
+                # Gather shapes for precision matrices.
+                for f in site["cond_indep_stack"]:
+                    if f.vectorized:
+                        precision_plates.add(f)
+
+            # Initialize precision matrices.
+            for u in self.dependencies[d]:
+                precision_size += self._unconstrained_event_shapes[u].numel()
+                for f in self.prototype_trace.nodes[u]["cond_indep_stack"]:
+                    if f not in precision_plates:
+                        # TODO Convert upstream plates to event dimensions, and
+                        # support colliders in backend sum_product() algorithms.
+                        raise NotImplementedError("intractable!")
+            precision_plates = sorted(precision_plates, key=lambda f: f.dim)
+            batch_shape = torch.Size(f.size for f in precision_plates)
+            init_precision = torch.zeros(*batch_shape, precision_size, precision_size)
+            init_precision.view(-1, precision_size ** 2)[
+                ..., :: precision_size + 1
+            ].fill_(
+                1
+            )  # init to eye
             _deep_setattr(
-                self.scales,
+                self.precisions,
                 d,
                 PyroParam(
-                    torch.full_like(init_loc, self._init_scale),
-                    constraint=constraints.softplus_positive,
-                    event_dim=event_dim,
+                    init_precision,
+                    constraint=constraints.positive_definite,
+                    event_dim=2,
                 ),
             )
-            self._plates[d] = frozenset(site["cond_indep_stack"])
-            for f in site["cond_indep_stack"]:
-                self._plates[f.name] = f
-            for u, dep_plate_names in upstreams.items():
-                if u not in order or order[u] > order[d]:
-                    continue
-                dep_plates = frozenset(self._plates[p] for p in dep_plate_names)
-                indep_plates = self._plates[u] | self._plates[d] - dep_plates
-                shape = torch.Size(
-                    tuple(f.size for f in indep_plates)
-                    + tuple(f.size for f in dep_plates)
-                    + self._unconstrained_event_shapes[u]
-                    + self._unconstrained_event_shapes[d]
-                )
-                _deep_setattr(
-                    self.precisions,
-                    f"{d}.{u}",
-                    torch.nn.Parameter(init_loc.new_zeros(shape)),
-                )
 
     def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         if self.prototype_trace is None:
@@ -1756,8 +1779,7 @@ class AutoGaussian(AutoGuide):
         # Replay via Pyro primitives.
         compute_density = am_i_wrapped() and poutine.get_mask() is not False
         plates = self._create_plates(*args, **kwargs)
-        for name in self.dependencies:
-            site = self.prototype_trace.nodes[name]
+        for name, site in self.latents.items():
             if compute_density:
                 scale = _deep_getattr(self.scales, name)
                 log_density = log_density + scale.log().sum()
@@ -1783,15 +1805,13 @@ class AutoGaussian(AutoGuide):
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.tensor]]:
         # Sample auxiliary values via Gaussian tensor variable elimination.
-        aux_values = {}
-        log_density = 0.0
-
         if self.backend == "funsor":
-            raise NotImplementedError("TODO")
+            return self._sample_aux_values_funsor()
         elif self.backend == "smoke_test":
             # The following should be equivalent to AutoNormal.
-            for name in self.dependencies:
-                site = self.prototype_trace.nodes[name]
+            aux_values = {}
+            log_density = 0.0
+            for name, site in self.latents.items():
                 aux_values[name] = pyro.sample(
                     name + "_aux",
                     dist.Normal(
@@ -1799,10 +1819,76 @@ class AutoGaussian(AutoGuide):
                     ).to_event(site["fn"].event_dim),
                     infer={"is_auxiliary": True},
                 )
+            return aux_values, log_density
         else:
             raise ValueError(f"Unknown backend: {self.backend}")
 
-        return aux_values, log_density
+    def _sample_aux_values_funsor(
+        self,
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.tensor]]:
+        import funsor
+
+        import pyro.contrib.funsor
+
+        # Construct TVE problem inputs, converting torch to funsor.
+        factors = {}
+        plate_to_dim = {}
+        eliminate = set()
+        for d, site in self.latents.items():
+            inputs = OrderedDict()
+            for f in site["cond_indep_stack"]:
+                if f.vectorized:
+                    inputs[f.name] = funsor.Bint[f.size]
+                    plate_to_dim[f.name] = f.dim
+                    eliminate.add(f.name)
+            if not site["is_observed"]:
+                inputs[d] = funsor.Reals[self._unconstrained_event_shapes[d]]
+                eliminate.add(d)
+            for u in self.dependencies[d]:
+                inputs[u] = funsor.Reals[self._unconstrained_event_shapes[u]]
+                assert u in eliminate
+
+            precision = _deep_getattr(self.precisions, d)
+            info_vec = precision.new_zeros(precision.shape[:-1])
+            factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
+        plates = frozenset(plate_to_dim)
+        eliminate = frozenset(eliminate)
+
+        # Draw samples via Gaussian tensor variable elimination.
+        with funsor.interpretations.reflect:
+            log_Z = funsor.sum_product.sum_product(
+                funsor.ops.logaddexp,
+                funsor.ops.add,
+                list(factors.values()),
+                eliminate=eliminate,
+                plates=plates,
+            )
+            log_Z = funsor.optimizer.apply_optimizer(log_Z)
+        with funsor.montecarlo.MonteCarlo():
+            samples = funsor.adjoint.adjoint(
+                funsor.ops.logaddexp, funsor.ops.add, log_Z
+            )
+        # Extract funsor.Tensor values from funsor.Delta samples.
+        samples = {
+            name: pyro.contrib.funsor.handlers.enum_messenger._get_support_value(
+                samples[factors[name]], name
+            )
+            for name in eliminate - plates
+        }
+
+        # Compute density.
+        log_prob = 0.0
+        for f in factors.values():
+            # Substitute samples and eliminate plates.
+            log_prob += f(**samples).reduce(funsor.ops.add)
+
+        # Convert funsor to torch.
+        samples = {
+            k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()
+        }
+        log_density = funsor.to_data(log_prob)
+
+        return samples, log_density
 
     def _transform_values(
         self,
@@ -1812,8 +1898,7 @@ class AutoGaussian(AutoGuide):
         compute_density = am_i_wrapped() and poutine.get_mask() is not False
         values = {}
         log_density = 0.0
-        for name in self.dependencies:
-            site = self.prototype_trace.nodes[name]
+        for name, site in self.latents.items():
             loc = _deep_getattr(self.locs, name)
             scale = _deep_getattr(self.scales, name)
             values[name] = biject_to(site["fn"].support)(aux_values[name] * scale + loc)
