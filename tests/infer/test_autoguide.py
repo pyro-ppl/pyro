@@ -40,7 +40,7 @@ from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-from tests.common import assert_close, assert_equal
+from tests.common import assert_close, assert_equal, xfail_param
 
 
 @pytest.mark.parametrize(
@@ -383,7 +383,7 @@ def test_median(auto_class, Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
         AutoStructured,
         AutoStructured_median,
-        AutoGaussian,
+        xfail_param(AutoGaussian, reason="not jit compatible"),
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -843,7 +843,7 @@ class AutoStructured_predictive(AutoStructured):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoStructured,
         AutoStructured_predictive,
-        AutoGaussian,
+        xfail_param(AutoGaussian, reason="not jit compatible"),
     ],
 )
 def test_predictive(auto_class):

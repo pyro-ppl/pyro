@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 import funsor
 import torch
+from funsor.adjoint import _alpha_unmangle as alpha_unmangle  # FIXME publish
 
 import pyro.poutine.runtime
 import pyro.poutine.util
@@ -26,6 +27,10 @@ funsor.set_backend("torch")
 
 @functools.singledispatch
 def _get_support_value(funsor_dist, name, **kwargs):
+    """
+    Extracts the sample value out of a funsor Delta,
+    possibly wrapped in reductions over sample plates.
+    """
     raise ValueError(
         "Could not extract point from {} at name {}".format(funsor_dist, name)
     )
@@ -33,13 +38,10 @@ def _get_support_value(funsor_dist, name, **kwargs):
 
 @_get_support_value.register(funsor.cnf.Contraction)
 def _get_support_value_contraction(funsor_dist, name, **kwargs):
-    delta_terms = [
-        v
-        for v in funsor_dist.terms
-        if isinstance(v, funsor.delta.Delta) and name in v.fresh
-    ]
-    assert len(delta_terms) == 1
-    return _get_support_value(delta_terms[0], name, **kwargs)
+    unmangled_terms = alpha_unmangle(funsor_dist)[-1]
+    terms = [v for v in unmangled_terms if name in v.inputs]
+    assert len(terms) == 1
+    return _get_support_value(terms[0], name, **kwargs)
 
 
 @_get_support_value.register(funsor.delta.Delta)

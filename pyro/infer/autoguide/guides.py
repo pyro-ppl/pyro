@@ -45,7 +45,7 @@ from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.indep_messenger import CondIndepStackFrame
-from pyro.poutine.runtime import am_i_wrapped
+from pyro.poutine.runtime import am_i_wrapped, get_plates
 from pyro.poutine.util import site_is_subsample
 
 from .utils import _product, helpful_support_errors
@@ -1718,7 +1718,7 @@ class AutoGaussian(AutoGuide):
             for plates in upstreams.values()
             for p in plates
         }
-        self.latents = {
+        self.latents: Dict[str, Dict[str, object]] = {
             name: site
             for name, site in self.prototype_trace.nodes.items()
             if site["type"] == "sample"
@@ -1790,12 +1790,8 @@ class AutoGaussian(AutoGuide):
         log_density = log_density_1 + log_density_2
 
         # Replay via Pyro primitives.
-        compute_density = am_i_wrapped() and poutine.get_mask() is not False
         plates = self._create_plates(*args, **kwargs)
         for name, site in self.latents.items():
-            if compute_density:
-                scale = _deep_getattr(self.scales, name)
-                log_density = log_density + scale.log().sum()
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
@@ -1803,16 +1799,33 @@ class AutoGaussian(AutoGuide):
                 pyro.sample(
                     name, dist.Delta(values[name], event_dim=site["fn"].event_dim)
                 )
-        if compute_density:
+        if am_i_wrapped() and poutine.get_mask() is not False:
             pyro.factor("AutoGaussian_log_density", log_density)
         return values
 
     @torch.no_grad()
     def median(self) -> Dict[str, torch.Tensor]:
         with poutine.mask(mask=False):
-            aux_values = {name: 0.0 for name in self.dependencies}
+            aux_values = {name: 0.0 for name in self.latents}
             values, _ = self._transform_values(aux_values)
         return values
+
+    def _transform_values(
+        self,
+        aux_values: Dict[str, torch.Tensor],
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
+        # Learnably transform auxiliary values to user-facing values.
+        values = {}
+        log_density = 0.0
+        compute_density = am_i_wrapped() and poutine.get_mask() is not False
+        for name, site in self.latents.items():
+            loc = _deep_getattr(self.locs, name)
+            scale = _deep_getattr(self.scales, name)
+            values[name] = biject_to(site["fn"].support)(aux_values[name] * scale + loc)
+            if compute_density:
+                log_density = log_density - scale.log().sum()
+
+        return values, log_density
 
     def _sample_aux_values(
         self,
@@ -1820,19 +1833,6 @@ class AutoGaussian(AutoGuide):
         # Sample auxiliary values via Gaussian tensor variable elimination.
         if self.backend == "funsor":
             return self._sample_aux_values_funsor()
-        elif self.backend == "smoke_test":
-            # The following should be equivalent to AutoNormal.
-            aux_values = {}
-            log_density = 0.0
-            for name, site in self.latents.items():
-                aux_values[name] = pyro.sample(
-                    name + "_aux",
-                    dist.Normal(
-                        torch.zeros_like(_deep_getattr(self.locs, name)), 1
-                    ).to_event(site["fn"].event_dim),
-                    infer={"is_auxiliary": True},
-                )
-            return aux_values, log_density
         else:
             raise ValueError(f"Unknown backend: {self.backend}")
 
@@ -1844,8 +1844,8 @@ class AutoGaussian(AutoGuide):
         import pyro.contrib.funsor
 
         # Construct TVE problem inputs, converting torch to funsor.
+        plate_to_dim = {}
         factors = {}
-        plate_to_dim = {}  # TODO including enclosing particle plates
         eliminate = set()
         for d, site in self.latents.items():
             inputs = OrderedDict()
@@ -1868,7 +1868,7 @@ class AutoGaussian(AutoGuide):
         plates = frozenset(plate_to_dim)
         eliminate = frozenset(eliminate)
 
-        # Draw samples via Gaussian tensor variable elimination.
+        # Compute log normalizer via Gaussian tensor variable elimination.
         with funsor.interpretations.reflect:
             log_Z = funsor.sum_product.sum_product(
                 funsor.ops.logaddexp,
@@ -1878,11 +1878,16 @@ class AutoGaussian(AutoGuide):
                 plates=plates,
             )
             log_Z = funsor.optimizer.apply_optimizer(log_Z)
-        # TODO Support enclosing particle plates.
-        with funsor.montecarlo.MonteCarlo():
+
+        # Draw a batch of samples.
+        particle_plates = frozenset(get_plates())
+        plate_to_dim.update({f.name: f.dim for f in particle_plates})
+        sample_inputs = {f.name: funsor.Bint[f.size] for f in particle_plates}
+        with funsor.montecarlo.MonteCarlo(**sample_inputs):
             samples = funsor.adjoint.adjoint(
                 funsor.ops.logaddexp, funsor.ops.add, log_Z
             )
+
         # Extract funsor.Tensor values from funsor.Delta samples.
         samples = {
             name: pyro.contrib.funsor.handlers.enum_messenger._get_support_value(
@@ -1895,31 +1900,16 @@ class AutoGaussian(AutoGuide):
         # TODO Avoid recomputing this by obtaining it from adjoint above.
         log_prob = -funsor.reinterpret(log_Z)
         for f in factors.values():
-            # Substitute samples and eliminate plates.
-            log_prob += f(**samples).reduce(funsor.ops.add)
+            term = f(**samples)
+            term = term.reduce(funsor.ops.add, eliminate.intersection(term.inputs))
+            log_prob += term
+        assert all(f.name in log_prob.inputs for f in particle_plates)
 
         # Convert funsor to torch.
         samples = {
             k: funsor.to_data(v[self._broken_plates[k]], name_to_dim=plate_to_dim)
             for k, v in samples.items()
         }
-        log_density = funsor.to_data(log_prob)
+        log_density = funsor.to_data(log_prob, name_to_dim=plate_to_dim)
 
         return samples, log_density
-
-    def _transform_values(
-        self,
-        aux_values: Dict[str, torch.Tensor],
-    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
-        # Learnably transform auxiliary values to user-facing values.
-        compute_density = am_i_wrapped() and poutine.get_mask() is not False
-        values = {}
-        log_density = 0.0
-        for name, site in self.latents.items():
-            loc = _deep_getattr(self.locs, name)
-            scale = _deep_getattr(self.scales, name)
-            values[name] = biject_to(site["fn"].support)(aux_values[name] * scale + loc)
-            if compute_density:
-                log_density = log_density + scale.log().sum()
-
-        return values, log_density
