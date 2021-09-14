@@ -1845,7 +1845,7 @@ class AutoGaussian(AutoGuide):
 
         # Construct TVE problem inputs, converting torch to funsor.
         factors = {}
-        plate_to_dim = {}
+        plate_to_dim = {}  # TODO including enclosing particle plates
         eliminate = set()
         for d, site in self.latents.items():
             inputs = OrderedDict()
@@ -1878,6 +1878,7 @@ class AutoGaussian(AutoGuide):
                 plates=plates,
             )
             log_Z = funsor.optimizer.apply_optimizer(log_Z)
+        # TODO Support enclosing particle plates.
         with funsor.montecarlo.MonteCarlo():
             samples = funsor.adjoint.adjoint(
                 funsor.ops.logaddexp, funsor.ops.add, log_Z
@@ -1891,7 +1892,8 @@ class AutoGaussian(AutoGuide):
         }
 
         # Compute density.
-        log_prob = 0.0
+        # TODO Avoid recomputing this by obtaining it from adjoint above.
+        log_prob = -funsor.reinterpret(log_Z)
         for f in factors.values():
             # Substitute samples and eliminate plates.
             log_prob += f(**samples).reduce(funsor.ops.add)

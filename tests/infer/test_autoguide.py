@@ -1315,7 +1315,7 @@ def pyrocov_model_relaxed(dataset):
             )
 
 
-# This is modified by relaxing rate from deterministic to latent.
+# This is modified by more precisely tracking plates for features and strains.
 def pyrocov_model_plated(dataset):
     # Tensor shapes are commented at the end of some lines.
     features = dataset["features"]
@@ -1337,9 +1337,7 @@ def pyrocov_model_plated(dataset):
     init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))
 
     with feature_plate:
-        # FIXME
-        # coef = pyro.sample("coef", dist.Logistic(0, coef_scale))  # [F]
-        coef = pyro.sample("coef", dist.Normal(0, coef_scale))  # [F]
+        coef = pyro.sample("coef", dist.Logistic(0, coef_scale))  # [F]
     rate_loc_loc = 0.01 * coef @ features.T
     with strain_plate:
         rate_loc = pyro.sample(
@@ -1363,13 +1361,7 @@ def pyrocov_model_plated(dataset):
 @pytest.mark.parametrize(
     "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
 )
-@pytest.mark.parametrize(
-    "backend",
-    [
-        # "smoke_test",
-        "funsor",
-    ],
-)
+@pytest.mark.parametrize("backend", ["funsor"])
 def test_autogaussian_pyrocov_smoke(model, backend):
     T, P, S, F = 3, 4, 5, 6
     dataset = {
@@ -1387,15 +1379,9 @@ def test_autogaussian_pyrocov_smoke(model, backend):
 @pytest.mark.parametrize(
     "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
 )
-@pytest.mark.parametrize(
-    "backend",
-    [
-        # "smoke_test",
-        "funsor",
-    ],
-)
+@pytest.mark.parametrize("backend", ["funsor"])
 def test_structured_pyrocov_reparam(model, backend):
-    T, P, S, F = 3, 4, 5, 6
+    T, P, S, F = 2, 3, 4, 5
     dataset = {
         "features": torch.randn(S, F),
         "local_time": torch.randn(T, P),
@@ -1405,7 +1391,7 @@ def test_structured_pyrocov_reparam(model, backend):
     # Reparametrize the model.
     config = {
         "coef": LocScaleReparam(),
-        "rate_loc": LocScaleReparam(),  # only in relaxed model
+        "rate_loc": None if model is pyrocov_model else LocScaleReparam(),
         "rate": LocScaleReparam(),
         "init_loc": LocScaleReparam(),
         "init": LocScaleReparam(),

@@ -42,7 +42,7 @@ class Logistic(TorchDistribution):
         super().__init__(self.loc.shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(SkewLogistic, _instance)
+        new = self._get_checked_instance(Logistic, _instance)
         batch_shape = torch.Size(batch_shape)
         new.loc = self.loc.expand(batch_shape)
         new.scale = self.scale.expand(batch_shape)
