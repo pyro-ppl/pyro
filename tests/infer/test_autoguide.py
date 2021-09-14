@@ -1225,18 +1225,13 @@ def test_exact_batch(Guide):
 
 # Simplified from https://github.com/pyro-cov/tree/master/pyrocov/mutrans.py
 def pyrocov_model(dataset):
-    # Tensor shapes are commented at at the end of some lines.
+    # Tensor shapes are commented at the end of some lines.
     features = dataset["features"]
     local_time = dataset["local_time"][..., None]  # [T, P, 1]
     T, P, _ = local_time.shape
     S, F = features.shape
     weekly_strains = dataset["weekly_strains"]
     assert weekly_strains.shape == (T, P, S)
-
-    # Configure reparametrization (which does not affect model density).
-    local_time = local_time + pyro.param(
-        "local_time", lambda: torch.zeros(P, S)
-    )  # [T, P, S]
 
     # Sample global random variables.
     coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))[..., None]
@@ -1273,8 +1268,109 @@ def pyrocov_model(dataset):
             )
 
 
-@pytest.mark.parametrize("backend", ["smoke_test"])
-def test_autogaussian_pyrocov(backend):
+# This is modified by relaxing rate from deterministic to latent.
+def pyrocov_model_relaxed(dataset):
+    # Tensor shapes are commented at the end of some lines.
+    features = dataset["features"]
+    local_time = dataset["local_time"][..., None]  # [T, P, 1]
+    T, P, _ = local_time.shape
+    S, F = features.shape
+    weekly_strains = dataset["weekly_strains"]
+    assert weekly_strains.shape == (T, P, S)
+
+    # Sample global random variables.
+    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))[..., None]
+    rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))[..., None]
+    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))[..., None]
+    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))[..., None]
+    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))[..., None]
+
+    # Assume relative growth rate depends strongly on mutations and weakly on place.
+    coef_loc = torch.zeros(F)
+    coef = pyro.sample("coef", dist.Logistic(coef_loc, coef_scale).to_event(1))  # [F]
+    rate_loc = pyro.sample(
+        "rate_loc",
+        dist.Normal(0.01 * coef @ features.T, rate_loc_scale).to_event(1),
+    )  # [S]
+
+    # Assume initial infections depend strongly on strain and place.
+    init_loc = pyro.sample(
+        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
+    )  # [S]
+    with pyro.plate("place", P, dim=-1):
+        rate = pyro.sample(
+            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
+        )  # [P, S]
+        init = pyro.sample(
+            "init", dist.Normal(init_loc, init_scale).to_event(1)
+        )  # [P, S]
+
+        # Finally observe counts.
+        with pyro.plate("time", T, dim=-2):
+            logits = init + rate * local_time  # [T, P, S]
+            pyro.sample(
+                "obs",
+                dist.Multinomial(logits=logits, validate_args=False),
+                obs=weekly_strains,
+            )
+
+
+# This is modified by relaxing rate from deterministic to latent.
+def pyrocov_model_plated(dataset):
+    # Tensor shapes are commented at the end of some lines.
+    features = dataset["features"]
+    local_time = dataset["local_time"][..., None]  # [T, P, 1]
+    T, P, _ = local_time.shape
+    S, F = features.shape
+    weekly_strains = dataset["weekly_strains"]  # [T, P, S]
+    assert weekly_strains.shape == (T, P, S)
+    feature_plate = pyro.plate("feature", F, dim=-1)
+    strain_plate = pyro.plate("strain", S, dim=-1)
+    place_plate = pyro.plate("place", P, dim=-2)
+    time_plate = pyro.plate("time", T, dim=-3)
+
+    # Sample global random variables.
+    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))
+    rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))
+    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))
+    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))
+    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))
+
+    with feature_plate:
+        # FIXME
+        # coef = pyro.sample("coef", dist.Logistic(0, coef_scale))  # [F]
+        coef = pyro.sample("coef", dist.Normal(0, coef_scale))  # [F]
+    rate_loc_loc = 0.01 * coef @ features.T
+    with strain_plate:
+        rate_loc = pyro.sample(
+            "rate_loc", dist.Normal(rate_loc_loc, rate_loc_scale)
+        )  # [S]
+        init_loc = pyro.sample("init_loc", dist.Normal(0, init_loc_scale))  # [S]
+    with place_plate, strain_plate:
+        rate = pyro.sample("rate", dist.Normal(rate_loc, rate_scale))  # [P, S]
+        init = pyro.sample("init", dist.Normal(init_loc, init_scale))  # [P, S]
+
+    # Finally observe counts.
+    with time_plate, place_plate:
+        logits = (init + rate * local_time)[..., None, :]  # [T, P, 1, S]
+        pyro.sample(
+            "obs",
+            dist.Multinomial(logits=logits, validate_args=False),
+            obs=weekly_strains[..., None, :],
+        )
+
+
+@pytest.mark.parametrize(
+    "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
+)
+@pytest.mark.parametrize(
+    "backend",
+    [
+        # "smoke_test",
+        "funsor",
+    ],
+)
+def test_autogaussian_pyrocov_smoke(model, backend):
     T, P, S, F = 3, 4, 5, 6
     dataset = {
         "features": torch.randn(S, F),
@@ -1282,37 +1378,23 @@ def test_autogaussian_pyrocov(backend):
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(pyrocov_model, backend=backend)
-    with poutine.mask(mask=False):
-        guide(dataset)  # initialize guide
-
-    # Check automatically determined dependencies.
-    # Without reparametrization the posterior dependencies are sparse.
-    _ = set()
-    expected_dependencies = {
-        "coef": {
-            "coef_scale": _,  # direct
-            "rate_scale": _,  # moralized
-        },
-        "init_loc": {
-            "init_loc_scale": _,  # direct
-            "init_scale": _,  # moralized
-        },
-        "rate": {
-            "coef": _,  # direct
-            "rate_scale": _,  # direct
-        },
-        "init": {
-            "init_loc": _,  # direct
-            "init_scale": _,  # direct
-            "rate": _,  # moralized
-        },
-    }
-    assert guide.dependencies == expected_dependencies
+    guide = AutoGaussian(model, backend=backend)
+    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi.step(dataset)
+    svi.step(dataset)
 
 
-@pytest.mark.parametrize("backend", ["smoke_test"])
-def test_structured_pyrocov_reparam(backend):
+@pytest.mark.parametrize(
+    "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
+)
+@pytest.mark.parametrize(
+    "backend",
+    [
+        # "smoke_test",
+        "funsor",
+    ],
+)
+def test_structured_pyrocov_reparam(model, backend):
     T, P, S, F = 3, 4, 5, 6
     dataset = {
         "features": torch.randn(S, F),
@@ -1323,62 +1405,13 @@ def test_structured_pyrocov_reparam(backend):
     # Reparametrize the model.
     config = {
         "coef": LocScaleReparam(),
+        "rate_loc": LocScaleReparam(),  # only in relaxed model
         "rate": LocScaleReparam(),
         "init_loc": LocScaleReparam(),
         "init": LocScaleReparam(),
     }
-    model = poutine.reparam(pyrocov_model, config)
+    model = poutine.reparam(model, config)
     guide = AutoGaussian(model, backend=backend)
-    with poutine.mask(mask=False):
-        guide(dataset)  # initialize guide
-
-    # Check automatically determined dependencies.
-    # With reparametrization the posterior dependencies are dense.
-    _ = set()
-    expected_dependencies = {
-        "rate_scale": {
-            "coef_scale": _,  # reparam moralized
-        },
-        "init_loc_scale": {
-            "coef_scale": _,  # reparam moralized
-            "rate_scale": _,  # reparam moralized
-        },
-        "init_scale": {
-            "coef_scale": _,  # reparam moralized
-            "rate_scale": _,  # reparam moralized
-            "init_loc_scale": _,  # reparam moralized
-        },
-        "coef_decentered": {
-            "coef_scale": _,  # direct
-            "rate_scale": _,  # moralized
-            "init_loc_scale": _,  # reparam moralized
-            "init_scale": _,  # reparam moralized
-        },
-        "init_loc_decentered": {
-            "init_loc_scale": _,  # direct
-            "init_scale": _,  # moralized
-            "coef_scale": _,  # reparam moralized
-            "rate_scale": _,  # reparam moralized
-            "coef_decentered": _,  # reparam moralized
-        },
-        "rate_decentered": {
-            "coef_decentered": _,  # direct
-            "coef_scale": _,  # reparam direct
-            "rate_scale": _,  # direct
-            "rate_scale": _,  # reparam direct
-            "init_loc_scale": _,  # reparam moralized
-            "init_scale": _,  # reparam moralized
-            "init_loc_decentered": _,  # reparam moralized
-        },
-        "init_decentered": {
-            "init_loc_decentered": _,  # direct
-            "init_scale": _,  # direct
-            "rate_decentered": _,  # moralized
-            "init_loc_scale": _,  # reparam direct
-            "coef_scale": _,  # reparam moralized
-            "rate_scale": _,  # reparam moralized
-            "coef_decentered": _,  # reparam moralized
-            "rate_decentered": _,  # reparam moralized
-        },
-    }
-    assert guide.dependencies == expected_dependencies
+    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi.step(dataset)
+    svi.step(dataset)

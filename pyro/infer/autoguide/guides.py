@@ -22,7 +22,7 @@ import weakref
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
 from types import SimpleNamespace
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Set, Tuple, Union
 
 import torch
 from torch import nn
@@ -44,6 +44,7 @@ from pyro.infer.inspect import get_dependencies
 from pyro.nn import PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
+from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.runtime import am_i_wrapped
 from pyro.poutine.util import site_is_subsample
 
@@ -1704,11 +1705,19 @@ class AutoGaussian(AutoGuide):
         self.locs = PyroModule()
         self.scales = PyroModule()
         self.precisions = PyroModule()
-        self._unconstrained_event_shapes = {}
+        self._unconstrained_event_shapes: Dict[str, torch.Size] = {}
+        self._broken_event_shapes: Dict[str, torch.Size] = {}
+        self._broken_plates: Dict[str, Tuple[str, ...]] = defaultdict(tuple)
 
         model = self._original_model[0]
         meta = poutine.block(get_dependencies)(model, args, kwargs)
         self.dependencies = meta["prior_dependencies"]
+        broken_plates: Set[str] = {
+            p
+            for upstreams in meta["posterior_dependencies"].values()
+            for plates in upstreams.values()
+            for p in plates
+        }
         self.latents = {
             name: site
             for name, site in self.prototype_trace.nodes.items()
@@ -1717,7 +1726,7 @@ class AutoGaussian(AutoGuide):
         }
         for d, site in self.latents.items():
             precision_size = 0
-            precision_plates = set()
+            precision_plates: Set[CondIndepStackFrame] = set()
             if not site["is_observed"]:
                 # Initialize latent variable location-scale parameters.
                 init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
@@ -1738,20 +1747,24 @@ class AutoGaussian(AutoGuide):
                 )
 
                 # Gather shapes for precision matrices.
+                broken_shape = torch.Size()
                 for f in site["cond_indep_stack"]:
                     if f.vectorized:
-                        precision_plates.add(f)
+                        if f.name in broken_plates:
+                            self._broken_plates[d] += (f.name,)
+                            broken_shape += (f.size,)
+                        else:
+                            precision_plates.add(f)
+                self._broken_event_shapes[d] = broken_shape + event_shape
 
             # Initialize precision matrices.
             for u in self.dependencies[d]:
-                precision_size += self._unconstrained_event_shapes[u].numel()
+                precision_size += self._broken_event_shapes[u].numel()
                 for f in self.prototype_trace.nodes[u]["cond_indep_stack"]:
-                    if f not in precision_plates:
-                        # TODO Convert upstream plates to event dimensions, and
-                        # support colliders in backend sum_product() algorithms.
-                        raise NotImplementedError("intractable!")
-            precision_plates = sorted(precision_plates, key=lambda f: f.dim)
-            batch_shape = torch.Size(f.size for f in precision_plates)
+                    assert f in precision_plates or f.name in broken_plates
+            batch_shape = torch.Size(
+                f.size for f in sorted(precision_plates, key=lambda f: f.dim)
+            )
             init_precision = torch.zeros(*batch_shape, precision_size, precision_size)
             init_precision.view(-1, precision_size ** 2)[
                 ..., :: precision_size + 1
@@ -1838,14 +1851,15 @@ class AutoGaussian(AutoGuide):
             inputs = OrderedDict()
             for f in site["cond_indep_stack"]:
                 if f.vectorized:
-                    inputs[f.name] = funsor.Bint[f.size]
                     plate_to_dim[f.name] = f.dim
-                    eliminate.add(f.name)
+                    if f.name not in self._broken_plates[d]:
+                        inputs[f.name] = funsor.Bint[f.size]
+                        eliminate.add(f.name)
             if not site["is_observed"]:
-                inputs[d] = funsor.Reals[self._unconstrained_event_shapes[d]]
+                inputs[d] = funsor.Reals[self._broken_event_shapes[d]]
                 eliminate.add(d)
             for u in self.dependencies[d]:
-                inputs[u] = funsor.Reals[self._unconstrained_event_shapes[u]]
+                inputs[u] = funsor.Reals[self._broken_event_shapes[u]]
                 assert u in eliminate
 
             precision = _deep_getattr(self.precisions, d)
@@ -1884,7 +1898,8 @@ class AutoGaussian(AutoGuide):
 
         # Convert funsor to torch.
         samples = {
-            k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()
+            k: funsor.to_data(v[self._broken_plates[k]], name_to_dim=plate_to_dim)
+            for k, v in samples.items()
         }
         log_density = funsor.to_data(log_prob)
 
