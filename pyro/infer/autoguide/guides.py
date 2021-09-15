@@ -1696,7 +1696,7 @@ class AutoGaussian(AutoGuide):
     locs: PyroModule
     scales: PyroModule
     precisions: PyroModule
-    latents: Dict[str, Dict[str, object]]
+    _sorted_sites: Dict[str, Dict[str, object]]
     _init_scale: float
     _original_model: Tuple[Callable]
     _unconstrained_event_shapes: Dict[str, torch.Size]
@@ -1741,13 +1741,13 @@ class AutoGaussian(AutoGuide):
             for plates in upstreams.values()
             for p in plates
         }
-        self.latents = {
+        self._sorted_sites = {
             name: site
             for name, site in self.prototype_trace.nodes.items()
             if site["type"] == "sample"
             if not site_is_subsample(site)
         }
-        for d, site in self.latents.items():
+        for d, site in self._sorted_sites.items():
             precision_size = 0
             precision_plates: Set[CondIndepStackFrame] = set()
             if not site["is_observed"]:
@@ -1804,6 +1804,9 @@ class AutoGaussian(AutoGuide):
                 ),
             )
 
+        if self.backend == "funsor":
+            self._funsor_setup_prototype(*args, **kwargs)
+
     def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
@@ -1814,7 +1817,7 @@ class AutoGaussian(AutoGuide):
 
         # Replay via Pyro primitives.
         plates = self._create_plates(*args, **kwargs)
-        for name, site in self.latents.items():
+        for name, site in self._sorted_sites.items():
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
@@ -1823,13 +1826,12 @@ class AutoGaussian(AutoGuide):
                     name, dist.Delta(values[name], event_dim=site["fn"].event_dim)
                 )
         if am_i_wrapped() and poutine.get_mask() is not False:
-            pyro.factor("AutoGaussian_log_density", log_density)
+            pyro.factor("AutoGaussian.log_density", log_density)
         return values
 
-    @torch.no_grad()
     def median(self) -> Dict[str, torch.Tensor]:
-        with poutine.mask(mask=False):
-            aux_values = {name: 0.0 for name in self.latents}
+        with torch.no_grad(), poutine.mask(mask=False):
+            aux_values = {name: 0.0 for name in self._sorted_sites}
             values, _ = self._transform_values(aux_values)
         return values
 
@@ -1841,7 +1843,7 @@ class AutoGaussian(AutoGuide):
         values = {}
         log_density = 0.0
         compute_density = am_i_wrapped() and poutine.get_mask() is not False
-        for name, site in self.latents.items():
+        for name, site in self._sorted_sites.items():
             loc = _deep_getattr(self.locs, name)
             scale = _deep_getattr(self.scales, name)
             values[name] = biject_to(site["fn"].support)(aux_values[name] * scale + loc)
@@ -1855,11 +1857,42 @@ class AutoGaussian(AutoGuide):
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         # Sample auxiliary values via Gaussian tensor variable elimination.
         if self.backend == "funsor":
-            return self._sample_aux_values_funsor()
+            return self._funsor_sample_aux_values()
         else:
             raise ValueError(f"Unknown backend: {self.backend}")
 
-    def _sample_aux_values_funsor(
+    def _funsor_setup_prototype(self, *args, **kwargs):
+        import funsor
+
+        # Determine TVE problem shape.
+        factor_inputs: Dict[str, OrderedDict[str, funsor.Domain]] = {}
+        eliminate: Set[str] = set()
+        plate_to_dim: Dict[str, int] = {}
+
+        for d, site in self._sorted_sites.items():
+            # Order inputs as in the model, so as to maximize sparsity of the
+            # lower Cholesky parametrization of the precision matrix.
+            inputs = OrderedDict()
+            for f in site["cond_indep_stack"]:
+                if f.vectorized:
+                    plate_to_dim[f.name] = f.dim
+                    if f.name not in self._broken_plates[d]:
+                        inputs[f.name] = funsor.Bint[f.size]
+                        eliminate.add(f.name)
+            for u in self.dependencies[d]:
+                inputs[u] = funsor.Reals[self._broken_event_shapes[u]]
+                eliminate.add(u)
+            if not site["is_observed"]:
+                inputs[d] = funsor.Reals[self._broken_event_shapes[d]]
+                assert d in eliminate
+            factor_inputs[d] = inputs
+
+        self._funsor_factor_inputs = factor_inputs
+        self._funsor_eliminate = frozenset(eliminate)
+        self._funsor_plate_to_dim = plate_to_dim
+        self._funsor_plates = frozenset(plate_to_dim)
+
+    def _funsor_sample_aux_values(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         import funsor
@@ -1868,30 +1901,10 @@ class AutoGaussian(AutoGuide):
 
         # Construct TVE problem inputs, converting torch to funsor.
         factors = {}
-        eliminate = set()
-        plate_to_dim = {}
-        for d, site in self.latents.items():
-            inputs = OrderedDict()
-            for f in site["cond_indep_stack"]:
-                if f.vectorized:
-                    plate_to_dim[f.name] = f.dim
-                    if f.name not in self._broken_plates[d]:
-                        inputs[f.name] = funsor.Bint[f.size]
-                        eliminate.add(f.name)
-            # Order inputs as in the model, so as to maximize sparsity of the
-            # lower Cholesky parametrization of the precision matrix.
-            for u in self.dependencies[d]:
-                inputs[u] = funsor.Reals[self._broken_event_shapes[u]]
-                eliminate.add(u)
-            if not site["is_observed"]:
-                inputs[d] = funsor.Reals[self._broken_event_shapes[d]]
-                assert d in eliminate
-
+        for d, inputs in self._funsor_factor_inputs.items():
             precision = _deep_getattr(self.precisions, d)
-            info_vec = precision.new_zeros(precision.shape[:-1])
+            info_vec = precision.new_zeros(()).expand(precision.shape[:-1])
             factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
-        plates = frozenset(plate_to_dim)
-        eliminate = frozenset(eliminate)
 
         # Compute log normalizer via Gaussian tensor variable elimination.
         with funsor.interpretations.reflect:
@@ -1899,13 +1912,14 @@ class AutoGaussian(AutoGuide):
                 funsor.ops.logaddexp,
                 funsor.ops.add,
                 list(factors.values()),
-                eliminate=eliminate,
-                plates=plates,
+                eliminate=self._funsor_eliminate,
+                plates=self._funsor_plates,
             )
             log_Z = funsor.optimizer.apply_optimizer(log_Z)
 
         # Draw a batch of samples.
         particle_plates = frozenset(get_plates())
+        plate_to_dim = self._funsor_plate_to_dim.copy()
         plate_to_dim.update({f.name: f.dim for f in particle_plates})
         sample_inputs = {f.name: funsor.Bint[f.size] for f in particle_plates}
         with funsor.montecarlo.MonteCarlo(**sample_inputs):
@@ -1918,7 +1932,7 @@ class AutoGaussian(AutoGuide):
             name: pyro.contrib.funsor.handlers.enum_messenger._get_support_value(
                 samples[factors[name]], name
             )
-            for name in eliminate - plates
+            for name in self._funsor_eliminate - self._funsor_plates
         }
 
         # Compute density.
@@ -1926,7 +1940,8 @@ class AutoGaussian(AutoGuide):
         log_prob = -funsor.reinterpret(log_Z)
         for f in factors.values():
             term = f(**samples)
-            term = term.reduce(funsor.ops.add, eliminate.intersection(term.inputs))
+            plates = self._funsor_eliminate.intersection(term.inputs)
+            term = term.reduce(funsor.ops.add, plates)
             log_prob += term
         assert all(f.name in log_prob.inputs for f in particle_plates)
 

@@ -28,6 +28,10 @@ def is_sample_site(msg):
     if type(fn).__name__ == "Delta":
         return False
 
+    # Exclude factor statements.
+    if type(fn).__name__ == "Unit":
+        return False
+
     return True
 
 

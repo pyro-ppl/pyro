@@ -35,12 +35,15 @@ from pyro.infer.autoguide import (
     init_to_median,
     init_to_sample,
 )
-from pyro.infer.reparam import LocScaleReparam, ProjectedNormalReparam
+from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-from tests.common import assert_close, assert_equal, xfail_param
+from tests.common import assert_close, assert_equal
+
+# AutoGaussian currently depends on funsor.
+AutoGaussian = pytest.param(AutoGaussian, marks=[pytest.mark.stage("funsor")])
 
 
 @pytest.mark.parametrize(
@@ -88,6 +91,7 @@ def test_scores(auto_class):
         AutoLowRankMultivariateNormal,
         AutoIAFNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 def test_factor(auto_class, Elbo):
@@ -222,6 +226,7 @@ def test_shapes(auto_class, init_loc_fn, Elbo, num_particles):
         AutoLowRankMultivariateNormal,
         AutoIAFNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
@@ -383,7 +388,6 @@ def test_median(auto_class, Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
         AutoStructured,
         AutoStructured_median,
-        xfail_param(AutoGaussian, reason="not jit compatible"),
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -503,6 +507,7 @@ def test_quantiles(auto_class, Elbo):
         AutoLowRankMultivariateNormal,
         AutoIAFNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 def test_discrete_parallel(continuous_class):
@@ -538,6 +543,7 @@ def test_discrete_parallel(continuous_class):
         AutoLowRankMultivariateNormal,
         AutoIAFNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 def test_guide_list(auto_class):
@@ -560,6 +566,7 @@ def test_guide_list(auto_class):
         AutoMultivariateNormal,
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 def test_callable(auto_class):
@@ -582,11 +589,13 @@ def test_callable(auto_class):
     "auto_class",
     [
         AutoDelta,
+        AutoNormal,
         AutoDiagonalNormal,
         AutoMultivariateNormal,
         AutoNormal,
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 def test_callable_return_dict(auto_class):
@@ -629,9 +638,11 @@ def test_unpack_latent():
     "auto_class",
     [
         AutoDelta,
+        AutoNormal,
         AutoDiagonalNormal,
         AutoMultivariateNormal,
         AutoLowRankMultivariateNormal,
+        AutoGaussian,
     ],
 )
 def test_init_loc_fn(auto_class):
@@ -694,6 +705,7 @@ def test_init_scale(auto_class, init_scale):
         auto_guide_module_callable,
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -779,6 +791,7 @@ def test_nested_autoguide(Elbo):
         AutoLaplaceApproximation,
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -843,7 +856,6 @@ class AutoStructured_predictive(AutoStructured):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoStructured,
         AutoStructured_predictive,
-        xfail_param(AutoGaussian, reason="not jit compatible"),
     ],
 )
 def test_predictive(auto_class):
@@ -1020,6 +1032,7 @@ def test_subsample_guide_2(auto_class, independent):
         AutoNormal,
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize(
@@ -1054,6 +1067,7 @@ def test_discrete_helpful_error(auto_class, init_loc_fn):
         AutoNormal,
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize(
@@ -1085,6 +1099,7 @@ def test_sphere_helpful_error(auto_class, init_loc_fn):
         AutoNormal,
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
+        AutoGaussian,
     ],
 )
 @pytest.mark.parametrize(
@@ -1153,6 +1168,7 @@ class AutoStructured_exact_mvn(AutoStructured):
         AutoMultivariateNormal,
         AutoStructured_exact_normal,
         AutoStructured_exact_mvn,
+        AutoGaussian,
     ],
 )
 def test_exact(Guide):
@@ -1192,6 +1208,7 @@ def test_exact(Guide):
         AutoMultivariateNormal,
         AutoStructured_exact_normal,
         AutoStructured_exact_mvn,
+        AutoGaussian,
     ],
 )
 def test_exact_batch(Guide):
@@ -1221,183 +1238,3 @@ def test_exact_batch(Guide):
         actual_std = samples.std(0)
         assert_close(actual_mean, expected_mean, atol=0.05)
         assert_close(actual_std, expected_std, rtol=0.05)
-
-
-# Simplified from https://github.com/pyro-cov/tree/master/pyrocov/mutrans.py
-def pyrocov_model(dataset):
-    # Tensor shapes are commented at the end of some lines.
-    features = dataset["features"]
-    local_time = dataset["local_time"][..., None]  # [T, P, 1]
-    T, P, _ = local_time.shape
-    S, F = features.shape
-    weekly_strains = dataset["weekly_strains"]
-    assert weekly_strains.shape == (T, P, S)
-
-    # Sample global random variables.
-    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))[..., None]
-    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))[..., None]
-    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))[..., None]
-    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))[..., None]
-
-    # Assume relative growth rate depends strongly on mutations and weakly on place.
-    coef_loc = torch.zeros(F)
-    coef = pyro.sample("coef", dist.Logistic(coef_loc, coef_scale).to_event(1))  # [F]
-    rate_loc = pyro.deterministic(
-        "rate_loc", 0.01 * coef @ features.T, event_dim=1
-    )  # [S]
-
-    # Assume initial infections depend strongly on strain and place.
-    init_loc = pyro.sample(
-        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
-    )  # [S]
-    with pyro.plate("place", P, dim=-1):
-        rate = pyro.sample(
-            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
-        )  # [P, S]
-        init = pyro.sample(
-            "init", dist.Normal(init_loc, init_scale).to_event(1)
-        )  # [P, S]
-
-        # Finally observe counts.
-        with pyro.plate("time", T, dim=-2):
-            logits = init + rate * local_time  # [T, P, S]
-            pyro.sample(
-                "obs",
-                dist.Multinomial(logits=logits, validate_args=False),
-                obs=weekly_strains,
-            )
-
-
-# This is modified by relaxing rate from deterministic to latent.
-def pyrocov_model_relaxed(dataset):
-    # Tensor shapes are commented at the end of some lines.
-    features = dataset["features"]
-    local_time = dataset["local_time"][..., None]  # [T, P, 1]
-    T, P, _ = local_time.shape
-    S, F = features.shape
-    weekly_strains = dataset["weekly_strains"]
-    assert weekly_strains.shape == (T, P, S)
-
-    # Sample global random variables.
-    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))[..., None]
-    rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))[..., None]
-    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))[..., None]
-    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))[..., None]
-    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))[..., None]
-
-    # Assume relative growth rate depends strongly on mutations and weakly on place.
-    coef_loc = torch.zeros(F)
-    coef = pyro.sample("coef", dist.Logistic(coef_loc, coef_scale).to_event(1))  # [F]
-    rate_loc = pyro.sample(
-        "rate_loc",
-        dist.Normal(0.01 * coef @ features.T, rate_loc_scale).to_event(1),
-    )  # [S]
-
-    # Assume initial infections depend strongly on strain and place.
-    init_loc = pyro.sample(
-        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
-    )  # [S]
-    with pyro.plate("place", P, dim=-1):
-        rate = pyro.sample(
-            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
-        )  # [P, S]
-        init = pyro.sample(
-            "init", dist.Normal(init_loc, init_scale).to_event(1)
-        )  # [P, S]
-
-        # Finally observe counts.
-        with pyro.plate("time", T, dim=-2):
-            logits = init + rate * local_time  # [T, P, S]
-            pyro.sample(
-                "obs",
-                dist.Multinomial(logits=logits, validate_args=False),
-                obs=weekly_strains,
-            )
-
-
-# This is modified by more precisely tracking plates for features and strains.
-def pyrocov_model_plated(dataset):
-    # Tensor shapes are commented at the end of some lines.
-    features = dataset["features"]
-    local_time = dataset["local_time"][..., None]  # [T, P, 1]
-    T, P, _ = local_time.shape
-    S, F = features.shape
-    weekly_strains = dataset["weekly_strains"]  # [T, P, S]
-    assert weekly_strains.shape == (T, P, S)
-    feature_plate = pyro.plate("feature", F, dim=-1)
-    strain_plate = pyro.plate("strain", S, dim=-1)
-    place_plate = pyro.plate("place", P, dim=-2)
-    time_plate = pyro.plate("time", T, dim=-3)
-
-    # Sample global random variables.
-    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))
-    rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))
-    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))
-    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))
-    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))
-
-    with feature_plate:
-        coef = pyro.sample("coef", dist.Logistic(0, coef_scale))  # [F]
-    rate_loc_loc = 0.01 * coef @ features.T
-    with strain_plate:
-        rate_loc = pyro.sample(
-            "rate_loc", dist.Normal(rate_loc_loc, rate_loc_scale)
-        )  # [S]
-        init_loc = pyro.sample("init_loc", dist.Normal(0, init_loc_scale))  # [S]
-    with place_plate, strain_plate:
-        rate = pyro.sample("rate", dist.Normal(rate_loc, rate_scale))  # [P, S]
-        init = pyro.sample("init", dist.Normal(init_loc, init_scale))  # [P, S]
-
-    # Finally observe counts.
-    with time_plate, place_plate:
-        logits = (init + rate * local_time)[..., None, :]  # [T, P, 1, S]
-        pyro.sample(
-            "obs",
-            dist.Multinomial(logits=logits, validate_args=False),
-            obs=weekly_strains[..., None, :],
-        )
-
-
-@pytest.mark.parametrize(
-    "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
-)
-@pytest.mark.parametrize("backend", ["funsor"])
-def test_autogaussian_pyrocov_smoke(model, backend):
-    T, P, S, F = 3, 4, 5, 6
-    dataset = {
-        "features": torch.randn(S, F),
-        "local_time": torch.randn(T, P),
-        "weekly_strains": torch.randn(T, P, S).exp().round(),
-    }
-
-    guide = AutoGaussian(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
-    svi.step(dataset)
-    svi.step(dataset)
-
-
-@pytest.mark.parametrize(
-    "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
-)
-@pytest.mark.parametrize("backend", ["funsor"])
-def test_structured_pyrocov_reparam(model, backend):
-    T, P, S, F = 2, 3, 4, 5
-    dataset = {
-        "features": torch.randn(S, F),
-        "local_time": torch.randn(T, P),
-        "weekly_strains": torch.randn(T, P, S).exp().round(),
-    }
-
-    # Reparametrize the model.
-    config = {
-        "coef": LocScaleReparam(),
-        "rate_loc": None if model is pyrocov_model else LocScaleReparam(),
-        "rate": LocScaleReparam(),
-        "init_loc": LocScaleReparam(),
-        "init": LocScaleReparam(),
-    }
-    model = poutine.reparam(model, config)
-    guide = AutoGaussian(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
-    svi.step(dataset)
-    svi.step(dataset)
