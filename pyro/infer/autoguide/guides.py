@@ -1648,7 +1648,7 @@ class AutoStructured(AutoGuide):
 
 class AutoGaussian(AutoGuide):
     """
-    EXPERIMENTAL Gaussian Markov random field guide.
+    EXPERIMENTAL Gaussian tensor variable elimination guide [1,2].
 
     This is equivalent to a full rank :class:`AutoMultivariateNormal` guide,
     but with a sparse precision matrix determined by dependencies and plates in
@@ -1658,10 +1658,25 @@ class AutoGaussian(AutoGuide):
 
     The guide currently does not depend on the model's ``*args, **kwargs``.
 
-    Usage::
+    Example::
 
         guide = AutoGaussian(model)
         svi = SVI(model, guide, ...)
+
+    .. warning: This currently supports ``backend=funsor`` which depends on
+        the funsor package. You can install via
+        ``pip install pyro-ppl[funsor]``.
+
+    **References**
+
+    [1] F. Obermeyer, E. Bingham, M. Jankowiak, J. Chiu, N. Pradhan, A. M. Rush, N. Goodman
+        (2019)
+        "Tensor Variable Elimination for Plated Factor Graphs"
+        http://proceedings.mlr.press/v97/obermeyer19a/obermeyer19a.pdf
+    [2] F. Obermeyer, E. Bingham, M. Jankowiak, D. Phan, J. P. Chen
+        (2019)
+        "Functional Tensors for Probabilistic Programming"
+        https://arxiv.org/abs/1910.10775
 
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -1673,9 +1688,8 @@ class AutoGaussian(AutoGuide):
         or iterable of plates. Plates not returned will be created
         automatically as usual. This is useful for data subsampling.
     :param str backend: Back end for performing Gaussian tensor variable
-        elimination. Currently only the experimental "funsor" backend is supported,
-        and this requires the optional ``funsor`` dependency, installed via
-        ``pip install pyro-ppl[funsor]``.
+        elimination. Currently only the experimental "funsor" backend is
+        supported.
     """
 
     backend: str

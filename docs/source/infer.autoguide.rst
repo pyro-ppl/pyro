@@ -117,6 +117,13 @@ AutoStructured
     :special-members: __call__
     :show-inheritance:
 
+AutoGaussian
+------------
+.. autoclass:: pyro.infer.autoguide.AutoGaussian
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. _autoguide-initialization:
 
 Initialization
