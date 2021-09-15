@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 import torch
 
@@ -28,10 +28,6 @@ def is_sample_site(msg):
     if type(fn).__name__ == "Delta":
         return False
 
-    # Exclude factor statements.
-    if type(fn).__name__ == "Unit":
-        return False
-
     return True
 
 
@@ -48,6 +44,7 @@ class RequiresGradMessenger(Messenger):
                 msg["value"] = msg["value"].detach()
 
 
+@torch.enable_grad()
 def get_dependencies(
     model: Callable,
     model_args: Optional[tuple] = None,
@@ -175,7 +172,7 @@ def get_dependencies(
         model_kwargs = {}
 
     def get_sample_sites(predicate=lambda msg: True):
-        with torch.enable_grad(), torch.random.fork_rng():
+        with torch.random.fork_rng():
             with pyro.validation_enabled(False), RequiresGradMessenger(predicate):
                 trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
         return [msg for msg in trace.nodes.values() if is_sample_site(msg)]
@@ -191,15 +188,13 @@ def get_dependencies(
     # First find transitive dependencies among latent and observed sites
     prior_dependencies = {n: {n: set()} for n in plates}  # no deps yet
     for i, downstream in enumerate(sample_sites):
-        upstreams = [u for u in sample_sites[:i] if not u["is_observed"]]
+        upstreams = [
+            u for u in sample_sites[:i] if not u["is_observed"] if u["value"].numel()
+        ]
         if not upstreams:
             continue
-        grads = torch.autograd.grad(
-            downstream["fn"].log_prob(downstream["value"]).sum(),
-            [u["value"] for u in upstreams],
-            allow_unused=True,
-            retain_graph=True,
-        )
+        log_prob = downstream["fn"].log_prob(downstream["value"]).sum()
+        grads = _safe_grad(log_prob, [u["value"] for u in upstreams])
         for upstream, grad in zip(upstreams, grads):
             if grad is not None:
                 d = downstream["name"]
@@ -215,12 +210,8 @@ def get_dependencies(
             sample_sites_ij = get_sample_sites(lambda msg: msg["name"] in names)
             d = sample_sites_ij[i]
             u = sample_sites_ij[j]
-            grad = torch.autograd.grad(
-                d["fn"].log_prob(d["value"]).sum(),
-                [u["value"]],
-                allow_unused=True,
-                retain_graph=True,
-            )[0]
+            log_prob = d["fn"].log_prob(d["value"]).sum()
+            grad = _safe_grad(log_prob, [u["value"]])[0]
             if grad is None:
                 prior_dependencies[d["name"]].pop(u["name"])
 
@@ -250,6 +241,12 @@ def get_dependencies(
         "prior_dependencies": prior_dependencies,
         "posterior_dependencies": posterior_dependencies,
     }
+
+
+def _safe_grad(root: torch.Tensor, args: List[torch.Tensor]):
+    if not root.requires_grad:
+        return [None] * len(args)
+    return torch.autograd.grad(root, args, allow_unused=True, retain_graph=True)
 
 
 __all__ = [

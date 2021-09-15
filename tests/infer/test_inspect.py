@@ -118,6 +118,26 @@ def test_docstring_example_3():
     assert actual == expected
 
 
+def test_factor():
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        pyro.factor("b", torch.tensor(0.0))
+        pyro.factor("c", a)
+
+    actual = get_dependencies(model)
+    expected = {
+        "prior_dependencies": {
+            "a": {"a": set()},
+            "b": {"b": set()},
+            "c": {"c": set(), "a": set()},
+        },
+        "posterior_dependencies": {
+            "a": {"a": set(), "c": set()},
+        },
+    }
+    assert actual == expected
+
+
 def test_plate_coupling():
     #   x  x
     #    ||
