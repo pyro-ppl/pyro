@@ -1654,9 +1654,7 @@ class AutoGaussian(AutoGuide):
     but with a sparse precision matrix determined by dependencies and plates in
     the model. This can be orders of magnitude cheaper than the naive
     :class:`AutoMultivariateNormal` in terms of space, time, number of
-    parameters, and statistical complexity. This also parametrizes correlations
-    via precision matrices rather than Cholesky factors, and therefore is less
-    susceptible to variable ordering in the model.
+    parameters, and statistical complexity.
 
     The guide currently does not depend on the model's ``*args, **kwargs``.
 
@@ -1679,6 +1677,17 @@ class AutoGaussian(AutoGuide):
         and this requires the optional ``funsor`` dependency, installed via
         ``pip install pyro-ppl[funsor]``.
     """
+
+    backend: str
+    locs: PyroModule
+    scales: PyroModule
+    precisions: PyroModule
+    latents: Dict[str, Dict[str, object]]
+    _init_scale: float
+    _original_model: Tuple[Callable]
+    _unconstrained_event_shapes: Dict[str, torch.Size]
+    _broken_event_shapes: Dict[str, torch.Size]
+    _broken_plates: Dict[str, Tuple[str, ...]]
 
     scale_constraint = constraints.softplus_positive
 
@@ -1705,9 +1714,9 @@ class AutoGaussian(AutoGuide):
         self.locs = PyroModule()
         self.scales = PyroModule()
         self.precisions = PyroModule()
-        self._unconstrained_event_shapes: Dict[str, torch.Size] = {}
-        self._broken_event_shapes: Dict[str, torch.Size] = {}
-        self._broken_plates: Dict[str, Tuple[str, ...]] = defaultdict(tuple)
+        self._unconstrained_event_shapes = {}
+        self._broken_event_shapes = {}
+        self._broken_plates = defaultdict(tuple)
 
         model = self._original_model[0]
         meta = poutine.block(get_dependencies)(model, args, kwargs)
@@ -1718,7 +1727,7 @@ class AutoGaussian(AutoGuide):
             for plates in upstreams.values()
             for p in plates
         }
-        self.latents: Dict[str, Dict[str, object]] = {
+        self.latents = {
             name: site
             for name, site in self.prototype_trace.nodes.items()
             if site["type"] == "sample"
@@ -1829,7 +1838,7 @@ class AutoGaussian(AutoGuide):
 
     def _sample_aux_values(
         self,
-    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.tensor]]:
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         # Sample auxiliary values via Gaussian tensor variable elimination.
         if self.backend == "funsor":
             return self._sample_aux_values_funsor()
@@ -1838,15 +1847,15 @@ class AutoGaussian(AutoGuide):
 
     def _sample_aux_values_funsor(
         self,
-    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.tensor]]:
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         import funsor
 
         import pyro.contrib.funsor
 
         # Construct TVE problem inputs, converting torch to funsor.
-        plate_to_dim = {}
         factors = {}
         eliminate = set()
+        plate_to_dim = {}
         for d, site in self.latents.items():
             inputs = OrderedDict()
             for f in site["cond_indep_stack"]:
@@ -1855,12 +1864,14 @@ class AutoGaussian(AutoGuide):
                     if f.name not in self._broken_plates[d]:
                         inputs[f.name] = funsor.Bint[f.size]
                         eliminate.add(f.name)
-            if not site["is_observed"]:
-                inputs[d] = funsor.Reals[self._broken_event_shapes[d]]
-                eliminate.add(d)
+            # Order inputs as in the model, so as to maximize sparsity of the
+            # lower Cholesky parametrization of the precision matrix.
             for u in self.dependencies[d]:
                 inputs[u] = funsor.Reals[self._broken_event_shapes[u]]
-                assert u in eliminate
+                eliminate.add(u)
+            if not site["is_observed"]:
+                inputs[d] = funsor.Reals[self._broken_event_shapes[d]]
+                assert d in eliminate
 
             precision = _deep_getattr(self.precisions, d)
             info_vec = precision.new_zeros(precision.shape[:-1])
