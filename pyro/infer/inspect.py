@@ -37,7 +37,7 @@ class RequiresGradMessenger(Messenger):
         super().__init__()
 
     def _pyro_post_sample(self, msg):
-        if is_sample_site(msg):
+        if is_sample_site(msg) and msg["value"].dtype.is_floating_point:
             if self.predicate(msg):
                 msg["value"].requires_grad_()
             elif not msg["is_observed"] and msg["value"].requires_grad:

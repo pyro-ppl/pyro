@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections import OrderedDict
+
 import pytest
 import torch
 
@@ -154,8 +156,7 @@ def pyrocov_model_plated(dataset):
 @pytest.mark.parametrize(
     "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
 )
-@pytest.mark.parametrize("backend", ["funsor"])
-def test_autogaussian_pyrocov_smoke(model, backend):
+def test_pyrocov_smoke(model):
     T, P, S, F = 3, 4, 5, 6
     dataset = {
         "features": torch.randn(S, F),
@@ -163,7 +164,7 @@ def test_autogaussian_pyrocov_smoke(model, backend):
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(model, backend=backend)
+    guide = AutoGaussian(model)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         svi.step(dataset)
@@ -175,8 +176,7 @@ def test_autogaussian_pyrocov_smoke(model, backend):
 @pytest.mark.parametrize(
     "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
 )
-@pytest.mark.parametrize("backend", ["funsor"])
-def test_structured_pyrocov_reparam(model, backend):
+def test_pyrocov_reparam(model):
     T, P, S, F = 2, 3, 4, 5
     dataset = {
         "features": torch.randn(S, F),
@@ -193,13 +193,77 @@ def test_structured_pyrocov_reparam(model, backend):
         "init": LocScaleReparam(),
     }
     model = poutine.reparam(model, config)
-    guide = AutoGaussian(model, backend=backend)
+    guide = AutoGaussian(model)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         svi.step(dataset)
     guide(dataset)
     predictive = Predictive(model, guide=guide, num_samples=2)
     predictive(dataset)
+
+
+def test_pyrocov_structure():
+    from funsor import Bint, Real, Reals
+
+    T, P, S, F = 2, 3, 4, 5
+    dataset = {
+        "features": torch.randn(S, F),
+        "local_time": torch.randn(T, P),
+        "weekly_strains": torch.randn(T, P, S).exp().round(),
+    }
+
+    guide = AutoGaussian(pyrocov_model_plated)
+    guide(dataset)  # initialize
+
+    expected_plates = frozenset(["place", "feature", "strain"])
+    assert guide._funsor_plates == expected_plates
+
+    expected_eliminate = frozenset(
+        [
+            "place",
+            "coef_scale",
+            "rate_loc_scale",
+            "rate_scale",
+            "init_loc_scale",
+            "init_scale",
+            "coef",
+            "rate_loc",
+            "init_loc",
+            "rate",
+            "init",
+        ]
+    )
+    assert guide._funsor_eliminate == expected_eliminate
+
+    expected_factor_inputs = {
+        "coef_scale": OrderedDict([("coef_scale", Real)]),
+        "rate_loc_scale": OrderedDict([("rate_loc_scale", Real)]),
+        "rate_scale": OrderedDict([("rate_scale", Real)]),
+        "init_loc_scale": OrderedDict([("init_loc_scale", Real)]),
+        "init_scale": OrderedDict([("init_scale", Real)]),
+        "coef": OrderedDict([("coef", Reals[5]), ("coef_scale", Real)]),
+        "rate_loc": OrderedDict(
+            [("rate_loc", Reals[4]), ("rate_loc_scale", Real), ("coef", Reals[5])]
+        ),
+        "init_loc": OrderedDict([("init_loc", Reals[4]), ("init_loc_scale", Real)]),
+        "rate": OrderedDict(
+            [
+                ("place", Bint[3]),
+                ("rate", Reals[4]),
+                ("rate_scale", Real),
+                ("rate_loc", Reals[4]),
+            ]
+        ),
+        "init": OrderedDict(
+            [
+                ("place", Bint[3]),
+                ("init", Reals[4]),
+                ("init_scale", Real),
+                ("init_loc", Reals[4]),
+            ]
+        ),
+    }
+    assert guide._funsor_factor_inputs == expected_factor_inputs
 
 
 def test_profile(n=1, num_steps=1):
