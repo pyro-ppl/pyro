@@ -4,7 +4,7 @@
 import pytest
 import torch
 
-from pyro.contrib.mue.dataloaders import BiosequenceDataset, alphabets
+from pyro.contrib.mue.dataloaders import BiosequenceDataset, alphabets, write
 
 
 @pytest.mark.parametrize("source_type", ["list", "fasta"])
@@ -70,3 +70,49 @@ T
     dataload = torch.utils.data.DataLoader(dataset, batch_size=2)
     for seq_data, L_data in dataload:
         assert seq_data.shape[0] == L_data.shape[0]
+
+
+def test_write():
+
+    # Define dataset.
+    seqs = ["AATC*C", "CA*", "T**"]
+    dataset = BiosequenceDataset(seqs, "list", "ACGT*", include_stop=False)
+    # With truncation at stop symbol.
+    # Write.
+    with open("test_seqs.fasta", "w") as fw:
+        fw.write("")
+    write(
+        dataset.seq_data,
+        dataset.alphabet,
+        "test_seqs.fasta",
+        truncate_stop=True,
+        append=True,
+    )
+
+    # Reload.
+    dataset2 = BiosequenceDataset("test_seqs.fasta", "fasta", "dna", include_stop=True)
+    to_stop_lens = [4, 2, 1]
+    for j, to_stop_len in enumerate(to_stop_lens):
+        assert torch.allclose(
+            dataset.seq_data[j, :to_stop_len], dataset2.seq_data[j, :to_stop_len]
+        )
+        assert torch.allclose(
+            dataset2.seq_data[j, (to_stop_len + 1) :], torch.tensor(0.0)
+        )
+
+    # Without truncation at stop symbol.
+    # Write.
+    write(
+        dataset.seq_data,
+        dataset.alphabet,
+        "test_seqs.fasta",
+        truncate_stop=False,
+        append=False,
+    )
+
+    # Reload.
+    dataset2 = BiosequenceDataset(
+        "test_seqs.fasta", "fasta", "ACGT*", include_stop=False
+    )
+    for j, to_stop_len in enumerate(to_stop_lens):
+        assert torch.allclose(dataset.seq_data, dataset2.seq_data)

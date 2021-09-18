@@ -181,6 +181,7 @@ class AutoStructured_shapes(AutoStructured):
         AutoLowRankMultivariateNormal,
         AutoIAFNormal,
         AutoLaplaceApproximation,
+        AutoStructured,
         AutoStructured_shapes,
     ],
 )
@@ -329,6 +330,7 @@ class AutoStructured_median(AutoStructured):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+        AutoStructured,
         AutoStructured_median,
     ],
 )
@@ -376,6 +378,7 @@ def test_median(auto_class, Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+        AutoStructured,
         AutoStructured_median,
     ],
 )
@@ -422,6 +425,13 @@ def test_autoguide_serialization(auto_class, Elbo):
         assert_equal(attr_get(guide_deser), attr_get(guide).data)
 
 
+def AutoGuideList_x(model):
+    guide = AutoGuideList(model)
+    guide.append(AutoNormal(poutine.block(model, expose=["x"])))
+    guide.append(AutoLowRankMultivariateNormal(poutine.block(model, hide=["x"])))
+    return guide
+
+
 @pytest.mark.parametrize(
     "auto_class",
     [
@@ -430,6 +440,7 @@ def test_autoguide_serialization(auto_class, Elbo):
         AutoNormal,
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
+        AutoGuideList_x,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -826,6 +837,7 @@ class AutoStructured_predictive(AutoStructured):
         AutoLaplaceApproximation,
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+        AutoStructured,
         AutoStructured_predictive,
     ],
 )

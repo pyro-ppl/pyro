@@ -250,6 +250,7 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf
         model.
     4. At each sample site that appears in both the model and guide, the model
         and guide agree on sample shape.
+    5. Model-side sequential enumeration is not implemented.
     """
     # Check ordinary sample sites.
     guide_vars = set(
@@ -290,11 +291,15 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf
             )
         )
     if not (model_vars <= guide_vars | enum_vars):
-        warnings.warn(
-            "Found vars in model but not guide: {}".format(
-                model_vars - guide_vars - enum_vars
-            )
-        )
+        bad_sites = model_vars - guide_vars - enum_vars
+        for name in bad_sites:
+            if model_trace.nodes[name]["infer"].get("enumerate") == "sequential":
+                raise NotImplementedError(
+                    f"At site {repr(name)}, "
+                    "model-side sequential enumeration is not implemented. "
+                    "Try parallel enumeration or guide-side enumeration."
+                )
+        warnings.warn(f"Found vars in model but not guide: {bad_sites}")
 
     # Check shapes agree.
     for name in model_vars & guide_vars:

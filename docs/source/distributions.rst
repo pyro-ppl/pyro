@@ -232,6 +232,13 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
+Logistic
+--------
+.. autoclass:: pyro.distributions.Logistic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 MaskedDistribution
 ------------------
 .. autoclass:: pyro.distributions.MaskedDistribution
@@ -497,6 +504,13 @@ OrderedTransform
 Permute
 -------
 .. autoclass:: pyro.distributions.transforms.Permute
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PositivePowerTransform
+----------------------
+.. autoclass:: pyro.distributions.transforms.PositivePowerTransform
     :members:
     :undoc-members:
     :show-inheritance:

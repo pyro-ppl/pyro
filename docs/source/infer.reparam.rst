@@ -14,6 +14,15 @@ shaped. These can be used with a variety of inference algorithms, e.g.
     :member-order: bysource
     :special-members: __call__
 
+Automatic Strategies
+--------------------
+.. automodule:: pyro.infer.reparam.strategies
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :special-members: __call__
+    :show-inheritance:
+
 Conjugate Updating
 ------------------
 .. automodule:: pyro.infer.reparam.conjugate

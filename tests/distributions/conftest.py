@@ -646,6 +646,17 @@ continuous_dists = [
             },
         ],
     ),
+    Fixture(
+        pyro_dist=dist.Logistic,
+        examples=[
+            {"loc": [1.0], "scale": [1.0], "test_data": [2.0]},
+            {
+                "loc": [2.0, -50.0],
+                "scale": [2.0, 10.0],
+                "test_data": [[2.0, 10.0], [-1.0, -50.0]],
+            },
+        ],
+    ),
 ]
 
 discrete_dists = [

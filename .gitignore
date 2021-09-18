@@ -88,7 +88,6 @@ coverage.xml
 *,cover
 .hypothesis/
 *.out
-adam.unittest.save
 
 # Translations
 *.mo

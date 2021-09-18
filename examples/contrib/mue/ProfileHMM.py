@@ -27,8 +27,8 @@ acids"
 Cambridge university press
 
 [2] E. N. Weinstein, D. S. Marks (2021)
-"Generative probabilistic biological sequence models that account for
-mutational variability"
+"A structured observation distribution for generative biological sequence
+prediction and forecasting"
 https://www.biorxiv.org/content/10.1101/2020.07.31.231381v2.full.pdf
 """
 
@@ -68,10 +68,10 @@ def main(args):
     pyro.set_rng_seed(args.rng_seed)
 
     # Load dataset.
-    if args.cpu_data and args.cuda:
+    if args.cpu_data or not args.cuda:
         device = torch.device("cpu")
     else:
-        device = None
+        device = torch.device("cuda")
     if args.test:
         dataset = generate_data(args.small, args.include_stop, device)
     else:
@@ -90,7 +90,7 @@ def main(args):
         # Specific data split seed, for comparability across models and
         # parameter initializations.
         pyro.set_rng_seed(args.rng_data_seed)
-        indices = torch.randperm(sum(data_lengths)).tolist()
+        indices = torch.randperm(sum(data_lengths), device=device).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
             for offset, length in zip(
@@ -200,8 +200,11 @@ def main(args):
             "w",
         ) as ow:
             ow.write("[args]\n")
+            args.latent_seq_length = model.latent_seq_length
             for elem in list(args.__dict__.keys()):
                 ow.write("{} = {}\n".format(elem, args.__getattribute__(elem)))
+            ow.write("alphabet_str = {}\n".format("".join(dataset.alphabet)))
+            ow.write("max_length = {}\n".format(dataset.max_length))
 
 
 if __name__ == "__main__":

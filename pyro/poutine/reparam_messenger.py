@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from typing import Callable, Dict, Union
 
 import torch
 
@@ -32,13 +33,14 @@ class ReparamMessenger(Messenger):
         https://arxiv.org/pdf/1906.03028.pdf
 
     :param config: Configuration, either a dict mapping site name to
-        :class:`~pyro.infer.reparam.reparam.Reparameterizer` ,
-        or a function mapping site to
-        :class:`~pyro.infer.reparam.reparam.Reparameterizer` or None.
+        :class:`~pyro.infer.reparam.reparam.Reparameterizer` , or a function
+        mapping site to :class:`~pyro.infer.reparam.reparam.Reparameterizer` or
+        None. See :mod:`pyro.infer.reparam.strategies` for built-in
+        configuration strategies.
     :type config: dict or callable
     """
 
-    def __init__(self, config):
+    def __init__(self, config: Union[Dict[str, object], Callable]):
         super().__init__()
         assert isinstance(config, dict) or callable(config)
         self.config = config
@@ -48,6 +50,8 @@ class ReparamMessenger(Messenger):
         return ReparamHandler(self, fn)
 
     def _pyro_sample(self, msg):
+        if type(msg["fn"]).__name__ == "_Subsample":
+            return
         if isinstance(self.config, dict):
             reparam = self.config.get(msg["name"])
         else:
@@ -125,6 +129,7 @@ class ReparamHandler(object):
     def __init__(self, msngr, fn):
         self.msngr = msngr
         self.fn = fn
+        super().__init__()
 
     def __call__(self, *args, **kwargs):
         # This saves args,kwargs for optional use by reparameterizers.
