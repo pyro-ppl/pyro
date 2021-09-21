@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+from typing import Dict
 
 from pyro.params.param_store import (  # noqa: F401
     _MODULE_NAMESPACE_DIVIDER,
@@ -286,7 +287,7 @@ def effectful(fn=None, type=None):
     return _fn
 
 
-def _inspect():
+def _inspect() -> Dict[str, object]:
     """
     EXPERIMENTAL Inspect the Pyro stack.
 
@@ -334,3 +335,14 @@ def get_mask():
     :rtype: None, bool, or torch.Tensor
     """
     return _inspect()["mask"]
+
+
+def get_plates() -> tuple:
+    """
+    Records the effects of enclosing ``pyro.plate`` contexts.
+
+    :returns: A tuple of
+        :class:`pyro.poutine.indep_messenger.CondIndepStackFrame` objects.
+    :rtype: tuple
+    """
+    return _inspect()["cond_indep_stack"]
