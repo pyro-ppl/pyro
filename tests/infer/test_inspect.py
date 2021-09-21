@@ -1,14 +1,13 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing.fakes import NonreparameterizedNormal
 from pyro.infer.inspect import get_dependencies
-
-import pytest
 
 
 @pytest.mark.parametrize("grad_enabled", [True, False])
