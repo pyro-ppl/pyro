@@ -226,7 +226,7 @@ class DimStack:
         return key_to_value
 
     def names_from_batch_shape(self, batch_shape, dim_type=DimType.LOCAL):
-        return self.allocate_dim_to_name(
+        return self.allocate(
             OrderedDict(
                 (dim, DimRequest(None, dim_type))
                 for dim in range(-len(batch_shape), 0)

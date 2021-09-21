@@ -27,3 +27,8 @@ def to_data(x, name_to_dim=None, dim_type=DimType.LOCAL):
         isinstance(dim, DimRequest) for dim in name_to_dim.values()
     )
     return funsor.to_data(x, name_to_dim=name_to_dim)
+
+
+@pyro.poutine.runtime.effectful(type="do")
+def do(x: torch.Tensor, value: Optional[torch.Tensor] = None, *, event_dim: int = 0) -> torch.Tensor:
+    return value if value is not None else x
