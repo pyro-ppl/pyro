@@ -1862,7 +1862,14 @@ class AutoGaussian(AutoGuide):
             raise ValueError(f"Unknown backend: {self.backend}")
 
     def _funsor_setup_prototype(self, *args, **kwargs):
-        import funsor
+        try:
+            import funsor
+        except ImportError as e:
+            raise ImportError(
+                'AutoGaussian(..., backend="funsor") requires funsor. '
+                "Try installing via: pip install pyro-ppl[funsor]"
+            ) from e
+        funsor.set_backend("torch")
 
         # Determine TVE problem shape.
         factor_inputs: Dict[str, OrderedDict[str, funsor.Domain]] = {}
@@ -1897,53 +1904,23 @@ class AutoGaussian(AutoGuide):
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         import funsor
 
-        import pyro.contrib.funsor
-
-        # Construct TVE problem inputs, converting torch to funsor.
+        # Convert torch to funsor.
+        particle_plates = frozenset(get_plates())
+        plate_to_dim = self._funsor_plate_to_dim.copy()
+        plate_to_dim.update({f.name: f.dim for f in particle_plates})
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
             precision = _deep_getattr(self.precisions, d)
             info_vec = precision.new_zeros(()).expand(precision.shape[:-1])
             factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
 
-        # Compute log normalizer via Gaussian tensor variable elimination.
-        with funsor.interpretations.reflect:
-            log_Z = funsor.sum_product.sum_product(
-                funsor.ops.logaddexp,
-                funsor.ops.add,
-                list(factors.values()),
-                eliminate=self._funsor_eliminate,
-                plates=self._funsor_plates,
-            )
-            log_Z = funsor.optimizer.apply_optimizer(log_Z)
-
-        # Draw a batch of samples.
-        particle_plates = frozenset(get_plates())
-        plate_to_dim = self._funsor_plate_to_dim.copy()
-        plate_to_dim.update({f.name: f.dim for f in particle_plates})
-        sample_inputs = {f.name: funsor.Bint[f.size] for f in particle_plates}
-        with funsor.montecarlo.MonteCarlo(**sample_inputs):
-            samples = funsor.adjoint.adjoint(
-                funsor.ops.logaddexp, funsor.ops.add, log_Z
-            )
-
-        # Extract funsor.Tensor values from funsor.Delta samples.
-        samples = {
-            name: pyro.contrib.funsor.handlers.enum_messenger._get_support_value(
-                samples[factors[name]], name
-            )
-            for name in self._funsor_eliminate - self._funsor_plates
-        }
-
-        # Compute density.
-        # TODO Avoid recomputing this by obtaining it from adjoint above.
-        log_prob = -funsor.reinterpret(log_Z)
-        for f in factors.values():
-            term = f(**samples)
-            plates = self._funsor_eliminate.intersection(term.inputs)
-            term = term.reduce(funsor.ops.add, plates)
-            log_prob += term
-        assert all(f.name in log_prob.inputs for f in particle_plates)
+        # Perform Gaussian tensor variable elimination.
+        samples, log_prob = funsor.recipes.forward_filter_backward_rsample(
+            factors=factors,
+            eliminate=self._funsor_eliminate,
+            plates=frozenset(plate_to_dim),
+            sample_inputs={f.name: funsor.Bint[f.size] for f in particle_plates},
+        )
 
         # Convert funsor to torch.
         samples = {
