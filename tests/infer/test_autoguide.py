@@ -937,7 +937,7 @@ def test_replay_plates(auto_class, sample_shape):
         return a, b, c, d
 
     guide = auto_class(model)
-    with pyro.plate_stack("plate", sample_shape, rightmost_dim=-2):
+    with pyro.plate_stack("particles", sample_shape, rightmost_dim=-2):
         guide_trace = poutine.trace(guide).get_trace()
         a, b, c, d = poutine.replay(model, guide_trace)()
     assert a.shape == (sample_shape + (1,) if sample_shape else ())

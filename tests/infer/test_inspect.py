@@ -8,8 +8,11 @@ import pyro.distributions as dist
 from pyro.distributions.testing.fakes import NonreparameterizedNormal
 from pyro.infer.inspect import get_dependencies
 
+import pytest
 
-def test_get_dependencies():
+
+@pytest.mark.parametrize("grad_enabled", [True, False])
+def test_get_dependencies(grad_enabled):
     def model(data):
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", NonreparameterizedNormal(a, 0))
@@ -30,7 +33,8 @@ def test_get_dependencies():
         return [a, b, c, d, e, f, g, h, i, j, k]
 
     data = torch.randn(3)
-    actual = get_dependencies(model, (data,))
+    with torch.set_grad_enabled(grad_enabled):
+        actual = get_dependencies(model, (data,))
     _ = set()
     expected = {
         "prior_dependencies": {
@@ -133,6 +137,37 @@ def test_factor():
         },
         "posterior_dependencies": {
             "a": {"a": set(), "c": set()},
+        },
+    }
+    assert actual == expected
+
+
+def test_discrete_obs():
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.Normal(a[..., None], torch.ones(3)).to_event(1))
+        c = pyro.sample(
+            "c", dist.MultivariateNormal(torch.zeros(3) + a[..., None], torch.eye(3))
+        )
+        with pyro.plate("i", 2):
+            d = pyro.sample("d", dist.Dirichlet((b + c).exp()))
+            pyro.sample("e", dist.Categorical(logits=d), obs=torch.tensor([0, 0]))
+        return a, b, c, d
+
+    actual = get_dependencies(model)
+    expected = {
+        "prior_dependencies": {
+            "a": {"a": set()},
+            "b": {"a": set(), "b": set()},
+            "c": {"a": set(), "c": set()},
+            "d": {"b": set(), "c": set(), "d": set()},
+            "e": {"d": set(), "e": set()},
+        },
+        "posterior_dependencies": {
+            "a": {"a": set(), "b": set(), "c": set()},
+            "b": {"b": set(), "c": set(), "d": set()},
+            "c": {"c": set(), "d": set()},
+            "d": {"d": set(), "e": set()},
         },
     }
     assert actual == expected
