@@ -37,12 +37,17 @@ from pyro.infer.autoguide import (
 )
 from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
+from pyro.ops.gaussian import Gaussian
 from pyro.optim import Adam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
 # AutoGaussian currently depends on funsor.
+AutoGaussian_median = pytest.param(
+    functools.partial(AutoGaussian, init_loc_fn=init_to_median),
+    marks=[pytest.mark.stage("funsor")],
+)
 AutoGaussian = pytest.param(AutoGaussian, marks=[pytest.mark.stage("funsor")])
 
 
@@ -705,7 +710,8 @@ def test_init_scale(auto_class, init_scale):
         auto_guide_module_callable,
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
-        AutoGaussian,
+        functools.partial(AutoNormal, init_loc_fn=init_to_median),
+        AutoGaussian_median,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -717,8 +723,9 @@ def test_median_module(auto_class, Elbo):
             self.x_scale = PyroParam(torch.tensor(0.1), constraints.positive)
 
         def forward(self):
-            pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
+            x = pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
             pyro.sample("y", dist.Normal(2.0, 0.1))
+            pyro.sample("z", dist.Normal(1.0, 0.1), obs=x)
 
     model = Model()
     guide = auto_class(model)
@@ -1153,7 +1160,9 @@ def test_sphere_reparam_ok(auto_class, init_loc_fn):
     def model():
         x = pyro.sample("x", dist.Normal(0.0, 1.0).expand([3]).to_event(1))
         y = pyro.sample("y", dist.ProjectedNormal(x))
-        pyro.sample("obs", dist.Normal(y, 1), obs=torch.tensor([1.0, 0.0]))
+        pyro.sample(
+            "obs", dist.Normal(y, 1).to_event(1), obs=torch.tensor([1.0, 0.0, 0.0])
+        )
 
     model = poutine.reparam(model, {"y": ProjectedNormalReparam()})
     guide = auto_class(model)
@@ -1174,7 +1183,9 @@ def test_sphere_raw_ok(auto_class, init_loc_fn):
     def model():
         x = pyro.sample("x", dist.Normal(0.0, 1.0).expand([3]).to_event(1))
         y = pyro.sample("y", dist.ProjectedNormal(x))
-        pyro.sample("obs", dist.Normal(y, 1), obs=torch.tensor([1.0, 0.0]))
+        pyro.sample(
+            "obs", dist.Normal(y, 1).to_event(1), obs=torch.tensor([1.0, 0.0, 0.0])
+        )
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
     poutine.trace(guide).get_trace().compute_log_prob()
@@ -1204,6 +1215,7 @@ class AutoStructured_exact_mvn(AutoStructured):
         AutoNormal,
         AutoDiagonalNormal,
         AutoMultivariateNormal,
+        AutoLowRankMultivariateNormal,
         AutoStructured_exact_normal,
         AutoStructured_exact_mvn,
         AutoGaussian,
@@ -1219,6 +1231,15 @@ def test_exact(Guide):
     data = torch.randn(3)
     expected_mean = (0 + data.sum().item()) / (1 + len(data))
     expected_std = (1 + len(data)) ** (-0.5)
+    g = Gaussian(
+        log_normalizer=torch.zeros(()),
+        info_vec=torch.zeros(4),
+        precision=torch.tensor(
+            [[4, -1, -1, -1], [-1, 1, 0, 0], [-1, 0, 1, 0], [-1, 0, 0, 1]],
+            dtype=data.dtype,
+        ),
+    )
+    expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
@@ -1229,6 +1250,7 @@ def test_exact(Guide):
 
     guide.requires_grad_(False)
     with torch.no_grad():
+        # Check moments.
         vectorize = pyro.plate("particles", 10000, dim=-2)
         guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
         samples = poutine.replay(vectorize(model), guide_trace)(data)
@@ -1237,6 +1259,10 @@ def test_exact(Guide):
         assert_close(actual_mean, expected_mean, atol=0.05)
         assert_close(actual_std, expected_std, rtol=0.05)
 
+        # Check ELBO loss.
+        actual_loss = elbo.loss(model, guide, data)
+        assert_close(actual_loss, expected_loss, atol=0.01)
+
 
 @pytest.mark.parametrize(
     "Guide",
@@ -1244,6 +1270,7 @@ def test_exact(Guide):
         AutoNormal,
         AutoDiagonalNormal,
         AutoMultivariateNormal,
+        AutoLowRankMultivariateNormal,
         AutoStructured_exact_normal,
         AutoStructured_exact_mvn,
         AutoGaussian,
@@ -1259,6 +1286,19 @@ def test_exact_batch(Guide):
     data = torch.randn(3)
     expected_mean = (0 + data) / (1 + 1)
     expected_std = (1 + torch.ones_like(data)) ** (-0.5)
+    g = Gaussian(
+        log_normalizer=torch.zeros(3),
+        info_vec=torch.zeros(3, 2),
+        precision=torch.tensor(
+            [[[2, -1], [-1, 1]]] * 3,
+            dtype=data.dtype,
+        ),
+    )
+    expected_loss = (
+        (g.event_logsumexp() - g.condition(data[:, None]).event_logsumexp())
+        .sum()
+        .item()
+    )
 
     guide = Guide(model)
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
@@ -1276,3 +1316,7 @@ def test_exact_batch(Guide):
         actual_std = samples.std(0)
         assert_close(actual_mean, expected_mean, atol=0.05)
         assert_close(actual_std, expected_std, rtol=0.05)
+
+        # Check ELBO loss.
+        actual_loss = elbo.loss(model, guide, data)
+        assert_close(actual_loss, expected_loss, atol=0.01)

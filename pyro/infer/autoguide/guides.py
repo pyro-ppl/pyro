@@ -1752,7 +1752,8 @@ class AutoGaussian(AutoGuide):
             precision_plates: Set[CondIndepStackFrame] = set()
             if not site["is_observed"]:
                 # Initialize latent variable location-scale parameters.
-                init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
+                with helpful_support_errors(site):
+                    init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
                 init_scale = torch.full_like(init_loc, self._init_scale)
                 batch_shape = site["fn"].batch_shape
                 event_shape = init_loc.shape[len(batch_shape) :]
@@ -1811,9 +1812,8 @@ class AutoGaussian(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        aux_values, log_density_1 = self._sample_aux_values()
-        values, log_density_2 = self._transform_values(aux_values)
-        log_density = log_density_1 + log_density_2
+        aux_values, log_density = self._sample_aux_values()
+        values, log_densities = self._transform_values(aux_values)
 
         # Replay via Pyro primitives.
         plates = self._create_plates(*args, **kwargs)
@@ -1823,10 +1823,12 @@ class AutoGaussian(AutoGuide):
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
                 pyro.sample(
-                    name, dist.Delta(values[name], event_dim=site["fn"].event_dim)
+                    name,
+                    dist.Delta(values[name], log_densities[name], site["fn"].event_dim),
                 )
         if am_i_wrapped() and poutine.get_mask() is not False:
-            pyro.factor("AutoGaussian.log_density", log_density)
+            log_density = log_density + log_densities["AutoGaussian"]
+            pyro.factor("AutoGaussian", log_density)
         return values
 
     def median(self) -> Dict[str, torch.Tensor]:
@@ -1841,16 +1843,28 @@ class AutoGaussian(AutoGuide):
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         # Learnably transform auxiliary values to user-facing values.
         values = {}
-        log_density = 0.0
+        log_densities = defaultdict(float)
         compute_density = am_i_wrapped() and poutine.get_mask() is not False
         for name, site in self._sorted_sites.items():
             loc = _deep_getattr(self.locs, name)
             scale = _deep_getattr(self.scales, name)
-            values[name] = biject_to(site["fn"].support)(aux_values[name] * scale + loc)
-            if compute_density:
-                log_density = log_density - scale.log().sum()
+            unconstrained = aux_values[name] * scale + loc
 
-        return values, log_density
+            # Transform to constrained space.
+            transform = biject_to(site["fn"].support)
+            values[name] = transform(unconstrained)
+            if compute_density:
+                # Split the density into a aggregated unshaped part
+                # "AutoGaussian" and a per-site shaped part.
+                log_densities["AutoGaussian"] = (
+                    log_densities["AutoGaussian"] - scale.log().sum()
+                )
+                assert transform.codomain.event_dim == site["fn"].event_dim
+                log_densities[name] = transform.inv.log_abs_det_jacobian(
+                    values[name], unconstrained
+                )
+
+        return values, log_densities
 
     def _sample_aux_values(
         self,
