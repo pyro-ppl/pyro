@@ -1294,10 +1294,8 @@ def test_exact_batch(Guide):
             dtype=data.dtype,
         ),
     )
-    expected_loss = (
-        (g.event_logsumexp() - g.condition(data[:, None]).event_logsumexp())
-        .sum()
-        .item()
+    expected_loss = float(
+        g.event_logsumexp().sum() - g.condition(data[:, None]).event_logsumexp().sum()
     )
 
     guide = Guide(model)
@@ -1309,6 +1307,7 @@ def test_exact_batch(Guide):
 
     guide.requires_grad_(False)
     with torch.no_grad():
+        # Check moments.
         vectorize = pyro.plate("particles", 10000, dim=-2)
         guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
         samples = poutine.replay(vectorize(model), guide_trace)(data)

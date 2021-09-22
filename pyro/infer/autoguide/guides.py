@@ -1805,8 +1805,10 @@ class AutoGaussian(AutoGuide):
                 ),
             )
 
-        if self.backend == "funsor":
-            self._funsor_setup_prototype(*args, **kwargs)
+        # Dispatch to backend logic.
+        backend_fn = getattr(self, f"_{self.backend}_setup_prototype", None)
+        if backend_fn is not None:
+            backend_fn(*args, **kwargs)
 
     def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         if self.prototype_trace is None:
@@ -1869,11 +1871,11 @@ class AutoGaussian(AutoGuide):
     def _sample_aux_values(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
-        # Sample auxiliary values via Gaussian tensor variable elimination.
-        if self.backend == "funsor":
-            return self._funsor_sample_aux_values()
-        else:
-            raise ValueError(f"Unknown backend: {self.backend}")
+        # Dispatch to backend logic.
+        backend_fn = getattr(self, f"_{self.backend}_sample_aux_values", None)
+        if backend_fn is None:
+            raise NotImplementedError(f"Unknown AutoGaussian backend: {self.backend}")
+        return backend_fn()
 
     def _funsor_setup_prototype(self, *args, **kwargs):
         try:
