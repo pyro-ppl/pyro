@@ -1810,7 +1810,7 @@ class AutoGaussian(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        aux_values, log_density = self._sample_aux_values()
+        aux_values, global_log_density = self._sample_aux_values()
         values, log_densities = self._transform_values(aux_values)
 
         # Replay via Pyro primitives.
@@ -1825,8 +1825,7 @@ class AutoGaussian(AutoGuide):
                     dist.Delta(values[name], log_densities[name], site["fn"].event_dim),
                 )
         if am_i_wrapped() and poutine.get_mask() is not False:
-            log_density = log_density + log_densities["AutoGaussian"]
-            pyro.factor("AutoGaussian", log_density)
+            pyro.factor(self._pyro_name, global_log_density)
         return values
 
     def median(self) -> Dict[str, torch.Tensor]:
@@ -1852,15 +1851,10 @@ class AutoGaussian(AutoGuide):
             transform = biject_to(site["fn"].support)
             values[name] = transform(unconstrained)
             if compute_density:
-                # Split the density into a aggregated unshaped part
-                # "AutoGaussian" and a per-site shaped part.
-                log_densities["AutoGaussian"] = (
-                    log_densities["AutoGaussian"] - scale.log().sum()
-                )
                 assert transform.codomain.event_dim == site["fn"].event_dim
                 log_densities[name] = transform.inv.log_abs_det_jacobian(
                     values[name], unconstrained
-                )
+                ) - scale.log().reshape(site["fn"].batch_shape + (-1,)).sum(-1)
 
         return values, log_densities
 
