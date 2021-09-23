@@ -1691,7 +1691,7 @@ class AutoGaussian(AutoGuide):
     backend: str
     locs: PyroModule
     scales: PyroModule
-    precisions: PyroModule
+    precision_chols: PyroModule
     _sorted_sites: Dict[str, Dict[str, object]]
     _init_scale: float
     _original_model: Tuple[Callable]
@@ -1723,7 +1723,7 @@ class AutoGaussian(AutoGuide):
 
         self.locs = PyroModule()
         self.scales = PyroModule()
-        self.precisions = PyroModule()
+        self.precision_chols = PyroModule()
         self._unconstrained_event_shapes = {}
         self._broken_event_shapes = {}
         self._broken_plates = defaultdict(tuple)
@@ -1785,20 +1785,11 @@ class AutoGaussian(AutoGuide):
             batch_shape = torch.Size(
                 f.size for f in sorted(precision_plates, key=lambda f: f.dim)
             )
-            init_precision = torch.zeros(*batch_shape, precision_size, precision_size)
-            init_precision.view(-1, precision_size ** 2)[
-                ..., :: precision_size + 1
-            ].fill_(
-                1
-            )  # init to eye
+            eye = torch.eye(precision_size) + torch.zeros(batch_shape + (1, 1))
             _deep_setattr(
-                self.precisions,
+                self.precision_chols,
                 d,
-                PyroParam(
-                    init_precision,
-                    constraint=constraints.positive_definite,
-                    event_dim=2,
-                ),
+                PyroParam(eye, constraint=constraints.lower_cholesky, event_dim=2),
             )
 
         # Dispatch to backend logic.
@@ -1916,9 +1907,11 @@ class AutoGaussian(AutoGuide):
         plate_to_dim.update({f.name: f.dim for f in particle_plates})
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
-            precision = _deep_getattr(self.precisions, d)
+            precision_chol = _deep_getattr(self.precision_chols, d)
+            precision = precision_chol @ precision_chol.transpose(-1, -2)
             info_vec = precision.new_zeros(()).expand(precision.shape[:-1])
             factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
+            factors[d]._precision_chol = precision_chol  # avoid recomputing
 
         # Perform Gaussian tensor variable elimination.
         samples, log_prob = funsor.recipes.forward_filter_backward_rsample(
