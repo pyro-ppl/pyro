@@ -34,11 +34,6 @@ import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import eye_like, is_identically_zero, sum_rightmost
-from pyro.infer.autoguide.initialization import (
-    InitMessenger,
-    init_to_feasible,
-    init_to_median,
-)
 from pyro.infer.enum import config_enumerate
 from pyro.infer.inspect import get_dependencies
 from pyro.nn import PyroModule, PyroParam
@@ -48,6 +43,7 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.runtime import am_i_wrapped, get_plates
 from pyro.poutine.util import site_is_subsample
 
+from .initialization import InitMessenger, init_to_feasible, init_to_median
 from .utils import _product, helpful_support_errors
 
 

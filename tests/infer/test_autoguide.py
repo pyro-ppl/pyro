@@ -1235,7 +1235,12 @@ def test_exact(Guide):
         log_normalizer=torch.zeros(()),
         info_vec=torch.zeros(4),
         precision=torch.tensor(
-            [[4, -1, -1, -1], [-1, 1, 0, 0], [-1, 0, 1, 0], [-1, 0, 0, 1]],
+            [
+                [4, -1, -1, -1],
+                [-1, 1, 0, 0],
+                [-1, 0, 1, 0],
+                [-1, 0, 0, 1],
+            ],
             dtype=data.dtype,
         ),
     )
@@ -1319,3 +1324,73 @@ def test_exact_batch(Guide):
         # Check ELBO loss.
         actual_loss = elbo.loss(model, guide, data)
         assert_close(actual_loss, expected_loss, atol=0.01)
+
+
+@pytest.mark.parametrize(
+    "Guide",
+    [
+        AutoNormal,
+        AutoDiagonalNormal,
+        AutoMultivariateNormal,
+        AutoLowRankMultivariateNormal,
+        AutoStructured,
+        AutoGaussian,
+    ],
+)
+def test_exact_tree(Guide):
+    is_exact = Guide not in (AutoNormal, AutoDiagonalNormal)
+
+    def model(data):
+        x = pyro.sample("x", dist.Normal(0, 1))
+        with pyro.plate("data", len(data)):
+            y = pyro.sample("y", dist.Normal(x, 1))
+            pyro.sample("obs", dist.Normal(y, 1), obs=data)
+        return {"x": x, "y": y}
+
+    data = torch.randn(2)
+    g = Gaussian(
+        log_normalizer=torch.zeros(()),
+        info_vec=torch.zeros(5),
+        precision=torch.tensor(
+            [
+                [3, -1, -1, 0, 0],  # x
+                [-1, 2, 0, -1, 0],  # y[0]
+                [-1, 0, 2, 0, -1],  # y[1]
+                [0, -1, 0, 1, 0],  # obs[0]
+                [0, 0, -1, 0, 1],  # obs[1]
+            ],
+            dtype=data.dtype,
+        ),
+    )
+    g_cond = g.condition(data)
+    mean = torch.linalg.solve(g_cond.precision, g_cond.info_vec)
+    std = torch.inverse(g_cond.precision).diag().sqrt()
+    expected_mean = {"x": mean[0], "y": mean[1:]}
+    expected_std = {"x": std[0], "y": std[1:]}
+    expected_loss = float(g.event_logsumexp() - g_cond.event_logsumexp())
+
+    guide = Guide(model)
+    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
+    optim = Adam({"lr": 0.01})
+    svi = SVI(model, guide, optim, elbo)
+    for step in range(500):
+        svi.step(data)
+
+    guide.train(False)
+    guide.requires_grad_(False)
+    with torch.no_grad():
+        # Check moments.
+        vectorize = pyro.plate("particles", 10000, dim=-2)
+        guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
+        samples = poutine.replay(vectorize(model), guide_trace)(data)
+        for name in ["x", "y"]:
+            actual_mean = samples[name].mean(0).squeeze()
+            actual_std = samples[name].std(0).squeeze()
+            assert_close(actual_mean, expected_mean[name], atol=0.05)
+            if is_exact:
+                assert_close(actual_std, expected_std[name], rtol=0.05)
+
+        if is_exact:
+            # Check ELBO loss.
+            actual_loss = elbo.loss(model, guide, data)
+            assert_close(actual_loss, expected_loss, atol=0.01)
