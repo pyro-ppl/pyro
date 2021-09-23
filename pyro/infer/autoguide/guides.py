@@ -1695,9 +1695,14 @@ class AutoGaussian(AutoGuide):
         or iterable of plates. Plates not returned will be created
         automatically as usual. This is useful for data subsampling.
     :param str backend: Back end for performing Gaussian tensor variable
-        elimination. Defaults to "dense".
+        elimination. Defaults to "dense"; other options include "funsor".
     """
 
+    # Class configurable parameters.
+    default_backend: str = "dense"
+    scale_constraint = constraints.softplus_positive
+
+    # Type hints for instance variables.
     backend: str
     locs: PyroModule
     scales: PyroModule
@@ -1708,10 +1713,6 @@ class AutoGaussian(AutoGuide):
     _unconstrained_event_shapes: Dict[str, torch.Size]
     _broken_event_shapes: Dict[str, torch.Size]
     _broken_plates: Dict[str, Tuple[str, ...]]
-
-    # Class configurable parameters.
-    default_backend = "dense"
-    scale_constraint = constraints.softplus_positive
 
     def __init__(
         self,
@@ -1832,6 +1833,12 @@ class AutoGaussian(AutoGuide):
         return values
 
     def median(self) -> Dict[str, torch.Tensor]:
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
         with torch.no_grad(), poutine.mask(mask=False):
             aux_values = {name: 0.0 for name in self._sorted_sites}
             values, _ = self._transform_values(aux_values)
