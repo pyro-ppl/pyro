@@ -43,12 +43,10 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
-# AutoGaussian currently depends on funsor.
-AutoGaussian_median = pytest.param(
-    functools.partial(AutoGaussian, init_loc_fn=init_to_median),
-    marks=[pytest.mark.stage("funsor")],
-)
-AutoGaussian = pytest.param(AutoGaussian, marks=[pytest.mark.stage("funsor")])
+
+@functools.partial(pytest.param, marks=[pytest.mark.stage("funsor")])
+class AutoGaussian_funsor(AutoGaussian):
+    default_backend = "funsor"
 
 
 @pytest.mark.parametrize(
@@ -97,6 +95,7 @@ def test_scores(auto_class):
         AutoIAFNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_factor(auto_class, Elbo):
@@ -194,6 +193,7 @@ class AutoStructured_shapes(AutoStructured):
         AutoStructured,
         AutoStructured_shapes,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 @pytest.mark.filterwarnings("ignore::FutureWarning")
@@ -232,6 +232,7 @@ def test_shapes(auto_class, init_loc_fn, Elbo, num_particles):
         AutoIAFNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
@@ -345,6 +346,7 @@ class AutoStructured_median(AutoStructured):
         AutoStructured,
         AutoStructured_median,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -513,6 +515,7 @@ def test_quantiles(auto_class, Elbo):
         AutoIAFNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_discrete_parallel(continuous_class):
@@ -549,6 +552,7 @@ def test_discrete_parallel(continuous_class):
         AutoIAFNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_guide_list(auto_class):
@@ -572,6 +576,7 @@ def test_guide_list(auto_class):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_callable(auto_class):
@@ -601,6 +606,7 @@ def test_callable(auto_class):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_callable_return_dict(auto_class):
@@ -648,6 +654,7 @@ def test_unpack_latent():
         AutoMultivariateNormal,
         AutoLowRankMultivariateNormal,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_init_loc_fn(auto_class):
@@ -711,7 +718,7 @@ def test_init_scale(auto_class, init_scale):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoNormal, init_loc_fn=init_to_median),
-        AutoGaussian_median,
+        functools.partial(AutoGaussian, init_loc_fn=init_to_median),
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -799,6 +806,7 @@ def test_nested_autoguide(Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -929,6 +937,7 @@ def test_predictive(auto_class):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoStructured,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_replay_plates(auto_class, sample_shape):
@@ -1078,6 +1087,7 @@ def test_subsample_guide_2(auto_class, independent):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 @pytest.mark.parametrize(
@@ -1113,6 +1123,7 @@ def test_discrete_helpful_error(auto_class, init_loc_fn):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 @pytest.mark.parametrize(
@@ -1145,6 +1156,7 @@ def test_sphere_helpful_error(auto_class, init_loc_fn):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 @pytest.mark.parametrize(
@@ -1219,6 +1231,7 @@ class AutoStructured_exact_mvn(AutoStructured):
         AutoStructured_exact_normal,
         AutoStructured_exact_mvn,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_exact(Guide):
@@ -1247,6 +1260,14 @@ def test_exact(Guide):
     expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
+
+    # DEBUG
+    guide(data)
+    # guide.scales.train(False)
+    # guide.scales.requires_grad_(False)
+    # guide.precision_chols.train(False)
+    # guide.precision_chols.requires_grad_(False)
+
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, elbo)
@@ -1279,6 +1300,7 @@ def test_exact(Guide):
         AutoStructured_exact_normal,
         AutoStructured_exact_mvn,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_exact_batch(Guide):
@@ -1335,6 +1357,7 @@ def test_exact_batch(Guide):
         AutoLowRankMultivariateNormal,
         AutoStructured,
         AutoGaussian,
+        AutoGaussian_funsor,
     ],
 )
 def test_exact_tree(Guide):

@@ -14,8 +14,10 @@ from pyro.infer.autoguide import AutoGaussian
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
 
-# AutoGaussian currently depends on funsor.
-pytestmark = pytest.mark.stage("funsor")
+BACKENDS = [
+    "dense",
+    pytest.param("funsor", marks=[pytest.mark.stage("funsor")]),
+]
 
 
 # Simplified from https://github.com/pyro-cov/tree/master/pyrocov/mutrans.py
@@ -156,7 +158,8 @@ def pyrocov_model_plated(dataset):
 @pytest.mark.parametrize(
     "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
 )
-def test_pyrocov_smoke(model):
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_pyrocov_smoke(model, backend):
     T, P, S, F = 3, 4, 5, 6
     dataset = {
         "features": torch.randn(S, F),
@@ -164,7 +167,7 @@ def test_pyrocov_smoke(model):
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(model)
+    guide = AutoGaussian(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         svi.step(dataset)
@@ -176,7 +179,8 @@ def test_pyrocov_smoke(model):
 @pytest.mark.parametrize(
     "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
 )
-def test_pyrocov_reparam(model):
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_pyrocov_reparam(model, backend):
     T, P, S, F = 2, 3, 4, 5
     dataset = {
         "features": torch.randn(S, F),
@@ -193,7 +197,7 @@ def test_pyrocov_reparam(model):
         "init": LocScaleReparam(),
     }
     model = poutine.reparam(model, config)
-    guide = AutoGaussian(model)
+    guide = AutoGaussian(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         svi.step(dataset)
@@ -202,7 +206,8 @@ def test_pyrocov_reparam(model):
     predictive(dataset)
 
 
-def test_pyrocov_structure():
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_pyrocov_structure(backend):
     from funsor import Bint, Real, Reals
 
     T, P, S, F = 2, 3, 4, 5
@@ -212,7 +217,7 @@ def test_pyrocov_structure():
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(pyrocov_model_plated)
+    guide = AutoGaussian(pyrocov_model_plated, backend=backend)
     guide(dataset)  # initialize
 
     expected_plates = frozenset(["place", "feature", "strain"])
@@ -266,7 +271,8 @@ def test_pyrocov_structure():
     assert guide._funsor_factor_inputs == expected_factor_inputs
 
 
-def test_profile(n=1, num_steps=1):
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_profile(n=1, num_steps=1, backend="funsor"):
     """
     Helper function for profiling.
     """
@@ -295,4 +301,4 @@ def test_profile(n=1, num_steps=1):
 
 
 if __name__ == "__main__":
-    test_profile(n=10, num_steps=100)
+    test_profile(n=10, num_steps=100, backend="funsor")

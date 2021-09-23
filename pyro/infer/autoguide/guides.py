@@ -1644,13 +1644,19 @@ class AutoStructured(AutoGuide):
 
 class AutoGaussian(AutoGuide):
     """
-    EXPERIMENTAL Gaussian tensor variable elimination guide [1,2].
+    Gaussian guide with optimal conditional independence structure.
 
     This is equivalent to a full rank :class:`AutoMultivariateNormal` guide,
     but with a sparse precision matrix determined by dependencies and plates in
-    the model. This can be orders of magnitude cheaper than the naive
-    :class:`AutoMultivariateNormal` in terms of space, time, number of
-    parameters, and statistical complexity.
+    the model [1]. Depending on model structure, this can have asymptotically
+    better statistical efficiency than :class:`AutoMultivariateNormal` .
+
+    The default "dense" backend should have similar computational complexity to
+    :class:`AutoMultivariateNormal` . The experimental "funsor" backend can be
+    asymptotically cheaper in terms of time and space (using Gaussian tensor
+    variable elimination [2,3]), but incurs large constant overhead. The
+    "funsor" backend requires `funsor <https://funsor.pyro.ai>`_ which can be
+    installed via ``pip install pyro-ppl[funsor]``.
 
     The guide currently does not depend on the model's ``*args, **kwargs``.
 
@@ -1659,17 +1665,22 @@ class AutoGaussian(AutoGuide):
         guide = AutoGaussian(model)
         svi = SVI(model, guide, ...)
 
-    .. warning: This currently supports ``backend=funsor`` which depends on
-        the funsor package. You can install via
-        ``pip install pyro-ppl[funsor]``.
+    Example using funsor backend::
+
+        !pip install pyro-ppl[funsor]
+        guide = AutoGaussian(model, backend="funsor")
+        svi = SVI(model, guide, ...)
 
     **References**
 
-    [1] F. Obermeyer, E. Bingham, M. Jankowiak, J. Chiu, N. Pradhan, A. M. Rush, N. Goodman
+    [1] S.Webb, A.Goliński, R.Zinkov, N.Siddharth, T.Rainforth, Y.W.Teh, F.Wood (2018)
+        "Faithful inversion of generative models for effective amortized inference"
+        https://dl.acm.org/doi/10.5555/3327144.3327229
+    [2] F.Obermeyer, E.Bingham, M.Jankowiak, J.Chiu, N.Pradhan, A.M.Rush, N.Goodman
         (2019)
         "Tensor Variable Elimination for Plated Factor Graphs"
         http://proceedings.mlr.press/v97/obermeyer19a/obermeyer19a.pdf
-    [2] F. Obermeyer, E. Bingham, M. Jankowiak, D. Phan, J. P. Chen
+    [3] F. Obermeyer, E. Bingham, M. Jankowiak, D. Phan, J. P. Chen
         (2019)
         "Functional Tensors for Probabilistic Programming"
         https://arxiv.org/abs/1910.10775
@@ -1684,8 +1695,7 @@ class AutoGaussian(AutoGuide):
         or iterable of plates. Plates not returned will be created
         automatically as usual. This is useful for data subsampling.
     :param str backend: Back end for performing Gaussian tensor variable
-        elimination. Currently only the experimental "funsor" backend is
-        supported.
+        elimination. Defaults to "dense".
     """
 
     backend: str
@@ -1699,6 +1709,8 @@ class AutoGaussian(AutoGuide):
     _broken_event_shapes: Dict[str, torch.Size]
     _broken_plates: Dict[str, Tuple[str, ...]]
 
+    # Class configurable parameters.
+    default_backend = "dense"
     scale_constraint = constraints.softplus_positive
 
     def __init__(
@@ -1708,7 +1720,7 @@ class AutoGaussian(AutoGuide):
         init_loc_fn: Callable = init_to_feasible,
         init_scale: float = 0.1,
         create_plates: Optional[Callable] = None,
-        backend="funsor",
+        backend=None,
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
@@ -1716,7 +1728,7 @@ class AutoGaussian(AutoGuide):
         self._original_model = (model,)
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, create_plates=create_plates)
-        self.backend = backend
+        self.backend = self.default_backend if backend is None else backend
 
     def _setup_prototype(self, *args, **kwargs) -> None:
         super()._setup_prototype(*args, **kwargs)
@@ -1857,6 +1869,91 @@ class AutoGaussian(AutoGuide):
         if backend_fn is None:
             raise NotImplementedError(f"Unknown AutoGaussian backend: {self.backend}")
         return backend_fn()
+
+    ############################################################################
+    # Dense backend
+
+    def _dense_setup_prototype(self, *args, **kwargs):
+        # Collect flat and individual shapes.
+        self._dense_shapes = {}
+        pos = 0
+        offsets = {}
+        for d, event_shape in self._unconstrained_event_shapes.items():
+            batch_shape = self.prototype_trace.nodes[d]["fn"].batch_shape
+            self._dense_shapes[d] = batch_shape, event_shape
+            offsets[d] = pos
+            pos += (batch_shape + event_shape).numel()
+        self._dense_size = pos
+
+        # Create sparse -> dense precision matrix maps.
+        self._dense_factor_scatter = {}
+        for d, site in self._sorted_sites.items():
+            # Order inputs as in the model, so as to maximize sparsity of the
+            # lower Cholesky parametrization of the precision matrix.
+            event_indices = []
+            for f in site["cond_indep_stack"]:
+                if f.vectorized:
+                    if f.name not in self._broken_plates[d]:
+                        f.size
+            for u in self.dependencies[d]:
+                start = offsets[u]
+                stop = start + self._broken_event_shapes[u].numel()
+                event_indices.append(torch.arange(start, stop))
+            if not site["is_observed"]:
+                start = offsets[d]
+                stop = start + self._broken_event_shapes[d].numel()
+                event_indices.append(torch.arange(start, stop))
+            event_index = torch.cat(event_indices)
+            precision_shape = _deep_getattr(self.precision_chols, d).shape
+            index = torch.zeros(precision_shape, dtype=torch.long)
+            stride = 1
+            index += event_index * stride
+            stride *= self._dense_size
+            index += event_index[:, None] * stride
+            stride *= self._dense_size
+            # TODO add batch shapes
+            self._dense_factor_scatter[d] = index.reshape(-1)
+
+    def _dense_sample_aux_values(
+        self,
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
+        from pyro.ops import Gaussian
+
+        # Convert to a flat dense joint Gaussian.
+        flat_precision = torch.zeros(self._dense_size ** 2)
+        for d, index in self._dense_factor_scatter:
+            precision_chol = _deep_getattr(self.precision_chols, d)
+            precision = precision_chol @ precision_chol.transpose(-1, -2)
+            flat_precision.scatter_add_(0, index, precision.reshape(-1))
+        precision = flat_precision.reshape(self._dense_size, self._dense_size)
+        info_vec = torch.zeros(self._dense_size)
+        log_normalizer = torch.zeros(())
+        g = Gaussian(log_normalizer, info_vec, precision)
+
+        # Draw a batch of samples.
+        particle_plates = frozenset(get_plates())
+        sample_shape = [1] * max([0] + [-p.dim for p in particle_plates])
+        for p in particle_plates:
+            sample_shape[p.dim] = p.size
+        sample_shape = torch.Size(sample_shape)
+        flat_samples = g.rsample(sample_shape)
+        log_density = g.log_density(flat_samples) - g.event_logsumexp()
+
+        # Convert flat to shaped tensors.
+        samples = {}
+        pos = 0
+        for d, (batch_shape, event_shape) in self._dense_shapes.items():
+            numel = _deep_getattr(self.locs, d).numel()
+            flat_sample = flat_samples[pos : pos + numel]
+            pos += numel
+            # Assumes sample shapes are left of batch shapes.
+            samples[d] = flat_sample.reshape(
+                torch.broadcast_shapes(sample_shape, batch_shape) + event_shape
+            )
+        return samples, log_density
+
+    ############################################################################
+    # Funsor backend
 
     def _funsor_setup_prototype(self, *args, **kwargs):
         try:
