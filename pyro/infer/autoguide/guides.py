@@ -1737,30 +1737,23 @@ class AutoGaussian(AutoGuide):
         self.locs = PyroModule()
         self.scales = PyroModule()
         self.precision_chols = PyroModule()
+        self._sorted_sites = OrderedDict()
         self._unconstrained_event_shapes = {}
-        self._broken_event_shapes = {}
-        self._broken_plates = defaultdict(tuple)
 
         model = self._original_model[0]
         meta = poutine.block(get_dependencies)(model, args, kwargs)
         self.dependencies = meta["prior_dependencies"]
-        broken_plates: Set[str] = {
-            p
-            for upstreams in meta["posterior_dependencies"].values()
-            for plates in upstreams.values()
-            for p in plates
-        }
-        self._sorted_sites = {
-            name: site
-            for name, site in self.prototype_trace.nodes.items()
-            if site["type"] == "sample"
-            if not site_is_subsample(site)
-        }
+        for name, site in self.prototype_trace.nodes.items():
+            if site["type"] == "sample":
+                if not site_is_subsample(site):
+                    self._sorted_sites[name] = site
         for d, site in self._sorted_sites.items():
             precision_size = 0
             precision_plates: Set[CondIndepStackFrame] = set()
             if not site["is_observed"]:
                 # Initialize latent variable location-scale parameters.
+                # The scale parameters are statistically redundant, but improve
+                # learning with coordinate-wise optimizers.
                 with helpful_support_errors(site):
                     init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
                 init_scale = torch.full_like(init_loc, self._init_scale)
@@ -1780,21 +1773,27 @@ class AutoGaussian(AutoGuide):
                 )
 
                 # Gather shapes for precision matrices.
-                broken_shape = torch.Size()
                 for f in site["cond_indep_stack"]:
                     if f.vectorized:
-                        if f.name in broken_plates:
-                            self._broken_plates[d] += (f.name,)
-                            broken_shape += (f.size,)
-                        else:
-                            precision_plates.add(f)
-                self._broken_event_shapes[d] = broken_shape + event_shape
+                        precision_plates.add(f)
+                precision_size.add(event_shape.numel())
 
             # Initialize precision matrices.
+            # This adds a batched dense matrix for each factor, achieving
+            # statistically optimal sparsity structure of the model's joint
+            # precision matrix. Multiple factors may redundantly parametrize
+            # entries of the precision matrix on which they overlap, incurring
+            # slight computational cost but no cost to statistical efficiency.
             for u in self.dependencies[d]:
-                precision_size += self._broken_event_shapes[u].numel()
-                for f in self.prototype_trace.nodes[u]["cond_indep_stack"]:
-                    assert f in precision_plates or f.name in broken_plates
+                u_site = self.prototype_trace.nodes[u]
+                u_numel = self._unconstrained_event_shapes[u].numel()
+                for f in u_site["cond_indep_stack"]:
+                    if f.vectorized:
+                        if f in site["cond_indep_stack"]:
+                            precision_plates.add(f)
+                        else:
+                            u_numel *= f.size
+                precision_size += u_numel
             batch_shape = torch.Size(
                 f.size for f in sorted(precision_plates, key=lambda f: f.dim)
             )
