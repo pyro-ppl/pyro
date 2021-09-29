@@ -1,9 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 from contextlib import contextmanager
 
 from pyro import poutine
+from pyro.nn.module import PyroModule
 
 
 def _product(shape):
@@ -14,6 +16,32 @@ def _product(shape):
     for size in shape:
         result *= size
     return result
+
+
+def deep_getattr(obj, key):
+    for part in key.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
+def deep_setattr(obj, key, val):
+    """
+    Set an attribute `key` on the object. If any of the prefix attributes do
+    not exist, they are set to :class:`~pyro.nn.PyroModule`.
+    """
+
+    def _getattr(obj, attr):
+        obj_next = getattr(obj, attr, None)
+        if obj_next is not None:
+            return obj_next
+        setattr(obj, attr, PyroModule())
+        return getattr(obj, attr)
+
+    lpart, _, rpart = key.rpartition(".")
+    # Recursive getattr while setting any prefix attributes to PyroModule
+    if lpart:
+        obj = functools.reduce(_getattr, [obj] + lpart.split("."))
+    setattr(obj, rpart, val)
 
 
 def mean_field_entropy(model, args, whitelist=None):

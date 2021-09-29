@@ -15,7 +15,6 @@ from pyro.infer.autoguide.guides import (
     AutoMultivariateNormal,
     AutoNormal,
     AutoNormalizingFlow,
-    AutoStructured,
 )
 from pyro.infer.autoguide.initialization import (
     init_to_feasible,
@@ -26,6 +25,7 @@ from pyro.infer.autoguide.initialization import (
     init_to_uniform,
     init_to_value,
 )
+from pyro.infer.autoguide.structured import AutoStructured
 from pyro.infer.autoguide.utils import mean_field_entropy
 
 __all__ = [
