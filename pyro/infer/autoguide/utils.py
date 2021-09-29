@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
-
-from pyro.nn.module import PyroModule
 from contextlib import contextmanager
 
 from pyro import poutine
+from pyro.nn.module import PyroModule
 
 
 def _product(shape):
