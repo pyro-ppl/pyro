@@ -5,7 +5,7 @@ from contextlib import ExitStack
 
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.autoguide.guides import AutoStructured
+from pyro.infer.autoguide.structured import AutoStructured
 from pyro.poutine.plate_messenger import block_plate
 
 from .reparam import Reparam
