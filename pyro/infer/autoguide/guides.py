@@ -1880,7 +1880,7 @@ class AutoGaussian(AutoGuide):
     # Dense backend
 
     def _dense_setup_prototype(self, *args, **kwargs):
-        # Collect flat and individual shapes.
+        # Collect flat and individual and aggregated flat shapes.
         self._dense_shapes = {}
         pos = 0
         offsets = {}
@@ -1907,7 +1907,7 @@ class AutoGaussian(AutoGuide):
                 event_indices.append(torch.arange(start, stop))
             if not site["is_observed"]:
                 start = offsets[d]
-                stop = start + self._broken_event_shapes[d].numel()
+                stop = start + self._unconstrained_event_shapes[d].numel()
                 event_indices.append(torch.arange(start, stop))
             event_index = torch.cat(event_indices)
             precision_shape = _deep_getattr(self.precision_chols, d).shape
