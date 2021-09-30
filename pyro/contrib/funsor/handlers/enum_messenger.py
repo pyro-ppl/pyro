@@ -19,6 +19,7 @@ from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.replay_messenger import ReplayMessenger
 from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
 from pyro.poutine.escape_messenger import EscapeMessenger
+from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.poutine.subsample_messenger import _Subsample
 
 funsor.set_backend("torch")
@@ -179,6 +180,38 @@ def enumerate_site(dist, msg):
     raise ValueError("{} not valid enum strategy".format(msg))
 
 
+class ProvenanceMessenger(ReentrantMessenger):
+    def _pyro_sample(self, msg):
+        if (
+            msg["done"]
+            or msg["is_observed"]
+            or msg["infer"].get("enumerate") == "parallel"
+            or isinstance(msg["fn"], _Subsample)
+        ):
+            return
+
+        if "funsor" not in msg:
+            msg["funsor"] = {}
+
+        unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
+            value=msg["name"]
+        )
+        msg["funsor"]["log_measure"] = _enum_strategy_default(
+            unsampled_log_measure, msg
+        )
+        support_value = _get_support_value(
+            msg["funsor"]["log_measure"],
+            msg["name"],
+            expand=msg["infer"].get("expand", False),
+        )
+        msg["funsor"]["value"] = funsor.constant.Constant(
+            OrderedDict(((msg["name"], support_value.output),)),
+            support_value,
+        )
+        msg["value"] = to_data(msg["funsor"]["value"])
+        msg["done"] = True
+
+
 class EnumMessenger(NamedMessenger):
     """
     This version of :class:`~EnumMessenger` uses :func:`~pyro.contrib.funsor.to_data`
@@ -201,14 +234,10 @@ class EnumMessenger(NamedMessenger):
             value=msg["name"]
         )
         msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
-        support_value = _get_support_value(
+        msg["funsor"]["value"] = _get_support_value(
             msg["funsor"]["log_measure"],
             msg["name"],
             expand=msg["infer"].get("expand", False),
-        )
-        msg["funsor"]["value"] = funsor.constant.Constant(
-            OrderedDict(((msg["name"], funsor.Real),)),
-            support_value,
         )
         msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
