@@ -9,7 +9,7 @@ from funsor.adjoint import AdjointTape
 from funsor.constant import Constant
 
 from pyro.contrib.funsor import to_data, to_funsor
-from pyro.contrib.funsor.handlers import plate, provenance, replay, trace
+from pyro.contrib.funsor.handlers import enum, plate, provenance, replay, trace
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import Trace_ELBO as _OrigTrace_ELBO
 
@@ -20,7 +20,12 @@ from .traceenum_elbo import apply_optimizer, terms_from_trace
 @copy_docs_from(_OrigTrace_ELBO)
 class Trace_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with provenance(), plate(
+        with enum(
+            first_available_dim=(-self.max_plate_nesting - 1)
+            if self.max_plate_nesting is not None
+            and self.max_plate_nesting != float("inf")
+            else None
+        ), provenance(), plate(
             name="num_particles_vectorized",
             size=self.num_particles,
             dim=-self.max_plate_nesting,
@@ -31,8 +36,28 @@ class Trace_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
 
-        # cost terms
-        costs = model_terms["log_factors"] + [-f for f in guide_terms["log_factors"]]
+        # identify and contract out auxiliary variables in the model with partial_sum_product
+        contracted_factors, uncontracted_factors = [], []
+        for f in model_terms["log_factors"]:
+            if model_terms["measure_vars"].intersection(f.inputs):
+                contracted_factors.append(f)
+            else:
+                uncontracted_factors.append(f)
+        # incorporate the effects of subsampling and handlers.scale through a common scale factor
+        contracted_costs = [
+            model_terms["scale"] * f
+            for f in funsor.sum_product.partial_sum_product(
+                funsor.ops.logaddexp,
+                funsor.ops.add,
+                model_terms["log_measures"] + contracted_factors,
+                plates=model_terms["plate_vars"],
+                eliminate=model_terms["measure_vars"],
+            )
+        ]
+
+        # accumulate costs from model (logp) and guide (-logq)
+        costs = contracted_costs + uncontracted_factors  # model costs: logp
+        costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
 
         plate_vars = (
             guide_terms["plate_vars"] | model_terms["plate_vars"]
