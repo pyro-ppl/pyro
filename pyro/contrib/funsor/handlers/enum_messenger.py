@@ -71,6 +71,7 @@ def _enum_strategy_default(dist, msg):
         if f.vectorized and f.name not in dist.inputs
     )
     sampled_dist = dist.sample(msg["name"], sample_inputs)
+    sampled_dist -= sum([math.log(v.size) for v in sample_inputs.values()], 0)
     return sampled_dist
 
 
@@ -87,11 +88,15 @@ def _enum_strategy_diagonal(dist, msg):
     )
     # TODO should the ancestor_indices be pyro.observed?
     ancestor_indices = {name: sample_dim_name for name in ancestor_names}
+    denom = (
+        sum([math.log(v.size) for v in sample_inputs.values()], 0)
+        if not ancestor_indices
+        else math.log(msg["infer"]["num_samples"])
+    )
     sampled_dist = dist(**ancestor_indices).sample(
         msg["name"], sample_inputs if not ancestor_indices else None
     )
-    if ancestor_indices:  # XXX is there a better way to account for this in funsor?
-        sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
+    sampled_dist -= denom
     return sampled_dist
 
 
@@ -126,11 +131,15 @@ def _enum_strategy_mixture(dist, msg):
         )
         for name in ancestor_names
     }
+    denom = (
+        sum([math.log(v.size) for v in sample_inputs.values()], 0)
+        if not ancestor_indices
+        else math.log(msg["infer"]["num_samples"])
+    )
     sampled_dist = dist(**ancestor_indices).sample(
         msg["name"], sample_inputs if not ancestor_indices else None
     )
-    if ancestor_indices:  # XXX is there a better way to account for this in funsor?
-        sampled_dist = sampled_dist - math.log(msg["infer"]["num_samples"])
+    sampled_dist -= denom
     return sampled_dist
 
 
@@ -140,6 +149,7 @@ def _enum_strategy_full(dist, msg):
         {sample_dim_name: funsor.Bint[msg["infer"]["num_samples"]]}
     )
     sampled_dist = dist.sample(msg["name"], sample_inputs)
+    sampled_dist -= math.log(msg["infer"]["num_samples"])
     return sampled_dist
 
 
