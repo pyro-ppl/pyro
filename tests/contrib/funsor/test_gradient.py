@@ -144,7 +144,7 @@ def test_gradient(model, guide, data):
         (model_2, guide_2, torch.tensor([0.0, 1.0])),
     ],
 )
-def test_enum_gradient(model, guide, data):
+def test_guide_enum_gradient(model, guide, data):
 
     # Expected grads based on exact integration
     with pyro_backend("pyro"):
@@ -176,4 +176,4 @@ def test_enum_gradient(model, guide, data):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
         logger.info("actual   {} = {}".format(name, actual_grads[name]))
 
-    assert_equal(actual_grads, expected_grads, prec=1e-3)
+    assert_equal(actual_grads, expected_grads, prec=1e-4)
