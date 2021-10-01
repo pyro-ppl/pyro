@@ -98,11 +98,10 @@ class Trace_ELBO(ELBO):
                 elbo += elbo_term.reduce(
                     funsor.ops.add, plate_vars & frozenset(cost.inputs)
                 )
+            # average over Monte-Carlo particles
             elbo = elbo.reduce(funsor.ops.mean)
 
-        # evaluate the elbo, using memoize to share tensor computation where possible
-        with funsor.interpretations.memoize():
-            return -to_data(apply_optimizer(elbo))
+        return -to_data(apply_optimizer(elbo))
 
 
 class JitTrace_ELBO(Jit_ELBO, Trace_ELBO):
