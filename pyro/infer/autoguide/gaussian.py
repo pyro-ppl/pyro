@@ -14,7 +14,6 @@ import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.infer.inspect import get_dependencies
 from pyro.nn.module import PyroModule, PyroParam
-from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.poutine.runtime import am_i_wrapped, get_plates
 from pyro.poutine.util import site_is_subsample
 
@@ -79,21 +78,8 @@ class AutoGaussian(AutoGuide):
         elimination. Defaults to "dense"; other options include "funsor".
     """
 
-    # Class configurable parameters.
     default_backend: str = "dense"
     scale_constraint = constraints.softplus_positive
-
-    # Type hints for instance variables.
-    backend: str
-    locs: PyroModule
-    scales: PyroModule
-    precision_chols: PyroModule
-    _sorted_sites: Dict[str, Dict[str, object]]
-    _init_scale: float
-    _original_model: Tuple[Callable]
-    _unconstrained_event_shapes: Dict[str, torch.Size]
-    _broken_event_shapes: Dict[str, torch.Size]
-    _broken_plates: Dict[str, Tuple[str, ...]]
 
     def __init__(
         self,
@@ -117,73 +103,69 @@ class AutoGaussian(AutoGuide):
 
         self.locs = PyroModule()
         self.scales = PyroModule()
-        self.precision_chols = PyroModule()
-        self._sorted_sites = OrderedDict()
-        self._unconstrained_event_shapes = {}
+        self.factors = PyroModule()
+        self._factors = OrderedDict()
+        self._plates = OrderedDict()
+        self._event_numel = OrderedDict()
+        self._unconstrained_event_shapes = OrderedDict()
 
+        # Trace model dependencies.
         model = self._original_model[0]
-        meta = poutine.block(get_dependencies)(model, args, kwargs)
-        self.dependencies = meta["prior_dependencies"]
+        self.dependencies = poutine.block(get_dependencies)(model, args, kwargs)[
+            "prior_dependencies"
+        ]
+
+        # Collect factors and plates.
         for name, site in self.prototype_trace.nodes.items():
-            if site["type"] == "sample":
-                if not site_is_subsample(site):
-                    self._sorted_sites[name] = site
-        for d, site in self._sorted_sites.items():
-            precision_size = 0
-            precision_plates: Set[CondIndepStackFrame] = set()
+            if site["type"] == "sample" and not site_is_subsample(site):
+                assert all(f.vectorized for f in site["cond_indep_stack"])
+                self._factors[name] = site
+                plates = frozenset(site["cond_indep_stack"])
+                if site["is_observed"]:
+                    # Eagerly eliminate irrelevant observation plates.
+                    plates &= frozenset.union(
+                        *(self._plates[u] for u in self.dependencies[d] if u != d)
+                    )
+                self._plates[name] = plates
+
+        # Create location-scale parameters, one per latent variable.
+        for d, site in self._factors.items():
             if not site["is_observed"]:
-                # Initialize latent variable location-scale parameters.
-                # The scale parameters are statistically redundant, but improve
-                # learning with coordinate-wise optimizers.
                 with helpful_support_errors(site):
                     init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
-                init_scale = torch.full_like(init_loc, self._init_scale)
                 batch_shape = site["fn"].batch_shape
                 event_shape = init_loc.shape[len(batch_shape) :]
                 self._unconstrained_event_shapes[d] = event_shape
+                self._event_numel[d] = event_shape.numel()
                 event_dim = len(event_shape)
                 deep_setattr(self.locs, d, PyroParam(init_loc, event_dim=event_dim))
                 deep_setattr(
                     self.scales,
                     d,
                     PyroParam(
-                        init_scale,
+                        torch.full_like(init_loc, self._init_scale),
                         constraint=self.scale_constraint,
                         event_dim=event_dim,
                     ),
                 )
 
-                # Gather shapes for precision matrices.
-                for f in site["cond_indep_stack"]:
-                    if f.vectorized:
-                        precision_plates.add(f)
-                precision_size.add(event_shape.numel())
-
-            # Initialize precision matrices.
-            # This adds a batched dense matrix for each factor, achieving
-            # statistically optimal sparsity structure of the model's joint
-            # precision matrix. Multiple factors may redundantly parametrize
-            # entries of the precision matrix on which they overlap, incurring
-            # slight computational cost but no cost to statistical efficiency.
+        # Create parameters for dependencies, one per factor.
+        for d, site in self._factors.items():
+            u_size = 0
             for u in self.dependencies[d]:
-                u_site = self.prototype_trace.nodes[u]
-                u_numel = self._unconstrained_event_shapes[u].numel()
-                for f in u_site["cond_indep_stack"]:
-                    if f.vectorized:
-                        if f in site["cond_indep_stack"]:
-                            precision_plates.add(f)
-                        else:
-                            u_numel *= f.size
-                precision_size += u_numel
-            batch_shape = torch.Size(
-                f.size for f in sorted(precision_plates, key=lambda f: f.dim)
-            )
-            eye = torch.eye(precision_size) + torch.zeros(batch_shape + (1, 1))
-            deep_setattr(
-                self.precision_chols,
-                d,
-                PyroParam(eye, constraint=constraints.lower_cholesky, event_dim=2),
-            )
+                if not self._factors[u]["is_observed"]:
+                    broken_shape = _plates_to_batch_shape(
+                        self._plates[u] - self._plates[d]
+                    )
+                    u_size += broken_shape.numel() * self._event_numel[u]
+            d_size = self._event_numel[d]
+            if site["is_observed"]:
+                d_size = min(d_size, u_size)  # just an optimization
+            batch_shape = _plates_to_batch_shape(self._plates[d])
+
+            # Create a square root (not necessarily lower triangular).
+            raw = init_loc.new_zeros(batch_shape, u_size, d_size)
+            deep_setattr(self, self.factors, raw, event_dim=2)
 
         # Dispatch to backend logic.
         backend_fn = getattr(self, f"_{self.backend}_setup_prototype", None)
@@ -199,7 +181,7 @@ class AutoGaussian(AutoGuide):
 
         # Replay via Pyro primitives.
         plates = self._create_plates(*args, **kwargs)
-        for name, site in self._sorted_sites.items():
+        for name, site in self._factors.items():
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
@@ -220,7 +202,7 @@ class AutoGaussian(AutoGuide):
         :rtype: dict
         """
         with torch.no_grad(), poutine.mask(mask=False):
-            aux_values = {name: 0.0 for name in self._sorted_sites}
+            aux_values = {name: 0.0 for name in self._factors}
             values, _ = self._transform_values(aux_values)
         return values
 
@@ -232,7 +214,7 @@ class AutoGaussian(AutoGuide):
         values = {}
         log_densities = defaultdict(float)
         compute_density = am_i_wrapped() and poutine.get_mask() is not False
-        for name, site in self._sorted_sites.items():
+        for name, site in self._factors.items():
             loc = deep_getattr(self.locs, name)
             scale = deep_getattr(self.scales, name)
             unconstrained = aux_values[name] * scale + loc
@@ -258,40 +240,48 @@ class AutoGaussian(AutoGuide):
         return backend_fn()
 
     ############################################################################
-    # Dense backend
+    # Dense backend. Methods and attributes are prefixed by ._dense_
 
     def _dense_setup_prototype(self, *args, **kwargs):
         # Collect flat and individual and aggregated flat shapes.
         self._dense_shapes = {}
+        dense_gather = {}
         pos = 0
-        offsets = {}
         for d, event_shape in self._unconstrained_event_shapes.items():
-            batch_shape = self.prototype_trace.nodes[d]["fn"].batch_shape
+            batch_shape = self._factors[d]["fn"].batch_shape
             self._dense_shapes[d] = batch_shape, event_shape
-            offsets[d] = pos
-            pos += (batch_shape + event_shape).numel()
+            shape = batch_shape + event_shape
+            end = pos + shape.numel()
+            dense_gather[d] = torch.arange(pos, end).reshape(shape)
+            pos = end
         self._dense_size = pos
 
-        # Create sparse -> dense precision matrix maps.
-        self._dense_factor_scatter = {}
-        for d, site in self._sorted_sites.items():
-            # Order inputs as in the model, so as to maximize sparsity of the
-            # lower Cholesky parametrization of the precision matrix.
-            event_indices = []
-            for f in site["cond_indep_stack"]:
-                if f.vectorized:
-                    if f.name not in self._broken_plates[d]:
-                        f.size
+        # Create sparse -> dense precision scatter indices.
+        self._dense_scatter = {}
+        for d, site in self._factors.items():
+            raw_shape = deep_getattr(self.factors, d).shape
+            precision_shape = raw_shape[:-1] + raw_shape[-2:-1]
+            index = torch.zeros(precision_shape, dtype=torch.long)
             for u in self.dependencies[d]:
-                start = offsets[u]
-                stop = start + self._broken_event_shapes[u].numel()
-                event_indices.append(torch.arange(start, stop))
-            if not site["is_observed"]:
-                start = offsets[d]
-                stop = start + self._unconstrained_event_shapes[d].numel()
-                event_indices.append(torch.arange(start, stop))
+                if not self._factors[u]["is_observed"]:
+                    batch_plates = self._plates[u] & self._plates[d]  # linear
+                    broken_plates = self._plates[u] - self._plates[d]  # quadratic
+                    event_numel = self._event_numel[u]  # quadratic
+                    "TODO"
+            self._dense_scatter[d] = index.reshape(-1)
+
+        #########################################################
+        # OLD
+        for d, site in self._factors.items():
+            event_indices = []
+            for u in self.dependencies[d]:
+                if not self._factors[u]["is_observed"]:
+                    start = offsets[u]
+                    stop = start + "TODO"
+                    event_indices.append(torch.arange(start, stop))
             event_index = torch.cat(event_indices)
-            precision_shape = deep_getattr(self.precision_chols, d).shape
+            raw_shape = deep_getattr(self.factors, d).shape
+            precision_shape = raw_shape[:-1] + raw_shape[-2:-1]
             index = torch.zeros(precision_shape, dtype=torch.long)
             stride = 1
             index += event_index * stride
@@ -299,7 +289,7 @@ class AutoGaussian(AutoGuide):
             index += event_index[:, None] * stride
             stride *= self._dense_size
             # TODO add batch shapes
-            self._dense_factor_scatter[d] = index.reshape(-1)
+            self._dense_scatter[d] = index.reshape(-1)
 
     def _dense_sample_aux_values(
         self,
@@ -308,9 +298,9 @@ class AutoGaussian(AutoGuide):
 
         # Convert to a flat dense joint Gaussian.
         flat_precision = torch.zeros(self._dense_size ** 2)
-        for d, index in self._dense_factor_scatter:
-            precision_chol = deep_getattr(self.precision_chols, d)
-            precision = precision_chol @ precision_chol.transpose(-1, -2)
+        for d, index in self._dense_scatter:
+            raw = deep_getattr(self.factors, d)
+            precision = _raw_to_precision(raw)
             flat_precision.scatter_add_(0, index, precision.reshape(-1))
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
         info_vec = torch.zeros(self._dense_size)
@@ -330,9 +320,9 @@ class AutoGaussian(AutoGuide):
         samples = {}
         pos = 0
         for d, (batch_shape, event_shape) in self._dense_shapes.items():
-            numel = deep_getattr(self.locs, d).numel()
-            flat_sample = flat_samples[pos : pos + numel]
-            pos += numel
+            end = pos + self._event_numel[d]
+            flat_sample = flat_samples[pos:end]
+            pos = end
             # Assumes sample shapes are left of batch shapes.
             samples[d] = flat_sample.reshape(
                 torch.broadcast_shapes(sample_shape, batch_shape) + event_shape
@@ -340,7 +330,7 @@ class AutoGaussian(AutoGuide):
         return samples, log_density
 
     ############################################################################
-    # Funsor backend
+    # Funsor backend. Methods and attributes are prefixed by ._funsor_
 
     def _funsor_setup_prototype(self, *args, **kwargs):
         try:
@@ -357,7 +347,7 @@ class AutoGaussian(AutoGuide):
         eliminate: Set[str] = set()
         plate_to_dim: Dict[str, int] = {}
 
-        for d, site in self._sorted_sites.items():
+        for d, site in self._factors.items():
             # Order inputs as in the model, so as to maximize sparsity of the
             # lower Cholesky parametrization of the precision matrix.
             inputs = OrderedDict()
@@ -413,3 +403,19 @@ class AutoGaussian(AutoGuide):
         log_density = funsor.to_data(log_prob, name_to_dim=plate_to_dim)
 
         return samples, log_density
+
+
+def _raw_to_precision(raw):
+    """
+    Transform an unconstrained matrix of shape ``batch_shape + (m, n)`` to a
+    positive semidefinite precision matrix of shape ``batch_shape + (m, m)``.
+    Typically ``m >= n``.
+    """
+    return raw @ raw.transpose(dim1=-2, dim2=-1)
+
+
+def _plates_to_batch_shape(plates):
+    shape = [1] * max([0] + [-f.dim for f in plates])
+    for f in plates:
+        shape[f.dim] = f.size
+    return torch.Size(shape)
