@@ -81,7 +81,7 @@ class Trace_ELBO(ELBO):
         log_measures = tape.adjoint(
             funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values())
         )
-        with funsor.terms.eager:
+        with funsor.terms.lazy:
             # finally, integrate out guide variables in the elbo and all plates
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
