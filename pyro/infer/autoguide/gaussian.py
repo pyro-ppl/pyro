@@ -116,17 +116,17 @@ class AutoGaussian(AutoGuide):
         ]
 
         # Collect factors and plates.
-        for name, site in self.prototype_trace.nodes.items():
+        for d, site in self.prototype_trace.nodes.items():
             if site["type"] == "sample" and not site_is_subsample(site):
                 assert all(f.vectorized for f in site["cond_indep_stack"])
-                self._factors[name] = site
+                self._factors[d] = site
                 plates = frozenset(site["cond_indep_stack"])
                 if site["is_observed"]:
                     # Eagerly eliminate irrelevant observation plates.
                     plates &= frozenset.union(
                         *(self._plates[u] for u in self.dependencies[d] if u != d)
                     )
-                self._plates[name] = plates
+                self._plates[d] = plates
 
         # Create location-scale parameters, one per latent variable.
         for d, site in self._factors.items():
@@ -164,8 +164,8 @@ class AutoGaussian(AutoGuide):
             batch_shape = _plates_to_batch_shape(self._plates[d])
 
             # Create a square root (not necessarily lower triangular).
-            raw = init_loc.new_zeros(batch_shape, u_size, d_size)
-            deep_setattr(self, self.factors, raw, event_dim=2)
+            raw = init_loc.new_zeros(batch_shape + (u_size, d_size))
+            deep_setattr(self.factors, d, PyroParam(raw, event_dim=2))
 
         # Dispatch to backend logic.
         backend_fn = getattr(self, f"_{self.backend}_setup_prototype", None)
@@ -291,18 +291,22 @@ class AutoGaussian(AutoGuide):
             # TODO add batch shapes
             self._dense_scatter[d] = index.reshape(-1)
 
-    def _dense_sample_aux_values(
-        self,
-    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
-        from pyro.ops import Gaussian
-
-        # Convert to a flat dense joint Gaussian.
+    def _dense_get_precision(self):
         flat_precision = torch.zeros(self._dense_size ** 2)
         for d, index in self._dense_scatter:
             raw = deep_getattr(self.factors, d)
             precision = _raw_to_precision(raw)
             flat_precision.scatter_add_(0, index, precision.reshape(-1))
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
+        return precision
+
+    def _dense_sample_aux_values(
+        self,
+    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
+        from pyro.ops import Gaussian
+
+        # Convert to a flat dense joint Gaussian.
+        precision = self._dense_get_precision()
         info_vec = torch.zeros(self._dense_size)
         log_normalizer = torch.zeros(())
         g = Gaussian(log_normalizer, info_vec, precision)

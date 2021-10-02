@@ -14,10 +14,123 @@ from pyro.infer.autoguide import AutoGaussian
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
 
+from tests.common import assert_equal
+
 BACKENDS = [
     "dense",
     pytest.param("funsor", marks=[pytest.mark.stage("funsor")]),
 ]
+
+
+def check_structure(model, expected_str):
+    guide = AutoGaussian(model, backend="dense")
+    guide()  # initialize
+
+    # Inject random noise into all unconstrained parameters.
+    for parameter in guide.parameters():
+        parameter.normal_()
+
+    with torch.no_grad():
+        precision = guide._dense_get_gaussian().precision()
+        actual = precision.abs().gt(1e-5).long()
+
+    str_to_number = {"?": 1, ".": 0}
+    expected = torch.tensor(
+        [[str_to_number[c] for c in row if c != " "] for row in expected_str]
+    )
+    assert_equal(actual, expected)
+
+
+def test_structure_1():
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.Normal(a, 1))
+        c = pyro.sample("c", dist.Normal(b, 1))
+        pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
+
+    expected = [
+        "? ? .",
+        "? ? ?",
+        ". ? ?",
+    ]
+    check_structure(model, expected)
+
+
+def test_structure_2():
+
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.Normal(0, 1))
+        with pyro.plate("i", 2):
+            c = pyro.sample("c", dist.Normal(a, b.exp()))
+            pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
+
+    # size = 1 + 1 + 2 = 4
+    expected = [
+        "? . ? ?",
+        ". ? ? ?",
+        "? ? ? .",
+        "? ? . ?",
+    ]
+    check_structure(model, expected)
+
+
+def test_structure_3():
+    I, J = 2, 3
+
+    def model():
+        i_plate = pyro.plate("i", I, dim=-1)
+        j_plate = pyro.plate("j", J, dim=-2)
+        with i_plate:
+            w = pyro.sample("w", dist.Normal(0, 1))
+        with j_plate:
+            x = pyro.sample("x", dist.Normal(0, 1))
+        with i_plate, j_plate:
+            y = pyro.sample("y", dist.Normal(w, x.exp()))
+            pyro.sample("z", dist.Normal(0, 1), obs=y)
+
+    # size = 2 + 3 + 2 * 3 = 2 + 3 + 6 = 11
+    expected = [
+        "? . . . . ? . ? . ? .",
+        ". ? . . . . ? . ? . ?",
+        ". . ? . . ? ? . . . .",
+        ". . . ? . . . ? ? . .",
+        ". . . . ? . . . . ? ?",
+        "? . ? . . ? . . . . .",
+        ". ? ? . . . ? . . . .",
+        "? . . ? . . . ? . . .",
+        ". ? . ? . . . . ? . .",
+        "? . . . ? . . . . ? .",
+        ". ? . . ? . . . . . ?",
+    ]
+    check_structure(model, expected)
+
+
+def test_structure_4():
+    I, J = 2, 3
+
+    def model():
+        i_plate = pyro.plate("i", I, dim=-1)
+        j_plate = pyro.plate("j", J, dim=-2)
+        a = pyro.sample("a", dist.Normal(0, 1))
+        with i_plate:
+            b = pyro.sample("b", dist.Normal(a, 1))
+        with j_plate:
+            c = pyro.sample("c", dist.Normal(b.mean(), 1))
+        d = pyro.sample("d", dist.Normal(c.mean(), 1))
+        pyro.sample("e", dist.Normal(0, 1), obs=d)
+
+    # size = 1 + 2 + 3 + 1 = 7
+    expected = [
+        "? ? ? . . . .",
+        "? ? . ? ? ? .",
+        "? . ? ? ? ? .",
+        ". ? ? ? . . ?",
+        ". ? ? . ? . ?",
+        ". ? ? . . ? ?",
+        ". . . ? ? ? ?",
+    ]
+    check_structure(model, expected)
 
 
 # Simplified from https://github.com/pyro-cov/tree/master/pyrocov/mutrans.py
@@ -272,7 +385,7 @@ def test_pyrocov_structure(backend):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_profile(n=1, num_steps=1, backend="funsor"):
+def test_profile(backend, n=1, num_steps=1):
     """
     Helper function for profiling.
     """
@@ -301,4 +414,4 @@ def test_profile(n=1, num_steps=1, backend="funsor"):
 
 
 if __name__ == "__main__":
-    test_profile(n=10, num_steps=100, backend="funsor")
+    test_profile(backend="funsor", n=10, num_steps=100)
