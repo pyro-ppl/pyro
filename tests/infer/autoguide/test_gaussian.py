@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 import pytest
 import torch
@@ -11,6 +11,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Predictive, Trace_ELBO
 from pyro.infer.autoguide import AutoGaussian
+from pyro.infer.autoguide.gaussian import _break_plates
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
 from tests.common import assert_equal
@@ -21,16 +22,59 @@ BACKENDS = [
 ]
 
 
+MockPlate = namedtuple("MockPlate", "dim, size")
+
+
+def test_break_plates():
+    shape = torch.Size([5, 4, 3, 2])
+    i = MockPlate(-3, 5)
+    j = MockPlate(-2, 4)
+    k = MockPlate(-1, 3)
+    x = torch.arange(shape.numel()).reshape(shape)
+
+    actual = _break_plates(x, {i, j, k}, set())
+    expected = x.reshape(-1)
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {i})
+    expected = x.reshape(5, 1, 1, -1)
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {j})
+    expected = x.permute((1, 0, 2, 3)).reshape(4, 1, -1)
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {k})
+    expected = x.permute((2, 0, 1, 3)).reshape(3, -1)
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {i, j})
+    expected = x.reshape(5, 4, 1, -1)
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {i, k})
+    expected = x.permute((0, 2, 1, 3)).reshape(5, 1, 3, -1)
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {j, k})
+    expected = x.permute((1, 2, 0, 3)).reshape(4, 3, -1)
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {i, j, k})
+    expected = x
+    assert_equal(actual, expected)
+
+
 def check_structure(model, expected_str):
     guide = AutoGaussian(model, backend="dense")
     guide()  # initialize
 
     # Inject random noise into all unconstrained parameters.
     for parameter in guide.parameters():
-        parameter.normal_()
+        parameter.data.normal_()
 
     with torch.no_grad():
-        precision = guide._dense_get_gaussian().precision()
+        precision = guide._get_precision()
         actual = precision.abs().gt(1e-5).long()
 
     str_to_number = {"?": 1, ".": 0}

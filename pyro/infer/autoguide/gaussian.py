@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import itertools
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
 from typing import Callable, Dict, Set, Tuple, Union
@@ -106,7 +107,6 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         init_scale: float = 0.1,
         backend=None,
     ):
-        assert backend is not None
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
         self._init_scale = init_scale
@@ -170,17 +170,17 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
             u_size = 0
             for u in self.dependencies[d]:
                 if not self._factors[u]["is_observed"]:
-                    broken_shape = _plates_to_batch_shape(
-                        self._plates[u] - self._plates[d]
-                    )
+                    broken_shape = _plates_to_shape(self._plates[u] - self._plates[d])
                     u_size += broken_shape.numel() * self._event_numel[u]
             d_size = self._event_numel[d]
             if site["is_observed"]:
                 d_size = min(d_size, u_size)  # just an optimization
-            batch_shape = _plates_to_batch_shape(self._plates[d])
+            batch_shape = _plates_to_shape(self._plates[d])
 
             # Create a square root parameter (full, not lower triangular).
             sqrt = init_loc.new_zeros(batch_shape + (u_size, d_size))
+            if d in self.dependencies[d]:
+                sqrt += torch.eye(u_size, d_size)
             deep_setattr(self.factors, d, PyroParam(sqrt, event_dim=2))
 
     def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
@@ -248,25 +248,29 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
 
 class AutoGaussianDense(AutoGaussian):
-    # Dense implementation of :class:`AutoGaussian` .
+    """
+    Dense implementation of :class:`AutoGaussian` .
+
+    The following are equivalent::
+
+        guide = AutoGaussian(model, backend="dense")
+        guide = AutoGaussianDense(model)
+    """
+
     # Attributes are prefixed by ._dense_
-    # The following are equivalent:
-    #     guide = AutoGaussian(model, backend="dense")
-    #     guide = AutoGaussianDense(model)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
 
-        # Collect flat and individual and aggregated flat shapes.
+        # Collect global shapes and per-axis indices.
         self._dense_shapes = {}
-        dense_gather = {}
+        global_indices = {}
         pos = 0
         for d, event_shape in self._unconstrained_event_shapes.items():
             batch_shape = self._factors[d]["fn"].batch_shape
             self._dense_shapes[d] = batch_shape, event_shape
-            shape = batch_shape + event_shape
-            end = pos + shape.numel()
-            dense_gather[d] = torch.arange(pos, end).reshape(shape)
+            end = pos + (batch_shape + event_shape).numel()
+            global_indices[d] = torch.arange(pos, end).reshape(batch_shape + (-1,))
             pos = end
         self._dense_size = pos
 
@@ -276,50 +280,42 @@ class AutoGaussianDense(AutoGaussian):
             sqrt_shape = deep_getattr(self.factors, d).shape
             precision_shape = sqrt_shape[:-1] + sqrt_shape[-2:-1]
             index = torch.zeros(precision_shape, dtype=torch.long)
-            for u in self.dependencies[d]:
-                if not self._factors[u]["is_observed"]:
-                    batch_plates = self._plates[u] & self._plates[d]  # linear
-                    broken_plates = self._plates[u] - self._plates[d]  # quadratic
-                    event_numel = self._event_numel[u]  # quadratic
-                    "TODO"
-            self._dense_scatter[d] = index.reshape(-1)
 
-        #########################################################
-        # OLD
-        for d, site in self._factors.items():
-            event_indices = []
+            # Collect local offsets.
+            local_offsets = {}
+            pos = 0
             for u in self.dependencies[d]:
-                if not self._factors[u]["is_observed"]:
-                    start = offsets[u]
-                    stop = start + "TODO"
-                    event_indices.append(torch.arange(start, stop))
-            event_index = torch.cat(event_indices)
-            sqrt_shape = deep_getattr(self.factors, d).shape
-            precision_shape = sqrt_shape[:-1] + sqrt_shape[-2:-1]
-            index = torch.zeros(precision_shape, dtype=torch.long)
-            stride = 1
-            index += event_index * stride
-            stride *= self._dense_size
-            index += event_index[:, None] * stride
-            stride *= self._dense_size
-            # TODO add batch shapes
-            self._dense_scatter[d] = index.reshape(-1)
+                local_offsets[u] = pos
+                broken_plates = self._plates[u] - self._plates[d]
+                pos += self._event_numel[u] * _plates_to_shape(broken_plates).numel()
 
-    def _get_precision(self):
-        flat_precision = torch.zeros(self._dense_size ** 2)
-        for d, index in self._dense_scatter:
-            sqrt = deep_getattr(self.factors, d)
-            precision = sqrt @ sqrt.transpose(dim1=-2, dim2=-1)
-            flat_precision.scatter_add_(0, index, precision.reshape(-1))
-        precision = flat_precision.reshape(self._dense_size, self._dense_size)
-        return precision
+            # Create indices blockwise.
+            for u, v in itertools.product(self.dependencies[d], self.dependencies[d]):
+                u_index = global_indices[u]
+                v_index = global_indices[v]
+
+                # Permute broken plates to the right of preserved plates.
+                # FIXME what happens if d has a plate not in u or v?
+                u_index = _break_plates(u_index, self._plates[u], self._plates[d])
+                v_index = _break_plates(v_index, self._plates[v], self._plates[d])
+
+                # Scatter global indices into the [u,v] block.
+                u_start = local_offsets[u]
+                u_stop = u_start + u_index.size(-1)
+                v_start = local_offsets[v]
+                v_stop = v_start + v_index.size(-1)
+                index[
+                    ..., u_start:u_stop, v_start:v_stop
+                ] = self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
+
+            self._dense_scatter[d] = index.reshape(-1)
 
     def _sample_aux_values(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
-        from pyro.ops import Gaussian
+        from pyro.ops.gaussian import Gaussian
 
-        # Convert to a flat dense joint Gaussian.
+        # Convert to a dense joint Gaussian over flattened variables.
         precision = self._get_precision()
         info_vec = torch.zeros(self._dense_size)
         log_normalizer = torch.zeros(())
@@ -338,8 +334,8 @@ class AutoGaussianDense(AutoGaussian):
         samples = {}
         pos = 0
         for d, (batch_shape, event_shape) in self._dense_shapes.items():
-            end = pos + self._event_numel[d]
-            flat_sample = flat_samples[pos:end]
+            end = pos + (batch_shape + event_shape).numel()
+            flat_sample = flat_samples[..., pos:end]
             pos = end
             # Assumes sample shapes are left of batch shapes.
             samples[d] = flat_sample.reshape(
@@ -347,13 +343,26 @@ class AutoGaussianDense(AutoGaussian):
             )
         return samples, log_density
 
+    def _get_precision(self):
+        flat_precision = torch.zeros(self._dense_size ** 2)
+        for d, index in self._dense_scatter.items():
+            sqrt = deep_getattr(self.factors, d)
+            precision = sqrt @ sqrt.transpose(dim0=-2, dim1=-1)
+            flat_precision.scatter_add_(0, index, precision.reshape(-1))
+        precision = flat_precision.reshape(self._dense_size, self._dense_size)
+        return precision
+
 
 class AutoGaussianFunsor(AutoGaussian):
-    # Funsor implementation of :class:`AutoGaussian` .
+    """
+    Funsor implementation of :class:`AutoGaussian` .
+
+    The following are equivalent::
+        guide = AutoGaussian(model, backend="funsor")
+        guide = AutoGaussianFunsor(model)
+    """
+
     # Attributes are prefixed by ._funsor_
-    # The following are equivalent:
-    #     guide = AutoGaussian(model, backend="funsor")
-    #     guide = AutoGaussianFunsor(model)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -437,8 +446,41 @@ class AutoGaussianFunsor(AutoGaussian):
         return samples, log_density
 
 
-def _plates_to_batch_shape(plates):
+def _plates_to_shape(plates):
     shape = [1] * max([0] + [-f.dim for f in plates])
     for f in plates:
         shape[f.dim] = f.size
     return torch.Size(shape)
+
+
+def _break_plates(x, all_plates, kept_plates):
+    """
+    Reshapes and permutes a tensor ``x`` with event_dim=1 and batch shape given
+    by ``all_plates`` by breaking all plates not in ``kept_plates``. Each
+    broken plate is moved into the event shape, and finally the event shape is
+    flattend back to a single dimension.
+    """
+    assert x.shape[:-1] == _plates_to_shape(all_plates)  # event_dim == 1
+    broken_plates = all_plates - kept_plates
+
+    if not broken_plates:
+        return x
+
+    if not kept_plates:
+        # Empty batch shape.
+        return x.reshape(-1)
+
+    batch_shape = _plates_to_shape(kept_plates)
+    if max(p.dim for p in kept_plates) < min(p.dim for p in broken_plates):
+        # No permutation is necessary.
+        return x.reshape(batch_shape + (-1,))
+
+    # We need to permute broken plates left past kept plates.
+    event_dims = {-1} | {p.dim - 1 for p in broken_plates}
+    perm = sorted(range(-x.dim(), 0), key=lambda d: (d in event_dims, d))
+    return x.permute(perm).reshape(batch_shape + (-1,))
+
+
+__all__ = [
+    "AutoGaussian",
+]
