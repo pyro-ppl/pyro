@@ -3,7 +3,7 @@
 
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
-from typing import Callable, Dict, Optional, Set, Tuple, Union
+from typing import Callable, Dict, Set, Tuple, Union
 
 import torch
 from torch.distributions import biject_to
@@ -22,7 +22,29 @@ from .initialization import InitMessenger, init_to_feasible
 from .utils import deep_getattr, deep_setattr, helpful_support_errors
 
 
-class AutoGaussian(AutoGuide):
+# Helper to dispatch to concrete subclasses of AutoGaussian, e.g.
+#   AutoGaussian(model, backend="dense")
+# is converted to
+#   AutoGaussianDense(model)
+# The intent is to avoid proliferation of subclasses and docstrings,
+# and provide a single interface AutoGaussian(...).
+class AutoGaussianMeta(type(AutoGuide)):
+    backends = {}
+    default_backend = "dense"
+
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assert cls.__name__.startswith("AutoGaussian")
+        key = cls.__name__.replace("AutoGaussian", "").lower()
+        cls.backends[key] = cls
+
+    def __call__(cls, *args, **kwargs):
+        backend = kwargs.pop("backend", cls.default_backend)
+        cls = cls.backends[backend]
+        return super(AutoGaussianMeta, cls).__call__(*args, **kwargs)
+
+
+class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
     """
     Gaussian guide with optimal conditional independence structure.
 
@@ -70,15 +92,10 @@ class AutoGaussian(AutoGuide):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
-    :param callable create_plates: An optional function inputing the same
-        ``*args,**kwargs`` as ``model()`` and returning a :class:`pyro.plate`
-        or iterable of plates. Plates not returned will be created
-        automatically as usual. This is useful for data subsampling.
     :param str backend: Back end for performing Gaussian tensor variable
         elimination. Defaults to "dense"; other options include "funsor".
     """
 
-    default_backend: str = "dense"
     scale_constraint = constraints.softplus_positive
 
     def __init__(
@@ -87,16 +104,15 @@ class AutoGaussian(AutoGuide):
         *,
         init_loc_fn: Callable = init_to_feasible,
         init_scale: float = 0.1,
-        create_plates: Optional[Callable] = None,
         backend=None,
     ):
+        assert backend is not None
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")
         self._init_scale = init_scale
         self._original_model = (model,)
         model = InitMessenger(init_loc_fn)(model)
-        super().__init__(model, create_plates=create_plates)
-        self.backend = self.default_backend if backend is None else backend
+        super().__init__(model)
 
     def _setup_prototype(self, *args, **kwargs) -> None:
         super()._setup_prototype(*args, **kwargs)
@@ -163,14 +179,9 @@ class AutoGaussian(AutoGuide):
                 d_size = min(d_size, u_size)  # just an optimization
             batch_shape = _plates_to_batch_shape(self._plates[d])
 
-            # Create a square root (not necessarily lower triangular).
-            raw = init_loc.new_zeros(batch_shape + (u_size, d_size))
-            deep_setattr(self.factors, d, PyroParam(raw, event_dim=2))
-
-        # Dispatch to backend logic.
-        backend_fn = getattr(self, f"_{self.backend}_setup_prototype", None)
-        if backend_fn is not None:
-            backend_fn(*args, **kwargs)
+            # Create a square root parameter (full, not lower triangular).
+            sqrt = init_loc.new_zeros(batch_shape + (u_size, d_size))
+            deep_setattr(self.factors, d, PyroParam(sqrt, event_dim=2))
 
     def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         if self.prototype_trace is None:
@@ -233,16 +244,19 @@ class AutoGaussian(AutoGuide):
     def _sample_aux_values(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
-        # Dispatch to backend logic.
-        backend_fn = getattr(self, f"_{self.backend}_sample_aux_values", None)
-        if backend_fn is None:
-            raise NotImplementedError(f"Unknown AutoGaussian backend: {self.backend}")
-        return backend_fn()
+        raise NotImplementedError
 
-    ############################################################################
-    # Dense backend. Methods and attributes are prefixed by ._dense_
 
-    def _dense_setup_prototype(self, *args, **kwargs):
+class AutoGaussianDense(AutoGaussian):
+    # Dense implementation of :class:`AutoGaussian` .
+    # Attributes are prefixed by ._dense_
+    # The following are equivalent:
+    #     guide = AutoGaussian(model, backend="dense")
+    #     guide = AutoGaussianDense(model)
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+
         # Collect flat and individual and aggregated flat shapes.
         self._dense_shapes = {}
         dense_gather = {}
@@ -259,8 +273,8 @@ class AutoGaussian(AutoGuide):
         # Create sparse -> dense precision scatter indices.
         self._dense_scatter = {}
         for d, site in self._factors.items():
-            raw_shape = deep_getattr(self.factors, d).shape
-            precision_shape = raw_shape[:-1] + raw_shape[-2:-1]
+            sqrt_shape = deep_getattr(self.factors, d).shape
+            precision_shape = sqrt_shape[:-1] + sqrt_shape[-2:-1]
             index = torch.zeros(precision_shape, dtype=torch.long)
             for u in self.dependencies[d]:
                 if not self._factors[u]["is_observed"]:
@@ -280,8 +294,8 @@ class AutoGaussian(AutoGuide):
                     stop = start + "TODO"
                     event_indices.append(torch.arange(start, stop))
             event_index = torch.cat(event_indices)
-            raw_shape = deep_getattr(self.factors, d).shape
-            precision_shape = raw_shape[:-1] + raw_shape[-2:-1]
+            sqrt_shape = deep_getattr(self.factors, d).shape
+            precision_shape = sqrt_shape[:-1] + sqrt_shape[-2:-1]
             index = torch.zeros(precision_shape, dtype=torch.long)
             stride = 1
             index += event_index * stride
@@ -291,22 +305,22 @@ class AutoGaussian(AutoGuide):
             # TODO add batch shapes
             self._dense_scatter[d] = index.reshape(-1)
 
-    def _dense_get_precision(self):
+    def _get_precision(self):
         flat_precision = torch.zeros(self._dense_size ** 2)
         for d, index in self._dense_scatter:
-            raw = deep_getattr(self.factors, d)
-            precision = _raw_to_precision(raw)
+            sqrt = deep_getattr(self.factors, d)
+            precision = sqrt @ sqrt.transpose(dim1=-2, dim2=-1)
             flat_precision.scatter_add_(0, index, precision.reshape(-1))
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
         return precision
 
-    def _dense_sample_aux_values(
+    def _sample_aux_values(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         from pyro.ops import Gaussian
 
         # Convert to a flat dense joint Gaussian.
-        precision = self._dense_get_precision()
+        precision = self._get_precision()
         info_vec = torch.zeros(self._dense_size)
         log_normalizer = torch.zeros(())
         g = Gaussian(log_normalizer, info_vec, precision)
@@ -333,10 +347,16 @@ class AutoGaussian(AutoGuide):
             )
         return samples, log_density
 
-    ############################################################################
-    # Funsor backend. Methods and attributes are prefixed by ._funsor_
 
-    def _funsor_setup_prototype(self, *args, **kwargs):
+class AutoGaussianFunsor(AutoGaussian):
+    # Funsor implementation of :class:`AutoGaussian` .
+    # Attributes are prefixed by ._funsor_
+    # The following are equivalent:
+    #     guide = AutoGaussian(model, backend="funsor")
+    #     guide = AutoGaussianFunsor(model)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         try:
             import funsor
         except ImportError as e:
@@ -344,6 +364,12 @@ class AutoGaussian(AutoGuide):
                 'AutoGaussian(..., backend="funsor") requires funsor. '
                 "Try installing via: pip install pyro-ppl[funsor]"
             ) from e
+        funsor.set_backend("torch")
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+        import funsor
+
         funsor.set_backend("torch")
 
         # Determine TVE problem shape.
@@ -374,10 +400,12 @@ class AutoGaussian(AutoGuide):
         self._funsor_plate_to_dim = plate_to_dim
         self._funsor_plates = frozenset(plate_to_dim)
 
-    def _funsor_sample_aux_values(
+    def _sample_aux_values(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
         import funsor
+
+        funsor.set_backend("torch")
 
         # Convert torch to funsor.
         particle_plates = frozenset(get_plates())
@@ -407,15 +435,6 @@ class AutoGaussian(AutoGuide):
         log_density = funsor.to_data(log_prob, name_to_dim=plate_to_dim)
 
         return samples, log_density
-
-
-def _raw_to_precision(raw):
-    """
-    Transform an unconstrained matrix of shape ``batch_shape + (m, n)`` to a
-    positive semidefinite precision matrix of shape ``batch_shape + (m, m)``.
-    Typically ``m >= n``.
-    """
-    return raw @ raw.transpose(dim1=-2, dim2=-1)
 
 
 def _plates_to_batch_shape(plates):

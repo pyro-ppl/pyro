@@ -13,7 +13,6 @@ from pyro.infer import SVI, Predictive, Trace_ELBO
 from pyro.infer.autoguide import AutoGaussian
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
-
 from tests.common import assert_equal
 
 BACKENDS = [
@@ -57,7 +56,6 @@ def test_structure_1():
 
 
 def test_structure_2():
-
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(0, 1))
