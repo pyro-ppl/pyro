@@ -315,9 +315,61 @@ def pyrocov_model_plated(dataset):
         )
 
 
-@pytest.mark.parametrize(
-    "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
-)
+# This is modified by replacing the multinomial likelihood with poisson.
+def pyrocov_model_poisson(dataset):
+    # Tensor shapes are commented at the end of some lines.
+    features = dataset["features"]
+    local_time = dataset["local_time"][..., None]  # [T, P, 1]
+    T, P, _ = local_time.shape
+    S, F = features.shape
+    weekly_strains = dataset["weekly_strains"]  # [T, P, S]
+    assert weekly_strains.shape == (T, P, S)
+    feature_plate = pyro.plate("feature", F, dim=-1)
+    strain_plate = pyro.plate("strain", S, dim=-1)
+    place_plate = pyro.plate("place", P, dim=-2)
+    time_plate = pyro.plate("time", T, dim=-3)
+
+    # Sample global random variables.
+    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))
+    rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))
+    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))
+    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))
+    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))
+    pois_loc = pyro.sample("pois_loc", dist.Normal(0, 2))
+    pois_scale = pyro.sample("pois_scale", dist.LogNormal(0, 2))
+
+    with feature_plate:
+        coef = pyro.sample("coef", dist.Logistic(0, coef_scale))  # [F]
+    rate_loc_loc = 0.01 * coef @ features.T
+    with strain_plate:
+        rate_loc = pyro.sample(
+            "rate_loc", dist.Normal(rate_loc_loc, rate_loc_scale)
+        )  # [S]
+        init_loc = pyro.sample("init_loc", dist.Normal(0, init_loc_scale))  # [S]
+    with place_plate, strain_plate:
+        rate = pyro.sample("rate", dist.Normal(rate_loc, rate_scale))  # [P, S]
+        init = pyro.sample("init", dist.Normal(init_loc, init_scale))  # [P, S]
+
+    # Finally observe counts.
+    with time_plate, place_plate:
+        pois = pyro.sample("pois", dist.LogNormal(pois_loc, pois_scale))
+    with time_plate, place_plate, strain_plate:
+        # Note .softmax() breaks conditional independence over strain, but only
+        # weakly. We could directly call .exp(), but .softmax is more
+        # numerically stable.
+        logits = pois * (init + rate * local_time).softmax(-1)  # [T, P, S]
+        pyro.sample("obs", dist.Poisson(logits), obs=weekly_strains)
+
+
+PYRO_COV_MODELS = [
+    pyrocov_model,
+    pyrocov_model_relaxed,
+    pyrocov_model_plated,
+    pyrocov_model_poisson,
+]
+
+
+@pytest.mark.parametrize("model", PYRO_COV_MODELS)
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_pyrocov_smoke(model, backend):
     T, P, S, F = 3, 4, 5, 6
@@ -336,9 +388,7 @@ def test_pyrocov_smoke(model, backend):
     predictive(dataset)
 
 
-@pytest.mark.parametrize(
-    "model", [pyrocov_model, pyrocov_model_relaxed, pyrocov_model_plated]
-)
+@pytest.mark.parametrize("model", PYRO_COV_MODELS)
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_pyrocov_reparam(model, backend):
     T, P, S, F = 2, 3, 4, 5
@@ -366,7 +416,7 @@ def test_pyrocov_reparam(model, backend):
     predictive(dataset)
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize("backend", ["funsor"])
 def test_pyrocov_structure(backend):
     from funsor import Bint, Real, Reals
 
@@ -447,11 +497,6 @@ def test_profile(backend, n=1, num_steps=1):
     guide = AutoGaussian(model)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     guide(dataset)  # initialize
-    print("Factor inputs:")
-    for name, inputs in guide._funsor_factor_inputs.items():
-        print(f"  {name}:")
-        for k, v in inputs.items():
-            print(f"    {k}: {v}")
     print("Parameter shapes:")
     for name, param in guide.named_parameters():
         print(f"  {name}: {tuple(param.shape)}")
