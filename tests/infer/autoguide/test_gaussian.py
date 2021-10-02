@@ -27,6 +27,7 @@ MockPlate = namedtuple("MockPlate", "dim, size")
 
 def test_break_plates():
     shape = torch.Size([5, 4, 3, 2])
+    h = MockPlate(-4, 6)
     i = MockPlate(-3, 5)
     j = MockPlate(-2, 4)
     k = MockPlate(-1, 3)
@@ -61,6 +62,10 @@ def test_break_plates():
     assert_equal(actual, expected)
 
     actual = _break_plates(x, {i, j, k}, {i, j, k})
+    expected = x
+    assert_equal(actual, expected)
+
+    actual = _break_plates(x, {i, j, k}, {h, i, j, k})
     expected = x
     assert_equal(actual, expected)
 

@@ -22,7 +22,6 @@ from pyro.infer.autoguide import (
     AutoDiagonalNormal,
     AutoDiscreteParallel,
     AutoGaussian,
-    AutoGaussianFunsor,
     AutoGuide,
     AutoGuideList,
     AutoIAFNormal,
@@ -36,6 +35,7 @@ from pyro.infer.autoguide import (
     init_to_median,
     init_to_sample,
 )
+from pyro.infer.autoguide.gaussian import AutoGaussianFunsor
 from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.ops.gaussian import Gaussian
@@ -557,7 +557,7 @@ def test_discrete_parallel(continuous_class):
 )
 def test_guide_list(auto_class):
     def model():
-        pyro.sample("x", dist.Normal(0.0, 1.0).expand([2]))
+        pyro.sample("x", dist.Normal(0.0, 1.0).expand([2]).to_event(1))
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)

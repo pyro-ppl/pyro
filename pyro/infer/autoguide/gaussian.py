@@ -137,6 +137,11 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
                 assert all(f.vectorized for f in site["cond_indep_stack"])
                 self._factors[d] = site
                 plates = frozenset(site["cond_indep_stack"])
+                if site["fn"].batch_shape != _plates_to_shape(plates):
+                    raise ValueError(
+                        f"Shape mismatch at site '{d}'. "
+                        "Are you missing a pyro.plate() or .to_event()?"
+                    )
                 if site["is_observed"]:
                     # Eagerly eliminate irrelevant observation plates.
                     plates &= frozenset.union(
@@ -180,7 +185,8 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
             # Create a square root parameter (full, not lower triangular).
             sqrt = init_loc.new_zeros(batch_shape + (u_size, d_size))
             if d in self.dependencies[d]:
-                sqrt += torch.eye(u_size, d_size)
+                # Initialize the [d,d] block to the identity matrix.
+                sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)
             deep_setattr(self.factors, d, PyroParam(sqrt, event_dim=2))
 
     def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
@@ -295,7 +301,6 @@ class AutoGaussianDense(AutoGaussian):
                 v_index = global_indices[v]
 
                 # Permute broken plates to the right of preserved plates.
-                # FIXME what happens if d has a plate not in u or v?
                 u_index = _break_plates(u_index, self._plates[u], self._plates[d])
                 v_index = _break_plates(v_index, self._plates[v], self._plates[d])
 
@@ -461,6 +466,7 @@ def _break_plates(x, all_plates, kept_plates):
     flattend back to a single dimension.
     """
     assert x.shape[:-1] == _plates_to_shape(all_plates)  # event_dim == 1
+    kept_plates = kept_plates & all_plates
     broken_plates = all_plates - kept_plates
 
     if not broken_plates:
