@@ -4,7 +4,7 @@
 import itertools
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
-from typing import Callable, Dict, Set, Tuple, Union
+from typing import Callable, Dict, Optional, Set, Tuple, Union
 
 import torch
 from torch.distributions import biject_to
@@ -54,12 +54,14 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
     the model [1]. Depending on model structure, this can have asymptotically
     better statistical efficiency than :class:`AutoMultivariateNormal` .
 
-    The default "dense" backend should have similar computational complexity to
-    :class:`AutoMultivariateNormal` . The experimental "funsor" backend can be
-    asymptotically cheaper in terms of time and space (using Gaussian tensor
-    variable elimination [2,3]), but incurs large constant overhead. The
-    "funsor" backend requires `funsor <https://funsor.pyro.ai>`_ which can be
-    installed via ``pip install pyro-ppl[funsor]``.
+    This guide implements multiple backends for computation. All backends use
+    the same statistically optimal parametrization. The default "dense" backend
+    has computational complexity similar to :class:`AutoMultivariateNormal` .
+    The experimental "funsor" backend can be asymptotically cheaper in terms of
+    time and space (using Gaussian tensor variable elimination [2,3]), but
+    incurs large constant overhead. The "funsor" backend requires `funsor
+    <https://funsor.pyro.ai>`_ which can be installed via ``pip install
+    pyro-ppl[funsor]``.
 
     The guide currently does not depend on the model's ``*args, **kwargs``.
 
@@ -105,7 +107,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         *,
         init_loc_fn: Callable = init_to_feasible,
         init_scale: float = 0.1,
-        backend=None,
+        backend: Optional[str] = None,  # used only by metaclass
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError(f"Expected init_scale > 0. but got {init_scale}")

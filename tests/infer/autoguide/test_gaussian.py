@@ -14,7 +14,7 @@ from pyro.infer.autoguide import AutoGaussian
 from pyro.infer.autoguide.gaussian import _break_plates
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_if_not_implemented
 
 BACKENDS = [
     "dense",
@@ -178,6 +178,40 @@ def test_structure_4():
         ". . . ? ? ? ?",
     ]
     check_structure(model, expected)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_broken_plates_smoke(backend):
+    def model():
+        with pyro.plate("i", 2):
+            x = pyro.sample("x", dist.Normal(0, 1))
+        pyro.sample("y", dist.Normal(x.mean(-1), 1), obs=torch.tensor(0.0))
+
+    guide = AutoGaussian(model, backend=backend)
+    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    for step in range(2):
+        with xfail_if_not_implemented():
+            svi.step()
+    guide()
+    predictive = Predictive(model, guide=guide, num_samples=2)
+    predictive()
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_intractable_smoke(backend):
+    def model():
+        with pyro.plate("i", 2):
+            x = pyro.sample("x", dist.Normal(0, 1))
+        pyro.sample("y", dist.Normal(x.mean(-1), 1), obs=torch.tensor(0.0))
+
+    guide = AutoGaussian(model, backend=backend)
+    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    for step in range(2):
+        with xfail_if_not_implemented():
+            svi.step()
+    guide()
+    predictive = Predictive(model, guide=guide, num_samples=2)
+    predictive()
 
 
 # Simplified from https://github.com/pyro-cov/tree/master/pyrocov/mutrans.py
@@ -486,7 +520,7 @@ def test_profile(backend, n=1, num_steps=1):
     """
     Helper function for profiling.
     """
-    model = pyrocov_model_plated
+    model = pyrocov_model_poisson
     T, P, S, F = 2 * n, 3 * n, 4 * n, 5 * n
     dataset = {
         "features": torch.randn(S, F),
