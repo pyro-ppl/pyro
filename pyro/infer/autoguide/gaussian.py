@@ -373,20 +373,11 @@ class AutoGaussianFunsor(AutoGaussian):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        try:
-            import funsor
-        except ImportError as e:
-            raise ImportError(
-                'AutoGaussian(..., backend="funsor") requires funsor. '
-                "Try installing via: pip install pyro-ppl[funsor]"
-            ) from e
-        funsor.set_backend("torch")
+        _import_funsor()
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
-        import funsor
-
-        funsor.set_backend("torch")
+        funsor = _import_funsor()
 
         # Break plates globally to fit this into a TVE problem.
         broken_plates = frozenset()
@@ -429,9 +420,7 @@ class AutoGaussianFunsor(AutoGaussian):
     def _sample_aux_values(
         self,
     ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
-        import funsor
-
-        funsor.set_backend("torch")
+        funsor = _import_funsor()
 
         # Convert torch to funsor.
         particle_plates = frozenset(get_plates())
@@ -440,7 +429,7 @@ class AutoGaussianFunsor(AutoGaussian):
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
             sqrt = deep_getattr(self.factors, d)
-            if self._funsor_broken_vars:
+            if any(self._funsor_broken_vars[u] for u in self.dependencies[d]):
                 raise NotImplementedError("TODO break plates in sqrt")
             precision = sqrt @ sqrt.transpose(-1, -2)
             info_vec = precision.new_zeros(()).expand(precision.shape[:-1])
@@ -498,6 +487,18 @@ def _break_plates(x, all_plates, kept_plates):
     event_dims = {-1} | {p.dim - 1 for p in broken_plates}
     perm = sorted(range(-x.dim(), 0), key=lambda d: (d in event_dims, d))
     return x.permute(perm).reshape(batch_shape + (-1,))
+
+
+def _import_funsor():
+    try:
+        import funsor
+    except ImportError as e:
+        raise ImportError(
+            'AutoGaussian(..., backend="funsor") requires funsor. '
+            "Try installing via: pip install pyro-ppl[funsor]"
+        ) from e
+    funsor.set_backend("torch")
+    return funsor
 
 
 __all__ = [
