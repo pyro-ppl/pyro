@@ -1265,8 +1265,8 @@ def test_exact(Guide):
     guide(data)
     # guide.scales.train(False)
     # guide.scales.requires_grad_(False)
-    # guide.precision_chols.train(False)
-    # guide.precision_chols.requires_grad_(False)
+    # guide.factor.train(False)
+    # guide.factor.requires_grad_(False)
 
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
     optim = Adam({"lr": 0.01})

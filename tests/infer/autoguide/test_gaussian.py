@@ -11,7 +11,11 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Predictive, Trace_ELBO
 from pyro.infer.autoguide import AutoGaussian
-from pyro.infer.autoguide.gaussian import _break_plates
+from pyro.infer.autoguide.gaussian import (
+    AutoGaussianDense,
+    AutoGaussianFunsor,
+    _break_plates,
+)
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_if_not_implemented
@@ -22,16 +26,15 @@ BACKENDS = [
 ]
 
 
-MockPlate = namedtuple("MockPlate", "dim, size")
-
-
 def test_break_plates():
     shape = torch.Size([5, 4, 3, 2])
+    x = torch.arange(shape.numel()).reshape(shape)
+
+    MockPlate = namedtuple("MockPlate", "dim, size")
     h = MockPlate(-4, 6)
     i = MockPlate(-3, 5)
     j = MockPlate(-2, 4)
     k = MockPlate(-1, 3)
-    x = torch.arange(shape.numel()).reshape(shape)
 
     actual = _break_plates(x, {i, j, k}, set())
     expected = x.reshape(-1)
@@ -68,6 +71,20 @@ def test_break_plates():
     actual = _break_plates(x, {i, j, k}, {h, i, j, k})
     expected = x
     assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_backend_dispatch(backend):
+    def model():
+        pyro.sample("x", dist.Normal(0, 1))
+
+    guide = AutoGaussian(model, backend=backend)
+    if backend == "dense":
+        assert isinstance(guide, AutoGaussianDense)
+    elif backend == "funsor":
+        assert isinstance(guide, AutoGaussianFunsor)
+    else:
+        raise ValueError(f"Unknown backend: {backend}")
 
 
 def check_structure(model, expected_str):
