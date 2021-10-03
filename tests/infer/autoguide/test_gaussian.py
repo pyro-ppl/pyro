@@ -358,13 +358,12 @@ def pyrocov_model_poisson(dataset):
     S, F = features.shape
     weekly_strains = dataset["weekly_strains"]  # [T, P, S]
     assert weekly_strains.shape == (T, P, S)
-    feature_plate = pyro.plate("feature", F, dim=-1)
     strain_plate = pyro.plate("strain", S, dim=-1)
     place_plate = pyro.plate("place", P, dim=-2)
     time_plate = pyro.plate("time", T, dim=-3)
 
     # Sample global random variables.
-    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))
+    coef_scale = pyro.sample("coef_scale", dist.LogNormal(-4, 2))
     rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))
     rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))
     init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))
@@ -372,8 +371,9 @@ def pyrocov_model_poisson(dataset):
     pois_loc = pyro.sample("pois_loc", dist.Normal(0, 2))
     pois_scale = pyro.sample("pois_scale", dist.LogNormal(0, 2))
 
-    with feature_plate:
-        coef = pyro.sample("coef", dist.Logistic(0, coef_scale))  # [F]
+    coef = pyro.sample(
+        "coef", dist.Logistic(torch.zeros(F), coef_scale).to_event(1)
+    )  # [F]
     rate_loc_loc = 0.01 * coef @ features.T
     with strain_plate:
         rate_loc = pyro.sample(
@@ -416,7 +416,8 @@ def test_pyrocov_smoke(model, backend):
     guide = AutoGaussian(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
-        svi.step(dataset)
+        with xfail_if_not_implemented():
+            svi.step(dataset)
     guide(dataset)
     predictive = Predictive(model, guide=guide, num_samples=2)
     predictive(dataset)
@@ -444,7 +445,8 @@ def test_pyrocov_reparam(model, backend):
     guide = AutoGaussian(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
-        svi.step(dataset)
+        with xfail_if_not_implemented():
+            svi.step(dataset)
     guide(dataset)
     predictive = Predictive(model, guide=guide, num_samples=2)
     predictive(dataset)
@@ -461,15 +463,17 @@ def test_pyrocov_structure(backend):
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(pyrocov_model_plated, backend=backend)
+    guide = AutoGaussian(pyrocov_model_poisson, backend=backend)
     guide(dataset)  # initialize
 
-    expected_plates = frozenset(["place", "feature", "strain"])
+    expected_plates = frozenset(["time", "place", "strain"])
     assert guide._funsor_plates == expected_plates
 
     expected_eliminate = frozenset(
         [
+            "time",
             "place",
+            "strain",
             "coef_scale",
             "rate_loc_scale",
             "rate_scale",
@@ -480,6 +484,9 @@ def test_pyrocov_structure(backend):
             "init_loc",
             "rate",
             "init",
+            "pois_loc",
+            "pois_scale",
+            "pois",
         ]
     )
     assert guide._funsor_eliminate == expected_eliminate
@@ -490,25 +497,45 @@ def test_pyrocov_structure(backend):
         "rate_scale": OrderedDict([("rate_scale", Real)]),
         "init_loc_scale": OrderedDict([("init_loc_scale", Real)]),
         "init_scale": OrderedDict([("init_scale", Real)]),
+        "pois_loc": OrderedDict([("pois_loc", Real)]),
+        "pois_scale": OrderedDict([("pois_scale", Real)]),
         "coef": OrderedDict([("coef", Reals[5]), ("coef_scale", Real)]),
         "rate_loc": OrderedDict(
-            [("rate_loc", Reals[4]), ("rate_loc_scale", Real), ("coef", Reals[5])]
+            [
+                ("strain", Bint[4]),
+                ("rate_loc", Real),
+                ("rate_loc_scale", Real),
+                ("coef", Reals[5]),
+            ]
         ),
-        "init_loc": OrderedDict([("init_loc", Reals[4]), ("init_loc_scale", Real)]),
+        "init_loc": OrderedDict(
+            [("strain", Bint[4]), ("init_loc", Real), ("init_loc_scale", Real)]
+        ),
         "rate": OrderedDict(
             [
                 ("place", Bint[3]),
-                ("rate", Reals[4]),
+                ("strain", Bint[4]),
+                ("rate", Real),
                 ("rate_scale", Real),
-                ("rate_loc", Reals[4]),
+                ("rate_loc", Real),
             ]
         ),
         "init": OrderedDict(
             [
                 ("place", Bint[3]),
-                ("init", Reals[4]),
+                ("strain", Bint[4]),
+                ("init", Real),
                 ("init_scale", Real),
-                ("init_loc", Reals[4]),
+                ("init_loc", Real),
+            ]
+        ),
+        "pois": OrderedDict(
+            [
+                ("time", Bint[2]),
+                ("place", Bint[3]),
+                ("pois", Real),
+                ("pois_loc", Real),
+                ("pois_scale", Real),
             ]
         ),
     }

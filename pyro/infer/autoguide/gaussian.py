@@ -380,7 +380,7 @@ class AutoGaussianFunsor(AutoGaussian):
         funsor = _import_funsor()
 
         # Break plates globally to fit this into a TVE problem.
-        broken_plates = frozenset()
+        broken_plates: frozenset = frozenset()
         for d in self._factors:
             for u in self.dependencies[d]:
                 broken_plates |= self._plates[u] - self._plates[d]
@@ -404,13 +404,12 @@ class AutoGaussianFunsor(AutoGaussian):
                 if f not in broken_plates:
                     inputs[f.name] = funsor.Bint[f.size]
                     eliminate.add(f.name)
-            if not site["is_observed"]:
-                inputs[d] = funsor.Reals[broken_event_shapes[d]]
             for u in self.dependencies[d]:
                 inputs[u] = funsor.Reals[broken_event_shapes[u]]
                 eliminate.add(u)
             factor_inputs[d] = inputs
 
+        self._funsor_broken_plates = broken_plates
         self._funsor_broken_vars = broken_vars
         self._funsor_factor_inputs = factor_inputs
         self._funsor_eliminate = frozenset(eliminate)
@@ -429,8 +428,17 @@ class AutoGaussianFunsor(AutoGaussian):
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
             sqrt = deep_getattr(self.factors, d)
-            if any(self._funsor_broken_vars[u] for u in self.dependencies[d]):
-                raise NotImplementedError("TODO break plates in sqrt")
+            kept_plates = self._plates[d] - self._funsor_broken_plates
+            sqrt = _break_plates_sqrt(
+                sqrt,
+                self._plates[d],
+                kept_plates,
+                [(self._plates[u], self._event_numel[u]) for u in self.dependencies[d]],
+            )
+            batch_shape = torch.Size(
+                p.size for p in sorted(kept_plates, key=lambda p: p.dim)
+            )
+            sqrt = sqrt.reshape(batch_shape + sqrt.shape[-2:])
             precision = sqrt @ sqrt.transpose(-1, -2)
             info_vec = precision.new_zeros(()).expand(precision.shape[:-1])
             factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
@@ -487,6 +495,21 @@ def _break_plates(x, all_plates, kept_plates):
     event_dims = {-1} | {p.dim - 1 for p in broken_plates}
     perm = sorted(range(-x.dim(), 0), key=lambda d: (d in event_dims, d))
     return x.permute(perm).reshape(batch_shape + (-1,))
+
+
+def _break_plates_sqrt(
+    x,
+    d_plates,
+    kept_plates,
+    u_plates_and_event_numels,
+):
+    """
+    Reshapes a sqrt precision parameter ``x`` with event_dim=2 and batch shape
+    given by d_plates by breaking all plates not in ``kept_plates``.
+    """
+    if any(u_plates - kept_plates for u_plates, _ in u_plates_and_event_numels):
+        raise NotImplementedError("TODO break plates in sqrt")
+    return x
 
 
 def _import_funsor():
