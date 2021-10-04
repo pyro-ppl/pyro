@@ -1260,14 +1260,6 @@ def test_exact(Guide):
     expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
-
-    # DEBUG
-    guide(data)
-    # guide.scales.train(False)
-    # guide.scales.requires_grad_(False)
-    # guide.factor.train(False)
-    # guide.factor.requires_grad_(False)
-
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, elbo)

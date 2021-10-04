@@ -195,7 +195,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        aux_values, global_log_density = self._sample_aux_values()
+        aux_values = self._sample_aux_values()
         values, log_densities = self._transform_values(aux_values)
 
         # Replay via Pyro primitives.
@@ -204,12 +204,10 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     stack.enter_context(plates[frame.name])
-                pyro.sample(
+                values[name] = pyro.sample(
                     name,
                     dist.Delta(values[name], log_densities[name], site["fn"].event_dim),
                 )
-        if am_i_wrapped() and poutine.get_mask() is not False:
-            pyro.factor(self._pyro_name, global_log_density)
         return values
 
     def median(self) -> Dict[str, torch.Tensor]:
@@ -248,9 +246,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
         return values, log_densities
 
-    def _sample_aux_values(
-        self,
-    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
+    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
         raise NotImplementedError
 
 
@@ -263,8 +259,6 @@ class AutoGaussianDense(AutoGaussian):
         guide = AutoGaussian(model, backend="dense")
         guide = AutoGaussianDense(model)
     """
-
-    # Attributes are prefixed by ._dense_
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -316,25 +310,16 @@ class AutoGaussianDense(AutoGaussian):
 
             self._dense_scatter[d] = index.reshape(-1)
 
-    def _sample_aux_values(
-        self,
-    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
-        from pyro.ops.gaussian import Gaussian
-
-        # Convert to a dense joint Gaussian over flattened variables.
+    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
+        # Sample from a dense joint Gaussian over flattened variables.
         precision = self._get_precision()
-        info_vec = torch.zeros(self._dense_size)
-        log_normalizer = torch.zeros(())
-        g = Gaussian(log_normalizer, info_vec, precision)
-
-        # Draw a batch of samples.
-        particle_plates = frozenset(get_plates())
-        sample_shape = [1] * max([0] + [-p.dim for p in particle_plates])
-        for p in particle_plates:
-            sample_shape[p.dim] = p.size
-        sample_shape = torch.Size(sample_shape)
-        flat_samples = g.rsample(sample_shape)
-        log_density = g.log_density(flat_samples) - g.event_logsumexp()
+        loc = precision.new_zeros(self._dense_size)
+        flat_samples = pyro.sample(
+            f"_{self._pyro_name}",
+            dist.MultivariateNormal(loc, precision_matrix=precision),
+            infer={"is_auxiliary": True},
+        )
+        sample_shape = flat_samples.shape[:-1]
 
         # Convert flat to shaped tensors.
         samples = {}
@@ -347,7 +332,7 @@ class AutoGaussianDense(AutoGaussian):
             samples[d] = flat_sample.reshape(
                 torch.broadcast_shapes(sample_shape, batch_shape) + event_shape
             )
-        return samples, log_density
+        return samples
 
     def _get_precision(self):
         flat_precision = torch.zeros(self._dense_size ** 2)
@@ -368,9 +353,6 @@ class AutoGaussianFunsor(AutoGaussian):
         guide = AutoGaussianFunsor(model)
     """
 
-    # Attributes are prefixed by ._funsor_
-    # This uses tensor variable elimination (TVE).
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _import_funsor()
@@ -379,19 +361,17 @@ class AutoGaussianFunsor(AutoGaussian):
         super()._setup_prototype(*args, **kwargs)
         funsor = _import_funsor()
 
-        # Break plates globally to fit this into a TVE problem.
-        broken_plates: frozenset = frozenset()
+        # Check plates are strictly nested.
         for d in self._factors:
             for u in self.dependencies[d]:
-                broken_plates |= self._plates[u] - self._plates[d]
-        broken_vars: Dict[str, Tuple[funsor.Variable, ...]] = {}
-        broken_event_shapes: Dict[str, Tuple[int, ...]] = {}
-        for u, event_shape in self._unconstrained_event_shapes.items():
-            plates = sorted(self._plates[u] & broken_plates, key=lambda p: p.size)
-            broken_vars[u] = tuple(
-                funsor.Variable(p.name, funsor.Bint[p.size]) for p in plates
-            )
-            broken_event_shapes[u] = tuple(p.size for p in plates) + event_shape
+                broken_plates = self._plates[u] - self._plates[d]
+                if broken_plates:
+                    raise NotImplementedError(
+                        "Expected strictly increasing plates, but found dependency "
+                        f"{u} -> {d} leaves plates {set(broken_plates)}. "
+                        "Consider splitting into multiple guides via AutoGuideList, "
+                        "or replacing the plate in the model by .to_event()."
+                    )
 
         # Determine TVE problem shape.
         factor_inputs: Dict[str, OrderedDict[str, funsor.Domain]] = {}
@@ -401,24 +381,19 @@ class AutoGaussianFunsor(AutoGaussian):
             inputs = OrderedDict()
             for f in site["cond_indep_stack"]:
                 plate_to_dim[f.name] = f.dim
-                if f not in broken_plates:
-                    inputs[f.name] = funsor.Bint[f.size]
-                    eliminate.add(f.name)
+                inputs[f.name] = funsor.Bint[f.size]
+                eliminate.add(f.name)
             for u in self.dependencies[d]:
-                inputs[u] = funsor.Reals[broken_event_shapes[u]]
+                inputs[u] = funsor.Reals[self._unconstrained_event_shapes[u]]
                 eliminate.add(u)
             factor_inputs[d] = inputs
 
-        self._funsor_broken_plates = broken_plates
-        self._funsor_broken_vars = broken_vars
         self._funsor_factor_inputs = factor_inputs
         self._funsor_eliminate = frozenset(eliminate)
         self._funsor_plate_to_dim = plate_to_dim
         self._funsor_plates = frozenset(plate_to_dim)
 
-    def _sample_aux_values(
-        self,
-    ) -> Tuple[Dict[str, torch.Tensor], Union[float, torch.Tensor]]:
+    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
         funsor = _import_funsor()
 
         # Convert torch to funsor.
@@ -428,15 +403,8 @@ class AutoGaussianFunsor(AutoGaussian):
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
             sqrt = deep_getattr(self.factors, d)
-            kept_plates = self._plates[d] - self._funsor_broken_plates
-            sqrt = _break_plates_sqrt(
-                sqrt,
-                self._plates[d],
-                kept_plates,
-                [(self._plates[u], self._event_numel[u]) for u in self.dependencies[d]],
-            )
             batch_shape = torch.Size(
-                p.size for p in sorted(kept_plates, key=lambda p: p.dim)
+                p.size for p in sorted(self._plates[d], key=lambda p: p.dim)
             )
             sqrt = sqrt.reshape(batch_shape + sqrt.shape[-2:])
             precision = sqrt @ sqrt.transpose(-1, -2)
@@ -452,13 +420,13 @@ class AutoGaussianFunsor(AutoGaussian):
         )
 
         # Convert funsor to torch.
+        if am_i_wrapped() and poutine.get_mask() is not False:
+            log_prob = funsor.to_data(log_prob, name_to_dim=plate_to_dim)
+            pyro.factor(f"_{self._pyro_name}_latent", log_prob)
         samples = {
-            k: funsor.to_data(v[self._funsor_broken_vars[k]], name_to_dim=plate_to_dim)
-            for k, v in samples.items()
+            k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()
         }
-        log_density = funsor.to_data(log_prob, name_to_dim=plate_to_dim)
-
-        return samples, log_density
+        return samples
 
 
 def _plates_to_shape(plates):
@@ -495,21 +463,6 @@ def _break_plates(x, all_plates, kept_plates):
     event_dims = {-1} | {p.dim - 1 for p in broken_plates}
     perm = sorted(range(-x.dim(), 0), key=lambda d: (d in event_dims, d))
     return x.permute(perm).reshape(batch_shape + (-1,))
-
-
-def _break_plates_sqrt(
-    x,
-    d_plates,
-    kept_plates,
-    u_plates_and_event_numels,
-):
-    """
-    Reshapes a sqrt precision parameter ``x`` with event_dim=2 and batch shape
-    given by d_plates by breaking all plates not in ``kept_plates``.
-    """
-    if any(u_plates - kept_plates for u_plates, _ in u_plates_and_event_numels):
-        raise NotImplementedError("TODO break plates in sqrt")
-    return x
 
 
 def _import_funsor():
