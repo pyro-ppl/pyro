@@ -39,7 +39,7 @@ from pyro.infer.autoguide.gaussian import AutoGaussianFunsor
 from pyro.infer.reparam import ProjectedNormalReparam
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.ops.gaussian import Gaussian
-from pyro.optim import Adam
+from pyro.optim import Adam, ClippedAdam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
@@ -1386,9 +1386,10 @@ def test_exact_tree(Guide):
 
     guide = Guide(model)
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
-    optim = Adam({"lr": 0.01})
+    num_steps = 500
+    optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
-    for step in range(500):
+    for step in range(num_steps):
         svi.step(data)
 
     guide.train(False)
