@@ -176,9 +176,8 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         for d, site in self._factors.items():
             u_size = 0
             for u in self.dependencies[d]:
-                if not self._factors[u]["is_observed"]:
-                    broken_shape = _plates_to_shape(self._plates[u] - self._plates[d])
-                    u_size += broken_shape.numel() * self._event_numel[u]
+                broken_shape = _plates_to_shape(self._plates[u] - self._plates[d])
+                u_size += broken_shape.numel() * self._event_numel[u]
             d_size = self._event_numel[d]
             if site["is_observed"]:
                 d_size = min(d_size, u_size)  # just an optimization
@@ -361,17 +360,19 @@ class AutoGaussianFunsor(AutoGaussian):
         super()._setup_prototype(*args, **kwargs)
         funsor = _import_funsor()
 
-        # Check plates are strictly nested.
+        # Check TVE condition 1: plate nesting is monotone.
         for d in self._factors:
+            pd = {p.name for p in self._plates[d]}
             for u in self.dependencies[d]:
-                broken_plates = self._plates[u] - self._plates[d]
-                if broken_plates:
-                    raise NotImplementedError(
-                        "Expected strictly increasing plates, but found dependency "
-                        f"{u} -> {d} leaves plates {set(broken_plates)}. "
-                        "Consider splitting into multiple guides via AutoGuideList, "
-                        "or replacing the plate in the model by .to_event()."
-                    )
+                pu = {p.name for p in self._plates[u]}
+                if pu <= pd:
+                    continue  # ok
+                raise NotImplementedError(
+                    "Expected monotone plate nesting, but found dependency "
+                    f"{repr(u)} -> {repr(d)} leaves plates {pu - pd}. "
+                    "Consider splitting into multiple guides via AutoGuideList, "
+                    "or replacing the plate in the model by .to_event()."
+                )
 
         # Determine TVE problem shape.
         factor_inputs: Dict[str, OrderedDict[str, funsor.Domain]] = {}
@@ -379,7 +380,7 @@ class AutoGaussianFunsor(AutoGaussian):
         plate_to_dim: Dict[str, int] = {}
         for d, site in self._factors.items():
             inputs = OrderedDict()
-            for f in site["cond_indep_stack"]:
+            for f in sorted(site["cond_indep_stack"], key=lambda f: f.dim):
                 plate_to_dim[f.name] = f.dim
                 inputs[f.name] = funsor.Bint[f.size]
                 eliminate.add(f.name)
@@ -412,12 +413,22 @@ class AutoGaussianFunsor(AutoGaussian):
             factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
 
         # Perform Gaussian tensor variable elimination.
-        samples, log_prob = funsor.recipes.forward_filter_backward_rsample(
-            factors=factors,
-            eliminate=self._funsor_eliminate,
-            plates=frozenset(plate_to_dim),
-            sample_inputs={f.name: funsor.Bint[f.size] for f in particle_plates},
-        )
+        try:  # Convert ValueError into NotImplementedError.
+            samples, log_prob = funsor.recipes.forward_filter_backward_rsample(
+                factors=factors,
+                eliminate=self._funsor_eliminate,
+                plates=frozenset(plate_to_dim),
+                sample_inputs={f.name: funsor.Bint[f.size] for f in particle_plates},
+            )
+        except ValueError as e:
+            if str(e) != "intractable!":
+                raise e from None
+            raise NotImplementedError(
+                "Funsor backend found intractable plate nesting. "
+                'Consider using AutoGaussian(..., backend="dense"), '
+                "splitting into multiple guides via AutoGuideList, or "
+                "replacing some plates in the model by .to_event()."
+            ) from e
 
         # Convert funsor to torch.
         if am_i_wrapped() and poutine.get_mask() is not False:

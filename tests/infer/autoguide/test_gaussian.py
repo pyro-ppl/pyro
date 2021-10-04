@@ -197,12 +197,30 @@ def test_structure_4():
     check_structure(model, expected)
 
 
+def test_structure_5():
+    def model():
+        i_plate = pyro.plate("i", 2, dim=-1)
+        with i_plate:
+            a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.Normal(a.mean(-1), 1))
+        with i_plate:
+            pyro.sample("c", dist.Normal(b, 1), obs=torch.zeros(2))
+
+    # size = 2 + 1 = 3
+    expected = [
+        "? . ?",
+        ". ? ?",
+        "? ? ?",
+    ]
+    check_structure(model, expected)
+
+
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_broken_plates_smoke(backend):
     def model():
         with pyro.plate("i", 2):
-            x = pyro.sample("x", dist.Normal(0, 1))
-        pyro.sample("y", dist.Normal(x.mean(-1), 1), obs=torch.tensor(0.0))
+            a = pyro.sample("a", dist.Normal(0, 1))
+        pyro.sample("b", dist.Normal(a.mean(-1), 1), obs=torch.tensor(0.0))
 
     guide = AutoGaussian(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
@@ -217,9 +235,15 @@ def test_broken_plates_smoke(backend):
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_intractable_smoke(backend):
     def model():
-        with pyro.plate("i", 2):
-            x = pyro.sample("x", dist.Normal(0, 1))
-        pyro.sample("y", dist.Normal(x.mean(-1), 1), obs=torch.tensor(0.0))
+        i_plate = pyro.plate("i", 2, dim=-1)
+        j_plate = pyro.plate("j", 3, dim=-2)
+        with i_plate:
+            a = pyro.sample("a", dist.Normal(0, 1))
+        with j_plate:
+            b = pyro.sample("b", dist.Normal(0, 1))
+        with i_plate, j_plate:
+            c = pyro.sample("c", dist.Normal(a + b, 1))
+            pyro.sample("d", dist.Normal(c, 1), obs=torch.zeros(3, 2))
 
     guide = AutoGaussian(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())

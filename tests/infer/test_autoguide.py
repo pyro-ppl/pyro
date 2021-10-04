@@ -4,7 +4,6 @@
 import functools
 import io
 import warnings
-from operator import attrgetter
 
 import numpy as np
 import pytest
@@ -44,6 +43,13 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
+AutoGaussianFunsor_xfail = pytest.param(
+    AutoGaussianFunsor,
+    marks=[
+        pytest.mark.stage("funsor"),
+        pytest.mark.xfail(reason="jit is not supported"),
+    ],
+)
 AutoGaussianFunsor = pytest.param(
     AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
 )
@@ -377,6 +383,14 @@ def test_median(auto_class, Elbo):
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
+def serialize_model():
+    pyro.sample("x", dist.Normal(0.0, 1.0))
+    with pyro.plate("plate", 2):
+        pyro.sample("y", dist.LogNormal(0.0, 1.0))
+        pyro.sample("z", dist.Beta(2.0, 2.0))
+
+
+@pytest.mark.parametrize("jit", [False, True], ids=["nojit", "jit"])
 @pytest.mark.parametrize(
     "auto_class",
     [
@@ -395,49 +409,57 @@ def test_median(auto_class, Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
         AutoStructured,
         AutoStructured_median,
+        AutoGaussian,
+        AutoGaussianFunsor_xfail,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_autoguide_serialization(auto_class, Elbo):
-    def model():
-        pyro.sample("x", dist.Normal(0.0, 1.0))
-        with pyro.plate("plate", 2):
-            pyro.sample("y", dist.LogNormal(0.0, 1.0))
-            pyro.sample("z", dist.Beta(2.0, 2.0))
-
-    guide = auto_class(model)
+def test_serialization(auto_class, Elbo, jit):
+    guide = auto_class(serialize_model)
     guide()
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
     pyro.set_rng_seed(0)
     expected = guide.call()
-    names = sorted(guide())
+    latent_names = sorted(guide())
+    expected_params = {k: v.data for k, v in guide.named_parameters()}
 
-    # Ignore tracer warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
-        # XXX: check_trace=True fails for AutoLaplaceApproximation
-        traced_guide = torch.jit.trace_module(guide, {"call": ()}, check_trace=False)
-    f = io.BytesIO()
-    torch.jit.save(traced_guide, f)
-    f.seek(0)
-    guide_deser = torch.jit.load(f)
+    if jit:
+        # Ignore tracer warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+            # XXX: check_trace=True fails for AutoLaplaceApproximation
+            traced_guide = torch.jit.trace_module(
+                guide, {"call": ()}, check_trace=False
+            )
+        f = io.BytesIO()
+        torch.jit.save(traced_guide, f)
+        del guide, traced_guide
+        pyro.clear_param_store()
+        f.seek(0)
+        guide_deser = torch.jit.load(f)
+    else:
+        # Work around https://github.com/pytorch/pytorch/issues/27972
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            f = io.BytesIO()
+            torch.save(guide, f)
+            f.seek(0)
+            guide_deser = torch.load(f)
 
     # Check .call() result.
     pyro.set_rng_seed(0)
     actual = guide_deser.call()
     assert len(actual) == len(expected)
-    for name, a, e in zip(names, actual, expected):
+    for name, a, e in zip(latent_names, actual, expected):
         assert_equal(a, e, msg="{}: {} vs {}".format(name, a, e))
 
     # Check named_parameters.
-    expected_names = {name for name, _ in guide.named_parameters()}
-    actual_names = {name for name, _ in guide_deser.named_parameters()}
-    assert actual_names == expected_names
-    for name in actual_names:
-        # Get nested attributes.
-        attr_get = attrgetter(name)
-        assert_equal(attr_get(guide_deser), attr_get(guide).data)
+    actual_params = {k: v.data for k, v in guide_deser.named_parameters()}
+    assert set(actual_params) == set(expected_params)
+    for name, expected in expected_params.items():
+        actual = actual_params[name]
+        assert_equal(actual, expected)
 
 
 def AutoGuideList_x(model):
@@ -871,6 +893,8 @@ class AutoStructured_predictive(AutoStructured):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoStructured,
         AutoStructured_predictive,
+        AutoGaussian,
+        AutoGaussianFunsor_xfail,
     ],
 )
 def test_predictive(auto_class):
