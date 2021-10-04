@@ -129,6 +129,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
         # Trace model dependencies.
         model = self._original_model[0]
+        self._original_model = None
         self.dependencies = poutine.block(get_dependencies)(model, args, kwargs)[
             "prior_dependencies"
         ]

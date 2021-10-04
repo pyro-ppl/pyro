@@ -289,19 +289,20 @@ def auto_guide_callable(model):
     return guide
 
 
+class GuideX(AutoGuide):
+    def __init__(self, model):
+        super().__init__(model)
+        self.x_loc = nn.Parameter(torch.tensor(1.0))
+        self.x_scale = PyroParam(torch.tensor(0.1), constraint=constraints.positive)
+
+    def forward(self, *args, **kwargs):
+        return {"x": pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))}
+
+    def median(self, *args, **kwargs):
+        return {"x": self.x_loc.detach()}
+
+
 def auto_guide_module_callable(model):
-    class GuideX(AutoGuide):
-        def __init__(self, model):
-            super().__init__(model)
-            self.x_loc = nn.Parameter(torch.tensor(1.0))
-            self.x_scale = PyroParam(torch.tensor(0.1), constraint=constraints.positive)
-
-        def forward(self, *args, **kwargs):
-            return {"x": pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))}
-
-        def median(self, *args, **kwargs):
-            return {"x": self.x_loc.detach()}
-
     guide = AutoGuideList(model)
     guide.custom = GuideX(model)
     guide.diagnorm = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
@@ -383,13 +384,6 @@ def test_median(auto_class, Elbo):
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
-def serialize_model():
-    pyro.sample("x", dist.Normal(0.0, 1.0))
-    with pyro.plate("plate", 2):
-        pyro.sample("y", dist.LogNormal(0.0, 1.0))
-        pyro.sample("z", dist.Beta(2.0, 2.0))
-
-
 @pytest.mark.parametrize("jit", [False, True], ids=["nojit", "jit"])
 @pytest.mark.parametrize(
     "auto_class",
@@ -415,7 +409,13 @@ def serialize_model():
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_serialization(auto_class, Elbo, jit):
-    guide = auto_class(serialize_model)
+    def model():
+        pyro.sample("x", dist.Normal(0.0, 1.0))
+        with pyro.plate("plate", 2):
+            pyro.sample("y", dist.LogNormal(0.0, 1.0))
+            pyro.sample("z", dist.Beta(2.0, 2.0))
+
+    guide = auto_class(model)
     guide()
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
