@@ -83,7 +83,7 @@ class AutoGuide(PyroModule):
         return getattr(super(), "__getstate__", self.__dict__.copy)()
 
     def __setstate__(self, state):
-        getattr(super(), "__getstate__", self.__dict__.update)(state)
+        getattr(super(), "__setstate__", self.__dict__.update)(state)
         assert self.master is None
         master_ref = weakref.ref(self)
         for _, mod in self.named_modules():
