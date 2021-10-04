@@ -8,7 +8,7 @@ AutoGuide
 .. autoclass:: pyro.infer.autoguide.AutoGuide
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoGuideList
@@ -16,7 +16,7 @@ AutoGuideList
 .. autoclass:: pyro.infer.autoguide.AutoGuideList
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoCallable
@@ -24,7 +24,7 @@ AutoCallable
 .. autoclass:: pyro.infer.autoguide.AutoCallable
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoNormal
@@ -32,7 +32,7 @@ AutoNormal
 .. autoclass:: pyro.infer.autoguide.AutoNormal
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoDelta
@@ -40,7 +40,7 @@ AutoDelta
 .. autoclass:: pyro.infer.autoguide.AutoDelta
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoContinuous
@@ -48,7 +48,7 @@ AutoContinuous
 .. autoclass:: pyro.infer.autoguide.AutoContinuous
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoMultivariateNormal
@@ -56,7 +56,7 @@ AutoMultivariateNormal
 .. autoclass:: pyro.infer.autoguide.AutoMultivariateNormal
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoDiagonalNormal
@@ -64,7 +64,7 @@ AutoDiagonalNormal
 .. autoclass:: pyro.infer.autoguide.AutoDiagonalNormal
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoLowRankMultivariateNormal
@@ -72,7 +72,7 @@ AutoLowRankMultivariateNormal
 .. autoclass:: pyro.infer.autoguide.AutoLowRankMultivariateNormal
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 
@@ -81,7 +81,7 @@ AutoNormalizingFlow
 .. autoclass:: pyro.infer.autoguide.AutoNormalizingFlow
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 
@@ -90,7 +90,7 @@ AutoIAFNormal
 .. autoclass:: pyro.infer.autoguide.AutoIAFNormal
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoLaplaceApproximation
@@ -98,7 +98,7 @@ AutoLaplaceApproximation
 .. autoclass:: pyro.infer.autoguide.AutoLaplaceApproximation
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoDiscreteParallel
@@ -106,7 +106,7 @@ AutoDiscreteParallel
 .. autoclass:: pyro.infer.autoguide.AutoDiscreteParallel
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoStructured
@@ -114,7 +114,15 @@ AutoStructured
 .. autoclass:: pyro.infer.autoguide.AutoStructured
     :members:
     :undoc-members:
-    :special-members: __call__
+    :member-order: bysource
+    :show-inheritance:
+
+AutoGaussian
+------------
+.. autoclass:: pyro.infer.autoguide.AutoGaussian
+    :members:
+    :undoc-members:
+    :member-order: bysource
     :show-inheritance:
 
 .. _autoguide-initialization:
@@ -125,5 +133,5 @@ Initialization
     :members:
     :undoc-members:
     :special-members: __call__
-    :show-inheritance:
     :member-order: bysource
+    :show-inheritance:

@@ -76,8 +76,25 @@ class AutoGuide(PyroModule):
     def model(self):
         return self._model[0]
 
+    def __getstate__(self):
+        # Do not pickle weakrefs.
+        self._model = None
+        self.master = None
+        return getattr(super(), "__getstate__", self.__dict__.copy)()
+
+    def __setstate__(self, state):
+        getattr(super(), "__setstate__", self.__dict__.update)(state)
+        assert self.master is None
+        master_ref = weakref.ref(self)
+        for _, mod in self.named_modules():
+            if mod is not self and isinstance(mod, AutoGuide):
+                mod._update_master(master_ref)
+
     def _update_master(self, master_ref):
         self.master = master_ref
+        for _, mod in self.named_modules():
+            if mod is not self and isinstance(mod, AutoGuide):
+                mod._update_master(master_ref)
 
     def call(self, *args, **kwargs):
         """
@@ -103,8 +120,8 @@ class AutoGuide(PyroModule):
 
     def __setattr__(self, name, value):
         if isinstance(value, AutoGuide):
-            master_ref = self if self.master is None else self.master
-            value._update_master(weakref.ref(master_ref))
+            master_ref = weakref.ref(self) if self.master is None else self.master
+            value._update_master(master_ref)
         super().__setattr__(name, value)
 
     def _create_plates(self, *args, **kwargs):
@@ -183,11 +200,6 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
             assert part_site["fn"].batch_shape == self_site["fn"].batch_shape
             assert part_site["fn"].event_shape == self_site["fn"].event_shape
             assert part_site["value"].shape == self_site["value"].shape
-
-    def _update_master(self, master_ref):
-        self.master = master_ref
-        for submodule in self:
-            submodule._update_master(master_ref)
 
     def append(self, part):
         """

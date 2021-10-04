@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from pyro.infer.autoguide.gaussian import AutoGaussian
 from pyro.infer.autoguide.guides import (
     AutoCallable,
     AutoContinuous,
@@ -34,6 +35,7 @@ __all__ = [
     "AutoDelta",
     "AutoDiagonalNormal",
     "AutoDiscreteParallel",
+    "AutoGaussian",
     "AutoGuide",
     "AutoGuideList",
     "AutoIAFNormal",
