@@ -469,8 +469,8 @@ def test_pyrocov_reparam(model, backend):
     predictive(dataset)
 
 
-@pytest.mark.parametrize("backend", ["funsor"])
-def test_pyrocov_structure(backend):
+@pytest.mark.stage("funsor")
+def test_pyrocov_structure():
     from funsor import Bint, Real, Reals
 
     T, P, S, F = 2, 3, 4, 5
@@ -480,7 +480,7 @@ def test_pyrocov_structure(backend):
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(pyrocov_model_poisson, backend=backend)
+    guide = AutoGaussian(pyrocov_model_poisson, backend="funsor")
     guide(dataset)  # initialize
 
     expected_plates = frozenset(["time", "place", "strain"])
