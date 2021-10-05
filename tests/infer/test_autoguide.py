@@ -43,13 +43,6 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
-AutoGaussianFunsor_xfail = pytest.param(
-    AutoGaussianFunsor,
-    marks=[
-        pytest.mark.stage("funsor"),
-        pytest.mark.xfail(reason="jit is not supported"),
-    ],
-)
 AutoGaussianFunsor = pytest.param(
     AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
 )
@@ -404,7 +397,7 @@ def test_median(auto_class, Elbo):
         AutoStructured,
         AutoStructured_median,
         AutoGaussian,
-        AutoGaussianFunsor_xfail,
+        AutoGaussianFunsor,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -894,7 +887,7 @@ class AutoStructured_predictive(AutoStructured):
         AutoStructured,
         AutoStructured_predictive,
         AutoGaussian,
-        AutoGaussianFunsor_xfail,
+        AutoGaussianFunsor,
     ],
 )
 def test_predictive(auto_class):

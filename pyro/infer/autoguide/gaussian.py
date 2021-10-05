@@ -210,7 +210,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
                 )
         return values
 
-    def median(self) -> Dict[str, torch.Tensor]:
+    def median(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         """
         Returns the posterior median value of each latent variable.
 

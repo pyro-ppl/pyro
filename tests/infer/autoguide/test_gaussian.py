@@ -9,7 +9,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Predictive, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Predictive, Trace_ELBO
 from pyro.infer.autoguide import AutoGaussian
 from pyro.infer.autoguide.gaussian import (
     AutoGaussianDense,
@@ -18,7 +18,7 @@ from pyro.infer.autoguide.gaussian import (
 )
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_if_not_implemented
+from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
 
 BACKENDS = [
     "dense",
@@ -398,7 +398,8 @@ def pyrocov_model_poisson(dataset):
     T, P, _ = local_time.shape
     S, F = features.shape
     weekly_strains = dataset["weekly_strains"]  # [T, P, S]
-    assert weekly_strains.shape == (T, P, S)
+    if not torch._C._get_tracing_state():
+        assert weekly_strains.shape == (T, P, S)
     strain_plate = pyro.plate("strain", S, dim=-1)
     place_plate = pyro.plate("place", P, dim=-2)
     time_plate = pyro.plate("time", T, dim=-3)
@@ -583,29 +584,55 @@ def test_pyrocov_structure():
     assert guide._funsor_factor_inputs == expected_factor_inputs
 
 
+@pytest.mark.parametrize(
+    "jit",
+    [False, xfail_param(True, reason="jit shortcomings")],
+    ids=["nojit", "jit"],
+)
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_profile(backend, n=1, num_steps=1):
+def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     """
     Helper function for profiling.
     """
+    print("Generating fake data")
     model = pyrocov_model_poisson
-    T, P, S, F = 2 * n, 3 * n, 4 * n, 5 * n
+    T, P, S, F = n, n + 1, n + 2, n + 3
     dataset = {
         "features": torch.randn(S, F),
         "local_time": torch.randn(T, P),
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(model)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    guide = AutoGaussian(model, backend=backend)
+    elbo = JitTrace_ELBO() if jit else Trace_ELBO()
+    svi = SVI(model, guide, Adam({"lr": 1e-8}), elbo)
     guide(dataset)  # initialize
     print("Parameter shapes:")
     for name, param in guide.named_parameters():
         print(f"  {name}: {tuple(param.shape)}")
 
     for step in range(num_steps):
-        svi.step(dataset)
+        loss = svi.step(dataset)
+        if log_every and step % log_every == 0:
+            print(f"step {step} loss = {loss}")
 
 
 if __name__ == "__main__":
-    test_profile(backend="funsor", n=10, num_steps=100)
+    import argparse
+
+    # Usage: time python -m tests.infer.autoguide.test_autoguide
+    parser = argparse.ArgumentParser(description="Profiler for pyro-cov model")
+    parser.add_argument("-b", "--backend", default="funsor")
+    parser.add_argument("-s", "--size", default=10, type=int)
+    parser.add_argument("-n", "--num-steps", default=1001, type=int)
+    parser.add_argument("--jit", default=True, action="store_true")
+    parser.add_argument("--nojit", dest="jit", action="store_false")
+    parser.add_argument("-l", "--log-every", default=1, type=int)
+    args = parser.parse_args()
+    test_profile(
+        backend=args.backend,
+        jit=args.jit,
+        n=args.size,
+        num_steps=args.num_steps,
+        log_every=args.log_every,
+    )
