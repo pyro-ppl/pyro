@@ -592,7 +592,7 @@ def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     """
     print("Generating fake data")
     model = pyrocov_model_poisson
-    T, P, S, F = n, n + 1, n + 2, n + 3
+    T, P, S, F = min(n, 50), n + 1, n + 2, n + 3
     dataset = {
         "features": torch.randn(S, F),
         "local_time": torch.randn(T, P),
