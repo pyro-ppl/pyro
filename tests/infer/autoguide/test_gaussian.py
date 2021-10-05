@@ -599,15 +599,17 @@ def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
+    print("Initializing guide")
     guide = AutoGaussian(model, backend=backend)
-    Elbo = JitTrace_ELBO if jit else Trace_ELBO
-    elbo = Elbo(max_plate_nesting=3, ignore_jit_warnings=True)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), elbo)
     guide(dataset)  # initialize
     print("Parameter shapes:")
     for name, param in guide.named_parameters():
         print(f"  {name}: {tuple(param.shape)}")
 
+    print("Training")
+    Elbo = JitTrace_ELBO if jit else Trace_ELBO
+    elbo = Elbo(max_plate_nesting=3, ignore_jit_warnings=True)
+    svi = SVI(model, guide, Adam({"lr": 1e-8}), elbo)
     for step in range(num_steps):
         loss = svi.step(dataset)
         if log_every and step % log_every == 0:
@@ -616,16 +618,32 @@ def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
 
 if __name__ == "__main__":
     import argparse
+    import cProfile
 
     # Usage: time python -m tests.infer.autoguide.test_autoguide
     parser = argparse.ArgumentParser(description="Profiler for pyro-cov model")
     parser.add_argument("-b", "--backend", default="funsor")
     parser.add_argument("-s", "--size", default=10, type=int)
     parser.add_argument("-n", "--num-steps", default=1001, type=int)
+    parser.add_argument("-fp64", "--double", action="store_true")
+    parser.add_argument("-fp32", "--float", action="store_false", dest="double")
+    parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--cpu", dest="cuda", action="store_false")
     parser.add_argument("--jit", default=True, action="store_true")
-    parser.add_argument("--nojit", dest="jit", action="store_false")
+    parser.add_argument("--no-jit", dest="jit", action="store_false")
     parser.add_argument("-l", "--log-every", default=1, type=int)
+    parser.add_argument("-p", "--profile")
     args = parser.parse_args()
+
+    torch.set_default_dtype(torch.double if args.double else torch.float)
+    if args.cuda:
+        torch.set_default_tensor_type(
+            torch.cuda.DoubleTensor if args.double else torch.cuda.FloatTensor
+        )
+
+    if args.profile:
+        p = cProfile.Profile()
+        p.enable()
     test_profile(
         backend=args.backend,
         jit=args.jit,
@@ -633,3 +651,6 @@ if __name__ == "__main__":
         num_steps=args.num_steps,
         log_every=args.log_every,
     )
+    if args.profile:
+        p.disable()
+        p.dump_stats(args.profile)
