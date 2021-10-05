@@ -9,7 +9,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Predictive, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Predictive, Trace_ELBO
 from pyro.infer.autoguide import AutoGaussian
 from pyro.infer.autoguide.gaussian import (
     AutoGaussianDense,
@@ -398,7 +398,8 @@ def pyrocov_model_poisson(dataset):
     T, P, _ = local_time.shape
     S, F = features.shape
     weekly_strains = dataset["weekly_strains"]  # [T, P, S]
-    assert weekly_strains.shape == (T, P, S)
+    if not torch._C._get_tracing_state():
+        assert weekly_strains.shape == (T, P, S)
     strain_plate = pyro.plate("strain", S, dim=-1)
     place_plate = pyro.plate("place", P, dim=-2)
     time_plate = pyro.plate("time", T, dim=-3)
@@ -583,29 +584,73 @@ def test_pyrocov_structure():
     assert guide._funsor_factor_inputs == expected_factor_inputs
 
 
+@pytest.mark.parametrize("jit", [False, True], ids=["nojit", "jit"])
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_profile(backend, n=1, num_steps=1):
+def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     """
     Helper function for profiling.
     """
+    print("Generating fake data")
     model = pyrocov_model_poisson
-    T, P, S, F = 2 * n, 3 * n, 4 * n, 5 * n
+    T, P, S, F = min(n, 50), n + 1, n + 2, n + 3
     dataset = {
         "features": torch.randn(S, F),
         "local_time": torch.randn(T, P),
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(model)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    print("Initializing guide")
+    guide = AutoGaussian(model, backend=backend)
     guide(dataset)  # initialize
     print("Parameter shapes:")
     for name, param in guide.named_parameters():
         print(f"  {name}: {tuple(param.shape)}")
 
+    print("Training")
+    Elbo = JitTrace_ELBO if jit else Trace_ELBO
+    elbo = Elbo(max_plate_nesting=3, ignore_jit_warnings=True)
+    svi = SVI(model, guide, Adam({"lr": 1e-8}), elbo)
     for step in range(num_steps):
-        svi.step(dataset)
+        loss = svi.step(dataset)
+        if log_every and step % log_every == 0:
+            print(f"step {step} loss = {loss}")
 
 
 if __name__ == "__main__":
-    test_profile(backend="funsor", n=10, num_steps=100)
+    import argparse
+    import cProfile
+
+    # Usage: time python -m tests.infer.autoguide.test_autoguide
+    parser = argparse.ArgumentParser(description="Profiler for pyro-cov model")
+    parser.add_argument("-b", "--backend", default="funsor")
+    parser.add_argument("-s", "--size", default=10, type=int)
+    parser.add_argument("-n", "--num-steps", default=1001, type=int)
+    parser.add_argument("-fp64", "--double", action="store_true")
+    parser.add_argument("-fp32", "--float", action="store_false", dest="double")
+    parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--cpu", dest="cuda", action="store_false")
+    parser.add_argument("--jit", default=True, action="store_true")
+    parser.add_argument("--no-jit", dest="jit", action="store_false")
+    parser.add_argument("-l", "--log-every", default=1, type=int)
+    parser.add_argument("-p", "--profile")
+    args = parser.parse_args()
+
+    torch.set_default_dtype(torch.double if args.double else torch.float)
+    if args.cuda:
+        torch.set_default_tensor_type(
+            torch.cuda.DoubleTensor if args.double else torch.cuda.FloatTensor
+        )
+
+    if args.profile:
+        p = cProfile.Profile()
+        p.enable()
+    test_profile(
+        backend=args.backend,
+        jit=args.jit,
+        n=args.size,
+        num_steps=args.num_steps,
+        log_every=args.log_every,
+    )
+    if args.profile:
+        p.disable()
+        p.dump_stats(args.profile)

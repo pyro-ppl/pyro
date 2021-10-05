@@ -39,9 +39,11 @@ class RequiresGradMessenger(Messenger):
     def _pyro_post_sample(self, msg):
         if is_sample_site(msg) and msg["value"].dtype.is_floating_point:
             if self.predicate(msg):
-                msg["value"].requires_grad_()
+                if not msg["value"].requires_grad:
+                    msg["value"] = msg["value"][...].requires_grad_()
             elif not msg["is_observed"] and msg["value"].requires_grad:
-                msg["value"] = msg["value"].detach()
+                if msg["value"].requires_grad:
+                    msg["value"] = msg["value"].detach()
 
 
 @torch.enable_grad()
