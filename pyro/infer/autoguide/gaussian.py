@@ -4,6 +4,7 @@
 import itertools
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
+from types import SimpleNamespace
 from typing import Callable, Dict, Optional, Set, Tuple, Union
 
 import torch
@@ -136,42 +137,48 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
         # Collect factors and plates.
         for d, site in self.prototype_trace.nodes.items():
-            if site["type"] == "sample" and not site_is_subsample(site):
-                assert all(f.vectorized for f in site["cond_indep_stack"])
-                self._factors[d] = site
-                plates = frozenset(site["cond_indep_stack"])
-                if site["fn"].batch_shape != _plates_to_shape(plates):
-                    raise ValueError(
-                        f"Shape mismatch at site '{d}'. "
-                        "Are you missing a pyro.plate() or .to_event()?"
-                    )
-                if site["is_observed"]:
-                    # Eagerly eliminate irrelevant observation plates.
-                    plates &= frozenset.union(
-                        *(self._plates[u] for u in self.dependencies[d] if u != d)
-                    )
-                self._plates[d] = plates
+            # Prune non-essential parts of the trace to save memory.
+            pruned_site, site = site, site.copy()
+            pruned_site.clear()
 
-        # Create location-scale parameters, one per latent variable.
-        for d, site in self._factors.items():
-            if not site["is_observed"]:
-                with helpful_support_errors(site):
-                    init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
-                batch_shape = site["fn"].batch_shape
-                event_shape = init_loc.shape[len(batch_shape) :]
-                self._unconstrained_event_shapes[d] = event_shape
-                self._event_numel[d] = event_shape.numel()
-                event_dim = len(event_shape)
-                deep_setattr(self.locs, d, PyroParam(init_loc, event_dim=event_dim))
-                deep_setattr(
-                    self.scales,
-                    d,
-                    PyroParam(
-                        torch.full_like(init_loc, self._init_scale),
-                        constraint=self.scale_constraint,
-                        event_dim=event_dim,
-                    ),
+            # Collect factors and plates.
+            if site["type"] != "sample" or site_is_subsample(site):
+                continue
+            assert all(f.vectorized for f in site["cond_indep_stack"])
+            self._factors[d] = self._compress_site(site)
+            plates = frozenset(site["cond_indep_stack"])
+            if site["fn"].batch_shape != _plates_to_shape(plates):
+                raise ValueError(
+                    f"Shape mismatch at site '{d}'. "
+                    "Are you missing a pyro.plate() or .to_event()?"
                 )
+            if site["is_observed"]:
+                # Eagerly eliminate irrelevant observation plates.
+                plates &= frozenset.union(
+                    *(self._plates[u] for u in self.dependencies[d] if u != d)
+                )
+            self._plates[d] = plates
+
+            # Create location-scale parameters, one per latent variable.
+            if site["is_observed"]:
+                continue
+            with helpful_support_errors(site):
+                init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
+            batch_shape = site["fn"].batch_shape
+            event_shape = init_loc.shape[len(batch_shape) :]
+            self._unconstrained_event_shapes[d] = event_shape
+            self._event_numel[d] = event_shape.numel()
+            event_dim = len(event_shape)
+            deep_setattr(self.locs, d, PyroParam(init_loc, event_dim=event_dim))
+            deep_setattr(
+                self.scales,
+                d,
+                PyroParam(
+                    torch.full_like(init_loc, self._init_scale),
+                    constraint=self.scale_constraint,
+                    event_dim=event_dim,
+                ),
+            )
 
         # Create parameters for dependencies, one per factor.
         for d, site in self._factors.items():
@@ -190,6 +197,21 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
                 # Initialize the [d,d] block to the identity matrix.
                 sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)
             deep_setattr(self.factors, d, PyroParam(sqrt, event_dim=2))
+
+    @staticmethod
+    def _compress_site(site):
+        # Save memory by retaining only necessary parts of the site.
+        return {
+            "name": site["name"],
+            "type": site["type"],
+            "cond_indep_stack": site["cond_indep_stack"],
+            "is_observed": site["is_observed"],
+            "fn": SimpleNamespace(
+                support=site["fn"].support,
+                batch_shape=site["fn"].batch_shape,
+                event_dim=site["fn"].event_dim,
+            ),
+        }
 
     def forward(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         if self.prototype_trace is None:
