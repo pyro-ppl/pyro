@@ -18,7 +18,7 @@ from pyro.infer.autoguide.gaussian import (
 )
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
+from tests.common import assert_equal, xfail_if_not_implemented
 
 BACKENDS = [
     "dense",
@@ -584,11 +584,7 @@ def test_pyrocov_structure():
     assert guide._funsor_factor_inputs == expected_factor_inputs
 
 
-@pytest.mark.parametrize(
-    "jit",
-    [False, xfail_param(True, reason="jit shortcomings")],
-    ids=["nojit", "jit"],
-)
+@pytest.mark.parametrize("jit", [False, True], ids=["nojit", "jit"])
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     """
@@ -604,7 +600,8 @@ def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     }
 
     guide = AutoGaussian(model, backend=backend)
-    elbo = JitTrace_ELBO() if jit else Trace_ELBO()
+    Elbo = JitTrace_ELBO if jit else Trace_ELBO
+    elbo = Elbo(max_plate_nesting=3, ignore_jit_warnings=True)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), elbo)
     guide(dataset)  # initialize
     print("Parameter shapes:")
