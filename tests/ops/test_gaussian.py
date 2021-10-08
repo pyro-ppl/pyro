@@ -465,7 +465,12 @@ def test_gaussian_funsor(batch_shape):
     # Monte carlo estimate entropy via funsor.
     inputs = OrderedDict([(k, funsor.Bint[v]) for k, v in zip("ij", batch_shape)])
     inputs["x"] = funsor.Reals[3]
-    f_gaussian = funsor.gaussian.Gaussian(info_vec, precision, inputs)
+    f_gaussian = funsor.gaussian.Gaussian(
+        mean=loc,
+        precision=precision,
+        inputs=inputs,
+        negate=False,
+    )
     f_log_Z = f_gaussian.reduce(funsor.ops.logaddexp, "x")
     sample_inputs = OrderedDict(particle=funsor.Bint[num_samples])
     deltas = f_gaussian.sample("x", sample_inputs)
