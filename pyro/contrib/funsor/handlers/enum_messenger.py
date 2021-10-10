@@ -59,6 +59,13 @@ def _get_support_value_tensor(funsor_dist, name, **kwargs):
     )
 
 
+@_get_support_value.register(funsor.Provenance)
+def _get_support_value_tensor(funsor_dist, name, **kwargs):
+    assert name in funsor_dist.inputs
+    value = _get_support_value(funsor_dist.arg, name, **kwargs)
+    return funsor.Provenance(funsor_dist.const_inputs, value)
+
+
 @_get_support_value.register(funsor.distribution.Distribution)
 def _get_support_value_distribution(funsor_dist, name, expand=False):
     assert name == funsor_dist.value.name
@@ -204,7 +211,7 @@ class ProvenanceMessenger(ReentrantMessenger):
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )
-        msg["funsor"]["value"] = funsor.constant.Constant(
+        msg["funsor"]["value"] = funsor.Provenance(
             OrderedDict(((msg["name"], support_value.output),)),
             support_value,
         )
