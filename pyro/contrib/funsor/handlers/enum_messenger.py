@@ -59,11 +59,11 @@ def _get_support_value_tensor(funsor_dist, name, **kwargs):
     )
 
 
-@_get_support_value.register(funsor.Provenance)
-def _get_support_value_tensor(funsor_dist, name, **kwargs):
+@_get_support_value.register(funsor.Constant)
+def _get_support_value_constant(funsor_dist, name, **kwargs):
     assert name in funsor_dist.inputs
     value = _get_support_value(funsor_dist.arg, name, **kwargs)
-    return funsor.Provenance(funsor_dist.const_inputs, value)
+    return funsor.Constant(funsor_dist.const_inputs, value)
 
 
 @_get_support_value.register(funsor.distribution.Distribution)
@@ -164,6 +164,19 @@ def _enum_strategy_full(dist, msg):
 def _enum_strategy_exact(dist, msg):
     if isinstance(dist, funsor.Tensor):
         dist = dist - dist.reduce(funsor.ops.logaddexp, msg["name"])
+    else:
+        if hasattr(dist, "probs"):
+            value = dist.probs.materialize(
+                funsor.Variable(msg["name"], dist.inputs[msg["name"]])
+            )
+            dist = dist(**{msg["name"]: value})
+        elif hasattr(dist, "logits"):
+            value = dist.logits.materialize(
+                funsor.Variable(msg["name"], dist.inputs[msg["name"]])
+            )
+            dist = dist(**{msg["name"]: value})
+        else:
+            raise ValueError
     return dist
 
 
@@ -211,7 +224,7 @@ class ProvenanceMessenger(ReentrantMessenger):
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )
-        msg["funsor"]["value"] = funsor.Provenance(
+        msg["funsor"]["value"] = funsor.Constant(
             OrderedDict(((msg["name"], support_value.output),)),
             support_value,
         )

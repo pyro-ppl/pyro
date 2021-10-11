@@ -702,6 +702,7 @@ def test_elbo_enumerate_plate_6(enumerate1):
     _check_loss_and_grads(expected_loss, actual_loss)
 
 
+@pytest.mark.skip(reason="wrong dependency structure?")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_7(scale):

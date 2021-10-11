@@ -178,6 +178,7 @@ def test_guide_enum_gradient(model, guide, data):
 
     assert_equal(actual_grads, expected_grads, prec=1e-4)
 
+
 @pytest.mark.parametrize(
     "Elbo,backend",
     [
