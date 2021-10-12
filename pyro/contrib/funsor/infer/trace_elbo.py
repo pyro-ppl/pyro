@@ -114,11 +114,12 @@ class Trace_ELBO(ELBO):
             guide_terms["plate_vars"] | model_terms["plate_vars"]
         ) - frozenset({"num_particles_vectorized"})
 
+        model_measure_vars = model_terms["measure_vars"] - guide_terms["measure_vars"]
         with funsor.terms.lazy:
             # identify and contract out auxiliary variables in the model with partial_sum_product
             contracted_factors, uncontracted_factors = [], []
             for f in model_terms["log_factors"]:
-                if model_terms["measure_vars"].intersection(f.inputs):
+                if model_measure_vars.intersection(f.inputs):
                     contracted_factors.append(f)
                 else:
                     uncontracted_factors.append(f)
@@ -130,8 +131,7 @@ class Trace_ELBO(ELBO):
                     funsor.ops.add,
                     model_terms["log_measures"] + contracted_factors,
                     plates=plate_vars,
-                    eliminate=model_terms["measure_vars"],
-                    # eliminate=model_terms["measure_vars"] - guide_terms["measure_vars"],
+                    eliminate=model_measure_vars,
                 )
             ]
 

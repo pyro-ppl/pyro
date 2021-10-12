@@ -22,6 +22,7 @@ import weakref
 from contextlib import ExitStack
 
 import torch
+from pyroapi import handlers
 from torch import nn
 from torch.distributions import biject_to
 
@@ -134,8 +135,8 @@ class AutoGuide(PyroModule):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = poutine.block(self.model, prototype_hide_fn)
-        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(
+        model = handlers.block(self.model, prototype_hide_fn)
+        self.prototype_trace = handlers.block(handlers.trace(model).get_trace)(
             *args, **kwargs
         )
         if self.master is not None:
@@ -1148,9 +1149,9 @@ class AutoLaplaceApproximation(AutoContinuous):
         Returns a :class:`AutoMultivariateNormal` instance whose posterior's `loc` and
         `scale_tril` are given by Laplace approximation.
         """
-        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
-        model_trace = poutine.trace(
-            poutine.replay(self.model, trace=guide_trace)
+        guide_trace = handlers.trace(self).get_trace(*args, **kwargs)
+        model_trace = handlers.trace(
+            handlers.replay(self.model, trace=guide_trace)
         ).get_trace(*args, **kwargs)
         loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
 
@@ -1175,8 +1176,8 @@ class AutoDiscreteParallel(AutoGuide):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = poutine.block(config_enumerate(self.model), prototype_hide_fn)
-        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(
+        model = handlers.block(config_enumerate(self.model), prototype_hide_fn)
+        self.prototype_trace = handlers.block(handlers.trace(model).get_trace)(
             *args, **kwargs
         )
         if self.master is not None:
