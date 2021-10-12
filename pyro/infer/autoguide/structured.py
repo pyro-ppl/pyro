@@ -159,6 +159,7 @@ class AutoStructured(AutoGuide):
                         elif prior_order[d] > prior_order[u]:
                             dependencies[d][u] = self.dependencies
             self.dependencies = dict(dependencies)
+        self._original_model = None
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
