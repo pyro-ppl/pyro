@@ -11,7 +11,18 @@ from pyro.contrib.funsor.infer.elbo import ELBO, Jit_ELBO
 from pyro.distributions.util import copy_docs_from
 from pyro.infer import TraceEnum_ELBO as _OrigTraceEnum_ELBO
 
-from .trace_elbo import Trace_ELBO, apply_optimizer, terms_from_trace
+from .trace_elbo import Trace_ELBO, terms_from_trace
+
+
+# Work around a bug in unfold_contraction_generic_tuple interacting with
+# Approximate introduced in https://github.com/pyro-ppl/funsor/pull/488 .
+# Once fixed, this can be replaced by funsor.optimizer.apply_optimizer().
+def apply_optimizer(x):
+    with funsor.interpretations.normalize:
+        expr = funsor.interpreter.reinterpret(x)
+
+    with funsor.optimizer.optimize_base:
+        return funsor.interpreter.reinterpret(expr)
 
 
 @copy_docs_from(_OrigTraceEnum_ELBO)

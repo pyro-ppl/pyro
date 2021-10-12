@@ -119,7 +119,7 @@ def test_gradient(model, guide, data):
         pyro.clear_param_store()
         elbo = infer.Trace_ELBO(
             max_plate_nesting=1,  # set this to ensure rng agrees across runs
-            num_particles=100000,
+            num_particles=50000,
             vectorize_particles=True,
             strict_enumeration_warning=False,
         )
@@ -133,7 +133,7 @@ def test_gradient(model, guide, data):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
         logger.info("actual   {} = {}".format(name, actual_grads[name]))
 
-    assert_equal(actual_grads, expected_grads, prec=0.03)
+    assert_equal(actual_grads, expected_grads, prec=0.02)
 
 
 @pytest.mark.parametrize(

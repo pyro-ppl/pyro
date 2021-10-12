@@ -16,17 +16,6 @@ from pyro.infer import Trace_ELBO as _OrigTrace_ELBO
 from .elbo import ELBO, Jit_ELBO
 
 
-# Work around a bug in unfold_contraction_generic_tuple interacting with
-# Approximate introduced in https://github.com/pyro-ppl/funsor/pull/488 .
-# Once fixed, this can be replaced by funsor.optimizer.apply_optimizer().
-def apply_optimizer(x):
-    with funsor.interpretations.normalize:
-        expr = funsor.interpreter.reinterpret(x)
-
-    with funsor.optimizer.optimize_base:
-        return funsor.interpreter.reinterpret(expr)
-
-
 def terms_from_trace(tr):
     """Helper function to extract elbo components from execution traces."""
     # data structure containing densities, measures, scales, and identification
@@ -178,7 +167,7 @@ class Trace_ELBO(ELBO):
             # average over Monte-Carlo particles
             elbo = elbo.reduce(funsor.ops.mean)
 
-        return -to_data(apply_optimizer(elbo))
+        return -to_data(funsor.optimizer.apply_optimizer(elbo))
 
 
 class JitTrace_ELBO(Jit_ELBO, Trace_ELBO):
