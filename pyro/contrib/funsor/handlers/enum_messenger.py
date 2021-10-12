@@ -164,19 +164,6 @@ def _enum_strategy_full(dist, msg):
 def _enum_strategy_exact(dist, msg):
     if isinstance(dist, funsor.Tensor):
         dist = dist - dist.reduce(funsor.ops.logaddexp, msg["name"])
-    else:
-        if hasattr(dist, "probs"):
-            value = dist.probs.materialize(
-                funsor.Variable(msg["name"], dist.inputs[msg["name"]])
-            )
-            dist = dist(**{msg["name"]: value})
-        elif hasattr(dist, "logits"):
-            value = dist.logits.materialize(
-                funsor.Variable(msg["name"], dist.inputs[msg["name"]])
-            )
-            dist = dist(**{msg["name"]: value})
-        else:
-            raise ValueError
     return dist
 
 
@@ -216,6 +203,21 @@ class ProvenanceMessenger(ReentrantMessenger):
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
             value=msg["name"]
         )
+        # make Categorical from Tensor
+        if isinstance(unsampled_log_measure, funsor.Tensor):
+            from importlib import import_module
+
+            backend = funsor.util.get_backend()
+            dist = import_module(
+                funsor.distribution.BACKEND_TO_DISTRIBUTIONS_BACKEND[backend]
+            )
+            domain = unsampled_log_measure.inputs[msg["name"]]
+            logits = funsor.Lambda(
+                funsor.Variable(msg["name"], domain), unsampled_log_measure
+            )
+            unsampled_log_measure = dist.CategoricalLogits(
+                logits=logits, value=msg["name"]
+            )
         msg["funsor"]["log_measure"] = _enum_strategy_default(
             unsampled_log_measure, msg
         )
