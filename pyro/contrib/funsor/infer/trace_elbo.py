@@ -124,29 +124,35 @@ class Trace_ELBO(ELBO):
                 )
             ]
 
-        # accumulate costs from model (logp) and guide (-logq)
-        costs = contracted_costs + uncontracted_factors  # model costs: logp
-        costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
+            # accumulate costs from model (logp) and guide (-logq)
+            costs = contracted_costs + uncontracted_factors  # model costs: logp
+            costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
 
-        # compute log_measures corresponding to each cost term
-        # the goal is to achieve fine-grained Rao-Blackwellization
-        targets = dict()
-        for cost in costs:
-            if cost.input_vars not in targets:
-                targets[cost.input_vars] = Constant(
-                    cost.inputs, funsor.Tensor(torch.tensor(0.0))
+            # compute log_measures corresponding to each cost term
+            # the goal is to achieve fine-grained Rao-Blackwellization
+            targets = dict()
+            for cost in costs:
+                if cost.input_vars not in targets:
+                    targets[cost.input_vars] = Constant(
+                        cost.inputs, funsor.Tensor(torch.tensor(0.0))
+                    )
+
+            with AdjointTape() as tape:
+                logzq = funsor.sum_product.sum_product(
+                    funsor.ops.logaddexp,
+                    funsor.ops.add,
+                    guide_terms["log_measures"] + list(targets.values()),
+                    plates=plate_vars,
+                    eliminate=(plate_vars | guide_terms["measure_vars"]),
                 )
-        with AdjointTape() as tape:
-            logzq = funsor.sum_product.sum_product(
-                funsor.ops.logaddexp,
-                funsor.ops.add,
-                guide_terms["log_measures"] + list(targets.values()),
-                plates=plate_vars,
-                eliminate=(plate_vars | guide_terms["measure_vars"]),
-            )
+
+        breakpoint()
+        with funsor.terms.eager:
+            logzq = funsor.optimizer.apply_optimizer(logzq)
         log_measures = tape.adjoint(
             funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values())
         )
+
         with funsor.terms.lazy:
             # finally, integrate out guide variables in the elbo and all plates
             elbo = to_funsor(0, output=funsor.Real)
