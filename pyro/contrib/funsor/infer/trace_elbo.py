@@ -4,8 +4,7 @@
 import contextlib
 
 import funsor
-import torch
-from funsor.adjoint import AdjointTape
+from funsor.adjoint import adjoint
 from funsor.constant import Constant
 
 from pyro.contrib.funsor import to_data, to_funsor
@@ -134,31 +133,32 @@ class Trace_ELBO(ELBO):
             for cost in costs:
                 if cost.input_vars not in targets:
                     targets[cost.input_vars] = Constant(
-                        cost.inputs, funsor.Tensor(torch.tensor(0.0))
+                        cost.inputs,
+                        funsor.Tensor(
+                            funsor.ops.new_zeros(
+                                funsor.tensor.get_default_prototype(),
+                                (),
+                            )
+                        ),
                     )
 
-            with AdjointTape() as tape:
-                logzq = funsor.sum_product.sum_product(
-                    funsor.ops.logaddexp,
-                    funsor.ops.add,
-                    guide_terms["log_measures"] + list(targets.values()),
-                    plates=plate_vars,
-                    eliminate=(plate_vars | guide_terms["measure_vars"]),
-                )
-
-        breakpoint()
-        with funsor.terms.eager:
+            logzq = funsor.sum_product.sum_product(
+                funsor.ops.logaddexp,
+                funsor.ops.add,
+                guide_terms["log_measures"] + list(targets.values()),
+                plates=plate_vars,
+                eliminate=(plate_vars | guide_terms["measure_vars"]),
+            )
             logzq = funsor.optimizer.apply_optimizer(logzq)
-        log_measures = tape.adjoint(
-            funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values())
-        )
+
+        marginals = adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq)
 
         with funsor.terms.lazy:
             # finally, integrate out guide variables in the elbo and all plates
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[cost.input_vars]
-                log_measure = log_measures[target]
+                log_measure = marginals[target]
                 measure_vars = (frozenset(cost.inputs) - plate_vars) - frozenset(
                     {"num_particles_vectorized"}
                 )
