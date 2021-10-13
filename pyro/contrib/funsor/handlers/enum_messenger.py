@@ -180,7 +180,23 @@ def enumerate_site(dist, msg):
     raise ValueError("{} not valid enum strategy".format(msg))
 
 
+def _tensor_to_categorical(tensor, event_name):
+    from importlib import import_module
+
+    backend = funsor.util.get_backend()
+    dist = import_module(funsor.distribution.BACKEND_TO_DISTRIBUTIONS_BACKEND[backend])
+    domain = tensor.inputs[event_name]
+    event_var = funsor.Variable(event_name, domain)
+    logits = funsor.Lambda(event_var, tensor)
+    categorical = dist.CategoricalLogits(logits=logits, value=event_name)
+    return categorical
+
+
 class ProvenanceMessenger(ReentrantMessenger):
+    """
+    Adds provenance dim for all sample sites that are not enumerated.
+    """
+
     def _pyro_sample(self, msg):
         if (
             msg["done"]
@@ -196,20 +212,10 @@ class ProvenanceMessenger(ReentrantMessenger):
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
             value=msg["name"]
         )
-        # make Categorical from Tensor
         if isinstance(unsampled_log_measure, funsor.Tensor):
-            from importlib import import_module
-
-            backend = funsor.util.get_backend()
-            dist = import_module(
-                funsor.distribution.BACKEND_TO_DISTRIBUTIONS_BACKEND[backend]
-            )
-            domain = unsampled_log_measure.inputs[msg["name"]]
-            logits = funsor.Lambda(
-                funsor.Variable(msg["name"], domain), unsampled_log_measure
-            )
-            unsampled_log_measure = dist.CategoricalLogits(
-                logits=logits, value=msg["name"]
+            # convert Tensor to Categorical
+            unsampled_log_measure = _tensor_to_categorical(
+                unsampled_log_measure, msg["name"]
             )
         msg["funsor"]["log_measure"] = _enum_strategy_default(
             unsampled_log_measure, msg
