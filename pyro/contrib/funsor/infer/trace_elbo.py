@@ -35,9 +35,14 @@ class Trace_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
 
+        particle_var = (
+            frozenset({"num_particles_vectorized"})
+            if self.num_particles > 1
+            else frozenset()
+        )
         plate_vars = (
             guide_terms["plate_vars"] | model_terms["plate_vars"]
-        ) - frozenset({"num_particles_vectorized"})
+        ) - particle_var
 
         model_measure_vars = model_terms["measure_vars"] - guide_terms["measure_vars"]
         with funsor.terms.lazy:
@@ -95,10 +100,9 @@ class Trace_ELBO(ELBO):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[cost.input_vars]
+                # FIXME account for normalization factor for unnormalized logzq
                 log_measure = marginals[target]
-                measure_vars = (frozenset(cost.inputs) - plate_vars) - frozenset(
-                    {"num_particles_vectorized"}
-                )
+                measure_vars = (frozenset(cost.inputs) - plate_vars) - particle_var
                 elbo_term = funsor.Integrate(
                     log_measure,
                     cost,
@@ -108,7 +112,7 @@ class Trace_ELBO(ELBO):
                     funsor.ops.add, plate_vars & frozenset(cost.inputs)
                 )
             # average over Monte-Carlo particles
-            elbo = elbo.reduce(funsor.ops.mean)
+            elbo = elbo.reduce(funsor.ops.mean, particle_var)
 
         return -to_data(funsor.optimizer.apply_optimizer(elbo))
 
