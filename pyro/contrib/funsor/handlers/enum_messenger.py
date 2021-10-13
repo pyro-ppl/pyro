@@ -180,18 +180,6 @@ def enumerate_site(dist, msg):
     raise ValueError("{} not valid enum strategy".format(msg))
 
 
-def _tensor_to_categorical(tensor, event_name):
-    from importlib import import_module
-
-    backend = funsor.util.get_backend()
-    dist = import_module(funsor.distribution.BACKEND_TO_DISTRIBUTIONS_BACKEND[backend])
-    domain = tensor.inputs[event_name]
-    event_var = funsor.Variable(event_name, domain)
-    logits = funsor.Lambda(event_var, tensor)
-    categorical = dist.CategoricalLogits(logits=logits, value=event_name)
-    return categorical
-
-
 class ProvenanceMessenger(ReentrantMessenger):
     """
     Adds provenance dim for all sample sites that are not enumerated.
@@ -209,14 +197,11 @@ class ProvenanceMessenger(ReentrantMessenger):
         if "funsor" not in msg:
             msg["funsor"] = {}
 
-        unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
-            value=msg["name"]
-        )
-        if isinstance(unsampled_log_measure, funsor.Tensor):
-            # convert Tensor to Categorical
-            unsampled_log_measure = _tensor_to_categorical(
-                unsampled_log_measure, msg["name"]
+        with funsor.terms.lazy:
+            unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
+                value=msg["name"]
             )
+        # TODO delegate to enumerate_site
         msg["funsor"]["log_measure"] = _enum_strategy_default(
             unsampled_log_measure, msg
         )
@@ -225,6 +210,7 @@ class ProvenanceMessenger(ReentrantMessenger):
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )
+        # TODO delegate to _get_support_value
         msg["funsor"]["value"] = funsor.Constant(
             OrderedDict(((msg["name"], support_value.output),)),
             support_value,
