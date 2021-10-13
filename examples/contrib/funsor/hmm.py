@@ -700,11 +700,7 @@ def main(args):
     # learns point estimates of all of our conditional probability tables,
     # named probs_*.
     guide = AutoDelta(
-        handlers.block(
-            model,
-            expose_fn=lambda msg: msg["name"] is not None
-            and msg["name"].startswith("probs_"),
-        )
+        handlers.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_"))
     )
 
     # To help debug our tensor shapes, let's print the shape of each site's
