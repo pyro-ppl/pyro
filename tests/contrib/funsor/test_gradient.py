@@ -3,6 +3,7 @@
 
 import logging
 
+import pyroapi
 import pytest
 import torch
 
@@ -17,7 +18,7 @@ try:
 
     funsor.set_backend("torch")
     from pyroapi import distributions as dist
-    from pyroapi import handlers, infer, pyro, pyro_backend
+    from pyroapi import handlers, infer, pyro
 except ImportError:
     pytestmark = pytest.mark.skip(reason="funsor is not installed")
 
@@ -102,7 +103,7 @@ def guide_2(data):
 def test_gradient(model, guide, data):
 
     # Expected grads based on exact integration
-    with pyro_backend("pyro"):
+    with pyroapi.pyro_backend("pyro"):
         pyro.clear_param_store()
         elbo = infer.TraceEnum_ELBO(
             max_plate_nesting=1,  # set this to ensure rng agrees across runs
@@ -115,7 +116,7 @@ def test_gradient(model, guide, data):
         }
 
     # Actual grads averaged over num_particles
-    with pyro_backend("contrib.funsor"):
+    with pyroapi.pyro_backend("contrib.funsor"):
         pyro.clear_param_store()
         elbo = infer.Trace_ELBO(
             max_plate_nesting=1,  # set this to ensure rng agrees across runs
@@ -136,7 +137,7 @@ def test_gradient(model, guide, data):
     assert_equal(actual_grads, expected_grads, prec=0.02)
 
 
-@pyro_backend("contrib.funsor")
+@pyroapi.pyro_backend("contrib.funsor")
 def test_particle_gradient_0():
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -191,7 +192,7 @@ def test_particle_gradient_0():
     assert_equal(actual_grads, expected_grads, prec=1e-4)
 
 
-@pyro_backend("contrib.funsor")
+@pyroapi.pyro_backend("contrib.funsor")
 def test_particle_gradient_1():
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -262,7 +263,7 @@ def test_particle_gradient_1():
     assert_equal(actual_grads, expected_grads, prec=1e-4)
 
 
-@pyro_backend("contrib.funsor")
+@pyroapi.pyro_backend("contrib.funsor")
 def test_particle_gradient_2():
     pyro.clear_param_store()
     data = torch.tensor([0.0, 1.0])
