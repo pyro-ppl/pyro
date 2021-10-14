@@ -14,7 +14,14 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Predictive, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    Predictive,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+)
 from pyro.infer.autoguide import (
     AutoCallable,
     AutoDelta,
@@ -1286,7 +1293,9 @@ def test_exact(Guide):
     expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
-    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
+    elbo = JitTrace_ELBO(
+        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
+    )
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, elbo)
     for step in range(500):
@@ -1344,10 +1353,13 @@ def test_exact_batch(Guide):
     )
 
     guide = Guide(model)
-    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
-    optim = Adam({"lr": 0.01})
+    elbo = JitTrace_ELBO(
+        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
+    )
+    num_steps = 500
+    optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
-    for step in range(500):
+    for step in range(num_steps):
         svi.step(data)
 
     guide.requires_grad_(False)
@@ -1411,7 +1423,9 @@ def test_exact_tree(Guide):
     expected_loss = float(g.event_logsumexp() - g_cond.event_logsumexp())
 
     guide = Guide(model)
-    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
+    elbo = JitTrace_ELBO(
+        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
+    )
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
