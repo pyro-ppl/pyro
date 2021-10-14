@@ -122,7 +122,8 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
         self.locs = PyroModule()
         self.scales = PyroModule()
-        self.factors = PyroModule()
+        self.white_vecs = PyroModule()
+        self.prec_sqrts = PyroModule()
         self._factors = OrderedDict()
         self._plates = OrderedDict()
         self._event_numel = OrderedDict()
@@ -191,12 +192,14 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
                 d_size = min(d_size, u_size)  # just an optimization
             batch_shape = _plates_to_shape(self._plates[d])
 
-            # Create a square root parameter (full, not lower triangular).
-            sqrt = init_loc.new_zeros(batch_shape + (u_size, d_size))
+            # Create parameters of each Gaussian factor.
+            white_vec = init_loc.new_zeros(batch_shape + (d_size,))
+            prec_sqrt = init_loc.new_zeros(batch_shape + (u_size, d_size))
             if d in self.dependencies[d]:
                 # Initialize the [d,d] block to the identity matrix.
-                sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)
-            deep_setattr(self.factors, d, PyroParam(sqrt, event_dim=2))
+                prec_sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)
+            deep_setattr(self.white_vecs, d, PyroParam(white_vec, event_dim=1))
+            deep_setattr(self.prec_sqrts, d, PyroParam(prec_sqrt, event_dim=2))
 
     @staticmethod
     def _compress_site(site):
@@ -300,7 +303,7 @@ class AutoGaussianDense(AutoGaussian):
         # Create sparse -> dense precision scatter indices.
         self._dense_scatter = {}
         for d, site in self._factors.items():
-            sqrt_shape = deep_getattr(self.factors, d).shape
+            sqrt_shape = deep_getattr(self.prec_sqrts, d).shape
             precision_shape = sqrt_shape[:-1] + sqrt_shape[-2:-1]
             index = torch.zeros(precision_shape, dtype=torch.long)
 
@@ -334,11 +337,16 @@ class AutoGaussianDense(AutoGaussian):
 
     def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
         # Sample from a dense joint Gaussian over flattened variables.
-        precision = self._get_precision()
-        loc = precision.new_zeros(self._dense_size)
+        info_vec, precision = self._get_info_vec_and_precision()
+        scale_tril = dist.MultivariateNormal(
+            torch.zeros_like(info_vec), precision_matrix=precision
+        ).scale_tril
+        loc = (scale_tril @ (scale_tril.transpose(-1, -2) @ info_vec[..., None]))[
+            ..., 0
+        ]
         flat_samples = pyro.sample(
             f"_{self._pyro_name}",
-            dist.MultivariateNormal(loc, precision_matrix=precision),
+            dist.MultivariateNormal(loc, scale_tril),
             infer={"is_auxiliary": True},
         )
         sample_shape = flat_samples.shape[:-1]
@@ -356,14 +364,18 @@ class AutoGaussianDense(AutoGaussian):
             )
         return samples
 
-    def _get_precision(self):
+    def _get_info_vec_and_precision(self):
+        flat_info_vec = torch.zeros(self._dense_size)
         flat_precision = torch.zeros(self._dense_size ** 2)
-        for d, index in self._dense_scatter.items():
-            sqrt = deep_getattr(self.factors, d)
-            precision = sqrt @ sqrt.transpose(-1, -2)
-            flat_precision.scatter_add_(0, index, precision.reshape(-1))
+        for d, (index1, index2) in self._dense_scatter.items():
+            white_vec = deep_getattr(self.white_vecs, d)
+            prec_sqrt = deep_getattr(self.prec_sqrts, d)
+            precision = prec_sqrt @ prec_sqrt.transpose(-1, -2)
+            info_vec = (prec_sqrt @ white_vec[..., None])[..., 0]
+            flat_precision.scatter_add_(0, index2, precision.reshape(-1))
+            flat_info_vec.scatter_add_(0, index1, info_vec.reshape(-1))
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
-        return precision
+        return info_vec, precision
 
 
 class AutoGaussianFunsor(AutoGaussian):
@@ -417,7 +429,7 @@ class AutoGaussianFunsor(AutoGaussian):
         self._funsor_plate_to_dim = plate_to_dim
         self._funsor_plates = frozenset(plate_to_dim)
 
-    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
+    def _sample_aux_values(self, *, temperature=1) -> Dict[str, torch.Tensor]:
         funsor = _import_funsor()
 
         # Convert torch to funsor.
@@ -426,14 +438,16 @@ class AutoGaussianFunsor(AutoGaussian):
         plate_to_dim.update({f.name: f.dim for f in particle_plates})
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
-            sqrt = deep_getattr(self.factors, d)
             batch_shape = torch.Size(
                 p.size for p in sorted(self._plates[d], key=lambda p: p.dim)
             )
-            sqrt = sqrt.reshape(batch_shape + sqrt.shape[-2:])
-            precision = sqrt @ sqrt.transpose(-1, -2)
-            info_vec = precision.new_zeros(()).expand(precision.shape[:-1])
-            factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
+            white_vec = deep_getattr(self.white_vecs, d)
+            prec_sqrt = deep_getattr(self.prec_sqrts, d)
+            factors[d] = funsor.gaussian.Gaussian(
+                white_vec=white_vec.reshape(batch_shape + white_vec.shape[-1:]),
+                prec_sqrt=prec_sqrt.reshape(batch_shape + prec_sqrt.shape[-2:]),
+                inputs=inputs,
+            )
 
         # Perform Gaussian tensor variable elimination.
         try:  # Convert ValueError into NotImplementedError.
