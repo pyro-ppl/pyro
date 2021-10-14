@@ -81,7 +81,11 @@ def test_backend_dispatch(backend):
     guide = AutoGaussian(model, backend=backend)
     if backend == "dense":
         assert isinstance(guide, AutoGaussianDense)
+        guide = AutoGaussianDense(model)
+        assert isinstance(guide, AutoGaussianDense)
     elif backend == "funsor":
+        assert isinstance(guide, AutoGaussianFunsor)
+        guide = AutoGaussianFunsor(model)
         assert isinstance(guide, AutoGaussianFunsor)
     else:
         raise ValueError(f"Unknown backend: {backend}")

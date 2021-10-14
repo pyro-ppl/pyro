@@ -41,8 +41,9 @@ class AutoGaussianMeta(type(AutoGuide)):
         cls.backends[key] = cls
 
     def __call__(cls, *args, **kwargs):
-        backend = kwargs.pop("backend", cls.default_backend)
-        cls = cls.backends[backend]
+        if cls is AutoGaussian:
+            backend = kwargs.pop("backend", cls.default_backend)
+            cls = cls.backends[backend]
         return super(AutoGaussianMeta, cls).__call__(*args, **kwargs)
 
 
