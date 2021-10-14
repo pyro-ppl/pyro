@@ -41,8 +41,9 @@ class AutoGaussianMeta(type(AutoGuide)):
         cls.backends[key] = cls
 
     def __call__(cls, *args, **kwargs):
-        backend = kwargs.pop("backend", cls.default_backend)
-        cls = cls.backends[backend]
+        if cls is AutoGaussian:
+            backend = kwargs.pop("backend", cls.default_backend)
+            cls = cls.backends[backend]
         return super(AutoGaussianMeta, cls).__call__(*args, **kwargs)
 
 
@@ -220,7 +221,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        aux_values = self._sample_aux_values()
+        aux_values = self._sample_aux_values(temperature=1)
         values, log_densities = self._transform_values(aux_values)
 
         # Replay via Pyro primitives.
@@ -243,7 +244,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         :rtype: dict
         """
         with torch.no_grad(), poutine.mask(mask=False):
-            aux_values = {name: 0.0 for name in self._factors}
+            aux_values = self._sample_aux_values(temperature=0)
             values, _ = self._transform_values(aux_values)
         return values
 
@@ -271,7 +272,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
         return values, log_densities
 
-    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
+    def _sample_aux_values(self, *, temperature) -> Dict[str, torch.Tensor]:
         raise NotImplementedError
 
 
@@ -303,19 +304,30 @@ class AutoGaussianDense(AutoGaussian):
         # Create sparse -> dense precision scatter indices.
         self._dense_scatter = {}
         for d, site in self._factors.items():
-            sqrt_shape = deep_getattr(self.prec_sqrts, d).shape
-            precision_shape = sqrt_shape[:-1] + sqrt_shape[-2:-1]
-            index = torch.zeros(precision_shape, dtype=torch.long)
+            prec_sqrt_shape = deep_getattr(self.prec_sqrts, d).shape
+            info_vec_shape = prec_sqrt_shape[:-1]
+            precision_shape = prec_sqrt_shape[:-1] + prec_sqrt_shape[-2:-1]
+            index1 = torch.zeros(info_vec_shape, dtype=torch.long)
+            index2 = torch.zeros(precision_shape, dtype=torch.long)
 
-            # Collect local offsets.
+            # Collect local offsets and create index1 for info_vec blockwise.
             local_offsets = {}
             pos = 0
             for u in self.dependencies[d]:
                 local_offsets[u] = pos
                 broken_plates = self._plates[u] - self._plates[d]
                 pos += self._event_numel[u] * _plates_to_shape(broken_plates).numel()
+                u_index = global_indices[u]
 
-            # Create indices blockwise.
+                # Permute broken plates to the right of preserved plates.
+                u_index = _break_plates(u_index, self._plates[u], self._plates[d])
+
+                # Scatter global indices into the [u] block.
+                u_start = local_offsets[u]
+                u_stop = u_start + u_index.size(-1)
+                index1[..., u_start:u_stop] = u_index
+
+            # Create index2 for precision blockwise.
             for u, v in itertools.product(self.dependencies[d], self.dependencies[d]):
                 u_index = global_indices[u]
                 v_index = global_indices[v]
@@ -329,26 +341,33 @@ class AutoGaussianDense(AutoGaussian):
                 u_stop = u_start + u_index.size(-1)
                 v_start = local_offsets[v]
                 v_stop = v_start + v_index.size(-1)
-                index[
+                index2[
                     ..., u_start:u_stop, v_start:v_stop
                 ] = self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
 
-            self._dense_scatter[d] = index.reshape(-1)
+            self._dense_scatter[d] = index1.reshape(-1), index2.reshape(-1)
 
-    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
-        # Sample from a dense joint Gaussian over flattened variables.
+    def _sample_aux_values(self, *, temperature) -> Dict[str, torch.Tensor]:
+        # Conver to (loc, scale_tril) coordinates.
         info_vec, precision = self._get_info_vec_and_precision()
         scale_tril = dist.MultivariateNormal(
-            torch.zeros_like(info_vec), precision_matrix=precision
+            loc=info_vec.new_zeros(()).expand_as(info_vec), precision_matrix=precision
         ).scale_tril
         loc = (scale_tril @ (scale_tril.transpose(-1, -2) @ info_vec[..., None]))[
             ..., 0
         ]
-        flat_samples = pyro.sample(
-            f"_{self._pyro_name}",
-            dist.MultivariateNormal(loc, scale_tril),
-            infer={"is_auxiliary": True},
-        )
+        if temperature == 0:
+            # Simply return the mode.
+            flat_samples = loc
+        elif temperature == 1:
+            # Sample from a dense joint Gaussian over flattened variables.
+            flat_samples = pyro.sample(
+                f"_{self._pyro_name}",
+                dist.MultivariateNormal(loc, scale_tril=scale_tril),
+                infer={"is_auxiliary": True},
+            )
+        else:
+            raise NotImplementedError(f"Invalid temperature: {temperature}")
         sample_shape = flat_samples.shape[:-1]
 
         # Convert flat to shaped tensors.
@@ -370,10 +389,11 @@ class AutoGaussianDense(AutoGaussian):
         for d, (index1, index2) in self._dense_scatter.items():
             white_vec = deep_getattr(self.white_vecs, d)
             prec_sqrt = deep_getattr(self.prec_sqrts, d)
-            precision = prec_sqrt @ prec_sqrt.transpose(-1, -2)
             info_vec = (prec_sqrt @ white_vec[..., None])[..., 0]
-            flat_precision.scatter_add_(0, index2, precision.reshape(-1))
+            precision = prec_sqrt @ prec_sqrt.transpose(-1, -2)
             flat_info_vec.scatter_add_(0, index1, info_vec.reshape(-1))
+            flat_precision.scatter_add_(0, index2, precision.reshape(-1))
+        info_vec = flat_info_vec
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
         return info_vec, precision
 
@@ -450,6 +470,10 @@ class AutoGaussianFunsor(AutoGaussian):
             )
 
         # Perform Gaussian tensor variable elimination.
+        if temperature != 1:
+            raise NotImplementedError(
+                "TODO switch to forward_sample_backward_precondition"
+            )
         try:  # Convert ValueError into NotImplementedError.
             samples, log_prob = funsor.recipes.forward_filter_backward_rsample(
                 factors=factors,

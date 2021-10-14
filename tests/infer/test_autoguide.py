@@ -41,7 +41,7 @@ from pyro.ops.gaussian import Gaussian
 from pyro.optim import Adam, ClippedAdam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-from tests.common import assert_close, assert_equal
+from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 AutoGaussianFunsor = pytest.param(
     AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
@@ -368,7 +368,8 @@ def test_median(auto_class, Elbo):
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
 
-    median = guide.median()
+    with xfail_if_not_implemented():
+        median = guide.median()
     assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
     if auto_class is AutoDelta:
         assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
@@ -397,7 +398,13 @@ def test_median(auto_class, Elbo):
         AutoStructured,
         AutoStructured_median,
         AutoGaussian,
-        AutoGaussianFunsor,
+        pytest.param(
+            AutoGaussianFunsor[0],
+            marks=[
+                pytest.mark.stage("funsor"),
+                pytest.mark.xfail(reason="pyro.ops.special.safe_log() is not jittable"),
+            ],
+        ),
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
