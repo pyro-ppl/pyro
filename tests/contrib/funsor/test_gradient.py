@@ -139,7 +139,15 @@ def test_gradient(model, guide, data):
 
 @pyroapi.pyro_backend("contrib.funsor")
 def test_particle_gradient_0():
-    pyro.clear_param_store()
+    # model
+    # +---------+
+    # | z --> x |
+    # +---------+
+    #
+    # guide
+    # +---+
+    # | z |
+    # +---+
     data = torch.tensor([-0.5, 2.0])
 
     def model():
@@ -161,29 +169,34 @@ def test_particle_gradient_0():
         strict_enumeration_warning=False,
     )
 
-    # compute loss and get trace
-    guide_tr = handlers.trace(elbo.loss_and_grads).get_trace(model, guide)
-    model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
-
     # Trace_ELBO gradients
+    pyro.clear_param_store()
+    elbo.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     # Hand derived gradients
+    # elbo = Expectation(
+    #   sum(dice_factor_zi * (log_pzi + log_pxi - log_qzi))
+    # )
+    pyro.clear_param_store()
+    guide_tr = handlers.trace(guide).get_trace()
+    model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
     guide_tr.compute_log_prob()
     model_tr.compute_log_prob()
-
-    z = guide_tr.nodes["z"]["value"]._t.detach()
-    rate = pyro.param("rate").detach()
-    logpx = model_tr.nodes["x"]["log_prob"]._t.detach()
-    logpz = model_tr.nodes["z"]["log_prob"]._t.detach()
-    logqz = guide_tr.nodes["z"]["log_prob"]._t.detach()
-
-    loss_i = logpx + logpz - logqz
-    dlogq_drate = z / rate - 1
-    expected_grads = {
-        "rate": -(dlogq_drate * loss_i - dlogq_drate),
-    }
+    # log factors
+    logpx = model_tr.nodes["x"]["log_prob"]
+    logpz = model_tr.nodes["z"]["log_prob"]
+    logqz = guide_tr.nodes["z"]["log_prob"]
+    # dice factor
+    df_z = (logqz - logqz.detach()).exp()
+    # dice elbo
+    dice_elbo = (df_z * (logpz + logpx - logqz)).sum()
+    # backward run
+    loss = -dice_elbo
+    loss.backward()
+    params = dict(pyro.get_param_store().named_parameters())
+    expected_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     for name in sorted(params):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
@@ -194,7 +207,15 @@ def test_particle_gradient_0():
 
 @pyroapi.pyro_backend("contrib.funsor")
 def test_particle_gradient_1():
-    pyro.clear_param_store()
+    # model
+    #    +-----------+
+    # a -|-> b --> c |
+    #    +-----------+
+    #
+    # guide
+    #    +-----+
+    # a -|-> b |
+    #    +-----+
     data = torch.tensor([-0.5, 2.0])
 
     def model():
@@ -223,38 +244,47 @@ def test_particle_gradient_1():
         strict_enumeration_warning=False,
     )
 
-    # compute loss and get trace
-    guide_tr = handlers.trace(elbo.loss_and_grads).get_trace(model, guide)
-    model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
-
     # Trace_ELBO gradients
+    pyro.clear_param_store()
+    elbo.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     # Hand derived gradients
+    # elbo = Expectation(
+    #   q(a) * log_pa
+    #   + q(a) * sum(q(b_i|a) * log_pb_i)
+    #   + q(a) * sum(q(b_i|a) * log_pc_i)
+    #   - q(a) * log_qa
+    #   - q(a) * sum(q(b_i|a) * log_qb_i)
+    # )
+    pyro.clear_param_store()
+    guide_tr = handlers.trace(guide).get_trace()
+    model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
     guide_tr.compute_log_prob()
     model_tr.compute_log_prob()
-
-    a = guide_tr.nodes["a"]["value"]._t.detach()
-    b = guide_tr.nodes["b"]["value"]._t.detach()
-    prob = pyro.param("prob").detach()
-    rate = pyro.param("rate").detach()
-    logpa = model_tr.nodes["a"]["log_prob"]._t.detach()
-    logpb = model_tr.nodes["b"]["log_prob"]._t.detach()
-    logpc = model_tr.nodes["c"]["log_prob"]._t.detach()
-    logqa = guide_tr.nodes["a"]["log_prob"]._t.detach()
-    logqb = guide_tr.nodes["b"]["log_prob"]._t.detach()
-
-    dlogqa_dprob = (a - prob) / (prob * (1 - prob))
-    dlogqb_drate = b / rate[a.long()] - 1
-
-    loss_a = logpa - logqa
-    loss_bc = logpb + logpc - logqb
-    expected_grads = {
-        "prob": -(dlogqa_dprob * (loss_a + loss_bc.sum()) - dlogqa_dprob),
-        "rate": -(dlogqb_drate * (loss_bc) - dlogqb_drate),
-    }
-    actual_grads["rate"] = actual_grads["rate"][a.long()]
+    # log factors
+    logpa = model_tr.nodes["a"]["log_prob"]
+    logpb = model_tr.nodes["b"]["log_prob"]
+    logpc = model_tr.nodes["c"]["log_prob"]
+    logqa = guide_tr.nodes["a"]["log_prob"]
+    logqb = guide_tr.nodes["b"]["log_prob"]
+    # dice factors
+    df_a = (logqa - logqa.detach()).exp()
+    df_b = (logqb - logqb.detach()).exp()
+    # dice elbo
+    dice_elbo = (
+        df_a * logpa
+        + df_a * (df_b * logpb).sum()
+        + df_a * (df_b * logpc).sum()
+        - df_a * logqa
+        - df_a * (df_b * logqb).sum()
+    )
+    # backward run
+    loss = -dice_elbo
+    loss.backward()
+    params = dict(pyro.get_param_store().named_parameters())
+    expected_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     for name in sorted(params):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
@@ -265,7 +295,17 @@ def test_particle_gradient_1():
 
 @pyroapi.pyro_backend("contrib.funsor")
 def test_particle_gradient_2():
-    pyro.clear_param_store()
+    # model
+    #    +-----------------+
+    # a -|-> b --> c --> e |
+    #    |    \--> d       |
+    #    +-----------------+
+    #
+    # guide
+    #    +-----------+
+    # a -|-> b --> c |
+    #    |    \--> d |
+    #    +-----------+
     data = torch.tensor([0.0, 1.0])
 
     def model():
@@ -300,72 +340,62 @@ def test_particle_gradient_2():
         strict_enumeration_warning=False,
     )
 
-    # compute loss and get trace
-    guide_tr = handlers.trace(elbo.loss_and_grads).get_trace(model, guide)
-    model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
-
     # Trace_ELBO gradients
+    pyro.clear_param_store()
+    elbo.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     # Hand derived gradients
+    # elbo = Expectation(
+    #   q(a) * log_pa
+    #   + q(a) * sum(q(b_i|a) * log_pb_i)
+    #   + q(a) * sum(q(b_i|a) * q(c_i|b_i) * log_pc_i)
+    #   + q(a) * sum(q(b_i|a) * q(c_i|b_i) * log_pe_i)
+    #   + q(a) * sum(q(b_i|a) * q(d_i|b_i) * log_pd_i)
+    #   - q(a) * log_qa
+    #   - q(a) * sum(q(b_i|a) * log_qb_i)
+    #   - q(a) * sum(q(b_i|a) * q(c_i|b_i) * log_pq_i)
+    #   - q(a) * sum(q(b_i|a) * q(d_i|b_i) * log_pd_i)
+    # )
+    pyro.clear_param_store()
+    guide_tr = handlers.trace(guide).get_trace()
+    model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
     guide_tr.compute_log_prob()
     model_tr.compute_log_prob()
+    # log factors
+    logpa = model_tr.nodes["a"]["log_prob"]
+    logpb = model_tr.nodes["b"]["log_prob"]
+    logpc = model_tr.nodes["c"]["log_prob"]
+    logpd = model_tr.nodes["d"]["log_prob"]
+    logpe = model_tr.nodes["e"]["log_prob"]
 
-    a = guide_tr.nodes["a"]["value"]._t.detach()
-    b = guide_tr.nodes["b"]["value"]._t.detach()
-    c = guide_tr.nodes["c"]["value"]._t.detach()
-
-    proba = pyro.param("prob_a").detach()
-    probb = pyro.param("prob_b").detach()
-    probc = pyro.param("prob_c").detach()
-    probd = pyro.param("prob_d").detach()
-
-    logpa = model_tr.nodes["a"]["log_prob"]._t.detach()
-    logpba = model_tr.nodes["b"]["log_prob"]._t.detach()
-    logpcba = model_tr.nodes["c"]["log_prob"]._t.detach()
-    logpdba = model_tr.nodes["d"]["log_prob"]._t.detach()
-    logpecba = model_tr.nodes["e"]["log_prob"]._t.detach()
-
-    logqa = guide_tr.nodes["a"]["log_prob"]._t.detach()
-    logqba = guide_tr.nodes["b"]["log_prob"]._t.detach()
-    logqcba = guide_tr.nodes["c"]["log_prob"]._t.detach()
-    logqdba = guide_tr.nodes["d"]["log_prob"]._t.detach()
-
-    idx = torch.arange(2)
-    dlogqa_dproba = (a - proba) / (proba * (1 - proba))
-    dlogqb_dprobb = (b - probb[a.long()]) / (probb[a.long()] * (1 - probb[a.long()]))
-    dlogqc_dprobc = (c - Vindex(probc)[b.long(), idx]) / (
-        Vindex(probc)[b.long(), idx] * (1 - Vindex(probc)[b.long(), idx])
+    logqa = guide_tr.nodes["a"]["log_prob"]
+    logqb = guide_tr.nodes["b"]["log_prob"]
+    logqc = guide_tr.nodes["c"]["log_prob"]
+    logqd = guide_tr.nodes["d"]["log_prob"]
+    # dice factors
+    df_a = (logqa - logqa.detach()).exp()
+    df_b = (logqb - logqb.detach()).exp()
+    df_c = (logqc - logqc.detach()).exp()
+    df_d = (logqd - logqd.detach()).exp()
+    # dice elbo
+    dice_elbo = (
+        df_a * logpa
+        + df_a * (df_b * logpb).sum()
+        + df_a * (df_b * df_c * logpc).sum()
+        + df_a * (df_b * df_c * logpe).sum()
+        + df_a * (df_b * df_d * logpd).sum()
+        - df_a * logqa
+        - df_a * (df_b * logqb).sum()
+        - df_a * (df_b * df_c * logqc).sum()
+        - df_a * (df_b * df_d * logqd).sum()
     )
-    dlogqd_dprobd = (c - probd[b.long(), idx]) / (
-        Vindex(probd)[b.long(), idx] * (1 - Vindex(probd)[b.long(), idx])
-    )
-
-    # fine-grained Rao-Blackwellization based on provenance tracking
-    expected_grads = {
-        "prob_a": -dlogqa_dproba
-        * (
-            logpa
-            + (logpba + logpcba + logpdba + logpecba).sum()
-            - logqa
-            - (logqba + logqcba + logqdba).sum()
-            - 1
-        ),
-        "prob_b": (
-            -dlogqb_dprobb
-            * (
-                (logpba + logpcba + logpdba + logpecba)
-                - (logqba + logqcba + logqdba)
-                - 1
-            )
-        ).sum(),
-        "prob_c": -dlogqc_dprobc * (logpcba + logpecba - logqcba - 1),
-        "prob_d": -dlogqd_dprobd * (logpdba - logqdba - 1),
-    }
-    actual_grads["prob_b"] = actual_grads["prob_b"][a.long()]
-    actual_grads["prob_c"] = Vindex(actual_grads["prob_c"])[b.long(), idx]
-    actual_grads["prob_d"] = Vindex(actual_grads["prob_d"])[b.long(), idx]
+    # backward run
+    loss = -dice_elbo
+    loss.backward()
+    params = dict(pyro.get_param_store().named_parameters())
+    expected_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     for name in sorted(params):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
