@@ -402,7 +402,9 @@ def test_median(auto_class, Elbo):
             AutoGaussianFunsor[0],
             marks=[
                 pytest.mark.stage("funsor"),
-                pytest.mark.xfail(reason="pyro.ops.special.safe_log() is not jittable"),
+                pytest.mark.xfail(
+                    reason="https://github.com/pyro-ppl/pyro/issues/2945"
+                ),
             ],
         ),
     ],
