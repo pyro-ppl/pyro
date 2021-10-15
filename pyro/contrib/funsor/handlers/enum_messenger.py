@@ -60,7 +60,7 @@ def _get_support_value_tensor(funsor_dist, name, **kwargs):
 
 
 @_get_support_value.register(funsor.Constant)
-def _get_support_value_tensor(funsor_dist, name, **kwargs):
+def _get_support_value_constant(funsor_dist, name, **kwargs):
     assert name in funsor_dist.inputs
     value = _get_support_value(funsor_dist.arg, name, **kwargs)
     return funsor.Constant(funsor_dist.const_inputs, value)
