@@ -724,5 +724,4 @@ def test_particle_gradient_5():
         logger.info("expected {} = {}".format(name, expected_grads[name]))
         logger.info("actual   {} = {}".format(name, actual_grads[name]))
 
-    breakpoint()
     assert_equal(actual_grads, expected_grads, prec=1e-4)
