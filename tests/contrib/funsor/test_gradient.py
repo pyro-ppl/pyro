@@ -176,8 +176,10 @@ def test_particle_gradient_0():
     actual_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     # Hand derived gradients
-    # elbo = Expectation(
-    #   sum(dice_factor_zi * (log_pzi + log_pxi - log_qzi))
+    # elbo = MonteCarlo(
+    #   [q(z_i) * log_pz_i].sum(i)
+    #   + [q(z_i) * log_px_i].sum(i)
+    #   - [q(z_i) * log_qx_i].sum(i)
     # )
     pyro.clear_param_store()
     guide_tr = handlers.trace(guide).get_trace()
@@ -251,12 +253,12 @@ def test_particle_gradient_1():
     actual_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     # Hand derived gradients
-    # elbo = Expectation(
+    # elbo = MonteCarlo(
     #   q(a) * log_pa
-    #   + q(a) * sum(q(b_i|a) * log_pb_i)
-    #   + q(a) * sum(q(b_i|a) * log_pc_i)
+    #   + q(a) * [q(b_i|a) * log_pb_i].sum(i)
+    #   + q(a) * [q(b_i|a) * log_pc_i].sum(i)
     #   - q(a) * log_qa
-    #   - q(a) * sum(q(b_i|a) * log_qb_i)
+    #   - q(a) * [q(b_i|a) * log_qb_i].sum(i)
     # )
     pyro.clear_param_store()
     guide_tr = handlers.trace(guide).get_trace()
@@ -347,16 +349,16 @@ def test_particle_gradient_2():
     actual_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
 
     # Hand derived gradients
-    # elbo = Expectation(
+    # elbo = MonteCarlo(
     #   q(a) * log_pa
-    #   + q(a) * sum(q(b_i|a) * log_pb_i)
-    #   + q(a) * sum(q(b_i|a) * q(c_i|b_i) * log_pc_i)
-    #   + q(a) * sum(q(b_i|a) * q(c_i|b_i) * log_pe_i)
-    #   + q(a) * sum(q(b_i|a) * q(d_i|b_i) * log_pd_i)
+    #   + q(a) * [q(b_i|a) * log_pb_i].sum(i)
+    #   + q(a) * [q(b_i|a) * q(c_i|b_i) * log_pc_i].sum(i)
+    #   + q(a) * [q(b_i|a) * q(c_i|b_i) * log_pe_i].sum(i)
+    #   + q(a) * [q(b_i|a) * q(d_i|b_i) * log_pd_i].sum(i)
     #   - q(a) * log_qa
-    #   - q(a) * sum(q(b_i|a) * log_qb_i)
-    #   - q(a) * sum(q(b_i|a) * q(c_i|b_i) * log_pq_i)
-    #   - q(a) * sum(q(b_i|a) * q(d_i|b_i) * log_pd_i)
+    #   - q(a) * [q(b_i|a) * log_qb_i].sum(i)
+    #   - q(a) * [q(b_i|a) * q(c_i|b_i) * log_qc_i].sum(i)
+    #   - q(a) * [q(b_i|a) * q(d_i|b_i) * log_qd_i].sum(i)
     # )
     pyro.clear_param_store()
     guide_tr = handlers.trace(guide).get_trace()
@@ -390,6 +392,107 @@ def test_particle_gradient_2():
         - df_a * (df_b * logqb).sum()
         - df_a * (df_b * df_c * logqc).sum()
         - df_a * (df_b * df_d * logqd).sum()
+    )
+    # backward run
+    loss = -dice_elbo
+    loss.backward()
+    params = dict(pyro.get_param_store().named_parameters())
+    expected_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
+
+    for name in sorted(params):
+        logger.info("expected {} = {}".format(name, expected_grads[name]))
+        logger.info("actual   {} = {}".format(name, actual_grads[name]))
+
+    assert_equal(actual_grads, expected_grads, prec=1e-4)
+
+
+@pyroapi.pyro_backend("contrib.funsor")
+def test_particle_gradient_3():
+    # model
+    #    +-----------------+
+    # a -|-> b --> c --> d |
+    #    +-----------------+
+    #
+    # guide
+    #    +-----------+
+    # a -|-> b --> c |
+    #    +-----------+
+    data = torch.tensor([0.0, 1.0])
+
+    def model():
+        prob_b = torch.tensor([[0.3, 0.7], [0.4, 0.6]])
+        prob_c = torch.tensor([0.5, 0.6])
+        prob_d = torch.tensor([0.5, 0.1])
+        a = pyro.sample("a", dist.Bernoulli(0.3))
+        with pyro.plate("data", len(data)):
+            b = pyro.sample("b", dist.Categorical(prob_b[a.long()]))
+            c = pyro.sample("c", dist.Bernoulli(prob_c[b.long()]))
+            pyro.sample("d", dist.Bernoulli(prob_d[c.long()]), obs=data)
+
+    def guide():
+        # set this to ensure rng agrees across runs
+        # this should be ok since we are comparing a single particle gradients
+        pyro.set_rng_seed(0)
+        prob_a = pyro.param("prob_a", lambda: torch.tensor(0.5))
+        prob_b = pyro.param("prob_b", lambda: torch.tensor([[0.4, 0.6], [0.3, 0.7]]))
+        prob_c = pyro.param("prob_c", lambda: torch.tensor([[0.3, 0.8], [0.2, 0.5]]))
+        a = pyro.sample("a", dist.Bernoulli(prob_a))
+        with pyro.plate("data", len(data)) as idx:
+            b = pyro.sample(
+                "b", dist.Categorical(prob_b[a.long()]), infer={"enumerate": "parallel"}
+            )
+            pyro.sample("c", dist.Bernoulli(Vindex(prob_c)[b.long(), idx]))
+
+    elbo = infer.Trace_ELBO(
+        max_plate_nesting=1,  # set this to ensure rng agrees across runs
+        num_particles=1,
+        strict_enumeration_warning=False,
+    )
+
+    # Trace_ELBO gradients
+    pyro.clear_param_store()
+    elbo.loss_and_grads(model, guide)
+    params = dict(pyro.get_param_store().named_parameters())
+    actual_grads = {name: param.grad.detach().cpu() for name, param in params.items()}
+
+    # Hand derived gradients (b is exactly integrated)
+    # elbo = MonteCarlo(
+    #   q(a) * log_pa
+    #   + q(a) * [q(b_i|a) * log_pb_i].sum(i, b)
+    #   + q(a) * [q(b_i|a) * q(c_i|b_i) * log_pc_i].sum(i, b)
+    #   + q(a) * [q(b_i|a) * q(c_i|b_i) * log_pd_i].sum(i, b
+    #   - q(a) * log_qa
+    #   - q(a) * [q(b_i|a) * log_qb_i].sum(i)
+    #   - q(a) * [q(b_i|a) * q(c_i|b_i) * log_qc_i].sum(i, b)
+    # )
+    pyro.clear_param_store()
+    with handlers.enum(first_available_dim=(-2)), handlers.provenance():
+        guide_tr = handlers.trace(guide).get_trace()
+        model_tr = handlers.trace(handlers.replay(model, guide_tr)).get_trace()
+    guide_tr.compute_log_prob()
+    model_tr.compute_log_prob()
+    # log factors
+    logpa = model_tr.nodes["a"]["log_prob"]
+    logpb = model_tr.nodes["b"]["log_prob"]
+    logpc = model_tr.nodes["c"]["log_prob"]
+    logpd = model_tr.nodes["d"]["log_prob"]
+
+    logqa = guide_tr.nodes["a"]["log_prob"]
+    logqb = guide_tr.nodes["b"]["log_prob"]
+    logqc = guide_tr.nodes["c"]["log_prob"]
+    # dice factors
+    df_a = (logqa - logqa.detach()).exp()
+    qb = logqb.exp()
+    df_c = (logqc - logqc.detach()).exp()
+    # dice elbo
+    dice_elbo = (
+        df_a * logpa
+        + df_a * (qb * logpb).sum()
+        + df_a * (qb * df_c * logpc).sum()
+        + df_a * (qb * df_c * logpd).sum()
+        - df_a * logqa
+        - df_a * (qb * logqb).sum()
+        - df_a * (qb * df_c * logqc).sum()
     )
     # backward run
     loss = -dice_elbo
