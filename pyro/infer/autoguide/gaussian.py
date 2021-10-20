@@ -470,26 +470,28 @@ class AutoGaussianFunsor(AutoGaussian):
             )
 
         # Perform Gaussian tensor variable elimination.
-        if temperature != 1:
-            raise NotImplementedError(
-                "TODO switch to forward_sample_backward_precondition"
-            )
-        try:  # Convert ValueError into NotImplementedError.
-            samples, log_prob = funsor.recipes.forward_filter_backward_rsample(
+        if temperature == 1:
+            samples, log_prob = _try_possibly_intractable(
+                funsor.recipes.forward_filter_backward_rsample,
                 factors=factors,
                 eliminate=self._funsor_eliminate,
                 plates=frozenset(plate_to_dim),
                 sample_inputs={f.name: funsor.Bint[f.size] for f in particle_plates},
             )
-        except ValueError as e:
-            if str(e) != "intractable!":
-                raise e from None
-            raise NotImplementedError(
-                "Funsor backend found intractable plate nesting. "
-                'Consider using AutoGaussian(..., backend="dense"), '
-                "splitting into multiple guides via AutoGuideList, or "
-                "replacing some plates in the model by .to_event()."
-            ) from e
+
+        elif temperature == 0:
+            samples, log_prob = _try_possibly_intractable(
+                funsor.recipes.forward_filter_backward_precondition,
+                factors=factors,
+                eliminate=self._funsor_eliminate,
+                plates=frozenset(plate_to_dim),
+            )
+            with funsor.interpretations.memoize():
+                zero = torch.zeros(()).expand(log_prob.inputs["aux"].shape)
+                samples = {k: v(aux=zero) for k, v in samples.items()}
+                log_prob = log_prob(aux=zero)
+        else:
+            raise NotImplementedError(f"Invalid temperature: {temperature}")
 
         # Convert funsor to torch.
         if am_i_wrapped() and poutine.get_mask() is not False:
@@ -499,6 +501,21 @@ class AutoGaussianFunsor(AutoGaussian):
             k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()
         }
         return samples
+
+
+def _try_possibly_intractable(fn, *args, **kwargs):
+    # Convert ValueError into NotImplementedError.
+    try:
+        return fn(*args, **kwargs)
+    except ValueError as e:
+        if str(e) != "intractable!":
+            raise e from None
+        raise NotImplementedError(
+            "Funsor backend found intractable plate nesting. "
+            'Consider using AutoGaussian(..., backend="dense"), '
+            "splitting into multiple guides via AutoGuideList, or "
+            "replacing some plates in the model by .to_event()."
+        ) from e
 
 
 def _plates_to_shape(plates):

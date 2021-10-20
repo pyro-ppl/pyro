@@ -903,7 +903,15 @@ class AutoStructured_predictive(AutoStructured):
         AutoStructured,
         AutoStructured_predictive,
         AutoGaussian,
-        AutoGaussianFunsor,
+        pytest.param(
+            AutoGaussianFunsor[0],
+            marks=[
+                pytest.mark.stage("funsor"),
+                pytest.mark.xfail(
+                    reason="https://github.com/pyro-ppl/pyro/issues/2945"
+                ),
+            ],
+        ),
     ],
 )
 def test_predictive(auto_class):
