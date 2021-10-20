@@ -470,6 +470,13 @@ class AutoGaussianFunsor(AutoGaussian):
             )
 
         # Perform Gaussian tensor variable elimination.
+        samples, log_prob = _try_possibly_intractable(
+            funsor.recipes.forward_filter_backward_precondition,
+            factors=factors,
+            eliminate=self._funsor_eliminate,
+            plates=frozenset(plate_to_dim),
+        )
+
         if temperature == 1:
             samples, log_prob = _try_possibly_intractable(
                 funsor.recipes.forward_filter_backward_rsample,
@@ -479,19 +486,22 @@ class AutoGaussianFunsor(AutoGaussian):
                 sample_inputs={f.name: funsor.Bint[f.size] for f in particle_plates},
             )
 
-        elif temperature == 0:
+        else:
             samples, log_prob = _try_possibly_intractable(
                 funsor.recipes.forward_filter_backward_precondition,
                 factors=factors,
                 eliminate=self._funsor_eliminate,
                 plates=frozenset(plate_to_dim),
             )
+
+            # Substitute noise.
+            sample_shape = torch.Size(f.size for f in particle_plates)
+            noise = torch.randn(sample_shape + log_prob.inputs["aux"].shape)
+            noise.mul_(temperature)
+            aux = funsor.Tensor(noise)[tuple(f.name for f in particle_plates)]
             with funsor.interpretations.memoize():
-                zero = torch.zeros(()).expand(log_prob.inputs["aux"].shape)
-                samples = {k: v(aux=zero) for k, v in samples.items()}
-                log_prob = log_prob(aux=zero)
-        else:
-            raise NotImplementedError(f"Invalid temperature: {temperature}")
+                samples = {k: v(aux=aux) for k, v in samples.items()}
+                log_prob = log_prob(aux=aux)
 
         # Convert funsor to torch.
         if am_i_wrapped() and poutine.get_mask() is not False:
