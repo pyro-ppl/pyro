@@ -426,14 +426,20 @@ class AutoGaussianFunsor(AutoGaussian):
         plate_to_dim.update({f.name: f.dim for f in particle_plates})
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
-            sqrt = deep_getattr(self.factors, d)
+            prec_sqrt = deep_getattr(self.factors, d)
             batch_shape = torch.Size(
                 p.size for p in sorted(self._plates[d], key=lambda p: p.dim)
             )
-            sqrt = sqrt.reshape(batch_shape + sqrt.shape[-2:])
-            precision = sqrt @ sqrt.transpose(-1, -2)
-            info_vec = precision.new_zeros(()).expand(precision.shape[:-1])
-            factors[d] = funsor.gaussian.Gaussian(info_vec, precision, inputs)
+            prec_sqrt = prec_sqrt.reshape(batch_shape + prec_sqrt.shape[-2:])
+            # TODO Make white_vec learnable once .median() can be computed via
+            # funsor.recipies.forward_filter_backward_precondition()
+            # https://github.com/pyro-ppl/funsor/pull/553
+            white_vec = prec_sqrt.new_zeros(()).expand(
+                prec_sqrt.shape[:-2] + prec_sqrt.shape[-1:]
+            )
+            factors[d] = funsor.gaussian.Gaussian(
+                white_vec=white_vec, prec_sqrt=prec_sqrt, inputs=inputs
+            )
 
         # Perform Gaussian tensor variable elimination.
         try:  # Convert ValueError into NotImplementedError.
