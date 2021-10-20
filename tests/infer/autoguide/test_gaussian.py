@@ -304,53 +304,6 @@ def pyrocov_model(dataset):
             )
 
 
-# This is modified by relaxing rate from deterministic to latent.
-def pyrocov_model_relaxed(dataset):
-    # Tensor shapes are commented at the end of some lines.
-    features = dataset["features"]
-    local_time = dataset["local_time"][..., None]  # [T, P, 1]
-    T, P, _ = local_time.shape
-    S, F = features.shape
-    weekly_strains = dataset["weekly_strains"]
-    assert weekly_strains.shape == (T, P, S)
-
-    # Sample global random variables.
-    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))[..., None]
-    rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))[..., None]
-    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))[..., None]
-    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))[..., None]
-    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))[..., None]
-
-    # Assume relative growth rate depends strongly on mutations and weakly on place.
-    coef_loc = torch.zeros(F)
-    coef = pyro.sample("coef", dist.Logistic(coef_loc, coef_scale).to_event(1))  # [F]
-    rate_loc = pyro.sample(
-        "rate_loc",
-        dist.Normal(0.01 * coef @ features.T, rate_loc_scale).to_event(1),
-    )  # [S]
-
-    # Assume initial infections depend strongly on strain and place.
-    init_loc = pyro.sample(
-        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
-    )  # [S]
-    with pyro.plate("place", P, dim=-1):
-        rate = pyro.sample(
-            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
-        )  # [P, S]
-        init = pyro.sample(
-            "init", dist.Normal(init_loc, init_scale).to_event(1)
-        )  # [P, S]
-
-        # Finally observe counts.
-        with pyro.plate("time", T, dim=-2):
-            logits = init + rate * local_time  # [T, P, S]
-            pyro.sample(
-                "obs",
-                dist.Multinomial(logits=logits, validate_args=False),
-                obs=weekly_strains,
-            )
-
-
 # This is modified by more precisely tracking plates for features and strains.
 def pyrocov_model_plated(dataset):
     # Tensor shapes are commented at the end of some lines.
@@ -443,7 +396,6 @@ def pyrocov_model_poisson(dataset):
 
 PYRO_COV_MODELS = [
     pyrocov_model,
-    pyrocov_model_relaxed,
     pyrocov_model_plated,
     pyrocov_model_poisson,
 ]
