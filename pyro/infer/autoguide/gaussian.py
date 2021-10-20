@@ -334,17 +334,17 @@ class AutoGaussianDense(AutoGaussian):
             self._dense_scatter[d] = index.reshape(-1)
 
     def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
-        # Sample from a dense joint Gaussian over flattened variables.
-        precision = self._get_precision()
-        loc = precision.new_zeros(self._dense_size)
         flat_samples = pyro.sample(
-            f"_{self._pyro_name}",
-            dist.MultivariateNormal(loc, precision_matrix=precision),
+            f"_{self._pyro_name}_latent",
+            self._dense_get_mvn(),
             infer={"is_auxiliary": True},
         )
-        sample_shape = flat_samples.shape[:-1]
+        samples = self._dense_unflatten(flat_samples)
+        return samples
 
-        # Convert flat to shaped tensors.
+    def _dense_unflatten(self, flat_samples: torch.Tensor) -> Dict[str, torch.Tensor]:
+        # Convert a single flattened sample to a dict of shaped samples.
+        sample_shape = flat_samples.shape[:-1]
         samples = {}
         pos = 0
         for d, (batch_shape, event_shape) in self._dense_shapes.items():
@@ -357,14 +357,25 @@ class AutoGaussianDense(AutoGaussian):
             )
         return samples
 
-    def _get_precision(self):
+    def _dense_flatten(self, samples: Dict[str, torch.Tensor]) -> torch.Tensor:
+        # Convert a dict of shaped samples single flattened sample.
+        flat_samples = []
+        for d, (batch_shape, event_shape) in self._dense_shapes.items():
+            shape = samples[d].shape
+            sample_shape = shape[: len(shape) - len(batch_shape) - len(event_shape)]
+            flat_samples.append(samples[d].reshape(sample_shape + (-1,)))
+        return torch.cat(flat_samples, dim=-1)
+
+    def _dense_get_mvn(self):
+        # Create a dense joint Gaussian over flattened variables.
         flat_precision = torch.zeros(self._dense_size ** 2)
         for d, index in self._dense_scatter.items():
             sqrt = deep_getattr(self.factors, d)
             precision = sqrt @ sqrt.transpose(-1, -2)
             flat_precision.scatter_add_(0, index, precision.reshape(-1))
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
-        return precision
+        loc = precision.new_zeros(self._dense_size)
+        return dist.MultivariateNormal(loc, precision_matrix=precision)
 
 
 class AutoGaussianFunsor(AutoGaussian):

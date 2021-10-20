@@ -18,7 +18,7 @@ from pyro.infer.autoguide.gaussian import (
 )
 from pyro.infer.reparam import LocScaleReparam
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_if_not_implemented
+from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 BACKENDS = [
     "dense",
@@ -100,32 +100,138 @@ def check_structure(model, expected_str):
         parameter.data.normal_()
 
     with torch.no_grad():
-        precision = guide._get_precision()
+        # Check flatten & unflatten.
+        mvn = guide._dense_get_mvn()
+        expected = mvn.sample()
+        samples = guide._dense_unflatten(expected)
+        actual = guide._dense_flatten(samples)
+        assert_equal(actual, expected)
+
+        # Check sparsity structure.
+        precision = mvn.precision_matrix
         actual = precision.abs().gt(1e-5).long()
+        str_to_number = {"?": 1, ".": 0}
+        expected = torch.tensor(
+            [[str_to_number[c] for c in row if c != " "] for row in expected_str]
+        )
+        assert (actual == expected).all()
 
-    str_to_number = {"?": 1, ".": 0}
-    expected = torch.tensor(
-        [[str_to_number[c] for c in row if c != " "] for row in expected_str]
+
+def check_backends_agree(model):
+    guide1 = AutoGaussian(model, backend="dense")
+    guide2 = AutoGaussian(model, backend="funsor")
+    guide1()
+    with xfail_if_not_implemented():
+        guide2()
+
+    # Inject random noise into all unconstrained parameters.
+    params1 = dict(guide1.named_parameters())
+    params2 = dict(guide2.named_parameters())
+    assert set(params1) == set(params2)
+    for k, v in params1.items():
+        v.data.normal_()
+        params2[k].data.copy_(v.data)
+
+    # Check that densities agree between backends.
+    with torch.no_grad(), poutine.trace() as tr:
+        aux = guide2._sample_aux_values()
+        flat = guide1._dense_flatten(aux)
+        tr.trace.compute_log_prob()
+    log_prob_funsor = tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"]
+    with torch.no_grad(), poutine.trace() as tr:
+        with poutine.condition(data={"_AutoGaussianDense_latent": flat}):
+            guide1._sample_aux_values()
+        tr.trace.compute_log_prob()
+    log_prob_dense = tr.trace.nodes["_AutoGaussianDense_latent"]["log_prob"]
+    assert_equal(log_prob_funsor, log_prob_dense)
+
+    # Check Monte Carlo estimate of entropy.
+    expected_entropy = guide1._dense_get_mvn().entropy()
+    with pyro.plate("particle", 100000, dim=-3), poutine.trace() as tr:
+        guide2._sample_aux_values()
+        tr.trace.compute_log_prob()
+    actual_entropy = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
+    assert_close(actual_entropy, expected_entropy, atol=1e-1)
+
+    # Check gradients.
+    names = sorted(params1)
+    expected_grads = torch.autograd.grad(
+        expected_entropy, [params1[k] for k in names], allow_unused=True
     )
-    assert_equal(actual, expected)
+    actual_grads = torch.autograd.grad(
+        actual_entropy, [params2[k] for k in names], allow_unused=True
+    )
+    for name, actual, expected in zip(names, actual_grads, expected_grads):
+        assert_close(actual, expected, msg=name)
 
 
-def test_structure_1():
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_1(backend):
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(a, 1))
         c = pyro.sample("c", dist.Normal(b, 1))
         pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
 
-    expected = [
+    # size = 1 + 1 + 1 = 3
+    structure = [
         "? ? .",
         "? ? ?",
         ". ? ?",
     ]
-    check_structure(model, expected)
+    check_structure(model, structure)
+    check_backends_agree(model)
 
 
-def test_structure_2():
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_2(backend):
+    def model():
+        with pyro.plate("i", 2):
+            a = pyro.sample("a", dist.Normal(0, 1))
+            b = pyro.sample("b", dist.Normal(a, 1))
+            c = pyro.sample("c", dist.Normal(b, 1))
+            pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
+
+    # size = 2 + 2 + 2 = 6
+    structure = [
+        "? . ? . . .",
+        ". ? . ? . .",
+        "? . ? . ? .",
+        ". ? . ? . ?",
+        ". . ? . ? .",
+        ". . . ? . ?",
+    ]
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_3(backend):
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        with pyro.plate("i", 2):
+            b = pyro.sample("b", dist.Normal(a, 1))
+            c = pyro.sample("c", dist.Normal(b, 1))
+        pyro.sample("d", dist.Normal(c.sum(), 1), obs=torch.tensor(0.0))
+
+    # size = 1 + 2 + 2 = 5
+    structure = [
+        "? ? ? . .",
+        "? ? . ? .",
+        "? . ? . ?",
+        ". ? . ? ?",
+        ". . ? ? ?",
+    ]
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_4(backend):
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(0, 1))
@@ -134,16 +240,20 @@ def test_structure_2():
             pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
 
     # size = 1 + 1 + 2 = 4
-    expected = [
-        "? . ? ?",
-        ". ? ? ?",
+    structure = [
+        "? ? ? ?",
+        "? ? ? ?",
         "? ? ? .",
         "? ? . ?",
     ]
-    check_structure(model, expected)
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure)
 
 
-def test_structure_3():
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_5(backend):
     I, J = 2, 3
 
     def model():
@@ -158,12 +268,12 @@ def test_structure_3():
             pyro.sample("z", dist.Normal(0, 1), obs=y)
 
     # size = 2 + 3 + 2 * 3 = 2 + 3 + 6 = 11
-    expected = [
-        "? . . . . ? . ? . ? .",
-        ". ? . . . . ? . ? . ?",
-        ". . ? . . ? ? . . . .",
-        ". . . ? . . . ? ? . .",
-        ". . . . ? . . . . ? ?",
+    structure = [
+        "? . ? ? ? ? . ? . ? .",
+        ". ? ? ? ? . ? . ? . ?",
+        "? ? ? . . ? ? . . . .",
+        "? ? . ? . . . ? ? . .",
+        "? ? . . ? . . . . ? ?",
         "? . ? . . ? . . . . .",
         ". ? ? . . . ? . . . .",
         "? . . ? . . . ? . . .",
@@ -171,10 +281,14 @@ def test_structure_3():
         "? . . . ? . . . . ? .",
         ". ? . . ? . . . . . ?",
     ]
-    check_structure(model, expected)
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure)
 
 
-def test_structure_4():
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_6(backend):
     I, J = 2, 3
 
     def model():
@@ -189,19 +303,23 @@ def test_structure_4():
         pyro.sample("e", dist.Normal(0, 1), obs=d)
 
     # size = 1 + 2 + 3 + 1 = 7
-    expected = [
+    structure = [
         "? ? ? . . . .",
-        "? ? . ? ? ? .",
-        "? . ? ? ? ? .",
-        ". ? ? ? . . ?",
-        ". ? ? . ? . ?",
-        ". ? ? . . ? ?",
+        "? ? ? ? ? ? .",
+        "? ? ? ? ? ? .",
+        ". ? ? ? ? ? ?",
+        ". ? ? ? ? ? ?",
+        ". ? ? ? ? ? ?",
         ". . . ? ? ? ?",
     ]
-    check_structure(model, expected)
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure)
 
 
-def test_structure_5():
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_7(backend):
     def model():
         i_plate = pyro.plate("i", 2, dim=-1)
         with i_plate:
@@ -211,12 +329,15 @@ def test_structure_5():
             pyro.sample("c", dist.Normal(b, 1), obs=torch.zeros(2))
 
     # size = 2 + 1 = 3
-    expected = [
-        "? . ?",
-        ". ? ?",
+    structure = [
+        "? ? ?",
+        "? ? ?",
         "? ? ?",
     ]
-    check_structure(model, expected)
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
