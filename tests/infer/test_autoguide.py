@@ -17,6 +17,8 @@ import pyro.poutine as poutine
 from pyro.infer import (
     SVI,
     JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    JitTraceGraph_ELBO,
     Predictive,
     Trace_ELBO,
     TraceEnum_ELBO,
@@ -356,7 +358,7 @@ class AutoStructured_median(AutoStructured):
         AutoGaussianFunsor,
     ],
 )
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [JitTrace_ELBO, JitTraceGraph_ELBO, JitTraceEnum_ELBO])
 def test_median(auto_class, Elbo):
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
@@ -366,7 +368,10 @@ def test_median(auto_class, Elbo):
     guide = auto_class(model)
     optim = Adam({"lr": 0.02, "betas": (0.8, 0.99)})
     elbo = Elbo(
-        strict_enumeration_warning=False, num_particles=500, vectorize_particles=True
+        strict_enumeration_warning=False,
+        num_particles=500,
+        vectorize_particles=True,
+        ignore_jit_warnings=True,
     )
     infer = SVI(model, guide, optim, elbo)
     for _ in range(100):
