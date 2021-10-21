@@ -47,6 +47,11 @@ class AutoGaussianMeta(type(AutoGuide)):
         return super(AutoGaussianMeta, cls).__call__(*args, **kwargs)
 
 
+def prototype_hide_fn(msg):
+    # Record only sample and observe sites in the prototype_trace.
+    return msg["type"] != "sample" or site_is_subsample(msg)
+
+
 class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
     """
     Gaussian guide with optimal conditional independence structure.
@@ -102,6 +107,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
     """
 
     scale_constraint = constraints.softplus_positive
+    _prototype_hide_fn = staticmethod(prototype_hide_fn)
 
     def __init__(
         self,
