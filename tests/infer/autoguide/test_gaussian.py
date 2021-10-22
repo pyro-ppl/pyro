@@ -91,9 +91,11 @@ def test_backend_dispatch(backend):
         raise ValueError(f"Unknown backend: {backend}")
 
 
-def check_structure(model, expected_str):
+def check_structure(model, expected_str, expected_dependencies=None):
     guide = AutoGaussian(model, backend="dense")
     guide()  # initialize
+    if expected_dependencies is not None:
+        assert guide.dependencies == expected_dependencies
 
     # Inject random noise into all unconstrained parameters.
     for parameter in guide.parameters():
@@ -179,8 +181,16 @@ def test_structure_1(backend):
         "? ? ?",
         ". ? ?",
     ]
-    check_structure(model, structure)
-    check_backends_agree(model)
+    dependencies = {
+        "a": {"a": set()},
+        "b": {"b": set(), "a": set()},
+        "c": {"c": set(), "b": set()},
+        "d": {"c": set(), "d": set()},
+    }
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure, dependencies)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -201,10 +211,16 @@ def test_structure_2(backend):
         ". . ? . ? .",
         ". . . ? . ?",
     ]
+    dependencies = {
+        "a": {"a": set()},
+        "b": {"b": set(), "a": set()},
+        "c": {"c": set(), "b": set()},
+        "d": {"c": set(), "d": set()},
+    }
     if backend == "funsor":
         check_backends_agree(model)
     else:
-        check_structure(model, structure)
+        check_structure(model, structure, dependencies)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -224,10 +240,16 @@ def test_structure_3(backend):
         ". ? . ? ?",
         ". . ? ? ?",
     ]
+    dependencies = {
+        "a": {"a": set()},
+        "b": {"b": set(), "a": set()},
+        "c": {"c": set(), "b": set()},
+        "d": {"c": set(), "d": set()},
+    }
     if backend == "funsor":
         check_backends_agree(model)
     else:
-        check_structure(model, structure)
+        check_structure(model, structure, dependencies)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
