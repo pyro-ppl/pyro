@@ -163,7 +163,7 @@ def check_backends_agree(model):
     with pyro.plate("particle", 100000, dim=-3), poutine.trace() as tr:
         guide2._sample_aux_values()
         tr.trace.compute_log_prob()
-    aentropy2 = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
+    entropy2 = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
     assert_close(entropy1, entropy2, atol=1e-1)
     grads1 = torch.autograd.grad(
         entropy1, [params1[k] for k in names], allow_unused=True
