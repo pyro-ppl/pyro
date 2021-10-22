@@ -133,8 +133,9 @@ def check_backends_agree(model):
     for k, v in params1.items():
         v.data.normal_()
         params2[k].data.copy_(v.data)
+    names = sorted(params1)
 
-    # Check that densities agree between backends.
+    # Check densities agree between backends.
     with torch.no_grad(), poutine.trace() as tr:
         aux = guide2._sample_aux_values()
         flat = guide1._dense_flatten(aux)
@@ -147,28 +148,56 @@ def check_backends_agree(model):
     log_prob_dense = tr.trace.nodes["_AutoGaussianDense_latent"]["log_prob"]
     assert_equal(log_prob_funsor, log_prob_dense)
 
+    # Check elbos agree between backends.
+    elbo = Trace_ELBO(num_particles=100000, vectorize_particles=True)
+    loss1 = elbo.differentiable_loss(model, guide1)
+    loss2 = elbo.differentiable_loss(model, guide2)
+    assert_close(loss1, loss2, atol=0.05, rtol=0.05)
+    grads1 = torch.autograd.grad(loss1, [params1[k] for k in names], allow_unused=True)
+    grads2 = torch.autograd.grad(loss2, [params2[k] for k in names], allow_unused=True)
+    for name, grad1, grad2 in zip(names, grads1, grads2):
+        assert_close(grad1, grad2, atol=0.05, msg=f"{name}:\n{grad1} vs {grad2}")
+
     # Check Monte Carlo estimate of entropy.
-    expected_entropy = guide1._dense_get_mvn().entropy()
+    entropy1 = guide1._dense_get_mvn().entropy()
     with pyro.plate("particle", 100000, dim=-3), poutine.trace() as tr:
         guide2._sample_aux_values()
         tr.trace.compute_log_prob()
-    actual_entropy = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
-    assert_close(actual_entropy, expected_entropy, atol=1e-1)
-
-    # Check gradients.
-    names = sorted(params1)
-    expected_grads = torch.autograd.grad(
-        expected_entropy, [params1[k] for k in names], allow_unused=True
+    aentropy2 = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
+    assert_close(entropy1, entropy2, atol=1e-1)
+    grads1 = torch.autograd.grad(
+        entropy1, [params1[k] for k in names], allow_unused=True
     )
-    actual_grads = torch.autograd.grad(
-        actual_entropy, [params2[k] for k in names], allow_unused=True
+    grads2 = torch.autograd.grad(
+        entropy2, [params2[k] for k in names], allow_unused=True
     )
-    for name, actual, expected in zip(names, actual_grads, expected_grads):
-        assert_close(actual, expected, msg=name)
+    for name, grad1, grad2 in zip(names, grads1, grads2):
+        assert_close(grad1, grad2, atol=0.05, msg=f"{name}:\n{grad1} vs {grad2}")
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_structure_1(backend):
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        with pyro.plate("i", 3):
+            pyro.sample("b", dist.Normal(a, 1), obs=torch.zeros(3))
+
+    # size = 1
+    structure = [
+        "?",
+    ]
+    dependencies = {
+        "a": {"a": set()},
+        "b": {"b": set(), "a": set()},
+    }
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure, dependencies)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_2(backend):
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(a, 1))
@@ -194,7 +223,7 @@ def test_structure_1(backend):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_structure_2(backend):
+def test_structure_3(backend):
     def model():
         with pyro.plate("i", 2):
             a = pyro.sample("a", dist.Normal(0, 1))
@@ -224,7 +253,7 @@ def test_structure_2(backend):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_structure_3(backend):
+def test_structure_4(backend):
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         with pyro.plate("i", 2):
@@ -253,7 +282,7 @@ def test_structure_3(backend):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_structure_4(backend):
+def test_structure_5(backend):
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(0, 1))
@@ -275,7 +304,7 @@ def test_structure_4(backend):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_structure_5(backend):
+def test_structure_6(backend):
     I, J = 2, 3
 
     def model():
@@ -310,7 +339,7 @@ def test_structure_5(backend):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_structure_6(backend):
+def test_structure_7(backend):
     I, J = 2, 3
 
     def model():
@@ -341,7 +370,7 @@ def test_structure_6(backend):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_structure_7(backend):
+def test_structure_8(backend):
     def model():
         i_plate = pyro.plate("i", 2, dim=-1)
         with i_plate:

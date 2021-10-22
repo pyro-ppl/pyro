@@ -212,11 +212,12 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
             # Create a square root parameter (full, not lower triangular).
             # We initialize with noise to avoid singular gradient.
-            sqrt = torch.randn(
+            sqrt = torch.rand(
                 batch_shape + (u_size, d_size),
                 dtype=init_loc.dtype,
                 device=init_loc.device,
-            ).mul_(self._init_scale)
+            )
+            sqrt.sub_(0.5).mul_(self._init_scale)
             if not site["is_observed"]:
                 # Initialize the [d,d] block to the identity matrix.
                 sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)

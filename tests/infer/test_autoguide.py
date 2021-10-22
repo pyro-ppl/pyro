@@ -1309,9 +1309,10 @@ def test_exact(Guide):
     elbo = JitTrace_ELBO(
         num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
     )
-    optim = Adam({"lr": 0.01})
+    num_steps = 500
+    optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
-    for step in range(500):
+    for step in range(num_steps):
         svi.step(data)
 
     guide.requires_grad_(False)
