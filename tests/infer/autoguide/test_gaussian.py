@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, JitTrace_ELBO, Predictive, Trace_ELBO
-from pyro.infer.autoguide import AutoGaussian
+from pyro.infer.autoguide import AutoGaussian, AutoGuideList
 from pyro.infer.autoguide.gaussian import (
     AutoGaussianDense,
     AutoGaussianFunsor,
@@ -447,6 +447,53 @@ def pyrocov_model(dataset):
             )
 
 
+# This is modified by relaxing rate from deterministic to latent.
+def pyrocov_model_relaxed(dataset):
+    # Tensor shapes are commented at the end of some lines.
+    features = dataset["features"]
+    local_time = dataset["local_time"][..., None]  # [T, P, 1]
+    T, P, _ = local_time.shape
+    S, F = features.shape
+    weekly_strains = dataset["weekly_strains"]
+    assert weekly_strains.shape == (T, P, S)
+
+    # Sample global random variables.
+    coef_scale = pyro.sample("coef_scale", dist.InverseGamma(5e3, 1e2))[..., None]
+    rate_loc_scale = pyro.sample("rate_loc_scale", dist.LogNormal(-4, 2))[..., None]
+    rate_scale = pyro.sample("rate_scale", dist.LogNormal(-4, 2))[..., None]
+    init_loc_scale = pyro.sample("init_loc_scale", dist.LogNormal(0, 2))[..., None]
+    init_scale = pyro.sample("init_scale", dist.LogNormal(0, 2))[..., None]
+
+    # Assume relative growth rate depends strongly on mutations and weakly on place.
+    coef_loc = torch.zeros(F)
+    coef = pyro.sample("coef", dist.Logistic(coef_loc, coef_scale).to_event(1))  # [F]
+    rate_loc = pyro.sample(
+        "rate_loc",
+        dist.Normal(0.01 * coef @ features.T, rate_loc_scale).to_event(1),
+    )  # [S]
+
+    # Assume initial infections depend strongly on strain and place.
+    init_loc = pyro.sample(
+        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
+    )  # [S]
+    with pyro.plate("place", P, dim=-1):
+        rate = pyro.sample(
+            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
+        )  # [P, S]
+        init = pyro.sample(
+            "init", dist.Normal(init_loc, init_scale).to_event(1)
+        )  # [P, S]
+
+        # Finally observe counts.
+        with pyro.plate("time", T, dim=-2):
+            logits = init + rate * local_time  # [T, P, S]
+            pyro.sample(
+                "obs",
+                dist.Multinomial(logits=logits, validate_args=False),
+                obs=weekly_strains,
+            )
+
+
 # This is modified by more precisely tracking plates for features and strains.
 def pyrocov_model_plated(dataset):
     # Tensor shapes are commented at the end of some lines.
@@ -537,16 +584,36 @@ def pyrocov_model_poisson(dataset):
         pyro.sample("obs", dist.Poisson(logits), obs=weekly_strains)
 
 
+class PoissonGuide(AutoGuideList):
+    def __init__(self, model, backend):
+        super().__init__(model)
+        self.append(
+            AutoGaussian(poutine.block(model, hide_fn=self.hide_fn_1), backend=backend)
+        )
+        self.append(
+            AutoGaussian(poutine.block(model, hide_fn=self.hide_fn_2), backend=backend)
+        )
+
+    @staticmethod
+    def hide_fn_1(msg):
+        return msg["type"] == "sample" and "pois" in msg["name"]
+
+    @staticmethod
+    def hide_fn_2(msg):
+        return msg["type"] == "sample" and "pois" not in msg["name"]
+
+
 PYRO_COV_MODELS = [
-    pyrocov_model,
-    pyrocov_model_plated,
-    pyrocov_model_poisson,
+    (pyrocov_model, AutoGaussian),
+    (pyrocov_model_relaxed, AutoGaussian),
+    (pyrocov_model_plated, AutoGaussian),
+    (pyrocov_model_poisson, PoissonGuide),
 ]
 
 
-@pytest.mark.parametrize("model", PYRO_COV_MODELS)
+@pytest.mark.parametrize("model, Guide", PYRO_COV_MODELS)
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_pyrocov_smoke(model, backend):
+def test_pyrocov_smoke(model, Guide, backend):
     T, P, S, F = 3, 4, 5, 6
     dataset = {
         "features": torch.randn(S, F),
@@ -554,7 +621,7 @@ def test_pyrocov_smoke(model, backend):
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(model, backend=backend)
+    guide = Guide(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
@@ -564,9 +631,9 @@ def test_pyrocov_smoke(model, backend):
     predictive(dataset)
 
 
-@pytest.mark.parametrize("model", PYRO_COV_MODELS)
+@pytest.mark.parametrize("model, Guide", PYRO_COV_MODELS)
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_pyrocov_reparam(model, backend):
+def test_pyrocov_reparam(model, Guide, backend):
     T, P, S, F = 2, 3, 4, 5
     dataset = {
         "features": torch.randn(S, F),
@@ -583,7 +650,7 @@ def test_pyrocov_reparam(model, backend):
         "init": LocScaleReparam(),
     }
     model = poutine.reparam(model, config)
-    guide = AutoGaussian(model, backend=backend)
+    guide = Guide(model, backend=backend)
     svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
@@ -604,30 +671,27 @@ def test_pyrocov_structure():
         "weekly_strains": torch.randn(T, P, S).exp().round(),
     }
 
-    guide = AutoGaussian(pyrocov_model_poisson, backend="funsor")
+    guide = PoissonGuide(pyrocov_model_poisson, backend="funsor")
     guide(dataset)  # initialize
+    guide = guide[0]  # pull out AutoGaussian part of PoissonGuide
 
-    expected_plates = frozenset(["time", "place", "strain"])
+    expected_plates = frozenset(["place", "strain"])
     assert guide._funsor_plates == expected_plates
 
     expected_eliminate = frozenset(
         [
-            "time",
-            "place",
-            "strain",
+            "coef",
             "coef_scale",
-            "rate_loc_scale",
-            "rate_scale",
+            "init",
+            "init_loc",
             "init_loc_scale",
             "init_scale",
-            "coef",
-            "rate_loc",
-            "init_loc",
+            "place",
             "rate",
-            "init",
-            "pois_loc",
-            "pois_scale",
-            "pois",
+            "rate_loc",
+            "rate_loc_scale",
+            "rate_scale",
+            "strain",
         ]
     )
     assert guide._funsor_eliminate == expected_eliminate
@@ -638,8 +702,6 @@ def test_pyrocov_structure():
         "rate_scale": OrderedDict([("rate_scale", Real)]),
         "init_loc_scale": OrderedDict([("init_loc_scale", Real)]),
         "init_scale": OrderedDict([("init_scale", Real)]),
-        "pois_loc": OrderedDict([("pois_loc", Real)]),
-        "pois_scale": OrderedDict([("pois_scale", Real)]),
         "coef": OrderedDict([("coef", Reals[5]), ("coef_scale", Real)]),
         "rate_loc": OrderedDict(
             [
@@ -650,7 +712,11 @@ def test_pyrocov_structure():
             ]
         ),
         "init_loc": OrderedDict(
-            [("strain", Bint[4]), ("init_loc", Real), ("init_loc_scale", Real)]
+            [
+                ("strain", Bint[4]),
+                ("init_loc", Real),
+                ("init_loc_scale", Real),
+            ]
         ),
         "rate": OrderedDict(
             [
@@ -670,13 +736,12 @@ def test_pyrocov_structure():
                 ("init_loc", Real),
             ]
         ),
-        "pois": OrderedDict(
+        "obs": OrderedDict(
             [
-                ("time", Bint[2]),
                 ("place", Bint[3]),
-                ("pois", Real),
-                ("pois_loc", Real),
-                ("pois_scale", Real),
+                ("strain", Bint[4]),
+                ("rate", Real),
+                ("init", Real),
             ]
         ),
     }
@@ -699,7 +764,7 @@ def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     }
 
     print("Initializing guide")
-    guide = AutoGaussian(model, backend=backend)
+    guide = PoissonGuide(model, backend=backend)
     guide(dataset)  # initialize
     print("Parameter shapes:")
     for name, param in guide.named_parameters():

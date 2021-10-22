@@ -166,7 +166,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
                     "Are you missing a pyro.plate() or .to_event()?"
                 )
             if site["is_observed"]:
-                # Eagerly eliminate irrelevant observation plates.
+                # Break irrelevant observation plates.
                 plates &= frozenset().union(
                     *(self._plates[u] for u in self.dependencies[d] if u != d)
                 )
@@ -176,6 +176,9 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
             if site["is_observed"]:
                 # This may slightly overestimate, e.g. for Multinomial.
                 self._event_numel[d] = site["fn"].event_shape.numel()
+                # Account for broken irrelevant observation plates.
+                for f in set(site["cond_indep_stack"]) - plates:
+                    self._event_numel[d] *= f.size
                 continue
             with helpful_support_errors(site):
                 init_loc = biject_to(site["fn"].support).inv(site["value"]).detach()
@@ -208,7 +211,12 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
             batch_shape = _plates_to_shape(self._plates[d])
 
             # Create a square root parameter (full, not lower triangular).
-            sqrt = init_loc.new_zeros(batch_shape + (u_size, d_size))
+            # We initialize with noise to avoid singular gradient.
+            sqrt = torch.randn(
+                batch_shape + (u_size, d_size),
+                dtype=init_loc.dtype,
+                device=init_loc.device,
+            ).mul_(self._init_scale)
             if not site["is_observed"]:
                 # Initialize the [d,d] block to the identity matrix.
                 sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)
@@ -333,7 +341,6 @@ class AutoGaussianDense(AutoGaussian):
             for u in upstreams:
                 local_offsets[u] = pos
                 broken_plates = self._plates[u] - self._plates[d]
-                print("DEBUG", d, u, [f.name for f in broken_plates])
                 pos += self._event_numel[u] * _plates_to_shape(broken_plates).numel()
 
             # Create indices blockwise.
