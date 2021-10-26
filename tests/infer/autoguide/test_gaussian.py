@@ -180,7 +180,7 @@ def test_structure_1(backend):
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         with pyro.plate("i", 3):
-            pyro.sample("b", dist.Normal(a, 1), obs=torch.zeros(3))
+            pyro.sample("b", dist.Normal(a, 1), obs=torch.ones(3))
 
     # size = 1
     structure = [
@@ -202,7 +202,7 @@ def test_structure_2(backend):
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(a, 1))
         c = pyro.sample("c", dist.Normal(b, 1))
-        pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
+        pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(1.0))
 
     # size = 1 + 1 + 1 = 3
     structure = [
@@ -229,7 +229,7 @@ def test_structure_3(backend):
             a = pyro.sample("a", dist.Normal(0, 1))
             b = pyro.sample("b", dist.Normal(a, 1))
             c = pyro.sample("c", dist.Normal(b, 1))
-            pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
+            pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(1.0))
 
     # size = 2 + 2 + 2 = 6
     structure = [
@@ -259,7 +259,7 @@ def test_structure_4(backend):
         with pyro.plate("i", 2):
             b = pyro.sample("b", dist.Normal(a, 1))
             c = pyro.sample("c", dist.Normal(b, 1))
-        pyro.sample("d", dist.Normal(c.sum(), 1), obs=torch.tensor(0.0))
+        pyro.sample("d", dist.Normal(c.sum(), 1), obs=torch.tensor(1.0))
 
     # size = 1 + 2 + 2 = 5
     structure = [
@@ -288,7 +288,7 @@ def test_structure_5(backend):
         b = pyro.sample("b", dist.Normal(0, 1))
         with pyro.plate("i", 2):
             c = pyro.sample("c", dist.Normal(a, b.exp()))
-            pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(0.0))
+            pyro.sample("d", dist.Normal(c, 1), obs=torch.tensor(1.0))
 
     # size = 1 + 1 + 2 = 4
     structure = [
@@ -316,7 +316,7 @@ def test_structure_6(backend):
             x = pyro.sample("x", dist.Normal(0, 1))
         with i_plate, j_plate:
             y = pyro.sample("y", dist.Normal(w, x.exp()))
-            pyro.sample("z", dist.Normal(0, 1), obs=y)
+            pyro.sample("z", dist.Normal(1, 1), obs=y)
 
     # size = 2 + 3 + 2 * 3 = 2 + 3 + 6 = 11
     structure = [
@@ -351,7 +351,7 @@ def test_structure_7(backend):
         with j_plate:
             c = pyro.sample("c", dist.Normal(b.mean(), 1))
         d = pyro.sample("d", dist.Normal(c.mean(), 1))
-        pyro.sample("e", dist.Normal(0, 1), obs=d)
+        pyro.sample("e", dist.Normal(1, 1), obs=d)
 
     # size = 1 + 2 + 3 + 1 = 7
     structure = [
@@ -377,7 +377,7 @@ def test_structure_8(backend):
             a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(a.mean(-1), 1))
         with i_plate:
-            pyro.sample("c", dist.Normal(b, 1), obs=torch.zeros(2))
+            pyro.sample("c", dist.Normal(b, 1), obs=torch.ones(2))
 
     # size = 2 + 1 = 3
     structure = [
