@@ -4,7 +4,7 @@
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
 from types import SimpleNamespace
-from typing import Callable, Dict, Optional, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
 import torch
 from torch.distributions import biject_to
@@ -53,7 +53,7 @@ class AutoStructured(AutoGuide):
         guide = AutoStructured(
             model=model,
             conditionals={"x": "normal", "y": "delta"},
-            dependencies={"x": {"y": "linear"}},
+            dependencies={"y": {"x": "linear"}},
         )
 
     Once trained, this guide can be used with
@@ -79,14 +79,16 @@ class AutoStructured(AutoGuide):
         returns a sample from a zero mean (or approximately centered) noise
         distribution (such callables typically call ``pyro.param()`` and
         ``pyro.sample()`` internally).
-    :param dependencies: Dependency type, or a dict mapping each site name to a
-        dict mapping its upstream dependencies to dependency types. If only a
-        dependecy type is provided, dependency structure will be inferred. A
-        dependency type is either the string "linear" or a callable that maps a
-        *flattened* upstream perturbation to *flattened* downstream
-        perturbation. The string "linear" is equivalent to
-        ``nn.Linear(upstream.numel(), downstream.numel(), bias=False)``.
-        Dependencies must not contain cycles or self-loops.
+    :param dependencies: Dependency type, or a dict mapping each downstream
+        site name to a dict mapping its upstream dependencies to dependency
+        types, where an upstream dependency key can be either a single upstream
+        site name or a tuple of upstream site names. If only a dependecy type
+        is provided, dependency structure will be inferred. A dependency type
+        is either the string "linear" or a callable that maps a *flattened*
+        upstream perturbation to *flattened* downstream perturbation. The
+        string "linear" is equivalent to ``nn.Linear(upstream.numel(),
+        downstream.numel(), bias=False)``. Dependencies must not contain cycles
+        or self-loops.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
@@ -105,7 +107,9 @@ class AutoStructured(AutoGuide):
         model,
         *,
         conditionals: Union[str, Dict[str, Union[str, Callable]]] = "mvn",
-        dependencies: Union[str, Dict[str, Dict[str, Union[str, Callable]]]] = "linear",
+        dependencies: Union[
+            str, Dict[Union[str, Tuple[str, ...]], Dict[str, Union[str, Callable]]]
+        ] = "linear",
         init_loc_fn: Callable = init_to_feasible,
         init_scale: float = 0.1,
         create_plates: Optional[Callable] = None,
@@ -222,6 +226,18 @@ class AutoStructured(AutoGuide):
             deps = PyroModule()
             deep_setattr(self.deps, name, deps)
             for upstream, dep in self.dependencies.get(name, {}).items():
+                if isinstance(upstream, tuple):
+                    upstreams = upstream
+                    for upstream in upstreams:
+                        assert isinstance(upstream, str)
+                        assert upstream in sample_sites
+                        children[upstream].append(name)
+                        num_pending[name] += 1
+                    if not callable(dep):
+                        raise ValueError(f"Expected either a callable, but got {dep}")
+                    deep_setattr(deps, ",".join(upstreams), dep)
+                    continue
+                assert isinstance(upstream, str)
                 assert upstream in sample_sites
                 children[upstream].append(name)
                 num_pending[name] += 1
@@ -320,6 +336,11 @@ class AutoStructured(AutoGuide):
             # computation below, even for nonlinear dep().
             deps = deep_getattr(self.deps, name)
             for upstream in self.dependencies.get(name, {}):
+                if isinstance(upstream, tuple):
+                    dep = deep_getattr(deps, ",".join(upstream))
+                    aux_value = aux_value + dep(*(aux_values[u] for u in upstream))
+                    continue
+                assert isinstance(upstream, str)
                 dep = deep_getattr(deps, upstream)
                 aux_value = aux_value + dep(aux_values[upstream])
             aux_values[name] = aux_value
