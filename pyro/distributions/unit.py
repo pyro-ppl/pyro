@@ -20,21 +20,26 @@ class Unit(TorchDistribution):
     arg_constraints = {"log_factor": constraints.real}
     support = constraints.real
 
-    def __init__(self, log_factor, validate_args=None):
+    def __init__(self, log_factor, *, has_rsample=False, validate_args=None):
         log_factor = torch.as_tensor(log_factor)
         batch_shape = log_factor.shape
         event_shape = torch.Size((0,))  # This satisfies .numel() == 0.
         self.log_factor = log_factor
+        self.has_rsample = has_rsample
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(Unit, _instance)
         new.log_factor = self.log_factor.expand(batch_shape)
+        new.has_rsample = self.has_rsample
         super(Unit, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
     def sample(self, sample_shape=torch.Size()):
+        return self.log_factor.new_empty(sample_shape + self.shape())
+
+    def rsample(self, sample_shape=torch.Size()):
         return self.log_factor.new_empty(sample_shape + self.shape())
 
     def log_prob(self, value):
