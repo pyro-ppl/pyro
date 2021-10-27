@@ -149,9 +149,11 @@ class AutoGuide(PyroModule):
             self.plates = self.master().plates
         return self.plates
 
+    _prototype_hide_fn = staticmethod(prototype_hide_fn)
+
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = poutine.block(self.model, prototype_hide_fn)
+        model = poutine.block(self.model, self._prototype_hide_fn)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(
             *args, **kwargs
         )
@@ -193,9 +195,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
     """
 
     def _check_prototype(self, part_trace):
-        for name, part_site in part_trace.nodes.items():
-            if part_site["type"] != "sample":
-                continue
+        for name, part_site in part_trace.iter_stochastic_nodes():
             self_site = self.prototype_trace.nodes[name]
             assert part_site["fn"].batch_shape == self_site["fn"].batch_shape
             assert part_site["fn"].event_shape == self_site["fn"].event_shape
@@ -1187,7 +1187,7 @@ class AutoDiscreteParallel(AutoGuide):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = poutine.block(config_enumerate(self.model), prototype_hide_fn)
+        model = poutine.block(config_enumerate(self.model), self._prototype_hide_fn)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(
             *args, **kwargs
         )

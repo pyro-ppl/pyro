@@ -30,6 +30,7 @@ class Unit(TorchDistribution):
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
+        batch_shape = torch.Size(batch_shape)
         new = self._get_checked_instance(Unit, _instance)
         new.log_factor = self.log_factor.expand(batch_shape)
         if "has_rsample" in self.__dict__:
