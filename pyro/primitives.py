@@ -165,22 +165,25 @@ def sample(name, fn, *args, **kwargs):
         return msg["value"]
 
 
-def factor(name, log_factor):
+def factor(name, log_factor, *, has_rsample=False):
     """
     Factor statement to add arbitrary log probability factor to a
     probabilisitic model.
 
     .. warning:: Beware using factor statements in guides. Factor statements
-        assume ``log_factor`` is computed from non-reparametrized statements
-        such as observation statements ``pyro.sample(..., obs=...)``. If
-        instead ``log_factor`` is computed from e.g. the Jacobian determinant
-        of a transformation of a reparametrized variable, factor statements
-        in the guide will result in incorrect results.
+        assume by default that ``log_factor`` is computed from
+        non-reparametrized statements such as observation statements
+        ``pyro.sample(..., obs=...)``. If instead ``log_factor`` is computed
+        from e.g. the Jacobian determinant of a transformation of a
+        reparametrized variable, you'll need to set ``has_rsample=True``.
 
     :param str name: Name of the trivial sample
     :param torch.Tensor log_factor: A possibly batched log probability factor.
+    :param bool has_rsample: Whether the ``log_factor`` arose from a fully
+        reparametrized distribution. Defaults to False, which is safe for use
+        in models (but may not be safe for use in guides).
     """
-    unit_dist = dist.Unit(log_factor)
+    unit_dist = dist.Unit(log_factor, has_rsample=has_rsample)
     unit_value = unit_dist.sample()
     sample(name, unit_dist, obs=unit_value, infer={"is_auxiliary": True})
 
