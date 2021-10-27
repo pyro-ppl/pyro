@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
+from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
 from types import SimpleNamespace
@@ -30,7 +31,7 @@ from .utils import deep_getattr, deep_setattr, helpful_support_errors
 #   AutoGaussianDense(model)
 # The intent is to avoid proliferation of subclasses and docstrings,
 # and provide a single interface AutoGaussian(...).
-class AutoGaussianMeta(type(AutoGuide)):
+class AutoGaussianMeta(type(AutoGuide), ABCMeta):
     backends = {}
     default_backend = "dense"
 
@@ -297,6 +298,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
         return values, log_densities
 
+    @abstractmethod
     def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
         raise NotImplementedError
 

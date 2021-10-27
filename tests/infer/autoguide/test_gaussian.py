@@ -148,23 +148,13 @@ def check_backends_agree(model):
     log_prob_dense = tr.trace.nodes["_AutoGaussianDense_latent"]["log_prob"]
     assert_equal(log_prob_funsor, log_prob_dense)
 
-    # Check elbos agree between backends.
-    elbo = Trace_ELBO(num_particles=100000, vectorize_particles=True)
-    loss1 = elbo.differentiable_loss(model, guide1)
-    loss2 = elbo.differentiable_loss(model, guide2)
-    assert_close(loss1, loss2, atol=0.05, rtol=0.05)
-    grads1 = torch.autograd.grad(loss1, [params1[k] for k in names], allow_unused=True)
-    grads2 = torch.autograd.grad(loss2, [params2[k] for k in names], allow_unused=True)
-    for name, grad1, grad2 in zip(names, grads1, grads2):
-        assert_close(grad1, grad2, atol=0.05, msg=f"{name}:\n{grad1} vs {grad2}")
-
     # Check Monte Carlo estimate of entropy.
     entropy1 = guide1._dense_get_mvn().entropy()
     with pyro.plate("particle", 100000, dim=-3), poutine.trace() as tr:
         guide2._sample_aux_values()
         tr.trace.compute_log_prob()
     entropy2 = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
-    assert_close(entropy1, entropy2, atol=1e-1)
+    assert_close(entropy1, entropy2, atol=1e-2)
     grads1 = torch.autograd.grad(
         entropy1, [params1[k] for k in names], allow_unused=True
     )
@@ -172,7 +162,38 @@ def check_backends_agree(model):
         entropy2, [params2[k] for k in names], allow_unused=True
     )
     for name, grad1, grad2 in zip(names, grads1, grads2):
+        assert_close(grad1, grad2, msg=f"{name}:\n{grad1} vs {grad2}")
+
+    # Check elbos agree between backends.
+    elbo = Trace_ELBO(num_particles=1000000, vectorize_particles=True)
+    loss1 = elbo.differentiable_loss(model, guide1)
+    loss2 = elbo.differentiable_loss(model, guide2)
+    assert_close(loss1, loss2, atol=1e-2, rtol=0.05)
+    grads1 = torch.autograd.grad(loss1, [params1[k] for k in names], allow_unused=True)
+    grads2 = torch.autograd.grad(loss2, [params2[k] for k in names], allow_unused=True)
+    for name, grad1, grad2 in zip(names, grads1, grads2):
         assert_close(grad1, grad2, atol=0.05, msg=f"{name}:\n{grad1} vs {grad2}")
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_structure_0(backend):
+    @poutine.scale(scale=1e-20)  # DEBUG
+    def model():
+        a = pyro.sample("a", dist.Normal(0, 1))
+        pyro.sample("b", dist.Normal(a, 1), obs=torch.ones(()))
+
+    # size = 1
+    structure = [
+        "?",
+    ]
+    dependencies = {
+        "a": {"a": set()},
+        "b": {"b": set(), "a": set()},
+    }
+    if backend == "funsor":
+        check_backends_agree(model)
+    else:
+        check_structure(model, structure, dependencies)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
