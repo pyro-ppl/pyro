@@ -162,17 +162,20 @@ def check_backends_agree(model):
         entropy2, [params2[k] for k in names], allow_unused=True
     )
     for name, grad1, grad2 in zip(names, grads1, grads2):
+        # Gradients should agree to very high precision.
         assert_close(grad1, grad2, msg=f"{name}:\n{grad1} vs {grad2}")
 
     # Check elbos agree between backends.
-    elbo = Trace_ELBO(num_particles=1000000, vectorize_particles=True)
+    elbo = Trace_ELBO(num_particles=100000, vectorize_particles=True)
     loss1 = elbo.differentiable_loss(model, guide1)
     loss2 = elbo.differentiable_loss(model, guide2)
     assert_close(loss1, loss2, atol=1e-2, rtol=0.05)
     grads1 = torch.autograd.grad(loss1, [params1[k] for k in names], allow_unused=True)
     grads2 = torch.autograd.grad(loss2, [params2[k] for k in names], allow_unused=True)
     for name, grad1, grad2 in zip(names, grads1, grads2):
-        assert_close(grad1, grad2, atol=0.05, msg=f"{name}:\n{grad1} vs {grad2}")
+        assert_close(
+            grad1, grad2, atol=0.05, rtol=0.05, msg=f"{name}:\n{grad1} vs {grad2}"
+        )
 
 
 @pytest.mark.parametrize("backend", BACKENDS)

@@ -509,7 +509,7 @@ class AutoGaussianFunsor(AutoGaussian):
         # Convert funsor to torch.
         if am_i_wrapped() and poutine.get_mask() is not False:
             log_prob = funsor.to_data(log_prob, name_to_dim=plate_to_dim)
-            pyro.factor(f"_{self._pyro_name}_latent", log_prob)
+            pyro.factor(f"_{self._pyro_name}_latent", log_prob, has_rsample=True)
         samples = {
             k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()
         }
