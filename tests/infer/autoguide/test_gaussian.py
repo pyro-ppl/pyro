@@ -180,7 +180,6 @@ def check_backends_agree(model):
 
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_structure_0(backend):
-    @poutine.scale(scale=1e-20)  # DEBUG
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         pyro.sample("b", dist.Normal(a, 1), obs=torch.ones(()))
