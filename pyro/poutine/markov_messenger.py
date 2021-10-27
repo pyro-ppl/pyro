@@ -44,6 +44,11 @@ class MarkovMessenger(ReentrantMessenger):
         self._iterable = None
         self._pos = -1
         self._stack = []
+
+        if _FUNSOR_ACTIVE:
+            from pyro.contrib.funsor.handlers.named_messenger import MarkovMessenger as FunsorMarkovMessenger
+            self._funsor_markov = FunsorMarkovMessenger(history=history, keep=keep)
+
         super().__init__()
 
     def generator(self, iterable):
@@ -60,12 +65,20 @@ class MarkovMessenger(ReentrantMessenger):
         self._pos += 1
         if len(self._stack) <= self._pos:
             self._stack.append(set())
+
+        if hasattr(self, "_funsor_markov"):
+            self._funsor_markov.__enter__()
+
         return super().__enter__()
 
     def __exit__(self, *args, **kwargs):
         if not self.keep:
             self._stack.pop()
         self._pos -= 1
+
+        if hasattr(self, "_funsor_markov"):
+            self._funsor_markov.__exit__(*args, **kwargs)
+
         return super().__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):

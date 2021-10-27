@@ -143,10 +143,16 @@ class EnumMessenger(Messenger):
     def __enter__(self):
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
+        else:
+            _ENUM_ALLOCATOR.restore_globals()
         self._markov_depths = {}  # site name -> depth (nonnegative integer)
         self._param_dims = {}  # site name -> (enum dim -> unique id)
         self._value_dims = {}  # site name -> (enum dim -> unique id)
         return super().__enter__()
+
+    def __exit__(self, *args):
+        _ENUM_ALLOCATOR.remove_globals()
+        return super().__exit__(*args)
 
     @ignore_jit_warnings()
     def _pyro_sample(self, msg):
