@@ -17,7 +17,7 @@ from pyro.infer.autoguide.gaussian import (
     _break_plates,
 )
 from pyro.infer.reparam import LocScaleReparam
-from pyro.optim import Adam
+from pyro.optim import ClippedAdam
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 BACKENDS = [
@@ -426,7 +426,7 @@ def test_broken_plates_smoke(backend):
         pyro.sample("b", dist.Normal(a.mean(-1), 1), obs=torch.tensor(0.0))
 
     guide = AutoGaussian(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step()
@@ -449,7 +449,7 @@ def test_intractable_smoke(backend):
             pyro.sample("d", dist.Normal(c, 1), obs=torch.zeros(3, 2))
 
     guide = AutoGaussian(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step()
@@ -678,7 +678,7 @@ def test_pyrocov_smoke(model, Guide, backend):
     }
 
     guide = Guide(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step(dataset)
@@ -707,7 +707,7 @@ def test_pyrocov_reparam(model, Guide, backend):
     }
     model = poutine.reparam(model, config)
     guide = Guide(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step(dataset)
@@ -829,7 +829,7 @@ def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     print("Training")
     Elbo = JitTrace_ELBO if jit else Trace_ELBO
     elbo = Elbo(max_plate_nesting=3, ignore_jit_warnings=True)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), elbo)
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), elbo)
     for step in range(num_steps):
         loss = svi.step(dataset)
         if log_every and step % log_every == 0:
