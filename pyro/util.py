@@ -367,6 +367,22 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf
             )
         )
 
+    # Check factor statements in guide specify has_rsample.
+    for name, site in guide_trace.nodes.items():
+        if not site["type"] == "sample":
+            continue
+        if not site["infer"].get("is_auxiliary"):
+            continue
+        if type(site["fn"]).__name__ != "Unit":
+            continue
+        if "has_rsample" not in site["fn"].__dict__:
+            raise ValueError(
+                f'At guide site pyro.factor("{name}",...), '
+                "missing specification of has_rsample. "
+                "Please either set has_rsample=True if the factor statement arises "
+                "from reparametrized sampling or has_rsample=False otherwise."
+            )
+
 
 def check_site_shape(site, max_plate_nesting):
     actual_shape = list(site["log_prob"].shape)
