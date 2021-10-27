@@ -1450,7 +1450,7 @@ def test_exact_tree(Guide):
     guide.requires_grad_(False)
     with torch.no_grad():
         # Check moments.
-        vectorize = pyro.plate("particles", 10000, dim=-2)
+        vectorize = pyro.plate("particles", 50000, dim=-2)
         guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
         samples = poutine.replay(vectorize(model), guide_trace)(data)
         for name in ["x", "y"]:

@@ -381,23 +381,14 @@ class AutoGaussianDense(AutoGaussian):
             self._dense_scatter[d] = index1.reshape(-1), index2.reshape(-1)
 
     def _sample_aux_values(self, *, temperature: float) -> Dict[str, torch.Tensor]:
-        # Conver to (loc, scale_tril) coordinates.
-        info_vec, precision = self._get_info_vec_and_precision()
-        scale_tril = dist.MultivariateNormal(
-            loc=info_vec.new_zeros(()).expand_as(info_vec), precision_matrix=precision
-        ).scale_tril
-        loc = (scale_tril @ (scale_tril.transpose(-1, -2) @ info_vec[..., None]))[
-            ..., 0
-        ]
+        mvn = self._dense_get_mvn()
         if temperature == 0:
             # Simply return the mode.
-            flat_samples = loc
+            flat_samples = mvn.mean
         elif temperature == 1:
             # Sample from a dense joint Gaussian over flattened variables.
             flat_samples = pyro.sample(
-                f"_{self._pyro_name}_latent",
-                self._dense_get_mvn(),
-                infer={"is_auxiliary": True},
+                f"_{self._pyro_name}_latent", mvn, infer={"is_auxiliary": True}
             )
         else:
             raise NotImplementedError(f"Invalid temperature: {temperature}")
@@ -442,7 +433,9 @@ class AutoGaussianDense(AutoGaussian):
         info_vec = flat_info_vec
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
         scale_tril = _precision_to_scale_tril(precision)
-        loc = info_vec.unsqueeze(-1).cholesky_solve(scale_tril).squeeze(-1)
+        loc = (
+            scale_tril @ (scale_tril.transpose(-1, -2) @ info_vec.unsqueeze(-1))
+        ).squeeze(-1)
         return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
 
