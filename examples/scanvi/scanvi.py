@@ -267,7 +267,11 @@ class SCANVI(nn.Module):
                 classification_loss = y_dist.log_prob(y)
                 # Note that the negative sign appears because we're adding this term in the guide
                 # and the guide log_prob appears in the ELBO as -log q
-                pyro.factor("classification_loss", -self.alpha * classification_loss)
+                pyro.factor(
+                    "classification_loss",
+                    -self.alpha * classification_loss,
+                    has_rsample=False,
+                )
 
             z1_loc, z1_scale = self.z1_encoder(z2, y)
             pyro.sample("z1", dist.Normal(z1_loc, z1_scale).to_event(1))
