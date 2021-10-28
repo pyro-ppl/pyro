@@ -3,7 +3,7 @@
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Callable, Dict, Tuple, Union
+from typing import Dict, Tuple, Union
 
 import torch
 
@@ -27,24 +27,24 @@ class GuideMessenger(TraceMessenger, ABC):
     Derived classes must implement the :meth:`get_posterior` method.
     """
 
-    def __enter__(self, *args, **kwargs) -> Trace:
+    def __call__(self, *args, **kwargs):
         self.args_kwargs = args, kwargs
         self.upstream_values = OrderedDict()
-        return super().__enter__()
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         del self.args_kwargs
         del self.upstream_values
-        return super().__exit__(self, exc_type, exc_value, traceback)
+        return super().__exit__(exc_type, exc_value, traceback)
 
     def _pyro_sample(self, msg):
-        if not msg["is_observed"] and not site_is_subsample(msg):
-            msg["infer"]["prior"] = msg["fn"]
-            posterior = self.get_posterior(msg["name"], msg["fn"], self.upstream_values)
-            if isinstance(posterior, torch.Tensor):
-                posterior = dist.Delta(posterior, event_dim=msg["fn"].event_dim)
-            msg["fn"] = posterior
-        return super()._pyro_sample(msg)
+        if msg["is_observed"] or site_is_subsample(msg):
+            return
+        msg["infer"]["prior"] = msg["fn"]
+        posterior = self.get_posterior(msg["name"], msg["fn"], self.upstream_values)
+        if isinstance(posterior, torch.Tensor):
+            posterior = dist.Delta(posterior, event_dim=msg["fn"].event_dim)
+        msg["fn"] = posterior
 
     def _pyro_post_sample(self, msg):
         self.upstream_values[msg["name"]] = msg["value"]
@@ -90,13 +90,15 @@ class GuideMessenger(TraceMessenger, ABC):
         :returns: a pair ``(model_trace, guide_trace)``
         :rtype: tuple
         """
-        guide_trace = self.trace.copy()
-        model_trace = self.trace.copy()
+        guide_trace = prune_subsample_sites(self.trace)
+        model_trace = model_trace = guide_trace.copy()
         for name, guide_site in list(guide_trace.nodes.items()):
             if guide_site["type"] != "sample" or guide_site["is_observed"]:
                 del guide_trace.nodes[name]
                 continue
-            model_trace[name]["fn"] = guide_site["infer"]["prior"]
+            model_site = model_trace.nodes[name].copy()
+            model_site["fn"] = guide_site["infer"]["prior"]
+            model_trace.nodes[name] = model_site
         return model_trace, guide_trace
 
 
@@ -106,14 +108,13 @@ class EffectMixin(ELBO):
     implementation.
     """
 
-    def _get_trace(
-        self, model: Callable, guide: GuideMessenger, args: tuple, kwargs: dict
-    ):
+    def _get_trace(self, model, guide, args, kwargs):
         # This differs from Trace_ELBO in that the guide is assumed to be an
         # effect handler.
-        assert isinstance(guide, GuideMessenger)
         with guide(*args, **kwargs):
             model(*args, **kwargs)
+        while not isinstance(guide, GuideMessenger):
+            guide = guide.func.args[1]  # unwrap plates
         model_trace, guide_trace = guide.get_traces()
         if self.max_plate_nesting == -float("inf"):
             self.max_plate_nesting = max(

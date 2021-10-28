@@ -94,10 +94,17 @@ class ELBO(object, metaclass=ABCMeta):
         """
         # Ignore validation to allow model-enumerated sites absent from the guide.
         with poutine.block():
-            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(
-                poutine.replay(model, trace=guide_trace)
-            ).get_trace(*args, **kwargs)
+            if isinstance(guide, poutine.messenger.Messenger):
+                # Subclasses of GuideMessenger.
+                with guide(*args, **kwargs):
+                    model(*args, **kwargs)
+                model_trace, guide_trace = guide.get_traces()
+            else:
+                # Traditional callable guides.
+                guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
+                model_trace = poutine.trace(
+                    poutine.replay(model, trace=guide_trace)
+                ).get_trace(*args, **kwargs)
         guide_trace = prune_subsample_sites(guide_trace)
         model_trace = prune_subsample_sites(model_trace)
         sites = [
@@ -139,17 +146,13 @@ class ELBO(object, metaclass=ABCMeta):
         :return: wrapped callable.
         """
 
-        def wrapped_fn(*args, **kwargs):
-            if self.num_particles == 1:
-                return fn(*args, **kwargs)
-            with pyro.plate(
-                "num_particles_vectorized",
-                self.num_particles,
-                dim=-self.max_plate_nesting,
-            ):
-                return fn(*args, **kwargs)
-
-        return wrapped_fn
+        if self.num_particles == 1:
+            return fn
+        return pyro.plate(
+            "num_particles_vectorized",
+            self.num_particles,
+            dim=-self.max_plate_nesting,
+        )(fn)
 
     def _get_vectorized_trace(self, model, guide, args, kwargs):
         """

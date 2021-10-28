@@ -16,6 +16,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import (
     SVI,
+    Effect_ELBO,
+    JitEffect_ELBO,
     JitTrace_ELBO,
     JitTraceEnum_ELBO,
     JitTraceGraph_ELBO,
@@ -35,8 +37,10 @@ from pyro.infer.autoguide import (
     AutoIAFNormal,
     AutoLaplaceApproximation,
     AutoLowRankMultivariateNormal,
+    AutoMessenger,
     AutoMultivariateNormal,
     AutoNormal,
+    AutoRegressiveMessenger,
     AutoStructured,
     init_to_feasible,
     init_to_mean,
@@ -55,6 +59,20 @@ from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 AutoGaussianFunsor = pytest.param(
     AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
 )
+
+
+def promote_elbo(Guide, Elbo):
+    """
+    Promote e.g. Trace_ELBO --> Effect_ELBO for AutoMessengers.
+    """
+    if issubclass(Guide, AutoMessenger):
+        if Elbo is Trace_ELBO:
+            return Effect_ELBO
+        if Elbo is JitTrace_ELBO:
+            return Effect_ELBO  # DEBUG
+            return JitEffect_ELBO
+        pytest.skip("not implemented")
+    return Elbo
 
 
 @pytest.mark.parametrize(
@@ -202,6 +220,7 @@ class AutoStructured_shapes(AutoStructured):
         AutoStructured_shapes,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.filterwarnings("ignore::FutureWarning")
@@ -218,6 +237,7 @@ def test_shapes(auto_class, init_loc_fn, Elbo, num_particles):
         )
         pyro.sample("z7", dist.LKJCholesky(2, torch.tensor(1.0)))
 
+    Elbo = promote_elbo(auto_class, Elbo)
     guide = auto_class(model, init_loc_fn=init_loc_fn)
     elbo = Elbo(
         num_particles=num_particles,
@@ -1278,6 +1298,7 @@ class AutoStructured_exact_mvn(AutoStructured):
         AutoStructured_exact_mvn,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoRegressiveMessenger,
     ],
 )
 def test_exact(Guide):
@@ -1306,9 +1327,8 @@ def test_exact(Guide):
     expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
-    elbo = JitTrace_ELBO(
-        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
-    )
+    Elbo = promote_elbo(Guide, JitTrace_ELBO)
+    elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
@@ -1342,6 +1362,7 @@ def test_exact(Guide):
         AutoStructured_exact_mvn,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoRegressiveMessenger,
     ],
 )
 def test_exact_batch(Guide):
@@ -1367,9 +1388,8 @@ def test_exact_batch(Guide):
     )
 
     guide = Guide(model)
-    elbo = JitTrace_ELBO(
-        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
-    )
+    Elbo = promote_elbo(Guide, JitTrace_ELBO)
+    elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
@@ -1402,6 +1422,7 @@ def test_exact_batch(Guide):
         AutoStructured,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoRegressiveMessenger,
     ],
 )
 def test_exact_tree(Guide):
@@ -1437,9 +1458,8 @@ def test_exact_tree(Guide):
     expected_loss = float(g.event_logsumexp() - g_cond.event_logsumexp())
 
     guide = Guide(model)
-    elbo = JitTrace_ELBO(
-        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
-    )
+    Elbo = promote_elbo(Guide, JitTrace_ELBO)
+    elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
