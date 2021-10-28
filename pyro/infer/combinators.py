@@ -23,19 +23,15 @@ from typing import NamedTuple, Any, Callable, Union, Optional, Tuple, Set
 from pyro.poutine import Trace
 
 # type aliases
+
 Node = dict
 T = TypeVar("T")
 Predicate = Callable[[Any], bool]
 SiteFilter = Callable[[str, Node], bool]
 
 
-def true(*args, **kwargs):
-    return True
-
-
-
 def concat_traces(
-    *traces: Trace, site_filter: Callable[[str, Any], bool] = true
+    *traces: Trace, site_filter: Callable[[str, Any], bool] = lambda name, node: True
 ) -> Trace:
     newtrace = Trace()
     for tr in traces:
@@ -51,22 +47,18 @@ def concat_traces(
     return newtrace
 
 
-
 def assert_no_overlap(t0: Trace, t1: Trace, location=""):
     assert (
         len(set(t0.nodes.keys()).intersection(set(t1.nodes.keys()))) == 0
     ), f"{location}: addresses must not overlap"
 
 
-
 def is_observed(node: Node) -> bool:
     return node["is_observed"]
 
 
-
 def not_observed(node: Node) -> bool:
     return not is_observed(node)
-
 
 
 def _check_infer_map(k: str) -> Callable[[Node], bool]:
@@ -77,46 +69,20 @@ is_substituted = _check_infer_map("substituted")
 is_auxiliary = _check_infer_map("is_auxiliary")
 
 
-
 def not_substituted(node: Node) -> bool:
     return not is_substituted(node)
-
-
-
-def is_random_variable(node: Node) -> bool:
-    # FIXME as opposed to "is improper random variable"
-    raise NotImplementedError()
-
-
-
-def is_improper_random_variable(node: Node) -> bool:
-    raise NotImplementedError()
-
-
-
-def _and(p0: Predicate, p1: Predicate) -> Predicate:
-    return lambda x: p0(x) and p1(x)
-
 
 
 def _or(p0: Predicate, p1: Predicate) -> Predicate:
     return lambda x: p0(x) or p1(x)
 
 
-
-def _not(p: Predicate) -> Predicate:
-    return lambda x: not p(x)
-
-
-
 def node_filter(p: Callable[[Node], bool]) -> SiteFilter:
     return lambda _, node: p(node)
 
 
-
 def addr_filter(p: Callable[[str], bool]) -> SiteFilter:
     return lambda name, _: p(name)
-
 
 
 def membership_filter(members: Set[str]) -> SiteFilter:
@@ -144,11 +110,6 @@ class WithSubstitutionMessenger(ReplayMessenger):
             msg["infer"] = orig_infer
 
 
-_handler_name, _handler = _make_handler(WithSubstitutionMessenger)
-_handler.__module__ = __name__
-locals()[_handler_name] = _handler
-
-
 class AuxiliaryMessenger(Messenger):
     def __init__(self) -> None:
         super().__init__()
@@ -157,10 +118,10 @@ class AuxiliaryMessenger(Messenger):
         msg["infer"]["is_auxiliary"] = True
 
 
-_handler_name, _handler = _make_handler(AuxiliaryMessenger)
-_handler.__module__ = __name__
-locals()[_handler_name] = _handler
-
+for messenger in [WithSubstitutionMessenger, AuxiliaryMessenger]:
+    _handler_name, _handler = _make_handler(messenger)
+    _handler.__module__ = __name__
+    locals()[_handler_name] = _handler
 
 
 def get_marginal(trace: Trace) -> Trace:
@@ -190,7 +151,6 @@ class proposals(inference):
 
 Proposals = Union[proposals, Callable[..., Out]]
 
-# FIXME evaluation in context of loss
 
 class primitive(targets, proposals):
     def __init__(self, program: Callable[..., Any]):
@@ -208,7 +168,6 @@ class primitive(targets, proposals):
 
 
 Primitive = Union[Callable[..., Out], primitive]
-
 
 
 class extend(targets):
@@ -241,7 +200,6 @@ class extend(targets):
         )
 
 
-
 class compose(proposals):
     def __init__(self, q2: Proposals, q1: Proposals):
         super().__init__()
@@ -259,13 +217,12 @@ class compose(proposals):
         )
 
 
-
 class propose(proposals):
     def __init__(
         self,
         p: Targets,
         q: Proposals,
-        loss_fn: Callable[[Out], Union[Tensor,float]] = (lambda out: 0.0),
+        loss_fn: Callable[[Out], Union[Tensor, float]] = (lambda out: 0.0),
     ):
         super().__init__()
         self.p, self.q = p, q
@@ -275,14 +232,14 @@ class propose(proposals):
         q_out = self.q(*args, **kwargs)
         p_out = with_substitution(self.p, trace=q_out.trace)(*args, **kwargs)
 
-        rho_1 = set(q_out.trace.nodes.keys())
-        tau_1 = set({k for k, v in q_out.trace.nodes.items() if not_observed(v)})
-        tau_2 = set({k for k, v in p_out.trace.nodes.items() if not_observed(v)})
+        # all_nodes = set(q_out.trace.nodes.keys())
+        # sampled_nodes = set({k for k, v in q_out.trace.nodes.items() if not_observed(v)})
+        # substituted_nodes = set({k for k, v in p_out.trace.nodes.items() if not_observed(v)})
+        # lu_1 = q_out.trace.log_prob_sum(membership_filter(all_nodes - (sampled_nodes - substituted_nodes)))
 
-        # FIXME this hook exists to reshape NVI for stl
+        # FIXME this hook exists to alter an NVI trace for stl
         # q_trace = dispatch(self.transf_q_trace, q_out.trace, **inf_kwargs)
-        lu_1 = q_out.trace.log_prob_sum(membership_filter(rho_1 - (tau_1 - tau_2)))
-        #lu_1 = q_out.trace.log_prob_sum(node_filter(_or(is_substituted, is_observed)))
+        lu_1 = q_out.trace.log_prob_sum(node_filter(_or(not_substituted, is_observed)))
         lw_1 = q_out.log_weight
 
         # We call that lv because its the incremental weight in the IS sense
