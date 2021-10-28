@@ -119,7 +119,7 @@ class EffectMixin(ELBO):
         with guide(*args, **kwargs):
             model(*args, **kwargs)
         model_trace, guide_trace = guide.get_traces()
-        if getattr(self, "max_plate_nesting") is None:
+        if self.max_plate_nesting == -float("inf"):
             self.max_plate_nesting = max(
                 [0]
                 + [
