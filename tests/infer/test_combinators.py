@@ -73,7 +73,6 @@ def simple3():
 
     yield model
 
-
 @pytest.fixture(scope="session", autouse=True)
 def simple4():
     def model(c):
@@ -139,8 +138,9 @@ def assert_log_weight_zero(primitive_output):
     assert isinstance(lw, Tensor) and lw == 0.0
 
 
+# primitive expression tests
 # ===========================================================================
-# tests
+
 def test_constructor(model0):
     m = primitive(model0)
     assert_no_observe(m)
@@ -181,6 +181,23 @@ def test_with_substitution(model0):
     assert p_out.output == q_out.output
     assert q_out.log_weight != 0.0
 
+
+def test_with_plates():
+    def model(data):
+        """ example from SVI pt. 1 """
+        alpha0 = torch.tensor(10.0)
+        beta0 = torch.tensor(10.0)
+        f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
+        for i in range(len(data)):
+            pyro.sample("obs_{}".format(i), dist.Bernoulli(f), obs=data[i])
+
+    inp = torch.tensor([i % 2 for i in range(11)]).double()
+
+    with pyro.plate("data1", 3), pyro.plate("data2", 5), pyro.plate("data3", 7):
+        p = primitive(model)
+        p_out = p(inp)
+
+    assert p_out.log_weight.shape == torch.Size([7, 5, 3])
 
 def starts_with_x(n):
     return n[0] == "x"

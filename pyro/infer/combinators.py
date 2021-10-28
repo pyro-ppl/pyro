@@ -1,26 +1,13 @@
+import torch
 from torch import Tensor, tensor
-from typing import Any, Callable
-from pyro.poutine import Trace
-from pyro.poutine.trace_messenger import TraceMessenger
-from pyro.poutine.messenger import Messenger
-from typing import NamedTuple
-from torch import Tensor, tensor
-from typing import NamedTuple, Any, Callable, Union
+from typing import NamedTuple, Any, Callable, Union, TypeVar, Set
+
 from pyro.poutine import Trace
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.handlers import _make_handler
 
-from typing import Any, Callable, TypeVar
-from pyro import poutine
-from pyro.poutine import Trace
-from pyro.poutine.trace_messenger import TraceMessenger
-from pyro.poutine.messenger import Messenger
-from typing import NamedTuple
-from torch import Tensor, tensor
-from typing import NamedTuple, Any, Callable, Union, Optional, Tuple, Set
-from pyro.poutine import Trace
 
 # type aliases
 
@@ -162,8 +149,9 @@ class primitive(targets, proposals):
             out = self.program(*args, **kwargs)
             tr: Trace = tracer.trace
 
-            lp = tr.log_prob_sum(node_filter(_or(is_substituted, is_observed)))
-            lp = lp if isinstance(lp, Tensor) else tensor(lp)
+            tr.compute_log_prob(node_filter(_or(is_substituted, is_observed)))
+            lps = [n['log_prob'] for n in tr.nodes.values() if 'log_prob' in n]
+            lp = torch.stack(lps).sum(dim=0) if len(lps) > 0 else tensor(0.)
             return Out(output=out, log_weight=lp, trace=tr)
 
 
