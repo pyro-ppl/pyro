@@ -138,6 +138,13 @@ class proposals(inference):
 
 Proposals = Union[proposals, Callable[..., Out]]
 
+def stacked_log_prob(trace, site_filter: Callable[[str, Any], bool] = lambda name, node: True):
+    trace.compute_log_prob(site_filter=site_filter)
+    log_probs = [n['log_prob'] for k, n in trace.nodes.items() if 'log_prob' in n and site_filter(k, n)]
+    log_prob  = torch.stack(log_probs).sum(dim=0) if len(log_probs) > 0 else tensor([0.])
+    if len(log_prob.shape) == 0:
+        log_prob.unsqueeze_(0)
+    return log_prob
 
 class primitive(targets, proposals):
     def __init__(self, program: Callable[..., Any]):
@@ -148,10 +155,8 @@ class primitive(targets, proposals):
         with TraceMessenger() as tracer:
             out = self.program(*args, **kwargs)
             tr: Trace = tracer.trace
-
-            tr.compute_log_prob(node_filter(_or(is_substituted, is_observed)))
-            lps = [n['log_prob'] for n in tr.nodes.values() if 'log_prob' in n]
-            lp = torch.stack(lps).sum(dim=0) if len(lps) > 0 else tensor(0.)
+            lp = stacked_log_prob(tr, node_filter(_or(is_substituted, is_observed)))
+            # FIXME: put out on the trace as well so that these are correctly plated
             return Out(output=out, log_weight=lp, trace=tr)
 
 
@@ -179,8 +184,7 @@ class extend(targets):
             assert f_out.log_weight == 0.0
             assert all(map(not_substituted, f_trace.nodes.values()))
 
-        log_u2 = f_trace.log_prob_sum()
-
+        log_u2 = stacked_log_prob(f_trace)
         return Out(
             trace=concat_traces(p_out.trace, f_out.trace),
             log_weight=p_out.log_weight + log_u2,
@@ -227,7 +231,8 @@ class propose(proposals):
 
         # FIXME this hook exists to alter an NVI trace for stl
         # q_trace = dispatch(self.transf_q_trace, q_out.trace, **inf_kwargs)
-        lu_1 = q_out.trace.log_prob_sum(node_filter(_or(not_substituted, is_observed)))
+
+        lu_1 = stacked_log_prob(q_out.trace, node_filter(_or(not_substituted, is_observed)))
         lw_1 = q_out.log_weight
 
         # We call that lv because its the incremental weight in the IS sense

@@ -16,7 +16,7 @@ import pyro.distributions as dist
 from pyro.infer.combinators import *
 
 
-def seed(s=42)->None:
+def seed(s=42) -> None:
     import numpy as np
     import random
 
@@ -72,6 +72,7 @@ def simple3():
         return None
 
     yield model
+
 
 @pytest.fixture(scope="session", autouse=True)
 def simple4():
@@ -141,6 +142,7 @@ def assert_log_weight_zero(primitive_output):
 # primitive expression tests
 # ===========================================================================
 
+
 def test_constructor(model0):
     m = primitive(model0)
     assert_no_observe(m)
@@ -184,7 +186,7 @@ def test_with_substitution(model0):
 
 def test_with_substitution_and_plates():
     def model(data):
-        """ example from SVI pt. 1 """
+        """example from SVI pt. 1"""
         alpha0 = torch.tensor(10.0)
         beta0 = torch.tensor(10.0)
         f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
@@ -197,8 +199,9 @@ def test_with_substitution_and_plates():
         p = primitive(model)
         p_out = p(inp)
 
-    assert p_out.log_weight.shape == torch.Size([7, 5, 3]), \
-        "plated calls should return weights for independent dimensions"
+    assert p_out.log_weight.shape == torch.Size(
+        [7, 5, 3]
+    ), "plated calls should return weights for independent dimensions"
 
     with pyro.plate("data", 3):
         q = primitive(model)
@@ -215,12 +218,14 @@ def test_with_substitution_and_plates():
 
     for a in p_addrs:
         pnode, qnode = over2(lambda o: o.trace.nodes[a], (p_out, q_out))
-        assert torch.equal(pnode['value'], qnode['value'])
-        assert torch.equal(pnode['value'], qnode['value'])
-        assert pnode["is_observed"] ^ pnode['infer'].get("substituted", False)
+        assert torch.equal(pnode["value"], qnode["value"])
+        assert torch.equal(pnode["value"], qnode["value"])
+        assert pnode["is_observed"] ^ pnode["infer"].get("substituted", False)
 
     assert p_out.output == q_out.output
-    assert torch.all(torch.ne(q_out.log_weight, torch.zeros(q_out.log_weight.shape))).item()
+    assert torch.all(
+        torch.ne(q_out.log_weight, torch.zeros(q_out.log_weight.shape))
+    ).item()
 
 
 def starts_with_x(n):
@@ -268,7 +273,7 @@ def test_simple_substitution(simple1, simple2):
     assert len(set({"z_1", "x_1"}).intersection(set(s2_out.trace.nodes.keys()))) == 0
 
 
-def test_extend_unconditioned(simple2, simple4):
+def test_extend_unconditioned_no_plates(simple2, simple4):
     s2, s4 = primitive(simple2), primitive(simple4)
 
     p_out = s2()
@@ -313,6 +318,75 @@ def test_extend_unconditioned(simple2, simple4):
     assert lw_2 == out.log_weight, "p_out.log_weight is not expected lw_2"
 
 
+def tensor_eq(t0: Tensor, t1: Tensor) -> bool:
+    if t0.shape != t1.shape:
+        raise AssertionError(f"shape mismatch: {t0.shape} vs {t1.shape}")
+    return bool(torch.all(torch.eq(t0, t1)).item())
+
+
+def batched_log_prob_sum(
+    o: Out, site_filter: Callable[[str, Node], bool] = (lambda a, b: True)
+) -> Tensor:
+    o.trace.compute_log_prob(site_filter=site_filter)
+    lp = torch.stack(
+        [n["log_prob"] for k, n in o.trace.nodes.items() if site_filter(k, n)]
+    ).sum(dim=0)
+    return lp if len(lp.shape) > 0 else lp.unsqueeze(0)
+
+
+def test_extend_unconditioned_with_plates(simple2, simple4):
+    s2, s4 = primitive(simple2), primitive(simple4)
+
+    with pyro.plate("batch", 3), pyro.plate("samples", 5):
+        p_out = s2()
+        replay_s2 = poutine.replay(s2, trace=p_out.trace)
+        f_out = s4(p_out.output)
+        replay_s4 = poutine.replay(s4, trace=f_out.trace)
+
+    tau_2 = {"z_2", "z_3", "x_2", "x_3"}
+    assert set(p_out.trace.nodes.keys()) == tau_2
+    assert tensor_eq(
+        p_out.log_weight, batched_log_prob_sum(p_out, lambda n, _: n[0] == "x")
+    )
+    tau_star = {"z_1"}
+    assert set(f_out.trace.nodes.keys()) == tau_star
+    assert (
+        f_out.log_weight.shape == torch.Size([1]) and f_out.log_weight == 0.0
+    ), "kernel's log weight is scalar of zero"
+
+    with pyro.plate("batch", 3), pyro.plate("samples", 5):
+        out = extend(p=replay_s2, f=replay_s4)()
+
+    assert set(out.trace.nodes.keys()) == {"x_2", "x_3", "z_2", "z_3", "z_1"}
+
+    assert tensor_eq(out.log_weight, p_out.log_weight + batched_log_prob_sum(f_out))
+
+    p_nodes = list(
+        filter(lambda kv: kv[0] in p_out.trace.nodes.keys(), out.trace.nodes.items())
+    )
+    assert len(p_nodes) > 0
+    assert all(list(map(lambda kv: not is_auxiliary(kv[1]), p_nodes)))
+
+    f_nodes = list(
+        filter(lambda kv: kv[0] in f_out.trace.nodes.keys(), out.trace.nodes.items())
+    )
+    assert len(f_nodes) > 0
+    assert all(list(map(lambda kv: is_auxiliary(kv[1]), f_nodes)))
+
+    # Test extend log_weight
+    trace_addrs = set(out.trace.nodes.keys())
+    m_trace_addrs = set(get_marginal(out.trace).nodes.keys())
+    assert m_trace_addrs == tau_2
+
+    aux_trace_addrs = trace_addrs - m_trace_addrs
+    assert aux_trace_addrs == tau_star
+
+    lw_2 = batched_log_prob_sum(
+        out, membership_filter({"x_2", "x_3"})
+    ) + batched_log_prob_sum(out, membership_filter({"z_1"}))
+    assert tensor_eq(out.log_weight, lw_2), "p_out.log_weight is not expected lw_2"
+
+
 def test_nested_marginal(simple2, simple4, simple5):
     s2, s4, s5 = primitive(simple2), primitive(simple4), primitive(simple5)
 
@@ -340,11 +414,34 @@ def test_compose(simple1, simple3):
     assert set(out.trace.nodes.keys()) == {"x_1", "x_2", "x_3", "z_1", "z_2", "z_3"}
     assert torch.equal(out.log_weight, s1_out.log_weight + s3_out.log_weight)
 
-    sum_xprobs = lambda out: out.trace.log_prob_sum(addr_filter(lambda a: a[0] == "x"))
+    sum_xprobs = lambda out: out.trace.log_prob_sum(
+        addr_filter(lambda a: a[0] == "x")
+    ).unsqueeze(0)
     assert torch.equal(out.log_weight, sum_xprobs(s1_out) + sum_xprobs(s3_out))
 
+
+def test_compose_with_plates(simple1, simple3):
+    with pyro.plate("batch_dim", 3), pyro.plate("sample_dim", 7):
+        s1, s3 = primitive(simple1), primitive(simple3)
+        s1_out, s3_out = s1(), s3()
+        replay_s1, replay_s3 = replay(s1, trace=s1_out.trace), replay(
+            s3, trace=s3_out.trace
+        )
+        out = compose(q1=replay_s1, q2=replay_s3)()
+
+    assert set(out.trace.nodes.keys()) == {"x_1", "x_2", "x_3", "z_1", "z_2", "z_3"}
+    assert tensor_eq(out.log_weight, s1_out.log_weight + s3_out.log_weight)
+
+    site_filter = lambda k, n: k in {"x_1", "x_2", "x_3"}
+    manual = sum(
+        [batched_log_prob_sum(out, site_filter=site_filter) for out in [s1_out, s3_out]]
+    )
+    # type: ignore
+    assert tensor_eq(out.log_weight, manual)
+
+
 @mark.skip()
-def test_propose(simple1, simple2):
+def test_propose_(simple1, simple2):
     s1, s2 = primitive(simple1), primitive(simple2)
     s1_out, s2_out = s1(), s2()
     replay_s1, replay_s2 = replay(s1, trace=s1_out.trace), replay(
@@ -388,7 +485,9 @@ def test_propose(simple1, simple2, simple3, simple4):
     assert set(q_out.trace.nodes.keys()) == tau_1
     assert torch.equal(q_out.log_weight, s1_out.log_weight + s3_out.log_weight)
 
-    sum_xprobs = lambda out: out.trace.log_prob_sum(addr_filter(lambda a: a[0] == "x"))
+    sum_xprobs = lambda out: out.trace.log_prob_sum(
+        addr_filter(lambda a: a[0] == "x")
+    ).unsqueeze(0)
     assert torch.equal(q_out.log_weight, sum_xprobs(s1_out) + sum_xprobs(s3_out))
 
     lw_1 = q_out.trace.log_prob_sum(
@@ -456,3 +555,78 @@ def test_propose(simple1, simple2, simple3, simple4):
     assert torch.isclose(
         lw_out, out.log_weight
     ), "final weight, can be a bit off if addition happens out-of-order"
+
+
+def test_propose_with_plates(simple1, simple2, simple3, simple4):
+    seed(7)
+    with pyro.plate("sample", 7), pyro.plate("batch", 3):
+        s1, s3 = primitive(simple1), primitive(simple3)
+        s1_out, s3_out = s1(), s3()
+        replay_s1, replay_s3 = replay(s1, trace=s1_out.trace), replay(
+            s3, trace=s3_out.trace
+        )
+
+        q = compose(q1=replay_s1, q2=replay_s3)
+        q_out = q()
+
+        tau_1 = {"z_1", "z_2", "z_3", "x_2", "x_3", "x_1"}
+        assert set(q_out.trace.nodes.keys()) == tau_1
+        assert tensor_eq(
+            q_out.log_weight, s1_out.log_weight + s3_out.log_weight
+        ), "we can manually reconstruct log weight from the previous output weights"
+
+        sum_xprobs = lambda out: batched_log_prob_sum(
+            out, addr_filter(lambda a: a[0] == "x")
+        )
+        assert tensor_eq(
+            q_out.log_weight, sum_xprobs(s1_out) + sum_xprobs(s3_out)
+        ), "we can manually reconstruct log weight from original traces"
+
+        # NOTE: order of addition matters for precise floating point math
+        lw_1 = batched_log_prob_sum(
+            q_out, membership_filter({"x_1", "x_2"})
+        ) + batched_log_prob_sum(q_out, membership_filter({"x_3"}))
+        assert tensor_eq(
+            lw_1, q_out.log_weight
+        ), "we can manually reconstruct log weight from the output trace"
+
+        s2, s4 = primitive(simple2), primitive(simple4)
+
+        s2_out = s2()
+        replay_s2 = replay(s2, trace=s2_out.trace)
+        s4_out = s4(s2_out.output)
+        replay_s4 = replay(s4, trace=s4_out.trace)
+
+        p = with_substitution(extend(p=replay_s2, f=replay_s4), trace=q_out.trace)
+        p_out = p()
+
+        # Test extend inside propose
+        tau_2 = {"z_2", "z_3", "x_2", "x_3"}
+        trace_addrs = set(p_out.trace.nodes.keys())
+        m_trace = get_marginal(p_out.trace)
+        m_trace_addrs = set(m_trace.nodes.keys())
+        assert m_trace_addrs == tau_2
+
+        tau_star = {"z_1"}
+        aux_trace_addrs = trace_addrs - m_trace_addrs
+        assert aux_trace_addrs == tau_star
+
+        lw_2 = batched_log_prob_sum(
+            p_out, membership_filter({"z_2", "z_3", "x_2", "x_3"})
+        ) + batched_log_prob_sum(p_out, membership_filter({"z_1"}))
+        assert tensor_eq(
+            lw_2, p_out.log_weight
+        ), f"p_out.log_weight ({p_out.log_weight}) is not expected lw_2 ({lw_2})"
+
+        out = propose(p=p, q=q)()
+
+        # Compute weight the same way as inside the propose combinator for reproduceability
+        lu_1 = batched_log_prob_sum(
+            q_out, membership_filter({"x_2", "x_3", "x_1", "z_2", "z_3"})
+        )
+        lu_star = batched_log_prob_sum(p_out, membership_filter({"z_1"}))
+        lv = lw_2 - (lu_1 + lu_star)
+        lw_out = lw_1 + lv
+        assert torch.allclose(
+            lw_out, out.log_weight
+        ), f"final weight, can be a bit off when addition happens out-of-order but computed:\n{lw_out}\nvs output:\n{out.log_weight}"
