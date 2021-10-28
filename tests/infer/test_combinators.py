@@ -182,7 +182,7 @@ def test_with_substitution(model0):
     assert q_out.log_weight != 0.0
 
 
-def test_with_plates():
+def test_with_substitution_and_plates():
     def model(data):
         """ example from SVI pt. 1 """
         alpha0 = torch.tensor(10.0)
@@ -197,7 +197,31 @@ def test_with_plates():
         p = primitive(model)
         p_out = p(inp)
 
-    assert p_out.log_weight.shape == torch.Size([7, 5, 3])
+    assert p_out.log_weight.shape == torch.Size([7, 5, 3]), \
+        "plated calls should return weights for independent dimensions"
+
+    with pyro.plate("data", 3):
+        q = primitive(model)
+        q_out = q(inp)
+
+        p = primitive(model)
+        p_out = with_substitution(p, trace=q_out.trace)(inp)
+
+    p_addrs = set(p_out.trace.nodes.keys())
+    q_addrs = set(q_out.trace.nodes.keys())
+    assert p_addrs.intersection(q_addrs) == p_addrs.union(q_addrs)
+
+    over2 = lambda f, tpl: (f(tpl[0]), f(tpl[1]))
+
+    for a in p_addrs:
+        pnode, qnode = over2(lambda o: o.trace.nodes[a], (p_out, q_out))
+        assert torch.equal(pnode['value'], qnode['value'])
+        assert torch.equal(pnode['value'], qnode['value'])
+        assert pnode["is_observed"] ^ pnode['infer'].get("substituted", False)
+
+    assert p_out.output == q_out.output
+    assert torch.all(torch.ne(q_out.log_weight, torch.zeros(q_out.log_weight.shape))).item()
+
 
 def starts_with_x(n):
     return n[0] == "x"
