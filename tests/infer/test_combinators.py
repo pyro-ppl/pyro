@@ -1,24 +1,38 @@
-#!/usr/bin/env python3
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
+from operator import itemgetter
+from typing import Callable, Union
+
 import pytest
 import torch
 from pytest import mark
-from torch import Tensor
-from typing import Union
+from torch import Tensor, tensor
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.poutine import replay
-
-import pyro.infer.combinators
-
-import pyro.distributions as dist
-from pyro.infer.combinators import *
+from pyro.infer.combinators import (
+    Node,
+    Out,
+    addr_filter,
+    compose,
+    extend,
+    get_marginal,
+    is_auxiliary,
+    membership_filter,
+    not_auxiliary,
+    primitive,
+    propose,
+    with_substitution,
+)
+from pyro.poutine import Trace, replay
 
 
 def seed(s=42) -> None:
-    import numpy as np
     import random
+
+    import numpy as np
 
     torch.manual_seed(s)
     np.random.seed(s)
@@ -40,8 +54,8 @@ def simple1():
         z_1 = pyro.sample("z_1", dist.Normal(tensor_of(1), tensor_of(1)))
         z_2 = pyro.sample("z_2", dist.Normal(tensor_of(2), tensor_of(2)))
 
-        x_1 = pyro.sample("x_1", dist.Normal(z_1, tensor_of(1)), obs=z_1)
-        x_2 = pyro.sample("x_2", dist.Normal(z_2, tensor_of(2)), obs=z_2)
+        pyro.sample("x_1", dist.Normal(z_1, tensor_of(1)), obs=z_1)
+        pyro.sample("x_2", dist.Normal(z_2, tensor_of(2)), obs=z_2)
 
         return tensor_of(3)
 
@@ -54,8 +68,8 @@ def simple2():
         z_2 = pyro.sample("z_2", dist.Normal(tensor_of(2), tensor_of(2)))
         z_3 = pyro.sample("z_3", dist.Normal(tensor_of(3), tensor_of(3)))
 
-        x_2 = pyro.sample("x_2", dist.Normal(tensor_of(2), tensor_of(2)), obs=z_2)
-        x_3 = pyro.sample("x_3", dist.Normal(tensor_of(3), tensor_of(3)), obs=z_3)
+        pyro.sample("x_2", dist.Normal(tensor_of(2), tensor_of(2)), obs=z_2)
+        pyro.sample("x_3", dist.Normal(tensor_of(3), tensor_of(3)), obs=z_3)
 
         return tensor_of(1)
 
@@ -67,7 +81,7 @@ def simple3():
     def model():
         z_3 = pyro.sample("z_3", dist.Normal(tensor_of(3), tensor_of(3)))
 
-        x_3 = pyro.sample("x_3", dist.Normal(tensor_of(3), tensor_of(3)), obs=z_3)
+        pyro.sample("x_3", dist.Normal(tensor_of(3), tensor_of(3)), obs=z_3)
 
         return None
 
@@ -77,7 +91,7 @@ def simple3():
 @pytest.fixture(scope="session", autouse=True)
 def simple4():
     def model(c):
-        z_1 = pyro.sample("z_1", dist.Normal(tensor_of(c), tensor_of(c)))
+        pyro.sample("z_1", dist.Normal(tensor_of(c), tensor_of(c)))
         return c + 1
 
     yield model
@@ -86,7 +100,7 @@ def simple4():
 @pytest.fixture(scope="session", autouse=True)
 def simple5():
     def model(c):
-        z_5 = pyro.sample("z_5", dist.Normal(tensor_of(c), tensor_of(c)))
+        pyro.sample("z_5", dist.Normal(tensor_of(c), tensor_of(c)))
         return c + 1
 
     yield model
@@ -173,12 +187,13 @@ def test_with_substitution(model0):
     q_addrs = set(q_out.trace.nodes.keys())
     assert p_addrs.intersection(q_addrs) == p_addrs.union(q_addrs)
 
-    valueat = lambda o, a: o.trace.nodes[a]["value"]
+    def valueat(o, a):
+        return o.trace.nodes[a]["value"]
 
     for a in p_addrs:
         assert q_out.trace.nodes[a]["value"] == p_out.trace.nodes[a]["value"]
         assert valueat(q_out, a) == valueat(p_out, a)
-        assert q_out.trace.nodes[a]["infer"]["substituted"] == True
+        assert q_out.trace.nodes[a]["infer"]["substituted"] is True
 
     assert p_out.output == q_out.output
     assert q_out.log_weight != 0.0
@@ -214,10 +229,9 @@ def test_with_substitution_and_plates():
     q_addrs = set(q_out.trace.nodes.keys())
     assert p_addrs.intersection(q_addrs) == p_addrs.union(q_addrs)
 
-    over2 = lambda f, tpl: (f(tpl[0]), f(tpl[1]))
-
     for a in p_addrs:
-        pnode, qnode = over2(lambda o: o.trace.nodes[a], (p_out, q_out))
+        pnode = p_out.trace.nodes[a]
+        qnode = q_out.trace.nodes[a]
         assert torch.equal(pnode["value"], qnode["value"])
         assert torch.equal(pnode["value"], qnode["value"])
         assert pnode["is_observed"] ^ pnode["infer"].get("substituted", False)
@@ -280,7 +294,7 @@ def test_extend_unconditioned_no_plates(simple2, simple4):
     replay_s2 = poutine.replay(s2, trace=p_out.trace)
     tau_2 = {"z_2", "z_3", "x_2", "x_3"}
     assert set(p_out.trace.nodes.keys()) == tau_2
-    assert p_out.log_weight == p_out.trace.log_prob_sum(lambda n, _: n[0] == "x")
+    assert p_out.log_weight == batched_log_prob_sum(p_out, addr_filter(starts_with_x))
 
     f_out = s4(p_out.output)
     replay_s4 = poutine.replay(s4, trace=f_out.trace)
@@ -292,17 +306,21 @@ def test_extend_unconditioned_no_plates(simple2, simple4):
     assert set(out.trace.nodes.keys()) == {"x_2", "x_3", "z_2", "z_3", "z_1"}
     assert out.log_weight == p_out.log_weight + f_out.trace.log_prob_sum()
 
-    p_nodes = list(
-        filter(lambda kv: kv[0] in p_out.trace.nodes.keys(), out.trace.nodes.items())
-    )
+    def in_keys(out):
+        def go(kv):
+            return kv[0] in out.trace.nodes.keys()
+
+        return go
+
+    p_nodes = list(filter(in_keys(p_out), out.trace.nodes.items()))
     assert len(p_nodes) > 0
-    assert all(list(map(lambda kv: not is_auxiliary(kv[1]), p_nodes)))
+    assert all(list(map(not_auxiliary, map(itemgetter(1), p_nodes))))
 
     f_nodes = list(
         filter(lambda kv: kv[0] in f_out.trace.nodes.keys(), out.trace.nodes.items())
     )
     assert len(f_nodes) > 0
-    assert all(list(map(lambda kv: is_auxiliary(kv[1]), f_nodes)))
+    assert all(list(map(is_auxiliary, map(itemgetter(1), f_nodes))))
 
     # Test extend log_weight
     trace_addrs = set(out.trace.nodes.keys())
@@ -414,10 +432,15 @@ def test_compose(simple1, simple3):
     assert set(out.trace.nodes.keys()) == {"x_1", "x_2", "x_3", "z_1", "z_2", "z_3"}
     assert torch.equal(out.log_weight, s1_out.log_weight + s3_out.log_weight)
 
-    sum_xprobs = lambda out: out.trace.log_prob_sum(
-        addr_filter(lambda a: a[0] == "x")
-    ).unsqueeze(0)
-    assert torch.equal(out.log_weight, sum_xprobs(s1_out) + sum_xprobs(s3_out))
+    assert torch.equal(
+        out.log_weight,
+        sum(
+            [
+                batched_log_prob_sum(out, addr_filter(starts_with_x))
+                for out in [s1_out, s3_out]
+            ]
+        ),
+    )
 
 
 def test_compose_with_plates(simple1, simple3):
@@ -432,9 +455,11 @@ def test_compose_with_plates(simple1, simple3):
     assert set(out.trace.nodes.keys()) == {"x_1", "x_2", "x_3", "z_1", "z_2", "z_3"}
     assert tensor_eq(out.log_weight, s1_out.log_weight + s3_out.log_weight)
 
-    site_filter = lambda k, n: k in {"x_1", "x_2", "x_3"}
     manual = sum(
-        [batched_log_prob_sum(out, site_filter=site_filter) for out in [s1_out, s3_out]]
+        [
+            batched_log_prob_sum(out, membership_filter({"x_1", "x_2", "x_3"}))
+            for out in [s1_out, s3_out]
+        ]
     )
     # type: ignore
     assert tensor_eq(out.log_weight, manual)
@@ -485,10 +510,15 @@ def test_propose(simple1, simple2, simple3, simple4):
     assert set(q_out.trace.nodes.keys()) == tau_1
     assert torch.equal(q_out.log_weight, s1_out.log_weight + s3_out.log_weight)
 
-    sum_xprobs = lambda out: out.trace.log_prob_sum(
-        addr_filter(lambda a: a[0] == "x")
-    ).unsqueeze(0)
-    assert torch.equal(q_out.log_weight, sum_xprobs(s1_out) + sum_xprobs(s3_out))
+    assert torch.equal(
+        q_out.log_weight,
+        sum(
+            [
+                batched_log_prob_sum(out, addr_filter(starts_with_x))
+                for out in [s1_out, s3_out]
+            ]
+        ),
+    )
 
     lw_1 = q_out.trace.log_prob_sum(
         membership_filter({"x_1", "x_2"})
@@ -575,11 +605,14 @@ def test_propose_with_plates(simple1, simple2, simple3, simple4):
             q_out.log_weight, s1_out.log_weight + s3_out.log_weight
         ), "we can manually reconstruct log weight from the previous output weights"
 
-        sum_xprobs = lambda out: batched_log_prob_sum(
-            out, addr_filter(lambda a: a[0] == "x")
-        )
         assert tensor_eq(
-            q_out.log_weight, sum_xprobs(s1_out) + sum_xprobs(s3_out)
+            q_out.log_weight,
+            sum(
+                [
+                    batched_log_prob_sum(out, addr_filter(starts_with_x))
+                    for out in [s1_out, s3_out]
+                ]
+            ),
         ), "we can manually reconstruct log weight from original traces"
 
         # NOTE: order of addition matters for precise floating point math
@@ -627,6 +660,7 @@ def test_propose_with_plates(simple1, simple2, simple3, simple4):
         lu_star = batched_log_prob_sum(p_out, membership_filter({"z_1"}))
         lv = lw_2 - (lu_1 + lu_star)
         lw_out = lw_1 + lv
-        assert torch.allclose(
-            lw_out, out.log_weight
-        ), f"final weight, can be a bit off when addition happens out-of-order but computed:\n{lw_out}\nvs output:\n{out.log_weight}"
+        assert torch.allclose(lw_out, out.log_weight), (
+            "final weight, can be a bit off when addition happens out-of-order but computed:\n"
+            + f"{lw_out}\nvs output:\n{out.log_weight}"
+        )

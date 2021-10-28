@@ -1,13 +1,16 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
+from typing import Any, Callable, NamedTuple, Set, TypeVar, Union
+
 import torch
 from torch import Tensor, tensor
-from typing import NamedTuple, Any, Callable, Union, TypeVar, Set
 
 from pyro.poutine import Trace
+from pyro.poutine.handlers import _make_handler
+from pyro.poutine.messenger import Messenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger
-from pyro.poutine.messenger import Messenger
-from pyro.poutine.handlers import _make_handler
-
 
 # type aliases
 
@@ -49,15 +52,21 @@ def not_observed(node: Node) -> bool:
 
 
 def _check_infer_map(k: str) -> Callable[[Node], bool]:
-    return lambda node: k in node["infer"] and node["infer"][k]
+    return lambda node: node["infer"].get(k, False)
 
 
 is_substituted = _check_infer_map("substituted")
-is_auxiliary = _check_infer_map("is_auxiliary")
 
 
 def not_substituted(node: Node) -> bool:
     return not is_substituted(node)
+
+
+is_auxiliary = _check_infer_map("is_auxiliary")
+
+
+def not_auxiliary(node: Node) -> bool:
+    return not is_auxiliary(node)
 
 
 def _or(p0: Predicate, p1: Predicate) -> Predicate:
@@ -138,13 +147,23 @@ class proposals(inference):
 
 Proposals = Union[proposals, Callable[..., Out]]
 
-def stacked_log_prob(trace, site_filter: Callable[[str, Any], bool] = lambda name, node: True):
+
+def stacked_log_prob(
+    trace, site_filter: Callable[[str, Any], bool] = lambda name, node: True
+):
     trace.compute_log_prob(site_filter=site_filter)
-    log_probs = [n['log_prob'] for k, n in trace.nodes.items() if 'log_prob' in n and site_filter(k, n)]
-    log_prob  = torch.stack(log_probs).sum(dim=0) if len(log_probs) > 0 else tensor([0.])
+    log_probs = [
+        n["log_prob"]
+        for k, n in trace.nodes.items()
+        if "log_prob" in n and site_filter(k, n)
+    ]
+    log_prob = (
+        torch.stack(log_probs).sum(dim=0) if len(log_probs) > 0 else tensor([0.0])
+    )
     if len(log_prob.shape) == 0:
         log_prob.unsqueeze_(0)
     return log_prob
+
 
 class primitive(targets, proposals):
     def __init__(self, program: Callable[..., Any]):
@@ -224,15 +243,12 @@ class propose(proposals):
         q_out = self.q(*args, **kwargs)
         p_out = with_substitution(self.p, trace=q_out.trace)(*args, **kwargs)
 
-        # all_nodes = set(q_out.trace.nodes.keys())
-        # sampled_nodes = set({k for k, v in q_out.trace.nodes.items() if not_observed(v)})
-        # substituted_nodes = set({k for k, v in p_out.trace.nodes.items() if not_observed(v)})
-        # lu_1 = q_out.trace.log_prob_sum(membership_filter(all_nodes - (sampled_nodes - substituted_nodes)))
-
         # FIXME this hook exists to alter an NVI trace for stl
         # q_trace = dispatch(self.transf_q_trace, q_out.trace, **inf_kwargs)
 
-        lu_1 = stacked_log_prob(q_out.trace, node_filter(_or(not_substituted, is_observed)))
+        lu_1 = stacked_log_prob(
+            q_out.trace, node_filter(_or(not_substituted, is_observed))
+        )
         lw_1 = q_out.log_weight
 
         # We call that lv because its the incremental weight in the IS sense
