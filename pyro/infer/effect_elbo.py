@@ -21,8 +21,8 @@ from .trace_elbo import JitTrace_ELBO, Trace_ELBO
 
 class GuideMessenger(TraceMessenger, ABC):
     """
-    Abstract base class for effect-based guides for use in :class:`Effect_ELBO`
-    and similar.
+    EXPERIMENTAL Abstract base class for effect-based guides for use in
+    :class:`Effect_ELBO` and similar.
 
     Derived classes must implement the :meth:`get_posterior` method.
     """
@@ -104,8 +104,8 @@ class GuideMessenger(TraceMessenger, ABC):
 
 class EffectMixin(ELBO):
     """
-    Mixin class to turn a trace-based ELBO implementation into an effect-based
-    implementation.
+    EXPERIMENTAL Mixin class to turn a trace-based ELBO implementation into an
+    effect-based implementation.
     """
 
     def _get_trace(self, model, guide, args, kwargs):
@@ -148,8 +148,9 @@ class EffectMixin(ELBO):
 
 class Effect_ELBO(EffectMixin, Trace_ELBO):
     """
-    Similar to :class:`~pyro.infer.trace_elbo.Trace_ELBO` but supporting guides
-    that are :class:`GuideMessenger` s rather than traceable functions.
+    EXPERIMENTAL Similar to :class:`~pyro.infer.trace_elbo.Trace_ELBO` but
+    supporting guides that are :class:`GuideMessenger` s rather than traceable
+    functions.
     """
 
     pass
@@ -157,8 +158,9 @@ class Effect_ELBO(EffectMixin, Trace_ELBO):
 
 class JitEffect_ELBO(EffectMixin, JitTrace_ELBO):
     """
-    Similar to :class:`~pyro.infer.trace_elbo.JitTrace_ELBO` but supporting guides
-    that are :class:`GuideMessenger` s rather than traceable functions.
+    EXPERIMENTAL Similar to :class:`~pyro.infer.trace_elbo.JitTrace_ELBO` but
+    supporting guides that are :class:`GuideMessenger` s rather than traceable
+    functions.
     """
 
     pass

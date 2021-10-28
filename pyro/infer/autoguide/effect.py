@@ -22,7 +22,8 @@ class AutoMessengerMeta(type(GuideMessenger), type(PyroModule)):
 
 class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
     """
-    Base class for :class:`pyro.infer.effect_elbo.GuideMessenger` autoguides.
+    EXPERIMENTAL Base class for :class:`pyro.infer.effect_elbo.GuideMessenger`
+    autoguides.
     """
 
     # Drop args for backwards compatibility with AutoGuide.
@@ -49,8 +50,9 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
 
 class AutoRegressiveMessenger(AutoMessenger):
     """
-    Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` , intended for
-    use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or similar.
+    EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
+    intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
+    similar.
 
     The posterior at any site is a learned affine transform of the prior,
     conditioned on upstream posterior samples. The affine transform operates in

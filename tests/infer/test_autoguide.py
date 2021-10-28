@@ -69,7 +69,7 @@ def promote_elbo(Guide, Elbo):
         if Elbo is Trace_ELBO:
             return Effect_ELBO
         if Elbo is JitTrace_ELBO:
-            return Effect_ELBO  # DEBUG
+            return Effect_ELBO  # DEBUG work around "Trying to backward a second time"
             return JitEffect_ELBO
         pytest.skip("not implemented")
     return Elbo
@@ -1338,9 +1338,13 @@ def test_exact(Guide):
     guide.requires_grad_(False)
     with torch.no_grad():
         # Check moments.
-        vectorize = pyro.plate("particles", 10000, dim=-2)
-        guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
-        samples = poutine.replay(vectorize(model), guide_trace)(data)
+        with pyro.plate("particles", 10000, dim=-2):
+            if isinstance(guide, poutine.messenger.Messenger):
+                with guide(data):
+                    samples = model(data)
+            else:
+                guide_trace = poutine.trace(guide).get_trace(data)
+                samples = poutine.replay(model, guide_trace)(data)
         actual_mean = samples.mean().item()
         actual_std = samples.std().item()
         assert_close(actual_mean, expected_mean, atol=0.05)
@@ -1399,9 +1403,13 @@ def test_exact_batch(Guide):
     guide.requires_grad_(False)
     with torch.no_grad():
         # Check moments.
-        vectorize = pyro.plate("particles", 10000, dim=-2)
-        guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
-        samples = poutine.replay(vectorize(model), guide_trace)(data)
+        with pyro.plate("particles", 10000, dim=-2):
+            if isinstance(guide, poutine.messenger.Messenger):
+                with guide(data):
+                    samples = model(data)
+            else:
+                guide_trace = poutine.trace(guide).get_trace(data)
+                samples = poutine.replay(model, guide_trace)(data)
         actual_mean = samples.mean(0)
         actual_std = samples.std(0)
         assert_close(actual_mean, expected_mean, atol=0.05)
@@ -1426,7 +1434,7 @@ def test_exact_batch(Guide):
     ],
 )
 def test_exact_tree(Guide):
-    is_exact = Guide not in (AutoNormal, AutoDiagonalNormal)
+    is_exact = Guide not in (AutoNormal, AutoDiagonalNormal, AutoRegressiveMessenger)
 
     def model(data):
         x = pyro.sample("x", dist.Normal(0, 1))
@@ -1470,9 +1478,13 @@ def test_exact_tree(Guide):
     guide.requires_grad_(False)
     with torch.no_grad():
         # Check moments.
-        vectorize = pyro.plate("particles", 10000, dim=-2)
-        guide_trace = poutine.trace(vectorize(guide)).get_trace(data)
-        samples = poutine.replay(vectorize(model), guide_trace)(data)
+        with pyro.plate("particles", 10000, dim=-2):
+            if isinstance(guide, poutine.messenger.Messenger):
+                with guide(data):
+                    samples = model(data)
+            else:
+                guide_trace = poutine.trace(guide).get_trace(data)
+                samples = poutine.replay(model, guide_trace)(data)
         for name in ["x", "y"]:
             actual_mean = samples[name].mean(0).squeeze()
             actual_std = samples[name].std(0).squeeze()
