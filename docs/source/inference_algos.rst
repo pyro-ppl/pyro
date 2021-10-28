@@ -57,6 +57,11 @@ ELBO
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.infer.effect_elbo
+    :members:
+    :show-inheritance:
+    :member-order: bysource
+
 Importance
 ----------
 

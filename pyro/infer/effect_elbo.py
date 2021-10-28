@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Callable, Dict, Tuple, Union
 
@@ -12,26 +12,22 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine.trace_messenger import TraceMessenger
-from pyro.poutine.trace_struct import TraceStruct
+from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites, site_is_subsample
 from pyro.util import check_model_guide_match, check_site_shape
 
 from .trace_elbo import JitTrace_ELBO, Trace_ELBO
 
 
-class GuideMessengerMeta(type(TraceMessenger), ABCMeta):
-    pass
-
-
-class GuideMessenger(TraceMessenger, metaclass=GuideMessengerMeta):
+class GuideMessenger(TraceMessenger, ABC):
     """
     Abstract base class for effect-based guides for use in :class:`Effect_ELBO`
-    .
+    and similar.
 
     Derived classes must implement the :meth:`get_posterior` method.
     """
 
-    def __enter__(self, *args, **kwargs) -> TraceStruct:
+    def __enter__(self, *args, **kwargs) -> Trace:
         self.args_kwargs = args, kwargs
         self.upstream_values = OrderedDict()
         return super().__enter__()
@@ -89,7 +85,7 @@ class GuideMessenger(TraceMessenger, metaclass=GuideMessengerMeta):
         """
         raise NotImplementedError
 
-    def get_traces(self) -> Tuple[TraceStruct, TraceStruct]:
+    def get_traces(self) -> Tuple[Trace, Trace]:
         """
         :returns: a pair ``(model_trace, guide_trace)``
         :rtype: tuple
@@ -152,7 +148,7 @@ class EffectMixin(ELBO):
 class Effect_ELBO(EffectMixin, Trace_ELBO):
     """
     Similar to :class:`~pyro.infer.trace_elbo.Trace_ELBO` but supporting guides
-    that are effect handlers rather than traceable functions.
+    that are :class:`GuideMessenger` s rather than traceable functions.
     """
 
     pass
@@ -161,7 +157,7 @@ class Effect_ELBO(EffectMixin, Trace_ELBO):
 class JitEffect_ELBO(EffectMixin, JitTrace_ELBO):
     """
     Similar to :class:`~pyro.infer.trace_elbo.JitTrace_ELBO` but supporting guides
-    that are effect handlers rather than traceable functions.
+    that are :class:`GuideMessenger` s rather than traceable functions.
     """
 
     pass

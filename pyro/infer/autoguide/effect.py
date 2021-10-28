@@ -10,12 +10,12 @@ import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.infer.effect_elbo import GuideMessenger
-from pyro.infer.nn import PyroModule, PyroParam
+from pyro.nn.module import PyroModule, PyroParam
 
 from .utils import deep_getattr, deep_setattr, helpful_support_errors
 
 
-class AutoMessengerMeta(type(PyroModule), type(GuideMessenger)):
+class AutoMessengerMeta(type(GuideMessenger), type(PyroModule)):
     pass
 
 
@@ -25,8 +25,8 @@ class AutoRegressiveMessenger(GuideMessenger, PyroModule, metaclass=AutoMessenge
     use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or similar.
 
     The posterior at any site is a learned affine transform of the prior,
-    conditioned on upstream posterior samples. The affine tramsform operates in
-    unconstrained space. This supports only continuous inference.
+    conditioned on upstream posterior samples. The affine transform operates in
+    unconstrained space. This supports only continuous latent variables.
 
     Derived classes may override particular sites and use this simply as a
     default, e.g.::
@@ -50,7 +50,7 @@ class AutoRegressiveMessenger(GuideMessenger, PyroModule, metaclass=AutoMessenge
     ) -> Union[TorchDistribution, torch.Tensor]:
         with helpful_support_errors({"name": name, "fn": prior}):
             transform = constraints.biject_to(prior.support)
-        loc, scale = self.get_params(name, prior)
+        loc, scale = self._get_params(name, prior)
         affine = dist.transforms.AffineTransform(
             loc, scale, event_dim=transform.domain.event_dim, cache_size=1
         )
@@ -59,7 +59,7 @@ class AutoRegressiveMessenger(GuideMessenger, PyroModule, metaclass=AutoMessenge
         )
         return posterior
 
-    def get_params(self, name, prior):
+    def _get_params(self, name, prior):
         try:
             loc = deep_getattr(self.locs, name)
             scale = deep_getattr(self.scales, name)
@@ -83,4 +83,4 @@ class AutoRegressiveMessenger(GuideMessenger, PyroModule, metaclass=AutoMessenge
             name,
             PyroParam(torch.ones_like(unconstrained), event_dim=event_dim),
         )
-        return self.get_params(name, prior)
+        return self._get_params(name, prior)
