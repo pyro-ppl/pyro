@@ -2126,12 +2126,33 @@ def test_factor_in_model_ok(Elbo):
         TraceTMC_ELBO,
     ],
 )
-def test_factor_in_guide_ok(Elbo):
+def test_factor_in_guide_error(Elbo):
     def model():
         pass
 
     def guide():
         pyro.factor("f", torch.tensor(0.0))
+
+    elbo = Elbo(strict_enumeration_warning=False)
+    assert_error(model, guide, elbo, match=".*missing specification of has_rsample.*")
+
+
+@pytest.mark.parametrize(
+    "Elbo",
+    [
+        Trace_ELBO,
+        TraceGraph_ELBO,
+        TraceEnum_ELBO,
+        TraceTMC_ELBO,
+    ],
+)
+@pytest.mark.parametrize("has_rsample", [False, True])
+def test_factor_in_guide_ok(Elbo, has_rsample):
+    def model():
+        pass
+
+    def guide():
+        pyro.factor("f", torch.tensor(0.0), has_rsample=has_rsample)
 
     elbo = Elbo(strict_enumeration_warning=False)
     assert_ok(model, guide, elbo)
@@ -2643,7 +2664,6 @@ def test_collapse_normal_plate_normal(num_particles):
     assert_ok(model, guide, elbo)
 
 
-@pytest.mark.xfail(reason="missing pattern")
 @pytest.mark.stage("funsor")
 @pytest.mark.parametrize("num_particles", [1, 2])
 def test_collapse_beta_bernoulli(num_particles):
@@ -2665,7 +2685,6 @@ def test_collapse_beta_bernoulli(num_particles):
     assert_ok(model, guide, elbo)
 
 
-@pytest.mark.xfail(reason="missing pattern")
 @pytest.mark.stage("funsor")
 @pytest.mark.parametrize("num_particles", [1, 2])
 def test_collapse_beta_binomial(num_particles):
@@ -2687,7 +2706,6 @@ def test_collapse_beta_binomial(num_particles):
     assert_ok(model, guide, elbo)
 
 
-@pytest.mark.xfail(reason="missing pattern in Funsor")
 @pytest.mark.stage("funsor")
 @pytest.mark.parametrize("num_particles", [1, 2])
 def test_collapse_beta_binomial_plate(num_particles):

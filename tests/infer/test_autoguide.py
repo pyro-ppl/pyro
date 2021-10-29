@@ -14,7 +14,16 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Predictive, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import (
+    SVI,
+    JitTrace_ELBO,
+    JitTraceEnum_ELBO,
+    JitTraceGraph_ELBO,
+    Predictive,
+    Trace_ELBO,
+    TraceEnum_ELBO,
+    TraceGraph_ELBO,
+)
 from pyro.infer.autoguide import (
     AutoCallable,
     AutoDelta,
@@ -41,7 +50,7 @@ from pyro.ops.gaussian import Gaussian
 from pyro.optim import Adam, ClippedAdam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-from tests.common import assert_close, assert_equal
+from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 AutoGaussianFunsor = pytest.param(
     AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
@@ -349,7 +358,7 @@ class AutoStructured_median(AutoStructured):
         AutoGaussianFunsor,
     ],
 )
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [JitTrace_ELBO, JitTraceGraph_ELBO, JitTraceEnum_ELBO])
 def test_median(auto_class, Elbo):
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
@@ -359,7 +368,10 @@ def test_median(auto_class, Elbo):
     guide = auto_class(model)
     optim = Adam({"lr": 0.02, "betas": (0.8, 0.99)})
     elbo = Elbo(
-        strict_enumeration_warning=False, num_particles=500, vectorize_particles=True
+        strict_enumeration_warning=False,
+        num_particles=500,
+        vectorize_particles=True,
+        ignore_jit_warnings=True,
     )
     infer = SVI(model, guide, optim, elbo)
     for _ in range(100):
@@ -368,7 +380,8 @@ def test_median(auto_class, Elbo):
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
 
-    median = guide.median()
+    with xfail_if_not_implemented():
+        median = guide.median()
     assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
     if auto_class is AutoDelta:
         assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
@@ -397,7 +410,15 @@ def test_median(auto_class, Elbo):
         AutoStructured,
         AutoStructured_median,
         AutoGaussian,
-        AutoGaussianFunsor,
+        pytest.param(
+            AutoGaussianFunsor[0],
+            marks=[
+                pytest.mark.stage("funsor"),
+                pytest.mark.xfail(
+                    reason="https://github.com/pyro-ppl/pyro/issues/2945"
+                ),
+            ],
+        ),
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -887,7 +908,15 @@ class AutoStructured_predictive(AutoStructured):
         AutoStructured,
         AutoStructured_predictive,
         AutoGaussian,
-        AutoGaussianFunsor,
+        pytest.param(
+            AutoGaussianFunsor[0],
+            marks=[
+                pytest.mark.stage("funsor"),
+                pytest.mark.xfail(
+                    reason="https://github.com/pyro-ppl/pyro/issues/2945"
+                ),
+            ],
+        ),
     ],
 )
 def test_predictive(auto_class):
@@ -1277,10 +1306,13 @@ def test_exact(Guide):
     expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
-    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
-    optim = Adam({"lr": 0.01})
+    elbo = JitTrace_ELBO(
+        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
+    )
+    num_steps = 500
+    optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
-    for step in range(500):
+    for step in range(num_steps):
         svi.step(data)
 
     guide.requires_grad_(False)
@@ -1335,10 +1367,13 @@ def test_exact_batch(Guide):
     )
 
     guide = Guide(model)
-    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
-    optim = Adam({"lr": 0.01})
+    elbo = JitTrace_ELBO(
+        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
+    )
+    num_steps = 500
+    optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
-    for step in range(500):
+    for step in range(num_steps):
         svi.step(data)
 
     guide.requires_grad_(False)
@@ -1402,7 +1437,9 @@ def test_exact_tree(Guide):
     expected_loss = float(g.event_logsumexp() - g_cond.event_logsumexp())
 
     guide = Guide(model)
-    elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
+    elbo = JitTrace_ELBO(
+        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
+    )
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
