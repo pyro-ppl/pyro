@@ -59,14 +59,44 @@ class AutoNormalMessenger(AutoMessenger):
     Derived classes may override particular sites and use this simply as a
     default, e.g.::
 
+        def model(data):
+            a = pyro.sample("a", dist.Normal(0, 1))
+            b = pyro.sample("b", dist.Normal(0, 1))
+            c = pyro.sample("c", dist.Normal(a + b, 1))
+            pyro.sample("obs", dist.Normal(c, 1), obs=data)
+
         class MyGuideMessenger(AutoNormalMessenger):
             def get_posterior(self, name, prior, upstream_values):
-                if name == "x":
-                    # Use a custom distribution at site x.
-                    loc = pyro.param("x_loc", lambda: torch.zeros(prior.shape()))
-                    scale = pyro.param("x_scale", lambda: torch.ones(prior.shape()))
-                    return dist.Normal(loc, scale).to_event(prior.event_dim())
-                # Fall back to autoregressive.
+                if name == "c":
+                    # Use a custom distribution at site c.
+                    bias = pyro.param("c_bias", lambda: torch.zeros(()))
+                    weight = pyro.param("c_weight", lambda: torch.ones(()),
+                                        constraint=constraints.positive)
+                    scale = pyro.param("c_scale", lambda: torch.ones(()),
+                                       constraint=constraints.positive)
+                    a = upstream_values["a"]
+                    b = upstream_values["b"]
+                    loc = bias + weight * (a + b)
+                    return dist.Normal(loc, scale)
+                # Fall back to mean field.
+                return super().get_posterior(name, prior, upstream_values)
+
+    Note that above we manually computed ``loc = bias + weight * (a + b)``.
+    Alternatively we could reuse the model-side computation by setting ``loc =
+    bias + weight * prior.loc``::
+
+        class MyGuideMessenger_v2(AutoNormalMessenger):
+            def get_posterior(self, name, prior, upstream_values):
+                if name == "c":
+                    # Use a custom distribution at site c.
+                    bias = pyro.param("c_bias", lambda: torch.zeros(()))
+                    scale = pyro.param("c_scale", lambda: torch.ones(()),
+                                       constraint=constraints.positive)
+                    weight = pyro.param("c_weight", lambda: torch.ones(()),
+                                        constraint=constraints.positive)
+                    loc = bias + weight * prior.loc
+                    return dist.Normal(loc, scale)
+                # Fall back to mean field.
                 return super().get_posterior(name, prior, upstream_values)
     """
 
@@ -82,8 +112,8 @@ class AutoNormalMessenger(AutoMessenger):
         loc, scale = self._get_params(name, prior)
         posterior = dist.TransformedDistribution(
             dist.Normal(loc, scale).to_event(transform.domain.event_dim),
-            transform.with_cache()
-        ).expand(prior.batch_shape)
+            transform.with_cache(),
+        )
         return posterior
 
     def _get_params(self, name, prior):
@@ -136,7 +166,8 @@ class AutoRegressiveMessenger(AutoMessenger):
                 if name == "x":
                     # Use a custom distribution at site x.
                     loc = pyro.param("x_loc", lambda: torch.zeros(prior.shape()))
-                    scale = pyro.param("x_scale", lambda: torch.ones(prior.shape()))
+                    scale = pyro.param("x_scale", lambda: torch.ones(prior.shape())),
+                                       constraint=constraints.positive
                     return dist.Normal(loc, scale).to_event(prior.event_dim())
                 # Fall back to autoregressive.
                 return super().get_posterior(name, prior, upstream_values)

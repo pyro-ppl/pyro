@@ -1438,7 +1438,12 @@ def test_exact_batch(Guide):
     ],
 )
 def test_exact_tree(Guide):
-    is_exact = Guide not in (AutoNormal, AutoDiagonalNormal, AutoNormalMessenger, AutoRegressiveMessenger)
+    is_exact = Guide not in (
+        AutoNormal,
+        AutoDiagonalNormal,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
+    )
 
     def model(data):
         x = pyro.sample("x", dist.Normal(0, 1))

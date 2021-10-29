@@ -40,10 +40,13 @@ class GuideMessenger(TraceMessenger, ABC):
     def _pyro_sample(self, msg):
         if msg["is_observed"] or site_is_subsample(msg):
             return
-        msg["infer"]["prior"] = msg["fn"]
-        posterior = self.get_posterior(msg["name"], msg["fn"], self.upstream_values)
+        prior = msg["fn"]
+        msg["infer"]["prior"] = prior
+        posterior = self.get_posterior(msg["name"], prior, self.upstream_values)
         if isinstance(posterior, torch.Tensor):
-            posterior = dist.Delta(posterior, event_dim=msg["fn"].event_dim)
+            posterior = dist.Delta(posterior, event_dim=prior.event_dim)
+        if posterior.batch_shape != prior.batch_shape:
+            posterior = posterior.expand(prior.batch_shape)
         msg["fn"] = posterior
 
     def _pyro_post_sample(self, msg):
