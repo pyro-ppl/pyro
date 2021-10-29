@@ -1,7 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from pyro.infer.autoguide.effect import AutoMessenger, AutoRegressiveMessenger
+from pyro.infer.autoguide.effect import (
+    AutoMessenger,
+    AutoNormalMessenger,
+    AutoRegressiveMessenger,
+)
 from pyro.infer.autoguide.gaussian import AutoGaussian
 from pyro.infer.autoguide.guides import (
     AutoCallable,
@@ -45,6 +49,7 @@ __all__ = [
     "AutoMessenger",
     "AutoMultivariateNormal",
     "AutoNormal",
+    "AutoNormalMessenger",
     "AutoNormalizingFlow",
     "AutoRegressiveMessenger",
     "AutoStructured",

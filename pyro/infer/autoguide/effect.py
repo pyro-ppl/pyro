@@ -48,6 +48,76 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         return value
 
 
+class AutoNormalMessenger(AutoMessenger):
+    """
+    EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
+    intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
+    similar.
+
+    The mean-field posterior at any site is a transformed normal distribution.
+
+    Derived classes may override particular sites and use this simply as a
+    default, e.g.::
+
+        class MyGuideMessenger(AutoNormalMessenger):
+            def get_posterior(self, name, prior, upstream_values):
+                if name == "x":
+                    # Use a custom distribution at site x.
+                    loc = pyro.param("x_loc", lambda: torch.zeros(prior.shape()))
+                    scale = pyro.param("x_scale", lambda: torch.ones(prior.shape()))
+                    return dist.Normal(loc, scale).to_event(prior.event_dim())
+                # Fall back to autoregressive.
+                return super().get_posterior(name, prior, upstream_values)
+    """
+
+    @pyro_method
+    def get_posterior(
+        self,
+        name: str,
+        prior: TorchDistribution,
+        upstream_values: Dict[str, torch.Tensor],
+    ) -> Union[TorchDistribution, torch.Tensor]:
+        with helpful_support_errors({"name": name, "fn": prior}):
+            transform = biject_to(prior.support)
+        loc, scale = self._get_params(name, prior)
+        posterior = dist.TransformedDistribution(
+            dist.Normal(loc, scale).to_event(transform.domain.event_dim),
+            transform.with_cache()
+        ).expand(prior.batch_shape)
+        return posterior
+
+    def _get_params(self, name, prior):
+        try:
+            loc = deep_getattr(self.locs, name)
+            scale = deep_getattr(self.scales, name)
+            return loc, scale
+        except AttributeError:
+            pass
+
+        # Initialize.
+        with poutine.block(), torch.no_grad():
+            constrained = prior.sample().detach()
+            transform = biject_to(prior.support)
+            unconstrained = transform.inv(constrained)
+            event_dim = transform.domain.event_dim
+            prototype = self._remove_outer_plates(unconstrained, event_dim)
+        deep_setattr(
+            self,
+            "locs." + name,
+            PyroParam(torch.zeros_like(prototype), event_dim=event_dim),
+        )
+        deep_setattr(
+            self,
+            "scales." + name,
+            PyroParam(
+                torch.ones_like(prototype),
+                constraint=constraints.positive,
+                event_dim=event_dim,
+            ),
+        )
+        return self._get_params(name, prior)
+
+
 class AutoRegressiveMessenger(AutoMessenger):
     """
     EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,

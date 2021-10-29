@@ -40,6 +40,7 @@ from pyro.infer.autoguide import (
     AutoMessenger,
     AutoMultivariateNormal,
     AutoNormal,
+    AutoNormalMessenger,
     AutoRegressiveMessenger,
     AutoStructured,
     init_to_feasible,
@@ -1298,6 +1299,7 @@ class AutoStructured_exact_mvn(AutoStructured):
         AutoStructured_exact_mvn,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1366,6 +1368,7 @@ def test_exact(Guide):
         AutoStructured_exact_mvn,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1430,11 +1433,12 @@ def test_exact_batch(Guide):
         AutoStructured,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
 def test_exact_tree(Guide):
-    is_exact = Guide not in (AutoNormal, AutoDiagonalNormal, AutoRegressiveMessenger)
+    is_exact = Guide not in (AutoNormal, AutoDiagonalNormal, AutoNormalMessenger, AutoRegressiveMessenger)
 
     def model(data):
         x = pyro.sample("x", dist.Normal(0, 1))
