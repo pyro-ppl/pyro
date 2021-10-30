@@ -67,7 +67,7 @@ AutoGaussianFunsor = pytest.param(
 )
 
 
-def promote_elbo(Guide, Elbo):
+def promote_elbo(Guide, Elbo, jit=True):
     """
     Promote e.g. Trace_ELBO --> Effect_ELBO for AutoMessengers.
     """
@@ -75,8 +75,7 @@ def promote_elbo(Guide, Elbo):
         if Elbo is Trace_ELBO:
             return Effect_ELBO
         if Elbo is JitTrace_ELBO:
-            return Effect_ELBO  # DEBUG work around "Trying to backward a second time"
-            return JitEffect_ELBO
+            return JitEffect_ELBO if jit else Effect_ELBO
         pytest.skip("not implemented")
     return Elbo
 
@@ -1353,7 +1352,11 @@ def test_exact(Guide):
     expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
-    Elbo = promote_elbo(Guide, JitTrace_ELBO)
+    Elbo = promote_elbo(
+        Guide,
+        JitTrace_ELBO,
+        jit=(Guide is not AutoRegressiveMessenger),  # currently fails with jit
+    )
     elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
@@ -1415,7 +1418,11 @@ def test_exact_batch(Guide):
     )
 
     guide = Guide(model)
-    Elbo = promote_elbo(Guide, JitTrace_ELBO)
+    Elbo = promote_elbo(
+        Guide,
+        JitTrace_ELBO,
+        jit=(Guide is not AutoRegressiveMessenger),  # currently fails with jit
+    )
     elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
@@ -1491,7 +1498,11 @@ def test_exact_tree(Guide):
     expected_loss = float(g.event_logsumexp() - g_cond.event_logsumexp())
 
     guide = Guide(model)
-    Elbo = promote_elbo(Guide, JitTrace_ELBO)
+    Elbo = promote_elbo(
+        Guide,
+        JitTrace_ELBO,
+        jit=(Guide is not AutoRegressiveMessenger),  # currently fails with jit
+    )
     elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})

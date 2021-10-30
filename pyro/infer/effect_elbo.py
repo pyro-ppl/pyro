@@ -37,6 +37,14 @@ class GuideMessenger(TraceMessenger, ABC):
         return self._model[0]
 
     def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
+        """
+        Draws posterior samples from the guide and replays the model against
+        those samples.
+
+        :returns: A dict mapping sample site name to sample value.
+            This includes latent, deterministic, and observed values.
+        :rtype: dict
+        """
         self.args_kwargs = args, kwargs
         self.upstream_values = OrderedDict()
         try:
@@ -113,6 +121,13 @@ class GuideMessenger(TraceMessenger, ABC):
 
     def get_traces(self) -> Tuple[Trace, Trace]:
         """
+        This can be called after running :meth:`__call__` . In contrast to the
+        trace-replay pattern of generating a pair of traces,
+        :class:`GuideMessenger` interleaves model and guide computations, so
+        only a single ``guide(*args, **kwargs)`` call is needed to create both
+        traces. This function merely extract the relevant information from this
+        guide's ``.trace`` attribute.
+
         :returns: a pair ``(model_trace, guide_trace)``
         :rtype: tuple
         """

@@ -59,6 +59,8 @@ ELBO
 
 .. automodule:: pyro.infer.effect_elbo
     :members:
+    :undoc-members:
+    :special-members: __call__
     :show-inheritance:
     :member-order: bysource
 

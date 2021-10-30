@@ -27,7 +27,12 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
     autoguides.
     """
 
+    @pyro_method
     def __call__(self, *args, **kwargs):
+        # Since this guide creates parameters lazily, we need to avoid batching
+        # those parameters by a particle plate, in case the first time this
+        # guide is called is inside a particle plate. We assume all plates
+        # outside the model are particle plates.
         self._outer_plates = get_plates()
         try:
             return super().__call__(*args, **kwargs)
@@ -135,7 +140,6 @@ class AutoNormalMessenger(AutoMessenger):
         self._init_scale = init_scale
         self._computing_median = False
 
-    @pyro_method
     def get_posterior(
         self,
         name: str,
@@ -216,6 +220,8 @@ class AutoRegressiveMessenger(AutoMessenger):
                 # Fall back to autoregressive.
                 return super().get_posterior(name, prior, upstream_values)
 
+    .. warning:: This guide currently does not support ``JitEffect_ELBO``.
+
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
@@ -236,7 +242,6 @@ class AutoRegressiveMessenger(AutoMessenger):
         self.init_loc_fn = init_loc_fn
         self._init_scale = init_scale
 
-    @pyro_method
     def get_posterior(
         self,
         name: str,
