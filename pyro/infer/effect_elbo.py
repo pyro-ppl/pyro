@@ -3,12 +3,12 @@
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Dict, Tuple, Union
+from typing import Callable, Dict, Tuple, Union
 
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.distribution import Distribution
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine.trace_messenger import TraceMessenger
@@ -27,7 +27,7 @@ class GuideMessenger(TraceMessenger, ABC):
     Derived classes must implement the :meth:`get_posterior` method.
     """
 
-    def __init__(self, model):
+    def __init__(self, model: Callable):
         super().__init__()
         # Do not register model as submodule
         self._model = (model,)
@@ -80,9 +80,9 @@ class GuideMessenger(TraceMessenger, ABC):
     def get_posterior(
         self,
         name: str,
-        prior: TorchDistribution,
+        prior: Distribution,
         upstream_values: Dict[str, torch.Tensor],
-    ) -> Union[TorchDistribution, torch.Tensor]:
+    ) -> Union[Distribution, torch.Tensor]:
         """
         Abstract method to compute a posterior distribution or sample a
         posterior value given a prior distribution and values of upstream
@@ -103,11 +103,11 @@ class GuideMessenger(TraceMessenger, ABC):
         :param str name: The name of the sample site to sample.
         :param prior: The prior distribution of this sample site
             (conditioned on upstream samples from the posterior).
-        :type prior: ~pyro.distributions.TorchDistribution
+        :type prior: ~pyro.distributions.Distribution
         :param dict upstream_values:
         :returns: A posterior distribution or sample from the posterior
             distribution.
-        :rtype: ~pyro.distributions.TorchDistribution or torch.Tensor
+        :rtype: ~pyro.distributions.Distribution or torch.Tensor
         """
         raise NotImplementedError
 

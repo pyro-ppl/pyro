@@ -1,18 +1,19 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, Union
+from typing import Callable, Dict, Union
 
 import torch
 from torch.distributions import biject_to, constraints
 
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.distribution import Distribution
 from pyro.infer.effect_elbo import GuideMessenger
 from pyro.nn.module import PyroModule, PyroParam, pyro_method
 from pyro.poutine.runtime import get_plates
 
+from .initialization import init_to_feasible, init_to_mean
 from .utils import deep_getattr, deep_setattr, helpful_support_errors
 
 
@@ -26,10 +27,6 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
     autoguides.
     """
 
-    # Drop args for backwards compatibility with AutoGuide.
-    def __init__(self, model, *, init_loc_fn=None):
-        super().__init__(model)
-
     def __call__(self, *args, **kwargs):
         self._outer_plates = get_plates()
         try:
@@ -37,7 +34,7 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         finally:
             del self._outer_plates
 
-    def _remove_outer_plates(self, value, event_dim):
+    def _remove_outer_plates(self, value: torch.Tensor, event_dim: int) -> torch.Tensor:
         """
         Removes particle plates from initial values of parameters.
         """
@@ -101,15 +98,34 @@ class AutoNormalMessenger(AutoMessenger):
                     return dist.Normal(loc, scale)
                 # Fall back to mean field.
                 return super().get_posterior(name, prior, upstream_values)
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
     """
+
+    def __init__(
+        self,
+        model: Callable,
+        *,
+        init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
+        init_scale: float = 0.1,
+    ):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        super().__init__(model)
+        self.init_loc_fn = init_loc_fn
+        self._init_scale = init_scale
 
     @pyro_method
     def get_posterior(
         self,
         name: str,
-        prior: TorchDistribution,
+        prior: Distribution,
         upstream_values: Dict[str, torch.Tensor],
-    ) -> Union[TorchDistribution, torch.Tensor]:
+    ) -> Union[Distribution, torch.Tensor]:
         with helpful_support_errors({"name": name, "fn": prior}):
             transform = biject_to(prior.support)
         loc, scale = self._get_params(name, prior)
@@ -119,7 +135,7 @@ class AutoNormalMessenger(AutoMessenger):
         )
         return posterior
 
-    def _get_params(self, name, prior):
+    def _get_params(self, name: str, prior: Distribution):
         try:
             loc = deep_getattr(self.locs, name)
             scale = deep_getattr(self.scales, name)
@@ -129,24 +145,19 @@ class AutoNormalMessenger(AutoMessenger):
 
         # Initialize.
         with poutine.block(), torch.no_grad():
-            constrained = prior.sample().detach()
-            transform = biject_to(prior.support)
-            unconstrained = transform.inv(constrained)
+            with helpful_support_errors({"name": name, "fn": prior}):
+                transform = biject_to(prior.support)
             event_dim = transform.domain.event_dim
-            prototype = self._remove_outer_plates(unconstrained, event_dim)
-        deep_setattr(
-            self,
-            "locs." + name,
-            PyroParam(torch.zeros_like(prototype), event_dim=event_dim),
-        )
+            constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
+            unconstrained = transform.inv(constrained)
+            init_loc = self._remove_outer_plates(unconstrained, event_dim)
+            init_scale = torch.full_like(init_loc, self._init_scale)
+
+        deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
         deep_setattr(
             self,
             "scales." + name,
-            PyroParam(
-                torch.ones_like(prototype),
-                constraint=constraints.positive,
-                event_dim=event_dim,
-            ),
+            PyroParam(init_scale, constraint=constraints.positive, event_dim=event_dim),
         )
         return self._get_params(name, prior)
 
@@ -174,15 +185,34 @@ class AutoRegressiveMessenger(AutoMessenger):
                     return dist.Normal(loc, scale).to_event(prior.event_dim())
                 # Fall back to autoregressive.
                 return super().get_posterior(name, prior, upstream_values)
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
     """
+
+    def __init__(
+        self,
+        model: Callable,
+        *,
+        init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
+        init_scale: float = 0.1,
+    ):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        super().__init__(model)
+        self.init_loc_fn = init_loc_fn
+        self._init_scale = init_scale
 
     @pyro_method
     def get_posterior(
         self,
         name: str,
-        prior: TorchDistribution,
+        prior: Distribution,
         upstream_values: Dict[str, torch.Tensor],
-    ) -> Union[TorchDistribution, torch.Tensor]:
+    ) -> Union[Distribution, torch.Tensor]:
         with helpful_support_errors({"name": name, "fn": prior}):
             transform = biject_to(prior.support)
         loc, scale = self._get_params(name, prior)
@@ -194,7 +224,7 @@ class AutoRegressiveMessenger(AutoMessenger):
         )
         return posterior
 
-    def _get_params(self, name, prior):
+    def _get_params(self, name: str, prior: Distribution):
         try:
             loc = deep_getattr(self.locs, name)
             scale = deep_getattr(self.scales, name)
@@ -204,23 +234,21 @@ class AutoRegressiveMessenger(AutoMessenger):
 
         # Initialize.
         with poutine.block(), torch.no_grad():
-            constrained = prior.sample().detach()
-            transform = biject_to(prior.support)
-            unconstrained = transform.inv(constrained)
+            with helpful_support_errors({"name": name, "fn": prior}):
+                transform = biject_to(prior.support)
             event_dim = transform.domain.event_dim
-            prototype = self._remove_outer_plates(unconstrained, event_dim)
-        deep_setattr(
-            self,
-            "locs." + name,
-            PyroParam(torch.zeros_like(prototype), event_dim=event_dim),
-        )
+            constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
+            unconstrained = transform.inv(constrained)
+            # Initialize the distribution to be an affine combination:
+            #   init_scale * prior + (1 - init_scale) * init_loc
+            init_loc = self._remove_outer_plates(unconstrained, event_dim)
+            init_loc = init_loc * (1 - self._init_scale)
+            init_scale = torch.full_like(init_loc, self._init_scale)
+
+        deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
         deep_setattr(
             self,
             "scales." + name,
-            PyroParam(
-                torch.ones_like(prototype),
-                constraint=constraints.positive,
-                event_dim=event_dim,
-            ),
+            PyroParam(init_scale, constraint=constraints.positive, event_dim=event_dim),
         )
         return self._get_params(name, prior)
