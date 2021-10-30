@@ -195,6 +195,98 @@ class AutoNormalMessenger(AutoMessenger):
         loc, scale = self._get_params(name, prior)
         return transform(loc)
 
+class AutoHierarchicalNormalMessenger(AutoMessenger):
+    """
+    EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
+    intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
+    similar.
+
+    The mean-field posterior at any site is a transformed normal distribution.
+    Posterior mean at each site depends on the value of that site given it's dependencies in the model:
+
+        loc = loc + transform.inv(prior.mean) * weight
+
+    Where the value of `prior.mean` is conditional on upstream sites in the model.
+
+    Derived classes may override particular sites and use this simply as a
+    default, see AutoNormalMessenger documentation for example.
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
+    """
+
+    def __init__(
+        self,
+        model: Callable,
+        *,
+        init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
+        init_scale: float = 0.1,
+    ):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        super().__init__(model)
+        self.init_loc_fn = init_loc_fn
+        self._init_scale = init_scale
+        self._computing_median = False
+
+    def get_posterior(
+        self,
+        name: str,
+        prior: Distribution,
+        upstream_values: Dict[str, torch.Tensor],
+    ) -> Union[Distribution, torch.Tensor]:
+        if self._computing_median:
+            return self._get_posterior_median(name, prior)
+
+        with helpful_support_errors({"name": name, "fn": prior}):
+            transform = biject_to(prior.support)
+        loc, scale = self._get_params(name, prior)
+        posterior = dist.TransformedDistribution(
+            dist.Normal(loc, scale).to_event(transform.domain.event_dim),
+            transform.with_cache(),
+        )
+        return posterior
+
+    def _get_params(self, name: str, prior: Distribution):
+        try:
+            loc = deep_getattr(self.locs, name)
+            scale = deep_getattr(self.scales, name)
+            return loc, scale
+        except AttributeError:
+            pass
+
+        # Initialize.
+        with poutine.block(), torch.no_grad():
+            transform = biject_to(prior.support)
+            event_dim = transform.domain.event_dim
+            constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
+            unconstrained = transform.inv(constrained)
+            init_loc = self._remove_outer_plates(unconstrained, event_dim)
+            init_scale = torch.full_like(init_loc, self._init_scale)
+
+        deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
+        deep_setattr(
+            self,
+            "scales." + name,
+            PyroParam(init_scale, constraint=constraints.positive, event_dim=event_dim),
+        )
+        return self._get_params(name, prior)
+
+    def median(self, *args, **kwargs):
+        self._computing_median = True
+        try:
+            return self(*args, **kwargs)
+        finally:
+            self._computing_median = False
+
+    def _get_posterior_median(self, name, prior):
+        transform = biject_to(prior.support)
+        loc, scale = self._get_params(name, prior)
+        return transform(loc)
+
 
 class AutoRegressiveMessenger(AutoMessenger):
     """
