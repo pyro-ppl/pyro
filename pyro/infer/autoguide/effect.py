@@ -195,14 +195,15 @@ class AutoNormalMessenger(AutoMessenger):
         loc, scale = self._get_params(name, prior)
         return transform(loc)
 
-class AutoHierarchicalNormalMessenger(AutoMessenger):
+
+class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
     """
     EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
     intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
     similar.
 
     The mean-field posterior at any site is a transformed normal distribution.
-    Posterior mean at each site depends on the value of that site given it's dependencies in the model:
+    Posterior mean at each site depends on the value of that site given its dependencies in the model:
 
         loc = loc + transform.inv(prior.mean) * weight
 
@@ -224,12 +225,16 @@ class AutoHierarchicalNormalMessenger(AutoMessenger):
         *,
         init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
         init_scale: float = 0.1,
+        init_weight: float = 1.0,
+        hierarchical_sites: list = None,
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         super().__init__(model)
         self.init_loc_fn = init_loc_fn
         self._init_scale = init_scale
+        self._init_weight = init_weight
+        self._hierarchical_sites = hierarchical_sites
         self._computing_median = False
 
     def get_posterior(
@@ -243,18 +248,25 @@ class AutoHierarchicalNormalMessenger(AutoMessenger):
 
         with helpful_support_errors({"name": name, "fn": prior}):
             transform = biject_to(prior.support)
-        loc, scale = self._get_params(name, prior)
-        posterior = dist.TransformedDistribution(
-            dist.Normal(loc, scale).to_event(transform.domain.event_dim),
-            transform.with_cache(),
-        )
-        return posterior
+        if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
+            # If hierarchical_sites not specified all sites are assumed to be hierarchical
+            loc, scale, weight = self._get_params(name, prior)
+            loc = loc + transform.inv(prior.mean) * weight
+            posterior = dist.TransformedDistribution(
+                dist.Normal(loc, scale).to_event(transform.domain.event_dim),
+                transform.with_cache(),
+            )
+            return posterior
+        else:
+            # Fall back to mean field when hierarchical_sites list is not empty and site not in the list.
+            return super().get_posterior(name, prior, upstream_values)
 
     def _get_params(self, name: str, prior: Distribution):
         try:
             loc = deep_getattr(self.locs, name)
             scale = deep_getattr(self.scales, name)
-            return loc, scale
+            weight = deep_getattr(self.weights, name)
+            return loc, scale, weight
         except AttributeError:
             pass
 
@@ -266,6 +278,8 @@ class AutoHierarchicalNormalMessenger(AutoMessenger):
             unconstrained = transform.inv(constrained)
             init_loc = self._remove_outer_plates(unconstrained, event_dim)
             init_scale = torch.full_like(init_loc, self._init_scale)
+            # weight is a single value parameter
+            init_weight = torch.full_like((), self._init_weight)
 
         deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
         deep_setattr(
@@ -273,18 +287,20 @@ class AutoHierarchicalNormalMessenger(AutoMessenger):
             "scales." + name,
             PyroParam(init_scale, constraint=constraints.positive, event_dim=event_dim),
         )
+        deep_setattr(
+            self,
+            "weights." + name,
+            PyroParam(init_weight, constraint=constraints.positive),
+        )
         return self._get_params(name, prior)
-
-    def median(self, *args, **kwargs):
-        self._computing_median = True
-        try:
-            return self(*args, **kwargs)
-        finally:
-            self._computing_median = False
 
     def _get_posterior_median(self, name, prior):
         transform = biject_to(prior.support)
-        loc, scale = self._get_params(name, prior)
+        if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
+            loc, scale, weight = self._get_params(name, prior)
+            loc = loc + transform.inv(prior.mean) * weight
+        else:
+            loc, scale = super()._get_params(name, prior)
         return transform(loc)
 
 
