@@ -75,8 +75,12 @@ class AutoNormalMessenger(AutoMessenger):
     similar.
 
     The mean-field posterior at any site is a transformed normal distribution.
+    This posterior is equivalent to :class:`~pyro.infer.autoguide.AutoNormal`
+    or :class:`~pyro.infer.autoguide.AutoDiagonalNormal`, but allows
+    customization via subclassing.
 
-    Derived classes may override particular sites and use this simply as a
+    Derived classes may override the :meth:`get_posterior` behavior at
+    particular sites and use the mean-field normal behavior simply as a
     default, e.g.::
 
         def model(data):
@@ -206,8 +210,9 @@ class AutoRegressiveMessenger(AutoMessenger):
     conditioned on upstream posterior samples. The affine transform operates in
     unconstrained space. This supports only continuous latent variables.
 
-    Derived classes may override particular sites and use this simply as a
-    default, e.g.::
+    Derived classes may override the :meth:`get_posterior` behavior at
+    particular sites and use the regressive behavior simply as a default,
+    e.g.::
 
         class MyGuideMessenger(AutoRegressiveMessenger):
             def get_posterior(self, name, prior, upstream_values):
