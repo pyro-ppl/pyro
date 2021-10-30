@@ -141,6 +141,14 @@ AutoNormalMessenger
     :member-order: bysource
     :show-inheritance:
 
+AutoHierarchicalNormal
+-------------------
+.. autoclass:: pyro.infer.autoguide.AutoHierarchicalNormal
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :show-inheritance:
+
 AutoRegressiveMessenger
 -----------------------
 .. autoclass:: pyro.infer.autoguide.AutoRegressiveMessenger
