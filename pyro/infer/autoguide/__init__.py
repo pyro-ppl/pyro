@@ -4,6 +4,7 @@
 from pyro.infer.autoguide.effect import (
     AutoMessenger,
     AutoNormalMessenger,
+    AutoHierarchicalNormal,
     AutoRegressiveMessenger,
 )
 from pyro.infer.autoguide.gaussian import AutoGaussian
@@ -50,6 +51,7 @@ __all__ = [
     "AutoMultivariateNormal",
     "AutoNormal",
     "AutoNormalMessenger",
+    "AutoHierarchicalNormal",
     "AutoNormalizingFlow",
     "AutoRegressiveMessenger",
     "AutoStructured",
