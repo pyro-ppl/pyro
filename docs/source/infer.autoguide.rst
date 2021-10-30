@@ -125,6 +125,14 @@ AutoGaussian
     :member-order: bysource
     :show-inheritance:
 
+AutoMessenger
+-------------
+.. autoclass:: pyro.infer.autoguide.AutoMessenger
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :show-inheritance:
+
 AutoNormalMessenger
 -------------------
 .. autoclass:: pyro.infer.autoguide.AutoNormalMessenger
