@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, Optional, Union
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -202,12 +202,13 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
     intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
     similar.
 
-    The mean-field posterior at any site is a transformed normal distribution.
-    Posterior mean at each site depends on the value of that site given its dependencies in the model:
+    The mean-field posterior at any site is a transformed normal distribution,
+    the mean of which depends on the value of that site given its dependencies in the model:
 
         loc = loc + transform.inv(prior.mean) * weight
 
     Where the value of `prior.mean` is conditional on upstream sites in the model.
+    This approach doesn't work for distributions that don't have the mean.
 
     Derived classes may override particular sites and use this simply as a
     default, see AutoNormalMessenger documentation for example.
@@ -217,6 +218,12 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
+    :param float init_weight: Initial value for the weight of the contribution
+        of hierarchical sites to posterior mean for each latent variable.
+    :param list hierarchical_sites: List of latent variables (model sites)
+        that have hierarchical dependencies.
+        If None, all sites are assumed to have hierarchical dependencies. If None, for the sites
+        that don't have upstream sites, the guide is representing/learning deviation from the prior.
     """
 
     def __init__(
@@ -226,7 +233,7 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
         init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
         init_scale: float = 0.1,
         init_weight: float = 1.0,
-        hierarchical_sites: list = None,
+        hierarchical_sites: Optional(list) = None,
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -265,8 +272,11 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
         try:
             loc = deep_getattr(self.locs, name)
             scale = deep_getattr(self.scales, name)
-            weight = deep_getattr(self.weights, name)
-            return loc, scale, weight
+            if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
+                weight = deep_getattr(self.weights, name)
+                return loc, scale, weight
+            else:
+                return loc, scale
         except AttributeError:
             pass
 
@@ -280,6 +290,9 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             init_scale = torch.full_like(init_loc, self._init_scale)
             # weight is a single value parameter
             init_weight = torch.full_like((), self._init_weight)
+            # if site is hierarchical substract contribution of dependencies from init_loc
+            if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
+                init_loc = init_loc - init_weight * prior.mean
 
         deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
         deep_setattr(
@@ -300,7 +313,7 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             loc, scale, weight = self._get_params(name, prior)
             loc = loc + transform.inv(prior.mean) * weight
         else:
-            loc, scale = super()._get_params(name, prior)
+            loc, scale = self._get_params(name, prior)
         return transform(loc)
 
 
