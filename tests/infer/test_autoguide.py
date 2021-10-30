@@ -55,7 +55,12 @@ from pyro.ops.gaussian import Gaussian
 from pyro.optim import Adam, ClippedAdam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-from tests.common import assert_close, assert_equal, xfail_if_not_implemented
+from tests.common import (
+    assert_close,
+    assert_equal,
+    xfail_if_not_implemented,
+    xfail_param,
+)
 
 AutoGaussianFunsor = pytest.param(
     AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
@@ -66,7 +71,7 @@ def promote_elbo(Guide, Elbo):
     """
     Promote e.g. Trace_ELBO --> Effect_ELBO for AutoMessengers.
     """
-    if issubclass(Guide, AutoMessenger):
+    if isinstance(Guide, type) and issubclass(Guide, AutoMessenger):
         if Elbo is Trace_ELBO:
             return Effect_ELBO
         if Elbo is JitTrace_ELBO:
@@ -123,6 +128,8 @@ def test_scores(auto_class):
         AutoLaplaceApproximation,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 def test_factor(auto_class, Elbo):
@@ -135,6 +142,7 @@ def test_factor(auto_class, Elbo):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
     guide = auto_class(model)
+    Elbo = promote_elbo(auto_class, Elbo)
     elbo = Elbo(strict_enumeration_warning=False)
     elbo.loss(model, guide, torch.tensor(0.0))  # initialize param store
 
@@ -377,6 +385,7 @@ class AutoStructured_median(AutoStructured):
         AutoStructured_median,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [JitTrace_ELBO, JitTraceGraph_ELBO, JitTraceEnum_ELBO])
@@ -388,6 +397,7 @@ def test_median(auto_class, Elbo):
 
     guide = auto_class(model)
     optim = Adam({"lr": 0.02, "betas": (0.8, 0.99)})
+    Elbo = promote_elbo(auto_class, Elbo)
     elbo = Elbo(
         strict_enumeration_warning=False,
         num_particles=500,
@@ -409,6 +419,13 @@ def test_median(auto_class, Elbo):
     else:
         assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
+
+
+def serialization_model():
+    pyro.sample("x", dist.Normal(0.0, 1.0))
+    with pyro.plate("plate", 2):
+        pyro.sample("y", dist.LogNormal(0.0, 1.0))
+        pyro.sample("z", dist.Beta(2.0, 2.0))
 
 
 @pytest.mark.parametrize("jit", [False, True], ids=["nojit", "jit"])
@@ -440,17 +457,12 @@ def test_median(auto_class, Elbo):
                 ),
             ],
         ),
+        AutoNormalMessenger,
+        xfail_param(AutoRegressiveMessenger, reason="jit does not support _Dirichlet"),
     ],
 )
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_serialization(auto_class, Elbo, jit):
-    def model():
-        pyro.sample("x", dist.Normal(0.0, 1.0))
-        with pyro.plate("plate", 2):
-            pyro.sample("y", dist.LogNormal(0.0, 1.0))
-            pyro.sample("z", dist.Beta(2.0, 2.0))
-
-    guide = auto_class(model)
+def test_serialization(auto_class, jit):
+    guide = auto_class(serialization_model)
     guide()
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
@@ -712,6 +724,7 @@ def test_unpack_latent():
         AutoLowRankMultivariateNormal,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
     ],
 )
 def test_init_loc_fn(auto_class):
@@ -776,6 +789,7 @@ def test_init_scale(auto_class, init_scale):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoNormal, init_loc_fn=init_to_median),
         functools.partial(AutoGaussian, init_loc_fn=init_to_median),
+        AutoNormalMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -793,6 +807,7 @@ def test_median_module(auto_class, Elbo):
 
     model = Model()
     guide = auto_class(model)
+    Elbo = promote_elbo(auto_class, Elbo)
     infer = SVI(
         model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False)
     )
@@ -864,6 +879,8 @@ def test_nested_autoguide(Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -894,6 +911,7 @@ def test_linear_regression_smoke(auto_class, Elbo):
     x, y = torch.randn(N, D), torch.randn(N)
     model = LinearRegression()
     guide = auto_class(model)
+    Elbo = promote_elbo(auto_class, Elbo)
     infer = SVI(
         model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False)
     )
@@ -1005,6 +1023,8 @@ def test_predictive(auto_class):
         AutoStructured,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 def test_replay_plates(auto_class, sample_shape):
@@ -1191,6 +1211,8 @@ def test_discrete_helpful_error(auto_class, init_loc_fn):
         AutoLaplaceApproximation,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.parametrize(
@@ -1224,6 +1246,8 @@ def test_sphere_helpful_error(auto_class, init_loc_fn):
         AutoLaplaceApproximation,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.parametrize(

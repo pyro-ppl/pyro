@@ -34,15 +34,30 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         finally:
             del self._outer_plates
 
+    def call(self, *args, **kwargs):
+        """
+        Method that calls :meth:`forward` and returns parameter values of the
+        guide as a `tuple` instead of a `dict`, which is a requirement for
+        JIT tracing. Unlike :meth:`forward`, this method can be traced by
+        :func:`torch.jit.trace_module`.
+
+        .. warning::
+            This method may be removed once PyTorch JIT tracer starts accepting
+            `dict` as valid return types. See
+            `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
+        """
+        result = self(*args, **kwargs)
+        return tuple(v for _, v in sorted(result.items()))
+
     def _remove_outer_plates(self, value: torch.Tensor, event_dim: int) -> torch.Tensor:
         """
         Removes particle plates from initial values of parameters.
         """
         for f in self._outer_plates:
-            dim = -f.dim - event_dim
+            dim = f.dim - event_dim
             if -value.dim() <= dim:
                 dim = dim + value.dim()
-                value = value[(slice(None),) * dim + slice(1)]
+                value = value[(slice(None),) * dim + (slice(1),)]
         for dim in range(value.dim() - event_dim):
             value = value.squeeze(0)
         return value
@@ -118,6 +133,7 @@ class AutoNormalMessenger(AutoMessenger):
         super().__init__(model)
         self.init_loc_fn = init_loc_fn
         self._init_scale = init_scale
+        self._computing_median = False
 
     @pyro_method
     def get_posterior(
@@ -126,6 +142,9 @@ class AutoNormalMessenger(AutoMessenger):
         prior: Distribution,
         upstream_values: Dict[str, torch.Tensor],
     ) -> Union[Distribution, torch.Tensor]:
+        if self._computing_median:
+            return self._get_posterior_median(name, prior)
+
         with helpful_support_errors({"name": name, "fn": prior}):
             transform = biject_to(prior.support)
         loc, scale = self._get_params(name, prior)
@@ -145,8 +164,7 @@ class AutoNormalMessenger(AutoMessenger):
 
         # Initialize.
         with poutine.block(), torch.no_grad():
-            with helpful_support_errors({"name": name, "fn": prior}):
-                transform = biject_to(prior.support)
+            transform = biject_to(prior.support)
             event_dim = transform.domain.event_dim
             constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
             unconstrained = transform.inv(constrained)
@@ -160,6 +178,18 @@ class AutoNormalMessenger(AutoMessenger):
             PyroParam(init_scale, constraint=constraints.positive, event_dim=event_dim),
         )
         return self._get_params(name, prior)
+
+    def median(self, *args, **kwargs):
+        self._computing_median = True
+        try:
+            return self(*args, **kwargs)
+        finally:
+            self._computing_median = False
+
+    def _get_posterior_median(self, name, prior):
+        transform = biject_to(prior.support)
+        loc, scale = self._get_params(name, prior)
+        return transform(loc)
 
 
 class AutoRegressiveMessenger(AutoMessenger):
@@ -234,8 +264,7 @@ class AutoRegressiveMessenger(AutoMessenger):
 
         # Initialize.
         with poutine.block(), torch.no_grad():
-            with helpful_support_errors({"name": name, "fn": prior}):
-                transform = biject_to(prior.support)
+            transform = biject_to(prior.support)
             event_dim = transform.domain.event_dim
             constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
             unconstrained = transform.inv(constrained)
