@@ -94,17 +94,10 @@ class ELBO(object, metaclass=ABCMeta):
         """
         # Ignore validation to allow model-enumerated sites absent from the guide.
         with poutine.block():
-            if isinstance(guide, poutine.messenger.Messenger):
-                # Subclasses of GuideMessenger.
-                with guide(*args, **kwargs):
-                    model(*args, **kwargs)
-                model_trace, guide_trace = guide.get_traces()
-            else:
-                # Traditional callable guides.
-                guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-                model_trace = poutine.trace(
-                    poutine.replay(model, trace=guide_trace)
-                ).get_trace(*args, **kwargs)
+            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(
+                poutine.replay(model, trace=guide_trace)
+            ).get_trace(*args, **kwargs)
         guide_trace = prune_subsample_sites(guide_trace)
         model_trace = prune_subsample_sites(model_trace)
         sites = [

@@ -27,15 +27,32 @@ class GuideMessenger(TraceMessenger, ABC):
     Derived classes must implement the :meth:`get_posterior` method.
     """
 
-    def __call__(self, *args, **kwargs):
+    def __init__(self, model):
+        super().__init__()
+        # Do not register model as submodule
+        self._model = (model,)
+
+    @property
+    def model(self):
+        return self._model[0]
+
+    def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         self.args_kwargs = args, kwargs
         self.upstream_values = OrderedDict()
-        return self
+        try:
+            with self:
+                self.model(*args, **kwargs)
+        finally:
+            del self.args_kwargs
+            del self.upstream_values
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        del self.args_kwargs
-        del self.upstream_values
-        return super().__exit__(exc_type, exc_value, traceback)
+        model_trace, guide_trace = self.get_traces()
+        samples = {
+            name: site["value"]
+            for name, site in model_trace.nodes.items()
+            if site["type"] == "sample"
+        }
+        return samples
 
     def _pyro_sample(self, msg):
         if msg["is_observed"] or site_is_subsample(msg):
@@ -51,6 +68,12 @@ class GuideMessenger(TraceMessenger, ABC):
 
     def _pyro_post_sample(self, msg):
         self.upstream_values[msg["name"]] = msg["value"]
+
+        # Manually apply outer plates.
+        prior = msg["infer"].get("prior")
+        if prior is not None and prior.batch_shape != msg["fn"].batch_shape:
+            msg["infer"]["prior"] = prior.expand(msg["fn"].batch_shape)
+
         return super()._pyro_post_sample(msg)
 
     @abstractmethod
@@ -114,28 +137,15 @@ class EffectMixin(ELBO):
     def _get_trace(self, model, guide, args, kwargs):
         # This differs from Trace_ELBO in that the guide is assumed to be an
         # effect handler.
-        with guide(*args, **kwargs):
-            model(*args, **kwargs)
+        guide(*args, **kwargs)
         while not isinstance(guide, GuideMessenger):
             guide = guide.func.args[1]  # unwrap plates
         model_trace, guide_trace = guide.get_traces()
-        if self.max_plate_nesting == -float("inf"):
-            self.max_plate_nesting = max(
-                [0]
-                + [
-                    -f.dim
-                    for site in guide.trace.nodes.values()
-                    for f in site["cond_indep_stack"]
-                    if f.vectorized
-                ]
-            )
 
         # The rest follows pyro.infer.enum.get_importance_trace().
         max_plate_nesting = self.max_plate_nesting
         if is_validation_enabled():
             check_model_guide_match(model_trace, guide_trace, max_plate_nesting)
-        guide_trace = prune_subsample_sites(guide_trace)
-        model_trace = prune_subsample_sites(model_trace)
         model_trace.compute_log_prob()
         guide_trace.compute_score_parts()
         if is_validation_enabled():

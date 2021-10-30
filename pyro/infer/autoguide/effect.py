@@ -28,11 +28,14 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
 
     # Drop args for backwards compatibility with AutoGuide.
     def __init__(self, model, *, init_loc_fn=None):
-        super().__init__()
+        super().__init__(model)
 
     def __call__(self, *args, **kwargs):
         self._outer_plates = get_plates()
-        return super().__call__(*args, **kwargs)
+        try:
+            return super().__call__(*args, **kwargs)
+        finally:
+            del self._outer_plates
 
     def _remove_outer_plates(self, value, event_dim):
         """

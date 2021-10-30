@@ -1341,12 +1341,8 @@ def test_exact(Guide):
     with torch.no_grad():
         # Check moments.
         with pyro.plate("particles", 10000, dim=-2):
-            if isinstance(guide, poutine.messenger.Messenger):
-                with guide(data):
-                    samples = model(data)
-            else:
-                guide_trace = poutine.trace(guide).get_trace(data)
-                samples = poutine.replay(model, guide_trace)(data)
+            guide_trace = poutine.trace(guide).get_trace(data)
+            samples = poutine.replay(model, guide_trace)(data)
         actual_mean = samples.mean().item()
         actual_std = samples.std().item()
         assert_close(actual_mean, expected_mean, atol=0.05)
@@ -1407,12 +1403,8 @@ def test_exact_batch(Guide):
     with torch.no_grad():
         # Check moments.
         with pyro.plate("particles", 10000, dim=-2):
-            if isinstance(guide, poutine.messenger.Messenger):
-                with guide(data):
-                    samples = model(data)
-            else:
-                guide_trace = poutine.trace(guide).get_trace(data)
-                samples = poutine.replay(model, guide_trace)(data)
+            guide_trace = poutine.trace(guide).get_trace(data)
+            samples = poutine.replay(model, guide_trace)(data)
         actual_mean = samples.mean(0)
         actual_std = samples.std(0)
         assert_close(actual_mean, expected_mean, atol=0.05)
@@ -1488,12 +1480,8 @@ def test_exact_tree(Guide):
     with torch.no_grad():
         # Check moments.
         with pyro.plate("particles", 10000, dim=-2):
-            if isinstance(guide, poutine.messenger.Messenger):
-                with guide(data):
-                    samples = model(data)
-            else:
-                guide_trace = poutine.trace(guide).get_trace(data)
-                samples = poutine.replay(model, guide_trace)(data)
+            guide_trace = poutine.trace(guide).get_trace(data)
+            samples = poutine.replay(model, guide_trace)(data)
         for name in ["x", "y"]:
             actual_mean = samples[name].mean(0).squeeze()
             actual_std = samples[name].std(0).squeeze()
