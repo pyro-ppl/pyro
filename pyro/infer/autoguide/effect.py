@@ -31,6 +31,7 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         parameters should be shared. This is useful for subsampling, where a
         guide parameter can be shared across all plates.
     """
+
     def __init__(self, model: Callable, *, amortized_plates: Tuple[str, ...] = ()):
         self.amortized_plates = amortized_plates
         super().__init__(model)
