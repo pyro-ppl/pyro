@@ -78,7 +78,6 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
                 value = periodic_repeat(value, full_size, dim).contiguous()
         for dim in range(value.dim() - event_dim):
             value = value.squeeze(0)
-        print(f"DEBUG {tuple(value.shape)}")
         return value
 
 
