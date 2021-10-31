@@ -41,6 +41,7 @@ from pyro.infer.autoguide import (
     AutoMultivariateNormal,
     AutoNormal,
     AutoNormalMessenger,
+    AutoHierarchicalNormal,
     AutoRegressiveMessenger,
     AutoStructured,
     init_to_feasible,
@@ -128,6 +129,7 @@ def test_scores(auto_class):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormal,
         AutoRegressiveMessenger,
     ],
 )
@@ -385,6 +387,7 @@ class AutoStructured_median(AutoStructured):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormal,
     ],
 )
 @pytest.mark.parametrize("Elbo", [JitTrace_ELBO, JitTraceGraph_ELBO, JitTraceEnum_ELBO])
@@ -457,6 +460,7 @@ def serialization_model():
             ],
         ),
         AutoNormalMessenger,
+        AutoHierarchicalNormal,
         xfail_param(AutoRegressiveMessenger, reason="jit does not support _Dirichlet"),
     ],
 )
@@ -724,6 +728,7 @@ def test_unpack_latent():
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormal,
     ],
 )
 def test_init_loc_fn(auto_class):
@@ -789,6 +794,7 @@ def test_init_scale(auto_class, init_scale):
         functools.partial(AutoNormal, init_loc_fn=init_to_median),
         functools.partial(AutoGaussian, init_loc_fn=init_to_median),
         AutoNormalMessenger,
+        AutoHierarchicalNormal,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
