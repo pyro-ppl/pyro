@@ -1,16 +1,16 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, Tuple, Union
 
 import torch
 from torch.distributions import biject_to, constraints
 
 import pyro.distributions as dist
-import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.infer.effect_elbo import GuideMessenger
 from pyro.nn.module import PyroModule, PyroParam, pyro_method
+from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.runtime import get_plates
 
 from .initialization import init_to_feasible, init_to_mean
@@ -25,7 +25,15 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
     """
     EXPERIMENTAL Base class for :class:`pyro.infer.effect_elbo.GuideMessenger`
     autoguides.
+
+    :param callable model: A Pyro model.
+    :param tuple amortized_plates: A tuple of names of plates over which guide
+        parameters should be shared. This is useful for subsampling, where a
+        guide parameter can be shared across all plates.
     """
+    def __init__(self, model: Callable, *, amortized_plates: Tuple[str, ...] = ()):
+        self.amortized_plates = amortized_plates
+        super().__init__(model)
 
     @pyro_method
     def __call__(self, *args, **kwargs):
@@ -33,7 +41,7 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         # those parameters by a particle plate, in case the first time this
         # guide is called is inside a particle plate. We assume all plates
         # outside the model are particle plates.
-        self._outer_plates = get_plates()
+        self._outer_plates = tuple(f.name for f in get_plates())
         try:
             return super().__call__(*args, **kwargs)
         finally:
@@ -54,17 +62,22 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         result = self(*args, **kwargs)
         return tuple(v for _, v in sorted(result.items()))
 
+    @torch.no_grad()
     def _remove_outer_plates(self, value: torch.Tensor, event_dim: int) -> torch.Tensor:
         """
         Removes particle plates from initial values of parameters.
         """
-        for f in self._outer_plates:
+        for f in get_plates():
+            full_size = getattr(f, "full_size", f.size)
             dim = f.dim - event_dim
-            if -value.dim() <= dim:
-                dim = dim + value.dim()
-                value = value[(slice(None),) * dim + (slice(1),)]
+            if f in self._outer_plates or f.name in self.amortized_plates:
+                if -value.dim() <= dim:
+                    value = value.mean(dim, keepdim=True)
+            elif f.size != full_size:
+                value = periodic_repeat(value, full_size, dim).contiguous()
         for dim in range(value.dim() - event_dim):
             value = value.squeeze(0)
+        print(f"DEBUG {tuple(value.shape)}")
         return value
 
 
@@ -128,6 +141,9 @@ class AutoNormalMessenger(AutoMessenger):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
+    :param tuple amortized_plates: A tuple of names of plates over which guide
+        parameters should be shared. This is useful for subsampling, where a
+        guide parameter can be shared across all plates.
     """
 
     def __init__(
@@ -136,10 +152,11 @@ class AutoNormalMessenger(AutoMessenger):
         *,
         init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
         init_scale: float = 0.1,
+        amortized_plates: Tuple[str, ...] = (),
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
-        super().__init__(model)
+        super().__init__(model, amortized_plates=amortized_plates)
         self.init_loc_fn = init_loc_fn
         self._init_scale = init_scale
         self._computing_median = False
@@ -171,7 +188,7 @@ class AutoNormalMessenger(AutoMessenger):
             pass
 
         # Initialize.
-        with poutine.block(), torch.no_grad():
+        with torch.no_grad():
             transform = biject_to(prior.support)
             event_dim = transform.domain.event_dim
             constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
@@ -232,6 +249,9 @@ class AutoRegressiveMessenger(AutoMessenger):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
+    :param tuple amortized_plates: A tuple of names of plates over which guide
+        parameters should be shared. This is useful for subsampling, where a
+        guide parameter can be shared across all plates.
     """
 
     def __init__(
@@ -240,10 +260,11 @@ class AutoRegressiveMessenger(AutoMessenger):
         *,
         init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
         init_scale: float = 0.1,
+        amortized_plates: Tuple[str, ...] = (),
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
-        super().__init__(model)
+        super().__init__(model, amortized_plates=amortized_plates)
         self.init_loc_fn = init_loc_fn
         self._init_scale = init_scale
 
@@ -273,7 +294,7 @@ class AutoRegressiveMessenger(AutoMessenger):
             pass
 
         # Initialize.
-        with poutine.block(), torch.no_grad():
+        with torch.no_grad():
             transform = biject_to(prior.support)
             event_dim = transform.domain.event_dim
             constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()

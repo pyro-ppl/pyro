@@ -1048,7 +1048,15 @@ def test_replay_plates(auto_class, sample_shape):
     assert d.shape == sample_shape + (2, 3)
 
 
-@pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal])
+@pytest.mark.parametrize(
+    "auto_class",
+    [
+        AutoDelta,
+        AutoNormal,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
+    ],
+)
 def test_subsample_model(auto_class):
     def model(x, y=None, batch_size=None):
         loc = pyro.param("loc", lambda: torch.tensor(0.0))
@@ -1074,9 +1082,54 @@ def test_subsample_model(auto_class):
 
     pyro.get_param_store().clear()
     pyro.set_rng_seed(123456789)
-    svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
+    Elbo = promote_elbo(auto_class, Trace_ELBO)
+    svi = SVI(model, guide, Adam({"lr": 0.02}), Elbo())
     for step in range(5):
         svi.step(x, y, batch_size=batch_size)
+
+
+@pytest.mark.parametrize(
+    "auto_class",
+    [
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
+    ],
+)
+def test_subsample_model_amortized(auto_class):
+    def model(x, y=None, batch_size=None):
+        loc = pyro.param("loc", lambda: torch.tensor(0.0))
+        scale = pyro.param(
+            "scale", lambda: torch.tensor(1.0), constraint=constraints.positive
+        )
+        with pyro.plate("batch", len(x), subsample_size=batch_size):
+            batch_x = pyro.subsample(x, event_dim=0)
+            batch_y = pyro.subsample(y, event_dim=0) if y is not None else None
+            mean = loc + scale * batch_x
+            sigma = pyro.sample("sigma", dist.LogNormal(0.0, 1.0))
+            return pyro.sample("obs", dist.Normal(mean, sigma), obs=batch_y)
+
+    guide1 = auto_class(model)
+    guide2 = auto_class(model, amortized_plates=("batch",))
+
+    full_size = 50
+    batch_size = 20
+    pyro.set_rng_seed(123456789)
+    x = torch.randn(full_size)
+    with torch.no_grad():
+        y = model(x)
+    assert y.shape == x.shape
+
+    for guide in guide1, guide2:
+        pyro.get_param_store().clear()
+        pyro.set_rng_seed(123456789)
+        svi = SVI(model, guide, Adam({"lr": 0.02}), Effect_ELBO())
+        for step in range(5):
+            svi.step(x, y, batch_size=batch_size)
+
+    params1 = dict(guide1.named_parameters())
+    params2 = dict(guide2.named_parameters())
+    assert params1["locs.sigma_unconstrained"].shape == (50,)
+    assert params2["locs.sigma_unconstrained"].shape == ()
 
 
 @pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
