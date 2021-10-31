@@ -233,7 +233,7 @@ class AutoHierarchicalNormal(AutoNormalMessenger):
         init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
         init_scale: float = 0.1,
         init_weight: float = 1.0,
-        hierarchical_sites: Optional(list) = None,
+        hierarchical_sites: Optional[list] = None,
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
@@ -289,7 +289,7 @@ class AutoHierarchicalNormal(AutoNormalMessenger):
             init_loc = self._remove_outer_plates(unconstrained, event_dim)
             init_scale = torch.full_like(init_loc, self._init_scale)
             # weight is a single value parameter
-            init_weight = torch.full_like((), self._init_weight)
+            init_weight = torch.full((), self._init_weight)
             # if site is hierarchical substract contribution of dependencies from init_loc
             if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
                 init_loc = init_loc - init_weight * prior.mean
