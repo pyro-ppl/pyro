@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pyro.infer.autoguide.effect import (
+    AutoHierarchicalNormal,
     AutoMessenger,
     AutoNormalMessenger,
-    AutoHierarchicalNormal,
     AutoRegressiveMessenger,
 )
 from pyro.infer.autoguide.gaussian import AutoGaussian
