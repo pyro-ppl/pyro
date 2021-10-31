@@ -292,7 +292,7 @@ class AutoHierarchicalNormal(AutoNormalMessenger):
             init_weight = torch.full((), self._init_weight)
             # if site is hierarchical substract contribution of dependencies from init_loc
             if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
-                init_loc = init_loc - init_weight * prior.mean
+                init_loc = init_loc - init_weight * transform.inv(prior.mean)
 
         deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
         deep_setattr(
