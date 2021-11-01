@@ -23,7 +23,7 @@ class AutoMessengerMeta(type(GuideMessenger), type(PyroModule)):
 
 class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
     """
-    Base class for :class:`pyro.poutine.guide.GuideMessenger` autoguides.
+    Base class for :class:`~pyro.poutine.guide.GuideMessenger` autoguides.
 
     :param callable model: A Pyro model.
     :param tuple amortized_plates: A tuple of names of plates over which guide
@@ -82,8 +82,7 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
 
 class AutoNormalMessenger(AutoMessenger):
     """
-    Automatic :class:`~pyro.poutine.guide.GuideMessenger` with mean-field
-    normal posterior.
+    :class:`AutoMessenger` with mean-field normal posterior.
 
     The mean-field posterior at any site is a transformed normal distribution.
     This posterior is equivalent to :class:`~pyro.infer.autoguide.AutoNormal`
@@ -214,8 +213,8 @@ class AutoNormalMessenger(AutoMessenger):
 
 class AutoRegressiveMessenger(AutoMessenger):
     """
-    Automatic :class:`~pyro.poutine.guide.GuideMessenger` with prior dependency
-    structure.
+    :class:`AutoMessenger` with recursively affine-transformed priors using
+    prior dependency structure.
 
     The posterior at any site is a learned affine transform of the prior,
     conditioned on upstream posterior samples. The affine transform operates in
