@@ -250,12 +250,13 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
         *,
         init_loc_fn: Callable = init_to_mean(fallback=init_to_feasible),
         init_scale: float = 0.1,
+        amortized_plates: Tuple[str, ...] = (),
         init_weight: float = 1.0,
         hierarchical_sites: Optional[list] = None,
     ):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
-        super().__init__(model)
+        super().__init__(model, amortized_plates=amortized_plates)
         self.init_loc_fn = init_loc_fn
         self._init_scale = init_scale
         self._init_weight = init_weight
@@ -263,10 +264,7 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
         self._computing_median = False
 
     def get_posterior(
-        self,
-        name: str,
-        prior: Distribution,
-        upstream_values: Dict[str, torch.Tensor],
+        self, name: str, prior: Distribution
     ) -> Union[Distribution, torch.Tensor]:
         if self._computing_median:
             return self._get_posterior_median(name, prior)
@@ -284,7 +282,7 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             return posterior
         else:
             # Fall back to mean field when hierarchical_sites list is not empty and site not in the list.
-            return super().get_posterior(name, prior, upstream_values)
+            return super().get_posterior(name, prior)
 
     def _get_params(self, name: str, prior: Distribution):
         try:
@@ -299,7 +297,7 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             pass
 
         # Initialize.
-        with poutine.block(), torch.no_grad():
+        with torch.no_grad():
             transform = biject_to(prior.support)
             event_dim = transform.domain.event_dim
             constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
@@ -341,8 +339,14 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
                         event_dim=event_dim,
                     ),
                 )
-
         return self._get_params(name, prior)
+
+    def median(self, *args, **kwargs):
+        self._computing_median = True
+        try:
+            return self(*args, **kwargs)
+        finally:
+            self._computing_median = False
 
     def _get_posterior_median(self, name, prior):
         transform = biject_to(prior.support)
