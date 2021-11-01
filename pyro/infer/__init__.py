@@ -4,7 +4,6 @@
 from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior, TracePredictive
 from pyro.infer.csis import CSIS
 from pyro.infer.discrete import infer_discrete
-from pyro.infer.effect_elbo import Effect_ELBO, GuideMessenger, JitEffect_ELBO
 from pyro.infer.elbo import ELBO
 from pyro.infer.energy_distance import EnergyDistance
 from pyro.infer.enum import config_enumerate
@@ -28,16 +27,17 @@ from pyro.infer.tracetmc_elbo import TraceTMC_ELBO
 from pyro.infer.util import enable_validation, is_validation_enabled
 
 __all__ = [
+    "config_enumerate",
     "CSIS",
+    "enable_validation",
+    "is_validation_enabled",
     "ELBO",
-    "Effect_ELBO",
     "EmpiricalMarginal",
     "EnergyDistance",
-    "GuideMessenger",
     "HMC",
-    "IMQSteinKernel",
     "Importance",
-    "JitEffect_ELBO",
+    "IMQSteinKernel",
+    "infer_discrete",
     "JitTraceEnum_ELBO",
     "JitTraceGraph_ELBO",
     "JitTraceMeanField_ELBO",
@@ -51,17 +51,13 @@ __all__ = [
     "SMCFilter",
     "SVGD",
     "SVI",
+    "TraceTMC_ELBO",
     "TraceEnum_ELBO",
     "TraceGraph_ELBO",
     "TraceMeanField_ELBO",
     "TracePosterior",
     "TracePredictive",
-    "TraceTMC_ELBO",
     "TraceTailAdaptive_ELBO",
     "Trace_ELBO",
     "Trace_MMD",
-    "config_enumerate",
-    "enable_validation",
-    "infer_discrete",
-    "is_validation_enabled",
 ]

@@ -21,6 +21,7 @@ from .handlers import (
     trace,
     uncondition,
 )
+from .messenger import unwrap
 from .runtime import NonlocalExit, get_mask
 from .trace_struct import Trace
 from .util import enable_validation, is_validation_enabled
@@ -49,4 +50,5 @@ __all__ = [
     "trace",
     "Trace",
     "uncondition",
+    "unwrap",
 ]

@@ -49,12 +49,23 @@ def get_importance_trace(
     Returns a single trace from the guide, which can optionally be detached,
     and the model that is run against it.
     """
-    guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
-    if detach:
-        guide_trace.detach_()
-    model_trace = poutine.trace(
-        poutine.replay(model, trace=guide_trace), graph_type=graph_type
-    ).get_trace(*args, **kwargs)
+    # Dispatch between callables vs GuideMessengers.
+    unwrapped_guide = poutine.unwrap(guide)
+    if isinstance(unwrapped_guide, poutine.messenger.Messenger):
+        if detach:
+            raise NotImplementedError("GuideMessenger does not support detach")
+        guide(*args, **kwargs)
+        model_trace, guide_trace = unwrapped_guide.get_traces()
+    else:
+        guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(
+            *args, **kwargs
+        )
+        if detach:
+            guide_trace.detach_()
+        model_trace = poutine.trace(
+            poutine.replay(model, trace=guide_trace), graph_type=graph_type
+        ).get_trace(*args, **kwargs)
+
     if is_validation_enabled():
         check_model_guide_match(model_trace, guide_trace, max_plate_nesting)
 
