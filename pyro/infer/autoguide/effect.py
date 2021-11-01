@@ -290,10 +290,10 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             unconstrained = transform.inv(constrained)
             init_loc = self._remove_outer_plates(unconstrained, event_dim)
             init_scale = torch.full_like(init_loc, self._init_scale)
-            if weight_type == "scalar":
+            if self.weight_type == "scalar":
                 # weight is a single value parameter
                 init_weight = torch.full((), self._init_weight)
-            if weight_type == "element-wise":
+            if self.weight_type == "element-wise":
                 # weight is element-wise
                 init_weight = torch.full_like(init_loc, self._init_weight)
             # if site is hierarchical substract contribution of dependencies from init_loc
@@ -307,14 +307,14 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             PyroParam(init_scale, constraint=constraints.positive, event_dim=event_dim),
         )
         if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
-            if weight_type == "scalar":
+            if self.weight_type == "scalar":
                 # weight is a single value parameter
                 deep_setattr(
                     self,
                     "weights." + name,
                     PyroParam(init_weight, constraint=constraints.positive),
                 )
-            if weight_type == "element-wise":
+            if self.weight_type == "element-wise":
                 # weight is element-wise
                 deep_setattr(
                     self,
