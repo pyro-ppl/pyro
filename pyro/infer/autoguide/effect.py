@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Tuple, Optional, Union
+from typing import Callable, Optional, Tuple, Union
 
 import torch
 from torch.distributions import biject_to, constraints
