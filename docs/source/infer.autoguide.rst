@@ -125,6 +125,30 @@ AutoGaussian
     :member-order: bysource
     :show-inheritance:
 
+AutoMessenger
+-------------
+.. autoclass:: pyro.infer.autoguide.AutoMessenger
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :show-inheritance:
+
+AutoNormalMessenger
+-------------------
+.. autoclass:: pyro.infer.autoguide.AutoNormalMessenger
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :show-inheritance:
+
+AutoRegressiveMessenger
+-----------------------
+.. autoclass:: pyro.infer.autoguide.AutoRegressiveMessenger
+    :members:
+    :undoc-members:
+    :member-order: bysource
+    :show-inheritance:
+
 .. _autoguide-initialization:
 
 Initialization

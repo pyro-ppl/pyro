@@ -37,6 +37,8 @@ from pyro.infer.autoguide import (
     AutoLowRankMultivariateNormal,
     AutoMultivariateNormal,
     AutoNormal,
+    AutoNormalMessenger,
+    AutoRegressiveMessenger,
     AutoStructured,
     init_to_feasible,
     init_to_mean,
@@ -50,11 +52,23 @@ from pyro.ops.gaussian import Gaussian
 from pyro.optim import Adam, ClippedAdam
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
-from tests.common import assert_close, assert_equal, xfail_if_not_implemented
+from tests.common import (
+    assert_close,
+    assert_equal,
+    xfail_if_not_implemented,
+    xfail_param,
+)
 
 AutoGaussianFunsor = pytest.param(
     AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
 )
+
+
+def xfail_messenger(auto_class, Elbo):
+    if isinstance(auto_class, type):
+        if issubclass(auto_class, poutine.messenger.Messenger):
+            if Elbo in (TraceEnum_ELBO, JitTraceEnum_ELBO):
+                pytest.xfail(reason="not implemented")
 
 
 @pytest.mark.parametrize(
@@ -104,9 +118,13 @@ def test_scores(auto_class):
         AutoLaplaceApproximation,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 def test_factor(auto_class, Elbo):
+    xfail_messenger(auto_class, Elbo)
+
     def model(log_factor):
         pyro.sample("z1", dist.Normal(0.0, 1.0))
         pyro.factor("f1", log_factor)
@@ -202,10 +220,13 @@ class AutoStructured_shapes(AutoStructured):
         AutoStructured_shapes,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_shapes(auto_class, init_loc_fn, Elbo, num_particles):
+    xfail_messenger(auto_class, Elbo)
+
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
         pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1))
@@ -356,10 +377,13 @@ class AutoStructured_median(AutoStructured):
         AutoStructured_median,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [JitTrace_ELBO, JitTraceGraph_ELBO, JitTraceEnum_ELBO])
 def test_median(auto_class, Elbo):
+    xfail_messenger(auto_class, Elbo)
+
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
         pyro.sample("y", dist.LogNormal(0.0, 1.0))
@@ -388,6 +412,13 @@ def test_median(auto_class, Elbo):
     else:
         assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
+
+
+def serialization_model():
+    pyro.sample("x", dist.Normal(0.0, 1.0))
+    with pyro.plate("plate", 2):
+        pyro.sample("y", dist.LogNormal(0.0, 1.0))
+        pyro.sample("z", dist.Beta(2.0, 2.0))
 
 
 @pytest.mark.parametrize("jit", [False, True], ids=["nojit", "jit"])
@@ -419,17 +450,12 @@ def test_median(auto_class, Elbo):
                 ),
             ],
         ),
+        AutoNormalMessenger,
+        xfail_param(AutoRegressiveMessenger, reason="jit does not support _Dirichlet"),
     ],
 )
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_serialization(auto_class, Elbo, jit):
-    def model():
-        pyro.sample("x", dist.Normal(0.0, 1.0))
-        with pyro.plate("plate", 2):
-            pyro.sample("y", dist.LogNormal(0.0, 1.0))
-            pyro.sample("z", dist.Beta(2.0, 2.0))
-
-    guide = auto_class(model)
+def test_serialization(auto_class, jit):
+    guide = auto_class(serialization_model)
     guide()
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
@@ -691,6 +717,7 @@ def test_unpack_latent():
         AutoLowRankMultivariateNormal,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
     ],
 )
 def test_init_loc_fn(auto_class):
@@ -755,10 +782,13 @@ def test_init_scale(auto_class, init_scale):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoNormal, init_loc_fn=init_to_median),
         functools.partial(AutoGaussian, init_loc_fn=init_to_median),
+        AutoNormalMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median_module(auto_class, Elbo):
+    xfail_messenger(auto_class, Elbo)
+
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
@@ -843,10 +873,13 @@ def test_nested_autoguide(Elbo):
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_linear_regression_smoke(auto_class, Elbo):
+    xfail_messenger(auto_class, Elbo)
     N, D = 10, 3
 
     class RandomLinear(nn.Linear, PyroModule):
@@ -984,6 +1017,8 @@ def test_predictive(auto_class):
         AutoStructured,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 def test_replay_plates(auto_class, sample_shape):
@@ -1008,7 +1043,15 @@ def test_replay_plates(auto_class, sample_shape):
     assert d.shape == sample_shape + (2, 3)
 
 
-@pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal])
+@pytest.mark.parametrize(
+    "auto_class",
+    [
+        AutoDelta,
+        AutoNormal,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
+    ],
+)
 def test_subsample_model(auto_class):
     def model(x, y=None, batch_size=None):
         loc = pyro.param("loc", lambda: torch.tensor(0.0))
@@ -1037,6 +1080,50 @@ def test_subsample_model(auto_class):
     svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
     for step in range(5):
         svi.step(x, y, batch_size=batch_size)
+
+
+@pytest.mark.parametrize(
+    "auto_class",
+    [
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
+    ],
+)
+def test_subsample_model_amortized(auto_class):
+    def model(x, y=None, batch_size=None):
+        loc = pyro.param("loc", lambda: torch.tensor(0.0))
+        scale = pyro.param(
+            "scale", lambda: torch.tensor(1.0), constraint=constraints.positive
+        )
+        with pyro.plate("batch", len(x), subsample_size=batch_size):
+            batch_x = pyro.subsample(x, event_dim=0)
+            batch_y = pyro.subsample(y, event_dim=0) if y is not None else None
+            mean = loc + scale * batch_x
+            sigma = pyro.sample("sigma", dist.LogNormal(0.0, 1.0))
+            return pyro.sample("obs", dist.Normal(mean, sigma), obs=batch_y)
+
+    guide1 = auto_class(model)
+    guide2 = auto_class(model, amortized_plates=("batch",))
+
+    full_size = 50
+    batch_size = 20
+    pyro.set_rng_seed(123456789)
+    x = torch.randn(full_size)
+    with torch.no_grad():
+        y = model(x)
+    assert y.shape == x.shape
+
+    for guide in guide1, guide2:
+        pyro.get_param_store().clear()
+        pyro.set_rng_seed(123456789)
+        svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
+        for step in range(5):
+            svi.step(x, y, batch_size=batch_size)
+
+    params1 = dict(guide1.named_parameters())
+    params2 = dict(guide2.named_parameters())
+    assert params1["locs.sigma_unconstrained"].shape == (50,)
+    assert params2["locs.sigma_unconstrained"].shape == ()
 
 
 @pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
@@ -1170,6 +1257,8 @@ def test_discrete_helpful_error(auto_class, init_loc_fn):
         AutoLaplaceApproximation,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.parametrize(
@@ -1203,6 +1292,8 @@ def test_sphere_helpful_error(auto_class, init_loc_fn):
         AutoLaplaceApproximation,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 @pytest.mark.parametrize(
@@ -1278,6 +1369,8 @@ class AutoStructured_exact_mvn(AutoStructured):
         AutoStructured_exact_mvn,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 def test_exact(Guide):
@@ -1306,9 +1399,10 @@ def test_exact(Guide):
     expected_loss = float(g.event_logsumexp() - g.condition(data).event_logsumexp())
 
     guide = Guide(model)
-    elbo = JitTrace_ELBO(
-        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
-    )
+    Elbo = JitTrace_ELBO
+    if Guide is AutoRegressiveMessenger:
+        Elbo = Trace_ELBO  # currently fails with jit
+    elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
@@ -1342,6 +1436,8 @@ def test_exact(Guide):
         AutoStructured_exact_mvn,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 def test_exact_batch(Guide):
@@ -1367,9 +1463,10 @@ def test_exact_batch(Guide):
     )
 
     guide = Guide(model)
-    elbo = JitTrace_ELBO(
-        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
-    )
+    Elbo = JitTrace_ELBO
+    if Guide is AutoRegressiveMessenger:
+        Elbo = Trace_ELBO  # currently fails with jit
+    elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
@@ -1402,10 +1499,17 @@ def test_exact_batch(Guide):
         AutoStructured,
         AutoGaussian,
         AutoGaussianFunsor,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
     ],
 )
 def test_exact_tree(Guide):
-    is_exact = Guide not in (AutoNormal, AutoDiagonalNormal)
+    is_exact = Guide not in (
+        AutoNormal,
+        AutoDiagonalNormal,
+        AutoNormalMessenger,
+        AutoRegressiveMessenger,
+    )
 
     def model(data):
         x = pyro.sample("x", dist.Normal(0, 1))
@@ -1437,9 +1541,10 @@ def test_exact_tree(Guide):
     expected_loss = float(g.event_logsumexp() - g_cond.event_logsumexp())
 
     guide = Guide(model)
-    elbo = JitTrace_ELBO(
-        num_particles=100, vectorize_particles=True, ignore_jit_warnings=True
-    )
+    Elbo = JitTrace_ELBO
+    if Guide is AutoRegressiveMessenger:
+        Elbo = Trace_ELBO  # currently fails with jit
+    elbo = Elbo(num_particles=100, vectorize_particles=True, ignore_jit_warnings=True)
     num_steps = 500
     optim = ClippedAdam({"lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
     svi = SVI(model, guide, optim, elbo)
