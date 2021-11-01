@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pyro.infer.autoguide.effect import (
-    AutoHierarchicalNormal,
+    AutoHierarchicalNormalMessenger,
     AutoMessenger,
     AutoNormalMessenger,
     AutoRegressiveMessenger,
@@ -51,7 +51,7 @@ __all__ = [
     "AutoMultivariateNormal",
     "AutoNormal",
     "AutoNormalMessenger",
-    "AutoHierarchicalNormal",
+    "AutoHierarchicalNormalMessenger",
     "AutoNormalizingFlow",
     "AutoRegressiveMessenger",
     "AutoStructured",

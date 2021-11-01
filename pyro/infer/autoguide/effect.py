@@ -196,7 +196,7 @@ class AutoNormalMessenger(AutoMessenger):
         return transform(loc)
 
 
-class AutoHierarchicalNormal(AutoNormalMessenger):
+class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
     """
     EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
     intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
