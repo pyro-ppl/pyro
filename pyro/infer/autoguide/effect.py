@@ -1,16 +1,16 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, Tuple, Union
+from typing import Callable, Tuple, Union
 
 import torch
 from torch.distributions import biject_to, constraints
 
 import pyro.distributions as dist
 from pyro.distributions.distribution import Distribution
-from pyro.infer.effect_elbo import GuideMessenger
 from pyro.nn.module import PyroModule, PyroParam, pyro_method
 from pyro.ops.tensor_utils import periodic_repeat
+from pyro.poutine.guide import GuideMessenger
 from pyro.poutine.runtime import get_plates
 
 from .initialization import init_to_feasible, init_to_mean
@@ -23,8 +23,7 @@ class AutoMessengerMeta(type(GuideMessenger), type(PyroModule)):
 
 class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
     """
-    EXPERIMENTAL Base class for :class:`pyro.infer.effect_elbo.GuideMessenger`
-    autoguides.
+    Base class for :class:`pyro.poutine.guide.GuideMessenger` autoguides.
 
     :param callable model: A Pyro model.
     :param tuple amortized_plates: A tuple of names of plates over which guide
@@ -83,9 +82,8 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
 
 class AutoNormalMessenger(AutoMessenger):
     """
-    EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
-    intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
-    similar.
+    Automatic :class:`~pyro.poutine.guide.GuideMessenger` with mean-field
+    normal posterior.
 
     The mean-field posterior at any site is a transformed normal distribution.
     This posterior is equivalent to :class:`~pyro.infer.autoguide.AutoNormal`
@@ -103,7 +101,7 @@ class AutoNormalMessenger(AutoMessenger):
             pyro.sample("obs", dist.Normal(c, 1), obs=data)
 
         class MyGuideMessenger(AutoNormalMessenger):
-            def get_posterior(self, name, prior, upstream_values):
+            def get_posterior(self, name, prior):
                 if name == "c":
                     # Use a custom distribution at site c.
                     bias = pyro.param("c_bias", lambda: torch.zeros(()))
@@ -111,19 +109,19 @@ class AutoNormalMessenger(AutoMessenger):
                                         constraint=constraints.positive)
                     scale = pyro.param("c_scale", lambda: torch.ones(()),
                                        constraint=constraints.positive)
-                    a = upstream_values["a"]
-                    b = upstream_values["b"]
+                    a = self.upstream_value("a")
+                    b = self.upstream_value("b")
                     loc = bias + weight * (a + b)
                     return dist.Normal(loc, scale)
                 # Fall back to mean field.
-                return super().get_posterior(name, prior, upstream_values)
+                return super().get_posterior(name, prior)
 
     Note that above we manually computed ``loc = bias + weight * (a + b)``.
     Alternatively we could reuse the model-side computation by setting ``loc =
     bias + weight * prior.loc``::
 
         class MyGuideMessenger_v2(AutoNormalMessenger):
-            def get_posterior(self, name, prior, upstream_values):
+            def get_posterior(self, name, prior):
                 if name == "c":
                     # Use a custom distribution at site c.
                     bias = pyro.param("c_bias", lambda: torch.zeros(()))
@@ -134,7 +132,7 @@ class AutoNormalMessenger(AutoMessenger):
                     loc = bias + weight * prior.loc
                     return dist.Normal(loc, scale)
                 # Fall back to mean field.
-                return super().get_posterior(name, prior, upstream_values)
+                return super().get_posterior(name, prior)
 
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -162,10 +160,7 @@ class AutoNormalMessenger(AutoMessenger):
         self._computing_median = False
 
     def get_posterior(
-        self,
-        name: str,
-        prior: Distribution,
-        upstream_values: Dict[str, torch.Tensor],
+        self, name: str, prior: Distribution
     ) -> Union[Distribution, torch.Tensor]:
         if self._computing_median:
             return self._get_posterior_median(name, prior)
@@ -219,9 +214,8 @@ class AutoNormalMessenger(AutoMessenger):
 
 class AutoRegressiveMessenger(AutoMessenger):
     """
-    EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
-    intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
-    similar.
+    Automatic :class:`~pyro.poutine.guide.GuideMessenger` with prior dependency
+    structure.
 
     The posterior at any site is a learned affine transform of the prior,
     conditioned on upstream posterior samples. The affine transform operates in
@@ -232,7 +226,7 @@ class AutoRegressiveMessenger(AutoMessenger):
     e.g.::
 
         class MyGuideMessenger(AutoRegressiveMessenger):
-            def get_posterior(self, name, prior, upstream_values):
+            def get_posterior(self, name, prior):
                 if name == "x":
                     # Use a custom distribution at site x.
                     loc = pyro.param("x_loc", lambda: torch.zeros(prior.shape()))
@@ -240,9 +234,9 @@ class AutoRegressiveMessenger(AutoMessenger):
                                        constraint=constraints.positive
                     return dist.Normal(loc, scale).to_event(prior.event_dim())
                 # Fall back to autoregressive.
-                return super().get_posterior(name, prior, upstream_values)
+                return super().get_posterior(name, prior)
 
-    .. warning:: This guide currently does not support ``JitEffect_ELBO``.
+    .. warning:: This guide currently does not support jit-based elbos.
 
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -269,10 +263,7 @@ class AutoRegressiveMessenger(AutoMessenger):
         self._init_scale = init_scale
 
     def get_posterior(
-        self,
-        name: str,
-        prior: Distribution,
-        upstream_values: Dict[str, torch.Tensor],
+        self, name: str, prior: Distribution
     ) -> Union[Distribution, torch.Tensor]:
         with helpful_support_errors({"name": name, "fn": prior}):
             transform = biject_to(prior.support)

@@ -33,7 +33,7 @@ def unwrap(fn):
             fn = fn.func
             continue
         if isinstance(fn, partial):
-            fn = fn.args[1]
+            fn = fn.args[1]  # extract from partial(handler, fn)
             continue
         return fn
 

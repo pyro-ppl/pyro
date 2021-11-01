@@ -2,28 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from collections import OrderedDict
 from typing import Callable, Dict, Tuple, Union
 
 import torch
 
 import pyro.distributions as dist
-import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
-from pyro.infer.elbo import ELBO
-from pyro.infer.util import is_validation_enabled
-from pyro.poutine.trace_messenger import TraceMessenger
-from pyro.poutine.trace_struct import Trace
-from pyro.poutine.util import prune_subsample_sites, site_is_subsample
-from pyro.util import check_model_guide_match, check_site_shape
 
-from .trace_elbo import JitTrace_ELBO, Trace_ELBO
+from .trace_messenger import TraceMessenger
+from .trace_struct import Trace
+from .util import prune_subsample_sites, site_is_subsample
 
 
 class GuideMessenger(TraceMessenger, ABC):
     """
-    EXPERIMENTAL Abstract base class for effect-based guides for use in
-    :class:`Effect_ELBO` and similar.
+    EXPERIMENTAL Abstract base class for effect-based guides.
 
     Derived classes must implement the :meth:`get_posterior` method.
     """
@@ -37,6 +30,9 @@ class GuideMessenger(TraceMessenger, ABC):
     def model(self):
         return self._model[0]
 
+    def upstream_value(self, name: str) -> torch.Tensor:
+        return self.trace.nodes[name]["value"]
+
     def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         """
         Draws posterior samples from the guide and replays the model against
@@ -47,13 +43,11 @@ class GuideMessenger(TraceMessenger, ABC):
         :rtype: dict
         """
         self.args_kwargs = args, kwargs
-        self.upstream_values = OrderedDict()
         try:
             with self:
                 self.model(*args, **kwargs)
         finally:
             del self.args_kwargs
-            del self.upstream_values
 
         model_trace, guide_trace = self.get_traces()
         samples = {
@@ -68,7 +62,7 @@ class GuideMessenger(TraceMessenger, ABC):
             return
         prior = msg["fn"]
         msg["infer"]["prior"] = prior
-        posterior = self.get_posterior(msg["name"], prior, self.upstream_values)
+        posterior = self.get_posterior(msg["name"], prior)
         if isinstance(posterior, torch.Tensor):
             posterior = dist.Delta(posterior, event_dim=prior.event_dim)
         if posterior.batch_shape != prior.batch_shape:
@@ -76,21 +70,15 @@ class GuideMessenger(TraceMessenger, ABC):
         msg["fn"] = posterior
 
     def _pyro_post_sample(self, msg):
-        self.upstream_values[msg["name"]] = msg["value"]
-
         # Manually apply outer plates.
         prior = msg["infer"].get("prior")
         if prior is not None and prior.batch_shape != msg["fn"].batch_shape:
             msg["infer"]["prior"] = prior.expand(msg["fn"].batch_shape)
-
         return super()._pyro_post_sample(msg)
 
     @abstractmethod
     def get_posterior(
-        self,
-        name: str,
-        prior: Distribution,
-        upstream_values: Dict[str, torch.Tensor],
+        self, name: str, prior: Distribution
     ) -> Union[Distribution, torch.Tensor]:
         """
         Abstract method to compute a posterior distribution or sample a
@@ -103,17 +91,18 @@ class GuideMessenger(TraceMessenger, ABC):
 
         Implementations may access further information for computations:
 
-        -  ``args, kwargs = self.args_kwargs`` are the inputs to the model, and
-            may be useful for amortization.
+        - ``self.upstream_value(name)`` returns the value of an upstream sample
+            or deterministic site.
         -  ``self.trace`` is a trace of upstream sites, and may be useful for
            other information such as ``self.trace.nodes["my_site"]["fn"]`` or
            ``self.trace.nodes["my_site"]["cond_indep_stack"]`` .
+        -  ``args, kwargs = self.args_kwargs`` are the inputs to the model, and
+            may be useful for amortization.
 
         :param str name: The name of the sample site to sample.
         :param prior: The prior distribution of this sample site
             (conditioned on upstream samples from the posterior).
         :type prior: ~pyro.distributions.Distribution
-        :param dict upstream_values:
         :returns: A posterior distribution or sample from the posterior
             distribution.
         :rtype: ~pyro.distributions.Distribution or torch.Tensor
@@ -122,8 +111,10 @@ class GuideMessenger(TraceMessenger, ABC):
 
     def get_traces(self) -> Tuple[Trace, Trace]:
         """
-        This can be called after running :meth:`__call__` . In contrast to the
-        trace-replay pattern of generating a pair of traces,
+        This can be called after running :meth:`__call__` to extract a pair of
+        traces.
+
+        In contrast to the trace-replay pattern of generating a pair of traces,
         :class:`GuideMessenger` interleaves model and guide computations, so
         only a single ``guide(*args, **kwargs)`` call is needed to create both
         traces. This function merely extract the relevant information from this
@@ -142,54 +133,3 @@ class GuideMessenger(TraceMessenger, ABC):
             model_site["fn"] = guide_site["infer"]["prior"]
             model_trace.nodes[name] = model_site
         return model_trace, guide_trace
-
-
-class EffectMixin(ELBO):
-    """
-    EXPERIMENTAL Mixin class to turn a trace-based ELBO implementation into an
-    effect-based implementation.
-    """
-
-    def _get_trace(self, model, guide, args, kwargs):
-        # This differs from Trace_ELBO in that the guide is assumed to be an
-        # effect handler.
-        guide(*args, **kwargs)
-        guide = poutine.unwrap(guide)
-        assert isinstance(guide, GuideMessenger)
-        model_trace, guide_trace = guide.get_traces()
-
-        # The rest follows pyro.infer.enum.get_importance_trace().
-        max_plate_nesting = self.max_plate_nesting
-        if is_validation_enabled():
-            check_model_guide_match(model_trace, guide_trace, max_plate_nesting)
-        model_trace.compute_log_prob()
-        guide_trace.compute_score_parts()
-        if is_validation_enabled():
-            for site in model_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, max_plate_nesting)
-            for site in guide_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, max_plate_nesting)
-
-        return model_trace, guide_trace
-
-
-class Effect_ELBO(EffectMixin, Trace_ELBO):
-    """
-    EXPERIMENTAL Similar to :class:`~pyro.infer.trace_elbo.Trace_ELBO` but
-    supporting guides that are :class:`GuideMessenger` s rather than traceable
-    functions.
-    """
-
-    pass
-
-
-class JitEffect_ELBO(EffectMixin, JitTrace_ELBO):
-    """
-    EXPERIMENTAL Similar to :class:`~pyro.infer.trace_elbo.JitTrace_ELBO` but
-    supporting guides that are :class:`GuideMessenger` s rather than traceable
-    functions.
-    """
-
-    pass

@@ -4,7 +4,6 @@
 from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior, TracePredictive
 from pyro.infer.csis import CSIS
 from pyro.infer.discrete import infer_discrete
-from pyro.infer.effect_elbo import Effect_ELBO, GuideMessenger, JitEffect_ELBO
 from pyro.infer.elbo import ELBO
 from pyro.infer.energy_distance import EnergyDistance
 from pyro.infer.enum import config_enumerate
@@ -30,14 +29,11 @@ from pyro.infer.util import enable_validation, is_validation_enabled
 __all__ = [
     "CSIS",
     "ELBO",
-    "Effect_ELBO",
     "EmpiricalMarginal",
     "EnergyDistance",
-    "GuideMessenger",
     "HMC",
     "IMQSteinKernel",
     "Importance",
-    "JitEffect_ELBO",
     "JitTraceEnum_ELBO",
     "JitTraceGraph_ELBO",
     "JitTraceMeanField_ELBO",
