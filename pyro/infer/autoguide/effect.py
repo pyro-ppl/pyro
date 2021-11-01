@@ -226,7 +226,8 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
         that don't have upstream sites, the guide is representing/learning deviation from the prior.
     """
 
-    weight_type = "element-wise"  #  'element-wise' or 'scalar'
+    # 'element-wise' or 'scalar'
+    weight_type = "element-wise"
 
     def __init__(
         self,
