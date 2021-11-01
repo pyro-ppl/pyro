@@ -32,7 +32,7 @@ def unwrap(fn):
         if isinstance(fn, _bound_partial):
             fn = fn.func
             continue
-        if isinstance(fn, partial):
+        if isinstance(fn, partial) and len(fn.args) >= 2:
             fn = fn.args[1]  # extract from partial(handler, fn)
             continue
         return fn
