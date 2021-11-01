@@ -120,10 +120,7 @@ def test_scores(auto_class):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
-<<<<<<< HEAD
         AutoHierarchicalNormalMessenger,
-=======
->>>>>>> dev
         AutoRegressiveMessenger,
     ],
 )
@@ -457,10 +454,7 @@ def serialization_model():
             ],
         ),
         AutoNormalMessenger,
-<<<<<<< HEAD
         AutoHierarchicalNormalMessenger,
-=======
->>>>>>> dev
         xfail_param(AutoRegressiveMessenger, reason="jit does not support _Dirichlet"),
     ],
 )
@@ -728,10 +722,7 @@ def test_unpack_latent():
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
-<<<<<<< HEAD
         AutoHierarchicalNormalMessenger,
-=======
->>>>>>> dev
     ],
 )
 def test_init_loc_fn(auto_class):
@@ -797,10 +788,7 @@ def test_init_scale(auto_class, init_scale):
         functools.partial(AutoNormal, init_loc_fn=init_to_median),
         functools.partial(AutoGaussian, init_loc_fn=init_to_median),
         AutoNormalMessenger,
-<<<<<<< HEAD
         AutoHierarchicalNormalMessenger,
-=======
->>>>>>> dev
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
