@@ -142,7 +142,7 @@ AutoNormalMessenger
     :show-inheritance:
 
 AutoHierarchicalNormalMessenger
-----------------------
+-------------------------------
 .. autoclass:: pyro.infer.autoguide.AutoHierarchicalNormalMessenger
     :members:
     :undoc-members:
