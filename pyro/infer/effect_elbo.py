@@ -8,6 +8,7 @@ from typing import Callable, Dict, Tuple, Union
 import torch
 
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import is_validation_enabled
@@ -153,8 +154,8 @@ class EffectMixin(ELBO):
         # This differs from Trace_ELBO in that the guide is assumed to be an
         # effect handler.
         guide(*args, **kwargs)
-        while not isinstance(guide, GuideMessenger):
-            guide = guide.func.args[1]  # unwrap plates
+        guide = poutine.unwrap(guide)
+        assert isinstance(guide, GuideMessenger)
         model_trace, guide_trace = guide.get_traces()
 
         # The rest follows pyro.infer.enum.get_importance_trace().

@@ -24,6 +24,20 @@ class _bound_partial(partial):
         return partial(self.func, instance)
 
 
+def unwrap(fn):
+    """
+    Recursively unwraps poutines.
+    """
+    while True:
+        if isinstance(fn, _bound_partial):
+            fn = fn.func
+            continue
+        if isinstance(fn, partial):
+            fn = fn.args[1]
+            continue
+        return fn
+
+
 class Messenger:
     """
     Context manager class that modifies behavior
