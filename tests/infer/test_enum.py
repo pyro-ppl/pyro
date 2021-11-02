@@ -6,6 +6,7 @@ import math
 import os
 import timeit
 from collections import defaultdict
+from contextlib import ExitStack  # python 3
 
 import pytest
 import torch
@@ -27,12 +28,6 @@ from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.ops.indexing import Vindex
 from pyro.util import torch_isnan
 from tests.common import assert_equal, skipif_param
-
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
-
 
 logger = logging.getLogger(__name__)
 
