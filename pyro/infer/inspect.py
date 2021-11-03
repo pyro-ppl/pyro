@@ -49,7 +49,7 @@ def get_dependencies(
     model_kwargs: Optional[dict] = None,
 ) -> Dict[str, object]:
     r"""
-    EXPERIMENTAL Infers dependency structure about a conditioned model.
+    Infers dependency structure about a conditioned model.
 
     This returns a nested dictionary with structure like::
 
@@ -146,11 +146,6 @@ def get_dependencies(
                 "a": {"a": {"p"}, "b": set()},
             },
         }
-
-    .. warning:: This currently relies on autograd and therefore works only for
-        continuous latent variables with differentiable dependencies. Discrete
-        latent variables will raise errors. Gradient blocking may silently drop
-        dependencies.
 
     **References**
 

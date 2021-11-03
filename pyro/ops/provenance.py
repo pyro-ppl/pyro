@@ -66,4 +66,6 @@ class ProvenanceTensor(torch.Tensor):
 
 
 def get_provenance(tensor: torch.Tensor) -> frozenset:
-    return getattr(tensor, "_provenance", frozenset())
+    provenance = getattr(tensor, "_provenance", frozenset())
+    assert isinstance(provenance, frozenset)
+    return provenance

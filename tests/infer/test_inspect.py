@@ -172,6 +172,33 @@ def test_discrete_obs():
     assert actual == expected
 
 
+def test_discrete():
+    def model():
+        a = pyro.sample("a", dist.Dirichlet(torch.ones(3)))
+        b = pyro.sample("b", dist.Categorical(a))
+        c = pyro.sample("c", dist.Normal(torch.zeros(3), 1).to_event(1))
+        d = pyro.sample("d", dist.Poisson(c[b].exp()))
+        pyro.sample("e", dist.Normal(d, 1), obs=torch.ones(()))
+
+    actual = get_dependencies(model)
+    expected = {
+        "prior_dependencies": {
+            "a": {"a": set()},
+            "b": {"a": set(), "b": set()},
+            "c": {"c": set()},
+            "d": {"b": set(), "c": set(), "d": set()},
+            "e": {"d": set(), "e": set()},
+        },
+        "posterior_dependencies": {
+            "a": {"a": set(), "b": set()},
+            "b": {"b": set(), "c": set(), "d": set()},
+            "c": {"c": set(), "d": set()},
+            "d": {"d": set(), "e": set()},
+        },
+    }
+    assert actual == expected
+
+
 def test_plate_coupling():
     #   x  x
     #    ||
