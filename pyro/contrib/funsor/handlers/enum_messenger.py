@@ -39,6 +39,13 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
         for v in funsor_dist.terms
         if isinstance(v, funsor.delta.Delta) and name in v.fresh
     ]
+    delta_terms.extend(
+        [
+            v
+            for v in funsor_dist.terms
+            if isinstance(v, funsor.Approximate) and name in v.model.fresh
+        ]
+    )
     assert len(delta_terms) == 1
     return _get_support_value(delta_terms[0], name, **kwargs)
 
@@ -64,6 +71,11 @@ def _get_support_value_constant(funsor_dist, name, **kwargs):
     assert name in funsor_dist.inputs
     value = _get_support_value(funsor_dist.arg, name, **kwargs)
     return funsor.Constant(funsor_dist.const_inputs, value)
+
+
+@_get_support_value.register(funsor.terms.Approximate)
+def _get_support_value_approximate(funsor_dist, name, **kwargs):
+    return _get_support_value(funsor_dist.guide, name, **kwargs)
 
 
 @_get_support_value.register(funsor.distribution.Distribution)
@@ -218,6 +230,8 @@ class ProvenanceMessenger(ReentrantMessenger):
             expand=msg["infer"].get("expand", False),
         )
         # TODO delegate to _get_support_value
+        if isinstance(support_value, funsor.Constant):
+            support_value = support_value.arg
         msg["funsor"]["value"] = funsor.Constant(
             OrderedDict(((msg["name"], support_value.output),)),
             support_value,

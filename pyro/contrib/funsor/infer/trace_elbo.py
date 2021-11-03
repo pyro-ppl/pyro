@@ -6,6 +6,7 @@ import contextlib
 import funsor
 from funsor.adjoint import adjoint
 from funsor.constant import Constant
+from funsor.interpreter import reinterpret
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, provenance, replay, trace
@@ -94,6 +95,9 @@ class Trace_ELBO(ELBO):
             logzq = funsor.optimizer.apply_optimizer(logzq)
 
         marginals = adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq)
+        with funsor.montecarlo.MonteCarlo():
+            for target, log_measure in marginals.items():
+                marginals[target] = reinterpret(log_measure)
 
         with funsor.terms.lazy:
             # finally, integrate out guide variables in the elbo and all plates
