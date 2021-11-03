@@ -63,9 +63,9 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         return tuple(v for _, v in sorted(result.items()))
 
     @torch.no_grad()
-    def _remove_outer_plates(self, value: torch.Tensor, event_dim: int) -> torch.Tensor:
+    def _adjust_plates(self, value: torch.Tensor, event_dim: int) -> torch.Tensor:
         """
-        Removes particle plates from initial values of parameters.
+        Adjusts plates for generating initial values of parameters.
         """
         for f in get_plates():
             full_size = getattr(f, "full_size", f.size)
@@ -187,7 +187,7 @@ class AutoNormalMessenger(AutoMessenger):
             event_dim = transform.domain.event_dim
             constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
             unconstrained = transform.inv(constrained)
-            init_loc = self._remove_outer_plates(unconstrained, event_dim)
+            init_loc = self._adjust_plates(unconstrained, event_dim)
             init_scale = torch.full_like(init_loc, self._init_scale)
 
         deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
@@ -213,20 +213,20 @@ class AutoNormalMessenger(AutoMessenger):
 
 class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
     """
-    EXPERIMENTAL Automatic :class:`~pyro.infer.effect_elbo.GuideMessenger` ,
-    intended for use with :class:`~pyro.infer.effect_elbo.Effect_ELBO` or
-    similar.
+    :class:`AutoMessenger` with mean-field normal posterior conditional on all dependencies.
 
     The mean-field posterior at any site is a transformed normal distribution,
     the mean of which depends on the value of that site given its dependencies in the model:
 
-        loc = loc + transform.inv(prior.mean) * weight
+        loc_total = loc + transform.inv(prior.mean) * weight
 
-    Where the value of `prior.mean` is conditional on upstream sites in the model.
+    Where the value of `prior.mean` is conditional on upstream sites in the model,
+    loc is independent component of the mean in the untransformed space,
+    weight is element-wise factor that scales the prior mean.
     This approach doesn't work for distributions that don't have the mean.
 
     Derived classes may override particular sites and use this simply as a
-    default, see AutoNormalMessenger documentation for example.
+    default, see :class:`AutoNormalMessenger` documentation for example.
 
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -238,7 +238,8 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
     :param list hierarchical_sites: List of latent variables (model sites)
         that have hierarchical dependencies.
         If None, all sites are assumed to have hierarchical dependencies. If None, for the sites
-        that don't have upstream sites, the guide is representing/learning deviation from the prior.
+        that don't have upstream sites, the loc and weight of the guide
+        are representing/learning deviation from the prior.
     """
 
     # 'element-wise' or 'scalar'
@@ -302,7 +303,7 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             event_dim = transform.domain.event_dim
             constrained = self.init_loc_fn({"name": name, "fn": prior}).detach()
             unconstrained = transform.inv(constrained)
-            init_loc = self._remove_outer_plates(unconstrained, event_dim)
+            init_loc = self._adjust_plates(unconstrained, event_dim)
             init_scale = torch.full_like(init_loc, self._init_scale)
             if self.weight_type == "scalar":
                 # weight is a single value parameter
@@ -312,7 +313,8 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
                 init_weight = torch.full_like(init_loc, self._init_weight)
             # if site is hierarchical substract contribution of dependencies from init_loc
             if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
-                init_loc = init_loc - init_weight * transform.inv(prior.mean)
+                init_prior_mean = self._adjust_plates(prior.mean, event_dim)
+                init_loc = init_loc - init_weight * transform.inv(init_prior_mean)
 
         deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
         deep_setattr(
@@ -438,7 +440,7 @@ class AutoRegressiveMessenger(AutoMessenger):
             unconstrained = transform.inv(constrained)
             # Initialize the distribution to be an affine combination:
             #   init_scale * prior + (1 - init_scale) * init_loc
-            init_loc = self._remove_outer_plates(unconstrained, event_dim)
+            init_loc = self._adjust_plates(unconstrained, event_dim)
             init_loc = init_loc * (1 - self._init_scale)
             init_scale = torch.full_like(init_loc, self._init_scale)
 

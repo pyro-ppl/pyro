@@ -880,6 +880,7 @@ def test_nested_autoguide(Elbo):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1024,6 +1025,7 @@ def test_predictive(auto_class):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1055,6 +1057,7 @@ def test_replay_plates(auto_class, sample_shape):
         AutoDelta,
         AutoNormal,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1092,6 +1095,7 @@ def test_subsample_model(auto_class):
     "auto_class",
     [
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1264,6 +1268,7 @@ def test_discrete_helpful_error(auto_class, init_loc_fn):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1299,6 +1304,7 @@ def test_sphere_helpful_error(auto_class, init_loc_fn):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1376,6 +1382,7 @@ class AutoStructured_exact_mvn(AutoStructured):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1443,6 +1450,7 @@ def test_exact(Guide):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1506,6 +1514,7 @@ def test_exact_batch(Guide):
         AutoGaussian,
         AutoGaussianFunsor,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     ],
 )
@@ -1514,6 +1523,7 @@ def test_exact_tree(Guide):
         AutoNormal,
         AutoDiagonalNormal,
         AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
         AutoRegressiveMessenger,
     )
 
