@@ -1,12 +1,13 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, Optional
 
 import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.ops.provenance import ProvenanceTensor, get_provenance
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 
@@ -31,19 +32,14 @@ def is_sample_site(msg):
     return True
 
 
-class RequiresGradMessenger(Messenger):
-    def __init__(self, predicate=lambda msg: True):
-        self.predicate = predicate
-        super().__init__()
-
+class TrackProvenance(Messenger):
     def _pyro_post_sample(self, msg):
-        if is_sample_site(msg) and msg["value"].dtype.is_floating_point:
-            if self.predicate(msg):
-                if not msg["value"].requires_grad:
-                    msg["value"] = msg["value"][...].requires_grad_()
-            elif not msg["is_observed"] and msg["value"].requires_grad:
-                if msg["value"].requires_grad:
-                    msg["value"] = msg["value"].detach()
+        if is_sample_site(msg):
+            provenance = frozenset({msg["name"]})  # track only direct dependencies
+            value = msg["value"]
+            while isinstance(value, ProvenanceTensor):
+                value = value._t
+            msg["value"] = ProvenanceTensor(value, provenance)
 
 
 @torch.enable_grad()
@@ -173,21 +169,20 @@ def get_dependencies(
     if model_kwargs is None:
         model_kwargs = {}
 
-    def get_sample_sites(predicate=lambda msg: True):
-        with torch.random.fork_rng():
-            with pyro.validation_enabled(False), RequiresGradMessenger(predicate):
-                trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-        return [msg for msg in trace.nodes.values() if is_sample_site(msg)]
+    # Collect sites with tracked provenance.
+    with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
+        with TrackProvenance():
+            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+    sample_sites = [msg for msg in trace.nodes.values() if is_sample_site(msg)]
 
     # Collect observations.
-    sample_sites = get_sample_sites()
     observed = {msg["name"] for msg in sample_sites if msg["is_observed"]}
     plates = {
         msg["name"]: {f.name for f in msg["cond_indep_stack"] if f.vectorized}
         for msg in sample_sites
     }
 
-    # First find transitive dependencies among latent and observed sites
+    # Find direct prior dependencies among latent and observed sites.
     prior_dependencies = {n: {n: set()} for n in plates}  # no deps yet
     for i, downstream in enumerate(sample_sites):
         upstreams = [
@@ -195,27 +190,13 @@ def get_dependencies(
         ]
         if not upstreams:
             continue
-        log_prob = downstream["fn"].log_prob(downstream["value"]).sum()
-        grads = _safe_grad(log_prob, [u["value"] for u in upstreams])
-        for upstream, grad in zip(upstreams, grads):
-            if grad is not None:
+        log_prob = downstream["fn"].log_prob(downstream["value"])
+        provenance = get_provenance(log_prob)
+        for upstream in upstreams:
+            u = upstream["name"]
+            if u in provenance:
                 d = downstream["name"]
-                u = upstream["name"]
                 prior_dependencies[d][u] = set()
-
-    # Then refine to direct dependencies among latent and observed sites.
-    for i, downstream in enumerate(sample_sites):
-        for j, upstream in enumerate(sample_sites[: max(0, i - 1)]):
-            if upstream["name"] not in prior_dependencies[downstream["name"]]:
-                continue
-            names = {upstream["name"], downstream["name"]}
-            sample_sites_ij = get_sample_sites(lambda msg: msg["name"] in names)
-            d = sample_sites_ij[i]
-            u = sample_sites_ij[j]
-            log_prob = d["fn"].log_prob(d["value"]).sum()
-            grad = _safe_grad(log_prob, [u["value"]])[0]
-            if grad is None:
-                prior_dependencies[d["name"]].pop(u["name"])
 
     # Next reverse dependencies and restrict downstream nodes to latent sites.
     posterior_dependencies = {n: {} for n in plates if n not in observed}
@@ -243,12 +224,6 @@ def get_dependencies(
         "prior_dependencies": prior_dependencies,
         "posterior_dependencies": posterior_dependencies,
     }
-
-
-def _safe_grad(root: torch.Tensor, args: List[torch.Tensor]):
-    if not root.requires_grad:
-        return [None] * len(args)
-    return torch.autograd.grad(root, args, allow_unused=True, retain_graph=True)
 
 
 __all__ = [
