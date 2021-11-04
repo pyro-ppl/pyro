@@ -313,9 +313,8 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
                 init_weight = torch.full_like(init_loc, self._init_weight)
             # if site is hierarchical substract contribution of dependencies from init_loc
             if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
-                init_prior_mean = self._adjust_plates(
-                    transform.inv(init_prior_mean), event_dim
-                )
+                init_prior_mean = transform.inv(prior.mean)
+                init_prior_mean = self._adjust_plates(init_prior_mean, event_dim)
                 init_loc = init_loc - init_weight * init_prior_mean
 
         deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
