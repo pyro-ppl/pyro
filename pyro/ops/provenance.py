@@ -29,6 +29,12 @@ class ProvenanceTensor(torch.Tensor):
         >>> assert get_provenance(a + b + c) == frozenset({"a", "b"})
         >>> assert get_provenance(a + detach_provenance(b) + c) == frozenset({"a"})
 
+    **References**
+
+    [1] David Wingate, Noah Goodman, Andreas Stuhlmüller, Jeffrey Siskind (2011)
+        Nonstandard Interpretations of Probabilistic Programs for Efficient Inference
+        http://papers.neurips.cc/paper/4309-nonstandard-interpretations-of-probabilistic-programs-for-efficient-inference.pdf
+
     :param torch.Tensor data: An initial tensor to start tracking.
     :param frozenset provenance: An initial provenance set.
     """
