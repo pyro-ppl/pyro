@@ -8,10 +8,32 @@ class ProvenanceTensor(torch.Tensor):
     """
     Provenance tracking implementation in Pytorch.
 
-    Provenance of the output tensor is the union of provenances of input tensors.
+    This class wraps a :class:`torch.Tensor` to track provenance through
+    PyTorch ops, where provenance is a user-defined frozenset of objects. The
+    provenance of the output tensors of any op is the union of provenances of
+    input tensors.
+
+    -   To start tracking provenance, wrap a :class:`torch.Tensor` in a
+        :class:`ProvenanceTensor` with user-defined initial provenance.
+    -   To read the provenance of a tensor use :meth:`get_provenance` .
+    -   To detach provenance during a computation (similar to
+        :meth:`~torch.Tensor.detach` to detach gradients during Pytorch
+        computations), use the :meth:`detach_provenance` . This is useful to
+        distinguish direct vs indirect provenance.
+
+    Example::
+
+        >>> a = ProvenanceTensor(torch.randn(3), frozenset({"a"}))
+        >>> b = ProvenanceTensor(torch.randn(3), frozenset({"b"}))
+        >>> c = torch.randn(3)
+        >>> assert get_provenance(a + b + c) == frozenset({"a", "b"})
+        >>> assert get_provenance(a + detach_provenance(b) + c) == frozenset({"a"})
+
+    :param torch.Tensor data: An initial tensor to start tracking.
+    :param frozenset provenance: An initial provenance set.
     """
 
-    def __new__(cls, data, provenance=frozenset(), **kwargs):
+    def __new__(cls, data: torch.Tensor, provenance=frozenset(), **kwargs):
         if not provenance:
             return data
         instance = torch.Tensor.__new__(cls)
@@ -66,6 +88,28 @@ class ProvenanceTensor(torch.Tensor):
 
 
 def get_provenance(tensor: torch.Tensor) -> frozenset:
+    """
+    Reads the provenance of either a :class:`torch.Tensor` (which may or may
+    not be a :class:`ProvenanceTensor` ).
+
+    :param torch.Tensor tensor: An input tensor.
+    :returns: A provenance frozenset.
+    :rtype: frozenset
+    """
     provenance = getattr(tensor, "_provenance", frozenset())
     assert isinstance(provenance, frozenset)
     return provenance
+
+
+def detach_provenance(tensor: torch.Tensor) -> torch.Tensor:
+    """
+    Blocks provenance tracking through a tensor, similar to :meth:`torch.Tensor.detach`.
+
+    :param torch.Tensor tensor: An input tensor.
+    :returns: A tensor sharing the same data but with no provenance.
+    :rtype: torch.Tensor
+    """
+    while isinstance(tensor, ProvenanceTensor):
+        tensor = tensor._t
+    assert isinstance(tensor, torch.Tensor)
+    return tensor

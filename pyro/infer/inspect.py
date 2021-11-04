@@ -7,7 +7,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.ops.provenance import ProvenanceTensor, get_provenance
+from pyro.ops.provenance import ProvenanceTensor, detach_provenance, get_provenance
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
 
@@ -36,9 +36,7 @@ class TrackProvenance(Messenger):
     def _pyro_post_sample(self, msg):
         if is_sample_site(msg):
             provenance = frozenset({msg["name"]})  # track only direct dependencies
-            value = msg["value"]
-            while isinstance(value, ProvenanceTensor):
-                value = value._t
+            value = detach_provenance(msg["value"])
             msg["value"] = ProvenanceTensor(value, provenance)
 
 
