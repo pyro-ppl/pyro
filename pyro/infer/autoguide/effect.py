@@ -216,13 +216,13 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
     :class:`AutoMessenger` with mean-field normal posterior conditional on all dependencies.
 
     The mean-field posterior at any site is a transformed normal distribution,
-    the mean of which depends on the value of that site given its dependencies in the model:
+    the mean of which depends on the value of that site given its dependencies in the model::
 
         loc_total = loc + transform.inv(prior.mean) * weight
 
-    Where the value of `prior.mean` is conditional on upstream sites in the model,
-    loc is independent component of the mean in the untransformed space,
-    weight is element-wise factor that scales the prior mean.
+    Where the value of ``prior.mean`` is conditional on upstream sites in the model,
+    ``loc`` is independent component of the mean in the untransformed space,
+    ``weight`` is element-wise factor that scales the prior mean.
     This approach doesn't work for distributions that don't have the mean.
 
     Derived classes may override particular sites and use this simply as a
@@ -313,8 +313,10 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
                 init_weight = torch.full_like(init_loc, self._init_weight)
             # if site is hierarchical substract contribution of dependencies from init_loc
             if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
-                init_prior_mean = self._adjust_plates(prior.mean, event_dim)
-                init_loc = init_loc - init_weight * transform.inv(init_prior_mean)
+                init_prior_mean = self._adjust_plates(
+                    transform.inv(init_prior_mean), event_dim
+                )
+                init_loc = init_loc - init_weight * init_prior_mean
 
         deep_setattr(self, "locs." + name, PyroParam(init_loc, event_dim=event_dim))
         deep_setattr(
