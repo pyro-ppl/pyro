@@ -7,4 +7,4 @@ observations>=0.1.4
 opt_einsum>=2.3.2
 pyro-api>=0.1.1
 tqdm>=4.36
-funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@18a107ccce40de9e3e98db87d116789e0909ce7b
+funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@importance-funsor

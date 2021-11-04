@@ -44,7 +44,7 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
         [
             v.guide
             for v in funsor_dist.terms
-            if isinstance(v, funsor.importance.Importance) and name in v.guide.fresh
+            if isinstance(v, funsor.Importance) and name in v.guide.fresh
         ]
     )
     assert len(delta_terms) == 1
@@ -78,7 +78,7 @@ def _get_support_value_constant(funsor_dist, name, **kwargs):
     return funsor.Constant(funsor_dist.const_inputs, value)
 
 
-@_get_support_value.register(funsor.importance.Importance)
+@_get_support_value.register(funsor.Importance)
 def _get_support_value_approximate(funsor_dist, name, **kwargs):
     return _get_support_value(funsor_dist.guide, name, **kwargs)
 
