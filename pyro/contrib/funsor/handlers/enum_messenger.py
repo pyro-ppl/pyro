@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 import funsor
 import torch
+from funsor.importance import lazy_importance
 
 import pyro.poutine.runtime
 import pyro.poutine.util
@@ -41,9 +42,9 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
     ]
     delta_terms.extend(
         [
-            v
+            v.guide
             for v in funsor_dist.terms
-            if isinstance(v, funsor.Approximate) and name in v.model.fresh
+            if isinstance(v, funsor.importance.Importance) and name in v.guide.fresh
         ]
     )
     assert len(delta_terms) == 1
@@ -53,7 +54,11 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
 @_get_support_value.register(funsor.delta.Delta)
 def _get_support_value_delta(funsor_dist, name, **kwargs):
     assert name in funsor_dist.fresh
-    return OrderedDict(funsor_dist.terms)[name][0]
+    support_value = OrderedDict(funsor_dist.terms)[name][0]
+    # remove all upstream dependencies
+    while isinstance(support_value, funsor.Constant):
+        support_value = support_value.arg
+    return support_value
 
 
 @_get_support_value.register(funsor.Tensor)
@@ -73,7 +78,7 @@ def _get_support_value_constant(funsor_dist, name, **kwargs):
     return funsor.Constant(funsor_dist.const_inputs, value)
 
 
-@_get_support_value.register(funsor.terms.Approximate)
+@_get_support_value.register(funsor.importance.Importance)
 def _get_support_value_approximate(funsor_dist, name, **kwargs):
     return _get_support_value(funsor_dist.guide, name, **kwargs)
 
@@ -90,7 +95,8 @@ def _enum_strategy_default(dist, msg):
         for f in msg["cond_indep_stack"]
         if f.vectorized and f.name not in dist.inputs
     )
-    sampled_dist = dist.sample(msg["name"], sample_inputs)
+    with lazy_importance:
+        sampled_dist = dist.sample(msg["name"], sample_inputs)
     sampled_dist -= sum([math.log(v.size) for v in sample_inputs.values()], 0)
     return sampled_dist
 
@@ -230,8 +236,6 @@ class ProvenanceMessenger(ReentrantMessenger):
             expand=msg["infer"].get("expand", False),
         )
         # TODO delegate to _get_support_value
-        if isinstance(support_value, funsor.Constant):
-            support_value = support_value.arg
         msg["funsor"]["value"] = funsor.Constant(
             OrderedDict(((msg["name"], support_value.output),)),
             support_value,
