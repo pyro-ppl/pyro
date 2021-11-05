@@ -1,15 +1,25 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import itertools
+from collections import defaultdict
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Callable, Dict, Optional
 
 import torch
 
 import pyro
+import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.ops.provenance import ProvenanceTensor, detach_provenance, get_provenance
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import site_is_subsample
+
+try:
+    import graphviz
+except ImportError:
+    graphviz = SimpleNamespace(Digraph=object)  # for type hints
 
 
 def is_sample_site(msg):
@@ -145,8 +155,6 @@ def get_dependencies(
             },
         }
 
-    **References**
-
     [1] S.Webb, A.Goliński, R.Zinkov, N.Siddharth, T.Rainforth, Y.W.Teh, F.Wood (2018)
         "Faithful inversion of generative models for effective amortized inference"
         https://dl.acm.org/doi/10.5555/3327144.3327229
@@ -219,6 +227,257 @@ def get_dependencies(
     }
 
 
+def get_model_relations(
+    model: Callable,
+    model_args: Optional[tuple] = None,
+    model_kwargs: Optional[dict] = None,
+):
+    """
+    Infer relations of RVs and plates from given model and optionally data.
+    See https://github.com/pyro-ppl/numpyro/issues/949 for more details.
+
+    This returns a dictionary with keys:
+
+    -  "sample_sample" map each downstream sample site to a list of the upstream
+       sample sites on which it depend;
+    -  "sample_dist" maps each sample site to the name of the distribution at
+       that site;
+    -  "plate_sample" maps each plate name to a lists of the sample sites
+       within that plate; and
+    -  "observe" is a list of observed sample sites.
+
+    For example for the model::
+
+        def model(data):
+            m = numpyro.sample('m', dist.Normal(0, 1))
+            sd = numpyro.sample('sd', dist.LogNormal(m, 1))
+            with numpyro.plate('N', len(data)):
+                numpyro.sample('obs', dist.Normal(m, sd), obs=data)
+
+    the relation is::
+
+        {'sample_sample': {'m': [], 'sd': ['m'], 'obs': ['m', 'sd']},
+         'sample_dist': {'m': 'Normal', 'sd': 'LogNormal', 'obs': 'Normal'},
+         'plate_sample': {'N': ['obs']},
+         'observed': ['obs']}
+
+    :param callable model: A model to inspect.
+    :param model_args: Optional tuple of model args.
+    :param model_kwargs: Optional dict of model kwargs.
+    :rtype: dict
+    """
+    if model_args is None:
+        model_args = ()
+    if model_kwargs is None:
+        model_kwargs = {}
+
+    with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
+        with TrackProvenance():
+            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+
+    sample_sample = {}
+    sample_dist = {}
+    plate_sample = defaultdict(list)
+    observed = []
+    for name, site in trace.nodes.items():
+        if site["type"] != "sample" or site_is_subsample(site):
+            continue
+        sample_sample[name] = [
+            upstream
+            for upstream in get_provenance(site["fn"].log_prob(site["value"]))
+            if upstream != name
+        ]
+        sample_dist[name] = _get_dist_name(site["fn"])
+        for frame in site["cond_indep_stack"]:
+            plate_sample[frame.name].append(name)
+        if site["is_observed"]:
+            observed.append(name)
+
+    return {
+        "sample_sample": sample_sample,
+        "sample_dist": sample_dist,
+        "plate_sample": dict(plate_sample),
+        "observed": observed,
+    }
+
+
+def _get_dist_name(fn):
+    while isinstance(
+        fn, (dist.Independent, dist.ExpandedDistribution, dist.MaskedDistribution)
+    ):
+        fn = fn.base_dist
+    return type(fn).__name__
+
+
+def generate_graph_specification(model_relations: dict) -> dict:
+    """
+    Convert model relations into data structure which can be readily
+    converted into a network.
+    """
+    # group nodes by plate
+    plate_groups = dict(model_relations["plate_sample"])
+    plate_rvs = {rv for rvs in plate_groups.values() for rv in rvs}
+    plate_groups[None] = [
+        rv for rv in model_relations["sample_sample"] if rv not in plate_rvs
+    ]  # RVs which are in no plate
+
+    # retain node metadata
+    node_data = {}
+    for rv in model_relations["sample_sample"]:
+        node_data[rv] = {
+            "is_observed": rv in model_relations["observed"],
+            "distribution": model_relations["sample_dist"][rv],
+        }
+
+    # infer plate structure
+    # (when the order of plates cannot be determined from subset relations,
+    # it follows the order in which plates appear in trace)
+    plate_data = {}
+    for plate1, plate2 in list(itertools.combinations(plate_groups, 2)):
+        if plate1 is None or plate2 is None:
+            continue
+
+        if set(plate_groups[plate1]) < set(plate_groups[plate2]):
+            plate_data[plate1] = {"parent": plate2}
+        elif set(plate_groups[plate1]) >= set(plate_groups[plate2]):
+            plate_data[plate2] = {"parent": plate1}
+
+    for plate in plate_groups:
+        if plate is None:
+            continue
+
+        if plate not in plate_data:
+            plate_data[plate] = {"parent": None}
+
+    # infer RV edges
+    edge_list = []
+    for target, source_list in model_relations["sample_sample"].items():
+        edge_list.extend([(source, target) for source in source_list])
+
+    return {
+        "plate_groups": plate_groups,
+        "plate_data": plate_data,
+        "node_data": node_data,
+        "edge_list": edge_list,
+    }
+
+
+def render_graph(
+    graph_specification: dict,
+    render_distributions: bool = False,
+) -> "graphviz.Digraph":
+    """
+    Create a graphviz object given a graph specification.
+
+    :param bool render_distributions: Show distribution of each RV in plot.
+    """
+    try:
+        import graphviz  # noqa: F401
+    except ImportError as e:
+        raise ImportError(
+            "Looks like you want to use graphviz (https://graphviz.org/) "
+            "to render your model. "
+            "You need to install `graphviz` to be able to use this feature. "
+            "It can be installed with `pip install graphviz`."
+        ) from e
+
+    plate_groups = graph_specification["plate_groups"]
+    plate_data = graph_specification["plate_data"]
+    node_data = graph_specification["node_data"]
+    edge_list = graph_specification["edge_list"]
+
+    graph = graphviz.Digraph()
+
+    # add plates
+    plate_graph_dict = {
+        plate: graphviz.Digraph(name=f"cluster_{plate}")
+        for plate in plate_groups
+        if plate is not None
+    }
+    for plate, plate_graph in plate_graph_dict.items():
+        plate_graph.attr(label=plate.split("__CLONE")[0], labeljust="r", labelloc="b")
+
+    plate_graph_dict[None] = graph
+
+    # add nodes
+    for plate, rv_list in plate_groups.items():
+        cur_graph = plate_graph_dict[plate]
+
+        for rv in rv_list:
+            color = "grey" if node_data[rv]["is_observed"] else "white"
+            cur_graph.node(
+                rv, label=rv, shape="ellipse", style="filled", fillcolor=color
+            )
+
+    # add leaf nodes first
+    while len(plate_data) >= 1:
+        for plate, data in plate_data.items():
+            parent_plate = data["parent"]
+            is_leaf = True
+
+            for plate2, data2 in plate_data.items():
+                if plate == data2["parent"]:
+                    is_leaf = False
+                    break
+
+            if is_leaf:
+                plate_graph_dict[parent_plate].subgraph(plate_graph_dict[plate])
+                plate_data.pop(plate)
+                break
+
+    # add edges
+    for source, target in edge_list:
+        graph.edge(source, target)
+
+    # render distributions if requested
+    if render_distributions:
+        dist_label = ""
+        for rv, data in node_data.items():
+            rv_dist = data["distribution"]
+            dist_label += rf"{rv} ~ {rv_dist}\l"
+
+        graph.node("distribution_description_node", label=dist_label, shape="plaintext")
+
+    # return whole graph
+    return graph
+
+
+def render_model(
+    model: Callable,
+    model_args: Optional[tuple] = None,
+    model_kwargs: Optional[dict] = None,
+    filename: Optional[str] = None,
+    render_distributions: bool = False,
+) -> "graphviz.Digraph":
+    """
+    Renders a model using `graphviz <https://graphviz.org>`_ .
+
+    If ``filename`` is provided, this saves an image; otherwise this draws the
+    graph. For example usage see the
+    `model rendering tutorial <https://pyro.ai/examples/model_rendering.html>`_ .
+
+    :param model: Model to render.
+    :param model_args: Positional arguments to pass to the model.
+    :param model_kwargs: Keyword arguments to pass to the model.
+    :param str filename: File to save rendered model in.
+    :param bool render_distributions: Whether to include RV distribution
+        annotations in the plot.
+    :returns: A model graph.
+    :rtype: graphviz.Digraph
+    """
+    relations = get_model_relations(model, model_args, model_kwargs)
+    graph_spec = generate_graph_specification(relations)
+    graph = render_graph(graph_spec, render_distributions=render_distributions)
+
+    if filename is not None:
+        filename = Path(filename)
+        suffix = filename.suffix[1:]  # remove leading period from suffix
+        graph.render(filename.stem, view=False, cleanup=True, format=suffix)
+
+    return graph
+
+
 __all__ = [
     "get_dependencies",
+    "render_model",
 ]

@@ -109,7 +109,7 @@ Discrete Inference
     :show-inheritance:
     :member-order: bysource
 
-Inference Utilities
+Prediction utilities
 -------------------
 
 .. automodule:: pyro.infer.predictive
