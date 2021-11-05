@@ -110,7 +110,7 @@ Discrete Inference
     :member-order: bysource
 
 Prediction utilities
--------------------
+--------------------
 
 .. automodule:: pyro.infer.predictive
     :members:
