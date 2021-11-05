@@ -106,6 +106,8 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
       - name: Install dependencies
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
