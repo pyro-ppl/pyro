@@ -234,7 +234,7 @@ def get_model_relations(
 ):
     """
     Infer relations of RVs and plates from given model and optionally data.
-    See https://github.com/pyro-ppl/numpyro/issues/949 for more details.
+    See https://github.com/pyro-ppl/pyro/issues/949 for more details.
 
     This returns a dictionary with keys:
 
@@ -242,17 +242,17 @@ def get_model_relations(
        sample sites on which it depend;
     -  "sample_dist" maps each sample site to the name of the distribution at
        that site;
-    -  "plate_sample" maps each plate name to a lists of the sample sites
-       within that plate; and
+    -  "plate_sample" maps each plate name to a list of the sample sites within
+       that plate; and
     -  "observe" is a list of observed sample sites.
 
     For example for the model::
 
         def model(data):
-            m = numpyro.sample('m', dist.Normal(0, 1))
-            sd = numpyro.sample('sd', dist.LogNormal(m, 1))
-            with numpyro.plate('N', len(data)):
-                numpyro.sample('obs', dist.Normal(m, sd), obs=data)
+            m = pyro.sample('m', dist.Normal(0, 1))
+            sd = pyro.sample('sd', dist.LogNormal(m, 1))
+            with pyro.plate('N', len(data)):
+                pyro.sample('obs', dist.Normal(m, sd), obs=data)
 
     the relation is::
 
