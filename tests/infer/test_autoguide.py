@@ -310,7 +310,7 @@ def auto_guide_callable(model):
 
     guide = AutoGuideList(model)
     guide.append(AutoCallable(model, guide_x, median_x))
-    guide.append(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.append(AutoNormal(poutine.block(model, hide=["x"])))
     return guide
 
 
@@ -330,7 +330,7 @@ class GuideX(AutoGuide):
 def auto_guide_module_callable(model):
     guide = AutoGuideList(model)
     guide.custom = GuideX(model)
-    guide.diagnorm = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
+    guide.diagnorm = AutoNormal(poutine.block(model, hide=["x"]))
     return guide
 
 
