@@ -29,7 +29,7 @@ from pyro.infer import (
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import ignore_jit_warnings
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def constant(*args, **kwargs):
@@ -421,7 +421,15 @@ def test_svi_irregular_batch_size(Elbo):
 
 
 @pytest.mark.parametrize("vectorized", [False, True])
-@pytest.mark.parametrize("Elbo", [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parametrize(
+    "Elbo",
+    [
+        TraceEnum_ELBO,
+        xfail_param(
+            JitTraceEnum_ELBO, reason="https://github.com/pyro-ppl/pyro/issues/2965"
+        ),
+    ],
+)
 def test_dirichlet_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)

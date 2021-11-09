@@ -111,7 +111,9 @@ class CompiledFunction:
                     self.compile_time = t.elapsed
         else:
             unconstrained_params = [
-                pyro.param(name).unconstrained() for name in self._param_names
+                # FIXME this does unnecessary transform work
+                pyro.param(name).unconstrained()
+                for name in self._param_names
             ]
             params_and_args = unconstrained_params + list(args)
 
