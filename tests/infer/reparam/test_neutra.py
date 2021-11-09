@@ -9,10 +9,14 @@ import pyro.distributions as dist
 from pyro import optim
 from pyro.distributions.transforms import ComposeTransform
 from pyro.infer import MCMC, NUTS, SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoIAFNormal
+from pyro.infer.autoguide import (
+    AutoDiagonalNormal,
+    AutoIAFNormal,
+    AutoMultivariateNormal,
+)
 from pyro.infer.mcmc.util import initialize_model
 from pyro.infer.reparam import NeuTraReparam
-from tests.common import assert_close, xfail_param
+from tests.common import assert_close
 
 from .util import check_init_reparam
 
@@ -31,25 +35,22 @@ def dirichlet_categorical(data):
     return p_latent
 
 
+@pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize(
-    "jit",
-    [
-        False,
-        xfail_param(True, reason="https://github.com/pyro-ppl/pyro/issues/2292"),
-    ],
+    "Guide", [AutoDiagonalNormal, AutoMultivariateNormal, AutoIAFNormal],
 )
-def test_neals_funnel_smoke(jit):
+def test_neals_funnel_smoke(Guide, jit):
     dim = 10
 
-    guide = AutoIAFNormal(neals_funnel)
+    guide = Guide(neals_funnel)
     svi = SVI(neals_funnel, guide, optim.Adam({"lr": 1e-10}), Trace_ELBO())
-    for _ in range(1000):
+    for _ in range(10):
         svi.step(dim)
 
     neutra = NeuTraReparam(guide.requires_grad_(False))
     model = neutra.reparam(neals_funnel)
-    nuts = NUTS(model, jit_compile=jit)
-    mcmc = MCMC(nuts, num_samples=50, warmup_steps=50)
+    nuts = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
+    mcmc = MCMC(nuts, num_samples=10, warmup_steps=10)
     mcmc.run(dim)
     samples = mcmc.get_samples()
     # XXX: `MCMC.get_samples` adds a leftmost batch dim to all sites, not uniformly at -max_plate_nesting-1;
@@ -65,14 +66,7 @@ def test_neals_funnel_smoke(jit):
     "model, kwargs",
     [
         (neals_funnel, {"dim": 10}),
-        (
-            dirichlet_categorical,
-            {
-                "data": torch.ones(
-                    10,
-                )
-            },
-        ),
+        (dirichlet_categorical, {"data": torch.ones(10)}),
     ],
 )
 def test_reparam_log_joint(model, kwargs):
