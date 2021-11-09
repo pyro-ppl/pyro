@@ -1172,14 +1172,21 @@ class AutoLaplaceApproximation(AutoContinuous):
         loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
 
         H = hessian(loss, self.loc)
-        cov = H.inverse()
-        loc = self.loc
-        scale_tril = torch.linalg.cholesky(cov)
+        with torch.no_grad():
+            loc = self.loc.detach()
+            cov = H.inverse().detach()
+            scale_squared = cov.diagonal()
+            scale = scale_squared.sqrt()
+            scale_tril = torch.linalg.cholesky(cov / scale_squared[:, None])
 
         gaussian_guide = AutoMultivariateNormal(self.model)
         gaussian_guide._setup_prototype(*args, **kwargs)
-        # Set loc, scale_tril parameters as computed above.
+        # Set loc, scale, scale_tril parameters as computed above.
+        del gaussian_guide.loc
+        del gaussian_guide.scale
+        del gaussian_guide.scale_tril
         gaussian_guide.loc = loc
+        gaussian_guide.scale = scale
         gaussian_guide.scale_tril = scale_tril
         return gaussian_guide
 
