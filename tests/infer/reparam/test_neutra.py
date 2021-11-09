@@ -37,7 +37,8 @@ def dirichlet_categorical(data):
 
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize(
-    "Guide", [AutoDiagonalNormal, AutoMultivariateNormal, AutoIAFNormal],
+    "Guide",
+    [AutoDiagonalNormal, AutoMultivariateNormal, AutoIAFNormal],
 )
 def test_neals_funnel_smoke(Guide, jit):
     dim = 10
