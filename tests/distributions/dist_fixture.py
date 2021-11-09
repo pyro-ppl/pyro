@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+import warnings
 
 import numpy as np
 import torch
@@ -162,16 +163,20 @@ class Fixture:
 
 
 def tensor_wrap(*args, **kwargs):
-    tensor_list, tensor_map = [], {}
-    for arg in args:
-        wrapped_arg = torch.tensor(arg) if isinstance(arg, list) else arg
-        tensor_list.append(wrapped_arg)
-    for k in kwargs:
-        kwarg = kwargs[k]
-        wrapped_kwarg = torch.tensor(kwarg) if isinstance(kwarg, list) else kwarg
-        tensor_map[k] = wrapped_kwarg
-    if args and not kwargs:
-        return tensor_list
-    if kwargs and not args:
-        return tensor_map
-    return tensor_list, tensor_map
+    # Ignore PyTorch performance warning.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+
+        tensor_list, tensor_map = [], {}
+        for arg in args:
+            wrapped_arg = torch.tensor(arg) if isinstance(arg, list) else arg
+            tensor_list.append(wrapped_arg)
+        for k in kwargs:
+            kwarg = kwargs[k]
+            wrapped_kwarg = torch.tensor(kwarg) if isinstance(kwarg, list) else kwarg
+            tensor_map[k] = wrapped_kwarg
+        if args and not kwargs:
+            return tensor_list
+        if kwargs and not args:
+            return tensor_map
+        return tensor_list, tensor_map
