@@ -8,14 +8,16 @@ accessed by name via ``poutine.reparam(config=name_of_strategy)`` .
 See :func:`~pyro.poutine.handlers.reparam` for usage.
 """
 
-from abc import ABC, abstractmethod
-from typing import Callable, Dict, Optional, Union
+from abc import abstractmethod
+from typing import Callable, Dict, Optional
 
 import torch
 from torch.distributions import constraints
 
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.infer.inspect import get_dependencies
+from pyro.poutine.reparam_messenger import BaseStrategy
 
 from .loc_scale import LocScaleReparam
 from .projected_normal import ProjectedNormalReparam
@@ -25,7 +27,7 @@ from .stable import LatentStableReparam, StableReparam, SymmetricStableReparam
 from .transform import TransformReparam
 
 
-class Strategy(ABC):
+class Strategy(BaseStrategy):
     """
     Abstract base class for reparametrizer configuration strategies.
 
@@ -60,24 +62,27 @@ class Strategy(ABC):
         """
         raise NotImplementedError
 
-    def __call__(self, msg_or_fn: Union[dict, Callable]):
+    def __call__(self, fn: Callable):
         """
         Strategies can be used as decorators to reparametrize a model.
 
-        :param msg_or_fn: Public use: a model to be decorated. (Internal use: a
-            site to be configured for reparametrization).
+        :param msg_or_fn: Public use: a model to be decorated.
         """
-        if isinstance(msg_or_fn, dict):  # Internal use during configuration.
-            msg = msg_or_fn
-            name = msg["name"]
-            if name in self.config:
-                return self.config[name]
-            result = self.configure(msg)
-            self.config[name] = result
-            return result
-        else:  # Public use as a decorator or handler.
-            fn = msg_or_fn
-            return poutine.reparam(fn, self)
+        return poutine.reparam(fn, self)
+
+    def config_with_model(
+        self,
+        msg: dict,
+        model: Callable,
+        model_args: tuple,
+        model_kwargs: dict,
+    ) -> Optional[Reparam]:
+        name = msg["name"]
+        if name in self.config:
+            return self.config[name]
+        result = self.configure(msg)
+        self.config[name] = result
+        return result
 
 
 class MinimalReparam(Strategy):
@@ -163,6 +168,18 @@ class AutoReparam(Strategy):
         assert centered is None or isinstance(centered, float)
         super().__init__()
         self.centered = centered
+        self.dependencies = None
+
+    def config_with_model(
+        self,
+        msg: dict,
+        model: Callable,
+        model_args: tuple,
+        model_kwargs: dict,
+    ) -> Optional[Reparam]:
+        if self.dependencies is None:
+            self.dependencies = get_dependencies(model, model_args, model_kwargs)
+        super().config_with_model(self, msg, model, model_args, model_kwargs)
 
     def configure(self, msg: dict) -> Optional[Reparam]:
         # Focus on tricks for latent sites.
@@ -178,10 +195,12 @@ class AutoReparam(Strategy):
             if isinstance(fn, torch.distributions.RelaxedOneHotCategorical):
                 return GumbelSoftmaxReparam()
 
-            # Apply a learnable LocScaleReparam.
-            result = _loc_scale_reparam(msg["name"], fn, self.centered)
-            if result is not None:
-                return result
+            # Check whether parameters depend on upstream latent variables.
+            if len(self.dependencies["prior_dependencies"][msg["name"]]) > 1:
+                # Apply a learnable LocScaleReparam.
+                result = _loc_scale_reparam(msg["name"], fn, self.centered)
+                if result is not None:
+                    return result
 
         # Apply minimal reparametrizers.
         return _minimal_reparam(fn, msg["is_observed"])
@@ -199,10 +218,6 @@ def _loc_scale_reparam(name, fn, centered):
     # Check for unconstrained support.
     if not _is_unconstrained(fn.support):
         return
-
-    # TODO reparametrize only if parameters are variable. We might guess
-    # based on whether parameters are differentiable, .requires_grad. See
-    # https://github.com/pyro-ppl/pyro/pull/2824
 
     # Create an elementwise-learnable reparametrizer.
     shape_params = sorted(params - {"loc", "scale"})

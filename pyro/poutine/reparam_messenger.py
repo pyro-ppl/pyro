@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from typing import Callable, Dict, Union
 
 import torch
@@ -13,6 +15,26 @@ from .runtime import effectful
 @effectful(type="get_init_messengers")
 def _get_init_messengers():
     return []
+
+
+class BaseStrategy(ABC):
+    """
+    Abstract base class for reparametrization strategies.
+    """
+
+    @abstractmethod
+    def config_with_model(
+        self,
+        msg: dict,
+        model: Callable,
+        model_args: tuple,
+        model_kwargs: dict,
+    ):
+        """
+        Returns a reparametrizer or None, based on ``msg``.  The ``model``,
+        ``model_args``, and ``model_kwargs`` may be used for initialization.
+        """
+        raise NotImplementedError
 
 
 class ReparamMessenger(Messenger):
@@ -33,17 +55,19 @@ class ReparamMessenger(Messenger):
         https://arxiv.org/pdf/1906.03028.pdf
 
     :param config: Configuration, either a dict mapping site name to
-        :class:`~pyro.infer.reparam.reparam.Reparameterizer` , or a function
+        :class:`~pyro.infer.reparam.reparam.Reparameterizer` , a function
         mapping site to :class:`~pyro.infer.reparam.reparam.Reparameterizer` or
-        None. See :mod:`pyro.infer.reparam.strategies` for built-in
-        configuration strategies.
+        None, or a :class:`BaseStrategy` . See
+        :mod:`pyro.infer.reparam.strategies` for built-in configuration
+        strategies.
     :type config: dict or callable
     """
 
-    def __init__(self, config: Union[Dict[str, object], Callable]):
+    def __init__(self, config: Union[Dict[str, object], Callable, BaseStrategy]):
         super().__init__()
         assert isinstance(config, dict) or callable(config)
         self.config = config
+        self._model = None
         self._args_kwargs = None
 
     def __call__(self, fn):
@@ -54,6 +78,8 @@ class ReparamMessenger(Messenger):
             return
         if isinstance(self.config, dict):
             reparam = self.config.get(msg["name"])
+        elif isinstance(self.config, BaseStrategy):
+            self.config.config_with_model(msg, self._model, *self._args_kwargs)
         else:
             reparam = self.config(msg)
         if reparam is None:
@@ -120,6 +146,17 @@ class ReparamMessenger(Messenger):
         msg["value"] = new_msg["value"]
         msg["is_observed"] = new_msg["is_observed"]
 
+    @contextmanager
+    def call(self, model, model_args, model_kwargs):
+        # This saves model,args,kwargs for optional use by reparameterizers.
+        self._model = model
+        self._args_kwargs = model_args, model_kwargs
+        try:
+            yield self
+        finally:
+            self._model = None
+            self._args_kwargs = None
+
 
 class ReparamHandler(object):
     """
@@ -132,10 +169,5 @@ class ReparamHandler(object):
         super().__init__()
 
     def __call__(self, *args, **kwargs):
-        # This saves args,kwargs for optional use by reparameterizers.
-        self.msngr._args_kwargs = args, kwargs
-        try:
-            with self.msngr:
-                return self.fn(*args, **kwargs)
-        finally:
-            self.msngr._args_kwargs = None
+        with self.msngr.call(self.fn, args, kwargs):
+            return self.fn(*args, **kwargs)
