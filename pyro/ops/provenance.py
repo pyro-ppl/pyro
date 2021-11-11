@@ -1,6 +1,9 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+from functools import singledispatch
+from typing import Tuple
+
 import torch
 
 
@@ -40,6 +43,7 @@ class ProvenanceTensor(torch.Tensor):
     """
 
     def __new__(cls, data: torch.Tensor, provenance=frozenset(), **kwargs):
+        assert not isinstance(data, ProvenanceTensor)
         if not provenance:
             return data
         instance = torch.Tensor.__new__(cls)
@@ -57,57 +61,99 @@ class ProvenanceTensor(torch.Tensor):
     def __repr__(self):
         return "Provenance:\n{}\nTensor:\n{}".format(self._provenance, self._t)
 
-    def __torch_function__(self, func, types, args=(), kwargs=None):
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
         if kwargs is None:
             kwargs = {}
         # collect provenance information from args
         provenance = frozenset()
-        # extract ProvenanceTensor._t data from args
+        # extract ProvenanceTensor._t data from args and kwargs
         _args = []
         for arg in args:
-            if isinstance(arg, ProvenanceTensor):
-                provenance |= arg._provenance
-                _args.append(arg._t)
-            elif isinstance(arg, (tuple, list)):
-                _arg = []
-                for a in arg:
-                    if isinstance(a, ProvenanceTensor):
-                        provenance |= a._provenance
-                        _arg.append(a._t)
-                    else:
-                        _arg.append(a)
-                _args.append(tuple(_arg))
-            else:
-                _args.append(arg)
-        ret = func(*_args, **kwargs)
-        if isinstance(ret, torch.Tensor):
-            return ProvenanceTensor(ret, provenance=provenance)
-        if isinstance(ret, (tuple, list)):
-            _ret = []
-            for r in ret:
-                if isinstance(r, torch.Tensor):
-                    _ret.append(ProvenanceTensor(r, provenance=provenance))
-                else:
-                    _ret.append(r)
-            return type(ret)(_ret)
-        return ret
+            _arg, _provenance = extract_provenance(arg)
+            _args.append(_arg)
+            provenance |= _provenance
+        _kwargs = {}
+        for k, v in kwargs.items():
+            _v, _provenance = extract_provenance(v)
+            _kwargs[k] = _v
+            provenance |= provenance
+        ret = func(*_args, **_kwargs)
+        _ret = track_provenance(ret, provenance)
+        return _ret
 
 
-def get_provenance(tensor: torch.Tensor) -> frozenset:
+@singledispatch
+def track_provenance(x, provenance: frozenset):
     """
-    Reads the provenance of either a :class:`torch.Tensor` (which may or may
-    not be a :class:`ProvenanceTensor` ).
+    Adds provenance info to the :class:`torch.Tensor` leaves of a data structure.
+
+    :param x: an object to add provenence info to.
+    :param frozenset provenance: A provenence set.
+    :returns: A provenence-tracking version of ``x``.
+    """
+    return x
+
+
+track_provenance.register(torch.Tensor)(ProvenanceTensor)
+
+
+@track_provenance.register(frozenset)
+@track_provenance.register(list)
+@track_provenance.register(set)
+@track_provenance.register(tuple)
+def _track_provenance_list(x, provenance: frozenset):
+    return type(x)(track_provenance(part, provenance) for part in x)
+
+
+@singledispatch
+def extract_provenance(x) -> Tuple[object, frozenset]:
+    """
+    Extracts the provenance of a data structure possibly containing
+    :class:`torch.Tensor` s as leaves, and separates into a detached object and
+    provenance.
+
+    :param x: An input data structure.
+    :returns: a tuple ``(detached_value, provenance)``
+    :rtype: tuple
+    """
+    return x, frozenset()
+
+
+@extract_provenance.register(ProvenanceTensor)
+def _extract_provenance_tensor(x):
+    return x._t, x._provenance
+
+
+@extract_provenance.register(frozenset)
+@extract_provenance.register(list)
+@extract_provenance.register(set)
+@extract_provenance.register(tuple)
+def _extract_provenance_list(x):
+    provenance = frozenset()
+    values = []
+    for part in x:
+        v, p = extract_provenance(part)
+        values.append(v)
+        provenance |= p
+    value = type(x)(values)
+    return value, provenance
+
+
+def get_provenance(x) -> frozenset:
+    """
+    Reads the provenance of a recursive datastructure possibly containing
+    :class:`torch.Tensor` s.
 
     :param torch.Tensor tensor: An input tensor.
     :returns: A provenance frozenset.
     :rtype: frozenset
     """
-    provenance = getattr(tensor, "_provenance", frozenset())
-    assert isinstance(provenance, frozenset)
+    _, provenance = extract_provenance(x)
     return provenance
 
 
-def detach_provenance(tensor: torch.Tensor) -> torch.Tensor:
+def detach_provenance(x):
     """
     Blocks provenance tracking through a tensor, similar to :meth:`torch.Tensor.detach`.
 
@@ -115,7 +161,5 @@ def detach_provenance(tensor: torch.Tensor) -> torch.Tensor:
     :returns: A tensor sharing the same data but with no provenance.
     :rtype: torch.Tensor
     """
-    while isinstance(tensor, ProvenanceTensor):
-        tensor = tensor._t
-    assert isinstance(tensor, torch.Tensor)
-    return tensor
+    value, _ = extract_provenance(x)
+    return value
