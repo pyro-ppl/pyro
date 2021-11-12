@@ -513,13 +513,6 @@ class AutoGaussianFunsor(AutoGaussian):
             )
 
         # Perform Gaussian tensor variable elimination.
-        samples, log_prob = _try_possibly_intractable(
-            funsor.recipes.forward_filter_backward_precondition,
-            factors=factors,
-            eliminate=self._funsor_eliminate,
-            plates=frozenset(plate_to_dim),
-        )
-
         if temperature == 1:
             samples, log_prob = _try_possibly_intractable(
                 funsor.recipes.forward_filter_backward_rsample,
