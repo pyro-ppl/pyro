@@ -78,6 +78,7 @@ List of Tutorials
 
    intro_part_i
    intro_part_ii
+   model_rendering
    svi_part_i
    svi_part_ii
    svi_part_iii

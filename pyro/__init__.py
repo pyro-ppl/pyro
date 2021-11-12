@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.poutine as poutine
+from pyro.infer.inspect import render_model
 from pyro.logger import log
 from pyro.poutine import condition, do, markov
 from pyro.primitives import (
@@ -54,6 +55,7 @@ __all__ = [
     "plate_stack",
     "poutine",
     "random_module",
+    "render_model",
     "sample",
     "set_rng_seed",
     "subsample",
