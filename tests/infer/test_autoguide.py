@@ -781,8 +781,13 @@ def test_init_scale(auto_class, init_scale):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         auto_guide_list_x,
-        auto_guide_callable,
-        auto_guide_module_callable,
+        xfail_param(
+            auto_guide_callable, reason="https://github.com/pyro-ppl/pyro/issues/2965"
+        ),
+        xfail_param(
+            auto_guide_module_callable,
+            reason="https://github.com/pyro-ppl/pyro/issues/2965",
+        ),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
         functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
         functools.partial(AutoNormal, init_loc_fn=init_to_median),
