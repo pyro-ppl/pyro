@@ -101,6 +101,20 @@ class _SoftplusLowerCholesky(type(lower_cholesky)):
     pass
 
 
+class _UnitLowerCholesky(Constraint):
+    """
+    Constrain to lower-triangular square matrices with all ones diagonals.
+    """
+    event_dim = 2
+
+    def check(self, value):
+        value_tril = value.tril()
+        lower_triangular = (value_tril == value).view(value.shape[:-2] + (-1,)).min(-1)[0]
+
+        ones_diagonal = (value.diagonal(dim1=-2, dim2=-1) == 1).min(-1)[0]
+        return lower_triangular & ones_diagonal
+
+
 corr_matrix = _CorrMatrix()
 integer = _Integer()
 ordered_vector = _OrderedVector()
@@ -108,6 +122,7 @@ positive_ordered_vector = _PositiveOrderedVector()
 sphere = _Sphere()
 softplus_positive = _SoftplusPositive()
 softplus_lower_cholesky = _SoftplusLowerCholesky()
+unit_lower_cholesky = _UnitLowerCholesky()
 corr_cholesky_constraint = corr_cholesky  # noqa: F405 DEPRECATED
 
 __all__ = [

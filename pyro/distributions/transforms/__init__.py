@@ -70,6 +70,7 @@ from .polynomial import Polynomial, polynomial
 from .power import PositivePowerTransform
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
 from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
+from .unit_cholesky import UnitLowerCholeskyTransform
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (
     ConditionalSplineAutoregressive,
@@ -130,6 +131,11 @@ def _transform_to_softplus_positive(constraint):
 @transform_to.register(constraints.softplus_lower_cholesky)
 def _transform_to_softplus_lower_cholesky(constraint):
     return SoftplusLowerCholeskyTransform()
+
+
+@transform_to.register(constraints.unit_lower_cholesky)
+def _transform_to_unit_lower_cholesky(constraint):
+    return UnitLowerCholeskyTransform()
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
