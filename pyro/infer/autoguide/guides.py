@@ -863,7 +863,7 @@ class AutoMultivariateNormal(AutoContinuous):
     """
 
     scale_constraint = constraints.softplus_positive
-    scale_tril_constraint = constraints.softplus_lower_cholesky
+    scale_tril_constraint = constraints.unit_lower_cholesky
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):

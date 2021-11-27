@@ -5,6 +5,8 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
+from pyro.distributions.constraints import unit_lower_cholesky
+
 
 class UnitLowerCholeskyTransform(Transform):
     """
@@ -12,7 +14,7 @@ class UnitLowerCholeskyTransform(Transform):
     all ones diagonals.
     """
     domain = constraints.independent(constraints.real, 2)
-    codomain = constraints.unit_lower_cholesky
+    codomain = unit_lower_cholesky
 
     def __eq__(self, other):
         return isinstance(other, UnitLowerCholeskyTransform)
