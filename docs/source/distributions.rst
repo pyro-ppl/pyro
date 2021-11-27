@@ -522,6 +522,13 @@ SoftplusLowerCholeskyTransform
     :undoc-members:
     :show-inheritance:
 
+UnitLowerCholeskyTransform
+--------------------------
+.. autoclass:: pyro.distributions.transforms.UnitLowerCholeskyTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SoftplusTransform
 -----------------
 .. autoclass:: pyro.distributions.transforms.SoftplusTransform
