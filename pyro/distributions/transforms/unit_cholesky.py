@@ -13,6 +13,7 @@ class UnitLowerCholeskyTransform(Transform):
     Transform from unconstrained matrices to lower-triangular matrices with
     all ones diagonals.
     """
+
     domain = constraints.independent(constraints.real, 2)
     codomain = unit_lower_cholesky
 

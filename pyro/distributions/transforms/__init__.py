@@ -70,7 +70,6 @@ from .polynomial import Polynomial, polynomial
 from .power import PositivePowerTransform
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
 from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
-from .unit_cholesky import UnitLowerCholeskyTransform
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (
     ConditionalSplineAutoregressive,
@@ -80,6 +79,7 @@ from .spline_autoregressive import (
 )
 from .spline_coupling import SplineCoupling, spline_coupling
 from .sylvester import Sylvester, sylvester
+from .unit_cholesky import UnitLowerCholeskyTransform
 
 ########################################
 # register transforms
