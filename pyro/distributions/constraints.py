@@ -137,6 +137,7 @@ __all__ = [
     "softplus_lower_cholesky",
     "softplus_positive",
     "sphere",
+    "unit_lower_cholesky",
 ]
 
 __all__.extend(torch_constraints)
