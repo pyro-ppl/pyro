@@ -24,7 +24,7 @@ class UnitLowerCholeskyTransform(Transform):
         return x.tril(-1) + torch.eye(x.size(-1), device=x.device, dtype=x.dtype)
 
     def _inverse(self, y):
-        return y.tril(-1)
+        return y
 
 
 __all__ = [
