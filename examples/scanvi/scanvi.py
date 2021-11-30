@@ -270,7 +270,7 @@ class SCANVI(nn.Module):
                 pyro.factor(
                     "classification_loss",
                     -self.alpha * classification_loss,
-                    has_rsample=False,
+                    has_rsample=True,
                 )
 
             z1_loc, z1_scale = self.z1_encoder(z2, y)
