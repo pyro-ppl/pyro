@@ -4,6 +4,8 @@
 import functools
 import math
 import operator
+import weakref
+from typing import Dict
 
 import torch
 
@@ -151,3 +153,38 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     i1s = lvalues[..., :orders].T + seqs
     assert i1s.shape == (orders, vshape.numel())
     return i1s.view(-1, *vshape)
+
+
+def sparse_multinomial_likelihood(total_count, nonzero_logits, nonzero_value):
+    """
+    The following are equivalent::
+
+        # Version 1. dense
+        log_prob = Multinomial(logits=logits).log_prob(value).sum()
+
+        # Version 2. sparse
+        nnz = value.nonzero(as_tuple=True)
+        log_prob = sparse_multinomial_likelihood(
+            value.sum(-1),
+            (logits - logits.logsumexp(-1))[nnz],
+            value[nnz],
+        )
+    """
+    return (
+        _log_factorial_sum(total_count)
+        - _log_factorial_sum(nonzero_value)
+        + torch.dot(nonzero_logits, nonzero_value)
+    )
+
+
+_log_factorial_cache: Dict[int, torch.Tensor] = {}
+
+
+def _log_factorial_sum(x: torch.Tensor) -> torch.Tensor:
+    if x.requires_grad:
+        return (x + 1).lgamma().sum()
+    key = id(x)
+    if key not in _log_factorial_cache:
+        weakref.finalize(x, _log_factorial_cache.pop, key, None)
+        _log_factorial_cache[key] = (x + 1).lgamma().sum()
+    return _log_factorial_cache[key]
