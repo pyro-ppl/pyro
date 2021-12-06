@@ -5,7 +5,7 @@ import urllib
 
 import torch
 
-from pyro.contrib.examples.util import get_data_directory
+from .util import _mkdir_p, get_data_directory
 
 DATA = get_data_directory(__file__)
 URL = "https://github.com/pyro-ppl/datasets/raw/master/nextstrain.data.pt.gz"
@@ -21,6 +21,7 @@ def load_nextstrain_counts() -> dict:
     (month,location,lineage) and (lineage,mutation) bins by the Broad Institute's
     `preprocessing script <https://github.com/broadinstitute/pyro-cov/blob/master/scripts/preprocess_nextstrain.py>`_.
     """
+    _mkdir_p(DATA)
     basename = URL.split("/")[-1]
     gz_filename = os.path.join(DATA, basename)
     if not os.path.exists(gz_filename):
