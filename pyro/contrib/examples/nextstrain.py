@@ -20,7 +20,7 @@ def load_nextstrain_counts(map_location=None) -> dict:
 
     The original dataset is a preprocessed intermediate ``metadata.tsv.gz`` available via
     `nextstrain <https://docs.nextstrain.org/projects/ncov/en/latest/reference/remote_inputs.html>`_.
-    The ``metadata.tsv.gz`` file was then aggregated by to
+    The ``metadata.tsv.gz`` file was then aggregated to
     (month,location,lineage) and (lineage,mutation) bins by the Broad Institute's
     `preprocessing script <https://github.com/broadinstitute/pyro-cov/blob/master/scripts/preprocess_nextstrain.py>`_.
     """
