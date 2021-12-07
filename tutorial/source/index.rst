@@ -172,6 +172,7 @@ List of Tutorials
    epi_sir
    epi_regional
    sir_hmc
+   logistic-growth
 
 .. toctree::
    :maxdepth: 1
