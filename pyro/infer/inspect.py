@@ -337,10 +337,18 @@ def generate_graph_specification(model_relations: dict) -> dict:
         if plate1 is None or plate2 is None:
             continue
 
-        if set(plate_groups[plate1]) < set(plate_groups[plate2]):
+        nodes1 = set(plate_groups[plate1])
+        nodes2 = set(plate_groups[plate2])
+        if nodes1 < nodes2:
             plate_data[plate1] = {"parent": plate2}
-        elif set(plate_groups[plate1]) >= set(plate_groups[plate2]):
+        elif nodes1 >= nodes2:
             plate_data[plate2] = {"parent": plate1}
+        elif nodes1 & nodes2:
+            raise NotImplementedError(
+                f"Overlapping non-nested plates {repr(plate1)},{repr(plate2)} "
+                "are not supported by render_model(). To help add support see "
+                "https://github.com/pyro-ppl/pyro/issues/2980"
+            )
 
     for plate in plate_groups:
         if plate is None:
