@@ -293,6 +293,24 @@ def get_model_relations(
         if site["is_observed"]:
             observed.append(name)
 
+    def _resolve_plate_samples(plate_samples):
+        for p, pv in plate_samples.items():
+            pv = set(pv)
+            for q, qv in plate_samples.items():
+                qv = set(qv)
+                if len(pv & qv) > 0 and len(pv - qv) > 0 and len(qv - pv) > 0:
+                    plate_samples_ = plate_samples.copy()
+                    plate_samples_[q] = pv & qv
+                    plate_samples_[q + "__CLONE"] = qv - pv
+                    return _resolve_plate_samples(plate_samples_)
+        return plate_samples
+
+    plate_sample = _resolve_plate_samples(plate_sample)
+    # convert set to list to keep order of variables
+    plate_sample = {
+        k: [name for name in trace.nodes if name in v] for k, v in plate_sample.items()
+    }
+
     return {
         "sample_sample": sample_sample,
         "sample_dist": sample_dist,
