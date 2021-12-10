@@ -5,11 +5,24 @@ import logging
 import warnings
 from abc import ABCMeta, abstractmethod
 
+import torch
+
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_site_shape
+
+
+class _ELBOModule(torch.nn.Module):
+    def __init__(self, model, guide, elbo):
+        super().__init__()
+        self.model = model
+        self.guide = guide
+        self.elbo = elbo
+
+    def forward(self, *args, **kwargs):
+        return self.elbo.differentiable_loss(self.model, self.guide, *args, **kwargs)
 
 
 class ELBO(object, metaclass=ABCMeta):
@@ -85,6 +98,9 @@ class ELBO(object, metaclass=ABCMeta):
         self.ignore_jit_warnings = ignore_jit_warnings
         self.jit_options = jit_options
         self.tail_adaptive_beta = tail_adaptive_beta
+
+    def __call__(self, model, guide):
+        return _ELBOModule(model, guide, self)
 
     def _guess_max_plate_nesting(self, model, guide, args, kwargs):
         """

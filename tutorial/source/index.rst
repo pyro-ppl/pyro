@@ -91,6 +91,7 @@ List of Tutorials
 
    bayesian_regression
    bayesian_regression_ii
+   bayesian_regression_module
    tensor_shapes
    modules
    jit

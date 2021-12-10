@@ -14,6 +14,7 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.params import param_with_module_name
+from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.plate_messenger import PlateMessenger
 from pyro.poutine.runtime import (
     _MODULE_NAMESPACE_DIVIDER,
@@ -45,7 +46,19 @@ def clear_param_store():
     return _PYRO_PARAM_STORE.clear()
 
 
-_param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
+@contextmanager
+def use_param_store(param_store: ParamStoreDict):
+    try:
+        global _PYRO_PARAM_STORE
+        _PYRO_PARAM_STORE, prev_store = param_store, _PYRO_PARAM_STORE
+        yield param_store
+    finally:
+        _PYRO_PARAM_STORE = prev_store
+
+
+@effectful(type="param")
+def _param(*args, **kwargs):
+    return _PYRO_PARAM_STORE.get_param(*args, **kwargs)
 
 
 def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
