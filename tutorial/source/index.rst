@@ -107,7 +107,6 @@ List of Tutorials
    normalizing_flows_i
    dmm
    air
-   scanvi
    cevae
    sparse_gamma
    prodlda
