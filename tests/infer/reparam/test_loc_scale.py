@@ -92,7 +92,12 @@ def test_init(dist_type, centered, shape):
     check_init_reparam(model, LocScaleReparam(centered))
 
 
-@pytest.mark.xfail(reason="reparam inside plate not compatible with init messenger")
+@pytest.mark.xfail(
+    reason=(
+        "reparam inside plate not compatible with init messenger,"
+        " issue https://github.com/pyro-ppl/pyro/issues/2990"
+    )
+)
 def test_init_with_reparam_inside_plate():
     def model():
         with pyro.plate("N", 10):
