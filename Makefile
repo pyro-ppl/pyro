@@ -19,7 +19,7 @@ tutorial: FORCE
 
 lint: FORCE
 	flake8
-	black --extend-exclude=\.ipynb --check .
+	black --extend-exclude=\.ipynb --check . || black --exclude=\.ipynb --check .
 	isort --check .
 	python scripts/update_headers.py --check
 	mypy pyro
@@ -30,7 +30,7 @@ license: FORCE
 	python scripts/update_headers.py
 
 format: license FORCE
-	black --extend-exclude=\.ipynb .
+	black --extend-exclude=\.ipynb --check . || black --exclude=\.ipynb --check .
 	isort .
 
 version: FORCE
