@@ -522,6 +522,8 @@ def AutoGuideList_x(model):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         AutoGuideList_x,
+        AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
