@@ -23,7 +23,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from data import get_data
 from matplotlib.patches import Patch
 from torch.distributions import constraints
 from torch.nn.functional import softmax, softplus
@@ -32,6 +31,7 @@ from torch.optim import Adam
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.contrib.examples.scanvi_data import get_data
 from pyro.distributions.util import broadcast_shape
 from pyro.infer import SVI, TraceEnum_ELBO, config_enumerate
 from pyro.optim import MultiStepLR

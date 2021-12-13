@@ -107,10 +107,10 @@ List of Tutorials
    normalizing_flows_i
    dmm
    air
-   scanvi
    cevae
    sparse_gamma
    prodlda
+   scanvi
 
 .. toctree::
    :maxdepth: 1
@@ -172,6 +172,7 @@ List of Tutorials
    epi_sir
    epi_regional
    sir_hmc
+   logistic-growth
 
 .. toctree::
    :maxdepth: 1

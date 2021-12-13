@@ -456,6 +456,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
     [
         T.LowerCholeskyTransform(),
         T.SoftplusLowerCholeskyTransform(),
+        T.UnitLowerCholeskyTransform(),
     ],
     ids=lambda t: type(t).__name__,
 )

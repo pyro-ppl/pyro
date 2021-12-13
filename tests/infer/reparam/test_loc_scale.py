@@ -9,6 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.distributions.util import is_identically_one
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_uniform
 from pyro.infer.reparam import LocScaleReparam
 from tests.common import assert_close
 
@@ -89,3 +90,20 @@ def test_init(dist_type, centered, shape):
                 return pyro.sample("x", dist.AsymmetricLaplace(loc, scale, 1.5))
 
     check_init_reparam(model, LocScaleReparam(centered))
+
+
+@pytest.mark.xfail(
+    reason=(
+        "reparam inside plate not compatible with init messenger,"
+        " issue https://github.com/pyro-ppl/pyro/issues/2990"
+    )
+)
+def test_init_with_reparam_inside_plate():
+    def model():
+        with pyro.plate("N", 10):
+            with poutine.reparam(config={"x": LocScaleReparam(centered=0.0)}):
+                return pyro.sample("x", dist.Normal(0, 1))
+
+    with InitMessenger(init_to_uniform()):
+        actual = model()
+        assert actual.shape == (10,)

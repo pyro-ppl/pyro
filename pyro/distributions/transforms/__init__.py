@@ -79,6 +79,7 @@ from .spline_autoregressive import (
 )
 from .spline_coupling import SplineCoupling, spline_coupling
 from .sylvester import Sylvester, sylvester
+from .unit_cholesky import UnitLowerCholeskyTransform
 
 ########################################
 # register transforms
@@ -130,6 +131,11 @@ def _transform_to_softplus_positive(constraint):
 @transform_to.register(constraints.softplus_lower_cholesky)
 def _transform_to_softplus_lower_cholesky(constraint):
     return SoftplusLowerCholeskyTransform()
+
+
+@transform_to.register(constraints.unit_lower_cholesky)
+def _transform_to_unit_lower_cholesky(constraint):
+    return UnitLowerCholeskyTransform()
 
 
 def iterated(repeats, base_fn, *args, **kwargs):
