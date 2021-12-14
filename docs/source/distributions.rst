@@ -508,6 +508,13 @@ Permute
     :undoc-members:
     :show-inheritance:
 
+PositivePowerTransform
+----------------------
+.. autoclass:: pyro.distributions.transforms.PositivePowerTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SoftplusLowerCholeskyTransform
 ------------------------------
 .. autoclass:: pyro.distributions.transforms.SoftplusLowerCholeskyTransform
@@ -518,6 +525,13 @@ SoftplusLowerCholeskyTransform
 SoftplusTransform
 -----------------
 .. autoclass:: pyro.distributions.transforms.SoftplusTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+UnitLowerCholeskyTransform
+--------------------------
+.. autoclass:: pyro.distributions.transforms.UnitLowerCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:

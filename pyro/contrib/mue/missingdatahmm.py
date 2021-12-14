@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
+from torch.distributions import Categorical, OneHotCategorical
 
 from pyro.distributions import constraints
 from pyro.distributions.hmm import _sequential_logmatmulexp
@@ -110,3 +111,207 @@ class MissingDataDiscreteHMM(TorchDistribution):
         # Marginalize out final state.
         result = result.logsumexp(-1)
         return result
+
+    def sample(self, sample_shape=torch.Size([])):
+        """
+        :param ~torch.Size sample_shape: Sample shape, last dimension must be
+            ``num_steps`` and must be broadcastable to
+            ``(batch_size, num_steps)``. batch_size must be int not tuple.
+        """
+        # shape: batch_size x num_steps x categorical_size
+        shape = broadcast_shape(
+            torch.Size(list(self.batch_shape) + [1, 1]),
+            torch.Size(list(sample_shape) + [1]),
+            torch.Size((1, 1, self.event_shape[-1])),
+        )
+        # state: batch_size x state_dim
+        state = OneHotCategorical(logits=self.initial_logits).sample()
+        # sample: batch_size x num_steps x categorical_size
+        sample = torch.zeros(shape)
+        for i in range(shape[-2]):
+            # batch_size x 1 x state_dim @
+            # batch_size x state_dim x categorical_size
+            obs_logits = torch.matmul(
+                state.unsqueeze(-2), self.observation_logits
+            ).squeeze(-2)
+            sample[:, i, :] = OneHotCategorical(logits=obs_logits).sample()
+            # batch_size x 1 x state_dim @
+            # batch_size x state_dim x state_dim
+            trans_logits = torch.matmul(
+                state.unsqueeze(-2), self.transition_logits
+            ).squeeze(-2)
+            state = OneHotCategorical(logits=trans_logits).sample()
+
+        return sample
+
+    def filter(self, value):
+        """
+        Compute the marginal probability of the state variable at each
+        step conditional on the previous observations.
+
+        :param ~torch.Tensor value: One-hot encoded observation.
+            Must be real-valued (float) and broadcastable to
+            ``(batch_size, num_steps, categorical_size)`` where
+            ``categorical_size`` is the dimension of the categorical output.
+        """
+        # batch_size x num_steps x state_dim
+        shape = broadcast_shape(
+            torch.Size(list(self.batch_shape) + [1, 1]),
+            torch.Size(list(value.shape[:-1]) + [1]),
+            torch.Size((1, 1, self.initial_logits.shape[-1])),
+        )
+        filter = torch.zeros(shape)
+
+        # Combine observation and transition factors.
+        # batch_size x num_steps x state_dim
+        value_logits = torch.matmul(
+            value, torch.transpose(self.observation_logits, -2, -1)
+        )
+        # batch_size x num_steps-1 x state_dim x state_dim
+        result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
+
+        # Forward pass. (This could be parallelized using the
+        # Sarkka & Garcia-Fernandez method.)
+        filter[..., 0, :] = self.initial_logits + value_logits[..., 0, :]
+        filter[..., 0, :] = filter[..., 0, :] - torch.logsumexp(
+            filter[..., 0, :], -1, True
+        )
+        for i in range(1, shape[-2]):
+            filter[..., i, :] = torch.logsumexp(
+                filter[..., i - 1, :, None] + result[..., i - 1, :, :], -2
+            )
+            filter[..., i, :] = filter[..., i, :] - torch.logsumexp(
+                filter[..., i, :], -1, True
+            )
+        return filter
+
+    def smooth(self, value):
+        """
+        Compute posterior expected value of state at each position (smoothing).
+
+        :param ~torch.Tensor value: One-hot encoded observation.
+            Must be real-valued (float) and broadcastable to
+            ``(batch_size, num_steps, categorical_size)`` where
+            ``categorical_size`` is the dimension of the categorical output.
+        """
+        # Compute filter and initialize.
+        filter = self.filter(value)
+        shape = filter.shape
+        backfilter = torch.zeros(shape)
+
+        # Combine observation and transition factors.
+        # batch_size x num_steps x state_dim
+        value_logits = torch.matmul(
+            value, torch.transpose(self.observation_logits, -2, -1)
+        )
+        # batch_size x num_steps-1 x state_dim x state_dim
+        result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
+        # Construct backwards filter.
+        for i in range(shape[-2] - 1, 0, -1):
+            backfilter[..., i - 1, :] = torch.logsumexp(
+                backfilter[..., i, None, :] + result[..., i - 1, :, :], -1
+            )
+
+        # Compute smoothed version.
+        smooth = filter + backfilter
+        smooth = smooth - torch.logsumexp(smooth, -1, True)
+        return smooth
+
+    def sample_states(self, value):
+        """
+        Sample states with forward filtering-backward sampling algorithm.
+
+        :param ~torch.Tensor value: One-hot encoded observation.
+            Must be real-valued (float) and broadcastable to
+            ``(batch_size, num_steps, categorical_size)`` where
+            ``categorical_size`` is the dimension of the categorical output.
+        """
+        filter = self.filter(value)
+        shape = filter.shape
+        joint = filter.unsqueeze(-1) + self.transition_logits.unsqueeze(-3)
+        states = torch.zeros(shape[:-1], dtype=torch.long)
+        states[..., -1] = Categorical(logits=filter[..., -1, :]).sample()
+        for i in range(shape[-2] - 1, 0, -1):
+            logits = torch.gather(
+                joint[..., i - 1, :, :],
+                -1,
+                states[..., i, None, None]
+                * torch.ones([shape[-1], 1], dtype=torch.long),
+            ).squeeze(-1)
+            states[..., i - 1] = Categorical(logits=logits).sample()
+        return states
+
+    def map_states(self, value):
+        """
+        Compute maximum a posteriori (MAP) estimate of state variable with
+        Viterbi algorithm.
+
+        :param ~torch.Tensor value: One-hot encoded observation.
+            Must be real-valued (float) and broadcastable to
+            ``(batch_size, num_steps, categorical_size)`` where
+            ``categorical_size`` is the dimension of the categorical output.
+        """
+        # Setup for Viterbi.
+        # batch_size x num_steps x state_dim
+        shape = broadcast_shape(
+            torch.Size(list(self.batch_shape) + [1, 1]),
+            torch.Size(list(value.shape[:-1]) + [1]),
+            torch.Size((1, 1, self.initial_logits.shape[-1])),
+        )
+        state_logits = torch.zeros(shape)
+        state_traceback = torch.zeros(shape, dtype=torch.long)
+
+        # Combine observation and transition factors.
+        # batch_size x num_steps x state_dim
+        value_logits = torch.matmul(
+            value, torch.transpose(self.observation_logits, -2, -1)
+        )
+        # batch_size x num_steps-1 x state_dim x state_dim
+        result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
+
+        # Forward pass.
+        state_logits[..., 0, :] = self.initial_logits + value_logits[..., 0, :]
+        for i in range(1, shape[-2]):
+            transit_weights = (
+                state_logits[..., i - 1, :, None] + result[..., i - 1, :, :]
+            )
+            state_logits[..., i, :], state_traceback[..., i, :] = torch.max(
+                transit_weights, -2
+            )
+        # Traceback.
+        map_states = torch.zeros(shape[:-1], dtype=torch.long)
+        map_states[..., -1] = torch.argmax(state_logits[..., -1, :], -1)
+        for i in range(shape[-2] - 1, 0, -1):
+            map_states[..., i - 1] = torch.gather(
+                state_traceback[..., i, :], -1, map_states[..., i].unsqueeze(-1)
+            ).squeeze(-1)
+        return map_states
+
+    def given_states(self, states):
+        """
+        Distribution conditional on the state variable.
+
+        :param ~torch.Tensor map_states: State trajectory. Must be
+            integer-valued (long) and broadcastable to
+            ``(batch_size, num_steps)``.
+        """
+        shape = broadcast_shape(
+            list(self.batch_shape) + [1, 1],
+            list(states.shape[:-1]) + [1, 1],
+            [1, 1, self.observation_logits.shape[-1]],
+        )
+        states_index = states.unsqueeze(-1) * torch.ones(shape, dtype=torch.long)
+        obs_logits = self.observation_logits * torch.ones(shape)
+        logits = torch.gather(obs_logits, -2, states_index)
+        return OneHotCategorical(logits=logits)
+
+    def sample_given_states(self, states):
+        """
+        Sample an observation conditional on the state variable.
+
+        :param ~torch.Tensor map_states: State trajectory. Must be
+            integer-valued (long) and broadcastable to
+            ``(batch_size, num_steps)``.
+        """
+        conditional = self.given_states(states)
+        return conditional.sample()

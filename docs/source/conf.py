@@ -196,8 +196,9 @@ intersphinx_mapping = {
     "funsor": ("http://funsor.pyro.ai/en/stable/", None),
     "opt_einsum": ("https://optimized-einsum.readthedocs.io/en/stable/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
-    "Bio": ("https://biopython.readthedocs.io/en/latest/", None),
+    "Bio": ("https://biopython.org/docs/latest/api/", None),
     "horovod": ("https://horovod.readthedocs.io/en/stable/", None),
+    "graphviz": ("https://graphviz.readthedocs.io/en/stable/", None),
 }
 
 # document class constructors (__init__ methods):

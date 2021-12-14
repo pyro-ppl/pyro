@@ -46,7 +46,8 @@ class SineBivariateVonMises(TorchDistribution):
 
             \frac{\rho}{\kappa_1\kappa_2} \rightarrow 1
 
-        because the distribution becomes increasingly bimodal.
+        because the distribution becomes increasingly bimodal. To avoid bimodality use the `weighted_correlation`
+        parameter with a skew away from one (e.g., Beta(1,3)). The `weighted_correlation` should be in [0,1].
 
     .. note:: The correlation and weighted_correlation params are mutually exclusive.
 
@@ -64,7 +65,7 @@ class SineBivariateVonMises(TorchDistribution):
     :param torch.Tensor psi_concentration: concentration of second angle
     :param torch.Tensor correlation: correlation between the two angles
     :param torch.Tensor weighted_correlation: set correlation to weigthed_corr * sqrt(phi_conc*psi_conc)
-        to avoid bimodality (see note).
+        to avoid bimodality (see note). The `weightd_correlation` should be in [0,1].
     """
 
     arg_constraints = {

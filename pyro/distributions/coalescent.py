@@ -138,7 +138,7 @@ class CoalescentTimesWithRate(TorchDistribution):
     :param torch.Tensor rate_grid: Tensor of base coalescent rates (pairwise
         rate of coalescence). For example in a simple SIR model this might be
         ``beta S / I``. The rightmost dimension is time, and this tensor
-        represents a (batch of) rates that are piecwise constant in time.
+        represents a (batch of) rates that are piecewise constant in time.
     """
 
     arg_constraints = {

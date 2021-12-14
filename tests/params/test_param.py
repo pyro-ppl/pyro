@@ -149,3 +149,97 @@ def test_dict_interface():
     assert list(param_store.keys()) == []
     assert list(key for key, value in param_store.items()) == []
     assert len(list(param_store.values())) == 0
+
+
+def test_scope():
+    x0 = torch.randn(())
+    z0 = torch.randn(5).exp()
+    x1 = torch.randn(3)
+    y1 = torch.randn(2, 1).exp()
+    y2 = torch.randn(2, 1).exp()
+    z2 = torch.randn(1, 4).exp()
+    z2 /= z2.sum()
+
+    constraint_table = {
+        "z0": constraints.positive,
+        "y1": constraints.positive,
+        "y2": constraints.positive,
+        "z2": constraints.simplex,
+    }
+
+    def check_constraint(name):
+        expected = constraint_table.get(name, constraints.real)
+        actual = param_store._constraints[name[:1]]
+        assert actual == expected
+
+    param_store = pyro.get_param_store()
+
+    # Create base scope.
+    assert not param_store
+    pyro.param("x", x0)
+    pyro.param("z", z0, constraint=constraints.positive)
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Create scope1.
+    with param_store.scope() as scope1:
+        assert not param_store
+        pyro.param("x", x1)
+        pyro.param("y", y1, constraint=constraints.positive)
+        assert set(param_store) == {"x", "y"}
+        assert_equal(pyro.param("x"), x1)
+        assert_equal(pyro.param("y"), y1)
+        check_constraint("x1")
+        check_constraint("y1")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Create scope2.
+    with param_store.scope() as scope2:
+        assert not param_store
+        pyro.param("y", y2, constraint=constraints.positive)
+        pyro.param("z", z2, constraint=constraints.simplex)
+        assert set(param_store) == {"y", "z"}
+        assert_equal(pyro.param("y"), y2)
+        assert_equal(pyro.param("z"), z2)
+        check_constraint("y2")
+        check_constraint("z2")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Reload scope1.
+    with param_store.scope(scope1) as s:
+        assert s is scope1
+        assert set(param_store) == {"x", "y"}
+        assert_equal(pyro.param("x"), x1)
+        assert_equal(pyro.param("y"), y1)
+        check_constraint("x1")
+        check_constraint("y1")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")
+
+    # Reload scope2.
+    with param_store.scope(scope2) as s:
+        assert s is scope2
+        assert set(param_store) == {"y", "z"}
+        assert_equal(pyro.param("y"), y2)
+        assert_equal(pyro.param("z"), z2)
+        check_constraint("y2")
+        check_constraint("z2")
+    assert set(param_store) == {"x", "z"}
+    assert_equal(pyro.param("x"), x0)
+    assert_equal(pyro.param("z"), z0)
+    check_constraint("x0")
+    check_constraint("z0")

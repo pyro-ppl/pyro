@@ -6,6 +6,7 @@ import math
 import os
 import timeit
 from collections import defaultdict
+from contextlib import ExitStack  # python 3
 
 import pytest
 import torch
@@ -27,12 +28,6 @@ from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.ops.indexing import Vindex
 from pyro.util import torch_isnan
 from tests.common import assert_equal, skipif_param
-
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
-
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +100,33 @@ def test_iter_discrete_traces_vector(expand, graph_type):
 
     probs = pyro.param("probs")
     assert len(traces) == 2 * probs.size(-1)
+
+
+def test_enumerate_sequential_guide():
+    values = []
+
+    def model():
+        x = pyro.sample("x", dist.Bernoulli(0.5))
+        values.append(float(x))
+
+    def guide():
+        pyro.sample("x", dist.Bernoulli(0.5), infer={"enumerate": "sequential"})
+
+    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+    elbo.loss(model, guide)
+    assert len(values) == 2, values
+
+
+def test_enumerate_sequential_model():
+    def model():
+        pyro.sample("x", dist.Bernoulli(0.5), infer={"enumerate": "sequential"})
+
+    def guide():
+        pass
+
+    with pytest.raises(NotImplementedError):
+        elbo = TraceEnum_ELBO(max_plate_nesting=0)
+        elbo.loss(model, guide)
 
 
 # The usual dist.Bernoulli avoids NANs by clamping log prob. This unsafe version

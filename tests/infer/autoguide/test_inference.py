@@ -49,7 +49,7 @@ class AutoGaussianChain(GaussianChain):
             ) * self.target_auto_diag_cov[n + 1]
 
     def test_multivariatate_normal_auto(self):
-        self.do_test_auto(3, reparameterized=True, n_steps=10001)
+        self.do_test_auto(3, reparameterized=True, n_steps=1001)
 
     def do_test_auto(self, N, reparameterized, n_steps):
         logger.debug("\nGoing to do AutoGaussianChain test...")
@@ -70,20 +70,21 @@ class AutoGaussianChain(GaussianChain):
         )
 
         # TODO speed up with parallel num_particles > 1
-        adam = optim.Adam({"lr": 0.001, "betas": (0.95, 0.999)})
-        svi = SVI(self.model, self.guide, adam, loss=Trace_ELBO())
+        adam = optim.Adam({"lr": 0.01, "betas": (0.95, 0.999)})
+        elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
+        svi = SVI(self.model, self.guide, adam, elbo)
 
         for k in range(n_steps):
             loss = svi.step(reparameterized)
             assert np.isfinite(loss), loss
 
-            if k % 1000 == 0 and k > 0 or k == n_steps - 1:
+            if k % 100 == 0 and k > 0 or k == n_steps - 1:
                 logger.debug(
                     "[step {}] guide mean parameter: {}".format(
                         k, self.guide.loc.detach().cpu().numpy()
                     )
                 )
-                L = self.guide.scale_tril
+                L = self.guide.scale_tril * self.guide.scale[:, None]
                 diag_cov = torch.mm(L, L.t()).diag()
                 logger.debug(
                     "[step {}] auto_diag_cov: {}".format(

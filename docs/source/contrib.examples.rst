@@ -20,6 +20,14 @@ BART Ridership
     :show-inheritance:
     :member-order: bysource
 
+Nextstrain SARS-CoV-2 counts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. automodule:: pyro.contrib.examples.nextstrain
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Utilities
 ---------
 .. automodule:: pyro.contrib.examples.util

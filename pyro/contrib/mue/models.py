@@ -159,17 +159,26 @@ class ProfileHMM(nn.Module):
         )
         insert_q_sd = pyro.param("insert_q_sd", torch.zeros(self.indel_shape))
         pyro.sample(
-            "insert", dist.Normal(insert_q_mn, softplus(insert_q_sd)).to_event(3)
+            "insert",
+            dist.Normal(insert_q_mn, softplus(insert_q_sd)).to_event(3),
         )
         delete_q_mn = pyro.param(
             "delete_q_mn", torch.ones(self.indel_shape) * self.indel_prior
         )
         delete_q_sd = pyro.param("delete_q_sd", torch.zeros(self.indel_shape))
         pyro.sample(
-            "delete", dist.Normal(delete_q_mn, softplus(delete_q_sd)).to_event(3)
+            "delete",
+            dist.Normal(delete_q_mn, softplus(delete_q_sd)).to_event(3),
         )
 
-    def fit_svi(self, dataset, epochs=2, batch_size=1, scheduler=None, jit=False):
+    def fit_svi(
+        self,
+        dataset,
+        epochs=2,
+        batch_size=1,
+        scheduler=None,
+        jit=False,
+    ):
         """
         Infer approximate posterior with stochastic variational inference.
 
@@ -196,10 +205,18 @@ class ProfileHMM(nn.Module):
                     "gamma": 0.5,
                 }
             )
+        if self.is_cuda:
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
         # Initialize guide.
         self.guide(None, None)
         dataload = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, pin_memory=self.pin_memory
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            pin_memory=self.pin_memory,
+            generator=torch.Generator(device=device),
         )
         # Setup stochastic variational inference.
         if jit:
@@ -703,8 +720,16 @@ class FactorMuE(nn.Module):
                     "gamma": 0.5,
                 }
             )
+        if self.is_cuda:
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
         dataload = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, pin_memory=self.pin_memory
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            pin_memory=self.pin_memory,
+            generator=torch.Generator(device=device),
         )
         # Initialize guide.
         for seq_data, L_data in dataload:

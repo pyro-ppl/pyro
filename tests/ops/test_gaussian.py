@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from collections import OrderedDict
 
 import pytest
 import torch
+from torch.distributions import constraints, transform_to
 from torch.nn.functional import pad
 
 import pyro.distributions as dist
@@ -418,3 +420,70 @@ def test_gaussian_tensordot(
     # TODO(fehiepsi): find some condition to make this test stable, so we can compare large value
     # log densities.
     assert_close(actual.clamp(max=10.0), expect.clamp(max=10.0), atol=0.1, rtol=0.1)
+
+
+@pytest.mark.stage("funsor")
+@pytest.mark.parametrize("batch_shape", [(), (5,), (4, 2)], ids=str)
+def test_gaussian_funsor(batch_shape):
+    # This tests sample distribution, rsample gradients, log_prob, and log_prob
+    # gradients for both Pyro's and Funsor's Gaussian.
+    import funsor
+
+    funsor.set_backend("torch")
+    num_samples = 100000
+
+    # Declare unconstrained parameters.
+    loc = torch.randn(batch_shape + (3,)).requires_grad_()
+    t = transform_to(constraints.positive_definite)
+    m = torch.randn(batch_shape + (3, 3))
+    precision_unconstrained = t.inv(m @ m.transpose(-1, -2)).requires_grad_()
+
+    # Transform to constrained space.
+    log_normalizer = torch.zeros(batch_shape)
+    precision = t(precision_unconstrained)
+    info_vec = (precision @ loc[..., None])[..., 0]
+
+    def check_equal(actual, expected, atol=0.01, rtol=0):
+        assert_close(actual.data, expected.data, atol=atol, rtol=rtol)
+        grads = torch.autograd.grad(
+            (actual - expected).abs().sum(),
+            [loc, precision_unconstrained],
+            retain_graph=True,
+        )
+        for grad in grads:
+            assert grad.abs().max() < atol
+
+    entropy = dist.MultivariateNormal(loc, precision_matrix=precision).entropy()
+
+    # Monte carlo estimate entropy via pyro.
+    p_gaussian = Gaussian(log_normalizer, info_vec, precision)
+    p_log_Z = p_gaussian.event_logsumexp()
+    p_rsamples = p_gaussian.rsample((num_samples,))
+    pp_entropy = (p_log_Z - p_gaussian.log_density(p_rsamples)).mean(0)
+    check_equal(pp_entropy, entropy)
+
+    # Monte carlo estimate entropy via funsor.
+    inputs = OrderedDict([(k, funsor.Bint[v]) for k, v in zip("ij", batch_shape)])
+    inputs["x"] = funsor.Reals[3]
+    f_gaussian = funsor.gaussian.Gaussian(mean=loc, precision=precision, inputs=inputs)
+    f_log_Z = f_gaussian.reduce(funsor.ops.logaddexp, "x")
+    sample_inputs = OrderedDict(particle=funsor.Bint[num_samples])
+    deltas = f_gaussian.sample("x", sample_inputs)
+    f_rsamples = funsor.montecarlo.extract_samples(deltas)["x"]
+    ff_entropy = (f_log_Z - f_gaussian(x=f_rsamples)).reduce(
+        funsor.ops.mean, "particle"
+    )
+    check_equal(ff_entropy.data, entropy)
+
+    # Check Funsor's .rsample against Pyro's .log_prob.
+    pf_entropy = (p_log_Z - p_gaussian.log_density(f_rsamples.data)).mean(0)
+    check_equal(pf_entropy, entropy)
+
+    # Check Pyro's .rsample against Funsor's .log_prob.
+    fp_rsamples = funsor.Tensor(p_rsamples)["particle"]
+    for i in "ij"[: len(batch_shape)]:
+        fp_rsamples = fp_rsamples[i]
+    fp_entropy = (f_log_Z - f_gaussian(x=fp_rsamples)).reduce(
+        funsor.ops.mean, "particle"
+    )
+    check_equal(fp_entropy.data, entropy)

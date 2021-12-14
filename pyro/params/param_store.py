@@ -4,6 +4,7 @@
 import re
 import warnings
 import weakref
+from contextlib import contextmanager
 
 import torch
 from torch.distributions import constraints, transform_to
@@ -15,7 +16,7 @@ class ParamStoreDict:
     The typical user interacts with the ParamStore primarily through the
     primitive `pyro.param`.
 
-    See `Intro Part II <http://pyro.ai/examples/intro_part_ii.html>`_ for further discussion
+    See `Introduction <http://pyro.ai/examples/intro_long.html>`_ for further discussion
     and `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for some examples.
 
     Some things to bear in mind when using parameters in Pyro:
@@ -235,19 +236,22 @@ class ParamStoreDict:
         """
         return self._param_to_name.get(p)
 
-    def get_state(self):
+    # -------------------------------------------------------------------------------
+    # Persistence interface
+
+    def get_state(self) -> dict:
         """
         Get the ParamStore state.
         """
         state = {
-            "params": self._params,
-            "constraints": self._constraints,
+            "params": self._params.copy(),
+            "constraints": self._constraints.copy(),
         }
         return state
 
-    def set_state(self, state):
+    def set_state(self, state: dict):
         """
-        Set the ParamStore state using state from a previous get_state() call
+        Set the ParamStore state using state from a previous :meth:`get_state` call
         """
         assert isinstance(state, dict), "malformed ParamStore state"
         assert set(state.keys()) == set(
@@ -266,7 +270,7 @@ class ParamStoreDict:
 
     def save(self, filename):
         """
-        Save parameters to disk
+        Save parameters to file
 
         :param filename: file name to save to
         :type filename: str
@@ -276,7 +280,7 @@ class ParamStoreDict:
 
     def load(self, filename, map_location=None):
         """
-        Loads parameters from disk
+        Loads parameters from file
 
         .. note::
 
@@ -294,6 +298,44 @@ class ParamStoreDict:
         with open(filename, "rb") as input_file:
             state = torch.load(input_file, map_location)
         self.set_state(state)
+
+    @contextmanager
+    def scope(self, state=None) -> dict:
+        """
+        Context manager for using multiple parameter stores within the same process.
+
+        This is a thin wrapper around :meth:`get_state`, :meth:`clear`, and
+        :meth:`set_state`. For large models where memory space is limiting, you
+        may want to instead manually use :meth:`save`, :meth:`clear`, and
+        :meth:`load`.
+
+        Example usage::
+
+            param_store = pyro.get_param_store()
+
+            # Train multiple models, while avoiding param name conflicts.
+            with param_store.scope() as scope1:
+                # ...Train one model,guide pair...
+            with param_store.scope() as scope2:
+                # ...Train another model,guide pair...
+
+            # Now evaluate each, still avoiding name conflicts.
+            with param_store.scope(scope1):  # loads the first model's scope
+               # ...evaluate the first model...
+            with param_store.scope(scope2):  # loads the second model's scope
+               # ...evaluate the second model...
+        """
+        if state is None:
+            state = {"params": {}, "constraints": {}}
+        old_state = self.get_state()
+        try:
+            self.clear()
+            self.set_state(state)
+            yield state
+            state.update(self.get_state())
+        finally:
+            self.clear()
+            self.set_state(old_state)
 
 
 # used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight

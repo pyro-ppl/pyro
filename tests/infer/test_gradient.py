@@ -391,7 +391,6 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.xfail(reason="missing pattern")
 @pytest.mark.stage("funsor")
 def test_collapse_beta_binomial():
     pytest.importorskip("funsor")

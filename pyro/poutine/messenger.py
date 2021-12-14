@@ -24,6 +24,20 @@ class _bound_partial(partial):
         return partial(self.func, instance)
 
 
+def unwrap(fn):
+    """
+    Recursively unwraps poutines.
+    """
+    while True:
+        if isinstance(fn, _bound_partial):
+            fn = fn.func
+            continue
+        if isinstance(fn, partial) and len(fn.args) >= 2:
+            fn = fn.args[1]  # extract from partial(handler, fn)
+            continue
+        return fn
+
+
 class Messenger:
     """
     Context manager class that modifies behavior
@@ -38,9 +52,6 @@ class Messenger:
     Class of transformers for messages passed during inference.
     Most inference operations are implemented in subclasses of this.
     """
-
-    def __init__(self):
-        pass
 
     def __call__(self, fn):
         if not callable(fn):

@@ -67,6 +67,7 @@ from .ordered import OrderedTransform
 from .permute import Permute, permute
 from .planar import ConditionalPlanar, Planar, conditional_planar, planar
 from .polynomial import Polynomial, polynomial
+from .power import PositivePowerTransform
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
 from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
@@ -78,6 +79,7 @@ from .spline_autoregressive import (
 )
 from .spline_coupling import SplineCoupling, spline_coupling
 from .sylvester import Sylvester, sylvester
+from .unit_cholesky import UnitLowerCholeskyTransform
 
 ########################################
 # register transforms
@@ -131,6 +133,11 @@ def _transform_to_softplus_lower_cholesky(constraint):
     return SoftplusLowerCholeskyTransform()
 
 
+@transform_to.register(constraints.unit_lower_cholesky)
+def _transform_to_unit_lower_cholesky(constraint):
+    return UnitLowerCholeskyTransform()
+
+
 def iterated(repeats, base_fn, *args, **kwargs):
     """
     Helper function to compose a sequence of bijective transforms with potentially
@@ -180,6 +187,7 @@ __all__ = [
     "Permute",
     "Planar",
     "Polynomial",
+    "PositivePowerTransform",
     "Radial",
     "SoftplusLowerCholeskyTransform",
     "SoftplusTransform",

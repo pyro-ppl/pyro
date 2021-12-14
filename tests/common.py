@@ -5,8 +5,6 @@ import contextlib
 import numbers
 import os
 import re
-import shutil
-import tempfile
 import warnings
 from itertools import product
 
@@ -56,17 +54,6 @@ def suppress_warnings(fn):
             fn(*args, **kwargs)
 
     return wrapper
-
-
-# backport of Python 3's context manager
-@contextlib.contextmanager
-def TemporaryDirectory():
-    try:
-        path = tempfile.mkdtemp()
-        yield path
-    finally:
-        if os.path.exists(path):
-            shutil.rmtree(path)
 
 
 requires_cuda = pytest.mark.skipif(
@@ -158,6 +145,8 @@ def assert_tensors_equal(a, b, prec=0.0, msg=""):
         return
     b = b.type_as(a)
     b = b.cuda(device=a.get_device()) if a.is_cuda else b.cpu()
+    if not a.dtype.is_floating_point:
+        return (a == b).all()
     # check that NaNs are in the same locations
     nan_mask = a != a
     assert torch.equal(nan_mask, b != b), msg

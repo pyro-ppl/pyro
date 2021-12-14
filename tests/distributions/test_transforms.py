@@ -195,7 +195,7 @@ class TransformTests(TestCase):
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
                 self._test_jacobian(reduce(operator.mul, event_shape, 1), transform)
-            if autodiff:
+            if isinstance(transform, dist.TransformModule) and autodiff:
                 # If the function doesn't have an explicit inverse, then use the forward op for autodiff
                 self._test_autodiff(
                     reduce(operator.mul, event_shape, 1), transform, inverse=not inverse
@@ -390,10 +390,14 @@ class TransformTests(TestCase):
         self._test(T.sylvester, inverse=False)
 
     def test_normalize_transform(self):
-        self._test(lambda p: T.Normalize(p=p), autodiff=False)
+        self._test(lambda p: T.Normalize(p=p))
 
     def test_softplus(self):
-        self._test(lambda _: T.SoftplusTransform(), autodiff=False)
+        self._test(lambda _: T.SoftplusTransform())
+
+    def test_positive_power(self):
+        for p in [0.3, 1.0, 3.0]:
+            self._test(lambda _: T.PositivePowerTransform(p), event_dim=0)
 
 
 @pytest.mark.parametrize("batch_shape", [(), (7,), (6, 5)])
@@ -452,6 +456,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
     [
         T.LowerCholeskyTransform(),
         T.SoftplusLowerCholeskyTransform(),
+        T.UnitLowerCholeskyTransform(),
     ],
     ids=lambda t: type(t).__name__,
 )
