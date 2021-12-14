@@ -23,7 +23,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from data import get_data
 from matplotlib.patches import Patch
 from torch.distributions import constraints
 from torch.nn.functional import softmax, softplus
@@ -32,6 +31,7 @@ from torch.optim import Adam
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.contrib.examples.scanvi_data import get_data
 from pyro.distributions.util import broadcast_shape
 from pyro.infer import SVI, TraceEnum_ELBO, config_enumerate
 from pyro.optim import MultiStepLR
@@ -267,7 +267,11 @@ class SCANVI(nn.Module):
                 classification_loss = y_dist.log_prob(y)
                 # Note that the negative sign appears because we're adding this term in the guide
                 # and the guide log_prob appears in the ELBO as -log q
-                pyro.factor("classification_loss", -self.alpha * classification_loss)
+                pyro.factor(
+                    "classification_loss",
+                    -self.alpha * classification_loss,
+                    has_rsample=False,
+                )
 
             z1_loc, z1_scale = self.z1_encoder(z2, y)
             pyro.sample("z1", dist.Normal(z1_loc, z1_scale).to_event(1))

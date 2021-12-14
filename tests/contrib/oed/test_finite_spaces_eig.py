@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from contextlib import ExitStack
+
 import pytest
 import torch
 
@@ -18,11 +20,6 @@ from pyro.contrib.oed.eig import (
 )
 from pyro.contrib.util import iter_plates_to_shape
 from tests.common import assert_equal
-
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
 
 
 @pytest.fixture

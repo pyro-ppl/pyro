@@ -368,6 +368,8 @@ class TraceEnum_ELBO(ELBO):
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
+        if isinstance(poutine.unwrap(guide), poutine.messenger.Messenger):
+            raise NotImplementedError("TraceEnum_ELBO does not support GuideMessenger")
         if self.max_plate_nesting == float("inf"):
             self._guess_max_plate_nesting(model, guide, args, kwargs)
         if self.vectorize_particles:

@@ -198,6 +198,7 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
     "Bio": ("https://biopython.org/docs/latest/api/", None),
     "horovod": ("https://horovod.readthedocs.io/en/stable/", None),
+    "graphviz": ("https://graphviz.readthedocs.io/en/stable/", None),
 }
 
 # document class constructors (__init__ methods):
