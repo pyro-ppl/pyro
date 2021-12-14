@@ -13,7 +13,7 @@ please don't hesitate to ask a question on our `forum <https://forum.pyro.ai/>`_
 New users: getting from zero to one
 ------------------------------------
 If you're new to probabilistic programming or variational inference,
-you might want to start by reading the series :ref:`introductory-tutorials`.
+you might want to start by reading the series :ref:`introductory-tutorials`, especially the :doc:`Introduction to Pyro <intro_long>`.
 If you're new to PyTorch, you may also benefit from reading the official introduction `"Deep Learning with PyTorch." <https://pytorch.org/tutorials/beginner/deep_learning_60min_blitz.html>`_
 
 After that, you're ready to get started using Pyro! (Yes, really!)
