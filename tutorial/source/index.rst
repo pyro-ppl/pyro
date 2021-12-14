@@ -76,8 +76,7 @@ List of Tutorials
    :caption: Introductory Tutorials
    :name: introductory-tutorials
 
-   intro_part_i
-   intro_part_ii
+   intro_long
    model_rendering
    svi_part_i
    svi_part_ii
@@ -222,6 +221,14 @@ List of Tutorials
    contrib_funsor_intro_i
    contrib_funsor_intro_ii
    hmm_funsor
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Deprecated
+   :name: deprecated
+
+   intro_part_i
+   intro_part_ii
 
 Indices and tables
 ==================
