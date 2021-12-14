@@ -130,7 +130,8 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
 
         self.locs = PyroModule()
         self.scales = PyroModule()
-        self.factors = PyroModule()
+        self.white_vecs = PyroModule()
+        self.prec_sqrts = PyroModule()
         self._factors = OrderedDict()
         self._plates = OrderedDict()
         self._event_numel = OrderedDict()
@@ -211,18 +212,20 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
                 d_size = min(d_size, u_size)  # just an optimization
             batch_shape = _plates_to_shape(self._plates[d])
 
-            # Create a square root parameter (full, not lower triangular).
+            # Create parameters of each Gaussian factor.
+            white_vec = init_loc.new_zeros(batch_shape + (d_size,))
             # We initialize with noise to avoid singular gradient.
-            sqrt = torch.rand(
+            prec_sqrt = torch.rand(
                 batch_shape + (u_size, d_size),
                 dtype=init_loc.dtype,
                 device=init_loc.device,
             )
-            sqrt.sub_(0.5).mul_(self._init_scale)
+            prec_sqrt.sub_(0.5).mul_(self._init_scale)
             if not site["is_observed"]:
                 # Initialize the [d,d] block to the identity matrix.
-                sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)
-            deep_setattr(self.factors, d, PyroParam(sqrt, event_dim=2))
+                prec_sqrt.diagonal(dim1=-2, dim2=-1).fill_(1)
+            deep_setattr(self.white_vecs, d, PyroParam(white_vec, event_dim=1))
+            deep_setattr(self.prec_sqrts, d, PyroParam(prec_sqrt, event_dim=2))
 
     @staticmethod
     def _compress_site(site):
@@ -243,7 +246,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        aux_values = self._sample_aux_values()
+        aux_values = self._sample_aux_values(temperature=1.0)
         values, log_densities = self._transform_values(aux_values)
 
         # Replay via Pyro primitives.
@@ -268,7 +271,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         :rtype: dict
         """
         with torch.no_grad(), poutine.mask(mask=False):
-            aux_values = {name: 0.0 for name in self._factors}
+            aux_values = self._sample_aux_values(temperature=0.0)
             values, _ = self._transform_values(aux_values)
         return values
 
@@ -299,7 +302,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         return values, log_densities
 
     @abstractmethod
-    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
+    def _sample_aux_values(self, *, temperature: float) -> Dict[str, torch.Tensor]:
         raise NotImplementedError
 
 
@@ -331,11 +334,13 @@ class AutoGaussianDense(AutoGaussian):
         # Create sparse -> dense precision scatter indices.
         self._dense_scatter = {}
         for d, site in self._factors.items():
-            sqrt_shape = deep_getattr(self.factors, d).shape
-            precision_shape = sqrt_shape[:-1] + sqrt_shape[-2:-1]
-            index = torch.zeros(precision_shape, dtype=torch.long)
+            prec_sqrt_shape = deep_getattr(self.prec_sqrts, d).shape
+            info_vec_shape = prec_sqrt_shape[:-1]
+            precision_shape = prec_sqrt_shape[:-1] + prec_sqrt_shape[-2:-1]
+            index1 = torch.zeros(info_vec_shape, dtype=torch.long)
+            index2 = torch.zeros(precision_shape, dtype=torch.long)
 
-            # Collect local offsets.
+            # Collect local offsets and create index1 for info_vec blockwise.
             upstreams = [
                 u for u in self.dependencies[d] if not self._factors[u]["is_observed"]
             ]
@@ -345,8 +350,17 @@ class AutoGaussianDense(AutoGaussian):
                 local_offsets[u] = pos
                 broken_plates = self._plates[u] - self._plates[d]
                 pos += self._event_numel[u] * _plates_to_shape(broken_plates).numel()
+                u_index = global_indices[u]
 
-            # Create indices blockwise.
+                # Permute broken plates to the right of preserved plates.
+                u_index = _break_plates(u_index, self._plates[u], self._plates[d])
+
+                # Scatter global indices into the [u] block.
+                u_start = local_offsets[u]
+                u_stop = u_start + u_index.size(-1)
+                index1[..., u_start:u_stop] = u_index
+
+            # Create index2 for precision blockwise.
             for u, v in itertools.product(upstreams, upstreams):
                 u_index = global_indices[u]
                 v_index = global_indices[v]
@@ -360,18 +374,24 @@ class AutoGaussianDense(AutoGaussian):
                 u_stop = u_start + u_index.size(-1)
                 v_start = local_offsets[v]
                 v_stop = v_start + v_index.size(-1)
-                index[
+                index2[
                     ..., u_start:u_stop, v_start:v_stop
                 ] = self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
 
-            self._dense_scatter[d] = index.reshape(-1)
+            self._dense_scatter[d] = index1.reshape(-1), index2.reshape(-1)
 
-    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
-        flat_samples = pyro.sample(
-            f"_{self._pyro_name}_latent",
-            self._dense_get_mvn(),
-            infer={"is_auxiliary": True},
-        )
+    def _sample_aux_values(self, *, temperature: float) -> Dict[str, torch.Tensor]:
+        mvn = self._dense_get_mvn()
+        if temperature == 0:
+            # Simply return the mode.
+            flat_samples = mvn.mean
+        elif temperature == 1:
+            # Sample from a dense joint Gaussian over flattened variables.
+            flat_samples = pyro.sample(
+                f"_{self._pyro_name}_latent", mvn, infer={"is_auxiliary": True}
+            )
+        else:
+            raise NotImplementedError(f"Invalid temperature: {temperature}")
         samples = self._dense_unflatten(flat_samples)
         return samples
 
@@ -401,14 +421,22 @@ class AutoGaussianDense(AutoGaussian):
 
     def _dense_get_mvn(self):
         # Create a dense joint Gaussian over flattened variables.
+        flat_info_vec = torch.zeros(self._dense_size)
         flat_precision = torch.zeros(self._dense_size ** 2)
-        for d, index in self._dense_scatter.items():
-            sqrt = deep_getattr(self.factors, d)
-            precision = sqrt @ sqrt.transpose(-1, -2)
-            flat_precision.scatter_add_(0, index, precision.reshape(-1))
+        for d, (index1, index2) in self._dense_scatter.items():
+            white_vec = deep_getattr(self.white_vecs, d)
+            prec_sqrt = deep_getattr(self.prec_sqrts, d)
+            info_vec = (prec_sqrt @ white_vec[..., None])[..., 0]
+            precision = prec_sqrt @ prec_sqrt.transpose(-1, -2)
+            flat_info_vec.scatter_add_(0, index1, info_vec.reshape(-1))
+            flat_precision.scatter_add_(0, index2, precision.reshape(-1))
+        info_vec = flat_info_vec
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
-        loc = precision.new_zeros(self._dense_size)
-        return dist.MultivariateNormal(loc, precision_matrix=precision)
+        scale_tril = _precision_to_scale_tril(precision)
+        loc = (
+            scale_tril @ (scale_tril.transpose(-1, -2) @ info_vec.unsqueeze(-1))
+        ).squeeze(-1)
+        return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
 
 class AutoGaussianFunsor(AutoGaussian):
@@ -464,7 +492,7 @@ class AutoGaussianFunsor(AutoGaussian):
         self._funsor_plate_to_dim = plate_to_dim
         self._funsor_plates = frozenset(plate_to_dim)
 
-    def _sample_aux_values(self) -> Dict[str, torch.Tensor]:
+    def _sample_aux_values(self, *, temperature: float) -> Dict[str, torch.Tensor]:
         funsor = _import_funsor()
 
         # Convert torch to funsor.
@@ -473,38 +501,43 @@ class AutoGaussianFunsor(AutoGaussian):
         plate_to_dim.update({f.name: f.dim for f in particle_plates})
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
-            prec_sqrt = deep_getattr(self.factors, d)
             batch_shape = torch.Size(
                 p.size for p in sorted(self._plates[d], key=lambda p: p.dim)
             )
-            prec_sqrt = prec_sqrt.reshape(batch_shape + prec_sqrt.shape[-2:])
-            # TODO Make white_vec learnable once .median() can be computed via
-            # funsor.recipies.forward_filter_backward_precondition()
-            # https://github.com/pyro-ppl/funsor/pull/553
-            white_vec = prec_sqrt.new_zeros(()).expand(
-                prec_sqrt.shape[:-2] + prec_sqrt.shape[-1:]
-            )
+            white_vec = deep_getattr(self.white_vecs, d)
+            prec_sqrt = deep_getattr(self.prec_sqrts, d)
             factors[d] = funsor.gaussian.Gaussian(
-                white_vec=white_vec, prec_sqrt=prec_sqrt, inputs=inputs
+                white_vec=white_vec.reshape(batch_shape + white_vec.shape[-1:]),
+                prec_sqrt=prec_sqrt.reshape(batch_shape + prec_sqrt.shape[-2:]),
+                inputs=inputs,
             )
 
         # Perform Gaussian tensor variable elimination.
-        try:  # Convert ValueError into NotImplementedError.
-            samples, log_prob = funsor.recipes.forward_filter_backward_rsample(
+        if temperature == 1:
+            samples, log_prob = _try_possibly_intractable(
+                funsor.recipes.forward_filter_backward_rsample,
                 factors=factors,
                 eliminate=self._funsor_eliminate,
                 plates=frozenset(plate_to_dim),
                 sample_inputs={f.name: funsor.Bint[f.size] for f in particle_plates},
             )
-        except ValueError as e:
-            if str(e) != "intractable!":
-                raise e from None
-            raise NotImplementedError(
-                "Funsor backend found intractable plate nesting. "
-                'Consider using AutoGaussian(..., backend="dense"), '
-                "splitting into multiple guides via AutoGuideList, or "
-                "replacing some plates in the model by .to_event()."
-            ) from e
+
+        else:
+            samples, log_prob = _try_possibly_intractable(
+                funsor.recipes.forward_filter_backward_precondition,
+                factors=factors,
+                eliminate=self._funsor_eliminate,
+                plates=frozenset(plate_to_dim),
+            )
+
+            # Substitute noise.
+            sample_shape = torch.Size(f.size for f in particle_plates)
+            noise = torch.randn(sample_shape + log_prob.inputs["aux"].shape)
+            noise.mul_(temperature)
+            aux = funsor.Tensor(noise)[tuple(f.name for f in particle_plates)]
+            with funsor.interpretations.memoize():
+                samples = {k: v(aux=aux) for k, v in samples.items()}
+                log_prob = log_prob(aux=aux)
 
         # Convert funsor to torch.
         if am_i_wrapped() and poutine.get_mask() is not False:
@@ -514,6 +547,31 @@ class AutoGaussianFunsor(AutoGaussian):
             k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()
         }
         return samples
+
+
+def _precision_to_scale_tril(P):
+    # Ref: https://nbviewer.jupyter.org/gist/fehiepsi/5ef8e09e61604f10607380467eb82006#Precision-to-scale_tril
+    Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
+    L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
+    L = torch.triangular_solve(
+        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
+    )[0]
+    return L
+
+
+def _try_possibly_intractable(fn, *args, **kwargs):
+    # Convert ValueError into NotImplementedError.
+    try:
+        return fn(*args, **kwargs)
+    except ValueError as e:
+        if str(e) != "intractable!":
+            raise e from None
+        raise NotImplementedError(
+            "Funsor backend found intractable plate nesting. "
+            'Consider using AutoGaussian(..., backend="dense"), '
+            "splitting into multiple guides via AutoGuideList, or "
+            "replacing some plates in the model by .to_event()."
+        ) from e
 
 
 def _plates_to_shape(plates):
