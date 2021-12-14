@@ -8,7 +8,7 @@ usually involves some sort of optimization. Pyro supports multiple inference alg
 with support for stochastic variational inference (SVI) being the most extensive. 
 Look here for more inference algorithms in future versions of Pyro.
 
-See `Intro II <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion of inference in Pyro.
+See the `Introductory tutorial <http://pyro.ai/examples/intro_long.html>`_ for a discussion of inference in Pyro.
 
 .. toctree::
    :glob:
