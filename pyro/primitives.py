@@ -106,8 +106,7 @@ def sample(name, fn, *args, **kwargs):
     """
     Calls the stochastic function ``fn`` with additional side-effects depending
     on ``name`` and the enclosing context (e.g. an inference algorithm).  See
-    `Intro I <http://pyro.ai/examples/intro_part_i.html>`_ and `Intro II
-    <http://pyro.ai/examples/intro_part_ii.html>`_ for a discussion.
+    `Introduction to Pyro <http://pyro.ai/examples/intro_long.html>`_ for a discussion.
 
     :param name: name of sample
     :param fn: distribution class or function
