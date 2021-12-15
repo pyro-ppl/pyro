@@ -119,9 +119,7 @@ class _EnumAllocator:
         assert first_available_dim < 0, first_available_dim
         self.next_available_dim = first_available_dim
         self.next_available_id = 0
-        self.dim_to_id, prev_dim_to_id = {}, getattr(
-            self, "dim_to_id", {}
-        )  # only the global ids
+        self.dim_to_id = {}  # only the global ids
 
         if _is_funsor_active():
             from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, StackFrame

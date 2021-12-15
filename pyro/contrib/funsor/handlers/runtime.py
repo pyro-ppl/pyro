@@ -1,11 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 from collections import Counter, OrderedDict, namedtuple
 from enum import Enum
-
-os.environ["PYRO_FUNSOR_ACTIVE"] = "1"  # TODO better toggle
 
 
 class StackFrame:
