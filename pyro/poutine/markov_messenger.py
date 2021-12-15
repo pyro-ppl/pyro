@@ -5,6 +5,7 @@ from collections import Counter
 from contextlib import ExitStack  # python 3
 
 from .reentrant_messenger import ReentrantMessenger
+from .runtime import _is_funsor_active
 
 
 class MarkovMessenger(ReentrantMessenger):
@@ -45,8 +46,11 @@ class MarkovMessenger(ReentrantMessenger):
         self._pos = -1
         self._stack = []
 
-        if _FUNSOR_ACTIVE:
-            from pyro.contrib.funsor.handlers.named_messenger import MarkovMessenger as FunsorMarkovMessenger
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.named_messenger import (
+                MarkovMessenger as FunsorMarkovMessenger,
+            )
+
             self._funsor_markov = FunsorMarkovMessenger(history=history, keep=keep)
 
         super().__init__()
@@ -66,10 +70,12 @@ class MarkovMessenger(ReentrantMessenger):
         if len(self._stack) <= self._pos:
             self._stack.append(set())
 
+        result = super().__enter__()
+
         if hasattr(self, "_funsor_markov"):
             self._funsor_markov.__enter__()
 
-        return super().__enter__()
+        return result
 
     def __exit__(self, *args, **kwargs):
         if not self.keep:

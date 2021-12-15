@@ -1,8 +1,11 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from collections import Counter, OrderedDict, namedtuple
 from enum import Enum
+
+os.environ["PYRO_FUNSOR_ACTIVE"] = "1"  # TODO better toggle
 
 
 class StackFrame:
@@ -99,14 +102,12 @@ class DimStack:
         self._global_stack.append(frame)
 
     def pop_global(self):
-        assert self._global_stack, "cannot pop the global frame"
         return self._global_stack.pop()
 
     def push_iter(self, frame):
         self._iter_stack.append(frame)
 
     def pop_iter(self):
-        assert self._iter_stack, "cannot pop the global frame"
         return self._iter_stack.pop()
 
     def push_local(self, frame):
