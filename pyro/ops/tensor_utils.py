@@ -254,7 +254,7 @@ def repeated_matmul(M, n):
     assert M.size(-1) == M.size(
         -2
     ), "Input tensors must satisfy M.size(-1) == M.size(-2)."
-    assert n > 0, "argument n to parallel_scan_repeated_matmul must be 1 or larger"
+    assert n > 0, "argument n to repeated_matmul must be 1 or larger"
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
 
