@@ -171,7 +171,7 @@ if __name__ == "__main__":
     parser.add_argument("--test-window", default=336, type=int)
     parser.add_argument("--stride", default=168, type=int)
     parser.add_argument("-n", "--num-steps", default=501, type=int)
-    parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
+    parser.add_argument("-lr", "--learning-rate", default=0.01, type=float)
     parser.add_argument("--dct", action="store_true")
     parser.add_argument("--num-samples", default=100, type=int)
     parser.add_argument("--log-every", default=50, type=int)
