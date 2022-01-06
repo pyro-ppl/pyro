@@ -293,58 +293,71 @@ class propose(proposals):
         self.p, self.q = p, q
         self.loss_fn = loss_fn
 
+    def _compute_logweight(self, p_trace:Trace, q_trace:Trace)->Tensor:
+        log_weight = _logweight(q_trace)
+
+        lu = stacked_log_prob(
+            q_trace, site_filter=sample_filter(_or(not_substituted, is_observed))
+        )
+        log_incremental = _logweight(p_trace) - lu
+
+        return (log_weight + log_incremental).detach()
+
     def __call__(self, *args, **kwargs) -> Trace:
-        q_out = self.q(*args, **kwargs)
-        p_out = with_substitution(self.p, trace=q_out)(*args, **kwargs)
+        q_out = self.q(*args, **kwargs) # type: ignore
+        p_out = with_substitution(self.p, trace=q_out)(*args, **kwargs) # type: ignore
 
         m_trace = get_marginal(p_out)
         # FIXME: this is not accounted for -- will return the final kernel output, not the initial output
         # should be something like: m_output = m_trace["_RETURN"]
         m_output = _output(p_out)
 
+
         # FIXME local gradient computations
         # trace=m_trace if self._no_reruns else rerun_with_detached_values(m_trace),
         trace = m_trace
         set_input(trace, args=args, kwargs=kwargs)
 
-        # FIXME this hook exists to alter an NVI trace for stl
-        # q_trace = dispatch(self.transf_q_trace, q_out.trace, **inf_kwargs)
-        def compute_weight(p_trace, q_trace):
-            lu_1 = stacked_log_prob(
-                q_trace, site_filter=sample_filter(_or(not_substituted, is_observed))
-            )
-            lw_1 = _logweight(q_trace)
-
-            # We call that lv because its the incremental weight in the IS sense
-            lv = _logweight(p_trace) - lu_1
-            lw_out = lw_1 + lv
-            return lw_out.detach()
 
         set_param(trace, _RETURN, "return", value=m_output)
-        set_param(trace, _LOGWEIGHT, "return", value=(compute_weight, p_out, q_out))
+        set_param(trace, _LOGWEIGHT, "return", value=self._compute_logweight(p_out, q_out))
         self.loss = self.loss + self.loss_fn(m_output)
         return trace
 
 
-class augment_weight(proposals):
+class augment_logweight(object):
+    """
+    NOTE: technically this could be a trivial function wrapper like:
+
+        def augment(p:propose, pre:Callable):
+            def doit(self, p_trace, q_trace):
+                return initial_computation(self, *pre(p_trace, q_trace))
+            p._compute_logweight = doit
+            return p
+
+    This class-based method is chosen to keep in line with the rest of the
+    module's style (technically all classes here are just partially evaluated
+    functions).
+
+    The semantics ask for an existential, here we just "Leave No Trace" and
+    return the propose instance back to its original state.
+    """
     def __init__(
         self,
-        q: Proposals,
-        loss_fn: Callable[[Trace, Tuple[Callable[[Trace, Trace], Tensor], Trace, Trace]], Union[Tensor, float]],
+        instance:propose,
+        pre:Callable[[Trace, Trace], Tuple[Trace, Trace]]
     ):
-        super().__init__()
-        self.q = q
-        self.loss_fn = loss_fn
-        self.loss = 0.0
+        if not isinstance(instance, propose):
+            raise TypeError("expecting a propose instance")
+        self.propose = instance
 
     def __call__(self, *args, **kwargs) -> Trace:
-        q_out = self.q(*args, **kwargs)
-        loss = self.loss + self.loss_fn(m_output)
+        initial_computation = self.propose._compute_logweight
 
-        return Trace(
-            trace=concat_traces(
-                q2_out.trace, q1_out.trace, site_filter=node_filter(is_sample_type)
-            ),
-            log_weight=q1_out.log_weight + q2_out.log_weight,
-            output=q2_out.output,
-        )
+        def augmented_compute_logweight(self, p_trace, q_trace):
+            return initial_computation(*self.pre(p_trace, q_trace))
+        self.propose._compute_logweight = augmented_compute_logweight  # type: ignore
+        out = self.propose(*args, **kwargs)
+
+        self.propose._compute_logweight = initial_computation
+        return out
