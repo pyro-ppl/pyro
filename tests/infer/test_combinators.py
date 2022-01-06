@@ -348,7 +348,7 @@ def test_extend_unconditioned_no_plates(simple2, simple4):
 
     # Test extend log_weight
     trace_addrs = _addrs(out)
-    m_trace_addrs = set(get_marginal(out).nodes.keys())
+    m_trace_addrs = set(get_marginal(out)[0].nodes.keys())
     assert m_trace_addrs == tau_2
 
     aux_trace_addrs = trace_addrs - m_trace_addrs
@@ -418,7 +418,7 @@ def test_extend_unconditioned_with_plates(simple2, simple4):
 
     # Test extend log_weight
     trace_addrs = _addrs(out)
-    m_trace_addrs = set(get_marginal(out).nodes.keys())
+    m_trace_addrs = set(get_marginal(out)[0].nodes.keys())
     assert m_trace_addrs == tau_2
 
     aux_trace_addrs = trace_addrs - m_trace_addrs
@@ -439,7 +439,7 @@ def test_nested_marginal(simple2, simple4, simple5):
     p_nodes = list(filter(lambda kv: kv[0] not in {"z_1", "z_5"}, out.nodes.items()))
     assert len(p_nodes) > 0
 
-    marg = get_marginal(out)
+    marg = get_marginal(out)[0]
     assert _addrs(marg) == {"x_2", "x_3", "z_2", "z_3"}
 
 
@@ -570,7 +570,7 @@ def test_propose(simple1, simple2, simple3, simple4):
     # Test extend inside propose
     tau_2 = {"z_2", "z_3", "x_2", "x_3"}
     trace_addrs = _addrs(p_out)
-    m_trace = get_marginal(p_out)
+    m_trace = get_marginal(p_out)[0]
     m_trace_addrs = _addrs(m_trace)
     assert m_trace_addrs == tau_2
 
@@ -647,7 +647,7 @@ def test_propose_with_plates(simple1, simple2, simple3, simple4):
         # Test extend inside propose
         tau_2 = {"z_2", "z_3", "x_2", "x_3"}
         trace_addrs = _addrs(p_out)
-        m_trace = get_marginal(p_out)
+        m_trace = get_marginal(p_out)[0]
         m_trace_addrs = _addrs(m_trace)
         assert m_trace_addrs == tau_2
 
@@ -677,64 +677,27 @@ def test_propose_with_plates(simple1, simple2, simple3, simple4):
         )
 
 
-# Summary:
-#
-# I would like to invert control so that users write messengers which are caught
-# by handlers during an inference combinator's execution. Here is a small
-# prototype of how I would expect this to work without pyro's effect system.
-#
-# Ultimately, I am really just looking for a "Reader effect" which holds one
-# function. Each tunable aspect of inference each runs a different Reader
-# effect. This prototype is more of a "State effect".
-#
-# I think this might be possible, but I am not sure how to go about this.
+def test_propose_output(simple1, simple2, simple3, simple4):
+    seed(7)
+    with pyro.plate("sample", 7), pyro.plate("batch", 3):
+        s1, s3 = primitive(simple1), primitive(simple3)
+        s1_out, s3_out = s1(), s3()
+        replay_s1, replay_s3 = replay(s1, trace=s1_out), replay(s3, trace=s3_out)
 
-registry = dict()
+        q = compose(q1=replay_s1, q2=replay_s3)
+        q_out = q()
+        assert q_out.nodes["_RETURN"]['value'] is None
 
-# FIXME: Subclassing Messenger to use pyro infrastructure errors and says I am
-# installing the messenger twice.
-class UserFunctionMessenger:
-    def __init__(self, name: str, fn: Optional[Callable[[dict], dict]]) -> None:
-        self.fn = (lambda x: x) if fn is None else fn
-        registry[name] = lambda: self
+        s2, s4 = primitive(simple2), primitive(simple4)
 
-    def __enter__(self):
-        return None
+        s2_out = s2()
+        replay_s2 = replay(s2, trace=s2_out)
+        s4_out = s4(_output(s2_out))
+        replay_s4 = replay(s4, trace=s4_out)
 
-    def __exit__(self, *args, **kwargs):
-        return None
+        p = with_substitution(extend(p=replay_s2, f=replay_s4), trace=q_out)
+        p_out = p()
+        assert p_out.nodes["_RETURN"]['value'] == tensor_of(2)
 
-
-class UserFunctionHandler:
-    def __init__(self, name):
-        self.name = name
-
-    def __call__(self, *args, **kwargs):
-        lazy_msngr = registry.get(
-            self.name, lambda: UserFunctionMessenger(self.name, fn=None)
-        )
-        msngr = lazy_msngr()  # pull this out of the sky
-        with msngr:
-            ret = msngr.fn(*args, **kwargs)  # fn no longer on self
-        return ret
-
-
-class Invert:
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        tr1 = dict(one=1, two=2)
-        # NOTE: this call is a point of friction. Usually, handlers are passed a
-        # messenger and function, but here we would like to defer this to a lookup
-        # in some reader effect.
-        tr2 = UserFunctionHandler("on_dict")(tr1)
-        return tr2
-
-
-def test_ctx_sanity_check():
-    def inc_over(d):
-        # TODO: probably need to enforce that the user make this referentially transparent.
-        return {k: v + 1 for k, v in d.items()}
-
-    i = Invert()
-    with UserFunctionMessenger("on_dict", inc_over):
-        r = i()
-    assert r["one"] == 2 and r["two"] == 3
+        m_trace, m_output = get_marginal(p_out)
+        assert m_output['value'] == tensor_of(1)

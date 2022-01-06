@@ -37,11 +37,6 @@ def concat_traces(
                 newtrace.add_edge(p, s)
     return newtrace
 
-
-def _addrs(tr):
-    return {k for k, n in tr.nodes.items() if n["type"] == "sample"}
-
-
 def assert_no_overlap(t0: Trace, t1: Trace, location=""):
     assert (
         len(_addrs(t0).intersection(_addrs(t1))) == 0
@@ -55,6 +50,8 @@ def is_observed(node: Node) -> bool:
 def is_sample_type(node: Node) -> bool:
     return node["type"] == "sample"
 
+def is_return_type(node: Node) -> bool:
+    return node["type"] == "return"
 
 def not_observed(node: Node) -> bool:
     return not is_observed(node)
@@ -120,7 +117,6 @@ class AuxiliaryMessenger(Messenger):
 
     def _pyro_sample(self, msg):
         msg["infer"]["is_auxiliary"] = True
-        # FIXME: here, we need to mark "the first" return which will be the output of get_marginal
 
 
 for messenger in [WithSubstitutionMessenger, AuxiliaryMessenger]:
@@ -129,31 +125,38 @@ for messenger in [WithSubstitutionMessenger, AuxiliaryMessenger]:
     locals()[_handler_name] = _handler
 
 
-def get_marginal(trace: Trace) -> Trace:
-    return concat_traces(trace, site_filter=sample_filter(not_auxiliary))
+def get_marginal(trace: Trace) -> Tuple[Trace, Node]:
+    m_output = trace.nodes[_RETURN]
+    while "infer" in m_output:
+        m_output = m_output['infer']['m_return_node']
+    m_trace = concat_traces(trace, site_filter=sample_filter(not_auxiliary))
+    return m_trace, m_output
 
 
 class inference(object):
-    # FIXME: needs something like an "infer" map to hold things like index for APG.
-    # this must be placed at the top level on a trace in APG
-    def __init__(self):
-        self.loss = 0.0
+    # # FIXME: needs something like an "infer" map to hold things like index for APG.
+    # # this must be placed at the top level on a trace in APG
+    # def __init__(self):
+    #     self.loss = 0.0
+    pass
 
 
 Inference = Union[inference, Callable[..., Trace]]
 
 
 class targets(inference):
-    def __init__(self):
-        super().__init__()
+    pass
+    #def __init__(self):
+    #    super().__init__()
 
 
 Targets = Union[targets, Callable[..., Trace]]
 
 
 class proposals(inference):
-    def __init__(self):
-        super().__init__()
+    pass
+    #def __init__(self):
+    #    super().__init__()
 
 
 Proposals = Union[proposals, Callable[..., Trace]]
@@ -254,6 +257,7 @@ class extend(targets):
         trace = concat_traces(p_out, f_out, site_filter=node_filter(is_sample_type))
         set_input(trace, args=args, kwargs=kwargs)
         set_param(trace, _RETURN, "return", value=_output(f_out))
+        trace.nodes[_RETURN]['infer'] = {'m_return_node': p_out.nodes[_RETURN]} # see get_marginals
         set_param(trace, _LOGWEIGHT, "return", value=_logweight(p_out) + log_u2)
         return trace
 
@@ -276,6 +280,7 @@ class compose(proposals):
             kwargs=kwargs,
         )
         set_param(trace, _RETURN, "return", value=_output(q2_out))
+
         set_param(
             trace, _LOGWEIGHT, "return", value=_logweight(q1_out) + _logweight(q2_out)
         )
@@ -312,10 +317,7 @@ class propose(proposals):
         q_out = self.q(*args, **kwargs) # type: ignore
         p_out = with_substitution(self.p, trace=q_out)(*args, **kwargs) # type: ignore
 
-        m_trace = get_marginal(p_out)
-        # FIXME: this is not accounted for -- will return the final kernel output, not the initial output
-        # should be something like: m_output = m_trace["_RETURN"]
-        m_output = _output(p_out)
+        m_trace, m_output = get_marginal(p_out)
 
         # FIXME local gradient computations (show how to do this in NVI example).
         # something like:
@@ -331,7 +333,7 @@ class propose(proposals):
         trace = m_trace
         set_input(trace, args=args, kwargs=kwargs)
 
-        set_param(trace, _RETURN, "return", value=m_output)
+        set_param(trace, _RETURN, "return", value=m_output['value'])
 
         lw, lv = self._compute_logweight(p_out, q_out)
         set_param(trace, _LOGWEIGHT, "return", value=lw+lv)
