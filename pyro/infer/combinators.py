@@ -37,6 +37,7 @@ def concat_traces(
                 newtrace.add_edge(p, s)
     return newtrace
 
+
 def assert_no_overlap(t0: Trace, t1: Trace, location=""):
     assert (
         len(_addrs(t0).intersection(_addrs(t1))) == 0
@@ -50,8 +51,10 @@ def is_observed(node: Node) -> bool:
 def is_sample_type(node: Node) -> bool:
     return node["type"] == "sample"
 
+
 def is_return_type(node: Node) -> bool:
     return node["type"] == "return"
+
 
 def not_observed(node: Node) -> bool:
     return not is_observed(node)
@@ -95,7 +98,6 @@ def membership_filter(members: Set[str]) -> SiteFilter:
     return lambda name, _: name in members
 
 
-
 class WithSubstitutionMessenger(ReplayMessenger):
     def _pyro_sample(self, msg):
         orig_infer = msg["infer"]
@@ -128,16 +130,14 @@ for messenger in [WithSubstitutionMessenger, AuxiliaryMessenger]:
 def get_marginal(trace: Trace) -> Tuple[Trace, Node]:
     m_output = trace.nodes[_RETURN]
     while "infer" in m_output:
-        m_output = m_output['infer']['m_return_node']
+        m_output = m_output["infer"]["m_return_node"]
     m_trace = concat_traces(trace, site_filter=sample_filter(not_auxiliary))
     return m_trace, m_output
 
 
 class inference(object):
-    # # FIXME: needs something like an "infer" map to hold things like index for APG.
-    # # this must be placed at the top level on a trace in APG
-    # def __init__(self):
-    #     self.loss = 0.0
+    # FIXME: needs something like an "infer" map to hold things like index for APG.
+    # this must be placed at the top level on a trace in APG
     pass
 
 
@@ -146,8 +146,6 @@ Inference = Union[inference, Callable[..., Trace]]
 
 class targets(inference):
     pass
-    #def __init__(self):
-    #    super().__init__()
 
 
 Targets = Union[targets, Callable[..., Trace]]
@@ -155,8 +153,6 @@ Targets = Union[targets, Callable[..., Trace]]
 
 class proposals(inference):
     pass
-    #def __init__(self):
-    #    super().__init__()
 
 
 Proposals = Union[proposals, Callable[..., Trace]]
@@ -257,7 +253,9 @@ class extend(targets):
         trace = concat_traces(p_out, f_out, site_filter=node_filter(is_sample_type))
         set_input(trace, args=args, kwargs=kwargs)
         set_param(trace, _RETURN, "return", value=_output(f_out))
-        trace.nodes[_RETURN]['infer'] = {'m_return_node': p_out.nodes[_RETURN]} # see get_marginals
+        trace.nodes[_RETURN]["infer"] = {
+            "m_return_node": p_out.nodes[_RETURN]
+        }  # see get_marginals
         set_param(trace, _LOGWEIGHT, "return", value=_logweight(p_out) + log_u2)
         return trace
 
@@ -292,13 +290,17 @@ class propose(proposals):
         self,
         p: Targets,
         q: Proposals,
-        loss_fn: Callable[[Trace, Trace, Tensor, Tensor], Union[Tensor, float]] = (lambda _1, _2, _3, _4: 0.0),
+        loss_fn: Callable[[Trace, Trace, Tensor, Tensor], Union[Tensor, float]] = (
+            lambda _1, _2, _3, _4: 0.0
+        ),
     ):
         super().__init__()
         self.p, self.q = p, q
         self.loss_fn = loss_fn
 
-    def _compute_logweight(self, p_trace:Trace, q_trace:Trace)->Tuple[Tensor, Tensor]:
+    def _compute_logweight(
+        self, p_trace: Trace, q_trace: Trace
+    ) -> Tuple[Tensor, Tensor]:
         """
         compute the (decomposed) log weight. We want this to be decomposed to
         provide more information to the loss function.
@@ -314,8 +316,8 @@ class propose(proposals):
         return log_weight.detach(), log_incremental.detach()
 
     def __call__(self, *args, **kwargs) -> Trace:
-        q_out = self.q(*args, **kwargs) # type: ignore
-        p_out = with_substitution(self.p, trace=q_out)(*args, **kwargs) # type: ignore
+        q_out = self.q(*args, **kwargs)  # type: ignore
+        p_out = with_substitution(self.p, trace=q_out)(*args, **kwargs)  # type: ignore
 
         m_trace, m_output = get_marginal(p_out)
 
@@ -333,12 +335,12 @@ class propose(proposals):
         trace = m_trace
         set_input(trace, args=args, kwargs=kwargs)
 
-        set_param(trace, _RETURN, "return", value=m_output['value'])
+        set_param(trace, _RETURN, "return", value=m_output["value"])
 
         lw, lv = self._compute_logweight(p_out, q_out)
-        set_param(trace, _LOGWEIGHT, "return", value=lw+lv)
+        set_param(trace, _LOGWEIGHT, "return", value=lw + lv)
 
-        prev_loss = q_out.nodes.get(_LOSS, .0)
+        prev_loss = q_out.nodes.get(_LOSS, 0.0)
         accum_loss = self.loss_fn(p_out, q_out, lw, lv)
         set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
 
@@ -362,10 +364,9 @@ class augment_logweight(object):
     The semantics ask for an existential, here we just "Leave No Trace" and
     return the propose instance back to its original state.
     """
+
     def __init__(
-        self,
-        instance:propose,
-        pre:Callable[[Trace, Trace], Tuple[Trace, Trace]]
+        self, instance: propose, pre: Callable[[Trace, Trace], Tuple[Trace, Trace]]
     ):
         if not isinstance(instance, propose):
             raise TypeError("expecting a propose instance")
@@ -376,6 +377,7 @@ class augment_logweight(object):
 
         def augmented_compute_logweight(self, p_trace, q_trace):
             return initial_computation(*self.pre(p_trace, q_trace))
+
         self.propose._compute_logweight = augmented_compute_logweight  # type: ignore
         out = self.propose(*args, **kwargs)
 

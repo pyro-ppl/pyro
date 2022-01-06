@@ -1,11 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import functools
-from operator import getitem, itemgetter
-from pyro.poutine.handlers import _make_handler
-from pyro.poutine.messenger import Messenger
-from typing import Any, Callable, Optional, Union
+from operator import itemgetter
+from typing import Callable, Union
 
 import pytest
 import torch
@@ -686,7 +683,7 @@ def test_propose_output(simple1, simple2, simple3, simple4):
 
         q = compose(q1=replay_s1, q2=replay_s3)
         q_out = q()
-        assert q_out.nodes["_RETURN"]['value'] is None
+        assert q_out.nodes["_RETURN"]["value"] is None
 
         s2, s4 = primitive(simple2), primitive(simple4)
 
@@ -697,7 +694,7 @@ def test_propose_output(simple1, simple2, simple3, simple4):
 
         p = with_substitution(extend(p=replay_s2, f=replay_s4), trace=q_out)
         p_out = p()
-        assert p_out.nodes["_RETURN"]['value'] == tensor_of(2)
+        assert p_out.nodes["_RETURN"]["value"] == tensor_of(2)
 
         m_trace, m_output = get_marginal(p_out)
-        assert m_output['value'] == tensor_of(1)
+        assert m_output["value"] == tensor_of(1)
