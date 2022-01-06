@@ -287,13 +287,18 @@ class propose(proposals):
         self,
         p: Targets,
         q: Proposals,
-        loss_fn: Callable[[Trace], Union[Tensor, float]] = (lambda out: 0.0),
+        loss_fn: Callable[[Trace, Trace, Tensor, Tensor], Union[Tensor, float]] = (lambda _1, _2, _3, _4: 0.0),
     ):
         super().__init__()
         self.p, self.q = p, q
         self.loss_fn = loss_fn
 
-    def _compute_logweight(self, p_trace:Trace, q_trace:Trace)->Tensor:
+    def _compute_logweight(self, p_trace:Trace, q_trace:Trace)->Tuple[Tensor, Tensor]:
+        """
+        compute the (decomposed) log weight. We want this to be decomposed to
+        provide more information to the loss function.
+        """
+
         log_weight = _logweight(q_trace)
 
         lu = stacked_log_prob(
@@ -301,7 +306,7 @@ class propose(proposals):
         )
         log_incremental = _logweight(p_trace) - lu
 
-        return (log_weight + log_incremental).detach()
+        return log_weight.detach(), log_incremental.detach()
 
     def __call__(self, *args, **kwargs) -> Trace:
         q_out = self.q(*args, **kwargs) # type: ignore
@@ -312,16 +317,29 @@ class propose(proposals):
         # should be something like: m_output = m_trace["_RETURN"]
         m_output = _output(p_out)
 
-
-        # FIXME local gradient computations
-        # trace=m_trace if self._no_reruns else rerun_with_detached_values(m_trace),
+        # FIXME local gradient computations (show how to do this in NVI example).
+        # something like:
+        #
+        #     def rerun_as_detached_values():
+        #         def rerun(loss_fn):
+        #             def call(_p_trace, _q_trace, lw, lv):
+        #                 p_trace = rerun_with_detached_values(_p_trace)
+        #                 m_trace = rerun_with_detached_values(_m_trace)
+        #                 return loss_fn(p_trace, m_trace, lw, lv)
+        #             return call
+        #         return rerun
         trace = m_trace
         set_input(trace, args=args, kwargs=kwargs)
 
-
         set_param(trace, _RETURN, "return", value=m_output)
-        set_param(trace, _LOGWEIGHT, "return", value=self._compute_logweight(p_out, q_out))
-        self.loss = self.loss + self.loss_fn(m_output)
+
+        lw, lv = self._compute_logweight(p_out, q_out)
+        set_param(trace, _LOGWEIGHT, "return", value=lw+lv)
+
+        prev_loss = q_out.nodes.get(_LOSS, .0)
+        accum_loss = self.loss_fn(p_out, q_out, lw, lv)
+        set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
+
         return trace
 
 
