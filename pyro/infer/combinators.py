@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable, NamedTuple, Set, TypeVar, Union
+from typing import Any, Callable, Tuple, Set, TypeVar, Union
 
 import torch
 from torch import Tensor, tensor
@@ -98,11 +98,6 @@ def membership_filter(members: Set[str]) -> SiteFilter:
     return lambda name, _: name in members
 
 
-# class Trace(NamedTuple):
-#     output: Any
-#     log_weight: Tensor
-#     trace: Trace
-
 
 class WithSubstitutionMessenger(ReplayMessenger):
     def _pyro_sample(self, msg):
@@ -125,6 +120,7 @@ class AuxiliaryMessenger(Messenger):
 
     def _pyro_sample(self, msg):
         msg["infer"]["is_auxiliary"] = True
+        # FIXME: here, we need to mark "the first" return which will be the output of get_marginal
 
 
 for messenger in [WithSubstitutionMessenger, AuxiliaryMessenger]:
@@ -138,6 +134,8 @@ def get_marginal(trace: Trace) -> Trace:
 
 
 class inference(object):
+    # FIXME: needs something like an "infer" map to hold things like index for APG.
+    # this must be placed at the top level on a trace in APG
     def __init__(self):
         self.loss = 0.0
 
@@ -299,18 +297,6 @@ class propose(proposals):
         q_out = self.q(*args, **kwargs)
         p_out = with_substitution(self.p, trace=q_out)(*args, **kwargs)
 
-        # FIXME this hook exists to alter an NVI trace for stl
-        # q_trace = dispatch(self.transf_q_trace, q_out.trace, **inf_kwargs)
-
-        lu_1 = stacked_log_prob(
-            q_out, site_filter=sample_filter(_or(not_substituted, is_observed))
-        )
-        lw_1 = _logweight(q_out)
-
-        # We call that lv because its the incremental weight in the IS sense
-        lv = _logweight(p_out) - lu_1
-        lw_out = lw_1 + lv
-
         m_trace = get_marginal(p_out)
         # FIXME: this is not accounted for -- will return the final kernel output, not the initial output
         # should be something like: m_output = m_trace["_RETURN"]
@@ -319,22 +305,32 @@ class propose(proposals):
         # FIXME local gradient computations
         # trace=m_trace if self._no_reruns else rerun_with_detached_values(m_trace),
         trace = m_trace
-        set_input(
-            trace,
-            args=args,
-            kwargs=kwargs,
-        )
+        set_input(trace, args=args, kwargs=kwargs)
+
+        # FIXME this hook exists to alter an NVI trace for stl
+        # q_trace = dispatch(self.transf_q_trace, q_out.trace, **inf_kwargs)
+        def compute_weight(p_trace, q_trace):
+            lu_1 = stacked_log_prob(
+                q_trace, site_filter=sample_filter(_or(not_substituted, is_observed))
+            )
+            lw_1 = _logweight(q_trace)
+
+            # We call that lv because its the incremental weight in the IS sense
+            lv = _logweight(p_trace) - lu_1
+            lw_out = lw_1 + lv
+            return lw_out.detach()
+
         set_param(trace, _RETURN, "return", value=m_output)
-        set_param(trace, _LOGWEIGHT, "return", value=lw_out.detach())
+        set_param(trace, _LOGWEIGHT, "return", value=(compute_weight, p_out, q_out))
         self.loss = self.loss + self.loss_fn(m_output)
         return trace
 
 
-class observe(proposals):
+class augment_weight(proposals):
     def __init__(
         self,
         q: Proposals,
-        loss_fn: Callable[[Trace], Union[Tensor, float]],
+        loss_fn: Callable[[Trace, Tuple[Callable[[Trace, Trace], Tensor], Trace, Trace]], Union[Tensor, float]],
     ):
         super().__init__()
         self.q = q
