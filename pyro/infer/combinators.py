@@ -184,7 +184,7 @@ class primitive(targets, proposals):
     def __call__(self, *args, **kwargs) -> Trace:
         with TraceMessenger() as tracer:
             out = self.program(*args, **kwargs)
-            tr: Trace = tracer.trace
+            tr: Trace = tracer.trace  # type: ignore
             lp = stacked_log_prob(tr, sample_filter(_or(is_substituted, is_observed)))
 
             trace = tr
@@ -233,8 +233,8 @@ class extend(targets):
         self.p, self.f = p, f
 
     def __call__(self, *args, **kwargs) -> Trace:
-        p_out: Trace = self.p(*args, **kwargs)
-        f_out: Trace = auxiliary(self.f)(_output(p_out), *args, **kwargs)
+        p_out: Trace = self.p(*args, **kwargs)  # type: ignore
+        f_out: Trace = auxiliary(self.f)(_output(p_out), *args, **kwargs)  # type: ignore
         p_trace, f_trace = p_out, f_out
 
         # NOTE: we need to walk across all nodes to see if substitution was used
@@ -266,8 +266,8 @@ class compose(proposals):
         self.q1, self.q2 = q1, q2
 
     def __call__(self, *args, **kwargs) -> Trace:
-        q1_out = self.q1(*args, **kwargs)
-        q2_out = self.q2(*args, **kwargs)
+        q1_out = self.q1(*args, **kwargs)  # type: ignore
+        q2_out = self.q2(q1_out.nodes[_RETURN]['value'], *args, **kwargs)  # type: ignore
 
         assert_no_overlap(q2_out, q1_out, location=type(self))
 

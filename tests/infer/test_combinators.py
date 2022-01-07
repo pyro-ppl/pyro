@@ -78,7 +78,7 @@ def simple2():
 
 @pytest.fixture(scope="session", autouse=True)
 def simple3():
-    def model():
+    def model(c):
         z_3 = pyro.sample("z_3", dist.Normal(tensor_of(3), tensor_of(3)))
 
         pyro.sample("x_3", dist.Normal(tensor_of(3), tensor_of(3)), obs=z_3)
@@ -282,7 +282,7 @@ def test_simple2(simple2):
 
 
 def test_simple3(simple3):
-    out = primitive(simple3)()
+    out = primitive(simple3)(None)
     assert _addrs(out) == {"z_3", "x_3"}
     assert _log_weight(out) == out.log_prob_sum(addr_filter(starts_with_x))
 
@@ -442,7 +442,7 @@ def test_nested_marginal(simple2, simple4, simple5):
 
 def test_compose_simple(simple1, simple3):
     s1, s3 = primitive(simple1), primitive(simple3)
-    s1_out, s3_out = s1(), s3()
+    s1_out, s3_out = s1(), s3(None)
     replay_s1, replay_s3 = replay(s1, trace=s1_out), replay(s3, trace=s3_out)
 
     out = compose(q1=replay_s1, q2=replay_s3)()
@@ -464,7 +464,7 @@ def test_compose_simple(simple1, simple3):
 def test_compose_with_plates(simple1, simple3):
     with pyro.plate("batch_dim", 3), pyro.plate("sample_dim", 7):
         s1, s3 = primitive(simple1), primitive(simple3)
-        s1_out, s3_out = s1(), s3()
+        s1_out, s3_out = s1(), s3(None)
         replay_s1, replay_s3 = replay(s1, trace=s1_out), replay(s3, trace=s3_out)
         out = compose(q1=replay_s1, q2=replay_s3)()
 
@@ -512,7 +512,7 @@ def test_propose(simple1, simple2, simple3, simple4):
     seed(7)
 
     s1, s3 = primitive(simple1), primitive(simple3)
-    s1_out, s3_out = s1(), s3()
+    s1_out, s3_out = s1(), s3(None)
     replay_s1, replay_s3 = replay(s1, trace=s1_out), replay(s3, trace=s3_out)
 
     q = compose(q1=replay_s1, q2=replay_s3)
@@ -601,7 +601,7 @@ def test_propose_with_plates(simple1, simple2, simple3, simple4):
     seed(7)
     with pyro.plate("sample", 7), pyro.plate("batch", 3):
         s1, s3 = primitive(simple1), primitive(simple3)
-        s1_out, s3_out = s1(), s3()
+        s1_out, s3_out = s1(), s3(None)
         replay_s1, replay_s3 = replay(s1, trace=s1_out), replay(s3, trace=s3_out)
 
         q = compose(q1=replay_s1, q2=replay_s3)
@@ -678,7 +678,7 @@ def test_propose_output(simple1, simple2, simple3, simple4):
     seed(7)
     with pyro.plate("sample", 7), pyro.plate("batch", 3):
         s1, s3 = primitive(simple1), primitive(simple3)
-        s1_out, s3_out = s1(), s3()
+        s1_out, s3_out = s1(), s3(None)
         replay_s1, replay_s3 = replay(s1, trace=s1_out), replay(s3, trace=s3_out)
 
         q = compose(q1=replay_s1, q2=replay_s3)
