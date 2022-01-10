@@ -244,7 +244,9 @@ class extend(targets):
         )
 
         if not self.validated:
-            assert no_samples_overlap(p_out, f_out), f"{type(self)}: addresses must not overlap"
+            assert no_samples_overlap(p_out, f_out), f"{type(self)}: addresses must not overlap.\nGot:\n" \
+                + f"    target trace addresses: {_addrs(p_out)}\n" \
+                + f"    kernel trace addresses: {_addrs(f_out)}\n"
             assert all(map(not_observed, f_trace.nodes.values()))
             if not under_substitution:
                 assert _logweight(f_out) == 0.0
@@ -274,7 +276,9 @@ class compose(proposals):
         q2_out = self.q2(q1_out.nodes[_RETURN]['value'], *args, **kwargs)  # type: ignore
 
         if not self.validated:
-            assert no_samples_overlap(q2_out, q1_out), f"{type(self)}: addresses must not overlap"
+            assert no_samples_overlap(q2_out, q1_out), f"{type(self)}: addresses must not overlap.\nGot:\n" \
+                + f"    program trace addresses: {_addrs(q1_out)}\n" \
+                + f"    kernel trace addresses : {_addrs(q2_out)}\n"
             self.validated = True
 
         trace = concat_traces(q2_out, q1_out, site_filter=node_filter(is_sample_type))
