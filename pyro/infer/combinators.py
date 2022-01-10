@@ -1,16 +1,19 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable, Tuple, Set, TypeVar, Union
 
+import logging
 import torch
 from torch import Tensor, tensor
+from typing import Any, Callable, Tuple, Set, TypeVar, Union
 
 from pyro.poutine import Trace
 from pyro.poutine.handlers import _make_handler
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.trace_messenger import TraceMessenger
+
+logger = logging.getLogger(__name__)
 
 # type aliases
 
@@ -287,19 +290,20 @@ class compose(proposals):
         )
         return trace
 
+def default_loss_fn(_1: Trace, _2:Trace, _3:Tensor, _4:Tensor) -> Union[Tensor, float]:
+    return 0.0
 
 class propose(proposals):
     def __init__(
         self,
         p: Targets,
         q: Proposals,
-        loss_fn: Callable[[Trace, Trace, Tensor, Tensor], Union[Tensor, float]] = (
-            lambda _1, _2, _3, _4: 0.0
-        ),
+        loss_fn: Callable[[Trace, Trace, Tensor, Tensor], Union[Tensor, float]] = default_loss_fn
     ):
         super().__init__()
         self.p, self.q = p, q
         self.loss_fn = loss_fn
+        self.validated = False
 
     def _compute_logweight(
         self, p_trace: Trace, q_trace: Trace
@@ -327,6 +331,11 @@ class propose(proposals):
     def __call__(self, *args, **kwargs) -> Trace:
         q_out = self.q(*args, **kwargs)  # type: ignore
         p_out = with_substitution(self.p, trace=q_out)(*args, **kwargs)  # type: ignore
+
+        if not self.validated:
+            if no_samples_overlap(q_out, p_out) and self.loss_fn is not default_loss_fn:
+                logger.warn("no overlap found between proposal and trace: no gradients will be produced")
+            self.validated = True
 
         m_trace, m_output = get_marginal(p_out)
 
