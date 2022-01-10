@@ -44,6 +44,7 @@ def concat_traces(
 def no_samples_overlap(t0: Trace, t1: Trace):
     return len(_addrs(t0).intersection(_addrs(t1))) == 0
 
+
 def is_observed(node: Node) -> bool:
     return node.get("is_observed", False)
 
@@ -197,6 +198,9 @@ class primitive(targets, proposals):
             set_param(trace, _LOGWEIGHT, "return", value=lp)
             return trace
 
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} wrapper of {repr(self.program)} at {hex(id(self))}>"
+
 
 Primitive = Union[Callable[..., Trace], primitive]
 
@@ -244,9 +248,11 @@ class extend(targets):
         )
 
         if not self.validated:
-            assert no_samples_overlap(p_out, f_out), f"{type(self)}: addresses must not overlap.\nGot:\n" \
-                + f"    target trace addresses: {_addrs(p_out)}\n" \
+            assert no_samples_overlap(p_out, f_out), (
+                f"{type(self)}: addresses must not overlap.\nGot:\n"
+                + f"    target trace addresses: {_addrs(p_out)}\n"
                 + f"    kernel trace addresses: {_addrs(f_out)}\n"
+            )
             assert all(map(not_observed, f_trace.nodes.values()))
             if not under_substitution:
                 assert _logweight(f_out) == 0.0
@@ -273,12 +279,14 @@ class compose(proposals):
 
     def __call__(self, *args, **kwargs) -> Trace:
         q1_out = self.q1(*args, **kwargs)  # type: ignore
-        q2_out = self.q2(q1_out.nodes[_RETURN]['value'], *args, **kwargs)  # type: ignore
+        q2_out = self.q2(q1_out.nodes[_RETURN]["value"], *args, **kwargs)  # type: ignore
 
         if not self.validated:
-            assert no_samples_overlap(q2_out, q1_out), f"{type(self)}: addresses must not overlap.\nGot:\n" \
-                + f"    program trace addresses: {_addrs(q1_out)}\n" \
+            assert no_samples_overlap(q2_out, q1_out), (
+                f"{type(self)}: addresses must not overlap.\nGot:\n"
+                + f"    program trace addresses: {_addrs(q1_out)}\n"
                 + f"    kernel trace addresses : {_addrs(q2_out)}\n"
+            )
             self.validated = True
 
         trace = concat_traces(q2_out, q1_out, site_filter=node_filter(is_sample_type))
@@ -294,15 +302,21 @@ class compose(proposals):
         )
         return trace
 
-def default_loss_fn(_1: Trace, _2:Trace, _3:Tensor, _4:Tensor) -> Union[Tensor, float]:
+
+def default_loss_fn(
+    _1: Trace, _2: Trace, _3: Tensor, _4: Tensor
+) -> Union[Tensor, float]:
     return 0.0
+
 
 class propose(proposals):
     def __init__(
         self,
         p: Targets,
         q: Proposals,
-        loss_fn: Callable[[Trace, Trace, Tensor, Tensor], Union[Tensor, float]] = default_loss_fn
+        loss_fn: Callable[
+            [Trace, Trace, Tensor, Tensor], Union[Tensor, float]
+        ] = default_loss_fn,
     ):
         super().__init__()
         self.p, self.q = p, q
@@ -324,13 +338,7 @@ class propose(proposals):
         )
         log_incremental = _logweight(p_trace) - lu
 
-        log_weight = _logweight(q_trace)
-        # FIXME: I think this is unneccesary
-        #if log_weight == 0.0 or (log_weight.shape == torch.Size([1]) and log_weight.item() == 0.):
-        #    # if we are the first log_weight computation, ensure shapes align
-        #    log_weight = torch.zeros_like(log_incremental)
-
-        return log_weight.detach(), log_incremental
+        return _logweight(q_trace).detach(), log_incremental
 
     def __call__(self, *args, **kwargs) -> Trace:
         q_out = self.q(*args, **kwargs)  # type: ignore
@@ -338,7 +346,9 @@ class propose(proposals):
 
         if not self.validated:
             if no_samples_overlap(q_out, p_out) and self.loss_fn is not default_loss_fn:
-                logger.warning("no overlap found between proposal and trace: no gradients will be produced")
+                logger.warning(
+                    "no overlap found between proposal and trace: no gradients will be produced"
+                )
             self.validated = True
 
         m_trace, m_output = get_marginal(p_out)
@@ -363,7 +373,7 @@ class propose(proposals):
         set_param(trace, _LOGWEIGHT, "return", value=lw + lv.detach())
 
         prev_loss = q_out.nodes.get(_LOSS, 0.0)
-        accum_loss = self.loss_fn(p_out, q_out, lw, lv) # m_trace, last time
+        accum_loss = self.loss_fn(p_out, q_out, lw, lv)  # m_trace, last time
         set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
 
         return trace

@@ -28,14 +28,15 @@ from pyro.infer.combinators import (
     primitive,
     propose,
     with_substitution,
-    _LOGWEIGHT, _LOSS, _RETURN
+    _LOGWEIGHT,
+    _LOSS,
+    _RETURN,
 )
 from pyro.nn.module import PyroModule
 from pyro.poutine import Trace, replay
 from pyro.poutine.handlers import _make_handler
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.trace_messenger import TraceMessenger
-
 
 
 def seed(s=42) -> None:
@@ -78,9 +79,31 @@ def thash(
         return f"#{g}{v}"
 
 
+class LinearKernel(PyroModule):
+    """simple MLP kernel that expects an observation with a sample dimension"""
+
+    def __init__(self, name, dim=1):
+        super().__init__()
+        self.name = name
+        self.net = nn.Linear(dim, dim)
+
+    def forward(self, obs):
+        return pyro.sample(
+            self.name, dist.Normal(loc=self.net(obs.T.detach()).T, scale=1.0)
+        )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def linear_kernel():
+    def model(name):
+        return primitive(LinearKernel(name, dim=1))
+
+    yield model
+
 
 class MLPKernel(PyroModule):
-    """ simple MLP kernel that expects an observation with a sample dimension """
+    """simple MLP kernel that expects an observation with a sample dimension"""
+
     def __init__(self, name, dim_hidden):
         super().__init__()
         self.name = name
@@ -93,13 +116,19 @@ class MLPKernel(PyroModule):
         )
 
     def forward(self, obs):
-        return pyro.sample(self.name, dist.Normal(loc=self.net(obs.T.detach()).T, scale=1.))
+        return pyro.sample(
+            self.name, dist.Normal(loc=self.net(obs.T.detach()).T, scale=1.0)
+        )
+
+    def __repr__(self):
+        return f"MLPKernel({self.name})"
 
 
 @pytest.fixture(scope="session", autouse=True)
 def mlp_kernel():
     def model(name, dim_hidden):
         return primitive(MLPKernel(name, dim_hidden=dim_hidden))
+
     yield model
 
 
@@ -107,14 +136,24 @@ class Normal(PyroModule):
     def __init__(self, name, loc=0, scale=1):
         super().__init__()
         self.name, self.loc, self.scale = name, loc, scale
+
     def forward(self):
-        return pyro.sample(self.name, dist.Normal(loc=torch.ones(1,1)*self.loc, scale=torch.ones(1,1)*self.scale))
+        return pyro.sample(
+            self.name,
+            dist.Normal(
+                loc=torch.ones(1, 1) * self.loc, scale=torch.ones(1, 1) * self.scale
+            ),
+        )
+
+    def __repr__(self):
+        return f"Normal({self.name})"
 
 
 @pytest.fixture(scope="session", autouse=True)
 def normal():
-    def model(name:str, loc:int=0, scale:int=1):
+    def model(name: str, loc: int = 0, scale: int = 1):
         return primitive(Normal(name, loc, scale))
+
     yield model
 
 
@@ -147,7 +186,7 @@ def test_gradient_updates(normal, mlp_kernel):
 
     with pyro.plate("sample", 7):
         out = prop()
-        loss = out.nodes[_LOSS]['value']
+        loss = out.nodes[_LOSS]["value"]
 
         loss.backward()
         optimizer.step()
@@ -176,12 +215,13 @@ def vsmc(targets, forwards, reverses, loss_fn, resample=False):
 
 def test_avo_1step(normal, mlp_kernel):
     pyro.set_rng_seed(7)
-
     q = normal("z_1", loc=1, scale=0.05)
     p = normal("z_2", loc=2, scale=0.05)
     fwd = mlp_kernel(p.program.name, dim_hidden=10)
     rev = mlp_kernel(q.program.name, dim_hidden=10)
-    inf_step = vsmc(targets=[q, p], forwards=[fwd], reverses=[rev], loss_fn=nvo_avo, resample=False)
+    inf_step = vsmc(
+        targets=[q, p], forwards=[fwd], reverses=[rev], loss_fn=nvo_avo, resample=False
+    )
 
     optimizer = torch.optim.Adam(
         params=[dict(params=x.program.parameters()) for x in [fwd, rev]], lr=0.2
@@ -191,62 +231,81 @@ def test_avo_1step(normal, mlp_kernel):
         optimizer.zero_grad()
         with pyro.plate("samples", 50):
             out = inf_step()
-            loss = out.nodes[_LOSS]['value']
+            loss = out.nodes[_LOSS]["value"]
             loss.backward()
             optimizer.step()
 
     with pyro.plate("samples", 1000):
-        target_loc = p().nodes['z_2']['value'].mean()
-        forward_loc = compose(fwd, q)().nodes[_RETURN]['value'].mean()
+        target_loc = p().nodes["z_2"]["value"].mean()
+        forward_loc = compose(fwd, q)().nodes[_RETURN]["value"].mean()
         # pretty huge epsilon for a very short runway (100 steps).
         assert abs(target_loc - forward_loc) < 0.15
 
-@mark.skip()
+
 def test_avo_4step(normal, mlp_kernel):
-    from tqdm import trange
     pyro.set_rng_seed(7)
-    num_targets = 4
-    targets = [normal(f"z_{i}", loc=i, scale=0.25) for i in range(1, num_targets+1)]
+    num_targets = 3
+    targets = [normal(f"z_{i}", loc=i, scale=0.25) for i in range(1, num_targets + 1)]
     assert len(targets) > 2, "1 step accounted for in test_avo_1step"
 
-    forwards = [mlp_kernel(t.program.name, dim_hidden=10) for t in targets[1:]]
-    reverses = [mlp_kernel(t.program.name, dim_hidden=10) for t in targets[-2::-1]]
+    target_addrs = [t.program.name for t in targets]
+    forward_addrs, reverse_addrs = target_addrs[1:], target_addrs[:-1]
+    forwards, reverses = [
+        [mlp_kernel(addr, dim_hidden=10) for addr in addrs]
+        for addrs in [forward_addrs, reverse_addrs]
+    ]
+    assert len(forwards) == len(reverses) and len(forwards) == num_targets - 1
 
-    inf_step = vsmc(targets=targets, forwards=forwards, reverses=reverses, loss_fn=nvo_avo, resample=False)
-
-    optimizer = torch.optim.Adam(
-        params=[dict(params=x.program.parameters()) for x in forwards+reverses], lr=0.2
+    inf_step = vsmc(
+        targets=targets,
+        forwards=forwards,
+        reverses=reverses,
+        loss_fn=nvo_avo,
+        resample=False,
     )
 
+    optimizer = torch.optim.Adam(
+        params=[dict(params=x.program.parameters()) for x in forwards + reverses],
+        lr=0.2,
+    )
+
+    from tqdm import trange
+
+    losses = []
     with trange(1000) as bar:
         for i in bar:
             optimizer.zero_grad()
             out = inf_step()
-            loss = out.nodes[_LOSS]['value']
+            loss = out.nodes[_LOSS]["value"]
             loss.backward()
             optimizer.step()
 
             # REPORTING
-            if i % 100 == 0:
-                loss_scalar = loss.detach().cpu().mean().item()
-                bar.set_postfix_str("loss={}{:.4f}".format(
-                    "" if loss_scalar < 0 else " ", loss.detach().cpu().mean().item()
-                ))
+            losses.append(loss.detach().cpu().mean().item())
+            if len(losses) > 100:
+                losses.pop(0)
+                if i % 10 == 0:
+                    loss_scalar = sum(losses) / len(losses)
+                    bar.set_postfix_str(
+                        "loss={}{:.3f}".format(
+                            "" if loss_scalar < 0 else " ", loss_scalar
+                        )
+                    )
 
     chain = reduce(lambda q, fwd: compose(fwd, q), forwards, targets[0])
     target = targets[-1]
     chain = compose(forwards[0], targets[0])
 
     with pyro.plate("samples", 1000):
-        target_loc = target().nodes[f'z_{num_targets}']['value'].mean().detach()
-        forward_loc = chain().nodes[_RETURN]['value'].mean().detach()
+        target_loc = target().nodes[f"z_{num_targets}"]["value"].mean().detach()
+        forward_loc = chain().nodes[_RETURN]["value"].mean().detach()
         assert abs(num_targets - target_loc) < 0.05, "target location is miscalculated"
-        assert abs(target_loc - forward_loc) < 0.15, "kernels did not learn target density"
+        assert (
+            abs(target_loc - forward_loc) < 0.15
+        ), "kernels did not learn target density"
 
 
-
-
-#def test_2step_avo(seed, use_fast, is_smoketest):
+# def test_2step_avo(seed, use_fast, is_smoketest):
 #    """
 #    2-step NVI (NVI-sequential): 4 intermediate densities (target and proposal always fixed).
 #
@@ -391,7 +450,7 @@ def test_avo_4step(normal, mlp_kernel):
 #        )
 #
 #
-#def test_4step_avo(seed, use_fast, is_smoketest):
+# def test_4step_avo(seed, use_fast, is_smoketest):
 #    """
 #    4-step NVI-sequential: 8 intermediate densities
 #    """
@@ -609,7 +668,7 @@ def test_avo_4step(normal, mlp_kernel):
 #
 
 
-#def test_propose_gradients(seed):
+# def test_propose_gradients(seed):
 #    q = Normal(loc=4, scale=1, name="z_0", **kw_autodevice())
 #    p = Normal(loc=0, scale=4, name="z_1", **kw_autodevice())
 #    fwd = MLPKernel(dim_hidden=4, ext_name="z_1").to(autodevice())
