@@ -38,11 +38,8 @@ def concat_traces(
     return newtrace
 
 
-def assert_no_overlap(t0: Trace, t1: Trace, location=""):
-    assert (
-        len(_addrs(t0).intersection(_addrs(t1))) == 0
-    ), f"{location}: addresses must not overlap"
-
+def no_samples_overlap(t0: Trace, t1: Trace):
+    return len(_addrs(t0).intersection(_addrs(t1))) == 0
 
 def is_observed(node: Node) -> bool:
     return node.get("is_observed", False)
@@ -231,6 +228,7 @@ class extend(targets):
     def __init__(self, p: Targets, f: Primitive):
         super().__init__()
         self.p, self.f = p, f
+        self.validated = False
 
     def __call__(self, *args, **kwargs) -> Trace:
         p_out: Trace = self.p(*args, **kwargs)  # type: ignore
@@ -242,11 +240,13 @@ class extend(targets):
             map(is_substituted, [*p_trace.nodes.values(), *f_trace.nodes.values()])
         )
 
-        assert_no_overlap(p_trace, f_trace, location=type(self))
-        assert all(map(not_observed, f_trace.nodes.values()))
-        if not under_substitution:
-            assert _logweight(f_out) == 0.0
-            assert all(map(not_substituted, f_trace.nodes.values()))
+        if not self.validated:
+            assert no_samples_overlap(p_out, f_out), f"{type(self)}: addresses must not overlap"
+            assert all(map(not_observed, f_trace.nodes.values()))
+            if not under_substitution:
+                assert _logweight(f_out) == 0.0
+                assert all(map(not_substituted, f_trace.nodes.values()))
+            self.validated = True
 
         log_u2 = stacked_log_prob(f_trace, site_filter=node_filter(is_sample_type))
 
@@ -264,12 +264,15 @@ class compose(proposals):
     def __init__(self, q2: Proposals, q1: Proposals):
         super().__init__()
         self.q1, self.q2 = q1, q2
+        self.validated = False
 
     def __call__(self, *args, **kwargs) -> Trace:
         q1_out = self.q1(*args, **kwargs)  # type: ignore
         q2_out = self.q2(q1_out.nodes[_RETURN]['value'], *args, **kwargs)  # type: ignore
 
-        assert_no_overlap(q2_out, q1_out, location=type(self))
+        if not self.validated:
+            assert no_samples_overlap(q2_out, q1_out), f"{type(self)}: addresses must not overlap"
+            self.validated = True
 
         trace = concat_traces(q2_out, q1_out, site_filter=node_filter(is_sample_type))
         set_input(
