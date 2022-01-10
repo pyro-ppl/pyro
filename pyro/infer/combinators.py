@@ -334,7 +334,7 @@ class propose(proposals):
 
         if not self.validated:
             if no_samples_overlap(q_out, p_out) and self.loss_fn is not default_loss_fn:
-                logger.warn("no overlap found between proposal and trace: no gradients will be produced")
+                logger.warning("no overlap found between proposal and trace: no gradients will be produced")
             self.validated = True
 
         m_trace, m_output = get_marginal(p_out)
