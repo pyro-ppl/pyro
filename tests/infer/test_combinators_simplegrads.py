@@ -1,20 +1,20 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import functools
-from operator import getitem, itemgetter
-from pyro.poutine.handlers import _make_handler
-from pyro.poutine.messenger import Messenger
-from typing import Any, Callable, Optional, Union, Optional
 
 import pytest
 import torch
-from torch import Tensor, tensor
 import torch.nn as nn
+import torch.nn.functional as F
+from functools import reduce
 from pytest import mark, fixture
+from torch import Tensor, tensor
+from typing import Any, Callable, Optional, Union, Optional
+from tqdm import trange
 
 import pyro
 import pyro.distributions as dist
+import pyro.optim.pytorch_optimizers as optim
 from pyro import poutine
 from pyro.infer.combinators import (
     Node,
@@ -29,56 +29,58 @@ from pyro.infer.combinators import (
     primitive,
     propose,
     with_substitution,
+    _LOGWEIGHT, _LOSS, _RETURN
 )
-from pyro.poutine import Trace, replay
 from pyro.nn.module import PyroModule
+from pyro.poutine import Trace, replay
+from pyro.poutine.handlers import _make_handler
+from pyro.poutine.messenger import Messenger
 
-#@pytest.fixture(scope="session", autouse=True)
-#def mlp_kernel():
-#    def model():
-#        z_3 = pyro.sample("z_3", dist.Normal(tensor_of(3), tensor_of(3)))
-#
-#        pyro.sample("x_3", dist.Normal(tensor_of(3), tensor_of(3)), obs=z_3)
-#
-#        return None
-#
-#    yield model
-#
-#class MLPKernel(nn.PyroModule):
-#    @PyroSample
-#    def x(self):
-#        return Normal(0, 1)       # independent
-#
-#    @PyroSample
-#    def y(self):
-#        return Normal(self.x, 1)  # dependent
-#
-#    def forward(self):
-#        return self.y             # accessed like a @property
-#
-#class MLPKernel(Kernel):
-#    def __init__(self, dim_hidden, ext_name):
-#        super().__init__()
-#        self.ext_name = ext_name
-#        self.net = nn.Sequential(
-#            nn.Linear(1, dim_hidden),
-#            nn.Sigmoid(),
-#            nn.Linear(dim_hidden, dim_hidden),
-#            nn.Sigmoid(),
-#            nn.Linear(dim_hidden, 1),
-#        )
-#
-#    def apply_kernel(self, trace, cond_trace, obs):
-#        return trace.normal(
-#            loc=self.net(obs.detach()),
-#            scale=torch.ones(1, device=obs.device),
-#            value=None
-#            if self.ext_name not in cond_trace
-#            else cond_trace[self.ext_name].value,
-#            name=self.ext_name,
-#        )
+
+
+def seed(s=42) -> None:
+    import random
+
+    import numpy as np
+
+    torch.manual_seed(s)
+    np.random.seed(s)
+    random.seed(s)
+    # just incase something goes wrong with set_deterministic
+    torch.backends.cudnn.benchmark = True
+    if torch.__version__[:3] == "1.8":
+        pass
+        # torch.use_deterministic_algorithms(True)
+
+
+def thash(
+    aten: Tensor,
+    length: int = 8,
+    with_ref=False,
+    no_grad_char: str = " ",
+) -> str:
+    import pickle
+    import base64
+    import hashlib
+
+    def _hash(t: Tensor, length: int) -> str:
+        hasher = hashlib.sha1(pickle.dumps(t))
+        return base64.urlsafe_b64encode(hasher.digest()[:length]).decode("ascii")
+
+    g = "∇" if aten.grad_fn is not None else no_grad_char
+    save_ref = aten.detach()
+    if with_ref:
+        r = _hash(save_ref, (length // 4))
+        v = _hash(save_ref.cpu().numpy(), 3 * (length // 4))
+        return f"#{g}{r}{v}"
+    else:
+        v = _hash(save_ref.cpu().numpy(), length)
+        return f"#{g}{v}"
+
+
 
 class MLPKernel(PyroModule):
+    """ simple MLP kernel that expects an observation with a sample dimension """
     def __init__(self, name, dim_hidden):
         super().__init__()
         self.name = name
@@ -91,175 +93,166 @@ class MLPKernel(PyroModule):
         )
 
     def forward(self, obs):
-        return pyro.sample("g", dist.Normal(loc=self.net(obs.detach()), scale=torch.one(1)))
-
-def test_forward():
-    g = lambda: pyro.sample("g", dist.Normal(loc=torch.zeros(1), scale=torch.ones(1)))
-    fwd = MLPKernel("fwd", dim_hidden=4,)
-
-    ext = compose(fwd, g)
-    ext()
-    breakpoint();
-    print()
+        return pyro.sample(self.name, dist.Normal(loc=self.net(obs.T.detach()).T, scale=1.))
 
 
-#def test_forward_forward(seed):
-#    g0 = Normal(loc=0, scale=1, name="g0")
-#    f01 = MLPKernel(dim_hidden=4, ext_name="g1").to(autodevice())
-#    f12 = MLPKernel(dim_hidden=4, ext_name="g2").to(autodevice())
-#
-#    ext = Forward(f12, Forward(f01, g0))
-#    ext()
-#
-#
-#def test_reverse(seed):
-#    g = Normal(loc=0, scale=1, name="g")
-#    rev = MLPKernel(dim_hidden=4, ext_name="rev").to(autodevice())
-#
-#    ext = Reverse(g, rev)
-#    ext()
-#
-#    for k in ext._cache.program.trace.keys():
-#        assert torch.equal(
-#            ext._cache.program.trace[k].value, ext._cache.kernel.trace[k].value
-#        )
-#
-#
-#def test_propose_values(seed):
-#    q = Normal(loc=4, scale=1, name="z_0")
-#    p = Normal(loc=0, scale=4, name="z_1")
-#    fwd = MLPKernel(dim_hidden=4, ext_name="z_1").to(autodevice())
-#    rev = MLPKernel(dim_hidden=4, ext_name="z_0").to(autodevice())
-#    optimizer = torch.optim.Adam(
-#        [dict(params=x.parameters()) for x in [p, q, fwd, rev]], lr=0.5
-#    )
-#    assert len(list(p.parameters())) == 0
-#    assert len(list(q.parameters())) == 0
-#    fwd_hashes_0 = [thash(t) for t in fwd.parameters()]
-#    rev_hashes_0 = [thash(t) for t in rev.parameters()]
-#
-#    q_ext = Forward(fwd, q)
-#    p_ext = Reverse(p, rev)
-#    extend = Propose(target=p_ext, proposal=q_ext)
-#
-#    log_log_prob = extend().log_prob
-#
-#    assert isinstance(log_log_prob, Tensor)
-#
-#    proposal_cache = extend.proposal._cache
-#    target_cache = extend.target._cache
-#
-#    for k in ["z_0", "z_1"]:
-#        assert torch.equal(
-#            proposal_cache.kernel.trace[k].value, target_cache.kernel.trace[k].value
-#        )
-#
-#    loss = nvo_avo(log_log_prob, sample_dims=0).mean()
-#    loss.backward()
-#
-#    optimizer.step()
-#    fwd_hashes_1 = [thash(t) for t in fwd.parameters()]
-#    rev_hashes_1 = [thash(t) for t in rev.parameters()]
-#
-#    assert any([l != r for l, r in zip(fwd_hashes_0, fwd_hashes_1)])
-#    assert any([l != r for l, r in zip(rev_hashes_0, rev_hashes_1)])
-#
-#
-#def test_propose_gradients(seed):
-#    q = Normal(loc=4, scale=1, name="z_0", **kw_autodevice())
-#    p = Normal(loc=0, scale=4, name="z_1", **kw_autodevice())
-#    fwd = MLPKernel(dim_hidden=4, ext_name="z_1").to(autodevice())
-#    rev = MLPKernel(dim_hidden=4, ext_name="z_0").to(autodevice())
-#    optimizer = torch.optim.Adam(
-#        [dict(params=x.parameters()) for x in [p, q, fwd, rev]], lr=0.5
-#    )
-#
-#    tr0 = q().trace
-#    q_ext = Forward(fwd, Condition(q, tr0, requires_grad=RequiresGrad.NO))
-#    p_ext = Reverse(p, rev)
-#    extend = Propose(target=p_ext, proposal=q_ext)
-#
-#    state = extend()
-#    log_log_prob = state.log_prob
-#
-#    proposal_cache = extend.proposal._cache
-#    target_cache = extend.target._cache
-#
-#    for k in ["z_0", "z_1"]:
-#        assert torch.equal(
-#            proposal_cache.kernel.trace[k].value, target_cache.kernel.trace[k].value
-#        )
-#
-#    for k, prg in [
-#        ("z_1", target_cache.kernel),
-#        ("z_0", target_cache.kernel),
-#        ("z_1", proposal_cache.kernel),
-#    ]:
-#        assert (
-#            k == k and prg is prg and prg.trace[k].value.requires_grad
-#        )  # k==k for debugging the assert
-#
-#    assert not proposal_cache.kernel.trace["z_0"].value.requires_grad
-#
-#
-#def test_1step_avo(seed, is_smoketest):
-#    """ The VAE test. At one step no need for any detaches. """
-#
-#    target_params, proposal_params = all_params = [Params(4, 1), Params(1, 4)]
-#    target, proposal = [Normal(*p, name=f"z_{p.loc}") for p in all_params]
-#    # fwd, rev = [MLPKernel(dim_hidden=4, ext_name=f'z_{ext_mean}') for ext_mean in [4, 1]]
-#    fwd = NormalLinearKernel(ext_from=f"z_1", ext_to="z_4").to(autodevice())
-#    rev = NormalLinearKernel(ext_from=f"z_4", ext_to="z_1").to(autodevice())
-#
-#    optimizer = torch.optim.Adam(
-#        [dict(params=x.parameters()) for x in [proposal, target, fwd, rev]], lr=0.1
-#    )
-#
-#    num_steps = 1 if is_smoketest else 100
-#    loss_ct, loss_sum, loss_avgs, loss_all = 0, 0.0, [], []
-#
-#    with trange(num_steps) as bar:
-#        for i in bar:
-#            optimizer.zero_grad()
-#            q_ext = Forward(fwd, proposal)
-#            p_ext = Reverse(target, rev)
-#            extend = Propose(target=p_ext, proposal=q_ext)
-#
-#            log_log_prob = extend(sample_shape=(5, 1), sample_dims=0).log_prob
-#
-#            # proposal.clear_observations() # FIXME: this can be automated, but it would be nice to have more infrastructure around observations
-#            loss = nvo_avo(log_log_prob).mean()
-#
-#            loss.backward()
-#
-#            optimizer.step()
-#
-#            # REPORTING
-#            loss_ct += 1
-#            loss_scalar = loss.detach().cpu().mean().item()
-#            loss_sum += loss_scalar
-#            loss_all.append(loss_scalar)
-#            if num_steps <= 100:
-#                loss_avgs.append(loss_scalar)
-#            if i % 10 == 0:
-#                loss_avg = loss_sum / loss_ct
-#                loss_template = "loss={}{:.4f}".format(
-#                    "" if loss_avg < 0 else " ", loss_avg
-#                )
-#                bar.set_postfix_str(loss_template)
-#                loss_ct, loss_sum = 0, 0.0
-#                if num_steps > 100:
-#                    loss_avgs.append(loss_avg)
-#    with torch.no_grad():
-#        assert_empirical_marginal_mean_std(
-#            lambda: Forward(fwd, proposal)().output,
-#            target_params,
-#            Tolerance(loc=0.15, scale=0.15),
-#            is_smoketest,
-#            5 if is_smoketest else 400,
-#        )
-#
-#
+@pytest.fixture(scope="session", autouse=True)
+def mlp_kernel():
+    def model(name, dim_hidden):
+        return primitive(MLPKernel(name, dim_hidden=dim_hidden))
+    yield model
+
+
+class Normal(PyroModule):
+    def __init__(self, name, loc=0, scale=1):
+        super().__init__()
+        self.name, self.loc, self.scale = name, loc, scale
+    def forward(self):
+        return pyro.sample(self.name, dist.Normal(loc=torch.ones(1,1)*self.loc, scale=torch.ones(1,1)*self.scale))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def normal():
+    def model(name:str, loc:int=0, scale:int=1):
+        return primitive(Normal(name, loc, scale))
+    yield model
+
+
+def nvo_avo(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
+    def compute(lv):
+        # internal function just to note that we only need lv for avo
+        nw = F.softmax(torch.zeros_like(lv), dim=sample_dims)
+        loss = (nw * (-lv)).sum(dim=(sample_dims,), keepdim=False)
+        return loss
+    return compute(lv)
+
+
+def test_gradient_updates(normal, mlp_kernel):
+    q = normal("z_0", loc=4, scale=1)
+    p = normal("z_1", loc=0, scale=4)
+    fwd = mlp_kernel("z_1", dim_hidden=4)
+    rev = mlp_kernel("z_0", dim_hidden=4)
+
+    optimizer = torch.optim.Adam(
+        [dict(params=x.program.parameters()) for x in [p, q, fwd, rev]], lr=0.5
+    )
+
+    def hash_kernel_parameters():
+        return [[thash(t) for t in kern.program.parameters()] for kern in [fwd, rev]]
+
+    fwd_hashes_0, rev_hashes_0 = hash_kernel_parameters()
+
+    assert all([len(list(prim.program.parameters())) == 0 for prim in [p, q]])
+
+    q_ext = compose(fwd, q)
+    p_ext = extend(p, rev)
+    prop = propose(p=p_ext, q=q_ext, loss_fn=nvo_avo)
+
+    with pyro.plate("sample", 7):
+        out = prop()
+        loss = out.nodes[_LOSS]['value']
+
+        loss.backward()
+        optimizer.step()
+
+    fwd_hashes_1, rev_hashes_1 = hash_kernel_parameters()
+
+    assert all([l != r for l, r in zip(fwd_hashes_0, fwd_hashes_1)])
+    assert all([l != r for l, r in zip(rev_hashes_0, rev_hashes_1)])
+
+
+def vsmc(targets, forwards, reverses, loss_fn, resample=False):
+    q = targets[0]
+    for ix, (fwd, rev, p) in enumerate(zip(forwards, reverses, targets[1:])):
+        q = propose(
+            p=extend(p, rev),
+            q=compose(fwd, q),
+            loss_fn=loss_fn,
+            # FIXME: reintroduce
+            # transf_q_trace=None if loss_fn.__name__ == "nvo_avo" else stl_trace,
+        )
+        # FIXME: reintroduce
+        # if resample and k < len(forwards) - 1:
+        #     q = Resample(q)
+    return q
+
+
+def test_avo_1step(normal, mlp_kernel):
+    pyro.set_rng_seed(7)
+
+    q = normal("z_1", loc=1, scale=0.05)
+    p = normal("z_2", loc=4, scale=0.05)
+    fwd = mlp_kernel("fwd_12", dim_hidden=10)
+    rev = mlp_kernel("rev_21", dim_hidden=10)
+    inf_step = vsmc(targets=[q, p], forwards=[fwd], reverses=[rev], loss_fn=nvo_avo, resample=False)
+
+    optimizer = torch.optim.Adam(
+        params=[dict(params=x.program.parameters()) for x in [fwd, rev]], lr=0.2
+    )
+
+    with trange(1000) as bar:
+        for i in bar:
+            optimizer.zero_grad()
+            out = inf_step()
+            loss = out.nodes[_LOSS]['value']
+            loss.backward()
+
+            # REPORTING
+            if i % 100 == 0:
+                loss_scalar = loss.detach().cpu().mean().item()
+                bar.set_postfix_str("loss={}{:.4f}".format(
+                    "" if loss_scalar < 0 else " ", loss.detach().cpu().mean().item()
+                ))
+
+    with pyro.plate("samples", 1000):
+        target_loc = p().nodes['z_2']['value'].mean()
+        forward_loc = compose(fwd, q)().nodes[_RETURN]['value'].mean()
+        # pretty huge epsilon for a very short runway (100 steps).
+        assert abs(target_loc - forward_loc) < 0.15
+
+
+def test_avo_4step(normal, mlp_kernel):
+    pyro.set_rng_seed(7)
+    num_targets = 4
+    targets = [normal(f"z_{i}", loc=i, scale=0.25) for i in range(1, num_targets+1)]
+    assert len(targets) > 2, "1 step accounted for in test_avo_1step"
+
+    forwards = [mlp_kernel(f"fwd_{i}{i+1}", dim_hidden=10) for i in range(1, num_targets,  1)]
+    reverses = [mlp_kernel(f"rev_{i}{i-1}", dim_hidden=10) for i in range(num_targets, 1, -1)]
+
+    inf_step = vsmc(targets=targets, forwards=forwards, reverses=reverses, loss_fn=nvo_avo, resample=False)
+
+    optimizer = torch.optim.Adam(
+        params=[dict(params=x.program.parameters()) for x in forwards+reverses], lr=0.2
+    )
+
+    with trange(1000) as bar:
+        for i in bar:
+            optimizer.zero_grad()
+            out = inf_step()
+            loss = out.nodes[_LOSS]['value']
+            loss.backward()
+
+            # REPORTING
+            if i % 100 == 0:
+                loss_scalar = loss.detach().cpu().mean().item()
+                bar.set_postfix_str("loss={}{:.4f}".format(
+                    "" if loss_scalar < 0 else " ", loss.detach().cpu().mean().item()
+                ))
+
+    chain = reduce(lambda q, fwd: compose(fwd, q), forwards, targets[0])
+    target = targets[-1]
+    chain = compose(forwards[0], targets[0])
+
+    with pyro.plate("samples", 1000):
+        target_loc = target().nodes[f'z_{num_targets}']['value'].mean().detach()
+        forward_loc = chain().nodes[_RETURN]['value'].mean().detach()
+        assert abs(num_targets - target_loc) < 0.05, "target location is miscalculated"
+        assert abs(target_loc - forward_loc) < 0.15, "kernels did not learn target density"
+
+
+
+
 #def test_2step_avo(seed, use_fast, is_smoketest):
 #    """
 #    2-step NVI (NVI-sequential): 4 intermediate densities (target and proposal always fixed).
@@ -579,4 +572,83 @@ def test_forward():
 #            is_smoketest,
 #            5 if is_smoketest else 400,
 #        )
+#
+
+
+# OLD SANITY CHECKS (IF NEEDED)
+# -----------------------------
+# def test_forward(mlp_kernel, normal):
+#     seed(7)
+#     g = normal("g", loc=0, scale=1)
+#     fwd = mlp_kernel("fwd", dim_hidden=4,)
+#     ext = compose(fwd, g)
+#     ext()
+#
+#
+# def test_forward_forward(mlp_kernel, normal):
+#     seed(7)
+#     g0 = normal("g0", loc=0, scale=1)
+#     f01 = mlp_kernel("g1", dim_hidden=4)
+#     f12 = mlp_kernel("g2", dim_hidden=4)
+#
+#     ext = compose(f12, compose(f01, g0))
+#     ext()
+#
+#     #for k in ext._cache.program.trace.keys():
+#     #    assert torch.equal(
+#     #        ext._cache.program.trace[k].value, ext._cache.kernel.trace[k].value
+#     #    )
+#
+#
+#
+# def test_reverse(mlp_kernel, normal):
+#     g = normal("g", loc=0, scale=1)
+#     rev = mlp_kernel("rev", dim_hidden=4)
+#
+#     ext = extend(g, rev)
+#     ext()
+#
+#     #for k in ext._cache.program.trace.keys():
+#     #    assert torch.equal(
+#     #        ext._cache.program.trace[k].value, ext._cache.kernel.trace[k].value
+#     #    )
+#
+#
+
+
+#def test_propose_gradients(seed):
+#    q = Normal(loc=4, scale=1, name="z_0", **kw_autodevice())
+#    p = Normal(loc=0, scale=4, name="z_1", **kw_autodevice())
+#    fwd = MLPKernel(dim_hidden=4, ext_name="z_1").to(autodevice())
+#    rev = MLPKernel(dim_hidden=4, ext_name="z_0").to(autodevice())
+#    optimizer = torch.optim.Adam(
+#        [dict(params=x.parameters()) for x in [p, q, fwd, rev]], lr=0.5
+#    )
+#
+#    tr0 = q().trace
+#    q_ext = Forward(fwd, Condition(q, tr0, requires_grad=RequiresGrad.NO))
+#    p_ext = Reverse(p, rev)
+#    extend = Propose(target=p_ext, proposal=q_ext)
+#
+#    state = extend()
+#    log_log_prob = state.log_prob
+#
+#    proposal_cache = extend.proposal._cache
+#    target_cache = extend.target._cache
+#
+#    for k in ["z_0", "z_1"]:
+#        assert torch.equal(
+#            proposal_cache.kernel.trace[k].value, target_cache.kernel.trace[k].value
+#        )
+#
+#    for k, prg in [
+#        ("z_1", target_cache.kernel),
+#        ("z_0", target_cache.kernel),
+#        ("z_1", proposal_cache.kernel),
+#    ]:
+#        assert (
+#            k == k and prg is prg and prg.trace[k].value.requires_grad
+#        )  # k==k for debugging the assert
+#
+#    assert not proposal_cache.kernel.trace["z_0"].value.requires_grad
 #

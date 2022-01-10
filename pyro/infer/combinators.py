@@ -224,7 +224,7 @@ def _output(tr):
 
 
 def _addrs(tr):
-    return {k for k, n in tr.nodes.items() if n["type"] == "sample"}
+    return {k for k, n in tr.nodes.items() if is_sample_type(n)}
 
 
 class extend(targets):
@@ -304,16 +304,22 @@ class propose(proposals):
         """
         compute the (decomposed) log weight. We want this to be decomposed to
         provide more information to the loss function.
-        """
 
-        log_weight = _logweight(q_trace)
+        NOTE: the log weight is detached, but the incremental weight IS NOT!
+        """
 
         lu = stacked_log_prob(
             q_trace, site_filter=sample_filter(_or(not_substituted, is_observed))
         )
         log_incremental = _logweight(p_trace) - lu
 
-        return log_weight.detach(), log_incremental.detach()
+        log_weight = _logweight(q_trace)
+        # FIXME: I think this is unneccesary
+        #if log_weight == 0.0 or (log_weight.shape == torch.Size([1]) and log_weight.item() == 0.):
+        #    # if we are the first log_weight computation, ensure shapes align
+        #    log_weight = torch.zeros_like(log_incremental)
+
+        return log_weight.detach(), log_incremental
 
     def __call__(self, *args, **kwargs) -> Trace:
         q_out = self.q(*args, **kwargs)  # type: ignore
@@ -338,10 +344,10 @@ class propose(proposals):
         set_param(trace, _RETURN, "return", value=m_output["value"])
 
         lw, lv = self._compute_logweight(p_out, q_out)
-        set_param(trace, _LOGWEIGHT, "return", value=lw + lv)
+        set_param(trace, _LOGWEIGHT, "return", value=lw + lv.detach())
 
         prev_loss = q_out.nodes.get(_LOSS, 0.0)
-        accum_loss = self.loss_fn(p_out, q_out, lw, lv)
+        accum_loss = self.loss_fn(p_out, q_out, lw, lv) # m_trace, last time
         set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
 
         return trace
