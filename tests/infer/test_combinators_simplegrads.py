@@ -28,6 +28,7 @@ from pyro.infer.combinators import (
     primitive,
     propose,
     with_substitution,
+    nested_objective,
     _LOGWEIGHT,
     _LOSS,
     _RETURN,
@@ -157,6 +158,7 @@ def normal():
     yield model
 
 
+@nested_objective
 def nvo_avo(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
     nw = F.softmax(torch.zeros_like(lv), dim=sample_dims)
     loss = (nw * (-lv)).sum(dim=(sample_dims,), keepdim=False)

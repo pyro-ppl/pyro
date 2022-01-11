@@ -372,7 +372,12 @@ class propose(proposals):
         #                 return loss_fn(p_trace, m_trace, lw, lv)
         #             return call
         #         return rerun
-        trace = m_trace
+        trace = (
+            rerun_with_detached_values(m_trace)
+            if is_nested_objective(self.loss_fn)
+            else m_trace
+        )
+
         set_input(trace, args=args, kwargs=kwargs)
 
         set_param(trace, _RETURN, "return", value=m_output["value"])
@@ -387,6 +392,45 @@ class propose(proposals):
         set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
 
         return trace
+
+
+def is_nested_objective(fn):
+    """test to see if the function was wrapped in `nested_objective`"""
+    import inspect
+
+    return inspect.getsource(fn) == inspect.getsource(nested_objective(None))
+
+
+def nested_objective(loss_fn):
+    """an annotation for objectives which are nested"""
+
+    def call(_p_trace, _q_trace, lw, lv):
+        p_trace = rerun_with_detached_values(_p_trace)
+        q_trace = rerun_with_detached_values(_q_trace)
+        loss = loss_fn(p_trace, q_trace, lw, lv)
+        return loss
+
+    return call
+
+
+def rerun_with_detached_values(trace: Trace):
+    newtrace = Trace()
+
+    for name, node in trace.nodes.items():
+        value = node.get("value", None)
+        value = (
+            value.detach()
+            if isinstance(value, torch.Tensor) and value.requires_grad
+            else value
+        )
+        newtrace.add_node(
+            name, value=value, **{k: v for k, v in node.items() if k != "value"}
+        )
+
+    for p, s in zip(trace._pred, trace._succ):
+        newtrace.add_edge(p, s)
+
+    return newtrace
 
 
 class augment_logweight(object):
