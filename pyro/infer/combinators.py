@@ -300,6 +300,14 @@ class compose(proposals):
         set_param(
             trace, _LOGWEIGHT, "return", value=_logweight(q1_out) + _logweight(q2_out)
         )
+
+        set_param(
+            trace,
+            _LOSS,
+            "return",
+            value=q1_out.nodes.get(_LOSS, {"value": 0.0})["value"],
+        )
+
         return trace
 
 
@@ -372,8 +380,10 @@ class propose(proposals):
         lw, lv = self._compute_logweight(p_out, q_out)
         set_param(trace, _LOGWEIGHT, "return", value=lw + lv.detach())
 
-        prev_loss = q_out.nodes.get(_LOSS, 0.0)
+        prev_loss = q_out.nodes.get(_LOSS, {"value": 0.0})["value"]
+
         accum_loss = self.loss_fn(p_out, q_out, lw, lv)  # m_trace, last time
+
         set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
 
         return trace
