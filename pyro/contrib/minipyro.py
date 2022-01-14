@@ -162,7 +162,7 @@ class PlateMessenger(Messenger):
 # apply_stack is called by pyro.sample and pyro.param.
 # It is responsible for applying each Messenger to each effectful operation.
 def apply_stack(msg):
-    # PYRO_STACK is reversed so that effect handlers later
+    # PYRO_STACK is reversed so that effect handlers higher
     # in the stack are first applied.
     for pointer, handler in enumerate(reversed(PYRO_STACK)):
         handler.process_message(msg)
