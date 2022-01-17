@@ -338,7 +338,7 @@ class propose(proposals):
         compute the (decomposed) log weight. We want this to be decomposed to
         provide more information to the loss function.
 
-        NOTE: the log weight is detached, but the incremental weight IS NOT!
+        NOTE: the log weight is detached, but the incremental weight /is not/!
         """
 
         lu = stacked_log_prob(
@@ -361,17 +361,7 @@ class propose(proposals):
 
         m_trace, m_output = get_marginal(p_out)
 
-        # FIXME local gradient computations (show how to do this in NVI example).
-        # something like:
-        #
-        #     def rerun_as_detached_values():
-        #         def rerun(loss_fn):
-        #             def call(_p_trace, _q_trace, lw, lv):
-        #                 p_trace = rerun_with_detached_values(_p_trace)
-        #                 m_trace = rerun_with_detached_values(_m_trace)
-        #                 return loss_fn(p_trace, m_trace, lw, lv)
-        #             return call
-        #         return rerun
+        # NOTE: here we sever local gradient computations for nested objectives.
         trace = (
             rerun_with_detached_values(m_trace)
             if is_nested_objective(self.loss_fn)
@@ -387,7 +377,8 @@ class propose(proposals):
 
         prev_loss = q_out.nodes.get(_LOSS, {"value": 0.0})["value"]
 
-        accum_loss = self.loss_fn(p_out, q_out, lw, lv)  # m_trace, last time
+        # NOTE: this only required m_trace in the first codebase
+        accum_loss = self.loss_fn(p_out, q_out, lw, lv)
 
         set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
 
