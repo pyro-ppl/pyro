@@ -284,11 +284,7 @@ class QueueHandlerDiscreteTest(TestCase):
             trs.append(f.get_trace())
         assert len(trs) == 2 ** 3
 
-        true_latents = set()
-        for i1 in range(2):
-            for i2 in range(2):
-                for i3 in range(2):
-                    true_latents.add((i1, i2, i3))
+        true_latents = {(i1, i2, i3) for i1 in range(2) for i2 in range(2) for i3 in range(2)}
 
         tr_latents = []
         for tr in trs:
