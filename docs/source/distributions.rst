@@ -232,9 +232,9 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
-LogNegativeBinomialDistribution
--------------------------------
-.. autoclass:: pyro.distributions.LogNegativeBinomialDistribution
+LogNormalNegativeBinomialDistribution
+-------------------------------------
+.. autoclass:: pyro.distributions.LogNormalNegativeBinomialDistribution
     :members:
     :undoc-members:
     :show-inheritance:
