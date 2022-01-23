@@ -42,6 +42,10 @@ class ProjectedNormal(TorchDistribution):
         "The General Projected Normal Distribution of Arbitrary Dimension:
         Modeling and Bayesian Inference"
         https://projecteuclid.org/euclid.ba/1453211962
+
+    :param torch.Tensor concentration: A combined location-and-concentration
+        vector. The direction of this vector is the location, and its
+        magnitude is the concentration.
     """
 
     arg_constraints = {"concentration": constraints.real_vector}
