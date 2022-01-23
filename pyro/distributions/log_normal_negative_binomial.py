@@ -2,9 +2,9 @@ import numpy as np
 from numpy.polynomial.hermite import hermgauss
 
 import torch
-from torch.distributions import constraints, NegativeBinomial
+from torch.distributions import constraints
 
-from pyro.distributions import TorchDistribution
+from pyro.distributions import NegativeBinomial, TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
 
@@ -13,7 +13,7 @@ def get_quad_rule(num_quad, prototype_tensor):
     quad_points = quad_rule[0] * np.sqrt(2.0)
     log_weights = np.log(quad_rule[1]) - 0.5 * np.log(np.pi)
     return torch.from_numpy(quad_points).type_as(prototype_tensor), \
-           torch.from_numpy(log_weights).type_as(prototype_tensor)
+        torch.from_numpy(log_weights).type_as(prototype_tensor)
 
 
 class LogNormalNegativeBinomial(TorchDistribution):
