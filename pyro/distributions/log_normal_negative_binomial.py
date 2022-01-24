@@ -18,18 +18,45 @@ def get_quad_rule(num_quad, prototype_tensor):
 
 
 class LogNormalNegativeBinomial(TorchDistribution):
-    """
+    r"""
     A three-parameter generalization of the Negative Binomial distribution [1].
     It can be understood as a continuous mixture of Negative Binomial distributions
     in which we inject Normally-distributed noise into the logits of the Negative
     Binomial distribution:
 
-    :math:`\rm{LNNB}(\rm{total_count}=\nu, \rm{logits}=\ell, \rm{multiplicative_noise_scale}=sigma) = \int d\epsilon
-    \mathcal{N}(\epsilon | 0, \sigma) \rm{NB}(\rm{total_count}=\nu, \rm{logits}=\ell + \epsilon)`
+    .. math::
+
+        \begin{eqnarray}
+        &\rm{LNNB}(y | \rm{total\_count}=\nu, \rm{logits}=\ell, \rm{multiplicative\_noise\_scale}=sigma) = \\
+        &\int d\epsilon \mathcal{N}(\epsilon | 0, \sigma)
+        \rm{NB}(y | \rm{total\_count}=\nu, \rm{logits}=\ell + \epsilon)
+        \end{eqnarray}
+
+    where :math:`y \ge 0` is a non-negative integer. This distribution has a mean given by
+
+    .. math::
+        \mathbb{E}[y] = \nu e^{\ell} = e^{\ell + \log \nu + \tfrac{1}{2}\sigma^2}
+
+    and a variance given by
+
+    .. math::
+        \rm{Var}[y] = \mathbb{E}[y] + \left( e^{\sigma^2} (1 + 1/\nu) - 1 \right) \left( \mathbb{E}[y] \right)^2
+
+    Thus while a given mean and variance together uniquely characterize a Negative Binomial distribution, there is a
+    one-dimensional family of Log Normal Negative Binomial distributions with a given mean and variance.
+
+    Note that in some applications it may be useful to parameterize the logits as
+
+    .. math::
+        \ell = \ell^\prime - \log \nu - \tfrac{1}{2}\sigma^2
+
+    so that the mean is given by :math:`\mathbb{E}[y] = e^{\ell^\prime}` and does not depend on :math:`\nu`
+    and :math:`\sigma`, which serve to determine the higher moments.
 
     References:
+
     [1] "Lognormal and Gamma Mixed Negative Binomial Regression,"
-     Mingyuan Zhou, Lingbo Li, David Dunson, and Lawrence Carin.
+    Mingyuan Zhou, Lingbo Li, David Dunson, and Lawrence Carin.
 
     :param total_count: non-negative number of negative Bernoulli trials.
     :type total_count: float or torch.Tensor
