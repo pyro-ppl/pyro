@@ -4,7 +4,8 @@ from numpy.polynomial.hermite import hermgauss
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions import NegativeBinomial, TorchDistribution
+from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.torch import NegativeBinomial
 from pyro.distributions.util import broadcast_shape
 
 
