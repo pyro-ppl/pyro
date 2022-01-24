@@ -32,7 +32,12 @@ class LogNormalNegativeBinomial(TorchDistribution):
         \rm{NB}(y | \rm{total\_count}=\nu, \rm{logits}=\ell + \epsilon)
         \end{eqnarray}
 
-    where :math:`y \ge 0` is a non-negative integer. This distribution has a mean given by
+    where :math:`y \ge 0` is a non-negative integer. Thus while a Negative Binomial distribution
+    can be formulated as a Poisson distribution with a Gamma-distributed rate, this distribution
+    adds an additional level of variability by also modulating the rate by Log Normally-distributed
+    multiplicative noise.
+
+    This distribution has a mean given by
 
     .. math::
         \mathbb{E}[y] = \nu e^{\ell} = e^{\ell + \log \nu + \tfrac{1}{2}\sigma^2}
