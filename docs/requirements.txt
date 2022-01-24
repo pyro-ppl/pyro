@@ -10,3 +10,5 @@ funsor[torch]
 nbformat
 nbsphinx>=0.3.2
 nbstripout
+pypandoc
+ninja
