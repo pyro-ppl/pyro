@@ -62,6 +62,7 @@ jobs:
         run: |
           make docs
           make doctest
+          make tutorial
   unit:
     runs-on: ubuntu-20.04
     needs: docs
