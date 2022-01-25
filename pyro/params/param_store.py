@@ -16,7 +16,7 @@ class ParamStoreDict:
     The typical user interacts with the ParamStore primarily through the
     primitive `pyro.param`.
 
-    See `Intro Part II <http://pyro.ai/examples/intro_part_ii.html>`_ for further discussion
+    See `Introduction <http://pyro.ai/examples/intro_long.html>`_ for further discussion
     and `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for some examples.
 
     Some things to bear in mind when using parameters in Pyro:
