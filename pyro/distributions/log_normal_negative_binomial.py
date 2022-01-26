@@ -1,24 +1,14 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import numpy as np
 import torch
-from numpy.polynomial.hermite import hermgauss
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all, lazy_property
 
 from pyro.distributions.torch import NegativeBinomial
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
-
-
-def get_quad_rule(num_quad, prototype_tensor):
-    quad_rule = hermgauss(num_quad)
-    quad_points = quad_rule[0] * np.sqrt(2.0)
-    log_weights = np.log(quad_rule[1]) - 0.5 * np.log(np.pi)
-    return torch.from_numpy(quad_points).type_as(prototype_tensor), torch.from_numpy(
-        log_weights
-    ).type_as(prototype_tensor)
+from pyro.ops.special import get_quad_rule
 
 
 class LogNormalNegativeBinomial(TorchDistribution):
@@ -88,6 +78,7 @@ class LogNormalNegativeBinomial(TorchDistribution):
         total_count,
         logits,
         multiplicative_noise_scale,
+        *,
         num_quad_points=8,
         validate_args=None,
     ):
@@ -110,6 +101,7 @@ class LogNormalNegativeBinomial(TorchDistribution):
         self.multiplicative_noise_scale = multiplicative_noise_scale
         self.total_count = total_count
         self.logits = logits
+        self.num_quad_points = num_quad_points
 
         batch_shape = broadcast_shape(
             multiplicative_noise_scale.shape, self.nb_dist.batch_shape[:-1]
