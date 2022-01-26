@@ -1,12 +1,11 @@
 import numpy as np
-from numpy.polynomial.hermite import hermgauss
-
 import torch
+from numpy.polynomial.hermite import hermgauss
 from torch.distributions import constraints
-from torch.distributions.utils import lazy_property, broadcast_all
+from torch.distributions.utils import broadcast_all, lazy_property
 
-from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch import NegativeBinomial
+from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
 
