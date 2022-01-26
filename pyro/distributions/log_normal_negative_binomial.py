@@ -1,3 +1,6 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy as np
 import torch
 from numpy.polynomial.hermite import hermgauss
