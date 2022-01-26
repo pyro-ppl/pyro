@@ -3,6 +3,7 @@ from numpy.polynomial.hermite import hermgauss
 
 import torch
 from torch.distributions import constraints
+from torch.distributions.utils import lazy_property, broadcast_all
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch import NegativeBinomial
@@ -13,8 +14,9 @@ def get_quad_rule(num_quad, prototype_tensor):
     quad_rule = hermgauss(num_quad)
     quad_points = quad_rule[0] * np.sqrt(2.0)
     log_weights = np.log(quad_rule[1]) - 0.5 * np.log(np.pi)
-    return torch.from_numpy(quad_points).type_as(prototype_tensor), \
-        torch.from_numpy(log_weights).type_as(prototype_tensor)
+    return torch.from_numpy(quad_points).type_as(prototype_tensor), torch.from_numpy(
+        log_weights
+    ).type_as(prototype_tensor)
 
 
 class LogNormalNegativeBinomial(TorchDistribution):
@@ -72,25 +74,44 @@ class LogNormalNegativeBinomial(TorchDistribution):
     :param int num_quad_points: Number of quadrature points used to compute the (approximate) `log_prob`.
         Defaults to 8.
     """
-    arg_constraints = {'total_count': constraints.greater_than_eq(0),
-                       'logits': constraints.real,
-                       'multiplicative_noise_scale': constraints.positive}
+    arg_constraints = {
+        "total_count": constraints.greater_than_eq(0),
+        "logits": constraints.real,
+        "multiplicative_noise_scale": constraints.positive,
+    }
     support = constraints.nonnegative_integer
 
-    def __init__(self, total_count, logits, multiplicative_noise_scale,
-                 num_quad_points=8, validate_args=None):
+    def __init__(
+        self,
+        total_count,
+        logits,
+        multiplicative_noise_scale,
+        num_quad_points=8,
+        validate_args=None,
+    ):
         if num_quad_points <= 1:
             raise ValueError("num_quad_points must be positive.")
+
+        total_count, logits, multiplicative_noise_scale = broadcast_all(
+            total_count, logits, multiplicative_noise_scale
+        )
+
         self.quad_points, self.log_weights = get_quad_rule(num_quad_points, logits)
-        quad_logits = logits.unsqueeze(-1) + multiplicative_noise_scale.unsqueeze(-1) * self.quad_points
-        total_count = total_count if isinstance(total_count, float) else total_count.unsqueeze(-1)
-        self.nb_dist = NegativeBinomial(total_count=total_count, logits=quad_logits)
+        quad_logits = (
+            logits.unsqueeze(-1)
+            + multiplicative_noise_scale.unsqueeze(-1) * self.quad_points
+        )
+        self.nb_dist = NegativeBinomial(
+            total_count=total_count.unsqueeze(-1), logits=quad_logits
+        )
 
         self.multiplicative_noise_scale = multiplicative_noise_scale
         self.total_count = total_count
         self.logits = logits
 
-        batch_shape = broadcast_shape(multiplicative_noise_scale.shape, self.nb_dist.batch_shape[:-1])
+        batch_shape = broadcast_shape(
+            multiplicative_noise_scale.shape, self.nb_dist.batch_shape[:-1]
+        )
         event_shape = torch.Size()
 
         super().__init__(batch_shape, event_shape, validate_args)
@@ -101,3 +122,41 @@ class LogNormalNegativeBinomial(TorchDistribution):
 
     def sample(self, sample_shape=torch.Size()):
         raise NotImplementedError
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(type(self), _instance)
+        batch_shape = torch.Size(batch_shape)
+        total_count = self.total_count.expand(batch_shape)
+        logits = self.logits.expand(batch_shape)
+        multiplicative_noise_scale = self.multiplicative_noise_scale.expand(batch_shape)
+        LogNormalNegativeBinomial.__init__(
+            new,
+            total_count,
+            logits,
+            multiplicative_noise_scale,
+            num_quad_points=self.num_quad_points,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new
+
+    @constraints.dependent_property
+    def support(self):
+        return self.nb_dist.support
+
+    @lazy_property
+    def mean(self):
+        return torch.exp(
+            self.logits
+            + self.total_count.log()
+            + 0.5 * self.multiplicative_noise_scale.pow(2.0)
+        )
+
+    @lazy_property
+    def variance(self):
+        kappa = (
+            torch.exp(self.multiplicative_noise_scale.pow(2.0))
+            * (1 + 1 / self.total_count)
+            - 1
+        )
+        return self.mean + kappa * self.mean.pow(2.0)
