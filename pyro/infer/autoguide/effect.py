@@ -409,7 +409,6 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
             self._quantile_values, dtype=loc.dtype, device=loc.device
         )
         site_quantiles_values = dist.Normal(loc, scale).icdf(site_quantiles)
-        raise ValueError(site_quantiles_values.shape)
         return transform(site_quantiles_values)
 
 
