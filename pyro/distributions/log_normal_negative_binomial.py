@@ -63,13 +63,14 @@ class LogNormalNegativeBinomial(TorchDistribution):
     [1] "Lognormal and Gamma Mixed Negative Binomial Regression,"
     Mingyuan Zhou, Lingbo Li, David Dunson, and Lawrence Carin.
 
-    :param total_count: non-negative number of negative Bernoulli trials.
+    :param total_count: non-negative number of negative Bernoulli trials. The variance decreases
+        as `total_count` increases.
     :type total_count: float or torch.Tensor
     :param torch.Tensor logits: Event log-odds for probabilities of success for underlying
         Negative Binomial distribution.
-    :param num_quad_points: Number of quadrature points used to compute the (approximate) `log_prob`.
+    :param torch.Tensor multiplicative_noise_scale: Controls the level of the injected Normal logit noise.
+    :param int num_quad_points: Number of quadrature points used to compute the (approximate) `log_prob`.
         Defaults to 8.
-    :type num_quad_points: int
     """
     arg_constraints = {'total_count': constraints.greater_than_eq(0),
                        'logits': constraints.real,
@@ -78,13 +79,24 @@ class LogNormalNegativeBinomial(TorchDistribution):
 
     def __init__(self, total_count, logits, multiplicative_noise_scale,
                  num_quad_points=8, validate_args=None):
+        if num_quad_points <= 1:
+            raise ValueError("num_quad_points must be positive.")
         self.quad_points, self.log_weights = get_quad_rule(num_quad_points, logits)
         quad_logits = logits.unsqueeze(-1) + multiplicative_noise_scale.unsqueeze(-1) * self.quad_points
-        self.nb = NegativeBinomial(total_count=total_count.unsqueeze(-1), logits=quad_logits)
+        total_count = total_count if isinstance(total_count, float) else total_count.unsqueeze(-1)
+        self.nb_dist = NegativeBinomial(total_count=total_count, logits=quad_logits)
+
         self.multiplicative_noise_scale = multiplicative_noise_scale
+        self.total_count = total_count
+        self.logits = logits
+
+        batch_shape = broadcast_shape(multiplicative_noise_scale.shape, self.nb_dist.batch_shape[:-1])
+        event_shape = torch.Size()
+
+        super().__init__(batch_shape, event_shape, validate_args)
 
     def log_prob(self, value):
-        nb_log_prob = self.nb.log_prob(value.unsqueeze(-1))
+        nb_log_prob = self.nb_dist.log_prob(value.unsqueeze(-1))
         return torch.logsumexp(self.log_weights + nb_log_prob, axis=-1)
 
     def sample(self, sample_shape=torch.Size()):
