@@ -284,7 +284,13 @@ def test_distribution_validate_args(dist_class, args, validate_args):
 def check_sample_shapes(small, large):
     dist_instance = small
     if isinstance(
-        dist_instance, (dist.LogNormal, dist.LowRankMultivariateNormal, dist.VonMises, dist.LogNormalNegativeBinomial)
+        dist_instance,
+        (
+            dist.LogNormal,
+            dist.LowRankMultivariateNormal,
+            dist.VonMises,
+            dist.LogNormalNegativeBinomial,
+        ),
     ):
         # Ignore broadcasting bug in LogNormal:
         # https://github.com/pytorch/pytorch/pull/7269
