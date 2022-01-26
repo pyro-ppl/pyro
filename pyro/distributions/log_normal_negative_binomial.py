@@ -89,7 +89,7 @@ class LogNormalNegativeBinomial(TorchDistribution):
         num_quad_points=8,
         validate_args=None,
     ):
-        if num_quad_points <= 1:
+        if num_quad_points < 1:
             raise ValueError("num_quad_points must be positive.")
 
         total_count, logits, multiplicative_noise_scale = broadcast_all(
