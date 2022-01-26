@@ -284,10 +284,11 @@ def test_distribution_validate_args(dist_class, args, validate_args):
 def check_sample_shapes(small, large):
     dist_instance = small
     if isinstance(
-        dist_instance, (dist.LogNormal, dist.LowRankMultivariateNormal, dist.VonMises)
+        dist_instance, (dist.LogNormal, dist.LowRankMultivariateNormal, dist.VonMises, dist.LogNormalNegativeBinomial)
     ):
         # Ignore broadcasting bug in LogNormal:
         # https://github.com/pytorch/pytorch/pull/7269
+        # LogNormalNegativeBinomial has no sample method
         return
     x = small.sample()
     assert_equal(small.log_prob(x).expand(large.batch_shape), large.log_prob(x))

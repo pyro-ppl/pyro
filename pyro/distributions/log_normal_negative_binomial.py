@@ -134,10 +134,6 @@ class LogNormalNegativeBinomial(TorchDistribution):
         new._validate_args = self._validate_args
         return new
 
-    @constraints.dependent_property
-    def support(self):
-        return self.nb_dist.support
-
     @lazy_property
     def mean(self):
         return torch.exp(
