@@ -38,6 +38,8 @@ def test_lnnb_mean_variance(
 
     values = torch.arange(N)
     probs = d.log_prob(values).exp()
+    assert_close(1.0, probs.sum().item(), atol=1.0e-6)
+
     expected_mean = (probs * values).sum()
     assert_close(expected_mean, d.mean, atol=1.0e-6, rtol=1.0e-5)
 
