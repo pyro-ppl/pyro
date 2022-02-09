@@ -42,6 +42,10 @@ class ProjectedNormal(TorchDistribution):
         "The General Projected Normal Distribution of Arbitrary Dimension:
         Modeling and Bayesian Inference"
         https://projecteuclid.org/euclid.ba/1453211962
+
+    :param torch.Tensor concentration: A combined location-and-concentration
+        vector. The direction of this vector is the location, and its
+        magnitude is the concentration.
     """
 
     arg_constraints = {"concentration": constraints.real_vector}
@@ -163,6 +167,27 @@ def _log_prob_3(concentration, value):
     para_part = (
         t * t2.mul(-0.5).exp() / (2 * math.pi) ** 0.5
         + (1 + t2) * (1 + (t * 0.5 ** 0.5).erf()) / 2
+    ).log()
+
+    return para_part + perp_part
+
+
+@ProjectedNormal._register_log_prob(dim=4)
+def _log_prob_4(concentration, value):
+    # We integrate along a ray, factorizing the integrand as a product of:
+    # a truncated normal distribution over coordinate t parallel to the ray, and
+    # a bivariate normal distribution over coordinate r perpendicular to the ray.
+    t = _dot(concentration, value)
+    t2 = t.square()
+    r2 = _dot(concentration, concentration) - t2
+    perp_part = r2.mul(-0.5) - 1.5 * math.log(2 * math.pi)
+
+    # This is the log of a definite integral, computed by mathematica:
+    # Integrate[x^3/(E^((x-t)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
+    # = (2 + t^2)/(E^(t^2/2) Sqrt[2 Pi]) + (t (3 + t^2) (1 + Erf[t/Sqrt[2]]))/2
+    para_part = (
+        (2 + t2) * t2.mul(-0.5).exp() / (2 * math.pi) ** 0.5
+        + t * (3 + t2) * (1 + (t * 0.5 ** 0.5).erf()) / 2
     ).log()
 
     return para_part + perp_part

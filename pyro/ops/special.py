@@ -5,7 +5,9 @@ import functools
 import math
 import operator
 
+import numpy as np
 import torch
+from numpy.polynomial.hermite import hermgauss
 
 
 class _SafeLog(torch.autograd.Function):
@@ -151,3 +153,29 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     i1s = lvalues[..., :orders].T + seqs
     assert i1s.shape == (orders, vshape.numel())
     return i1s.view(-1, *vshape)
+
+
+def get_quad_rule(num_quad, prototype_tensor):
+    r"""
+    Get quadrature points and corresponding log weights for a Gauss Hermite quadrature rule
+    with the specified number of quadrature points.
+
+    Example usage::
+
+        quad_points, log_weights = get_quad_rule(32, prototype_tensor)
+        # transform to N(0, 4.0) Normal distribution
+        quad_points *= 4.0
+        # compute variance integral in log-space using logsumexp and exponentiate
+        variance = torch.logsumexp(quad_points.pow(2.0).log() + log_weights, axis=0).exp()
+        assert (variance - 16.0).abs().item() < 1.0e-6
+
+    :param int num_quad: number of quadrature points.
+    :param torch.Tensor prototype_tensor: used to determine `dtype` and `device` of returned tensors.
+    :return: tuple of `torch.Tensor`s of the form `(quad_points, log_weights)`
+    """
+    quad_rule = hermgauss(num_quad)
+    quad_points = quad_rule[0] * np.sqrt(2.0)
+    log_weights = np.log(quad_rule[1]) - 0.5 * np.log(np.pi)
+    return torch.from_numpy(quad_points).type_as(prototype_tensor), torch.from_numpy(
+        log_weights
+    ).type_as(prototype_tensor)
