@@ -97,14 +97,14 @@ def _fit_params_from_samples(samples, n_iter):
     samples_cs = samples.cos().sum()
     samples_ss = samples.sin().sum()
     mu = torch.atan2(samples_ss / samples_count, samples_cs / samples_count)
-    samples_r = (samples_cs ** 2 + samples_ss ** 2).sqrt() / samples_count
+    samples_r = (samples_cs**2 + samples_ss**2).sqrt() / samples_count
     # From Banerjee, Arindam, et al.
     # "Clustering on the unit hypersphere using von Mises-Fisher distributions."
     # Journal of Machine Learning Research 6.Sep (2005): 1345-1382.
     # By mic (https://stats.stackexchange.com/users/67168/mic),
     # Estimating kappa of von Mises distribution, URL (version: 2015-06-12):
     # https://stats.stackexchange.com/q/156692
-    kappa = (samples_r * 2 - samples_r ** 3) / (1 - samples_r ** 2)
+    kappa = (samples_r * 2 - samples_r**3) / (1 - samples_r**2)
     lr = 1e-2
     kappa.requires_grad = True
     bfgs = optim.LBFGS([kappa], lr=lr)

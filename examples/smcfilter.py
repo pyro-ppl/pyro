@@ -102,7 +102,7 @@ def main(args):
     z = smc.get_empirical()["z"]
     logging.info("truth: {}".format(zs[-1]))
     logging.info("mean: {}".format(z.mean))
-    logging.info("std: {}".format(z.variance ** 0.5))
+    logging.info("std: {}".format(z.variance**0.5))
 
 
 if __name__ == "__main__":

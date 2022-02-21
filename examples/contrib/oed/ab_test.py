@@ -82,7 +82,7 @@ def estimated_ape(ns, num_vi_steps):
 def true_ape(ns):
     """Analytic APE"""
     true_ape = []
-    prior_cov = torch.diag(prior_sds ** 2)
+    prior_cov = torch.diag(prior_sds**2)
     designs = [group_assignment_matrix(torch.tensor([n1, N - n1])) for n1 in ns]
     for i in range(len(ns)):
         x = designs[i]

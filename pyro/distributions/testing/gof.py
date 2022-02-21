@@ -203,7 +203,7 @@ def density_goodness_of_fit(samples, probs, plot=False):
 
 
 def volume_of_sphere(dim, radius):
-    return radius ** dim * math.pi ** (0.5 * dim) / math.gamma(0.5 * dim + 1)
+    return radius**dim * math.pi ** (0.5 * dim) / math.gamma(0.5 * dim + 1)
 
 
 def get_nearest_neighbor_distances(samples):

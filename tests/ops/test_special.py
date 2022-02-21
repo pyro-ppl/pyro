@@ -100,4 +100,4 @@ def test_get_quad_rule(sigma):
     quad_points, log_weights = get_quad_rule(32, torch.zeros(1))
     quad_points *= sigma  # transform to N(0, sigma) gaussian
     variance = torch.logsumexp(quad_points.pow(2.0).log() + log_weights, axis=0).exp()
-    assert_equal(sigma ** 2, variance.item())
+    assert_equal(sigma**2, variance.item())

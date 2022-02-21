@@ -185,7 +185,7 @@ class HMC(MCMCKernel):
         direction = 1 if self._direction_threshold < -delta_energy else -1
 
         # define scale for step_size: 2 for increasing, 1/2 for decreasing
-        step_size_scale = 2 ** direction
+        step_size_scale = 2**direction
         direction_new = direction
         # keep scale step_size until accept_prob crosses its target
         # TODO: make thresholds for too small step_size or too large step_size
