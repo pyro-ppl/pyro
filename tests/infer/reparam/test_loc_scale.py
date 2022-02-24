@@ -24,8 +24,8 @@ def get_moments(x):
     xxx = x * xx
     xxxx = xx * xx
     m2 = xx.mean(0)
-    m3 = xxx.mean(0) / m2 ** 1.5
-    m4 = xxxx.mean(0) / m2 ** 2
+    m3 = xxx.mean(0) / m2**1.5
+    m4 = xxxx.mean(0) / m2**2
     return torch.stack([m1, m2, m3, m4])
 
 

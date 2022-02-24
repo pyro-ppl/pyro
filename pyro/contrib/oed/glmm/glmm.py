@@ -16,7 +16,7 @@ import pyro.distributions as dist
 from pyro.contrib.util import iter_plates_to_shape, rmv
 
 # TODO read from torch float spec
-epsilon = torch.tensor(2 ** -24)
+epsilon = torch.tensor(2**-24)
 
 
 def known_covariance_linear_model(
@@ -457,7 +457,7 @@ def analytic_posterior_cov(prior_cov, x, obs_sd):
     p = prior_cov.shape[-1]
     SigmaXX = prior_cov.mm(x.t().mm(x))
     posterior_cov = prior_cov - torch.inverse(
-        SigmaXX + (obs_sd ** 2) * torch.eye(p)
+        SigmaXX + (obs_sd**2) * torch.eye(p)
     ).mm(SigmaXX.mm(prior_cov))
     return posterior_cov
 

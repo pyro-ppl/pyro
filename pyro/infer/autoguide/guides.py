@@ -1000,14 +1000,14 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         if self.rank is None:
-            self.rank = int(round(self.latent_dim ** 0.5))
+            self.rank = int(round(self.latent_dim**0.5))
         self.scale = PyroParam(
-            self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
+            self.loc.new_full((self.latent_dim,), 0.5**0.5 * self._init_scale),
             constraint=self.scale_constraint,
         )
         self.cov_factor = nn.Parameter(
             self.loc.new_empty(self.latent_dim, self.rank).normal_(
-                0, 1 / self.rank ** 0.5
+                0, 1 / self.rank**0.5
             )
         )
 

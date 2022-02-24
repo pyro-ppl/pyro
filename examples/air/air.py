@@ -88,14 +88,14 @@ class AIR(nn.Module):
         )
 
         # Create nn modules.
-        rnn_input_size = x_size ** 2 if embed_net is None else embed_net[-1]
+        rnn_input_size = x_size**2 if embed_net is None else embed_net[-1]
         rnn_input_size += self.z_where_size + z_what_size + self.z_pres_size
         nl = getattr(nn, non_linearity)
 
         self.rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
-        self.encode = Encoder(window_size ** 2, encoder_net, z_what_size, nl)
+        self.encode = Encoder(window_size**2, encoder_net, z_what_size, nl)
         self.decode = Decoder(
-            window_size ** 2,
+            window_size**2,
             decoder_net,
             z_what_size,
             decoder_output_bias,
@@ -106,13 +106,13 @@ class AIR(nn.Module):
             rnn_hidden_size, predict_net, self.z_pres_size, self.z_where_size, nl
         )
         self.embed = (
-            Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
+            Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
         )
 
         self.bl_rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
         self.bl_predict = MLP(rnn_hidden_size, bl_predict_net + [1], nl)
         self.bl_embed = (
-            Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
+            Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
         )
 
         # Create parameters.
@@ -205,7 +205,7 @@ class AIR(nn.Module):
                     x.view(n, -1),
                     (
                         self.likelihood_sd
-                        * torch.ones(n, self.x_size ** 2, **self.options)
+                        * torch.ones(n, self.x_size**2, **self.options)
                     ),
                 ).to_event(1),
                 obs=batch.view(n, -1),
@@ -385,7 +385,7 @@ def z_where_inv(z_where):
 
 def window_to_image(z_where, window_size, image_size, windows):
     n = windows.size(0)
-    assert windows.size(1) == window_size ** 2, "Size mismatch."
+    assert windows.size(1) == window_size**2, "Size mismatch."
     theta = expand_z_where(z_where)
     grid = F.affine_grid(theta, torch.Size((n, 1, image_size, image_size)))
     out = F.grid_sample(windows.view(n, 1, window_size, window_size), grid)

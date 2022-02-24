@@ -17,7 +17,7 @@ def analytic_grad(L11=1.0, L22=1.0, L21=1.0, omega1=1.0, omega2=1.0):
     dp = L11 * omega1 + L21 * omega2
     fact_1 = -omega2 * dp
     fact_2 = np.exp(-0.5 * (L22 * omega2) ** 2)
-    fact_3 = np.exp(-0.5 * dp ** 2)
+    fact_3 = np.exp(-0.5 * dp**2)
     return fact_1 * fact_2 * fact_3
 
 

@@ -422,7 +422,7 @@ class AutoGaussianDense(AutoGaussian):
     def _dense_get_mvn(self):
         # Create a dense joint Gaussian over flattened variables.
         flat_info_vec = torch.zeros(self._dense_size)
-        flat_precision = torch.zeros(self._dense_size ** 2)
+        flat_precision = torch.zeros(self._dense_size**2)
         for d, (index1, index2) in self._dense_scatter.items():
             white_vec = deep_getattr(self.white_vecs, d)
             prec_sqrt = deep_getattr(self.prec_sqrts, d)
