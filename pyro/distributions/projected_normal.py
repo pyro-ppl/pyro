@@ -142,7 +142,7 @@ def _log_prob_2(concentration, value):
     para_part = (
         (
             t2.mul(-0.5).exp().mul((2 / math.pi) ** 0.5)
-            + t * (1 + (t * 0.5 ** 0.5).erf())
+            + t * (1 + (t * 0.5**0.5).erf())
         )
         .mul(0.5)
         .log()
@@ -166,7 +166,7 @@ def _log_prob_3(concentration, value):
     # = t/(E^(t^2/2) Sqrt[2 Pi]) + ((1 + t^2) (1 + Erf[t/Sqrt[2]]))/2
     para_part = (
         t * t2.mul(-0.5).exp() / (2 * math.pi) ** 0.5
-        + (1 + t2) * (1 + (t * 0.5 ** 0.5).erf()) / 2
+        + (1 + t2) * (1 + (t * 0.5**0.5).erf()) / 2
     ).log()
 
     return para_part + perp_part
@@ -187,7 +187,7 @@ def _log_prob_4(concentration, value):
     # = (2 + t^2)/(E^(t^2/2) Sqrt[2 Pi]) + (t (3 + t^2) (1 + Erf[t/Sqrt[2]]))/2
     para_part = (
         (2 + t2) * t2.mul(-0.5).exp() / (2 * math.pi) ** 0.5
-        + t * (3 + t2) * (1 + (t * 0.5 ** 0.5).erf()) / 2
+        + t * (3 + t2) * (1 + (t * 0.5**0.5).erf()) / 2
     ).log()
 
     return para_part + perp_part

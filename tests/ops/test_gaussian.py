@@ -240,7 +240,7 @@ def test_logsumexp(batch_shape, dim):
         - scale / 2
     )
     expected = gaussian.log_density(samples).logsumexp(0) + math.log(
-        scale ** dim / num_samples
+        scale**dim / num_samples
     )
     actual = gaussian.event_logsumexp()
     assert_close(actual, expected, atol=0.05, rtol=0.05)
@@ -415,7 +415,7 @@ def test_gaussian_tensordot(
     value_x = pad(value_b, (na, 0))
     value_y = pad(value_b, (0, nc))
     expect = torch.logsumexp(x.log_density(value_x) + y.log_density(value_y), dim=0)
-    expect += math.log(scale ** nb / num_samples)
+    expect += math.log(scale**nb / num_samples)
     actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)))
     # TODO(fehiepsi): find some condition to make this test stable, so we can compare large value
     # log densities.

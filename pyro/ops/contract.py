@@ -16,8 +16,8 @@ from pyro.util import ignore_jit_warnings
 def _check_plates_are_sensible(output_dims, nonoutput_ordinal):
     if output_dims and nonoutput_ordinal:
         raise ValueError(
-            u"It is nonsensical to preserve a plated dim without preserving "
-            u"all of that dim's plates, but found '{}' without '{}'".format(
+            "It is nonsensical to preserve a plated dim without preserving "
+            "all of that dim's plates, but found '{}' without '{}'".format(
                 output_dims, ",".join(nonoutput_ordinal)
             )
         )
@@ -393,7 +393,7 @@ def einsum(equation, *operands, **kwargs):
                 old = dim_to_size.setdefault(dim, size)
                 if old != size:
                     raise ValueError(
-                        u"Dimension size mismatch at dim '{}': {} vs {}".format(
+                        "Dimension size mismatch at dim '{}': {} vs {}".format(
                             dim, size, old
                         )
                     )
@@ -518,7 +518,7 @@ def naive_ubersum(equation, *operands, **kwargs):
             old = sizes.setdefault(dim, size)
             if old != size:
                 raise ValueError(
-                    u"Dimension size mismatch at dim '{}': {} vs {}".format(
+                    "Dimension size mismatch at dim '{}': {} vs {}".format(
                         dim, size, old
                     )
                 )

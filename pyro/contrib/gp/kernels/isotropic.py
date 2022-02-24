@@ -51,8 +51,8 @@ class Isotropy(Kernel):
 
         scaled_X = X / self.lengthscale
         scaled_Z = Z / self.lengthscale
-        X2 = (scaled_X ** 2).sum(1, keepdim=True)
-        Z2 = (scaled_Z ** 2).sum(1, keepdim=True)
+        X2 = (scaled_X**2).sum(1, keepdim=True)
+        Z2 = (scaled_Z**2).sum(1, keepdim=True)
         XZ = scaled_X.matmul(scaled_Z.t())
         r2 = X2 - 2 * XZ + Z2.t()
         return r2.clamp(min=0)
@@ -159,7 +159,7 @@ class Matern32(Isotropy):
             return self._diag(X)
 
         r = self._scaled_dist(X, Z)
-        sqrt3_r = 3 ** 0.5 * r
+        sqrt3_r = 3**0.5 * r
         return self.variance * (1 + sqrt3_r) * torch.exp(-sqrt3_r)
 
 
@@ -180,5 +180,5 @@ class Matern52(Isotropy):
 
         r2 = self._square_scaled_dist(X, Z)
         r = _torch_sqrt(r2)
-        sqrt5_r = 5 ** 0.5 * r
+        sqrt5_r = 5**0.5 * r
         return self.variance * (1 + sqrt5_r + (5 / 3) * r2) * torch.exp(-sqrt5_r)
