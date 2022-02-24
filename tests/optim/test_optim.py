@@ -96,7 +96,7 @@ class OptimTests(TestCase):
             {
                 "optimizer": torch.optim.SGD,
                 "optim_args": {"lr": 0.01},
-                "lr_lambda": lambda epoch: 2.0 ** epoch,
+                "lr_lambda": lambda epoch: 2.0**epoch,
             }
         ),
         optim.StepLR(
@@ -344,7 +344,7 @@ def test_name_preserved_by_to_pyro_module():
             {
                 "optimizer": torch.optim.SGD,
                 "optim_args": {"lr": 0.01},
-                "lr_lambda": lambda epoch: 0.9 ** epoch,
+                "lr_lambda": lambda epoch: 0.9**epoch,
             },
         ),
         (

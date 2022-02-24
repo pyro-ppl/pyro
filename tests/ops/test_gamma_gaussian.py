@@ -220,7 +220,7 @@ def test_logsumexp(batch_shape, dim):
         - scale / 2
     )
     expected = g.log_density(samples, s).logsumexp(0) + math.log(
-        scale ** dim / num_samples
+        scale**dim / num_samples
     )
     actual = g.event_logsumexp().log_density(s)
     assert_close(actual, expected, atol=0.05, rtol=0.05)
@@ -353,6 +353,6 @@ def test_gamma_gaussian_tensordot(
     expect = torch.logsumexp(
         x.log_density(value_x, s) + y.log_density(value_y, s), dim=0
     )
-    expect += math.log(scale ** nb / num_samples)
+    expect += math.log(scale**nb / num_samples)
     actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)), s)
     assert_close(actual.clamp(max=10.0), expect.clamp(max=10.0), atol=0.1, rtol=0.1)

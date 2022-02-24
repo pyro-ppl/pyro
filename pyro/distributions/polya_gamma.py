@@ -60,7 +60,7 @@ class TruncatedPolyaGamma(TorchDistribution):
         ones = self.prototype.new_ones((self.num_gamma_variates))
         x = Exponential(ones).sample(self.batch_shape + sample_shape)
         x = (x / denom).sum(-1)
-        return torch.clamp(x * (0.5 / math.pi ** 2), max=self.truncation_point)
+        return torch.clamp(x * (0.5 / math.pi**2), max=self.truncation_point)
 
     def log_prob(self, value):
         value = value.unsqueeze(-1)

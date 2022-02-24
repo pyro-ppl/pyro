@@ -17,7 +17,7 @@ from pyro.infer.autoguide.gaussian import (
     _break_plates,
 )
 from pyro.infer.reparam import LocScaleReparam
-from pyro.optim import Adam
+from pyro.optim import ClippedAdam
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 BACKENDS = [
@@ -131,19 +131,19 @@ def check_backends_agree(model):
     params2 = dict(guide2.named_parameters())
     assert set(params1) == set(params2)
     for k, v in params1.items():
-        v.data.normal_()
+        v.data.add_(torch.zeros_like(v).normal_())
         params2[k].data.copy_(v.data)
     names = sorted(params1)
 
     # Check densities agree between backends.
     with torch.no_grad(), poutine.trace() as tr:
-        aux = guide2._sample_aux_values()
+        aux = guide2._sample_aux_values(temperature=1.0)
         flat = guide1._dense_flatten(aux)
         tr.trace.compute_log_prob()
     log_prob_funsor = tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"]
     with torch.no_grad(), poutine.trace() as tr:
         with poutine.condition(data={"_AutoGaussianDense_latent": flat}):
-            guide1._sample_aux_values()
+            guide1._sample_aux_values(temperature=1.0)
         tr.trace.compute_log_prob()
     log_prob_dense = tr.trace.nodes["_AutoGaussianDense_latent"]["log_prob"]
     assert_equal(log_prob_funsor, log_prob_dense)
@@ -151,7 +151,7 @@ def check_backends_agree(model):
     # Check Monte Carlo estimate of entropy.
     entropy1 = guide1._dense_get_mvn().entropy()
     with pyro.plate("particle", 100000, dim=-3), poutine.trace() as tr:
-        guide2._sample_aux_values()
+        guide2._sample_aux_values(temperature=1.0)
         tr.trace.compute_log_prob()
     entropy2 = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
     assert_close(entropy1, entropy2, atol=1e-2)
@@ -163,10 +163,14 @@ def check_backends_agree(model):
     )
     for name, grad1, grad2 in zip(names, grads1, grads2):
         # Gradients should agree to very high precision.
+        if grad1 is None and grad2 is not None:
+            grad1 = torch.zeros_like(grad2)
+        elif grad2 is None and grad1 is not None:
+            grad2 = torch.zeros_like(grad1)
         assert_close(grad1, grad2, msg=f"{name}:\n{grad1} vs {grad2}")
 
     # Check elbos agree between backends.
-    elbo = Trace_ELBO(num_particles=100000, vectorize_particles=True)
+    elbo = Trace_ELBO(num_particles=1000000, vectorize_particles=True)
     loss1 = elbo.differentiable_loss(model, guide1)
     loss2 = elbo.differentiable_loss(model, guide2)
     assert_close(loss1, loss2, atol=1e-2, rtol=0.05)
@@ -422,7 +426,7 @@ def test_broken_plates_smoke(backend):
         pyro.sample("b", dist.Normal(a.mean(-1), 1), obs=torch.tensor(0.0))
 
     guide = AutoGaussian(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step()
@@ -445,7 +449,7 @@ def test_intractable_smoke(backend):
             pyro.sample("d", dist.Normal(c, 1), obs=torch.zeros(3, 2))
 
     guide = AutoGaussian(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step()
@@ -674,7 +678,7 @@ def test_pyrocov_smoke(model, Guide, backend):
     }
 
     guide = Guide(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step(dataset)
@@ -703,7 +707,7 @@ def test_pyrocov_reparam(model, Guide, backend):
     }
     model = poutine.reparam(model, config)
     guide = Guide(model, backend=backend)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), Trace_ELBO())
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), Trace_ELBO())
     for step in range(2):
         with xfail_if_not_implemented():
             svi.step(dataset)
@@ -825,7 +829,7 @@ def test_profile(backend, jit, n=1, num_steps=1, log_every=1):
     print("Training")
     Elbo = JitTrace_ELBO if jit else Trace_ELBO
     elbo = Elbo(max_plate_nesting=3, ignore_jit_warnings=True)
-    svi = SVI(model, guide, Adam({"lr": 1e-8}), elbo)
+    svi = SVI(model, guide, ClippedAdam({"lr": 1e-8}), elbo)
     for step in range(num_steps):
         loss = svi.step(dataset)
         if log_every and step % log_every == 0:

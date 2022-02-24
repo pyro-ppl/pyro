@@ -13,9 +13,9 @@ from tests.common import assert_equal, assert_not_equal
 
 
 def model(observations={"y1": 0, "y2": 0}):
-    x = pyro.sample("x", dist.Normal(torch.tensor(0.0), torch.tensor(5 ** 0.5)))
-    pyro.sample("y1", dist.Normal(x, torch.tensor(2 ** 0.5)), obs=observations["y1"])
-    pyro.sample("y2", dist.Normal(x, torch.tensor(2 ** 0.5)), obs=observations["y2"])
+    x = pyro.sample("x", dist.Normal(torch.tensor(0.0), torch.tensor(5**0.5)))
+    pyro.sample("y1", dist.Normal(x, torch.tensor(2**0.5)), obs=observations["y1"])
+    pyro.sample("y2", dist.Normal(x, torch.tensor(2**0.5)), obs=observations["y2"])
     return x
 
 

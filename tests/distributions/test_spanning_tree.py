@@ -84,7 +84,7 @@ def test_find_best_tree_smoke(num_edges, backend):
 
 @pytest.mark.parametrize("num_edges", [1, 2, 3, 4, 5, 6])
 def test_enumerate_support(num_edges):
-    pyro.set_rng_seed(2 ** 32 - num_edges)
+    pyro.set_rng_seed(2**32 - num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
@@ -99,7 +99,7 @@ def test_enumerate_support(num_edges):
 
 @pytest.mark.parametrize("num_edges", [1, 2, 3, 4, 5, 6])
 def test_partition_function(num_edges):
-    pyro.set_rng_seed(2 ** 32 - num_edges)
+    pyro.set_rng_seed(2**32 - num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
@@ -117,7 +117,7 @@ def test_partition_function(num_edges):
 
 @pytest.mark.parametrize("num_edges", [1, 2, 3, 4, 5, 6])
 def test_log_prob(num_edges):
-    pyro.set_rng_seed(2 ** 32 - num_edges)
+    pyro.set_rng_seed(2**32 - num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
@@ -133,7 +133,7 @@ def test_log_prob(num_edges):
 
 @pytest.mark.parametrize("num_edges", [1, 2, 3, 4, 5, 6])
 def test_edge_mean_function(num_edges):
-    pyro.set_rng_seed(2 ** 32 - num_edges)
+    pyro.set_rng_seed(2**32 - num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
@@ -157,7 +157,7 @@ def test_edge_mean_function(num_edges):
 @pytest.mark.parametrize("num_edges", [1, 2, 3, 4, 5, 6])
 @pytest.mark.parametrize("backend", ["python", "cpp"])
 def test_mode(num_edges, backend):
-    pyro.set_rng_seed(2 ** 32 - num_edges)
+    pyro.set_rng_seed(2**32 - num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
@@ -180,7 +180,7 @@ def test_mode(num_edges, backend):
 @pytest.mark.parametrize("method", ["mcmc", "approx"])
 def test_sample_tree_gof(method, backend, num_edges, pattern):
     goftests = pytest.importorskip("goftests")
-    pyro.set_rng_seed(2 ** 32 - num_edges)
+    pyro.set_rng_seed(2**32 - num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
