@@ -23,6 +23,7 @@ Predicate = Callable[[Any], bool]
 SiteFilter = Callable[[str, Node], bool]
 
 
+
 def concat_traces(
     *traces: Trace,
     site_filter: Callable[[str, Any], bool] = lambda name, node: True,
@@ -35,9 +36,10 @@ def concat_traces(
                 newtrace.add_node(name, **node)
             else:
                 drop_edges.append(name)
-        for p, s in zip(tr._pred, tr._succ):
-            if p not in drop_edges and s not in drop_edges:
-                newtrace.add_edge(p, s)
+        for l, r in tr.edges:
+            if not (l in drop_edges and r in drop_edges):
+                newtrace.add_edge(l, r)
+
     return newtrace
 
 
