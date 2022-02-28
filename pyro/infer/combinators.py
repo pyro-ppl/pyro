@@ -23,7 +23,6 @@ Predicate = Callable[[Any], bool]
 SiteFilter = Callable[[str, Node], bool]
 
 
-
 def concat_traces(
     *traces: Trace,
     site_filter: Callable[[str, Any], bool] = lambda name, node: True,
@@ -450,11 +449,12 @@ class augment_logweight(object):
         if not isinstance(instance, propose):
             raise TypeError("expecting a propose instance")
         self.propose = instance
+        self.pre = pre
 
     def __call__(self, *args, **kwargs) -> Trace:
         initial_computation = self.propose._compute_logweight
 
-        def augmented_compute_logweight(self, p_trace, q_trace):
+        def augmented_compute_logweight(p_trace, q_trace):
             return initial_computation(*self.pre(p_trace, q_trace))
 
         self.propose._compute_logweight = augmented_compute_logweight  # type: ignore
