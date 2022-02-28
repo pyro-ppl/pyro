@@ -4,8 +4,10 @@
 
 import logging
 import torch
+import torch.nn.functional as F
+import math
 from torch import Tensor, tensor
-from typing import Any, Callable, Tuple, Set, TypeVar, Union
+from typing import Any, Callable, Tuple, Set, TypeVar, Union, Optional, Tuple
 
 from pyro.poutine import Trace
 from pyro.distributions.distribution import Distribution
@@ -24,16 +26,17 @@ Predicate = Callable[[Any], bool]
 SiteFilter = Callable[[str, Node], bool]
 
 
-def concat_traces(
+def flatmap_trace(
     *traces: Trace,
-    site_filter: Callable[[str, Any], bool] = lambda name, node: True,
+    site_map: Callable[[str, dict], dict] = lambda name, node: node,
+    site_filter: Callable[[str, dict], bool] = lambda name, node: True,
 ) -> Trace:
     newtrace = Trace()
     for tr in traces:
         drop_edges = []
         for name, node in tr.nodes.items():
             if site_filter(name, node):
-                newtrace.add_node(name, **node)
+                newtrace.add_node(name, **site_map(name, node))
             else:
                 drop_edges.append(name)
         for l, r in tr.edges:
@@ -41,6 +44,13 @@ def concat_traces(
                 newtrace.add_edge(l, r)
 
     return newtrace
+
+
+def concat_traces(
+    *traces: Trace,
+    site_filter: Callable[[str, Any], bool] = lambda name, node: True,
+) -> Trace:
+    return flatmap_trace(*traces, site_filter=site_filter)
 
 
 def no_samples_overlap(t0: Trace, t1: Trace):
@@ -507,3 +517,119 @@ def stl_trick(p_trace, q_trace):
             q_stl_trace.add_edge(l, r)
 
     return (p_trace, q_stl_trace)
+
+
+# ============================================
+# ported resamplers
+# ============================================
+
+
+def ancestor_indices_systematic(lw, sample_dims, batch_dim):
+    assert batch_dim is not None and sample_dims is not None
+    _sample_dims = -1
+    n, b = lw.shape[sample_dims], lw.shape[batch_dim]
+
+    u = torch.rand(b, device=lw.device)
+    usteps = torch.stack([(k + u) for k in range(n)], dim=_sample_dims) / n
+    nws = F.softmax(lw.detach(), dim=sample_dims)
+
+    csum = nws.transpose(sample_dims, _sample_dims).cumsum(dim=_sample_dims)
+    cmax, _ = torch.max(csum, dim=_sample_dims, keepdim=True)
+    ncsum = csum / cmax
+
+    aidx = torch.searchsorted(ncsum, usteps, right=False)
+    aidx = aidx.transpose(_sample_dims, sample_dims)
+    return aidx
+
+
+def _pick(z, aidx, sample_dims):
+    ddim = z.dim() - aidx.dim()
+    assert (
+        z.shape[: z.dim() - ddim] == aidx.shape
+    ), "data dims must be at the end of arg:z"
+
+    mask = aidx
+    for _ in range(ddim):
+        mask = mask.unsqueeze(-1)
+    mask = mask.expand_as(z)
+
+    return z.gather(sample_dims, mask)
+
+
+def _pick_node(node: dict, ancestor_indicies: Tensor, dim=0):
+    """
+    Draws ``num_samples`` samples from ``input`` at dimension ``dim``.
+
+    :param torch.Tensor input: the input tensor.
+    :param int num_samples: the number of samples to draw from ``input``.
+    :param int dim: dimension to draw from ``input``.
+    :returns torch.Tensor: resampled ``input`` using systematic resampling.
+    """
+    assert "_OUTPUT" in node
+
+    # FIXME: Do not detach all
+    value = _pick(node["_OUTPUT"], ancestor_indicies, sample_dims=dim)
+    log_prob = (
+        _pick(node["_computed_log_weights"], ancestor_indicies, sample_dims=dim)
+        if "_computed_log_weights" in node
+        else None
+    )
+
+    ret = node.copy()
+    ret["_OUTPUT"] = value
+    if log_prob is not None:
+        ret["_computed_log_weights"] = log_prob
+
+    return ret
+
+
+def resample_trace_systematic(
+    trace: Trace,
+    log_weight: Tensor,
+    sample_dims: int,
+    batch_dim: Optional[int],
+    normalize_weights: bool = False,
+) -> Trace:
+    assert sample_dims == 0, "FIXME: take this assert out"
+    assert "_LOGWEIGHT" in trace.nodes
+
+    _batch_dim = None
+    if batch_dim is None:
+        assert len(log_weight.shape) == 1, "batch_dim None requires 1d log_weight"
+        _batch_dim = 1
+        log_weight = log_weight.unsqueeze(_batch_dim)
+
+    aidx = ancestor_indices_systematic(
+        log_weight,
+        sample_dims=sample_dims,
+        batch_dim=_batch_dim if batch_dim is None else batch_dim,
+    )
+
+    if batch_dim is None:
+        aidx = aidx.squeeze(_batch_dim)
+
+    def _resample(_, site):
+        # if not rv.resamplable or rv.provenance == Provenance.OBSERVED: continue
+        if not site["infer"].get("resamplable", True) or site["is_observed"]:
+            return site
+        else:
+            return _pick_node(site, aidx, dim=sample_dims)
+
+    new_trace = flatmap_trace(
+        trace, site_map=_resample, site_filter=lambda k, _: k != "_LOGWEIGHT"
+    )
+
+    log_weight_node = trace.nodes["_LOGWEIGHT"].copy()
+    log_weight = log_weight_node["value"]
+    log_weight = torch.logsumexp(
+        log_weight - math.log(log_weight.shape[sample_dims]),
+        dim=sample_dims,
+        keepdim=True,
+    ).expand_as(log_weight)
+
+    if normalize_weights:
+        log_weight = F.softmax(log_weight, dim=sample_dims).log()
+
+    log_weight_node["value"] = log_weight
+    new_trace.add_node("_LOGWEIGHT", *log_weight_node)
+    return new_trace
