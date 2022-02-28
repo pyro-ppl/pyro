@@ -14,6 +14,7 @@ from pyro.distributions.distribution import Distribution
 from pyro.poutine.handlers import _make_handler
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.replay_messenger import ReplayMessenger
+from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.trace_messenger import TraceMessenger
 
 logger = logging.getLogger(__name__)
@@ -544,6 +545,7 @@ def ancestor_indices_systematic(lw, sample_dims, batch_dim):
 
 def _pick(z, aidx, sample_dims):
     ddim = z.dim() - aidx.dim()
+
     assert (
         z.shape[: z.dim() - ddim] == aidx.shape
     ), "data dims must be at the end of arg:z"
@@ -565,10 +567,10 @@ def _pick_node(node: dict, ancestor_indicies: Tensor, dim=0):
     :param int dim: dimension to draw from ``input``.
     :returns torch.Tensor: resampled ``input`` using systematic resampling.
     """
-    assert "_OUTPUT" in node
+    assert "value" in node
 
     # FIXME: Do not detach all
-    value = _pick(node["_OUTPUT"], ancestor_indicies, sample_dims=dim)
+    value = _pick(node["value"], ancestor_indicies, sample_dims=dim)
     log_prob = (
         _pick(node["_computed_log_weights"], ancestor_indicies, sample_dims=dim)
         if "_computed_log_weights" in node
@@ -576,7 +578,7 @@ def _pick_node(node: dict, ancestor_indicies: Tensor, dim=0):
     )
 
     ret = node.copy()
-    ret["_OUTPUT"] = value
+    ret["value"] = value
     if log_prob is not None:
         ret["_computed_log_weights"] = log_prob
 
@@ -585,13 +587,13 @@ def _pick_node(node: dict, ancestor_indicies: Tensor, dim=0):
 
 def resample_trace_systematic(
     trace: Trace,
-    log_weight: Tensor,
     sample_dims: int,
     batch_dim: Optional[int],
     normalize_weights: bool = False,
 ) -> Trace:
     assert sample_dims == 0, "FIXME: take this assert out"
     assert "_LOGWEIGHT" in trace.nodes
+    log_weight = trace.nodes["_LOGWEIGHT"]["value"]
 
     _batch_dim = None
     if batch_dim is None:
@@ -609,11 +611,24 @@ def resample_trace_systematic(
         aidx = aidx.squeeze(_batch_dim)
 
     def _resample(_, site):
-        # if not rv.resamplable or rv.provenance == Provenance.OBSERVED: continue
-        if not site["infer"].get("resamplable", True) or site["is_observed"]:
-            return site
-        else:
-            return _pick_node(site, aidx, dim=sample_dims)
+        # FIXME: in probtorch, we found it necessary to explicitly mark a RV as
+        # "rv.resamplable" -- need to doublecheck this. previously we just used:
+        #
+        #  if not rv.resamplable or rv.provenance == Provenance.OBSERVED: continue
+        return (
+            # if none of the below conditions hold, just return the input
+            site
+            # do not resample unsamplable sites
+            if site["type"] != "sample"
+            # do not resample observed distributions
+            or site["is_observed"]
+            # do not resample if it is not a pyro distribution
+            or not isinstance(site["fn"], Distribution)
+            # do not resample if it is a result of a plate effect
+            or isinstance(site["fn"], _Subsample)
+            # if all the above conditions hold, feel free to resample : )
+            else _pick_node(site, aidx, dim=sample_dims)
+        )
 
     new_trace = flatmap_trace(
         trace, site_map=_resample, site_filter=lambda k, _: k != "_LOGWEIGHT"
@@ -631,5 +646,5 @@ def resample_trace_systematic(
         log_weight = F.softmax(log_weight, dim=sample_dims).log()
 
     log_weight_node["value"] = log_weight
-    new_trace.add_node("_LOGWEIGHT", *log_weight_node)
+    new_trace.add_node("_LOGWEIGHT", **log_weight_node)
     return new_trace
