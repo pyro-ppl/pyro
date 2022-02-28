@@ -8,6 +8,7 @@ from torch import Tensor, tensor
 from typing import Any, Callable, Tuple, Set, TypeVar, Union
 
 from pyro.poutine import Trace
+from pyro.distributions.distribution import Distribution
 from pyro.poutine.handlers import _make_handler
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.replay_messenger import ReplayMessenger
@@ -462,3 +463,47 @@ class augment_logweight(object):
 
         self.propose._compute_logweight = initial_computation
         return out
+
+
+def _is_dist_node(n: dict):
+    return "fn" in n.keys() and isinstance(n["fn"], Distribution)
+
+
+def _eval_detached(node):
+    if not _is_dist_node(node):
+        raise ValueError("Trace node type is not supported")
+
+    dist = node["fn"]
+
+    node_detached = node.copy()
+    node_detached["fn"] = dist.__class__(
+        **{
+            k: dist.__dict__[k].detach()
+            for k, _ in dist.arg_constraints.items()
+            if k in dist.__dict__
+        }
+    )
+
+    return node_detached
+
+
+def stl_trick(p_trace, q_trace):
+    """
+    adjust trace to compute a "sticking the landing" (stl) gradient.
+
+    NOTE: this currently assumes a flat trace structure (no edges)
+    """
+    q_stl_trace = concat_traces(
+        q_trace, site_filter=lambda _, n: not _is_dist_node(n)
+    )  # generate a new trace
+    dist_nodes = {k for k, n in q_trace.nodes.items() if _is_dist_node(n)}
+
+    for k in dist_nodes:
+        dereparameterized = _eval_detached(q_trace.nodes[k])
+        q_stl_trace.add_node(k, **dereparameterized)
+
+    for l, r in q_trace.edges:
+        if l in dist_nodes or r in dist_nodes:
+            q_stl_trace.add_edge(l, r)
+
+    return (p_trace, q_stl_trace)

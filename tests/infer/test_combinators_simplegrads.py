@@ -28,6 +28,7 @@ from pyro.infer.combinators import (
     primitive,
     propose,
     with_substitution,
+    stl_trick,
     augment_logweight,
     nested_objective,
     _LOGWEIGHT,
@@ -396,7 +397,6 @@ def test_avo_4step_empirical(normal, mlp_kernel):
         ), "kernels did not learn target density"
 
 
-@mark.skip()
 def test_avo_4step_empirical_with_stl(normal, mlp_kernel):
     pyro.set_rng_seed(7)
     num_targets = 5
