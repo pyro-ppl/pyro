@@ -120,7 +120,24 @@ def _single_step_verlet_with_extension(z, r, potential_fn, kinetic_grad, step_si
     r"""
     Single step velocity verlet taht modifies the `z`, `r` dicts in place with dimension extension
     """
-    pass
+ 
+    z_grads = potential_grad(potential_fn, z)[0] if z_grads is None else z_grads
+    # print(r)
+    # print(z)
+    for site_name in r:
+        r[site_name] = r[site_name] + 0.5 * step_size * (
+            -z_grads[site_name]
+        )  # r(n+1/2)
+
+    r_grads = kinetic_grad(r)
+    for site_name in z:
+        z[site_name] = z[site_name] + step_size * r_grads[site_name]  # z(n+1)
+
+    z_grads, potential_energy = potential_grad(potential_fn, z)
+    for site_name in r:
+        r[site_name] = r[site_name] + 0.5 * step_size * (-z_grads[site_name])  # r(n+1)
+
+    return z, r, z_grads, potential_energy
 
 def _extention(z):
     """
