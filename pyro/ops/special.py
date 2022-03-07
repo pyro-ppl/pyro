@@ -4,6 +4,8 @@
 import functools
 import math
 import operator
+import weakref
+from typing import Dict
 
 import numpy as np
 import torch
@@ -179,3 +181,38 @@ def get_quad_rule(num_quad, prototype_tensor):
     return torch.from_numpy(quad_points).type_as(prototype_tensor), torch.from_numpy(
         log_weights
     ).type_as(prototype_tensor)
+
+
+def sparse_multinomial_likelihood(total_count, nonzero_logits, nonzero_value):
+    """
+    The following are equivalent::
+
+        # Version 1. dense
+        log_prob = Multinomial(logits=logits).log_prob(value).sum()
+
+        # Version 2. sparse
+        nnz = value.nonzero(as_tuple=True)
+        log_prob = sparse_multinomial_likelihood(
+            value.sum(-1),
+            (logits - logits.logsumexp(-1))[nnz],
+            value[nnz],
+        )
+    """
+    return (
+        _log_factorial_sum(total_count)
+        - _log_factorial_sum(nonzero_value)
+        + torch.dot(nonzero_logits, nonzero_value)
+    )
+
+
+_log_factorial_cache: Dict[int, torch.Tensor] = {}
+
+
+def _log_factorial_sum(x: torch.Tensor) -> torch.Tensor:
+    if x.requires_grad:
+        return (x + 1).lgamma().sum()
+    key = id(x)
+    if key not in _log_factorial_cache:
+        weakref.finalize(x, _log_factorial_cache.pop, key, None)
+        _log_factorial_cache[key] = (x + 1).lgamma().sum()
+    return _log_factorial_cache[key]
