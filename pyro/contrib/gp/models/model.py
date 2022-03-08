@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import torch
 from pyro.contrib.gp.parameterized import Parameterized
 
 
@@ -89,6 +90,13 @@ class GPModel(Parameterized):
     """
 
     def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6):
+        assert isinstance(
+            X, torch.Tensor
+        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        assert isinstance(
+            y, torch.Tensor
+        ), "y needs to be a torch Tensor instead of a {}".format(type(y))
+
         super().__init__()
         self.set_data(X, y)
         self.kernel = kernel

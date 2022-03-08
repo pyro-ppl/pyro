@@ -71,7 +71,12 @@ class VariationalGP(GPModel):
         whiten=False,
         jitter=1e-6,
     ):
-        assert type(X)==torch.Tensor
+        assert isinstance(
+            X, torch.Tensor
+        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        assert isinstance(
+            y, torch.Tensor
+        ), "y needs to be a torch Tensor instead of a {}".format(type(y))
         super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
