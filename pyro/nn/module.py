@@ -20,7 +20,8 @@ import torch
 from torch.distributions import constraints, transform_to
 
 import pyro
-from pyro.poutine.runtime import _PYRO_PARAM_STORE
+from pyro.params.param_store import ParamStoreDict
+from pyro.poutine.runtime import _PYRO_PARAM_STORE, _module_local_param_enabled
 
 
 class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
@@ -380,6 +381,8 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         self._pyro_context = _Context()  # shared among sub-PyroModules
         self._pyro_params = OrderedDict()
         self._pyro_samples = OrderedDict()
+        if _module_local_param_enabled():
+            self._pyro_param_store = ParamStoreDict()
         super().__init__()
 
     def add_module(self, name, module):
@@ -406,6 +409,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         gen = self._named_members(_get_pyro_params, prefix=prefix, recurse=recurse)
         for elem in gen:
             yield elem
+
+    def _pyro_param_local(self, *args, **kwargs):
+        with pyro.use_param_store(
+            getattr(self, "_pyro_param_store", _PYRO_PARAM_STORE)
+        ):
+            return pyro.param(*args, **kwargs)
 
     def _pyro_set_supermodule(self, name, context):
         self._pyro_name = name
@@ -434,22 +443,24 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 unconstrained_value = getattr(self, name + "_unconstrained")
                 if self._pyro_context.active:
                     fullname = self._pyro_get_fullname(name)
-                    if fullname in _PYRO_PARAM_STORE:
+                    if fullname in self._pyro_param_store:
                         if (
-                            _PYRO_PARAM_STORE._params[fullname]
+                            self._pyro_param_store._params[fullname]
                             is not unconstrained_value
                         ):
                             # Update PyroModule <--- ParamStore.
-                            unconstrained_value = _PYRO_PARAM_STORE._params[fullname]
+                            unconstrained_value = self._pyro_param_store._params[
+                                fullname
+                            ]
                             if not isinstance(unconstrained_value, torch.nn.Parameter):
                                 # Update PyroModule ---> ParamStore (type only; data is preserved).
                                 unconstrained_value = torch.nn.Parameter(
                                     unconstrained_value
                                 )
-                                _PYRO_PARAM_STORE._params[
+                                self._pyro_param_store._params[
                                     fullname
                                 ] = unconstrained_value
-                                _PYRO_PARAM_STORE._param_to_name[
+                                self._pyro_param_store._param_to_name[
                                     unconstrained_value
                                 ] = fullname
                             super().__setattr__(
@@ -457,10 +468,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                             )
                     else:
                         # Update PyroModule ---> ParamStore.
-                        _PYRO_PARAM_STORE._constraints[fullname] = constraint
-                        _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
-                        _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
-                    return pyro.param(fullname, event_dim=event_dim)
+                        self._pyro_param_store._constraints[fullname] = constraint
+                        self._pyro_param_store._params[fullname] = unconstrained_value
+                        self._pyro_param_store._param_to_name[
+                            unconstrained_value
+                        ] = fullname
+                    return self._pyro_param_local(fullname, event_dim=event_dim)
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
                     return transform_to(constraint)(unconstrained_value)
 
@@ -491,7 +504,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             "_unconstrained"
         ):
             if self._pyro_context.active:
-                pyro.param(self._pyro_get_fullname(name), result)
+                self._pyro_param_local(self._pyro_get_fullname(name), result)
 
         if isinstance(result, torch.nn.Module):
             if isinstance(result, PyroModule):
@@ -508,6 +521,11 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         return result
 
     def __setattr__(self, name, value):
+
+        if isinstance(value, ParamStoreDict):
+            super().__setattr__(name, value)
+            return
+
         if isinstance(value, PyroModule):
             # Create a new sub PyroModule, overwriting any old value.
             try:
@@ -527,19 +545,21 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             self._pyro_params[name] = constraint, event_dim
             if self._pyro_context.active:
                 fullname = self._pyro_get_fullname(name)
-                pyro.param(
+                self._pyro_param_local(
                     fullname,
                     constrained_value,
                     constraint=constraint,
                     event_dim=event_dim,
                 )
-                constrained_value = pyro.param(fullname)
+                constrained_value = self._pyro_param_local(fullname)
                 unconstrained_value = constrained_value.unconstrained()
                 if not isinstance(unconstrained_value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
                     unconstrained_value = torch.nn.Parameter(unconstrained_value)
-                    _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
-                    _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
+                    self._pyro_param_store._params[fullname] = unconstrained_value
+                    self._pyro_param_store._param_to_name[
+                        unconstrained_value
+                    ] = fullname
             else:  # Cannot determine supermodule and hence cannot compute fullname.
                 unconstrained_value = _unconstrain(constrained_value, constraint)
             super().__setattr__(name + "_unconstrained", unconstrained_value)
@@ -553,12 +573,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 pass
             if self._pyro_context.active:
                 fullname = self._pyro_get_fullname(name)
-                value = pyro.param(fullname, value)
+                value = self._pyro_param_local(fullname, value)
                 if not isinstance(value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
                     value = torch.nn.Parameter(value)
-                    _PYRO_PARAM_STORE._params[fullname] = value
-                    _PYRO_PARAM_STORE._param_to_name[value] = fullname
+                    self._pyro_param_store._params[fullname] = value
+                    self._pyro_param_store._param_to_name[value] = fullname
             super().__setattr__(name, value)
             return
 
@@ -590,9 +610,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             del self._parameters[name]
             if self._pyro_context.used:
                 fullname = self._pyro_get_fullname(name)
-                if fullname in _PYRO_PARAM_STORE:
+                if fullname in self._pyro_param_store:
                     # Update PyroModule ---> ParamStore.
-                    del _PYRO_PARAM_STORE[fullname]
+                    del self._pyro_param_store[fullname]
             return
 
         if name in self._pyro_params:
@@ -600,9 +620,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             del self._pyro_params[name]
             if self._pyro_context.used:
                 fullname = self._pyro_get_fullname(name)
-                if fullname in _PYRO_PARAM_STORE:
+                if fullname in self._pyro_param_store:
                     # Update PyroModule ---> ParamStore.
-                    del _PYRO_PARAM_STORE[fullname]
+                    del self._pyro_param_store[fullname]
             return
 
         if name in self._pyro_samples:
@@ -613,9 +633,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             del self._modules[name]
             if self._pyro_context.used:
                 fullname = self._pyro_get_fullname(name)
-                for p in list(_PYRO_PARAM_STORE.keys()):
+                for p in list(self._pyro_param_store.keys()):
                     if p.startswith(fullname):
-                        del _PYRO_PARAM_STORE[p]
+                        del self._pyro_param_store[p]
             return
 
         super().__delattr__(name)
@@ -699,6 +719,8 @@ def to_pyro_module_(m, recurse=True):
     m._pyro_context = _Context()
     m._pyro_params = OrderedDict()
     m._pyro_samples = OrderedDict()
+    if _module_local_param_enabled():
+        m._pyro_param_store = ParamStoreDict()
 
     # Reregister parameters and submodules.
     for name, value in list(m._parameters.items()):

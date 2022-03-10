@@ -15,6 +15,18 @@ _PYRO_STACK = []
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
 
+# toggle usage of local param stores in PyroModules
+_PYRO_MODULE_LOCAL_PARAM = False
+
+
+def enable_module_local_param(flag: bool) -> None:
+    global _PYRO_MODULE_LOCAL_PARAM
+    _PYRO_MODULE_LOCAL_PARAM = flag
+
+
+def _module_local_param_enabled():
+    return _PYRO_MODULE_LOCAL_PARAM
+
 
 class _DimAllocator:
     """
