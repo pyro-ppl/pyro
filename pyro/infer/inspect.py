@@ -546,7 +546,8 @@ def render_model(
     :param model_kwargs: Keyword arguments to pass to the model.
     :param str filename: File to save rendered model in.
     :param bool render_distributions: Whether to include RV distribution
-        annotations in the plot.
+        annotations (and param constraints) in the plot.
+    :param bool render_params: Whether to show params inthe plot.
     :returns: A model graph.
     :rtype: graphviz.Digraph
     """
