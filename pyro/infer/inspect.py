@@ -293,7 +293,7 @@ def get_model_relations(
 
     for name, site in trace.nodes.items():
         if site["type"] == "param":
-            param_constraint[name] = site["kwargs"]["constraint"]
+            param_constraint[name] = str(site["kwargs"]["constraint"])
 
         if site["type"] != "sample" or site_is_subsample(site):
             continue
@@ -366,15 +366,13 @@ def generate_graph_specification(
         rv for rv in model_relations["sample_sample"] if rv not in plate_rvs
     ]  # RVs which are in no plate
 
+    # get set of params
     params = set()
     if render_params:
         for rv, params_list in model_relations["sample_param"].items():
             for param in params_list:
                 params.add(param)
-        params = list(params)
         plate_groups[None].extend(params)
-
-    # get set of params
 
     # retain node metadata
     node_data = {}
