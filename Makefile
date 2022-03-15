@@ -22,7 +22,7 @@ lint: FORCE
 	black --check *.py pyro examples tests scripts profiler
 	isort --check .
 	python scripts/update_headers.py --check
-	# mypy pyro
+	mypy pyro
 	# mypy examples  # FIXME
 	mypy scripts
 
