@@ -89,7 +89,7 @@ class ConditionedGeneralizedChannelPermute(Transform):
         Ux = torch.linalg.solve_triangular(self.L, LUx, upper=False)
 
         # Solve Ux = (PL)^-1y
-        x = torch.linalg.solve_triangular(self.U, Ux)
+        x = torch.linalg.solve_triangular(self.U, Ux, upper=True)
 
         # Unflatten x (works when context variable has batch dim)
         return x.reshape(x.shape[:-1] + y.shape[-2:])

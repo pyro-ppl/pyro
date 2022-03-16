@@ -124,7 +124,11 @@ CPU_EXAMPLES = [
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 ",
-    "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 ",
+    xfail_param(
+        "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 ",
+        reason="OOM",
+        run=False,
+    ),
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 ",
