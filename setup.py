@@ -68,7 +68,7 @@ EXTRAS_REQUIRE = [
     "jupyter>=1.0.0",
     "graphviz>=0.8",
     "matplotlib>=1.3",
-    "torchvision>=0.10.0",
+    "torchvision>=0.12.0",
     "visdom>=0.1.4",
     "pandas",
     "pillow==8.2.0",  # https://github.com/pytorch/pytorch/issues/61125
@@ -98,7 +98,7 @@ setup(
         "numpy>=1.7",
         "opt_einsum>=2.3.2",
         "pyro-api>=0.1.1",
-        "torch>=1.9.0",
+        "torch>=1.11.0",
         "tqdm>=4.36",
     ],
     extras_require={
@@ -151,6 +151,8 @@ setup(
         "Operating System :: MacOS :: MacOS X",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     # yapf
 )
