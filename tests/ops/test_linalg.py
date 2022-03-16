@@ -43,7 +43,6 @@ def test_sym_rinverse(A, use_sym):
 def test_triangular_solve(upper):
     b = torch.randn(5, 6)
     A = torch.randn(5, 5)
-    A = A.triu() if upper else A.tril()
     expected = torch.triangular_solve(b, A, upper=upper).solution
     actual = torch.linalg.solve_triangular(A, b, upper=upper)
     assert_close(actual, expected)
@@ -55,7 +54,6 @@ def test_triangular_solve(upper):
 def test_triangular_solve_transpose(upper):
     b = torch.randn(5, 6)
     A = torch.randn(5, 5)
-    A = A.triu() if upper else A.tril()
-    expected = torch.triangular_solve(b, A.T, upper=upper, transpose=True).solution
-    actual = torch.linalg.solve_triangular(A.T, b, upper=upper)
+    expected = torch.triangular_solve(b, A, upper=upper, transpose=True).solution
+    actual = torch.linalg.solve_triangular(A.T, b, upper=not upper)
     assert_close(actual, expected)

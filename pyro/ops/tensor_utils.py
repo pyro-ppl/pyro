@@ -422,6 +422,7 @@ def triangular_solve(x, y, upper=False, transpose=False):
         return x / y
     if transpose:
         y = y.transpose(-1, -2)
+        upper = not upper
     return torch.linalg.solve_triangular(y, x, upper=upper)
 
 
