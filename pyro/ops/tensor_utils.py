@@ -420,7 +420,9 @@ def matvecmul(x, y):
 def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
-    return torch.linalg.solve_triangular(y, x, upper=upper, transpose=transpose)
+    if transpose:
+        y = y.transpose(-1, -2)
+    return torch.linalg.solve_triangular(y, x, upper=upper)
 
 
 def precision_to_scale_tril(P):
