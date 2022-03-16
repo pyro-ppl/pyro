@@ -91,6 +91,10 @@ setup(
     package_data={"pyro.distributions": ["*.cpp"]},
     author="Uber AI Labs",
     url="http://pyro.ai",
+    project_urls={
+        "Documentation": "https://docs.pyro.ai",
+        "Source": "https://github.com/pyro-ppl/pyro",
+    },
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
