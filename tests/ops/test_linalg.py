@@ -46,6 +46,8 @@ def test_triangular_solve(upper):
     expected = torch.triangular_solve(b, A, upper=upper).solution
     actual = torch.linalg.solve_triangular(A, b, upper=upper)
     assert_close(actual, expected)
+    A = A.triu() if upper else A.tril()
+    assert_close(A @ actual, b)
 
 
 # Tests migration from torch.triangular_solve -> torch.linalg.solve_triangular
@@ -57,3 +59,5 @@ def test_triangular_solve_transpose(upper):
     expected = torch.triangular_solve(b, A, upper=upper, transpose=True).solution
     actual = torch.linalg.solve_triangular(A.T, b, upper=not upper)
     assert_close(actual, expected)
+    A = A.triu() if upper else A.tril()
+    assert_close(A.T @ actual, b)
