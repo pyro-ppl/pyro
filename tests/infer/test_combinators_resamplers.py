@@ -41,11 +41,11 @@ def test_resample_without_batch():
 
     memo = torch.zeros(S)
 
-    @ConditionMessenger(data={f"{n}": value for n in range(NGaussians + 1)})
+    @ConditionMessenger(data={f"z_{n}": value for n in range(NGaussians + 1)})
     def model():
-        with pyro.plate("z_plate", 2):
+        with pyro.plate("plate", 2):
             with pyro.plate("samples", S):
-                for n in range(NGaussians + 1):
+                for n in range(NGaussians):
                     x = pyro.sample(
                         f"z_{n}", dist.Normal(0, 1)
                     )  # .expand([10]) is automatic
@@ -54,72 +54,49 @@ def test_resample_without_batch():
     for _ in range(B):
         trace = pyro.poutine.trace(model).get_trace()  # type: ignore
         trace.add_node(LW, name=LW, type="return", value=lw)
-        breakpoint()
         resampled = resample_trace_systematic(trace, sample_dims=0, batch_dim=None)
-        assert (resampled.nodes["_LOGWEIGHT"]["value"].exp() == 0.25).all()
-        breakpoint()
+        assert torch.isclose(
+            resampled.nodes["_LOGWEIGHT"]["value"].exp(), torch.ones(4) * 0.25
+        ).all()
         for k, site in resampled.nodes.items():
             if k[0:2] == "z_":
                 for s in range(S):
                     memo[s] += (site["value"] == (s + 1)).sum() / (S * NGaussians * 2)
-        breakpoint()
-    print(memo / B)
+
+    assert torch.isclose((memo / B), torch.ones(4) * 0.25).all()
 
 
-# def test_resample_without_batch():
-#    S = 4
-#    N = 5
-#    B = 100
-#
-#    value = torch.tensor([[1,1],[2,2],[3,3],[4,4]])
-#    lw = torch.tensor([0.1, 0.2, 0.3, 0.4]).log()
-#    tr = Trace()
-#
-#    memo = torch.zeros(S)
-#    for _ in range(B):
-#        for n in range(N):
-#            tr._inject(RandomVariable(dist=D.Normal(0, 1), value=value, log_prob=lw, reparameterized=False), name=f'z_{n}')
-#
-#        resampled, _lw = Systematic()(tr, lw, sample_dims=0, batch_dim=None)
-#
-#        assert (_lw.exp() == 0.25).all()
-#        for n, (_, rv) in enumerate(resampled.items()):
-#            for s in range(S):
-#                memo[s] += (rv.value == (s+1)).sum() / (S*N*2)
-#
-#    print(memo / B)
-
-
-@mark.skip()
 def test_resample_with_batch():
-    N, S, B = 5, 4, 100
+    NGaussians, S, B = 5, 4, 100
     init = torch.arange(1, 5)
-
     value = init.expand(2, S).T
+    LW = "_LOGWEIGHT"
     lw = (init / 10).log()
-    breakpoint()
 
     lw = lw.unsqueeze(1).expand(S, B)
     value = value.unsqueeze(1).expand(S, B, 2)
 
-    tr = Trace()
+    @ConditionMessenger(data={f"z_{n}": value for n in range(NGaussians + 1)})
+    def model():
+        with pyro.plate("plate", 2):
+            with pyro.plate("samples", S):
+                with pyro.plate("batch", B):
+                    for n in range(NGaussians):
+                        x = pyro.sample(f"z_{n}", dist.Normal(0, 1))
+                        assert x.shape == torch.Size([S, B, 2])
 
-    for n in range(N):
+    trace = pyro.poutine.trace(model).get_trace()  # type: ignore
+    trace.add_node(LW, name=LW, type="return", value=lw)
 
-        tr._inject(
-            RandomVariable(
-                dist=D.Normal(0, 1), value=value, log_prob=lw, reparameterized=False
-            ),
-            name=f"z_{n}",
-            silent=True,
-        )
-
-    resampled, _lw = Systematic()(tr, lw, sample_dims=0, batch_dim=1)
-    assert (_lw.exp() == 0.25).all()
+    resampled = resample_trace_systematic(trace, sample_dims=0, batch_dim=1)
+    assert torch.isclose(
+        resampled.nodes["_LOGWEIGHT"]["value"].exp(), torch.ones(S, B) * 0.25
+    ).all()
 
     memo = torch.zeros(S)
-    for n, (_, rv) in enumerate(resampled.items()):
-        for s in range(S):
-            memo[s] += (rv.value == (s + 1)).sum() / (S * B * N * 2)
+    for k, site in resampled.nodes.items():
+        if k[0:2] == "z_":
+            for s in range(S):
+                memo[s] += (site["value"] == (s + 1)).sum() / (S * B * NGaussians * 2)
 
-    print(memo)
+    assert torch.isclose((memo), torch.ones(4) * 0.25).all()
