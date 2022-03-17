@@ -164,6 +164,7 @@ def get_summary_table(
         if site_summary["mean"].shape:
             site_df = pd.DataFrame(site_summary, index=player_names)
         else:
+            site_summary = {k: float(v) for k, v in site_summary.items()}
             site_df = pd.DataFrame(site_summary, index=[0])
         if not diagnostics:
             site_df = site_df.drop(["n_eff", "r_hat"], axis=1)
