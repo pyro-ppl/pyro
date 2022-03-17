@@ -420,15 +420,18 @@ def matvecmul(x, y):
 def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
-    return x.triangular_solve(y, upper=upper, transpose=transpose).solution
+    if transpose:
+        y = y.transpose(-1, -2)
+        upper = not upper
+    return torch.linalg.solve_triangular(y, x, upper=upper)
 
 
 def precision_to_scale_tril(P):
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(
-        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
-    )[0]
+    L = torch.linalg.solve_triangular(
+        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
+    )
     return L
 
 

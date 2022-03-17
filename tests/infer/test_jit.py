@@ -173,7 +173,6 @@ def test_masked_fill():
     assert_equal(jit_f(y, mask), f(y, mask))
 
 
-@pytest.mark.xfail(reason="https://github.com/pytorch/pytorch/issues/11614")
 def test_scatter():
     def make_one_hot(x, i):
         return torch.zeros_like(x).scatter(-1, i.unsqueeze(-1), 1.0)

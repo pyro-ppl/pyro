@@ -46,9 +46,7 @@ class ProvenanceTensor(torch.Tensor):
         assert not isinstance(data, ProvenanceTensor)
         if not provenance:
             return data
-        instance = torch.Tensor.__new__(cls)
-        instance.__init__(data, provenance)
-        return instance
+        return super().__new__(cls)
 
     def __init__(self, data, provenance=frozenset()):
         assert isinstance(provenance, frozenset)

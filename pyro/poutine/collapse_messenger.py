@@ -5,6 +5,7 @@ from functools import reduce, singledispatch
 
 import pyro
 from pyro.distributions.distribution import COERCIONS
+from pyro.ops.linalg import ignore_torch_deprecation_warnings
 from pyro.poutine.util import site_is_subsample
 
 from .runtime import _PYRO_STACK
@@ -166,6 +167,7 @@ class CollapseMessenger(TraceMessenger):
             name, log_prob, _, _ = self._get_log_prob()
             pyro.factor(name, log_prob.data)
 
+    @ignore_torch_deprecation_warnings()
     def _get_log_prob(self):
         # Convert delayed statements to pyro.factor()
         reduced_vars = []

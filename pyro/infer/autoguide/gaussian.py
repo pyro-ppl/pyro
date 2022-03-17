@@ -17,6 +17,7 @@ import pyro.poutine as poutine
 from pyro.distributions import constraints
 from pyro.infer.inspect import get_dependencies, is_sample_site
 from pyro.nn.module import PyroModule, PyroParam
+from pyro.ops.linalg import ignore_torch_deprecation_warnings
 from pyro.poutine.runtime import am_i_wrapped, get_plates
 from pyro.poutine.util import site_is_subsample
 
@@ -553,12 +554,13 @@ def _precision_to_scale_tril(P):
     # Ref: https://nbviewer.jupyter.org/gist/fehiepsi/5ef8e09e61604f10607380467eb82006#Precision-to-scale_tril
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(
-        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
-    )[0]
+    L = torch.linalg.solve_triangular(
+        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
+    )
     return L
 
 
+@ignore_torch_deprecation_warnings()
 def _try_possibly_intractable(fn, *args, **kwargs):
     # Convert ValueError into NotImplementedError.
     try:
