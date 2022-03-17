@@ -424,6 +424,7 @@ def test_gaussian_tensordot(
 
 @pytest.mark.stage("funsor")
 @pytest.mark.parametrize("batch_shape", [(), (5,), (4, 2)], ids=str)
+@pytest.mark.filterwarnings("ignore:torch.triangular_solve is deprecated")
 def test_gaussian_funsor(batch_shape):
     # This tests sample distribution, rsample gradients, log_prob, and log_prob
     # gradients for both Pyro's and Funsor's Gaussian.
