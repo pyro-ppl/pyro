@@ -100,3 +100,66 @@ def test_resample_with_batch():
                 memo[s] += (site["value"] == (s + 1)).sum() / (S * B * NGaussians * 2)
 
     assert torch.isclose((memo), torch.ones(4) * 0.25).all()
+
+
+def test_resample_with_outputs():
+    S, NGaussians, B = 4, 4, 100
+    LW = "_LOGWEIGHT"
+    init = torch.arange(1, NGaussians + 1)
+    value = init.expand(S).T
+    lw = (init / 10).log()
+    assert value.shape == torch.Size([S])
+    as_set = lambda out: {v.item() for v in out}
+
+    def model_one():
+        with pyro.plate("samples", S):
+            return pyro.sample(f"z_0", dist.Normal(0, 1))
+
+    trace = pyro.poutine.trace(model_one).get_trace()  # type: ignore
+    trace.add_node(LW, name=LW, type="return", value=torch.arange(S).float())
+    out = trace.nodes["_RETURN"]["value"]
+    resampled = resample_trace_systematic(trace, sample_dims=0, batch_dim=None)
+    resampled_out = resampled.nodes["_RETURN"]["value"]
+
+    assert (
+        len(as_set(out) - as_set(resampled_out)) > 0
+        and resampled_out is resampled.nodes["z_0"]["value"]
+    )
+
+    def model_list():
+        with pyro.plate("samples", S):
+            ret = []
+            for n in range(NGaussians):
+                ret.append(pyro.sample(f"z_{n}", dist.Normal(0, 1)))
+            return ret
+
+    trace = pyro.poutine.trace(model_list).get_trace()  # type: ignore
+    trace.add_node(LW, name=LW, type="return", value=torch.arange(S).float())
+    out = [x.clone() for x in trace.nodes["_RETURN"]["value"]]
+    resampled = resample_trace_systematic(trace, sample_dims=0, batch_dim=None)
+    rout = [x.clone() for x in resampled.nodes["_RETURN"]["value"]]
+    for i, (o, r) in enumerate(zip(out, rout)):
+        assert (
+            len(as_set(o) - as_set(r)) > 0
+            and (r == resampled.nodes[f"z_{i}"]["value"]).all()
+        )
+
+    def model_dict():
+        with pyro.plate("samples", S):
+            ret = dict()
+            for n in range(NGaussians):
+                ret[n] = pyro.sample(f"z_{n}", dist.Normal(0, 1))
+            return ret
+
+    trace = pyro.poutine.trace(model_dict).get_trace()  # type: ignore
+    trace.add_node(LW, name=LW, type="return", value=torch.arange(S).float())
+    out = {i: x.clone() for i, x in trace.nodes["_RETURN"]["value"].items()}
+    resampled = resample_trace_systematic(trace, sample_dims=0, batch_dim=None)
+    rout = {i: x.clone() for i, x in resampled.nodes["_RETURN"]["value"].items()}
+
+    for (oix, o), (rix, r) in zip(out.items(), rout.items()):
+        assert (
+            oix == rix
+            and len(as_set(o) - as_set(r)) > 0
+            and (r == resampled.nodes[f"z_{oix}"]["value"]).all()
+        )

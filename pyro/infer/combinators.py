@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 import math
 from torch import Tensor, tensor
-from typing import Any, Callable, Tuple, Set, TypeVar, Union, Optional, Tuple
+from typing import Any, Callable, Tuple, Set, TypeVar, Union, Optional, Tuple, Sequence
 
 from pyro.poutine import Trace
 from pyro.distributions.distribution import Distribution
@@ -610,25 +610,41 @@ def resample_trace_systematic(
     if batch_dim is None:
         aidx = aidx.squeeze(_batch_dim)
 
+    # If we are resampling the output of a kernel function, the return may be a
+    # resampled output. We keep track of this here:
+    ret = trace.nodes.get(_RETURN, {"value": None})
+
     def _resample(_, site):
         # FIXME: in probtorch, we found it necessary to explicitly mark a RV as
         # "rv.resamplable" -- need to doublecheck this. previously we just used:
         #
-        #  if not rv.resamplable or rv.provenance == Provenance.OBSERVED: continue
-        return (
-            # if none of the below conditions hold, just return the input
-            site
+        # if not rv.resamplable or rv.provenance == Provenance.OBSERVED: continue
+        no_resample = (
             # do not resample unsamplable sites
-            if site["type"] != "sample"
+            site["type"] != "sample"
             # do not resample observed distributions
             or site["is_observed"]
             # do not resample if it is not a pyro distribution
             or not isinstance(site["fn"], Distribution)
             # do not resample if it is a result of a plate effect
             or isinstance(site["fn"], _Subsample)
-            # if all the above conditions hold, feel free to resample : )
-            else _pick_node(site, aidx, dim=sample_dims)
         )
+        if no_resample:
+            return site
+        else:
+            newsite = _pick_node(site, aidx, dim=sample_dims)
+            if isinstance(ret["value"], dict):
+                for k, v in ret["value"].items():  # type: ignore
+                    if site["value"] is v:
+                        ret["value"][k] = newsite["value"]  # type: ignore
+            elif isinstance(ret["value"], Sequence):
+                for i, v in enumerate(ret["value"]):  # type: ignore
+                    if site["value"] is v:
+                        ret["value"][i] = newsite["value"]  # type: ignore
+            elif site["value"] is ret["value"]:
+                ret["value"] = newsite["value"]
+
+            return newsite
 
     new_trace = flatmap_trace(
         trace, site_map=_resample, site_filter=lambda k, _: k != "_LOGWEIGHT"
@@ -647,4 +663,26 @@ def resample_trace_systematic(
 
     log_weight_node["value"] = log_weight
     new_trace.add_node("_LOGWEIGHT", **log_weight_node)
+
     return new_trace
+
+
+class resample(proposals):
+    def __init__(
+        self,
+        q: Proposals,
+        sample_dim: int,
+        batch_dim: Optional[int] = None,
+        normalize_weights: bool = False,
+    ):
+        super().__init__()
+        self.q = q
+        self.sample_dim, self.batch_dim = sample_dim, batch_dim
+        self.normalize_weights = normalize_weights
+
+    def __call__(self, *args, **kwargs) -> Trace:
+        trace = self.q(*args, **kwargs)  # type: ignore
+
+        return resample_trace_systematic(
+            trace, self.sample_dim, self.batch_dim, self.normalize_weights
+        )
