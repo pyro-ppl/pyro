@@ -6,6 +6,7 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pyro.infer.combinators as combinator
 from functools import reduce
 from pytest import mark, fixture
 from torch import Tensor, tensor
@@ -201,19 +202,19 @@ def test_gradient_updates(normal, mlp_kernel):
     assert all([l != r for l, r in zip(rev_hashes_0, rev_hashes_1)])
 
 
-def vsmc(targets, forwards, reverses, loss_fn, resample=False):
+def vsmc(targets, forwards, reverses, loss_fn, resample=False, stl=False):
     q = targets[0]
     for ix, (fwd, rev, p) in enumerate(zip(forwards, reverses, targets[1:])):
         q = propose(
             p=extend(p, rev),
             q=compose(fwd, q),
             loss_fn=loss_fn,
-            # FIXME: reintroduce
-            # transf_q_trace=None if loss_fn.__name__ == "nvo_avo" else stl_trace,
         )
-        # FIXME: reintroduce
-        # if resample and k < len(forwards) - 1:
-        #     q = Resample(q)
+        if stl:
+            q = augment_logweight(q, pre=stl_trick)
+        if resample and ix < len(forwards) - 1:
+            # NOTE: requires static knowledge that you plate once!
+            q = combinator.resample(q, batch_dim=0, sample_dim=1)
     return q
 
 
@@ -404,17 +405,13 @@ def test_avo_4step_empirical_with_stl(normal, mlp_kernel):
         normal, mlp_kernel, num_targets=num_targets
     )
 
-    q = targets[0]
-    for _, (fwd, rev, p) in enumerate(zip(forwards, reverses, targets[1:])):
-        q = augment_logweight(
-            propose(
-                p=extend(p, rev),
-                q=compose(fwd, q),
-                loss_fn=nvo_avo,
-            ),
-            pre=stl_trick,
-        )
-    infer = q
+    infer = vsmc(
+        targets=targets,
+        forwards=forwards,
+        reverses=reverses,
+        loss_fn=nvo_avo,
+        stl=True,
+    )
 
     optimizer = torch.optim.Adam(
         params=[dict(params=x.program.parameters()) for x in forwards + reverses],
@@ -452,4 +449,43 @@ def test_avo_4step_empirical_with_stl(normal, mlp_kernel):
         assert abs(num_targets - target_loc) < 0.05, "target location is miscalculated"
         assert (
             abs(target_loc - forward_loc) < 0.15
+        ), "kernels did not learn target density"
+
+
+def test_avo_4step_empirical_with_resampling(normal, mlp_kernel):
+    pyro.set_rng_seed(7)
+    num_targets = 5
+    targets, forwards, reverses = test_avo_construction(
+        normal, mlp_kernel, num_targets=num_targets
+    )
+    infer = vsmc(
+        targets=targets,
+        forwards=forwards,
+        reverses=reverses,
+        loss_fn=nvo_avo,
+        resample=True,
+    )
+
+    optimizer = torch.optim.Adam(
+        params=[dict(params=x.program.parameters()) for x in forwards + reverses],
+        lr=0.01,
+    )
+
+    for _ in range(500):
+        optimizer.zero_grad()
+        with pyro.plate("samples", 50):
+            out = infer()
+            loss = out.nodes[_LOSS]["value"]
+            loss.backward()
+        optimizer.step()
+
+    chain = reduce(lambda q, fwd: compose(fwd, q), forwards, targets[0])
+    target = targets[-1]
+
+    with pyro.plate("samples", 1000):
+        target_loc = target().nodes[f"z_{num_targets}"]["value"].mean().detach()
+        forward_loc = chain().nodes[_RETURN]["value"].mean().detach()
+        assert abs(num_targets - target_loc) < 0.05, "target location is miscalculated"
+        assert (
+            abs(target_loc - forward_loc) < 0.015
         ), "kernels did not learn target density"

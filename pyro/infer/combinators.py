@@ -591,14 +591,15 @@ def resample_trace_systematic(
     batch_dim: Optional[int],
     normalize_weights: bool = False,
 ) -> Trace:
-    assert sample_dims == 0, "FIXME: take this assert out"
     assert "_LOGWEIGHT" in trace.nodes
     log_weight = trace.nodes["_LOGWEIGHT"]["value"]
 
     _batch_dim = None
     if batch_dim is None:
+        lwsize = len(log_weight.shape)
+        assert lwsize != 2, "Found a undeclared batch dim on log_weight."
         assert len(log_weight.shape) == 1, "batch_dim None requires 1d log_weight"
-        _batch_dim = 1
+        _batch_dim = (sample_dims + 1) % 2  # expand the other dimension
         log_weight = log_weight.unsqueeze(_batch_dim)
 
     aidx = ancestor_indices_systematic(
@@ -615,11 +616,7 @@ def resample_trace_systematic(
     ret = trace.nodes.get(_RETURN, {"value": None})
 
     def _resample(_, site):
-        # FIXME: in probtorch, we found it necessary to explicitly mark a RV as
-        # "rv.resamplable" -- need to doublecheck this. previously we just used:
-        #
-        # if not rv.resamplable or rv.provenance == Provenance.OBSERVED: continue
-        no_resample = (
+        if (
             # do not resample unsamplable sites
             site["type"] != "sample"
             # do not resample observed distributions
@@ -628,12 +625,15 @@ def resample_trace_systematic(
             or not isinstance(site["fn"], Distribution)
             # do not resample if it is a result of a plate effect
             or isinstance(site["fn"], _Subsample)
-        )
-        if no_resample:
+        ):
             return site
         else:
             newsite = _pick_node(site, aidx, dim=sample_dims)
-            if isinstance(ret["value"], dict):
+
+            # ensure that the resampled site will change a model's output:
+            if site["value"] is ret["value"]:
+                ret["value"] = newsite["value"]
+            elif isinstance(ret["value"], dict):
                 for k, v in ret["value"].items():  # type: ignore
                     if site["value"] is v:
                         ret["value"][k] = newsite["value"]  # type: ignore
@@ -641,8 +641,6 @@ def resample_trace_systematic(
                 for i, v in enumerate(ret["value"]):  # type: ignore
                     if site["value"] is v:
                         ret["value"][i] = newsite["value"]  # type: ignore
-            elif site["value"] is ret["value"]:
-                ret["value"] = newsite["value"]
 
             return newsite
 
@@ -668,6 +666,11 @@ def resample_trace_systematic(
 
 
 class resample(proposals):
+    """
+    the resample combinator is a proposal which applies systematic resampling on
+    every site in the trace.
+    """
+
     def __init__(
         self,
         q: Proposals,
