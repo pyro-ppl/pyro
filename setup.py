@@ -76,7 +76,7 @@ EXTRAS_REQUIRE = [
     "seaborn",
     "wget",
     "lap",
-    # 'biopython>=1.54',  # Requires Python 3.6
+    # 'biopython>=1.54',
     # 'scanpy>=1.4',  # Requires HDF5
     # 'scvi>=0.6',  # Requires loopy and other fragile packages
 ]
