@@ -264,7 +264,6 @@ def test_elbo_enumerate_3(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pytest.mark.parametrize(
     "num_samples,num_masked", [(2, 2), (3, 2)], ids=["batch", "masked"]
@@ -499,7 +498,6 @@ def test_elbo_enumerate_plate_3(num_samples, num_masked, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pytest.mark.parametrize(
     "outer_obs,inner_obs", [(False, True), (True, False), (True, True)]
@@ -642,7 +640,6 @@ def test_elbo_enumerate_plate_5():
         _check_loss_and_grads(expected_loss, actual_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("enumerate1", ["parallel", "sequential"])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_6(enumerate1):
@@ -705,7 +702,6 @@ def test_elbo_enumerate_plate_6(enumerate1):
     _check_loss_and_grads(expected_loss, actual_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plate_7(scale):
@@ -877,7 +873,6 @@ def test_elbo_enumerate_plates_1(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_2(scale):
@@ -934,7 +929,6 @@ def test_elbo_enumerate_plates_2(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_3(scale):
@@ -987,7 +981,6 @@ def test_elbo_enumerate_plates_3(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_4(scale):
@@ -1047,7 +1040,6 @@ def test_elbo_enumerate_plates_4(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_5(scale):
@@ -1111,7 +1103,6 @@ def test_elbo_enumerate_plates_5(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_6(scale):
@@ -1250,7 +1241,6 @@ def test_elbo_enumerate_plates_6(scale):
         elbo.differentiable_loss(model_plate_plate, guide, data)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("scale", [1, 10])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_elbo_enumerate_plates_7(scale):
@@ -1403,7 +1393,6 @@ def test_elbo_enumerate_plates_7(scale):
     _check_loss_and_grads(loss_iplate_iplate, loss_plate_plate)
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3046")
 @pytest.mark.parametrize("guide_scale", [1])
 @pytest.mark.parametrize("model_scale", [1])
 @pytest.mark.parametrize(
