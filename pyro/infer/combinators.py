@@ -66,50 +66,31 @@ def is_sample_type(node: Node) -> bool:
     return node["type"] == "sample"
 
 
-def is_return_type(node: Node) -> bool:
-    return node["type"] == "return"
+def is_substituted(node: Node):
+    return node.get("infer", dict()).get("substituted", False)
 
 
-def not_observed(node: Node) -> bool:
-    return not is_observed(node)
+def is_auxiliary(node: Node):
+    return node.get("infer", dict()).get("is_auxiliary", False)
 
 
-def _check_infer_map(k: str) -> Callable[[Node], bool]:
-    return lambda node: node.get("infer", dict()).get(k, False)
+_RETURN, _LOGWEIGHT, _LOSS = "_RETURN", "_LOGWEIGHT", "_LOSS"
 
 
-is_substituted = _check_infer_map("substituted")
+def set_input(trace, args, kwargs):
+    trace.add_node("_INPUT", name="_INPUT", type="input", args=args, kwargs=kwargs)
 
 
-def not_substituted(node: Node) -> bool:
-    return not is_substituted(node)
+def set_param(trace, name, type, value=None):
+    trace.add_node(name, name=name, type=type, value=value)
 
 
-is_auxiliary = _check_infer_map("is_auxiliary")
+def valueat(tr, a):
+    return tr.nodes[a]["value"]
 
 
-def not_auxiliary(node: Node) -> bool:
-    return not is_auxiliary(node)
-
-
-def _or(p0: Predicate, p1: Predicate) -> Predicate:
-    return lambda x: p0(x) or p1(x)
-
-
-def node_filter(p: Callable[[Node], bool]) -> SiteFilter:
-    return lambda _, node: p(node)
-
-
-def sample_filter(p: Callable[[Node], bool]) -> SiteFilter:
-    return lambda _, node: is_sample_type(node) and p(node)
-
-
-def addr_filter(p: Callable[[str], bool]) -> SiteFilter:
-    return lambda name, _: p(name)
-
-
-def membership_filter(members: Set[str]) -> SiteFilter:
-    return lambda name, _: name in members
+def _addrs(tr):
+    return {k for k, n in tr.nodes.items() if is_sample_type(n)}
 
 
 class WithSubstitutionMessenger(ReplayMessenger):
@@ -145,13 +126,13 @@ def get_marginal(trace: Trace) -> Tuple[Trace, Node]:
     m_output = trace.nodes[_RETURN]
     while "infer" in m_output:
         m_output = m_output["infer"]["m_return_node"]
-    m_trace = concat_traces(trace, site_filter=sample_filter(not_auxiliary))
+    m_trace = concat_traces(
+        trace, site_filter=lambda _, n: is_sample_type(n) and not is_auxiliary(n)
+    )
     return m_trace, m_output
 
 
 class inference(object):
-    # FIXME: needs something like an "infer" map to hold things like index for APG.
-    # this must be placed at the top level on a trace in APG
     pass
 
 
@@ -199,14 +180,14 @@ class primitive(targets, proposals):
         with TraceMessenger() as tracer:
             out = self.program(*args, **kwargs)
             tr: Trace = tracer.trace  # type: ignore
-            lp = stacked_log_prob(tr, sample_filter(_or(is_substituted, is_observed)))
+            lp = stacked_log_prob(
+                tr,
+                lambda _, n: is_sample_type(n)
+                and (is_substituted(n) or is_observed(n)),
+            )
 
             trace = tr
-            set_input(
-                trace,
-                args=args,
-                kwargs=kwargs,
-            )
+            set_input(trace, args=args, kwargs=kwargs)
             set_param(trace, _RETURN, "return", value=out)
             set_param(trace, _LOGWEIGHT, "return", value=lp)
             return trace
@@ -217,32 +198,6 @@ class primitive(targets, proposals):
 
 Primitive = Union[Callable[..., Trace], primitive]
 
-_INPUT, _RETURN, _LOGWEIGHT, _LOSS = "_INPUT", "_RETURN", "_LOGWEIGHT", "_LOSS"
-
-
-def set_input(trace, args, kwargs):
-    trace.add_node("_INPUT", name="_INPUT", type="input", args=args, kwargs=kwargs)
-
-
-def set_param(trace, name, type, value=None):
-    trace.add_node(name, name=name, type=type, value=value)
-
-
-def valueat(o, a):
-    return o.nodes[a]["value"]
-
-
-def _logweight(tr):
-    return valueat(tr, "_LOGWEIGHT")
-
-
-def _output(tr):
-    return valueat(tr, "_RETURN")
-
-
-def _addrs(tr):
-    return {k for k, n in tr.nodes.items() if is_sample_type(n)}
-
 
 class extend(targets):
     def __init__(self, p: Targets, f: Primitive):
@@ -252,7 +207,7 @@ class extend(targets):
 
     def __call__(self, *args, **kwargs) -> Trace:
         p_out: Trace = self.p(*args, **kwargs)  # type: ignore
-        f_out: Trace = auxiliary(self.f)(_output(p_out), *args, **kwargs)  # type: ignore
+        f_out: Trace = auxiliary(self.f)(valueat(p_out, _RETURN), *args, **kwargs)  # type: ignore
         p_trace, f_trace = p_out, f_out
 
         # NOTE: we need to walk across all nodes to see if substitution was used
@@ -266,21 +221,23 @@ class extend(targets):
                 + f"    target trace addresses: {_addrs(p_out)}\n"
                 + f"    kernel trace addresses: {_addrs(f_out)}\n"
             )
-            assert all(map(not_observed, f_trace.nodes.values()))
+            assert all(map(lambda n: not is_observed(n), f_trace.nodes.values()))
             if not under_substitution:
-                assert _logweight(f_out) == 0.0
-                assert all(map(not_substituted, f_trace.nodes.values()))
+                assert valueat(f_out, _LOGWEIGHT) == 0.0
+                assert all(map(lambda n: not is_substituted(n), f_trace.nodes.values()))
             self.validated = True
 
-        log_u2 = stacked_log_prob(f_trace, site_filter=node_filter(is_sample_type))
+        log_u2 = stacked_log_prob(f_trace, site_filter=lambda _, n: is_sample_type(n))
 
-        trace = concat_traces(p_out, f_out, site_filter=node_filter(is_sample_type))
+        trace = concat_traces(p_out, f_out, site_filter=lambda _, n: is_sample_type(n))
         set_input(trace, args=args, kwargs=kwargs)
-        set_param(trace, _RETURN, "return", value=_output(f_out))
+        set_param(trace, _RETURN, "return", value=valueat(f_out, _RETURN))
         trace.nodes[_RETURN]["infer"] = {
             "m_return_node": p_out.nodes[_RETURN]
         }  # see get_marginals
-        set_param(trace, _LOGWEIGHT, "return", value=_logweight(p_out) + log_u2)
+        set_param(
+            trace, _LOGWEIGHT, "return", value=valueat(p_out, _LOGWEIGHT) + log_u2
+        )
         return trace
 
 
@@ -302,16 +259,21 @@ class compose(proposals):
             )
             self.validated = True
 
-        trace = concat_traces(q2_out, q1_out, site_filter=node_filter(is_sample_type))
+        trace = concat_traces(
+            q2_out, q1_out, site_filter=lambda _, n: is_sample_type(n)
+        )
         set_input(
             trace,
             args=args,
             kwargs=kwargs,
         )
-        set_param(trace, _RETURN, "return", value=_output(q2_out))
+        set_param(trace, _RETURN, "return", value=valueat(q2_out, _RETURN))
 
         set_param(
-            trace, _LOGWEIGHT, "return", value=_logweight(q1_out) + _logweight(q2_out)
+            trace,
+            _LOGWEIGHT,
+            "return",
+            value=valueat(q1_out, _LOGWEIGHT) + valueat(q2_out, _LOGWEIGHT),
         )
 
         set_param(
@@ -355,11 +317,13 @@ class propose(proposals):
         """
 
         lu = stacked_log_prob(
-            q_trace, site_filter=sample_filter(_or(not_substituted, is_observed))
+            q_trace,
+            site_filter=lambda _, n: is_sample_type(n)
+            and (not is_substituted(n) or is_observed(n)),
         )
-        log_incremental = _logweight(p_trace) - lu
+        log_incremental = valueat(p_trace, _LOGWEIGHT) - lu
 
-        return _logweight(q_trace).detach(), log_incremental
+        return valueat(q_trace, _LOGWEIGHT).detach(), log_incremental
 
     def __call__(self, *args, **kwargs) -> Trace:
         q_out = self.q(*args, **kwargs)  # type: ignore
@@ -451,7 +415,7 @@ class augment_logweight(object):
     module's style (technically all classes here are just partially evaluated
     functions).
 
-    The semantics ask for an existential, here we just "Leave No Trace" and
+    The semantics ask for an existential type, instead we "Leave No Trace" and
     return the propose instance back to its original state.
     """
 
@@ -501,8 +465,6 @@ def _eval_detached(node):
 def stl_trick(p_trace, q_trace):
     """
     adjust trace to compute a "sticking the landing" (stl) gradient.
-
-    NOTE: this currently assumes a flat trace structure (no edges)
     """
     q_stl_trace = concat_traces(
         q_trace, site_filter=lambda _, n: not _is_dist_node(n)
@@ -521,7 +483,7 @@ def stl_trick(p_trace, q_trace):
 
 
 # ============================================
-# ported resamplers
+# resamplering
 # ============================================
 
 
@@ -591,8 +553,8 @@ def resample_trace_systematic(
     batch_dim: Optional[int],
     normalize_weights: bool = False,
 ) -> Trace:
-    assert "_LOGWEIGHT" in trace.nodes
-    log_weight = trace.nodes["_LOGWEIGHT"]["value"]
+    assert _LOGWEIGHT in trace.nodes
+    log_weight = trace.nodes[_LOGWEIGHT]["value"]
 
     _batch_dim = None
     if batch_dim is None:
@@ -645,10 +607,10 @@ def resample_trace_systematic(
             return newsite
 
     new_trace = flatmap_trace(
-        trace, site_map=_resample, site_filter=lambda k, _: k != "_LOGWEIGHT"
+        trace, site_map=_resample, site_filter=lambda k, _: k != _LOGWEIGHT
     )
 
-    log_weight_node = trace.nodes["_LOGWEIGHT"].copy()
+    log_weight_node = trace.nodes[_LOGWEIGHT].copy()
     log_weight = log_weight_node["value"]
     log_weight = torch.logsumexp(
         log_weight - math.log(log_weight.shape[sample_dims]),
@@ -660,7 +622,7 @@ def resample_trace_systematic(
         log_weight = F.softmax(log_weight, dim=sample_dims).log()
 
     log_weight_node["value"] = log_weight
-    new_trace.add_node("_LOGWEIGHT", **log_weight_node)
+    new_trace.add_node(_LOGWEIGHT, **log_weight_node)
 
     return new_trace
 

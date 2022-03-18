@@ -17,22 +17,14 @@ import pyro.distributions as dist
 import pyro.optim.pytorch_optimizers as optim
 from pyro import poutine
 from pyro.infer.combinators import (
-    Node,
-    Trace,
-    addr_filter,
     compose,
     extend,
-    get_marginal,
-    is_auxiliary,
-    membership_filter,
-    not_auxiliary,
     primitive,
     propose,
     with_substitution,
     stl_trick,
     augment_logweight,
     nested_objective,
-    _LOGWEIGHT,
     _LOSS,
     _RETURN,
 )

@@ -15,18 +15,30 @@ from pyro import poutine
 from pyro.infer.combinators import (
     Node,
     Trace,
-    addr_filter,
     compose,
     extend,
     get_marginal,
     is_auxiliary,
-    membership_filter,
-    not_auxiliary,
     primitive,
     propose,
     with_substitution,
+    Set,
+    SiteFilter,
+    _RETURN,
 )
 from pyro.poutine import Trace, replay
+
+
+def node_filter(p: Callable[[Node], bool]) -> SiteFilter:
+    return lambda _, node: p(node)
+
+
+def addr_filter(p: Callable[[str], bool]) -> SiteFilter:
+    return lambda name, _: p(name)
+
+
+def membership_filter(members: Set[str]) -> SiteFilter:
+    return lambda name, _: name in members
 
 
 def seed(s=42) -> None:
@@ -185,10 +197,6 @@ def _log_weight(tr):
     return valueat(tr, "_LOGWEIGHT")
 
 
-def _output(tr):
-    return valueat(tr, "_RETURN")
-
-
 def _addrs(tr):
     return {k for k, n in tr.nodes.items() if n["type"] == "sample"}
 
@@ -257,7 +265,7 @@ def test_with_substitution_and_plates():
         ), f"expected identical '{a}' field, got: {pval} vs. {qval}"
         assert pnode["is_observed"] ^ pnode["infer"].get("substituted", False)
 
-    assert _output(p_out) == _output(q_out)
+    assert valueat(p_out, "_RETURN") == valueat(q_out, "_RETURN")
     assert torch.all(
         torch.ne(_log_weight(q_out), torch.zeros(_log_weight(q_out).shape))
     ).item()
@@ -318,7 +326,7 @@ def test_extend_unconditioned_no_plates(simple2, simple4):
     assert _addrs(p_out) == tau_2
     assert _log_weight(p_out) == batched_log_prob_sum(p_out, addr_filter(starts_with_x))
 
-    f_out = s4(_output(p_out))
+    f_out = s4(valueat(p_out, _RETURN))
     f_addrs = _addrs(f_out)
     replay_s4 = poutine.replay(s4, trace=f_out)
     tau_star = {"z_1"}
@@ -337,7 +345,7 @@ def test_extend_unconditioned_no_plates(simple2, simple4):
 
     p_nodes = list(filter(in_keys(p_out), out.nodes.items()))
     assert len(p_nodes) > 0
-    assert all(list(map(not_auxiliary, map(itemgetter(1), p_nodes))))
+    assert all(list(map(lambda n: not is_auxiliary(n), map(itemgetter(1), p_nodes))))
 
     f_nodes = list(filter(lambda kv: kv[0] in f_addrs, out.nodes.items()))
     assert len(f_nodes) > 0
@@ -383,7 +391,7 @@ def test_extend_unconditioned_with_plates(simple2, simple4):
     with pyro.plate("batch", 3), pyro.plate("samples", 5):
         p_out = s2()
         replay_s2 = poutine.replay(s2, trace=p_out)
-        f_out = s4(_output(p_out))
+        f_out = s4(valueat(p_out, _RETURN))
         replay_s4 = poutine.replay(s4, trace=f_out)
 
     tau_2 = {"z_2", "z_3", "x_2", "x_3"}
@@ -541,7 +549,7 @@ def test_propose(simple1, simple2, simple3, simple4):
 
     s2_out = s2()
     replay_s2 = replay(s2, trace=s2_out)
-    s4_out = s4(_output(s2_out))
+    s4_out = s4(valueat(s2_out, _RETURN))
     replay_s4 = replay(s4, trace=s4_out)
 
     p = with_substitution(extend(p=replay_s2, f=replay_s4), trace=q_out)
@@ -635,7 +643,7 @@ def test_propose_with_plates(simple1, simple2, simple3, simple4):
 
         s2_out = s2()
         replay_s2 = replay(s2, trace=s2_out)
-        s4_out = s4(_output(s2_out))
+        s4_out = s4(valueat(s2_out, _RETURN))
         replay_s4 = replay(s4, trace=s4_out)
 
         p = with_substitution(extend(p=replay_s2, f=replay_s4), trace=q_out)
@@ -689,7 +697,7 @@ def test_propose_output(simple1, simple2, simple3, simple4):
 
         s2_out = s2()
         replay_s2 = replay(s2, trace=s2_out)
-        s4_out = s4(_output(s2_out))
+        s4_out = s4(valueat(s2_out, _RETURN))
         replay_s4 = replay(s4, trace=s4_out)
 
         p = with_substitution(extend(p=replay_s2, f=replay_s4), trace=q_out)
