@@ -15,6 +15,7 @@ from pyro.ops.gaussian import (
     matrix_and_mvn_to_gaussian,
     mvn_to_gaussian,
 )
+from pyro.ops.indexing import Vindex
 from pyro.ops.special import safe_log
 from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
@@ -422,6 +423,32 @@ class DiscreteHMM(HiddenMarkovModel):
 
         # Convert to a distribution.
         return Categorical(logits=logp, validate_args=self._validate_args)
+
+    @torch.no_grad()
+    def sample(self, sample_shape=torch.Size()):
+        assert self.duration is not None
+
+        # Sample initial state.
+        S = self.initial_logits.size(-1)  # state space size
+        init_shape = torch.Size(sample_shape) + self.batch_shape + (S,)
+        init_logits = self.initial_logits.expand(init_shape)
+        x = Categorical(logits=init_logits).sample()
+
+        # Sample hidden states over time.
+        trans_shape = self.batch_shape + (self.duration, S, S)
+        trans_logits = self.transition_logits.expand(trans_shape)
+        xs = []
+        for t in range(self.duration):
+            x = Categorical(logits=Vindex(trans_logits)[..., t, x, :]).sample()
+            xs.append(x)
+        x = torch.stack(xs, dim=-1)
+
+        # Sample observations conditioned on hidden states.
+        obs_shape = self.batch_shape + (self.duration, S)
+        obs_dist = self.observation_dist.expand(obs_shape)
+        y = obs_dist.sample(sample_shape)
+        y = Vindex(y)[(Ellipsis, x) + (slice(None),) * obs_dist.event_dim]
+        return y
 
 
 class GaussianHMM(HiddenMarkovModel):
