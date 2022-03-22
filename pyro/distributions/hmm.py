@@ -15,6 +15,7 @@ from pyro.ops.gaussian import (
     matrix_and_mvn_to_gaussian,
     mvn_to_gaussian,
 )
+from pyro.ops.indexing import Vindex
 from pyro.ops.special import safe_log
 from pyro.ops.tensor_utils import cholesky, cholesky_solve
 
@@ -272,8 +273,10 @@ class HiddenMarkovModel(TorchDistribution):
 class DiscreteHMM(HiddenMarkovModel):
     """
     Hidden Markov Model with discrete latent state and arbitrary observation
-    distribution. This uses [1] to parallelize over time, achieving
-    O(log(time)) parallel complexity.
+    distribution.
+
+    This uses [1] to parallelize over time, achieving O(log(time)) parallel
+    complexity for computing :meth:`log_prob` and :meth:`filter`.
 
     The event_shape of this distribution includes time on the left::
 
@@ -288,6 +291,10 @@ class DiscreteHMM(HiddenMarkovModel):
 
         # homogeneous + homogeneous case:
         event_shape = (1,) + observation_dist.event_shape
+
+    The :meth:`sample` method is sequential (not parallized), slow, and memory
+    inefficient. It is intended for data generation only and is not recommended
+    during inference.
 
     **References:**
 
@@ -422,6 +429,40 @@ class DiscreteHMM(HiddenMarkovModel):
 
         # Convert to a distribution.
         return Categorical(logits=logp, validate_args=self._validate_args)
+
+    @torch.no_grad()
+    def sample(self, sample_shape=torch.Size()):
+        assert self.duration is not None
+
+        # Sample initial state.
+        S = self.initial_logits.size(-1)  # state space size
+        init_shape = torch.Size(sample_shape) + self.batch_shape + (S,)
+        init_logits = self.initial_logits.expand(init_shape)
+        x = Categorical(logits=init_logits).sample()
+
+        # Sample hidden states over time.
+        trans_shape = self.batch_shape + (self.duration, S, S)
+        trans_logits = self.transition_logits.expand(trans_shape)
+        xs = []
+        for t in range(self.duration):
+            x = Categorical(logits=Vindex(trans_logits)[..., t, x, :]).sample()
+            xs.append(x)
+        x = torch.stack(xs, dim=-1)
+
+        # Sample observations conditioned on hidden states.
+        # Note the simple sample-then-slice approach here generalizes to all
+        # distributions, but is inefficient. To implement a general optimal
+        # slice-then-sample strategy would require distributions to support
+        # slicing https://github.com/pyro-ppl/pyro/issues/3052. A simpler
+        # implementation might register a few slicing operators as is done with
+        # pyro.contrib.forecast.util.reshape_batch(). If you as a user need
+        # this function to be cheaper, feel free to submit a PR implementing
+        # one of these approaches.
+        obs_shape = self.batch_shape + (self.duration, S)
+        obs_dist = self.observation_dist.expand(obs_shape)
+        y = obs_dist.sample(sample_shape)
+        y = Vindex(y)[(Ellipsis, x) + (slice(None),) * obs_dist.event_dim]
+        return y
 
 
 class GaussianHMM(HiddenMarkovModel):
