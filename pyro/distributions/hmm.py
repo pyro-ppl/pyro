@@ -84,6 +84,9 @@ def _sequential_logmatmulexp(logits):
 
 
 def _markov_index(x, y):
+    """
+    Join ends of two Markov paths.
+    """
     y = Vindex(y.unsqueeze(-2))[..., x[..., -1:, :]]
     return torch.cat([x, y], -2)
 
@@ -134,6 +137,7 @@ def _sequential_index(samples):
         #    /
         # 1 1 0
     """
+    # new Markov time dimension at -2
     samples = samples.unsqueeze(-2)
     batch_shape = samples.shape[:-3]
     state_dim = samples.size(-1)
@@ -349,7 +353,7 @@ class DiscreteHMM(HiddenMarkovModel):
     distribution.
 
     This uses [1] to parallelize over time, achieving O(log(time)) parallel
-    complexity for computing :meth:`log_prob` and :meth:`filter`.
+    complexity for computing :meth:`log_prob`, :meth:`filter`, and :meth:`sample`.
 
     The event_shape of this distribution includes time on the left::
 
@@ -364,10 +368,6 @@ class DiscreteHMM(HiddenMarkovModel):
 
         # homogeneous + homogeneous case:
         event_shape = (1,) + observation_dist.event_shape
-
-    The :meth:`sample` method is sequential (not parallized), slow, and memory
-    inefficient. It is intended for data generation only and is not recommended
-    during inference.
 
     **References:**
 
