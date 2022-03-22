@@ -313,6 +313,21 @@ def test_discrete_hmm_diag_normal(num_steps):
     assert_close(actual_loss, expected_loss)
 
 
+def test_discrete_hmm_distribution():
+    init_probs = torch.tensor([0.9, 0.1])
+    trans_probs = torch.tensor(
+        [
+            [[0.9, 0.1], [0.1, 0.9]],  # noisy identity
+            [[0.1, 0.9], [0.9, 0.1]],  # noisy flip
+        ]
+    )
+    obs_dist = dist.Normal(torch.tensor([0.0, 1.0]), 0.1)
+    hmm = dist.DiscreteHMM(init_probs.log(), trans_probs.log(), obs_dist)
+    actual = hmm.sample([1000000]).mean(0)
+    expected = torch.tensor([0.1 * 0.9 + 0.9 * 0.1, 0.9**3 + 3 * 0.9 * 0.1**2])
+    assert_close(actual, expected, atol=1e-3)
+
+
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("hidden_dim", [1, 3])
 @pytest.mark.parametrize(
