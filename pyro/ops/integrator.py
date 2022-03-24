@@ -76,7 +76,7 @@ def potential_grad(potential_fn, z):
         potential_energy = potential_fn(z)
     # deal with singular matrices
     except RuntimeError as e:
-        if "singular U" in str(e) or "input is not positive-definite" in str(e):
+        if "singular" in str(e) or "input is not positive-definite" in str(e):
             grads = {k: v.new_zeros(v.shape) for k, v in z.items()}
             return grads, z_nodes[0].new_tensor(float("nan"))
         else:

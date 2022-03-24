@@ -7,7 +7,7 @@ from scipy.special import iv
 from torch import tensor
 from torch.autograd import grad
 
-from pyro.ops.special import log_beta, log_binomial, log_I1, safe_log
+from pyro.ops.special import get_quad_rule, log_beta, log_binomial, log_I1, safe_log
 from tests.common import assert_equal
 
 
@@ -93,3 +93,11 @@ def test_log_I1_shapes():
     assert_equal(log_I1(10, tensor([[0.6]])).shape, torch.Size([11, 1, 1]))
     assert_equal(log_I1(10, tensor([0.6, 0.2])).shape, torch.Size([11, 2]))
     assert_equal(log_I1(0, tensor(0.6)).shape, torch.Size((1, 1)))
+
+
+@pytest.mark.parametrize("sigma", [0.5, 1.25])
+def test_get_quad_rule(sigma):
+    quad_points, log_weights = get_quad_rule(32, torch.zeros(1))
+    quad_points *= sigma  # transform to N(0, sigma) gaussian
+    variance = torch.logsumexp(quad_points.pow(2.0).log() + log_weights, axis=0).exp()
+    assert_equal(sigma**2, variance.item())

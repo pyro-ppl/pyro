@@ -20,6 +20,7 @@ import torch
 from torch.distributions import constraints, transform_to
 
 import pyro
+from pyro.ops.provenance import detach_provenance
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
 
@@ -533,7 +534,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     constraint=constraint,
                     event_dim=event_dim,
                 )
-                constrained_value = pyro.param(fullname)
+                constrained_value = detach_provenance(pyro.param(fullname))
                 unconstrained_value = constrained_value.unconstrained()
                 if not isinstance(unconstrained_value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
@@ -556,7 +557,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 value = pyro.param(fullname, value)
                 if not isinstance(value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
-                    value = torch.nn.Parameter(value)
+                    value = torch.nn.Parameter(detach_provenance(value))
                     _PYRO_PARAM_STORE._params[fullname] = value
                     _PYRO_PARAM_STORE._param_to_name[value] = fullname
             super().__setattr__(name, value)

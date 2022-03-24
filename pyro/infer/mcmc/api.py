@@ -42,7 +42,7 @@ from pyro.infer.mcmc.util import (
 from pyro.ops.streaming import CountMeanVarianceStats, StatsOfDict, StreamingStats
 from pyro.util import optional
 
-MAX_SEED = 2 ** 32 - 1
+MAX_SEED = 2**32 - 1
 
 
 def logger_thread(

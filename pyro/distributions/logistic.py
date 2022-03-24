@@ -76,7 +76,7 @@ class Logistic(TorchDistribution):
 
     @property
     def variance(self):
-        return self.scale ** 2 * (math.pi ** 2 / 3)
+        return self.scale**2 * (math.pi**2 / 3)
 
     def entropy(self):
         return self.scale.log() + 2

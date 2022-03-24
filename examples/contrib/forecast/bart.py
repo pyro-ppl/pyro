@@ -165,13 +165,13 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.1")
     parser = argparse.ArgumentParser(description="Bart Ridership Forecasting Example")
     parser.add_argument("--train-window", default=2160, type=int)
     parser.add_argument("--test-window", default=336, type=int)
     parser.add_argument("--stride", default=168, type=int)
     parser.add_argument("-n", "--num-steps", default=501, type=int)
-    parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
+    parser.add_argument("-lr", "--learning-rate", default=0.01, type=float)
     parser.add_argument("--dct", action="store_true")
     parser.add_argument("--num-samples", default=100, type=int)
     parser.add_argument("--log-every", default=50, type=int)

@@ -232,6 +232,13 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
+LogNormalNegativeBinomial
+-------------------------
+.. autoclass:: pyro.distributions.LogNormalNegativeBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Logistic
 --------
 .. autoclass:: pyro.distributions.Logistic

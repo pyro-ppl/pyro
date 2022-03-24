@@ -12,7 +12,7 @@ from pyro.nn.module import PyroParam, pyro_method
 
 
 class SparseGPRegression(GPModel):
-    u"""
+    """
     Sparse Gaussian Process Regression model.
 
     In :class:`.GPRegression` model, when the number of input data :math:`X` is large,
@@ -98,6 +98,18 @@ class SparseGPRegression(GPModel):
     def __init__(
         self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6
     ):
+
+        assert isinstance(
+            X, torch.Tensor
+        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        if y is not None:
+            assert isinstance(
+                y, torch.Tensor
+            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
+        assert isinstance(
+            Xu, torch.Tensor
+        ), "Xu needs to be a torch Tensor instead of a {}".format(type(Xu))
+
         super().__init__(X, y, kernel, mean_function, jitter)
 
         self.Xu = Parameter(Xu)
@@ -134,7 +146,7 @@ class SparseGPRegression(GPModel):
         Kuu.view(-1)[:: M + 1] += self.jitter  # add jitter to the diagonal
         Luu = torch.linalg.cholesky(Kuu)
         Kuf = self.kernel(self.Xu, self.X)
-        W = Kuf.triangular_solve(Luu, upper=False)[0].t()
+        W = torch.linalg.solve_triangular(Luu, Kuf, upper=False).t()
 
         D = self.noise.expand(N)
         if self.approx == "FITC" or self.approx == "VFE":
@@ -215,7 +227,7 @@ class SparseGPRegression(GPModel):
 
         Kuf = self.kernel(self.Xu, self.X)
 
-        W = Kuf.triangular_solve(Luu, upper=False)[0]
+        W = torch.linalg.solve_triangular(Luu, Kuf, upper=False)
         D = self.noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = self.kernel(self.X, diag=True)
@@ -235,9 +247,9 @@ class SparseGPRegression(GPModel):
         # End caching ----------
 
         Kus = self.kernel(self.Xu, Xnew)
-        Ws = Kus.triangular_solve(Luu, upper=False)[0]
+        Ws = torch.linalg.solve_triangular(Luu, Kus, upper=False)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
-        Linv_pack = pack.triangular_solve(L, upper=False)[0]
+        Linv_pack = torch.linalg.solve_triangular(L, pack, upper=False)
         # unpack
         Linv_W_Dinv_y = Linv_pack[:, : W_Dinv_y.shape[1]]
         Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1] :]

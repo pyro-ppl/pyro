@@ -68,7 +68,7 @@ EXTRAS_REQUIRE = [
     "jupyter>=1.0.0",
     "graphviz>=0.8",
     "matplotlib>=1.3",
-    "torchvision>=0.10.0",
+    "torchvision>=0.12.0",
     "visdom>=0.1.4",
     "pandas",
     "pillow==8.2.0",  # https://github.com/pytorch/pytorch/issues/61125
@@ -76,7 +76,7 @@ EXTRAS_REQUIRE = [
     "seaborn",
     "wget",
     "lap",
-    # 'biopython>=1.54',  # Requires Python 3.6
+    # 'biopython>=1.54',
     # 'scanpy>=1.4',  # Requires HDF5
     # 'scvi>=0.6',  # Requires loopy and other fragile packages
 ]
@@ -91,6 +91,10 @@ setup(
     package_data={"pyro.distributions": ["*.cpp"]},
     author="Uber AI Labs",
     url="http://pyro.ai",
+    project_urls={
+        "Documentation": "https://docs.pyro.ai",
+        "Source": "https://github.com/pyro-ppl/pyro",
+    },
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
@@ -98,7 +102,7 @@ setup(
         "numpy>=1.7",
         "opt_einsum>=2.3.2",
         "pyro-api>=0.1.1",
-        "torch>=1.9.0",
+        "torch>=1.11.0",
         "tqdm>=4.36",
     ],
     extras_require={
@@ -136,10 +140,10 @@ setup(
         "funsor": [
             # This must be a released version when Pyro is released.
             # "funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@7bb52d0eae3046d08a20d1b288544e1a21b4f461",
-            "funsor[torch]==0.4.2",
+            "funsor[torch]==0.4.3",
         ],
     },
-    python_requires=">=3.6",
+    python_requires=">=3.7",
     keywords="machine learning statistics probabilistic programming bayesian modeling pytorch",
     license="Apache 2.0",
     classifiers=[
@@ -149,8 +153,9 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: POSIX :: Linux",
         "Operating System :: MacOS :: MacOS X",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     # yapf
 )

@@ -49,6 +49,7 @@ from pyro.distributions.hmm import (
 from pyro.distributions.improper_uniform import ImproperUniform
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJ, LKJCorrCholesky
+from pyro.distributions.log_normal_negative_binomial import LogNormalNegativeBinomial
 from pyro.distributions.logistic import Logistic, SkewLogistic
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
@@ -124,6 +125,7 @@ __all__ = [
     "LKJCorrCholesky",
     "LinearHMM",
     "Logistic",
+    "LogNormalNegativeBinomial",
     "MaskedDistribution",
     "MaskedMixture",
     "MixtureOfDiagNormals",

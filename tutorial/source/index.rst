@@ -92,6 +92,7 @@ List of Tutorials
    bayesian_regression_ii
    tensor_shapes
    modules
+   workflow
    jit
    svi_horovod
 

@@ -254,7 +254,7 @@ def repeated_matmul(M, n):
     assert M.size(-1) == M.size(
         -2
     ), "Input tensors must satisfy M.size(-1) == M.size(-2)."
-    assert n > 0, "argument n to parallel_scan_repeated_matmul must be 1 or larger"
+    assert n > 0, "argument n to repeated_matmul must be 1 or larger"
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
 
@@ -420,15 +420,18 @@ def matvecmul(x, y):
 def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
-    return x.triangular_solve(y, upper=upper, transpose=transpose).solution
+    if transpose:
+        y = y.transpose(-1, -2)
+        upper = not upper
+    return torch.linalg.solve_triangular(y, x, upper=upper)
 
 
 def precision_to_scale_tril(P):
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(
-        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
-    )[0]
+    L = torch.linalg.solve_triangular(
+        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
+    )
     return L
 
 

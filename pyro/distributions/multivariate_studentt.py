@@ -106,12 +106,9 @@ class MultivariateStudentT(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
         n = self.loc.size(-1)
-        y = (
-            (value - self.loc)
-            .unsqueeze(-1)
-            .triangular_solve(self.scale_tril, upper=False)
-            .solution.squeeze(-1)
-        )
+        y = torch.linalg.solve_triangular(
+            self.scale_tril, (value - self.loc).unsqueeze(-1), upper=False
+        ).squeeze(-1)
         Z = (
             self.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
             + 0.5 * n * self.df.log()
