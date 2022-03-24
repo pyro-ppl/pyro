@@ -53,7 +53,9 @@ templates_path = ["_templates"]
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = [".rst", ".ipynb"]
+source_suffix = [".rst"]
+# Note: do not add .ipynb when nbspinx is enabled, otherwise you get a
+# "missing title" error. See https://stackoverflow.com/questions/55297443
 
 # do not execute cells
 nbsphinx_execute = "never"
