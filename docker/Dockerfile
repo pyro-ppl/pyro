@@ -1,9 +1,9 @@
-ARG base_img=ubuntu:16.04
+ARG base_img=ubuntu:18.04
 FROM ${base_img}
 
 # Optional args
 ARG cuda=0
-ARG python_version=2.7
+ARG python_version=3
 ARG pyro_branch=release
 ARG pytorch_branch=release
 ARG uid=1000
