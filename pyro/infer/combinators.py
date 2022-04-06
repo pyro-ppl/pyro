@@ -580,10 +580,15 @@ def resample_trace_systematic(
     # resampled output. We keep track of this here:
     ret = trace.nodes.get(_RETURN, {"value": None})
 
+    def fixme_equality(o, n):
+        if isinstance(o, Tensor) and isinstance(n, Tensor):
+            return o is n or (o.shape == n.shape and torch.equal(o, n))
+        else:
+            return o is n
+
     def _resample(_, site):
         if (  # FIXME: triple check that these semantics line up with the paper.
             # especially compatibility with pyro-based semantics
-
             # do not resample unsamplable sites
             site["type"] != "sample"
             # do not resample observed distributions
@@ -600,15 +605,15 @@ def resample_trace_systematic(
             # FIXME: flatmap_trace might be doing the "right thing" and this can be removed. Test this.
 
             # ensure that the resampled site will change a model's output:
-            if site["value"] is ret["value"]:
+            if fixme_equality(site["value"], ret["value"]):
                 ret["value"] = newsite["value"]
             elif isinstance(ret["value"], dict):
                 for k, v in ret["value"].items():  # type: ignore
-                    if site["value"] is v:
+                    if fixme_equality(site["value"], v):
                         ret["value"][k] = newsite["value"]  # type: ignore
             elif isinstance(ret["value"], Sequence):
                 for i, v in enumerate(ret["value"]):  # type: ignore
-                    if site["value"] is v:
+                    if fixme_equality(site["value"], v):
                         ret["value"][i] = newsite["value"]  # type: ignore
 
             return newsite
