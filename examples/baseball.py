@@ -164,6 +164,7 @@ def get_summary_table(
         if site_summary["mean"].shape:
             site_df = pd.DataFrame(site_summary, index=player_names)
         else:
+            site_summary = {k: float(v) for k, v in site_summary.items()}
             site_df = pd.DataFrame(site_summary, index=[0])
         if not diagnostics:
             site_df = site_df.drop(["n_eff", "r_hat"], axis=1)
@@ -391,7 +392,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.7.0")
+    assert pyro.__version__.startswith("1.8.1")
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs="?", default=4, type=int)

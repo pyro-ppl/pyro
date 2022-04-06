@@ -163,7 +163,7 @@ def newton_step_2d(loss, x, trust_radius=None):
         # regularize to keep update within ball of given trust_radius
         detH = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
         mean_eig = (H[..., 0, 0] + H[..., 1, 1]) / 2
-        min_eig = mean_eig - (mean_eig ** 2 - detH).clamp(min=0).sqrt()
+        min_eig = mean_eig - (mean_eig**2 - detH).clamp(min=0).sqrt()
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(
             min=1e-8
         )

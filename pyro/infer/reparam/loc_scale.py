@@ -73,7 +73,7 @@ class LocScaleReparam(Reparam):
                 constraint=constraints.unit_interval,
             )
         params["loc"] = fn.loc * centered
-        params["scale"] = fn.scale ** centered
+        params["scale"] = fn.scale**centered
         decentered_fn = type(fn)(**params)
 
         # Differentiably invert transform.

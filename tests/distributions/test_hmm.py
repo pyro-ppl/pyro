@@ -55,6 +55,15 @@ def check_expand(old_dist, old_data):
     assert new_dist.log_prob(new_data).shape == new_batch_shape
 
 
+def check_sample_shape(d):
+    if d.duration is None:
+        return
+    for sample_shape in [(), (2,), (3,)]:
+        sample = d.sample(sample_shape)
+        expected_shape = torch.Size(sample_shape + d.shape())
+        assert sample.shape == expected_shape
+
+
 @pytest.mark.parametrize("num_steps", list(range(1, 20)))
 @pytest.mark.parametrize("state_dim", [2, 3])
 @pytest.mark.parametrize("batch_shape", [(), (5,), (2, 4)], ids=str)
@@ -179,6 +188,7 @@ def test_discrete_hmm_shape(
     expected_shape = broadcast_shape(init_shape, trans_shape[:-1], obs_shape[:-1])
     assert actual.shape == expected_shape
     check_expand(d, data)
+    check_sample_shape(d)
 
     final = d.filter(data)
     assert isinstance(final, dist.Categorical)
@@ -243,6 +253,7 @@ def test_discrete_hmm_categorical(num_steps):
     actual = d.log_prob(data)
     assert actual.shape == d.batch_shape
     check_expand(d, data)
+    check_sample_shape(d)
 
     # Check loss against TraceEnum_ELBO.
     @config_enumerate
@@ -278,6 +289,7 @@ def test_discrete_hmm_diag_normal(num_steps):
     actual = d.log_prob(data)
     assert actual.shape == d.batch_shape
     check_expand(d, data)
+    check_sample_shape(d)
 
     # Check loss against TraceEnum_ELBO.
     @config_enumerate
@@ -299,6 +311,21 @@ def test_discrete_hmm_diag_normal(num_steps):
     expected_loss = TraceEnum_ELBO().loss(model, empty_guide, data)
     actual_loss = -float(actual.sum())
     assert_close(actual_loss, expected_loss)
+
+
+def test_discrete_hmm_distribution():
+    init_probs = torch.tensor([0.9, 0.1])
+    trans_probs = torch.tensor(
+        [
+            [[0.9, 0.1], [0.1, 0.9]],  # noisy identity
+            [[0.1, 0.9], [0.9, 0.1]],  # noisy flip
+        ]
+    )
+    obs_dist = dist.Normal(torch.tensor([0.0, 1.0]), 0.1)
+    hmm = dist.DiscreteHMM(init_probs.log(), trans_probs.log(), obs_dist)
+    actual = hmm.sample([1000000]).mean(0)
+    expected = torch.tensor([0.1 * 0.9 + 0.9 * 0.1, 0.9**3 + 3 * 0.9 * 0.1**2])
+    assert_close(actual, expected, atol=1e-3)
 
 
 @pytest.mark.parametrize("obs_dim", [1, 2])
@@ -365,6 +392,7 @@ def test_gaussian_hmm_shape(
     actual = d.log_prob(data)
     assert actual.shape == expected_batch_shape
     check_expand(d, data)
+    check_sample_shape(d)
 
     x = d.rsample()
     assert x.shape == d.shape()
@@ -1019,6 +1047,7 @@ def test_independent_hmm_shape(
     actual = d.log_prob(data)
     assert actual.shape == expected_batch_shape
     check_expand(d, data)
+    check_sample_shape(d)
 
     x = d.rsample()
     assert x.shape == d.shape()

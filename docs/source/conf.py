@@ -198,6 +198,7 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
     "Bio": ("https://biopython.org/docs/latest/api/", None),
     "horovod": ("https://horovod.readthedocs.io/en/stable/", None),
+    "graphviz": ("https://graphviz.readthedocs.io/en/stable/", None),
 }
 
 # document class constructors (__init__ methods):
@@ -221,6 +222,6 @@ def setup(app):
 if "READTHEDOCS" in os.environ:
     os.system("pip install numpy")
     os.system(
-        "pip install torch==1.9.0+cpu torchvision==0.10.0+cpu "
+        "pip install torch==1.11.0+cpu torchvision==0.12.0+cpu "
         "-f https://download.pytorch.org/whl/torch_stable.html"
     )

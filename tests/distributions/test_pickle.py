@@ -76,14 +76,8 @@ def test_pickle(Dist):
         args = ARGS[Dist]
     else:
         # Optimistically try to initialize with Dist(1, 1, ..., 1).
-        try:
-            # Python 3.6+
-            spec = list(inspect.signature(Dist.__init__).parameters.values())
-            nargs = sum(1 for p in spec if p.default is p.empty) - 1
-        except AttributeError:
-            # Python 2.6-3.5
-            spec = inspect.getargspec(Dist.__init__)
-            nargs = len(spec.args) - 1 - (len(spec.defaults) if spec.defaults else 0)
+        spec = list(inspect.signature(Dist.__init__).parameters.values())
+        nargs = sum(1 for p in spec if p.default is p.empty) - 1
         args = (1,) * nargs
     try:
         dist = Dist(*args)

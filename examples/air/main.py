@@ -69,10 +69,10 @@ def count_accuracy(X, true_counts, air, batch_size):
 # between p(steps=n) and p(steps=n+1).
 def make_prior(k):
     assert 0 < k <= 1
-    u = 1 / (1 + k + k ** 2 + k ** 3)
+    u = 1 / (1 + k + k**2 + k**3)
     p0 = 1 - u
     p1 = 1 - (k * u) / p0
-    p2 = 1 - (k ** 2 * u) / (p0 * p1)
+    p2 = 1 - (k**2 * u) / (p0 * p1)
     trial_probs = [p0, p1, p2]
     # dist = [1 - p0, p0 * (1 - p1), p0 * p1 * (1 - p2), p0 * p1 * p2]
     # print(dist)
@@ -272,7 +272,7 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.7.0")
+    assert pyro.__version__.startswith("1.8.1")
     parser = argparse.ArgumentParser(
         description="Pyro AIR example", argument_default=argparse.SUPPRESS
     )

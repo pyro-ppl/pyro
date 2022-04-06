@@ -272,7 +272,7 @@ class TransformTests(TestCase):
             self._test_inverse(shape, transform)
 
         for width_dim in [2, 4, 6]:
-            input_dim = (width_dim ** 2) * 3
+            input_dim = (width_dim**2) * 3
             self._test_jacobian(
                 input_dim, Flatten(transform, (3, width_dim, width_dim))
             )
@@ -326,7 +326,7 @@ class TransformTests(TestCase):
             self._test_inverse(shape, transform)
 
         for width_dim in [2, 4, 6]:
-            input_dim = (width_dim ** 2) * 3
+            input_dim = (width_dim**2) * 3
             self._test_jacobian(
                 input_dim, Flatten(transform, (3, width_dim, width_dim))
             )
@@ -456,6 +456,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
     [
         T.LowerCholeskyTransform(),
         T.SoftplusLowerCholeskyTransform(),
+        T.UnitLowerCholeskyTransform(),
     ],
     ids=lambda t: type(t).__name__,
 )

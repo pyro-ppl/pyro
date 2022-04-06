@@ -15,7 +15,7 @@ def cleannb(nbfile):
     nb["metadata"]["kernelspec"]["name"] = "python3"
     nb["metadata"]["language_info"]["codemirror_mode"]["version"] = 3
     nb["metadata"]["language_info"]["pygments_lexer"] = "ipython3"
-    nb["metadata"]["language_info"]["version"] = "3.6.10"
+    nb["metadata"]["language_info"]["version"] = "3.7.1"
 
     with io.open(nbfile, "w", encoding="utf8") as f:
         nbformat.write(nb, f)

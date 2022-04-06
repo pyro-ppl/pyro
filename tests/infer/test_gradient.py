@@ -105,8 +105,8 @@ def test_particle_gradient(Elbo, reparameterized, has_rsample):
             + model_tr.nodes["z"]["log_prob"].data
             - guide_tr.nodes["z"]["log_prob"].data
         )
-        dlogq_dloc = (z - loc) / scale ** 2
-        dlogq_dscale = (z - loc) ** 2 / scale ** 3 - 1 / scale
+        dlogq_dloc = (z - loc) / scale**2
+        dlogq_dscale = (z - loc) ** 2 / scale**3 - 1 / scale
         if Elbo is TraceEnum_ELBO:
             expected_grads = {
                 "scale": -(dlogq_dscale * elbo - dlogq_dscale).sum(0, keepdim=True),

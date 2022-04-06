@@ -1,6 +1,5 @@
-sphinx
-sphinx_rtd_theme
-contextlib2
+sphinx==4.2.0
+sphinx-rtd-theme==1.0.0
 graphviz>=0.8
 numpy>=1.7
 observations>=0.1.4

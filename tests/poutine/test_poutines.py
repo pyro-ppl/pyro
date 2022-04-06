@@ -282,7 +282,7 @@ class QueueHandlerDiscreteTest(TestCase):
         trs = []
         while not self.queue.empty():
             trs.append(f.get_trace())
-        assert len(trs) == 2 ** 3
+        assert len(trs) == 2**3
 
         true_latents = set()
         for i1 in range(2):
@@ -893,10 +893,7 @@ def test_trace_log_prob_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing log_prob at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing log_prob at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_log_prob()
 
@@ -906,10 +903,7 @@ def test_trace_log_prob_sum_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing log_prob_sum at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing log_prob_sum at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.log_prob_sum()
 
@@ -919,10 +913,7 @@ def test_trace_score_parts_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(guide).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing score_parts at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing score_parts at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_score_parts()
 

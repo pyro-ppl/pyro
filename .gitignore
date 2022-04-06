@@ -25,6 +25,7 @@ cvae_net_q1.pth
 cvae_plot_q1.png
 prep_seal_data.csv
 results.csv
+tutorial/source/model.pdf
 
 # Logs
 logs

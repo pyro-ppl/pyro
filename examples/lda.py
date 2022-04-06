@@ -149,7 +149,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.7.0")
+    assert pyro.__version__.startswith("1.8.1")
     parser = argparse.ArgumentParser(
         description="Amortized Latent Dirichlet Allocation"
     )

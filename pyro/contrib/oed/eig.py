@@ -1196,10 +1196,10 @@ class EwmaLog:
         if torch_isnan(self.ewma) or torch_isinf(self.ewma):
             ewma = inputs
         else:
-            ewma = inputs * (1.0 - self.alpha) / (1 - self.alpha ** self.n) + torch.exp(
+            ewma = inputs * (1.0 - self.alpha) / (1 - self.alpha**self.n) + torch.exp(
                 self.s - s
-            ) * self.ewma * (self.alpha - self.alpha ** self.n) / (
-                1 - self.alpha ** self.n
+            ) * self.ewma * (self.alpha - self.alpha**self.n) / (
+                1 - self.alpha**self.n
             )
         self.ewma = ewma.detach()
         self.s = s.detach()

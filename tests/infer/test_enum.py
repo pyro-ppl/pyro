@@ -6,6 +6,7 @@ import math
 import os
 import timeit
 from collections import defaultdict
+from contextlib import ExitStack  # python 3
 
 import pytest
 import torch
@@ -28,12 +29,6 @@ from pyro.ops.indexing import Vindex
 from pyro.util import torch_isnan
 from tests.common import assert_equal, skipif_param
 
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +50,7 @@ def test_iter_discrete_traces_order(depth, graph_type):
 
     traces = list(iter_discrete_traces(graph_type, model, depth))
 
-    assert len(traces) == 2 ** depth
+    assert len(traces) == 2**depth
     for trace in traces:
         sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
         assert sites == ["x{}".format(i) for i in range(depth)]
@@ -207,7 +202,7 @@ def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     model = config_enumerate(model, "sequential")
     traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
-    assert len(traces) == 2 ** data_size
+    assert len(traces) == 2**data_size
 
 
 # A Gaussian mixture model, with vectorized batching.

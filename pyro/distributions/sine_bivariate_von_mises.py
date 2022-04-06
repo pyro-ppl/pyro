@@ -46,7 +46,8 @@ class SineBivariateVonMises(TorchDistribution):
 
             \frac{\rho}{\kappa_1\kappa_2} \rightarrow 1
 
-        because the distribution becomes increasingly bimodal.
+        because the distribution becomes increasingly bimodal. To avoid bimodality use the `weighted_correlation`
+        parameter with a skew away from one (e.g., Beta(1,3)). The `weighted_correlation` should be in [0,1].
 
     .. note:: The correlation and weighted_correlation params are mutually exclusive.
 
@@ -64,7 +65,7 @@ class SineBivariateVonMises(TorchDistribution):
     :param torch.Tensor psi_concentration: concentration of second angle
     :param torch.Tensor correlation: correlation between the two angles
     :param torch.Tensor weighted_correlation: set correlation to weigthed_corr * sqrt(phi_conc*psi_conc)
-        to avoid bimodality (see note).
+        to avoid bimodality (see note). The `weightd_correlation` should be in [0,1].
     """
 
     arg_constraints = {
@@ -119,7 +120,7 @@ class SineBivariateVonMises(TorchDistribution):
         super().__init__(batch_shape, event_shape, validate_args)
 
         if self._validate_args and torch.any(
-            phi_concentration * psi_concentration <= correlation ** 2
+            phi_concentration * psi_concentration <= correlation**2
         ):
             warnings.warn(
                 f"{self.__class__.__name__} bimodal due to concentration-correlation relation, "
@@ -169,7 +170,7 @@ class SineBivariateVonMises(TorchDistribution):
         corr = self.correlation
         conc = torch.stack((self.phi_concentration, self.psi_concentration))
 
-        eig = 0.5 * (conc[0] - corr ** 2 / conc[1])
+        eig = 0.5 * (conc[0] - corr**2 / conc[1])
         eig = torch.stack((torch.zeros_like(eig), eig))
         eigmin = torch.where(
             eig[1] < 0, eig[1], torch.zeros_like(eig[1], dtype=eig.dtype)
@@ -224,7 +225,7 @@ class SineBivariateVonMises(TorchDistribution):
                 1.0
                 - curr_b0.view(-1, 1) / 2
                 + torch.log(
-                    curr_b0.view(-1, 1) / 2 + (curr_eig.view(2, -1, 1) * x ** 2).sum(0)
+                    curr_b0.view(-1, 1) / 2 + (curr_eig.view(2, -1, 1) * x**2).sum(0)
                 )
             )
             assert lg_inv.shape == lf.shape

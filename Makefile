@@ -19,18 +19,16 @@ tutorial: FORCE
 
 lint: FORCE
 	flake8
-	black --extend-exclude=\.ipynb --check .
+	black --check *.py pyro examples tests scripts profiler
 	isort --check .
 	python scripts/update_headers.py --check
-	mypy pyro
-	# mypy examples  # FIXME
-	mypy scripts
+	mypy --install-types --non-interactive pyro scripts
 
 license: FORCE
 	python scripts/update_headers.py
 
 format: license FORCE
-	black --extend-exclude=\.ipynb .
+	black *.py pyro examples tests scripts profiler
 	isort .
 
 version: FORCE

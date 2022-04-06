@@ -74,7 +74,7 @@ def triu_inverse(x):
     B_Dinv = B / x.bottom_diag.unsqueeze(-2)
 
     identity = torch.eye(head_size, dtype=A.dtype, device=A.device)
-    top_left = torch.triangular_solve(identity, A, upper=True)[0]
+    top_left = torch.linalg.solve_triangular(A, identity, upper=True)
     top_right = -top_left.matmul(B_Dinv)  # complexity: head_size^2 x N
     top = torch.cat([top_left, top_right], -1)
     bottom_diag = x.bottom_diag.reciprocal()

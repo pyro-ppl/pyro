@@ -16,10 +16,10 @@ def guide_generic(config):
     N_state = config["sizes"]["state"]
 
     if config["group"]["random"] == "continuous":
-        loc_g = pyro.param("loc_group", lambda: torch.zeros((N_state ** 2,)))
+        loc_g = pyro.param("loc_group", lambda: torch.zeros((N_state**2,)))
         scale_g = pyro.param(
             "scale_group",
-            lambda: torch.ones((N_state ** 2,)),
+            lambda: torch.ones((N_state**2,)),
             constraint=constraints.positive,
         )
 
@@ -31,7 +31,7 @@ def guide_generic(config):
             lambda: torch.zeros(
                 (
                     N_c,
-                    N_state ** 2,
+                    N_state**2,
                 )
             ),
         )
@@ -40,7 +40,7 @@ def guide_generic(config):
             lambda: torch.ones(
                 (
                     N_c,
-                    N_state ** 2,
+                    N_state**2,
                 )
             ),
             constraint=constraints.positive,
@@ -83,10 +83,10 @@ def model_generic(config):
             lambda: torch.randn((N_v,)).abs(),
             constraint=constraints.simplex,
         )
-        theta_g = pyro.param("theta_group", lambda: torch.randn((N_v, N_state ** 2)))
+        theta_g = pyro.param("theta_group", lambda: torch.randn((N_v, N_state**2)))
     elif config["group"]["random"] == "continuous":
-        loc_g = torch.zeros((N_state ** 2,))
-        scale_g = torch.ones((N_state ** 2,))
+        loc_g = torch.zeros((N_state**2,))
+        scale_g = torch.ones((N_state**2,))
 
     # initialize individual-level random effect parameters
     N_c = config["sizes"]["group"]
@@ -102,19 +102,19 @@ def model_generic(config):
             constraint=constraints.simplex,
         )
         theta_i = pyro.param(
-            "theta_individual", lambda: torch.randn((N_c, N_v, N_state ** 2))
+            "theta_individual", lambda: torch.randn((N_c, N_v, N_state**2))
         )
     elif config["individual"]["random"] == "continuous":
         loc_i = torch.zeros(
             (
                 N_c,
-                N_state ** 2,
+                N_state**2,
             )
         )
         scale_i = torch.ones(
             (
                 N_c,
-                N_state ** 2,
+                N_state**2,
             )
         )
 
@@ -154,7 +154,7 @@ def model_generic(config):
     )
 
     # initialize gamma to uniform
-    gamma = torch.zeros((N_state ** 2,))
+    gamma = torch.zeros((N_state**2,))
 
     N_c = config["sizes"]["group"]
     with pyro.plate("group", N_c, dim=-1):

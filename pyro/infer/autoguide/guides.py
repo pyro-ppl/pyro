@@ -862,7 +862,8 @@ class AutoMultivariateNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    scale_tril_constraint = constraints.softplus_lower_cholesky
+    scale_constraint = constraints.softplus_positive
+    scale_tril_constraint = constraints.unit_lower_cholesky
 
     def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
@@ -874,27 +875,31 @@ class AutoMultivariateNormal(AutoContinuous):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
+        self.scale = PyroParam(
+            torch.full_like(self.loc, self._init_scale), self.scale_constraint
+        )
         self.scale_tril = PyroParam(
-            eye_like(self.loc, self.latent_dim) * self._init_scale,
-            self.scale_tril_constraint,
+            eye_like(self.loc, self.latent_dim), self.scale_tril_constraint
         )
 
     def get_base_dist(self):
         return dist.Normal(
-            torch.zeros_like(self.loc), torch.zeros_like(self.loc)
+            torch.zeros_like(self.loc), torch.ones_like(self.loc)
         ).to_event(1)
 
     def get_transform(self, *args, **kwargs):
-        return dist.transforms.LowerCholeskyAffine(self.loc, scale_tril=self.scale_tril)
+        scale_tril = self.scale[..., None] * self.scale_tril
+        return dist.transforms.LowerCholeskyAffine(self.loc, scale_tril=scale_tril)
 
     def get_posterior(self, *args, **kwargs):
         """
         Returns a MultivariateNormal posterior distribution.
         """
-        return dist.MultivariateNormal(self.loc, scale_tril=self.scale_tril)
+        scale_tril = self.scale[..., None] * self.scale_tril
+        return dist.MultivariateNormal(self.loc, scale_tril=scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
-        return self.loc, self.scale_tril.diag()
+        return self.loc, self.scale * self.scale_tril.diag()
 
 
 class AutoDiagonalNormal(AutoContinuous):
@@ -937,7 +942,7 @@ class AutoDiagonalNormal(AutoContinuous):
 
     def get_base_dist(self):
         return dist.Normal(
-            torch.zeros_like(self.loc), torch.zeros_like(self.loc)
+            torch.zeros_like(self.loc), torch.ones_like(self.loc)
         ).to_event(1)
 
     def get_transform(self, *args, **kwargs):
@@ -995,14 +1000,14 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         if self.rank is None:
-            self.rank = int(round(self.latent_dim ** 0.5))
+            self.rank = int(round(self.latent_dim**0.5))
         self.scale = PyroParam(
-            self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
+            self.loc.new_full((self.latent_dim,), 0.5**0.5 * self._init_scale),
             constraint=self.scale_constraint,
         )
         self.cov_factor = nn.Parameter(
             self.loc.new_empty(self.latent_dim, self.rank).normal_(
-                0, 1 / self.rank ** 0.5
+                0, 1 / self.rank**0.5
             )
         )
 
@@ -1167,15 +1172,23 @@ class AutoLaplaceApproximation(AutoContinuous):
         loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
 
         H = hessian(loss, self.loc)
-        cov = H.inverse()
-        loc = self.loc
-        scale_tril = torch.linalg.cholesky(cov)
+        with torch.no_grad():
+            loc = self.loc.detach()
+            cov = H.inverse()
+            scale = cov.diagonal().sqrt()
+            cov /= scale[:, None]
+            cov /= scale[None, :]
+            scale_tril = torch.linalg.cholesky(cov)
 
         gaussian_guide = AutoMultivariateNormal(self.model)
         gaussian_guide._setup_prototype(*args, **kwargs)
-        # Set loc, scale_tril parameters as computed above.
-        gaussian_guide.loc = loc
-        gaussian_guide.scale_tril = scale_tril
+        # Set detached loc, scale, scale_tril parameters as computed above.
+        del gaussian_guide.loc
+        del gaussian_guide.scale
+        del gaussian_guide.scale_tril
+        gaussian_guide.register_buffer("loc", loc)
+        gaussian_guide.register_buffer("scale", scale)
+        gaussian_guide.register_buffer("scale_tril", scale_tril)
         return gaussian_guide
 
 

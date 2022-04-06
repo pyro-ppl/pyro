@@ -232,6 +232,13 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
+LogNormalNegativeBinomial
+-------------------------
+.. autoclass:: pyro.distributions.LogNormalNegativeBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Logistic
 --------
 .. autoclass:: pyro.distributions.Logistic
@@ -525,6 +532,13 @@ SoftplusLowerCholeskyTransform
 SoftplusTransform
 -----------------
 .. autoclass:: pyro.distributions.transforms.SoftplusTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+UnitLowerCholeskyTransform
+--------------------------
+.. autoclass:: pyro.distributions.transforms.UnitLowerCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:

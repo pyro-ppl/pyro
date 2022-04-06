@@ -328,7 +328,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-    hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
+    hidden_dim = int(args.hidden_dim**0.5)  # split between w and x
     with handlers.mask(mask=include_prior):
         probs_w = pyro.sample(
             "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
@@ -383,7 +383,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-    hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
+    hidden_dim = int(args.hidden_dim**0.5)  # split between w and x
     with handlers.mask(mask=include_prior):
         probs_w = pyro.sample(
             "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
@@ -819,7 +819,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.7.0")
+    assert pyro.__version__.startswith("1.8.1")
     parser = argparse.ArgumentParser(
         description="MAP Baum-Welch learning Bach Chorales"
     )

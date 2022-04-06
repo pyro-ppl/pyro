@@ -13,7 +13,7 @@ please don't hesitate to ask a question on our `forum <https://forum.pyro.ai/>`_
 New users: getting from zero to one
 ------------------------------------
 If you're new to probabilistic programming or variational inference,
-you might want to start by reading the series :ref:`introductory-tutorials`.
+you might want to start by reading the series :ref:`introductory-tutorials`, especially the :doc:`Introduction to Pyro <intro_long>`.
 If you're new to PyTorch, you may also benefit from reading the official introduction `"Deep Learning with PyTorch." <https://pytorch.org/tutorials/beginner/deep_learning_60min_blitz.html>`_
 
 After that, you're ready to get started using Pyro! (Yes, really!)
@@ -76,8 +76,8 @@ List of Tutorials
    :caption: Introductory Tutorials
    :name: introductory-tutorials
 
-   intro_part_i
-   intro_part_ii
+   intro_long
+   model_rendering
    svi_part_i
    svi_part_ii
    svi_part_iii
@@ -92,6 +92,7 @@ List of Tutorials
    bayesian_regression_ii
    tensor_shapes
    modules
+   workflow
    jit
    svi_horovod
 
@@ -106,10 +107,10 @@ List of Tutorials
    normalizing_flows_i
    dmm
    air
-   scanvi
    cevae
    sparse_gamma
    prodlda
+   scanvi
 
 .. toctree::
    :maxdepth: 1
@@ -171,6 +172,7 @@ List of Tutorials
    epi_sir
    epi_regional
    sir_hmc
+   logistic-growth
 
 .. toctree::
    :maxdepth: 1
@@ -220,6 +222,14 @@ List of Tutorials
    contrib_funsor_intro_i
    contrib_funsor_intro_ii
    hmm_funsor
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Deprecated
+   :name: deprecated
+
+   intro_part_i
+   intro_part_ii
 
 Indices and tables
 ==================
