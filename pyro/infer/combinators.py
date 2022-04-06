@@ -339,6 +339,7 @@ class propose(proposals):
         m_trace, m_output = get_marginal(p_out)
 
         # NOTE: here we sever local gradient computations for nested objectives.
+        # NOTE: alternative is to add information into static proposal, gradients must be severed in the output trace
         trace = (
             rerun_with_detached_values(m_trace)
             if is_nested_objective(self.loss_fn)
@@ -381,6 +382,7 @@ def nested_objective(loss_fn):
     return call
 
 
+# FIXME: "rerun" is incorrect and misleading, we are recreating tensors without gradients
 def rerun_with_detached_values(trace: Trace):
     newtrace = Trace()
 
@@ -406,6 +408,7 @@ class augment_logweight(object):
     NOTE: technically this could be a trivial function wrapper like:
 
         def augment(p:propose, pre:Callable):
+            initial_computation = p._compute_logweight
             def doit(self, p_trace, q_trace):
                 return initial_computation(self, *pre(p_trace, q_trace))
             p._compute_logweight = doit
@@ -483,7 +486,7 @@ def stl_trick(p_trace, q_trace):
 
 
 # ============================================
-# resamplering
+# resampling
 # ============================================
 
 
@@ -549,7 +552,7 @@ def _pick_node(node: dict, ancestor_indicies: Tensor, dim=0):
 
 def resample_trace_systematic(
     trace: Trace,
-    sample_dims: int,
+    sample_dims: int,  # FIXME: review that this is, indeed an int. if this is a tuple, need more verification
     batch_dim: Optional[int],
     normalize_weights: bool = False,
 ) -> Trace:
@@ -578,7 +581,9 @@ def resample_trace_systematic(
     ret = trace.nodes.get(_RETURN, {"value": None})
 
     def _resample(_, site):
-        if (
+        if (  # FIXME: triple check that these semantics line up with the paper.
+            # especially compatibility with pyro-based semantics
+
             # do not resample unsamplable sites
             site["type"] != "sample"
             # do not resample observed distributions
@@ -591,6 +596,8 @@ def resample_trace_systematic(
             return site
         else:
             newsite = _pick_node(site, aidx, dim=sample_dims)
+
+            # FIXME: flatmap_trace might be doing the "right thing" and this can be removed. Test this.
 
             # ensure that the resampled site will change a model's output:
             if site["value"] is ret["value"]:
@@ -610,7 +617,9 @@ def resample_trace_systematic(
         trace, site_map=_resample, site_filter=lambda k, _: k != _LOGWEIGHT
     )
 
-    log_weight_node = trace.nodes[_LOGWEIGHT].copy()
+    log_weight_node = trace.nodes[
+        _LOGWEIGHT
+    ].copy()  # NOTE: expensive, can we remove this?
     log_weight = log_weight_node["value"]
     log_weight = torch.logsumexp(
         log_weight - math.log(log_weight.shape[sample_dims]),
