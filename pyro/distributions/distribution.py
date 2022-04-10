@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
-from abc import ABCMeta, abstractmethod
 import inspect
+from abc import ABCMeta, abstractmethod
 
 from pyro.distributions.score_parts import ScoreParts
 
