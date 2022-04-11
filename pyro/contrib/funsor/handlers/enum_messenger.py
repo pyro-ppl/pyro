@@ -11,7 +11,6 @@ from collections import OrderedDict
 
 import funsor
 import torch
-from funsor.importance import lazy_importance
 
 import pyro.poutine.runtime
 import pyro.poutine.util
@@ -40,13 +39,6 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
         for v in funsor_dist.terms
         if isinstance(v, funsor.delta.Delta) and name in v.fresh
     ]
-    delta_terms.extend(
-        [
-            v.guide
-            for v in funsor_dist.terms
-            if isinstance(v, funsor.Importance) and name in v.guide.fresh
-        ]
-    )
     assert len(delta_terms) == 1
     return _get_support_value(delta_terms[0], name, **kwargs)
 
@@ -55,9 +47,6 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
 def _get_support_value_delta(funsor_dist, name, **kwargs):
     assert name in funsor_dist.fresh
     support_value = OrderedDict(funsor_dist.terms)[name][0]
-    # remove all upstream dependencies
-    while isinstance(support_value, funsor.Constant):
-        support_value = support_value.arg
     return support_value
 
 
@@ -71,16 +60,11 @@ def _get_support_value_tensor(funsor_dist, name, **kwargs):
     )
 
 
-@_get_support_value.register(funsor.Constant)
-def _get_support_value_constant(funsor_dist, name, **kwargs):
+@_get_support_value.register(funsor.Sampled)
+def _get_support_value_sampled(funsor_dist, name, **kwargs):
     assert name in funsor_dist.inputs
     value = _get_support_value(funsor_dist.arg, name, **kwargs)
-    return funsor.Constant(funsor_dist.const_inputs, value)
-
-
-@_get_support_value.register(funsor.Importance)
-def _get_support_value_approximate(funsor_dist, name, **kwargs):
-    return _get_support_value(funsor_dist.guide, name, **kwargs)
+    return funsor.Sampled(funsor_dist.terms, value)
 
 
 @_get_support_value.register(funsor.distribution.Distribution)
@@ -95,8 +79,7 @@ def _enum_strategy_default(dist, msg):
         for f in msg["cond_indep_stack"]
         if f.vectorized and f.name not in dist.inputs
     )
-    with lazy_importance:
-        sampled_dist = dist.sample(msg["name"], sample_inputs)
+    sampled_dist = dist.sample(msg["name"], sample_inputs)
     sampled_dist -= sum([math.log(v.size) for v in sample_inputs.values()], 0)
     return sampled_dist
 
@@ -227,19 +210,25 @@ class ProvenanceMessenger(ReentrantMessenger):
                 value=msg["name"]
             )
         # TODO delegate to enumerate_site
-        msg["funsor"]["log_measure"] = _enum_strategy_default(
-            unsampled_log_measure, msg
-        )
+        _log_measure = _enum_strategy_default(unsampled_log_measure, msg)
         support_value = _get_support_value(
-            msg["funsor"]["log_measure"],
+            _log_measure,
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )
         # TODO delegate to _get_support_value
-        msg["funsor"]["value"] = funsor.Constant(
-            OrderedDict(((msg["name"], support_value.output),)),
-            support_value,
-        )
+        if isinstance(_log_measure, funsor.Sampled):
+            msg["funsor"]["value"] = funsor.Sampled(
+                _log_measure.arg.terms,
+                support_value,
+            )
+            msg["funsor"]["log_measure"] = _log_measure.arg
+        else:
+            msg["funsor"]["value"] = funsor.Sampled(
+                _log_measure.terms,
+                support_value,
+            )
+            msg["funsor"]["log_measure"] = _log_measure
         msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
 
@@ -265,9 +254,14 @@ class EnumMessenger(NamedMessenger):
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
             value=msg["name"]
         )
-        msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
+        _log_measure = enumerate_site(unsampled_log_measure, msg)
+        if isinstance(_log_measure, funsor.Sampled):
+            msg["funsor"]["log_measure"] = _log_measure.arg
+        else:
+            msg["funsor"]["log_measure"] = _log_measure
+        #  msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
         msg["funsor"]["value"] = _get_support_value(
-            msg["funsor"]["log_measure"],
+            _log_measure,
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )
