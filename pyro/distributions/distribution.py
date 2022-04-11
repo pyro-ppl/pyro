@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import inspect
 from abc import ABCMeta, abstractmethod
 
 from pyro.distributions.score_parts import ScoreParts
@@ -10,16 +11,17 @@ COERCIONS = []
 
 
 class DistributionMeta(ABCMeta):
+    def __init__(cls, *args, **kwargs):
+        signature = inspect.signature(functools.partial(cls.__init__, None))
+        cls.__signature__ = signature
+        return super().__init__(*args, **kwargs)
+
     def __call__(cls, *args, **kwargs):
         for coerce_ in COERCIONS:
             result = coerce_(cls, args, kwargs)
             if result is not None:
                 return result
         return super().__call__(*args, **kwargs)
-
-    @property
-    def __wrapped__(cls):
-        return functools.partial(cls.__init__, None)
 
 
 class Distribution(metaclass=DistributionMeta):
