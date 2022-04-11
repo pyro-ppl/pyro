@@ -59,11 +59,11 @@ def _get_support_value_tensor(funsor_dist, name, **kwargs):
     )
 
 
-@_get_support_value.register(funsor.Sampled)
+@_get_support_value.register(funsor.Provenance)
 def _get_support_value_sampled(funsor_dist, name, **kwargs):
     assert name in funsor_dist.inputs
-    value = _get_support_value(funsor_dist.arg, name, **kwargs)
-    return funsor.Sampled(funsor_dist.terms, value)
+    value = _get_support_value(funsor_dist.term, name, **kwargs)
+    return funsor.Provenance(value, frozenset(funsor_dist.provenance))
 
 
 @_get_support_value.register(funsor.distribution.Distribution)
@@ -216,16 +216,16 @@ class ProvenanceMessenger(ReentrantMessenger):
             expand=msg["infer"].get("expand", False),
         )
         # TODO delegate to _get_support_value
-        if isinstance(_log_measure, funsor.Sampled):
-            msg["funsor"]["value"] = funsor.Sampled(
-                _log_measure.arg.terms,
+        if isinstance(_log_measure, funsor.Provenance):
+            msg["funsor"]["value"] = funsor.Provenance(
                 support_value,
+                frozenset(_log_measure.term.terms),
             )
-            msg["funsor"]["log_measure"] = _log_measure.arg
+            msg["funsor"]["log_measure"] = _log_measure.term
         else:
-            msg["funsor"]["value"] = funsor.Sampled(
-                _log_measure.terms,
+            msg["funsor"]["value"] = funsor.Provenance(
                 support_value,
+                frozenset(_log_measure.terms),
             )
             msg["funsor"]["log_measure"] = _log_measure
         msg["value"] = to_data(msg["funsor"]["value"])
@@ -254,8 +254,8 @@ class EnumMessenger(NamedMessenger):
             value=msg["name"]
         )
         _log_measure = enumerate_site(unsampled_log_measure, msg)
-        if isinstance(_log_measure, funsor.Sampled):
-            msg["funsor"]["log_measure"] = _log_measure.arg
+        if isinstance(_log_measure, funsor.Provenance):
+            msg["funsor"]["log_measure"] = _log_measure.term
         else:
             msg["funsor"]["log_measure"] = _log_measure
         msg["funsor"]["value"] = _get_support_value(

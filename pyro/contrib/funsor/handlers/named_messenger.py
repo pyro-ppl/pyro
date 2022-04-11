@@ -66,8 +66,8 @@ class NamedMessenger(ReentrantMessenger):
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
         dim_type = msg["kwargs"].setdefault("dim_type", DimType.LOCAL)
 
-        if isinstance(funsor_value, funsor.Sampled):
-            batch_names = tuple(funsor_value.arg.inputs.keys())
+        if isinstance(funsor_value, funsor.Provenance):
+            batch_names = tuple(funsor_value.term.inputs.keys())
         else:
             batch_names = tuple(funsor_value.inputs.keys())
 
