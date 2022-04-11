@@ -46,8 +46,7 @@ def _get_support_value_contraction(funsor_dist, name, **kwargs):
 @_get_support_value.register(funsor.delta.Delta)
 def _get_support_value_delta(funsor_dist, name, **kwargs):
     assert name in funsor_dist.fresh
-    support_value = OrderedDict(funsor_dist.terms)[name][0]
-    return support_value
+    return OrderedDict(funsor_dist.terms)[name][0]
 
 
 @_get_support_value.register(funsor.Tensor)
@@ -259,7 +258,6 @@ class EnumMessenger(NamedMessenger):
             msg["funsor"]["log_measure"] = _log_measure.arg
         else:
             msg["funsor"]["log_measure"] = _log_measure
-        #  msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
         msg["funsor"]["value"] = _get_support_value(
             _log_measure,
             msg["name"],
