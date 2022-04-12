@@ -112,7 +112,6 @@ class Trace_ELBO(ELBO):
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[cost.input_vars]
-                # FIXME account for normalization factor for unnormalized logzq
                 log_measure = marginals[target]
                 measure_vars = (frozenset(cost.inputs) - plate_vars) - particle_var
                 elbo_term = funsor.Integrate(
