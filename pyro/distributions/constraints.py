@@ -118,6 +118,32 @@ class _UnitLowerCholesky(Constraint):
         return lower_triangular & ones_diagonal
 
 
+class _InsideConvexPolygon(Constraint):
+    """
+    Constrain to the interior of a 2D convex polygon.
+
+    :param torch.Tensor vertices: A ``(num_vertices, 2)`` shaped tensor of
+        the vertices of the polygon in clockwise order.
+    """
+
+    event_dim = 1
+
+    def __init__(self, vertcies: torch.Tensor):
+        super().__init__()
+        self.vertices = vertices
+
+    def __repr__(self):
+        fmt_string = self.__class__.__name__[1:]
+        fmt_string += "(vertices={})".format(self.vertices)
+        return fmt_string
+
+    def check(self, value):
+        value = value.unsqueeze(-2)
+        a, b = (value - self.vertices).unbind(-1)
+        c, d = (value - self.vertices.roll(1, -2)).unbind(-1)
+        return (a * d > b * c).all(-1)
+
+
 corr_matrix = _CorrMatrix()
 integer = _Integer()
 ordered_vector = _OrderedVector()
@@ -127,10 +153,12 @@ softplus_positive = _SoftplusPositive()
 softplus_lower_cholesky = _SoftplusLowerCholesky()
 unit_lower_cholesky = _UnitLowerCholesky()
 corr_cholesky_constraint = corr_cholesky  # noqa: F405 DEPRECATED
+inside_convex_polygon = _InsideConvexPolygon
 
 __all__ = [
     "corr_cholesky_constraint",
     "corr_matrix",
+    "inside_convex_polygon",
     "integer",
     "ordered_vector",
     "positive_ordered_vector",
