@@ -270,6 +270,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         return super().__enter__()
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self.cache.clear()
         if exc_type is None:
             assert not self.sum_dims, self.sum_dims
         return super().__exit__(exc_type, exc_value, traceback)
