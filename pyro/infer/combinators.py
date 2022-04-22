@@ -378,17 +378,17 @@ def nested_objective(loss_fn):
     return call
 
 
-# FIXME: "rerun" is incorrect and misleading, we are recreating tensors without gradients
-def detach_values(trace: Trace):
+def detach_values(trace: Trace, site_filter=lambda a, b: True):
     newtrace = Trace()
 
     for name, node in trace.nodes.items():
         value = node.get("value", None)
-        value = (
-            value.detach()
-            if isinstance(value, torch.Tensor) and value.requires_grad
-            else value
-        )
+        if site_filter(name, node):
+            value = (
+                value.detach()
+                if isinstance(value, torch.Tensor) and value.requires_grad
+                else value
+            )
         newtrace.add_node(
             name, value=value, **{k: v for k, v in node.items() if k != "value"}
         )
