@@ -22,6 +22,8 @@ from pyro.infer.combinators import (
     primitive,
     propose,
     with_substitution,
+    is_auxiliary,
+    is_sample_type,
     stl_trick,
     augment_logweight,
     nested_objective,
@@ -282,6 +284,10 @@ def test_avo_2step_grads_dont_leak(normal, mlp_kernel):
         lr=0.2,
     )
 
+    # TODO: remove thash, make this test more direct. As it stands, it is not clear that
+    # this check is evaluating the right thing. Looking at grad is probably more precise
+    #
+    # Later asserts of `==` should just be torch.equal.
     first_params_pre = [
         thash(param)
         for first_kernel in [f01, r10]
@@ -313,6 +319,100 @@ def test_avo_2step_grads_dont_leak(normal, mlp_kernel):
     assert all(
         [pre != post for pre, post in zip(second_params_pre, second_params_post)]
     ), "all parameters change in second layer of nesting"
+
+
+@mark.skip("still being developed, but commiting this test as a checkpoint")
+def test_avo_2step_grad_surgery_is_precise(normal, mlp_kernel):
+    seq_length = 3
+    targets, forwards, reverses = test_avo_construction(
+        normal, mlp_kernel, num_targets=seq_length
+    )
+
+    q0, q1, q2 = targets
+    f01, f12 = forwards
+    r10, r21 = reverses
+
+    def sitep(fn):
+        return lambda kv: fn(kv[1])
+
+    def verify_grads(p_out, q_out):
+        # check proposal trace
+        print("---------")
+        for k, s in filter(sitep(is_sample_type), q_out.nodes.items()):
+            g = s["value"].requires_grad
+            print("q  ", k, g)
+
+        sampled_sites = dict(filter(sitep(is_sample_type), p_out.nodes.items()))
+        aux_samples = dict(filter(sitep(is_auxiliary), sampled_sites.items()))
+        out_samples = dict(
+            filter(sitep(lambda x: not is_auxiliary(x)), sampled_sites.items())
+        )
+        # check target trace
+        for k, aux in aux_samples.items():
+            g = aux["value"].requires_grad
+            print("aux", k, g)
+
+        for k, out in out_samples.items():
+            g = out["value"].requires_grad
+            print("out", k, g)
+        for k in out_samples.keys():
+            assert not q_out.nodes[k]["value"].requires_grad
+
+    @nested_objective
+    def nvo_avo1(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
+        # verify_grads(p_out, q_out)
+        return (-lv).sum(dim=(sample_dims,), keepdim=False)
+
+    q = propose(p=extend(q1, r10), q=compose(f01, q0), loss_fn=nvo_avo1)
+
+    @nested_objective
+    def nvo_avo2(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
+        verify_grads(p_out, q_out)
+        loss = (-lv).sum(dim=(sample_dims,), keepdim=False)
+        loss.backward()
+        return loss
+
+    q = propose(p=extend(q2, r21), q=compose(f12, q), loss_fn=nvo_avo2)
+
+    optimizer = torch.optim.Adam(
+        params=[dict(params=x.program.parameters()) for x in forwards + reverses],
+        lr=0.2,
+    )
+
+    # remove thash
+    first_params_pre = [
+        thash(
+            param
+        )  # TODO: is this check evaluating the right thing? looking at grad is probably more precise
+        for first_kernel in [f01, r10]
+        for param in first_kernel.program.parameters()
+    ]
+    second_params_pre = [
+        thash(param)
+        for second_kernel in [f12, r21]
+        for param in second_kernel.program.parameters()
+    ]
+
+    out = q()
+    optimizer.step()
+
+    first_params_post = [
+        thash(param)
+        for first_kernel in [f01, r10]
+        for param in first_kernel.program.parameters()
+    ]
+    second_params_post = [
+        thash(param)
+        for second_kernel in [f12, r21]
+        for param in second_kernel.program.parameters()
+    ]
+    # # TODO: is == torch.equal?
+    # assert all(
+    #     [pre == post for pre, post in zip(first_params_pre, first_params_post)]
+    # ), "no parameters change in first layer of nesting"
+    # assert all(
+    #     [pre != post for pre, post in zip(second_params_pre, second_params_post)]
+    # ), "all parameters change in second layer of nesting"
 
 
 def test_avo_2step_empirical(normal, mlp_kernel):
