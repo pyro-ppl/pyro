@@ -370,8 +370,18 @@ def nested_objective(loss_fn):
     """an annotation for objectives which are nested"""
 
     def call(_p_trace, _q_trace, lw, lv):
-        p_trace = detach_values(_p_trace)
-        q_trace = detach_values(_q_trace)
+        out_names = {
+            k
+            for k, v in _p_trace.nodes.items()
+            if is_sample_type(v) and not is_auxiliary(v)
+        }
+        # p_trace, q_trace = detach_values(_p_trace, site_filter=lambda k, v: k in out_names), \
+        #    detach_values(_q_trace, site_filter=lambda k, v: k in out_names)
+        # p_trace, q_trace = detach_values(_p_trace, site_filter=lambda k, v: k in out_names), _q_trace
+        p_trace, q_trace = _p_trace, detach_values(
+            _q_trace, site_filter=lambda k, v: k in out_names
+        )
+        # p_trace, q_trace = _p_trace, _q_trace
         loss = loss_fn(p_trace, q_trace, lw, lv)
         return loss
 
