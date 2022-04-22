@@ -340,11 +340,7 @@ class propose(proposals):
 
         # NOTE: here we sever local gradient computations for nested objectives.
         # NOTE: alternative is to add information into static proposal, gradients must be severed in the output trace
-        trace = (
-            rerun_with_detached_values(m_trace)
-            if is_nested_objective(self.loss_fn)
-            else m_trace
-        )
+        trace = detach_values(m_trace) if is_nested_objective(self.loss_fn) else m_trace
 
         set_input(trace, args=args, kwargs=kwargs)
 
@@ -374,8 +370,8 @@ def nested_objective(loss_fn):
     """an annotation for objectives which are nested"""
 
     def call(_p_trace, _q_trace, lw, lv):
-        p_trace = rerun_with_detached_values(_p_trace)
-        q_trace = rerun_with_detached_values(_q_trace)
+        p_trace = detach_values(_p_trace)
+        q_trace = detach_values(_q_trace)
         loss = loss_fn(p_trace, q_trace, lw, lv)
         return loss
 
@@ -383,7 +379,7 @@ def nested_objective(loss_fn):
 
 
 # FIXME: "rerun" is incorrect and misleading, we are recreating tensors without gradients
-def rerun_with_detached_values(trace: Trace):
+def detach_values(trace: Trace):
     newtrace = Trace()
 
     for name, node in trace.nodes.items():
