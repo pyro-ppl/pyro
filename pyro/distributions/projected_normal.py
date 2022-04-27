@@ -131,7 +131,7 @@ def _log_prob_2(concentration, value):
     # We integrate along a ray, factorizing the integrand as a product of:
     # a truncated normal distribution over coordinate t parallel to the ray, and
     # a univariate normal distribution over coordinate r perpendicular to the ray.
-    t = _dot(concentration, value).clamp(min=torch.finfo(value.dtype).eps)
+    t = _dot(concentration, value)
     t2 = t.square()
     r2 = _dot(concentration, concentration) - t2
     perp_part = r2.mul(-0.5) - 0.5 * math.log(2 * math.pi)
@@ -139,12 +139,10 @@ def _log_prob_2(concentration, value):
     # This is the log of a definite integral, computed by mathematica:
     # Integrate[x/(E^((x-t)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
     # = (t + Sqrt[2/Pi]/E^(t^2/2) + t Erf[t/Sqrt[2]])/2
+    # = (Sqrt[2/Pi]/E^(t^2/2) + t (1 + Erf[t/Sqrt[2]]))/2
     para_part = torch.logaddexp(
-        t.log(),
-        torch.logaddexp(
-            t2.mul(-0.5) - math.log(math.pi / 2) / 2,
-            t.log() + (t * 0.5**0.5).erf().log(),
-        ),
+        t2.mul(-0.5) - math.log(math.pi / 2) / 2,
+        t.log() + (t * 0.5**0.5).erf().log1p(),  # FIXME t.log() may be nan
     ) - math.log(2)
 
     return para_part + perp_part
@@ -155,7 +153,7 @@ def _log_prob_3(concentration, value):
     # We integrate along a ray, factorizing the integrand as a product of:
     # a truncated normal distribution over coordinate t parallel to the ray, and
     # a bivariate normal distribution over coordinate r perpendicular to the ray.
-    t = _dot(concentration, value).clamp(min=torch.finfo(value.dtype).eps)
+    t = _dot(concentration, value)
     t2 = t.square()
     r2 = _dot(concentration, concentration) - t2
     perp_part = r2.mul(-0.5) - math.log(2 * math.pi)
@@ -176,7 +174,7 @@ def _log_prob_4(concentration, value):
     # We integrate along a ray, factorizing the integrand as a product of:
     # a truncated normal distribution over coordinate t parallel to the ray, and
     # a bivariate normal distribution over coordinate r perpendicular to the ray.
-    t = _dot(concentration, value).clamp(min=torch.finfo(value.dtype).eps)
+    t = _dot(concentration, value)
     t2 = t.square()
     r2 = _dot(concentration, concentration) - t2
     perp_part = r2.mul(-0.5) - 1.5 * math.log(2 * math.pi)
@@ -186,6 +184,7 @@ def _log_prob_4(concentration, value):
     # = (2 + t^2)/(E^(t^2/2) Sqrt[2 Pi]) + (t (3 + t^2) (1 + Erf[t/Sqrt[2]]))/2
     para_part = torch.logaddexp(
         (2 + t2).log() + t2.mul(-0.5) - math.log(2 * math.pi) / 2,
+        # FIXME t.log() may be nan below:
         t.log() + (3 + t2).log() + (t * 0.5**0.5).erf().log1p() - math.log(2),
     )
 
