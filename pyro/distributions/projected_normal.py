@@ -127,7 +127,7 @@ def _dot(x, y):
 
 
 def _safe_log(x):
-    return x.clamp(min=torch.finfo(x.dtype).tiny).log()
+    return x.clamp(min=torch.finfo(x.dtype).eps).log()
 
 
 @ProjectedNormal._register_log_prob(dim=2)
