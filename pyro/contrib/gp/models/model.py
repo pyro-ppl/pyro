@@ -61,7 +61,6 @@ class GPModel(Parameterized):
         >>> loss_fn = pyro.infer.TraceMeanField_ELBO().differentiable_loss
         >>>
         >>> for i in range(1000):
-        ...     svi.step()  # doctest: +SKIP
         ...     optimizer.zero_grad()
         ...     loss = loss_fn(gpr.model, gpr.guide)  # doctest: +SKIP
         ...     loss.backward()  # doctest: +SKIP
@@ -168,7 +167,6 @@ class GPModel(Parameterized):
             >>> for Xi, yi in zip(batched_X, batched_y):
             ...     optimizer.zero_grad()
             ...     vsgp.set_data(Xi, yi)
-            ...     svi.step()  # doctest: +SKIP
             ...     loss = loss_fn(vsgp.model, vsgp.guide)  # doctest: +SKIP
             ...     loss.backward()  # doctest: +SKIP
             ...     optimizer.step()
