@@ -22,7 +22,7 @@ class SparseGPRegression(GPModel):
     by approximate :math:`k(X, X)` by a low-rank Nymstr\u00F6m approximation :math:`Q`
     (see reference [1]), where
 
-    .. math:: Q = k(X, X_u) k(X,X)^{-1} k(X_u, X).
+    .. math:: Q = k(X, X_u) k(X_u,X_u)^{-1} k(X_u, X).
 
     Given inputs :math:`X`, their noisy observations :math:`y`, and the inducing-input
     parameters :math:`X_u`, the model takes the form:
