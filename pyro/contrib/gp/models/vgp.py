@@ -32,7 +32,7 @@ class VariationalGP(GPModel):
     be learned during a variational inference process.
 
     .. note:: This model can be seen as a special version of
-        :class:`.SparseVariationalGP` model with :math:`X_u = X`.
+        :class:`.VariationalSparseGP` model with :math:`X_u = X`.
 
     .. note:: This model has :math:`\mathcal{O}(N^3)` complexity for training,
         :math:`\mathcal{O}(N^3)` complexity for testing. Here, :math:`N` is the number
