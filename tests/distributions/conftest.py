@@ -526,10 +526,13 @@ continuous_dists = [
         pyro_dist=dist.ProjectedNormal,
         examples=[
             {"concentration": [0.0, 0.0], "test_data": [1.0, 0.0]},
+            {"concentration": [0.2, 0.1], "test_data": [1.0, 0.0]},
             {"concentration": [2.0, 3.0], "test_data": [0.0, 1.0]},
-            {"concentration": [0.0, 0.0, 0.0], "test_data": [1.0, 0.0, 0.0]},
+            {"concentration": [0.1, 0.0, 0.0], "test_data": [1.0, 0.0, 0.0]},
+            {"concentration": [0.3, 0.2, 0.1], "test_data": [1.0, 0.0, 0.0]},
             {"concentration": [-1.0, 2.0, 3.0], "test_data": [0.0, 0.0, 1.0]},
             {"concentration": [0.0, 0.0, 0.0, 0.0], "test_data": [1.0, 0.0, 0.0, 0.0]},
+            {"concentration": [0.4, 0.3, 0.2, 0.1], "test_data": [1.0, 0.0, 0.0, 0.0]},
             {
                 "concentration": [-1.0, 2.0, 0.5, -0.5],
                 "test_data": [0.0, 1.0, 0.0, 0.0],

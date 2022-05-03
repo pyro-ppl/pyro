@@ -103,6 +103,21 @@ def tensors_default_to(host):
 
 
 @contextlib.contextmanager
+def default_dtype(dtype):
+    """
+    Context manager to temporarily set PyTorch default dtype.
+
+    :param str host: Either "cuda" or "cpu".
+    """
+    old = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(dtype)
+        yield
+    finally:
+        torch.set_default_dtype(old)
+
+
+@contextlib.contextmanager
 def freeze_rng_state():
     rng_state = torch.get_rng_state()
     if torch.cuda.is_available():
