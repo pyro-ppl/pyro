@@ -254,7 +254,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
         return
     elif model_class is VariationalGP:
         gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
-    else:  # model_class is SparseVariationalGP
+    else:  # model_class is VariationalSparseGP
         gp = model_class(
             X, y, kernel, X.clone(), likelihood, latent_shape=torch.Size([])
         )
@@ -271,7 +271,7 @@ def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
         return
     elif model_class is VariationalGP:
         gp = model_class(X, y, kernel, likelihood, whiten=True)
-    else:  # model_class is SparseVariationalGP
+    else:  # model_class is VariationalSparseGP
         gp = model_class(X, y, kernel, X.clone(), likelihood, whiten=True)
 
     train(gp, num_steps=1)
