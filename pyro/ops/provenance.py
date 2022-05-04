@@ -104,6 +104,12 @@ def _track_provenance_list(x, provenance: frozenset):
     return type(x)(track_provenance(part, provenance) for part in x)
 
 
+@track_provenance.register
+def _track_provenance_provenancetensor(x: ProvenanceTensor, provenance: frozenset):
+    x_value, old_provenance = extract_provenance(x)
+    return track_provenance(x_value, old_provenance | provenance)
+
+
 @singledispatch
 def extract_provenance(x) -> Tuple[object, frozenset]:
     """
