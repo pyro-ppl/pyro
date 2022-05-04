@@ -110,7 +110,7 @@ def _compute_elbo(model_trace, guide_trace):
     elbo = 0.0
     surrogate_elbo = 0.0
     baseline_loss = 0.0
-    # mapping of non-reparameterizable sample sites to cost terms influenced by each
+    # mapping from non-reparameterizable sample sites to cost terms influenced by each of them
     downstream_costs = defaultdict(lambda: MultiFrameTensor())
 
     # Bring log p(x, z|...) terms into both the ELBO and the surrogate
@@ -118,7 +118,7 @@ def _compute_elbo(model_trace, guide_trace):
         if site["type"] == "sample":
             elbo += site["log_prob_sum"]
             surrogate_elbo += site["log_prob_sum"]
-            # add the log_prob to each sample site upstream
+            # add the log_prob to each non-reparam sample site upstream
             for key in get_provenance(site["log_prob_sum"]):
                 downstream_costs[key].add((site["cond_indep_stack"], site["log_prob"]))
 
@@ -135,7 +135,7 @@ def _compute_elbo(model_trace, guide_trace):
             # For fully non-reparameterized terms, it is zero
             if not is_identically_zero(entropy_term):
                 surrogate_elbo -= entropy_term.sum()
-            # add the -log_prob to each sample site upstream
+            # add the -log_prob to each non-reparam sample site upstream
             for key in get_provenance(site["log_prob_sum"]):
                 downstream_costs[key].add((site["cond_indep_stack"], -site["log_prob"]))
 
@@ -264,7 +264,6 @@ class TraceGraph_ELBO(ELBO):
 
     def _loss_and_surrogate_loss_particle(self, model_trace, guide_trace):
 
-        # compute elbo for reparameterized nodes
         elbo, surrogate_loss = _compute_elbo(model_trace, guide_trace)
 
         return elbo, surrogate_loss
