@@ -180,12 +180,13 @@ class TraceGraph_ELBO(ELBO):
     is constructed along the lines of reference [1] specialized to the case
     of the ELBO. It supports arbitrary dependency structure for the model
     and guide as well as baselines for non-reparameterizable random variables.
-    Where possible, conditional dependency information as recorded in the
+    Finde-grained conditional dependency information as recorded in the
     :class:`~pyro.poutine.trace.Trace` is used to reduce the variance of the gradient estimator.
     In particular two kinds of conditional dependency information are
     used to reduce variance:
 
-    - the sequential order of samples (z is sampled after y => y does not depend on z)
+    - finding cost terms that are influenced by each non-reparameterizable sample
+      site based on provenance tracking [3]
     - :class:`~pyro.plate` generators
 
     References
@@ -195,6 +196,9 @@ class TraceGraph_ELBO(ELBO):
 
     [2] `Neural Variational Inference and Learning in Belief Networks`
         Andriy Mnih, Karol Gregor
+
+    [3] `Nonstandard Interpretations of Probabilistic Programs for Efficient Inference`,
+        David Wingate, Noah Goodman, Andreas Stuhlmüller, Jeffrey Siskind
     """
 
     def _get_trace(self, model, guide, args, kwargs):
