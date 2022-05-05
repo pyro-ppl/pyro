@@ -549,6 +549,7 @@ def render_model(
     :returns: A model graph.
     :rtype: graphviz.Digraph
     """
+    assert model_args is None or isinstance(model_args, tuple), "model_args must be None or tuple"
     relations = get_model_relations(model, model_args, model_kwargs)
     graph_spec = generate_graph_specification(relations, render_params=render_params)
     graph = render_graph(graph_spec, render_distributions=render_distributions)
