@@ -225,7 +225,7 @@ class ProvenanceMessenger(ReentrantMessenger):
         # TODO delegate to _get_support_value
         msg["funsor"]["value"] = funsor.Provenance(
             support_value,
-            frozenset(msg["funsor"]["log_measure"].terms),
+            frozenset([(msg["name"], detach_provenance(support_value))]),
         )
         msg["value"] = to_data(msg["funsor"]["value"])
         msg["done"] = True
