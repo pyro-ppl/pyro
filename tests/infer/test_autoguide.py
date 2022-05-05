@@ -1585,3 +1585,30 @@ def test_exact_tree(Guide):
             # Check ELBO loss.
             actual_loss = elbo.loss(model, guide, data)
             assert_close(actual_loss, expected_loss, atol=0.01)
+
+
+def test_autonormal_dynamic_model():
+    def model1():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        pyro.sample("obs", dist.Normal(x, 1), obs=torch.tensor(0.0))
+
+    def model2():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        y = pyro.sample("y", dist.Normal(0, 1))
+        pyro.sample("obs", dist.Normal(x + y, 1), obs=torch.tensor(0.0))
+
+    guide = AutoNormal(model1)
+    guide()  # initialize
+
+    assert hasattr(guide.locs, "x")
+    assert not hasattr(guide.locs, "y")
+    assert guide.locs.x.shape == ()
+    expected = torch.tensor(12.345)
+    guide.locs.x = expected
+
+    guide = AutoNormal(model2)
+    guide()  # initialize
+
+    assert hasattr(guide.locs, "x")
+    assert hasattr(guide.locs, "y")
+    assert_equal(guide.locs.x.data, expected)

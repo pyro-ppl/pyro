@@ -143,7 +143,8 @@ def test_gof(continuous_dist):
     num_samples = 50000
     for i in range(continuous_dist.get_num_test_data()):
         d = Dist(**continuous_dist.get_dist_params(i))
-        samples = d.sample(torch.Size([num_samples]))
+        with torch.random.fork_rng():
+            samples = d.sample(torch.Size([num_samples]))
         with xfail_if_not_implemented():
             probs = d.log_prob(samples).exp()
 

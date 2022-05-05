@@ -62,7 +62,7 @@ class SparseGPRegression(GPModel):
 
     + Variational Free Energy (VFE), which is similar to DTC but has an additional
       `trace_term` in the model's log likelihood. This additional term makes "VFE"
-      equivalent to the variational approach in :class:`.SparseVariationalGP`
+      equivalent to the variational approach in :class:`.VariationalSparseGP`
       (see reference [2]).
 
     .. note:: This model has :math:`\\mathcal{O}(NM^2)` complexity for training,
