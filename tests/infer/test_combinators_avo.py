@@ -362,7 +362,9 @@ def nvo_avo(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
     return loss
 
 
-def vsmc(targets, forwards, reverses, loss_fn, resample=False, stl=False):
+def vsmc(
+    targets, forwards, reverses, loss_fn, resample=False, stl=False, batch_dim=None
+):
     q = targets[0]
     for ix, (fwd, rev, p) in enumerate(zip(forwards, reverses, targets[1:])):
         q = propose(
@@ -373,8 +375,9 @@ def vsmc(targets, forwards, reverses, loss_fn, resample=False, stl=False):
         if stl:
             q = augment_logweight(q, pre=stl_trick)
         if resample and ix < len(forwards) - 1:
-            # NOTE: requires static knowledge that you plate once!
-            q = combinator.resample(q, batch_dim=None, sample_dim=0)
+            # NOTE: requires static knowledge that sample_dim is first!
+            assert batch_dim is None or batch_dim in {-1, 1}
+            q = combinator.resample(q, batch_dim=batch_dim, sample_dim=0)
     return q
 
 
