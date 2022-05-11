@@ -478,7 +478,7 @@ def main(smoke_test_level=0, num_targets=8):
         reverses=reverses,
         loss_fn=nvo_avo,
         resample=True,
-        stl=False,
+        stl=True,
     )
     optimizer = torch.optim.Adam(
         params=[dict(params=x.program.parameters()) for x in forwards + reverses],
