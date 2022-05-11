@@ -396,7 +396,7 @@ def Z_hat(lw: Tensor, sample_dims=-1) -> Tensor:
 
 
 def save_models(models, filename, weights_dir="./weights") -> None:
-    checkpoint = {k: v.state_dict() for k, v in models.items()}
+    checkpoint = {k: v.program.state_dict() for k, v in models.items()}
     if not os.path.exists(weights_dir):
         os.makedirs(weights_dir)
     torch.save(checkpoint, f"{weights_dir}/{filename}")
@@ -421,7 +421,7 @@ def models_as_dict(model_iter, names):
     return model_dict
 
 
-def save_nvi_model(targets, forwards, reverses, filename=None):
+def save_annealing_model(targets, forwards, reverses, filename=None):
     assert filename is not None
     save_models(
         models_as_dict(
@@ -432,7 +432,7 @@ def save_nvi_model(targets, forwards, reverses, filename=None):
     )
 
 
-def load_nvi_model(targets, forwards, reverses, filename=None):
+def load_annealing_model(targets, forwards, reverses, filename=None):
     assert filename is not None
     load_models(
         models_as_dict(
@@ -549,7 +549,7 @@ def main(smoke_test_level=0, num_targets=8):
             )
 
         if smoke_test_level == 0:
-            # save_nvi_model(targets, forwards, reverses, filename=filename)
+            save_annealing_model(targets, forwards, reverses, filename=filename)
             torch.save(
                 (esss.mean(), lZhs.mean()),
                 "./metrics/{}-metric-tuple_S{}_B{}-ess-logZhat.pt".format(
