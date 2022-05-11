@@ -453,7 +453,7 @@ def _is_dist_node(n: dict):
     return "fn" in n.keys() and isinstance(n["fn"], Distribution)
 
 
-def _eval_detached(node):
+def _dist_with_detached_args(node):
     if not _is_dist_node(node):
         raise ValueError("Trace node type is not supported")
 
@@ -481,7 +481,7 @@ def stl_trick(p_trace, q_trace):
     dist_nodes = {k for k, n in q_trace.nodes.items() if _is_dist_node(n)}
 
     for k in dist_nodes:
-        dereparameterized = _eval_detached(q_trace.nodes[k])
+        dereparameterized = _dist_with_detached_args(q_trace.nodes[k])
         q_stl_trace.add_node(k, **dereparameterized)
 
     for l, r in q_trace.edges:
