@@ -266,18 +266,14 @@ class Tempered(TorchDistribution):
         optimize=False,
     ):
         super().__init__()
-        d1, d2 = density1, density2
-        assert isinstance(d1, type(d2)), "densities must be the same type"
+        assert isinstance(density1, type(density2)), "densities must be the same type"
         assert torch.all(beta > 0.0) and torch.all(
             beta < 1.0
         ), "tempered densities are β=(0, 1) for clarity. Use model directly for β=0 or β=1"
-        self._event_shape = d1.event_shape if "event_shape" in dir(d1) else event_shape
+        self._event_shape = density1.event_shape if "event_shape" in dir(density1) else event_shape
         self.optimize = optimize
-        if self.optimize:
-            self.logit = PyroParam(torch.logit(beta))
-        else:
-            self.logit = torch.logit(beta)
-        self.density1, self.density2 = d1, d2
+        self.logit = PyroParam(torch.logit(beta)) if self.optimize else torch.logit(beta)
+        self.density1, self.density2 = density1, density2
         self.beta = beta
 
     @property

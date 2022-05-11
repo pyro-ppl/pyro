@@ -460,13 +460,24 @@ def _dist_with_detached_args(node):
     dist = node["fn"]
 
     node_detached = node.copy()
+    import inspect
+
+    sig = inspect.signature(dist.__class__.__init__)
+    # FIXME: pretty sure we need to recurse into each density for Tempered
     node_detached["fn"] = dist.__class__(
         **{
-            k: dist.__dict__[k].detach()
-            for k, _ in dist.arg_constraints.items()
-            if k in dist.__dict__
+            p.name: dist.__dict__[p.name].detach()
+            if isinstance(dist.__dict__[p.name], Tensor)
+            else dist.__dict__[p.name]
+            for p in list(sig.parameters.values())[1:]
+            if p.name in dist.__dict__
         }
     )
+    if getattr(node_detached["fn"], "has_rsample", False):
+        node_detached["fn"].has_rsample = False
+        assert not node_detached[
+            "fn"
+        ].has_rsample, f"setting has_rsample does not stick on {dist.__class__}"
 
     return node_detached
 
