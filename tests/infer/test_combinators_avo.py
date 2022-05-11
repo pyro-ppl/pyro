@@ -509,29 +509,27 @@ def main(smoke_test_level=0, num_targets=8):
     writer.flush()
 
     # Metrics of logˆZ and effective sample size average over 100 batches of 1,000 samples
-    with pyro.plate("batches", smoke_test_level * 10 if smoke_test_level > 0 else 100):
-        with pyro.plate(
-            "samples", smoke_test_level * 100 if smoke_test_level > 0 else 1000
-        ):
+    test_batches = smoke_test_level * 10 if smoke_test_level > 0 else 100
+    test_samples = smoke_test_level * 100 if smoke_test_level > 0 else 1000
+    with pyro.plate("batches", test_batches):
+        with pyro.plate("samples", test_samples):
             metric_samples = vsmc(
                 targets=targets,
                 forwards=forwards,
                 reverses=reverses,
                 loss_fn=nvo_avo,
-                resample=True,
+                resample=False,
                 stl=False,
+                batch_dim=-1,
             )()
     lws = metric_samples.nodes["_LOGWEIGHT"]["value"]
     esss = effective_sample_size(lws, sample_dims=0)
     lZhs = log_Z_hat(lws, sample_dims=0)
-    print("lws shape:", lws.shape)
-    print(
-        "  avg ess:",
-        esss.mean().item(),
-        "/",
-        smoke_test_level * 100 if smoke_test_level > 0 else 1000,
-    )
-    print("  avg lZh:", lZhs.mean().item(), "/", lZ)
+    print("[N={}] lws shape: {}".format(N, "x".join(map(str, lws.shape))))
+    _ess = esss.mean().item()
+    print("[N={}] {}-avg ess: {:.2f} / {}".format(N, test_batches, _ess, test_samples))
+    _lZh = lZhs.mean().item()
+    print("[N={}] {}-avg lZh: {:.2f} / {:.2f}".format(N, test_batches, _lZh, lZ))
 
     if esss.mean() > 100:
         num_renderable_samples = 100000
@@ -563,13 +561,12 @@ if __name__ == "__main__":
         shutil.rmtree("./runs")
     except FileNotFoundError:
         pass
-    N = 2
     for N in [2, 4, 6, 8]:
         print(f"N={N}")
         start = time.time()
         main(smoke_test_level=0, num_targets=N)
         end = time.time()
-        print("Time consumed in working: ", end - start)
+        print("Time consumed in working: {:.1f}s".format(end - start))
         # FIXME(1): resample is working, but computed ESS seem to be the same regardless of this
 
 # AVO:
