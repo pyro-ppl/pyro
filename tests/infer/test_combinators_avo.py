@@ -388,8 +388,7 @@ def effective_sample_size(lw: Tensor, sample_dims=-1) -> Tensor:
 
 
 def log_Z_hat(lw: Tensor, sample_dims=-1) -> Tensor:
-    return lw.mean(dim=sample_dims)
-
+    return Z_hat(lw, sample_dims=sample_dims).log()
 
 def Z_hat(lw: Tensor, sample_dims=-1) -> Tensor:
     return lw.exp().mean(dim=sample_dims)
@@ -464,7 +463,7 @@ def main(smoke_test_level=0, num_targets=8):
     iterations = (
         smoke_test_level * smoke_test_level * 100 if smoke_test_level > 0 else 20_000
     )
-    seed = 7
+    seed = 8
     filename = mkfilename(K, iterations, seed, S, resample, optimize_path)
 
     pyro.set_rng_seed(seed)
@@ -477,12 +476,11 @@ def main(smoke_test_level=0, num_targets=8):
         forwards=forwards,
         reverses=reverses,
         loss_fn=nvo_avo,
-        resample=True,
-        stl=True,
+        resample=False,
+        stl=False,
     )
     optimizer = torch.optim.Adam(
         params=[dict(params=x.program.parameters()) for x in forwards + reverses],
-        lr=0.01,
     )
     Z = targets[-1].program.K
     lZ = math.log(Z)
@@ -527,8 +525,10 @@ def main(smoke_test_level=0, num_targets=8):
     lZhs = log_Z_hat(lws, sample_dims=0)
     print("[N={}] lws shape: {}".format(N, "x".join(map(str, lws.shape))))
     _ess = esss.mean().item()
+    writer.add_scalar("ESS/test", _ess, 0)
     print("[N={}] {}-avg ess: {:.2f} / {}".format(N, test_batches, _ess, test_samples))
     _lZh = lZhs.mean().item()
+    writer.add_scalar("log_z_hat/test", _lZh, 0)
     print("[N={}] {}-avg lZh: {:.2f} / {:.2f}".format(N, test_batches, _lZh, lZ))
 
     if esss.mean() > 100:
