@@ -390,6 +390,7 @@ def effective_sample_size(lw: Tensor, sample_dims=-1) -> Tensor:
 def log_Z_hat(lw: Tensor, sample_dims=-1) -> Tensor:
     return Z_hat(lw, sample_dims=sample_dims).log()
 
+
 def Z_hat(lw: Tensor, sample_dims=-1) -> Tensor:
     return lw.exp().mean(dim=sample_dims)
 
@@ -454,16 +455,15 @@ def mkfilename(K, iterations, seed, S=288, resample=True, optimize_path=False):
     )
 
 
-def main(smoke_test_level=0, num_targets=8):
+def train_and_test_avo(mkSummaryWriter, num_targets, smoke_test_level=0, seed=8):
     assert smoke_test_level < 5 and smoke_test_level >= 0
-    resample = True
+    resample = False
     optimize_path = False
     S = 288
     K = num_targets
     iterations = (
         smoke_test_level * smoke_test_level * 100 if smoke_test_level > 0 else 20_000
     )
-    seed = 8
     filename = mkfilename(K, iterations, seed, S, resample, optimize_path)
 
     pyro.set_rng_seed(seed)
@@ -476,7 +476,7 @@ def main(smoke_test_level=0, num_targets=8):
         forwards=forwards,
         reverses=reverses,
         loss_fn=nvo_avo,
-        resample=False,
+        resample=resample,
         stl=False,
     )
     optimizer = torch.optim.Adam(
@@ -486,7 +486,7 @@ def main(smoke_test_level=0, num_targets=8):
     lZ = math.log(Z)
     bar = trange(iterations)
     L = int(S / num_targets)
-    writer = SummaryWriter()
+    writer = mkSummaryWriter()
     for ix in bar:
         optimizer.zero_grad()
         with pyro.plate("samples", L):
@@ -523,15 +523,53 @@ def main(smoke_test_level=0, num_targets=8):
     lws = metric_samples.nodes["_LOGWEIGHT"]["value"]
     esss = effective_sample_size(lws, sample_dims=0)
     lZhs = log_Z_hat(lws, sample_dims=0)
-    print("[N={}] lws shape: {}".format(N, "x".join(map(str, lws.shape))))
+    print("[K={}] lws shape: {}".format(K, "x".join(map(str, lws.shape))))
     _ess = esss.mean().item()
     writer.add_scalar("ESS/test", _ess, 0)
-    print("[N={}] {}-avg ess: {:.2f} / {}".format(N, test_batches, _ess, test_samples))
+    print("[K={}] {}-avg ess: {:.2f} / {}".format(K, test_batches, _ess, test_samples))
     _lZh = lZhs.mean().item()
     writer.add_scalar("log_z_hat/test", _lZh, 0)
-    print("[N={}] {}-avg lZh: {:.2f} / {:.2f}".format(N, test_batches, _lZh, lZ))
+    print("[K={}] {}-avg lZh: {:.2f} / {:.2f}".format(K, test_batches, _lZh, lZ))
+    return _ess, _lZh, model, filename
 
-    if esss.mean() > 100:
+
+class NoopWriter(SummaryWriter):
+    def __init__(self):
+        pass
+
+    def add_scalar(self, a, b, c):
+        pass
+
+    def flush(self):
+        pass
+
+
+def test_avo_2step():
+    esss, lZhs = [], []
+    for seed in range(10):
+        _ess, _lZh, _, _ = train_and_test_avo(
+            NoopWriter, num_targets=2, smoke_test_level=0, seed=seed
+        )
+        esss.append(_ess)
+        lZhs.append(_lZh)
+    esss, lZhs = torch.tensor(esss), torch.tensor(lZhs)
+    assert esss.mean().item() > 300, "ess is less than expected"
+    breakpoint()
+    assert esss.std().item() < 20, "ess is a bit too variedd"
+    assert abs(lZhs.mean().item() - 1.88) < 0.1, "log_Z_hat is off"
+
+
+def main(smoke_test_level=0, num_targets=8, with_tb=True, seed=3):
+    mkSummaryWriter = SummaryWriter if with_tb else NoopWriter
+    _ess, _lZh, model, filename = train_and_test_avo(
+        mkSummaryWriter,
+        num_targets=num_targets,
+        smoke_test_level=smoke_test_level,
+        seed=seed,
+    )
+    targets, forwards, reverses = model
+
+    if _ess > 100:
         num_renderable_samples = 100000
         chain = reduce(lambda q, fwd: compose(fwd, q), forwards, targets[0])
         target = targets[-1]
@@ -549,7 +587,7 @@ def main(smoke_test_level=0, num_targets=8):
         if smoke_test_level == 0:
             save_annealing_model(targets, forwards, reverses, filename=filename)
             torch.save(
-                (esss.mean(), lZhs.mean()),
+                (_ess, _lZh),
                 "./metrics/{}-metric-tuple_S{}_B{}-ess-logZhat.pt".format(
                     filename, 1000, 100
                 ),
@@ -557,14 +595,15 @@ def main(smoke_test_level=0, num_targets=8):
 
 
 if __name__ == "__main__":
-    try:
-        shutil.rmtree("./runs")
-    except FileNotFoundError:
-        pass
-    for N in [2, 4, 6, 8]:
-        print(f"N={N}")
+    # try:
+    #    shutil.rmtree("./runs")
+    # except FileNotFoundError:
+    #    pass
+    # for K in [4, 6, 8]:
+    for K in [4]:
+        print(f"K={K}")
         start = time.time()
-        main(smoke_test_level=0, num_targets=N)
+        main(smoke_test_level=0, num_targets=K, seed=9)
         end = time.time()
         print("Time consumed in working: {:.1f}s".format(end - start))
         # FIXME(1): resample is working, but computed ESS seem to be the same regardless of this
