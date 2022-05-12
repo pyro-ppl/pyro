@@ -304,7 +304,7 @@ class propose(proposals):
         super().__init__()
         self.p, self.q = p, q
         self.loss_fn = loss_fn
-        self.validated = False
+        self.validated = True
 
     def _compute_logweight(
         self, p_trace: Trace, q_trace: Trace
@@ -315,15 +315,32 @@ class propose(proposals):
 
         NOTE: the log weight is detached, but the incremental weight /is not/!
         """
+        in_rho = lambda n: is_sample_type(n)
+        in_tau = lambda n: is_sample_type(n) and not is_observed(n)
+        rho_1 = {a for a, n in q_trace.nodes.items() if in_rho(n)}
+        tau_1 = {a for a, n in q_trace.nodes.items() if in_tau(n)}
+        tau_2 = {a for a, n in p_trace.nodes.items() if in_tau(n)}
+        nodes = rho_1 - (tau_1 - tau_2)
 
-        lu = stacked_log_prob(
-            q_trace,
-            site_filter=lambda _, n: is_sample_type(n)
-            and (not is_substituted(n) or is_observed(n)),
-        )
-        log_incremental = valueat(p_trace, _LOGWEIGHT) - lu
+        lu = stacked_log_prob(q_trace, site_filter=lambda a, _: a in nodes)
+        lv = valueat(p_trace, _LOGWEIGHT) - lu
+        lw = valueat(q_trace, _LOGWEIGHT).detach()
 
-        return valueat(q_trace, _LOGWEIGHT).detach(), log_incremental
+        if self.validated:
+            # FIXME: put this in a test
+            q_lps = stacked_log_prob(
+                q_trace, site_filter=lambda a, n: is_sample_type(n)
+            )
+            p_lps = stacked_log_prob(
+                p_trace, site_filter=lambda a, n: is_sample_type(n)
+            )
+            lv_check = p_lps - q_lps
+            isclose = torch.isclose(lv, lv_check)
+            assert isclose.all().item(), "incremental weight is constructed correctly"
+
+        log_weight = lw
+        log_incremental = lv
+        return log_weight, log_incremental
 
     def __call__(self, *args, **kwargs) -> Trace:
         q_out = self.q(*args, **kwargs)  # type: ignore
