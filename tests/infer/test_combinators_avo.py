@@ -595,18 +595,33 @@ def main(smoke_test_level=0, num_targets=8, with_tb=True, seed=3):
 
 
 if __name__ == "__main__":
-    # try:
-    #    shutil.rmtree("./runs")
-    # except FileNotFoundError:
-    #    pass
-    # for K in [4, 6, 8]:
-    for K in [4]:
-        print(f"K={K}")
-        start = time.time()
-        main(smoke_test_level=0, num_targets=K, seed=9)
-        end = time.time()
-        print("Time consumed in working: {:.1f}s".format(end - start))
-        # FIXME(1): resample is working, but computed ESS seem to be the same regardless of this
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--clear",
+        help="clear output artifacts before run",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument("--seed", help="set seed", type=int, default=3)
+    parser.add_argument("--smoketest", type=int, default=0, choices=[0, 1, 2])
+    parser.add_argument("--targets", type=int, choices=[2, 4, 6, 8])
+    args = parser.parse_args()
+    if args.clear:
+        try:
+            shutil.rmtree("./runs")
+        except FileNotFoundError:
+            pass
+
+    K, smoke_test_level, seed = args.targets, args.smoketest, args.seed
+
+    print(f"K={K}")
+    start = time.time()
+    main(smoke_test_level=smoke_test_level, num_targets=K, seed=seed)
+    end = time.time()
+    print("Time consumed in working: {:.1f}s".format(end - start))
 
 # AVO:
 #         N |   2  |   4  |   6  |   8
