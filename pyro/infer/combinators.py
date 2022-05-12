@@ -304,7 +304,8 @@ class propose(proposals):
         super().__init__()
         self.p, self.q = p, q
         self.loss_fn = loss_fn
-        self.validated = True
+        self.validated = False
+        self.validated_lw = False
 
     def _compute_logweight(
         self, p_trace: Trace, q_trace: Trace
@@ -326,7 +327,7 @@ class propose(proposals):
         lv = valueat(p_trace, _LOGWEIGHT) - lu
         lw = valueat(q_trace, _LOGWEIGHT).detach()
 
-        if self.validated:
+        if not self.validated_lw:
             # FIXME: put this in a test
             q_lps = stacked_log_prob(
                 q_trace, site_filter=lambda a, n: is_sample_type(n)
@@ -337,6 +338,7 @@ class propose(proposals):
             lv_check = p_lps - q_lps
             isclose = torch.isclose(lv, lv_check)
             assert isclose.all().item(), "incremental weight is constructed correctly"
+            self.validated_lw = True
 
         log_weight = lw
         log_incremental = lv
