@@ -243,13 +243,13 @@ class AIR(nn.Module):
 
             # Initial state.
             state = GuideState(
-                h=batch_expand(self.h_init, n),
-                c=batch_expand(self.c_init, n),
-                bl_h=batch_expand(self.bl_h_init, n),
-                bl_c=batch_expand(self.bl_c_init, n),
+                h=self.h_init.expand(n, -1),
+                c=self.c_init.expand(n, -1),
+                bl_h=self.bl_h_init.expand(n, -1),
+                bl_c=self.bl_c_init.expand(n, -1),
                 z_pres=torch.ones(n, self.z_pres_size, **self.options),
-                z_where=batch_expand(self.z_where_init, n),
-                z_what=batch_expand(self.z_what_init, n),
+                z_where=self.z_where_init.expand(n, -1),
+                z_what=self.z_what_init.expand(n, -1),
             )
 
             z_pres = []
@@ -399,13 +399,6 @@ def image_to_window(z_where, window_size, image_size, images):
     grid = F.affine_grid(theta_inv, torch.Size((n, 1, window_size, window_size)))
     out = F.grid_sample(images.view(n, 1, image_size, image_size), grid)
     return out.view(n, -1)
-
-
-# Helper to expand parameters to the size of the mini-batch. I would
-# like to remove this and just write `t.expand(n, -1)` inline, but the
-# `-1` argument of `expand` doesn't seem to work with PyTorch 0.2.0.
-def batch_expand(t, n):
-    return t.expand(n, t.size(1))
 
 
 # Combine z_pres and z_where (as returned by the model and guide) into
