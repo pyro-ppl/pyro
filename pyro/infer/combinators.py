@@ -410,16 +410,25 @@ def nested_objective(loss_fn):
 def detach_values(trace: Trace, site_filter=lambda a, b: True):
     newtrace = Trace()
 
+    detachit = (
+        lambda v: v.detach() if isinstance(v, torch.Tensor) and v.requires_grad else v
+    )
+    keys = ["value", "log_prob", "unscaled_log_prob"]
+
     for name, node in trace.nodes.items():
-        value = node.get("value", None)
+        value, log_prob, unscaled_log_prob = [
+            node.get(k, None) for k in ["value", "log_prob", "unscaled_log_prob"]
+        ]
+        detached = dict(value=value)
         if site_filter(name, node):
-            value = (
-                value.detach()
-                if isinstance(value, torch.Tensor) and value.requires_grad
-                else value
+            detached = dict(
+                value=detachit(value),
+                log_prob=detachit(log_prob),
+                unscaled_log_prob=detachit(unscaled_log_prob),
             )
+
         newtrace.add_node(
-            name, value=value, **{k: v for k, v in node.items() if k != "value"}
+            name, **detached, **{k: v for k, v in node.items() if k not in keys}
         )
 
     for p, s in zip(trace._pred, trace._succ):
