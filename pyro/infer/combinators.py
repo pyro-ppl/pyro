@@ -514,6 +514,7 @@ def _dist_with_detached_args(node):
             "fn"
         ].has_rsample, f"setting has_rsample does not stick on {dist.__class__}"
 
+    node_detached["value"] = node["value"]
     return node_detached
 
 
