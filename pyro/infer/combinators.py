@@ -424,19 +424,15 @@ def detach_values(trace: Trace, site_filter=lambda a, b: True):
     detachit = (
         lambda v: v.detach() if isinstance(v, torch.Tensor) and v.requires_grad else v
     )
-    keys = ["value", "log_prob", "unscaled_log_prob"]
+    keys = ["value"]
 
     for name, node in trace.nodes.items():
-        value, log_prob, unscaled_log_prob = [
-            node.get(k, None) for k in ["value", "log_prob", "unscaled_log_prob"]
-        ]
+        value = node.get("value", None)
         detached = dict(value=value)
         if site_filter(name, node):
-            detached = dict(
-                value=detachit(value),
-                log_prob=detachit(log_prob),
-                unscaled_log_prob=detachit(unscaled_log_prob),
-            )
+            detached = dict(value=detachit(value))
+            del node["log_prob"]
+            del node["unscaled_log_prob"]
 
         newtrace.add_node(
             name, **detached, **{k: v for k, v in node.items() if k not in keys}
