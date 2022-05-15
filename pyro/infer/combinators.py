@@ -147,6 +147,9 @@ Targets = Union[targets, Callable[..., Trace]]
 
 
 class proposals(inference):
+    # FIXME: debug and q_prev should be moved to a trace aggregation effect
+    debug = None
+    q_prev = None
     pass
 
 
@@ -300,12 +303,15 @@ class propose(proposals):
         loss_fn: Callable[
             [Trace, Trace, Tensor, Tensor], Union[Tensor, float]
         ] = default_loss_fn,
+        q_prev=None,
     ):
         super().__init__()
         self.p, self.q = p, q
         self.loss_fn = loss_fn
         self.validated = False
         self.validated_lw = False
+        self.q_prev = q_prev
+        self.debug = None
 
     def _compute_logweight(
         self, p_trace: Trace, q_trace: Trace
@@ -374,6 +380,11 @@ class propose(proposals):
         accum_loss = self.loss_fn(p_out, q_out, lw, lv)
 
         set_param(trace, _LOSS, "return", value=prev_loss + accum_loss)
+
+        if self.q_prev is not None:
+            self.debug = dict(
+                out=trace, q_out=q_out, p_out=p_out, prev=self.q_prev.debug
+            )
 
         return trace
 

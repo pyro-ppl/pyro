@@ -270,9 +270,13 @@ class Tempered(TorchDistribution):
         assert torch.all(beta > 0.0) and torch.all(
             beta < 1.0
         ), "tempered densities are β=(0, 1) for clarity. Use model directly for β=0 or β=1"
-        self._event_shape = density1.event_shape if "event_shape" in dir(density1) else event_shape
+        self._event_shape = (
+            density1.event_shape if "event_shape" in dir(density1) else event_shape
+        )
         self.optimize = optimize
-        self.logit = PyroParam(torch.logit(beta)) if self.optimize else torch.logit(beta)
+        self.logit = (
+            PyroParam(torch.logit(beta)) if self.optimize else torch.logit(beta)
+        )
         self.density1, self.density2 = density1, density2
         self.beta = beta
 
@@ -363,7 +367,14 @@ def nvo_avo(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
 
 
 def vsmc(
-    targets, forwards, reverses, loss_fn, resample=False, stl=False, batch_dim=None
+    targets,
+    forwards,
+    reverses,
+    loss_fn,
+    resample=False,
+    stl=False,
+    batch_dim=None,
+    debug=False,
 ):
     q = targets[0]
     for ix, (fwd, rev, p) in enumerate(zip(forwards, reverses, targets[1:])):
@@ -371,6 +382,7 @@ def vsmc(
             p=extend(p, rev),
             q=compose(fwd, q),
             loss_fn=loss_fn,
+            q_prev=q if debug else None,
         )
         if stl:
             q = augment_logweight(q, pre=stl_trick)
@@ -455,9 +467,12 @@ def mkfilename(K, iterations, seed, S=288, resample=True, optimize_path=False):
     )
 
 
-def train_and_test_avo(mkSummaryWriter, num_targets, smoke_test_level=0, seed=8):
+def train_and_test_avo(
+    mkSummaryWriter, num_targets, smoke_test_level=0, seed=8, debug=False
+):
     assert smoke_test_level < 5 and smoke_test_level >= 0
     resample = False
+    stl = False
     optimize_path = False
     S = 288
     K = num_targets
@@ -467,7 +482,7 @@ def train_and_test_avo(mkSummaryWriter, num_targets, smoke_test_level=0, seed=8)
     filename = mkfilename(K, iterations, seed, S, resample, optimize_path)
 
     pyro.set_rng_seed(seed)
-    model = paper_model(num_targets=num_targets, optimize_path=False)
+    model = paper_model(num_targets=num_targets, optimize_path=optimize_path)
     targets, forwards, reverses = [
         model[k] for k in ["targets", "forwards", "reverses"]
     ]
@@ -477,7 +492,8 @@ def train_and_test_avo(mkSummaryWriter, num_targets, smoke_test_level=0, seed=8)
         reverses=reverses,
         loss_fn=nvo_avo,
         resample=resample,
-        stl=False,
+        stl=stl,
+        debug=debug,
     )
     optimizer = torch.optim.Adam(
         params=[dict(params=x.program.parameters()) for x in forwards + reverses],
@@ -496,6 +512,9 @@ def train_and_test_avo(mkSummaryWriter, num_targets, smoke_test_level=0, seed=8)
             lw = out.nodes["_LOGWEIGHT"]["value"]
             ess = effective_sample_size(lw).item()
             lZh = log_Z_hat(lw).item()
+            if debug:
+                seq_trace = infer.debug
+                breakpoint()
             bar.set_postfix_str(
                 "ESS={: <6}/{}, lZhat={: <5}/{:.2f}".format(
                     "{: .1f}".format(ess), L, "{: .2f}".format(lZh), lZ
@@ -559,17 +578,20 @@ def test_avo_2step():
     assert abs(lZhs.mean().item() - 1.88) < 0.1, "log_Z_hat is off"
 
 
-def main(smoke_test_level=0, num_targets=8, with_tb=True, seed=3):
+def main(smoke_test_level=0, num_targets=8, with_tb=True, seed=3, debug=False):
     mkSummaryWriter = SummaryWriter if with_tb else NoopWriter
     _ess, _lZh, model, filename = train_and_test_avo(
         mkSummaryWriter,
         num_targets=num_targets,
         smoke_test_level=smoke_test_level,
         seed=seed,
+        debug=debug,
     )
-    targets, forwards, reverses = model
+    targets, forwards, reverses = [
+        model[k] for k in ["targets", "forwards", "reverses"]
+    ]
 
-    if _ess > 100:
+    if _ess > 0:
         num_renderable_samples = 100000
         chain = reduce(lambda q, fwd: compose(fwd, q), forwards, targets[0])
         target = targets[-1]
@@ -605,6 +627,12 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--debug",
+        help="clear output artifacts before run",
+        action="store_true",
+        default=False,
+    )
     parser.add_argument("--seed", help="set seed", type=int, default=3)
     parser.add_argument("--smoketest", type=int, default=0, choices=[0, 1, 2])
     parser.add_argument("--targets", type=int, choices=[2, 4, 6, 8])
@@ -615,11 +643,16 @@ if __name__ == "__main__":
         except FileNotFoundError:
             pass
 
-    K, smoke_test_level, seed = args.targets, args.smoketest, args.seed
+    K, smoke_test_level, seed, debug = (
+        args.targets,
+        args.smoketest,
+        args.seed,
+        args.debug,
+    )
 
     print(f"K={K}")
     start = time.time()
-    main(smoke_test_level=smoke_test_level, num_targets=K, seed=seed)
+    main(smoke_test_level=smoke_test_level, num_targets=K, seed=seed, debug=debug)
     end = time.time()
     print("Time consumed in working: {:.1f}s".format(end - start))
 
