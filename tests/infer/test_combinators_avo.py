@@ -11,6 +11,7 @@ import sys
 import time
 import torch
 import torch.nn.functional as F
+from pytest import mark
 
 
 from pyro.distributions import TorchDistribution
@@ -581,6 +582,68 @@ def test_avo_2step():
     breakpoint()
     assert esss.std().item() < 20, "ess is a bit too variedd"
     assert abs(lZhs.mean().item() - 1.88) < 0.1, "log_Z_hat is off"
+
+
+@mark.skip("TODO comment this and adjust test as needed")
+def test_avo_4step_grads_dont_leak():
+    seed = 4
+    pyro.set_rng_seed(seed)
+    model = paper_model(num_targets=4, optimize_path=False)
+    targets, forwards, reverses = [
+        model[k] for k in ["targets", "forwards", "reverses"]
+    ]
+    L = int(288 / 4)
+    q0 = targets[0]
+    [(f01, r10, q1), (f12, r21, q2), (f23, r32, p)] = list(
+        zip(forwards, reverses, targets[1:])
+    )
+
+    @nested_objective
+    def nvo_avo1(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
+        return (-lv).sum(dim=(sample_dims,), keepdim=False)
+
+    @nested_objective
+    def nvo_avo2(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
+        return (-lv).sum(dim=(sample_dims,), keepdim=False)
+
+    @nested_objective
+    def nvo_avo3(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
+        loss = (-lv).sum(dim=(sample_dims,), keepdim=False)
+        loss.backward()
+        return loss
+
+    q = propose(p=extend(q1, r10), q=compose(f01, q0), loss_fn=nvo_avo1, q_prev=None)
+    q = propose(p=extend(q2, r21), q=compose(f12, q), loss_fn=nvo_avo2, q_prev=q)
+    q = propose(p=extend(p, r32), q=compose(f23, q), loss_fn=nvo_avo3, q_prev=q)
+
+    infer = q
+    optimizer = torch.optim.Adam(
+        params=[dict(params=x.program.parameters()) for x in forwards + reverses],
+    )
+    Z = targets[-1].program.K
+    lZ = math.log(Z)
+
+    optimizer.zero_grad()
+
+    params_pre1 = [param for k in [f01, r10] for param in k.program.parameters()]
+    params_pre2 = [param for k in [f12, r21] for param in k.program.parameters()]
+    params_pre3 = [param for k in [f23, r32] for param in k.program.parameters()]
+
+    with pyro.plate("samples", L):
+        out = infer()
+        loss = out.nodes[_LOSS]["value"]
+        loss.backward()
+        lw = out.nodes["_LOGWEIGHT"]["value"]
+        ess = effective_sample_size(lw).item()
+        lZh = log_Z_hat(lw).item()
+        optimizer.step()
+
+    params_post1 = [param for k in [f01, r10] for param in k.program.parameters()]
+    params_post2 = [param for k in [f12, r21] for param in k.program.parameters()]
+    params_post3 = [param for k in [f23, r32] for param in k.program.parameters()]
+
+    breakpoint()
+    print()
 
 
 def main(smoke_test_level=0, num_targets=8, with_tb=True, seed=3, debug=False):
