@@ -502,7 +502,12 @@ def train_and_test_avo(
     lZ = math.log(Z)
     bar = trange(iterations)
     L = int(S / num_targets)
-    writer = mkSummaryWriter()
+    writer = mkSummaryWriter(
+        comment=":"
+        + "+".join(
+            [f"K{K}", f"s{seed}", "stl" if stl else "", "resample" if resample else ""]
+        )
+    )
     for ix in bar:
         optimizer.zero_grad()
         with pyro.plate("samples", L):
@@ -516,11 +521,11 @@ def train_and_test_avo(
                 seq_trace = infer.debug
                 breakpoint()
             bar.set_postfix_str(
-                "ESS={: <6}/{}, lZhat={: <5}/{:.2f}".format(
-                    "{: .1f}".format(ess), L, "{: .2f}".format(lZh), lZ
+                "ESS={: <6} / {}, lZhat={: <5}/{:.2f}".format(
+                    "{: .3f}".format(ess / L), 1, "{: .2f}".format(lZh), lZ
                 )
             )
-            writer.add_scalar("ESS/train", ess, ix)
+            writer.add_scalar("ESS/train", ess / L, ix)
             writer.add_scalar("log_z_hat/train", lZh, ix)
         optimizer.step()
     writer.flush()
