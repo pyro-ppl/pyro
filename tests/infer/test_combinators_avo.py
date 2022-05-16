@@ -5,6 +5,7 @@ import numpy
 import os
 import pyro
 import pyro.distributions as dist
+from pyro.distributions.distribution import Distribution
 import pyro.infer.combinators as combinator
 import pyro.optim.pytorch_optimizers as optim
 import sys
@@ -179,7 +180,7 @@ def ring_gmm(name, radius=10, scale=0.5, K=8):
     return primitive(RingModel(name, radius, scale, K))
 
 
-class ResMLPJ(nn.Module):
+class ResMLPJ(PyroModule):
     def __init__(self, dim_in, dim_hidden, dim_out):
         super().__init__()
         self.map_joint = nn.Sequential(nn.Linear(dim_in, dim_hidden), nn.ReLU())
