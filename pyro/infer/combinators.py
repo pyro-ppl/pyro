@@ -431,8 +431,10 @@ def detach_values(trace: Trace, site_filter=lambda a, b: True):
         detached = dict(value=value)
         if site_filter(name, node):
             detached = dict(value=detachit(value))
-            del node["log_prob"]
-            del node["unscaled_log_prob"]
+            if "log_prob" in node:
+                del node["log_prob"]
+            if "unscaled_log_prob" in node:
+                del node["unscaled_log_prob"]
 
         newtrace.add_node(
             name, **detached, **{k: v for k, v in node.items() if k not in keys}
