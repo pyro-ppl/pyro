@@ -358,6 +358,136 @@ def nvo_avo(p_out, q_out, lw, lv, sample_dims=-1) -> Tensor:
     return loss
 
 
+@nested_objective
+def nvo_rkl_mod(p_out, q_out, lw, lv, sample_dim=-1) -> Tensor:
+    """
+    Metric: KL(g_k-1(z_k-1)/Z_k-1 q_k(z_k | z_k-1) || g_k(z_k)/Z_k-1 r_k(z_k-1 | z_k)) = Exp[-(dlZ + lv)]
+    """
+    _eval0 = lambda e: e - e.detach()
+    _eval1 = lambda e: torch.exp(_eval0(e))
+
+    def _eval_nrep(node):
+        generator = node["fn"]
+        if isinstance(generator, Distribution):
+            out = node.copy()
+            out["value"] = node["value"].detach()
+            # out.reparameterized = False # FIXME not sure how to enforce this in pyro
+            return out
+        elif getattr(
+            generator, "log_prob"
+        ):  # not a normalized distribution, but still has a log_prob
+            out = node.copy()
+            out["value"] = node["value"].detach()
+            return out
+        else:
+            raise NotImplementedError(
+                "Only supports RandomVariable and ImproperRandomVariable"
+            )
+
+    def _estimate_mc(
+        values: Tensor,
+        log_weights: Tensor,
+        sample_dims: Tuple[int],
+        reducedims: Tuple[int],
+        keepdims: bool,
+    ) -> Tensor:
+        nw = F.softmax(log_weights, dim=sample_dims)
+        return (nw * values).sum(dim=reducedims, keepdim=keepdims)
+
+    reducedims = (sample_dim,)
+
+    lw = lw  # already detached
+    lv = lv
+    proposal_trace = q_out
+    target_trace = p_out
+
+    proposal_trace.compute_log_prob()
+    target_trace.compute_log_prob()
+
+    q_sites = {
+        k for k, n in p_out.nodes.items() if is_sample_type(n) and is_auxiliary(n)
+    }
+    q_extended_sites = {
+        k for k, n in p_out.nodes.items() if is_sample_type(n) and not is_auxiliary(n)
+    }
+
+    # TODO: in probtorch we fix an index, the following code still requires this assumption
+    assert len(q_sites) == 1 and len(q_sites) == len(q_extended_sites)
+    q_site = list(q_sites)[0]
+    q_ext_site = list(q_extended_sites)[0]
+
+    # rv_proposal = proposal_trace["g{}".format(out.ix)]
+    rv_proposal = proposal_trace.nodes[q_site]
+    # rv_target = target_trace["g{}".format(out.ix + 1)]
+    rv_target = target_trace.nodes[q_ext_site]
+    # rv_fwd = proposal_trace["g{}".format(out.ix + 1)]
+    rv_fwd = proposal_trace.nodes[q_ext_site]
+    # rv_rev = target_trace["g{}".format(out.ix)]
+    rv_rev = target_trace.nodes[q_site]
+
+    # ldZ = Z_{k} / Z_{k-1}
+    # Chat with Hao --> estimating dZ might be instable when resampling
+    ldZ = lv.detach().logsumexp(dim=sample_dim) - math.log(lv.shape[sample_dim])
+    # TODO: set ldZ to 0 if RandomVariable similar to grad  terms
+    f = -(lv - ldZ)
+
+    grad_log_Z1_term = (
+        _estimate_mc(
+            rv_proposal["log_prob"],
+            lw,
+            sample_dims=sample_dim,
+            reducedims=reducedims,
+            keepdims=False,
+        )
+        if not isinstance(rv_proposal["fn"], Distribution)
+        else torch.tensor(0.0)
+    )
+    grad_log_Z2_term = (
+        _estimate_mc(
+            _eval_nrep(rv_target)["log_prob"],
+            lw + lv.detach(),
+            sample_dims=sample_dim,
+            reducedims=reducedims,
+            keepdims=False,
+        )
+        if not isinstance(rv_target["fn"], Distribution)
+        else torch.tensor(0.0)
+    )
+
+    # FIXME: rewrite this
+    if getattr(rv_proposal["fn"], "has_rsample", False):
+        # Compute reparameterized gradient
+        kl_term = _estimate_mc(
+            f,
+            lw,
+            sample_dims=sample_dim,
+            reducedims=reducedims,
+            keepdims=False,
+        )
+        return kl_term - _eval0(grad_log_Z1_term) + _eval0(grad_log_Z2_term)
+
+    baseline = _estimate_mc(
+        f.detach(),
+        lw,
+        sample_dims=sample_dim,
+        reducedims=reducedims,
+        keepdims=False,
+    )
+
+    kl_term = _estimate_mc(
+        (f - baseline) * _eval1(rv_proposal["log_prob"] - grad_log_Z1_term)
+        - _eval0(rv_proposal["log_prob"]),
+        lw,
+        sample_dims=sample_dim,
+        reducedims=reducedims,
+        keepdims=False,
+    )
+
+    loss = kl_term + _eval0(grad_log_Z2_term) + baseline
+
+    return loss
+
+
 def vsmc(
     targets,
     forwards,
