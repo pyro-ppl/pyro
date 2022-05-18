@@ -255,13 +255,7 @@ def conditional_multivariate_normal_kernel(name, loc, cov, net):
     return primitive(ConditionalMultivariateNormalKernel(name, loc, cov, net))
 
 
-class Tempered(TorchDistribution):
-    """
-    FIXME: some annoying hardcoded things in here for quick hacks. should be cleaned up later.
-    """
-
-    arg_constraints = {}
-
+class Tempered(PyroModule):
     def __init__(
         self,
         density1,
@@ -284,13 +278,6 @@ class Tempered(TorchDistribution):
         )
         self.density1, self.density2 = density1, density2
         self.beta = beta
-
-    @property
-    def event_shape(self):
-        return self._event_shape
-
-    def sample(self, sample_shape=torch.Size([])):
-        raise RuntimeError()
 
     def log_prob(self, value):
         def _log_prob(g, value):
