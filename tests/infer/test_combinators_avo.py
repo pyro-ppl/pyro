@@ -28,8 +28,11 @@ from pyro.infer.combinators import (
     nested_objective,
     _LOSS,
     _RETURN,
+    is_sample_type,
+    is_auxiliary,
 )
 
+from typing import Tuple
 from torch import Tensor, nn
 from functools import reduce
 from scipy.interpolate import interpn
@@ -457,11 +460,11 @@ def load_annealing_model(targets, forwards, reverses, filename=None):
     )
 
 
-def mkfilename(K, iterations, seed, S=288, resample=True, optimize_path=False):
+def mkfilename(K, iterations, seed, loss_fn, S=288, resample=True, optimize_path=False):
     return "nvi{}{}_{}_S{}_K{}_I{}_seed{}".format(
         "r" if resample else "",
         "s" if optimize_path else "",
-        "avo",
+        loss_fn,
         S,
         K,
         iterations,
@@ -470,18 +473,26 @@ def mkfilename(K, iterations, seed, S=288, resample=True, optimize_path=False):
 
 
 def train_and_test_avo(
-    mkSummaryWriter, num_targets, smoke_test_level=0, seed=8, debug=False
+    mkSummaryWriter,
+    num_targets,
+    smoke_test_level=0,
+    seed=8,
+    debug=False,
+    resample=False,
+    stl=False,
+    optimize_path=False,
+    objective="nvo_avo",
 ):
     assert smoke_test_level < 5 and smoke_test_level >= 0
-    resample = False
-    stl = False
-    optimize_path = False
+    assert objective in {"nvo_rkl", "nvo_avo"}
     S = 288
     K = num_targets
+    loss_fn_name = objective
+    loss_fn = nvo_avo if loss_fn_name == "nvo_avo" else nvo_rkl_mod
     iterations = (
         smoke_test_level * smoke_test_level * 100 if smoke_test_level > 0 else 20_000
     )
-    filename = mkfilename(K, iterations, seed, S, resample, optimize_path)
+    filename = mkfilename(K, iterations, seed, loss_fn_name, S, resample, optimize_path)
 
     pyro.set_rng_seed(seed)
     model = paper_model(num_targets=num_targets, optimize_path=optimize_path)
@@ -492,7 +503,7 @@ def train_and_test_avo(
         targets=targets,
         forwards=forwards,
         reverses=reverses,
-        loss_fn=nvo_avo,
+        loss_fn=loss_fn,
         resample=resample,
         stl=stl,
         debug=debug,
@@ -507,7 +518,14 @@ def train_and_test_avo(
     writer = mkSummaryWriter(
         comment=":"
         + "+".join(
-            [f"K{K}", f"s{seed}", "stl" if stl else "", "resample" if resample else ""]
+            [
+                f"K{K}",
+                f"s{seed}",
+                loss_fn_name,
+                "stl" if stl else "",
+                "resample" if resample else "",
+                "opt" if optimize_path else "",
+            ]
         )
     )
     for ix in bar:
@@ -647,7 +665,17 @@ def test_avo_4step_grads_dont_leak():
     print()
 
 
-def main(smoke_test_level=0, num_targets=8, with_tb=True, seed=3, debug=False):
+def main(
+    smoke_test_level=0,
+    num_targets=8,
+    with_tb=True,
+    seed=3,
+    debug=False,
+    resample=False,
+    stl=False,
+    optimize_path=False,
+    objective=None,
+):
     mkSummaryWriter = SummaryWriter if with_tb else NoopWriter
     _ess, _lZh, model, filename = train_and_test_avo(
         mkSummaryWriter,
@@ -655,6 +683,10 @@ def main(smoke_test_level=0, num_targets=8, with_tb=True, seed=3, debug=False):
         smoke_test_level=smoke_test_level,
         seed=seed,
         debug=debug,
+        resample=resample,
+        stl=stl,
+        optimize_path=optimize_path,
+        objective=objective,
     )
     targets, forwards, reverses = [
         model[k] for k in ["targets", "forwards", "reverses"]
@@ -702,6 +734,24 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--optimize_path",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--resample",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--stl",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--objective", default="nvo_avo", choices=["nvo_avo", "nvo_rkl"]
+    )
     parser.add_argument("--seed", help="set seed", type=int, default=3)
     parser.add_argument("--smoketest", type=int, default=0, choices=[0, 1, 2])
     parser.add_argument("--targets", type=int, choices=[2, 4, 6, 8])
@@ -712,16 +762,15 @@ if __name__ == "__main__":
         except FileNotFoundError:
             pass
 
-    K, smoke_test_level, seed, debug = (
-        args.targets,
-        args.smoketest,
-        args.seed,
-        args.debug,
-    )
-
-    print(f"K={K}")
+    print(f"K={args.targets}")
     start = time.time()
-    main(smoke_test_level=smoke_test_level, num_targets=K, seed=seed, debug=debug)
+    main(
+        smoke_test_level=args.smoketest,
+        num_targets=args.targets,
+        seed=args.seed,
+        debug=args.debug,
+        objective=args.objective,
+    )
     end = time.time()
     print("Time consumed in working: {:.1f}s".format(end - start))
 
