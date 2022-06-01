@@ -12,11 +12,16 @@ def _context_wrap(context, fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
 
-class _bound_partial(partial):
+class _bound_partial:
     """
     Converts a (possibly) bound method into a partial function to
     support class methods as arguments to handlers.
     """
+    def __init__(self, func):
+        self.func = func
+
+    def __call__(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
 
     def __get__(self, instance, owner):
         if instance is None:
