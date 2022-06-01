@@ -516,7 +516,7 @@ def render_graph(
                 dist_label += rf"{rv} ~ {rv_dist}\l"
 
             if "constraint" in data and data["constraint"]:
-                dist_label += rf"{rv} ∈ {data['constraint']}\l"
+                dist_label += rf"{rv} : {data['constraint']}\l"
 
         graph.node("distribution_description_node", label=dist_label, shape="plaintext")
 
