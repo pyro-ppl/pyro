@@ -17,6 +17,7 @@ class _bound_partial:
     Converts a (possibly) bound method into a partial function to
     support class methods as arguments to handlers.
     """
+
     def __init__(self, func):
         self.func = func
 
