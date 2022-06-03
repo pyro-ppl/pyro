@@ -18,6 +18,9 @@ class _bound_partial(partial):
     support class methods as arguments to handlers.
     """
 
+    # Use '__slots__' for func to avoid the issue
+    #   `_bound_partial(_bound_partial(f)).func is f`
+    # in Python 3.10.
     __slots__ = "func"
 
     def __init__(self, func):
