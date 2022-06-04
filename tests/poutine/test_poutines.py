@@ -968,3 +968,13 @@ def test_arg_kwarg_error():
 
     with poutine.mask(mask=False):
         model()
+
+
+def test_block_class_method():
+    class A:
+        @poutine.block
+        def run(self):
+            return 1
+
+    a = A()
+    a.run()
