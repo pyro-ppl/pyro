@@ -48,7 +48,7 @@ def _linear_integrate(init, trans, shift):
 
 def _logmatmulexp(x, y):
     """
-    Numerically stable version of ``(x.log() @ y.log()).exp()``.
+    Numerically stable version of ``(x.exp() @ y.exp()).log()``.
     """
     finfo = torch.finfo(x.dtype)  # avoid nan due to -inf - -inf
     x_shift = x.detach().max(-1, keepdim=True).values.clamp_(min=finfo.min)
