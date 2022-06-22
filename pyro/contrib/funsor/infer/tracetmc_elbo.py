@@ -29,7 +29,9 @@ class TraceTMC_ELBO(ELBO):
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
 
-        log_measures = guide_terms["log_measures"] + model_terms["log_measures"]
+        log_measures = list(guide_terms["log_measures"].values()) + list(
+            model_terms["log_measures"].values()
+        )
         log_factors = model_terms["log_factors"] + [
             -f for f in guide_terms["log_factors"]
         ]

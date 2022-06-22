@@ -31,7 +31,7 @@ def terms_from_trace(tr):
     # of free variables as either product (plate) variables or sum (measure) variables
     terms = {
         "log_factors": [],
-        "log_measures": [],
+        "log_measures": {},
         "scale": to_funsor(1.0),
         "plate_vars": frozenset(),
         "measure_vars": frozenset(),
@@ -62,7 +62,7 @@ def terms_from_trace(tr):
         )
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
-            terms["log_measures"].append(node["funsor"]["log_measure"])
+            terms["log_measures"][name] = node["funsor"]["log_measure"]
             # sum (measure) variables: the fresh non-plate variables at a site
             terms["measure_vars"] |= (
                 frozenset(node["funsor"]["value"].inputs) | {name}
@@ -132,7 +132,7 @@ class TraceMarkovEnum_ELBO(ELBO):
                 for f in funsor.sum_product.dynamic_partial_sum_product(
                     funsor.ops.logaddexp,
                     funsor.ops.add,
-                    model_terms["log_measures"] + contracted_factors,
+                    list(model_terms["log_measures"].values()) + contracted_factors,
                     plate_to_step=model_terms["plate_to_step"],
                     eliminate=model_terms["measure_vars"] | markov_dims,
                 )
@@ -149,7 +149,7 @@ class TraceMarkovEnum_ELBO(ELBO):
                 log_prob = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp,
                     funsor.ops.add,
-                    guide_terms["log_measures"],
+                    list(guide_terms["log_measures"].values()),
                     plates=plate_vars,
                     eliminate=(plate_vars | guide_terms["measure_vars"])
                     - frozenset(cost.inputs),
@@ -198,7 +198,7 @@ class TraceEnum_ELBO(ELBO):
             contracted_costs = []
             # incorporate the effects of subsampling and handlers.scale through a common scale factor
             for group_factors, group_vars in _partition(
-                model_terms["log_measures"] + contracted_factors,
+                list(model_terms["log_measures"].values()) + contracted_factors,
                 model_terms["measure_vars"],
             ):
                 group_factor_vars = frozenset().union(
@@ -244,7 +244,7 @@ class TraceEnum_ELBO(ELBO):
                 logzq = funsor.sum_product.sum_product(
                     funsor.ops.logaddexp,
                     funsor.ops.add,
-                    guide_terms["log_measures"] + list(targets.values()),
+                    list(guide_terms["log_measures"].values()) + list(targets.values()),
                     plates=plate_vars,
                     eliminate=(plate_vars | guide_terms["measure_vars"]),
                 )

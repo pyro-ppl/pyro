@@ -4,8 +4,6 @@
 import contextlib
 
 import funsor
-from funsor.adjoint import adjoint
-from funsor.constant import Constant
 from funsor.sum_product import _partition
 
 from pyro.contrib.funsor import to_data, to_funsor
@@ -57,7 +55,7 @@ class Trace_ELBO(ELBO):
             contracted_costs = []
             # incorporate the effects of subsampling and handlers.scale through a common scale factor
             for group_factors, group_vars in _partition(
-                model_terms["log_measures"] + contracted_factors,
+                list(model_terms["log_measures"].values()) + contracted_factors,
                 model_terms["measure_vars"],
             ):
                 group_factor_vars = frozenset().union(
@@ -81,38 +79,33 @@ class Trace_ELBO(ELBO):
             costs = contracted_costs + uncontracted_factors  # model costs: logp
             costs += [-f for f in guide_terms["log_factors"]]  # guide costs: -logq
 
-            # compute log_measures corresponding to each cost term
-            # the goal is to achieve fine-grained Rao-Blackwellization
-            targets = dict()
-            for cost in costs:
-                if cost.input_vars not in targets:
-                    targets[cost.input_vars] = Constant(
-                        cost.inputs,
-                        funsor.Tensor(
-                            funsor.ops.new_zeros(
-                                funsor.tensor.get_default_prototype(),
-                                (),
-                            )
-                        ),
-                    )
-
-            logzq = funsor.sum_product.sum_product(
-                funsor.ops.logaddexp,
-                funsor.ops.add,
-                guide_terms["log_measures"] + list(targets.values()),
-                plates=plate_vars,
-                eliminate=(plate_vars | guide_terms["measure_vars"]),
-            )
-            logzq = funsor.optimizer.apply_optimizer(logzq)
-
-        marginals = adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq)
+        # compute log_measures corresponding to each cost term
+        # the goal is to achieve fine-grained Rao-Blackwellization
+        log_measures = dict()
+        for cost in costs:
+            if cost.input_vars not in log_measures:
+                log_probs = [
+                    f
+                    for name, f in guide_terms["log_measures"].items()
+                    if name in cost.inputs
+                ]
+                log_prob = funsor.sum_product.sum_product(
+                    funsor.ops.logaddexp,
+                    funsor.ops.add,
+                    log_probs,
+                    plates=plate_vars,
+                    eliminate=(plate_vars | guide_terms["measure_vars"])
+                    - frozenset(cost.inputs),
+                )
+                log_measures[cost.input_vars] = funsor.optimizer.apply_optimizer(
+                    log_prob
+                )
 
         with funsor.terms.lazy:
             # finally, integrate out guide variables in the elbo and all plates
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
-                target = targets[cost.input_vars]
-                log_measure = marginals[target]
+                log_measure = log_measures[cost.input_vars]
                 measure_vars = (frozenset(cost.inputs) - plate_vars) - particle_var
                 elbo_term = funsor.Integrate(
                     log_measure,
