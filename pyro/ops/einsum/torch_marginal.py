@@ -54,7 +54,6 @@ def einsum(equation, *operands):
 
     if any(hasattr(x, "_pyro_backward") for x in operands):
         result._pyro_backward = _EinsumBackward(equation, operands)
-    import pdb; pdb.set_trace()
     return result
 
 
