@@ -65,3 +65,9 @@ Inference algorithms
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.contrib.funsor.infer.discrete
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
