@@ -105,8 +105,7 @@ def test_statistics_A_ok_with_sample_shape(statistics, sample_shape):
 
 def test_autocorrelation():
     x = torch.arange(10.0)
-    with xfail_if_not_implemented():
-        actual = autocorrelation(x)
+    actual = autocorrelation(x)
     assert_equal(
         actual,
         torch.tensor([1, 0.78, 0.52, 0.21, -0.13, -0.52, -0.94, -1.4, -1.91, -2.45]),
@@ -116,8 +115,7 @@ def test_autocorrelation():
 
 def test_autocorrelation_trivial():
     x = torch.zeros(10)
-    with xfail_if_not_implemented():
-        actual = autocorrelation(x)
+    actual = autocorrelation(x)
     assert_equal(actual, torch.ones(10), prec=0.01)
 
 
