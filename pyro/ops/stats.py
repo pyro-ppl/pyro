@@ -117,7 +117,7 @@ def autocorrelation(input, dim=0):
     autocorr = autocorr / torch.tensor(
         range(N, 0, -1), dtype=input.dtype, device=input.device
     )
-    autocorr = autocorr / autocorr[..., :1]
+    autocorr = autocorr / autocorr[..., :1].clamp(min=torch.finfo(autocorr.dtype).tiny)
     return autocorr.transpose(dim, -1)
 
 
