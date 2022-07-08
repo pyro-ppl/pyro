@@ -93,11 +93,6 @@ def autocorrelation(input, dim=0):
     :param int dim: the dimension to calculate autocorrelation.
     :returns torch.Tensor: autocorrelation of ``input``.
     """
-    if (not input.is_cuda) and (not torch.backends.mkl.is_available()):
-        raise NotImplementedError(
-            "For CPU tensor, this method is only supported " "with MKL installed."
-        )
-
     # Adapted from Stan implementation
     # https://github.com/stan-dev/math/blob/develop/stan/math/prim/mat/fun/autocorrelation.hpp
     N = input.size(dim)
