@@ -114,6 +114,27 @@ def test_autocorrelation():
     )
 
 
+def test_autocorrelation_trivial():
+    x = torch.zeros(10)
+    with xfail_if_not_implemented():
+        actual = autocorrelation(x)
+    assert_equal(actual, torch.ones(10), prec=0.01)
+
+
+def test_autocorrelation_vectorized():
+    # make a mostly noisy x with a couple constant series
+    x = torch.randn(3, 4, 5)
+    x[1, 2] = 0
+    x[2, 3] = 1
+
+    actual = autocorrelation(x, dim=-1)
+    expected = torch.tensor([[autocorrelation(xij).tolist() for xij in xi] for xi in x])
+    assert_equal(actual, expected)
+
+    assert (actual[1, 2] == 1).all()
+    assert (actual[2, 3] == 1).all()
+
+
 def test_autocovariance():
     x = torch.arange(10.0)
     with xfail_if_not_implemented():

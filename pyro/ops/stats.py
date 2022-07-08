@@ -112,12 +112,18 @@ def autocorrelation(input, dim=0):
     # inverse Fourier transform
     autocorr = irfft(freqvec_gram, n=M2)
 
-    # truncate and normalize the result, then transpose back to original shape
+    # truncate and normalize the result, setting autocorrelation to 1 for all
+    # constant channels
     autocorr = autocorr[..., :N]
     autocorr = autocorr / torch.tensor(
         range(N, 0, -1), dtype=input.dtype, device=input.device
     )
-    autocorr = autocorr / autocorr[..., :1].clamp(min=torch.finfo(autocorr.dtype).tiny)
+    variance = autocorr[..., :1]
+    constant = (variance == 0).expand_as(autocorr)
+    autocorr = autocorr / variance.clamp(min=torch.finfo(variance.dtype).tiny)
+    autocorr[constant] = 1
+
+    # transpose back to original shape
     return autocorr.transpose(dim, -1)
 
 
