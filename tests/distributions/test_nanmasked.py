@@ -6,6 +6,7 @@ import math
 import pytest
 import torch
 
+import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
@@ -71,7 +72,7 @@ def test_multivariate_normal(batch_shape, p):
 
 def test_multivariate_normal_model():
     def model(data):
-        loc = pyro.sample("loc", dist.Normal(torch.zeros(3), torch.ones(3)))
+        loc = pyro.sample("loc", dist.Normal(torch.zeros(3), torch.ones(3)).to_event(1))
         scale_tril = torch.eye(3)
         with pyro.plate("data", len(data)):
             pyro.sample(
@@ -80,12 +81,13 @@ def test_multivariate_normal_model():
                 obs=data,
             )
 
-        data = torch.randn(100, 3)
-        ok = torch.rand(100, 3) < 0.5
-        assert 100 < ok.long().sum() < 200, "weak test"
+    data = torch.randn(100, 3)
+    ok = torch.rand(100, 3) < 0.5
+    assert 100 < ok.long().sum() < 200, "weak test"
+    data[~ok] = math.nan
 
-        guide = AutoNormal(model)
-        svi = SVI(model, guide,  Adam({"lr": 1e-4}), Trace_ELBO())
-        for step in range(3):
-            loss = svi.step(data)
-            assert math.isfinite(loss)
+    guide = AutoNormal(model)
+    svi = SVI(model, guide, Adam({"lr": 1e-4}), Trace_ELBO())
+    for step in range(3):
+        loss = svi.step(data)
+        assert math.isfinite(loss)
