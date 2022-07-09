@@ -36,8 +36,9 @@ def test_normal(batch_shape):
     assert loc_grad.isfinite().all()
     assert scale_grad.isfinite().all()
 
-    # Check identity on fully observed rows.
+    # Check identity on fully observed and fully unobserved rows.
     assert_close(actual[ok], expected[ok])
+    assert_close(actual[~ok], torch.zeros_like(actual[~ok]))
 
 
 @pytest.mark.parametrize("batch_shape", [(), (40,), (11, 9)], ids=str)
@@ -66,8 +67,11 @@ def test_multivariate_normal(batch_shape, p):
     assert loc_grad.isfinite().all()
     assert scale_tril_grad.isfinite().all()
 
-    # Check identity on fully observed rows.
-    assert_close(actual[ok.all(-1)], expected[ok.all(-1)])
+    # Check identity on fully observed and fully unobserved rows.
+    observed = ok.all(-1)
+    assert_close(actual[observed], expected[observed])
+    unobserved = ~ok.any(-1)
+    assert_close(actual[unobserved], torch.zeros_like(actual[unobserved]))
 
 
 def test_multivariate_normal_model():
