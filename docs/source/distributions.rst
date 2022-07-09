@@ -281,6 +281,20 @@ MultivariateStudentT
     :undoc-members:
     :show-inheritance:
 
+NanMaskedNormal
+---------------
+.. autoclass:: pyro.distributions.NanMaskedNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+NanMaskedMultivariateNormal
+---------------------------
+.. autoclass:: pyro.distributions.NanMaskedMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 OMTMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.OMTMultivariateNormal
