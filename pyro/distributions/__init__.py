@@ -53,6 +53,7 @@ from pyro.distributions.log_normal_negative_binomial import LogNormalNegativeBin
 from pyro.distributions.logistic import Logistic, SkewLogistic
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
+from pyro.distributions.nanmasked import NanMaskedMultivariateNormal, NanMaskedNormal
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.one_one_matching import OneOneMatching
 from pyro.distributions.one_two_matching import OneTwoMatching
@@ -92,9 +93,9 @@ from pyro.distributions.zero_inflated import (
 from . import constraints, kl, transforms
 
 __all__ = [
+    "AVFMultivariateNormal",
     "AffineBeta",
     "AsymmetricLaplace",
-    "AVFMultivariateNormal",
     "BetaBinomial",
     "CoalescentRateLikelihood",
     "CoalescentTimes",
@@ -124,13 +125,15 @@ __all__ = [
     "LKJ",
     "LKJCorrCholesky",
     "LinearHMM",
-    "Logistic",
     "LogNormalNegativeBinomial",
+    "Logistic",
     "MaskedDistribution",
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",
     "MultivariateStudentT",
+    "NanMaskedMultivariateNormal",
+    "NanMaskedNormal",
     "OMTMultivariateNormal",
     "OneOneMatching",
     "OneTwoMatching",
@@ -142,8 +145,8 @@ __all__ = [
     "SineBivariateVonMises",
     "SineSkewed",
     "SkewLogistic",
-    "SoftLaplace",
     "SoftAsymmetricLaplace",
+    "SoftLaplace",
     "SpanningTree",
     "Stable",
     "TorchDistribution",
