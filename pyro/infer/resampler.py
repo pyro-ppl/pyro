@@ -83,9 +83,9 @@ class ResamplingCache:
             new_logps = distribution.log_prob(params)
             # Importance sample: keep all weights > 1, and subsample weights < 1.
             weights = (new_logps - old_logps).exp()
-            accepted = (weights > us).nonzero(as_tuple=True)[0].tolist()
+            accepted = (weights > us).nonzero(as_tuple=True)[0][:num_samples].tolist()
             weights.clamp_(min=1)
-            for i in accepted[:num_samples]:
+            for i in accepted:
                 weight = float(weights[i])
                 sample = self.cache[i][2]
                 weighted_samples.append((weight, sample))
