@@ -9,7 +9,7 @@ from pyro.infer.resampler import ResamplingCache
 from tests.common import assert_close
 
 
-@pytest.mark.parametrize("batch_size", [None, 1000])
+@pytest.mark.parametrize("batch_size", [None, 10000])
 def test_resampling_cache(batch_size):
     size = 4
     loc = torch.arange(float(size))
@@ -32,7 +32,7 @@ def test_resampling_cache(batch_size):
         if batch_size:
             expected_mean = loc @ d.mean
             actual_mean = torch.stack(samples).mean(0)
-            assert_close(actual_mean, expected_mean, atol=0.1)
+            assert_close(actual_mean, expected_mean, atol=0.01)
             print(len(cache.cache))
 
     assert len(cache.cache) < num_steps * num_samples, "no sharing"

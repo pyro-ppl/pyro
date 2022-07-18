@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 from typing import Any, Callable, List, Optional, Tuple
 
 import torch
@@ -73,15 +74,22 @@ class ResamplingCache:
              the result of a simulation. Weights are always >= 1.
         :rtype: List[Tuple[float, Any]]
         """
-        # First try to reuse existing samples.
         weighted_samples = []
-        for old_log_prob, param, sample, u in self.cache:
-            weight = (distribution.log_prob(param) - old_log_prob).exp().item()
-            if weight > u:  # Randomly drop weights < 1.
-                weight = max(1.0, weight)
+
+        # First try to reuse existing samples.
+        if self.cache:
+            old_logps = torch.tensor([row[0] for row in self.cache])
+            params = torch.stack([row[1] for row in self.cache])
+            us = torch.tensor([row[3] for row in self.cache])
+            new_logps = distribution.log_prob(params)
+            # Importance sample: keep all weights > 1, and subsample weights < 1.
+            weights = (new_logps - old_logps).exp()
+            accepted = (weights > us).nonzero(as_tuple=True)[0].tolist()
+            weights.clamp_(min=1)
+            for i in accepted[:num_samples]:
+                weight = float(weights[i])
+                sample = self.cache[i][2]
                 weighted_samples.append((weight, sample))
-                if len(weighted_samples) >= num_samples:
-                    break
 
         # Then possibly draw new samples.
         while len(weighted_samples) < num_samples:
