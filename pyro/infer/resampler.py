@@ -34,7 +34,13 @@ class ResamplingCache:
         super().__init__()
         self.model = model
         self.batch_size = batch_size
+
+        # This cache is the source of truth.
         self.cache: List[Tuple[float, torch.Tensor, Any, float]] = []
+        # These are temporary tensors for speed.
+        self._logps = None
+        self._params = None
+        self._us = None
 
     def sample(self, distribution: Distribution, num_samples: int) -> list:
         """Draws a list of at least ``num_samples`` many model samples, each of
@@ -77,15 +83,13 @@ class ResamplingCache:
 
         # First try to reuse existing samples.
         if self.cache:
-            old_logps = torch.tensor([row[0] for row in self.cache])
-            params = torch.stack([row[1] for row in self.cache])
-            us = torch.tensor([row[3] for row in self.cache])
-            new_logps = distribution.log_prob(params)
             # Importance sample: keep all weights > 1, and subsample weights < 1.
+            old_logps, old_params, old_samples, us = self._read_cache()
+            new_logps = distribution.log_prob(old_params)
             weights = (new_logps - old_logps).exp()
-            accepted = (weights > us).nonzero(as_tuple=True)[0][:num_samples].tolist()
+            accepted = (weights > self._us).nonzero(as_tuple=True)[0]
             weights.clamp_(min=1)
-            for i in accepted:
+            for i in accepted[:num_samples].tolist():
                 weight = float(weights[i])
                 sample = self.cache[i][2]
                 weighted_samples.append((weight, sample))
@@ -109,3 +113,23 @@ class ResamplingCache:
 
         assert len(weighted_samples) == num_samples
         return weighted_samples
+
+    def _read_cache(self):
+        if self._logps is None:
+            # Initialize tensors.
+            self._logps = torch.tensor([row[0] for row in self.cache])
+            self._params = torch.stack([row[1] for row in self.cache])
+            self._us = torch.tensor([row[3] for row in self.cache])
+        elif len(self.cache) > len(self._logps):
+            # Extend tensors.
+            added = self.cache[len(self._logps) :]
+            self._logps = torch.cat(
+                [self._logps, torch.tensor([row[0] for row in added])]
+            )
+            self._params = torch.cat(
+                [self._params, torch.stack([row[1] for row in added])]
+            )
+            self._us = torch.cat([self._us, torch.tensor([row[3] for row in added])])
+
+        samples = [row[2] for row in self.cache]
+        return self._logps, self._params, samples, self._us
