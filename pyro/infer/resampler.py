@@ -87,7 +87,8 @@ class ResamplingCache:
             old_logps, old_params, old_samples, us = self._read_cache()
             new_logps = distribution.log_prob(old_params)
             weights = (new_logps - old_logps).exp()
-            accepted = (weights > self._us).nonzero(as_tuple=True)[0]
+            # we use saved randomness to avoid twinkling
+            accepted = (weights > us).nonzero(as_tuple=True)[0]
             weights.clamp_(min=1)
             for i in accepted[:num_samples].tolist():
                 weight = float(weights[i])
@@ -100,15 +101,16 @@ class ResamplingCache:
                 params = [distribution.sample()]
                 log_probs = [distribution.log_prob(params[0])]
                 samples = [self.model(params[0])]
+                us = torch.rand((1,))
             else:
                 batch_size = min(self.batch_size, num_samples - len(weighted_samples))
                 params = distribution.sample([batch_size])
                 log_probs = distribution.log_prob(params)
                 samples = self.model(params)
+                us = torch.rand((batch_size,))
 
-            for log_prob, param, sample in zip(log_probs, params, samples):
-                u = float(torch.rand(()))  # save randomness to avoid twinkling
-                self.cache.append((log_prob, param, sample, u))
+            for log_prob, param, sample, u in zip(log_probs, params, samples, us):
+                self.cache.append((float(log_prob), param, sample, float(u)))
                 weighted_samples.append((1.0, sample))
 
         assert len(weighted_samples) == num_samples
