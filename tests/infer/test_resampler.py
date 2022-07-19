@@ -14,9 +14,9 @@ def test_resampling_cache(batch_size):
     size = 4
     loc = torch.arange(float(size))
 
-    def make_distribution():
-        concentration = dist.Gamma(2, torch.ones(size)).sample()
-        return dist.Dirichlet(concentration)
+    def make_prior():
+        alpha = dist.Gamma(2, torch.ones(size)).sample()
+        return {"concentration": dist.Dirichlet(alpha)}
 
     def model(concentration):
         x = dist.Normal(loc, 0.1).sample(concentration.shape[:-1])
@@ -27,10 +27,10 @@ def test_resampling_cache(batch_size):
     num_steps = 3
     num_samples = 10 * (1 if batch_size is None else batch_size)
     for _ in range(num_steps):
-        d = make_distribution()
-        samples = cache.sample(d, num_samples)
+        prior = make_prior()
+        samples = cache.sample(prior, num_samples)
         if batch_size:
-            expected_mean = loc @ d.mean
+            expected_mean = loc @ prior["concentration"].mean
             actual_mean = torch.stack(samples).mean(0)
             assert_close(actual_mean, expected_mean, atol=0.01)
             print(len(cache.cache))
