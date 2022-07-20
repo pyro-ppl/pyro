@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections import defaultdict
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import torch
@@ -37,13 +38,18 @@ class ResamplingCache:
         super().__init__()
         self.model = model
         self.batch_size = batch_size
+        self.clear()
 
+    def clear(self) -> None:
+        """Clears the cache."""
         # This cache is the source of truth.
         self.cache: List[_CacheRow] = []
         # These temporary tensors are used only for speed.
         self._us: Optional[torch.Tensor] = None
         self._logps: Optional[torch.Tensor] = None
         self._params: Optional[Dict[str, torch.Tensor]] = None
+        # This memoized noise reduces twinkling.
+        self._vs: Dict[int, float] = defaultdict(lambda: torch.randn(()).item())
 
     def sample(self, prior: Dict[str, Distribution], num_samples: int) -> list:
         """Draws a list of at least ``num_samples`` many model outputs, each of
@@ -73,7 +79,8 @@ class ResamplingCache:
                 samples.append(sample)
             else:
                 samples.extend([sample] * int(weight))
-                if weight % 1 > torch.rand(()):
+                unif01 = self._vs[id(sample)]
+                if weight % 1 > unif01:
                     samples.append(sample)
 
         assert len(samples) >= num_samples
@@ -101,7 +108,7 @@ class ResamplingCache:
             us, old_logps, old_param, old_samples = self._read_cache()
             new_logps = prior_.log_prob(old_param)
             weights = (new_logps - old_logps).exp()
-            # we use saved randomness to avoid twinkling
+            # we memoize randomness to avoid twinkling
             accepted = (weights > us).nonzero(as_tuple=True)[0]
             weights.clamp_(min=1)
             for i in accepted[:num_samples].tolist():
