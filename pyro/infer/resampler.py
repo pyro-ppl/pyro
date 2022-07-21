@@ -8,6 +8,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.poutine.trace_struct import Trace
+from pyro.poutine.util import site_is_subsample
 
 
 class Resampler:
@@ -55,7 +56,7 @@ class Resampler:
         self._samples = {
             name: site["value"]
             for name, site in trace.nodes.items()
-            if site["type"] == "sample"
+            if site["type"] == "sample" and not site_is_subsample(site)
         }
 
     @torch.no_grad()
