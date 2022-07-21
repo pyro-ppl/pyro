@@ -45,6 +45,7 @@ class Resampler:
         if max_plate_nesting is None:
             max_plate_nesting = _guess_max_plate_nesting(model)
         self._particle_dim = -1 - max_plate_nesting
+        self._gumbels: Optional[torch.Tensor] = None
 
         # Draw samples from the initial guide.
         with pyro.plate("particles", num_samples, dim=self._particle_dim):
@@ -60,7 +61,9 @@ class Resampler:
         }
 
     @torch.no_grad()
-    def sample(self, guide: Callable, num_samples: int) -> Dict[str, torch.Tensor]:
+    def sample(
+        self, guide: Callable, num_samples: int, stable: bool = True
+    ) -> Dict[str, torch.Tensor]:
         """Draws a set of at most ``num_samples`` many model samples, each of
         which is conditioned on a sample from the given ``guide``.
 
@@ -70,6 +73,8 @@ class Resampler:
 
         :param callable guide: A model with a subset of sites from ``model``.
         :param int num_samples: The number of samples to draw.
+        :param bool stable: Whether to use stable multinomial sampling.
+            Set to True for visualization, False for Monte Carlo integration.
         :returns: A dictionary of stacked samples.
         :rtype: Dict[str, torch.Tensor]
         """
@@ -78,10 +83,24 @@ class Resampler:
         with pyro.plate("particles", batch_size, dim=self._particle_dim):
             trace = poutine.trace(poutine.condition(guide, self._samples)).get_trace()
         new_logp = _log_prob_sum(trace, batch_size)
-        weights = (new_logp - self._old_logp).exp()
-        i = torch.multinomial(weights, num_samples, replacement=True)
+        logits = new_logp - self._old_logp
+        i = self._categorical_sample(logits, num_samples, stable)
         samples = {k: v[i] for k, v in self._samples.items()}
         return samples
+
+    def _categorical_sample(
+        self, logits: torch.Tensor, num_samples: int, stable: bool
+    ) -> torch.Tensor:
+        if not stable:
+            return torch.multinomial(logits.exp(), num_samples, replacement=True)
+
+        # Implement stable categorical sampling via the Gumbel-max trick.
+        if self._gumbels is None or len(self._gumbels) < num_samples:
+            # gumbel ~ -log(-log(uniform(0,1)))
+            self._gumbels = logits.new_empty(num_samples, len(logits)).uniform_()
+            self._gumbels.clamp_(min=torch.finfo(logits.dtype).tiny).log_().neg_()
+            self._gumbels.clamp_(min=torch.finfo(logits.dtype).tiny).log_().neg_()
+        return self._gumbels[:num_samples].add(logits).max(-1).indices
 
 
 def _log_prob_sum(trace: Trace, batch_size: int) -> torch.Tensor:

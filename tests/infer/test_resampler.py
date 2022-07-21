@@ -3,6 +3,7 @@
 
 import functools
 
+import pytest
 import torch
 
 import pyro
@@ -11,7 +12,8 @@ from pyro.infer.resampler import Resampler
 from tests.common import assert_close
 
 
-def test_resampling_cache():
+@pytest.mark.parametrize("stable", [False, True])
+def test_resampling_cache(stable):
     def guide(a):
         pyro.sample("alpha", dist.Dirichlet(a))
 
@@ -23,15 +25,15 @@ def test_resampling_cache():
     # initialize
     a = torch.tensor([1.0, 2.0, 1.0, 1.0])
     guide_a = functools.partial(guide, a)
-    resampler = Resampler(model, guide_a, 100000)
+    resampler = Resampler(model, guide_a, 10000)
 
     # resample
     b = torch.tensor([1.0, 2.0, 3.0, 4.0])
     guide_b = functools.partial(guide, b)
-    samples = resampler.sample(guide_b, 10000)
-    assert all(v.shape[:1] == (10000,) for v in samples.values())
+    samples = resampler.sample(guide_b, 1000)
+    assert all(v.shape[:1] == (1000,) for v in samples.values())
     num_unique = len(set(map(tuple, samples["alpha"].tolist())))
-    assert num_unique >= 5000
+    assert num_unique >= 500
 
     # check moments
     expected_mean = b / b.sum()
