@@ -14,23 +14,23 @@ from tests.common import assert_close
 
 @pytest.mark.parametrize("stable", [False, True])
 def test_resampling_cache(stable):
-    def guide(a):
+    def model_(a):
         pyro.sample("alpha", dist.Dirichlet(a))
 
-    def model():
+    def simulator():
         a = torch.tensor([2.0, 1.0, 1.0, 2.0])
         alpha = pyro.sample("alpha", dist.Dirichlet(a))
         pyro.sample("x", dist.Normal(alpha, 0.01).to_event(1))
 
     # initialize
     a = torch.tensor([1.0, 2.0, 1.0, 1.0])
-    guide_a = functools.partial(guide, a)
-    resampler = Resampler(model, guide_a, 10000)
+    guide = functools.partial(model_, a)
+    resampler = Resampler(guide, simulator, num_guide_samples=10000)
 
     # resample
     b = torch.tensor([1.0, 2.0, 3.0, 4.0])
-    guide_b = functools.partial(guide, b)
-    samples = resampler.sample(guide_b, 1000)
+    model = functools.partial(model_, b)
+    samples = resampler.sample(model, 1000)
     assert all(v.shape[:1] == (1000,) for v in samples.values())
     num_unique = len(set(map(tuple, samples["alpha"].tolist())))
     assert num_unique >= 500
