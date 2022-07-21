@@ -48,7 +48,6 @@ class Resampler:
         # Draw samples from the initial guide.
         with pyro.plate("particles", num_samples, dim=self._particle_dim):
             trace = poutine.trace(guide).get_trace()
-            print(f"DEBUG1 {trace.nodes['alpha']['value'].mean(0)}")
             self._old_logp = _log_prob_sum(trace, num_samples)
 
             # Draw samples from the full model.
@@ -58,7 +57,6 @@ class Resampler:
             for name, site in trace.nodes.items()
             if site["type"] == "sample"
         }
-        print(f"DEBUG2 {self._samples['alpha'].mean(0)}")
 
     @torch.no_grad()
     def sample(self, guide: Callable, num_samples: int) -> Dict[str, torch.Tensor]:
@@ -77,13 +75,11 @@ class Resampler:
         # Importance sample: keep all weights >= 1; subsample weights < 1.
         batch_size = len(self._old_logp)
         with pyro.plate("particles", batch_size, dim=self._particle_dim):
-            trace = poutine.trace(guide).get_trace()
-            print(f"DEBUG3 {trace.nodes['alpha']['value'].mean(0)}")
+            trace = poutine.trace(poutine.condition(guide, self._samples)).get_trace()
         new_logp = _log_prob_sum(trace, batch_size)
         weights = (new_logp - self._old_logp).exp()
         i = torch.multinomial(weights, num_samples, replacement=True)
         samples = {k: v[i] for k, v in self._samples.items()}
-        print(f"DEBUG4 {samples['alpha'].mean(0)}")
         return samples
 
 
