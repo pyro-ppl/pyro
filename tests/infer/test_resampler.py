@@ -3,39 +3,39 @@
 
 import functools
 
-import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.resampler import ResamplingCache
+from pyro.infer.resampler import Resampler
 from tests.common import assert_close
 
 
 def test_resampling_cache():
-    size = 4
-
-    def prior(a):
-        alpha = pyro.sample("alpha", dist.Dirichlet(a))
+    def guide(a):
+        pyro.sample("alpha", dist.Dirichlet(a))
 
     def model():
-        alpha = pyro.sample("alpha", dist.Dirichlet(3 * torch.ones(size)))
-        x = pyro.sample("x", dist.Normal(alpha, 0.01).to_event(1))
+        a = torch.tensor([2.0, 1.0, 1.0, 2.0])
+        alpha = pyro.sample("alpha", dist.Dirichlet(a))
+        pyro.sample("x", dist.Normal(alpha, 0.01).to_event(1))
 
-    cache = ResamplingCache(model)
+    # initialize
+    a = torch.tensor([1.0, 2.0, 1.0, 1.0])
+    guide_a = functools.partial(guide, a)
+    resampler = Resampler(model, guide_a, 100000)
 
-    num_steps = 3
-    num_samples = 10000
-    for _ in range(num_steps):
-        a = 1 + torch.randn(size).exp()
-        prior_a = functools.partial(prior, a=a)
-        samples = cache.sample(prior_a, num_samples)
+    # resample
+    b = torch.tensor([1.0, 2.0, 3.0, 4.0])
+    guide_b = functools.partial(guide, b)
+    samples = resampler.sample(guide_b, 10000)
+    assert all(v.shape[:1] == (10000,) for v in samples.values())
+    num_unique = len(set(map(tuple, samples["alpha"].tolist())))
+    assert num_unique >= 5000
 
-        # check moments
-        expected_mean = a / a.sum()
-        probs = samples["_weight"] / samples["_weight"].sum()
-        actual_mean = probs @ samples["x"]
-        assert_close(actual_mean, expected_mean, atol=0.01)
-        print("cache size =", len(cache._cache["_logp"]))
-
-    assert len(cache.cache) < num_steps * num_samples, "no sharing"
+    # check moments
+    expected_mean = b / b.sum()
+    actual_mean = samples["alpha"].mean(0)
+    assert_close(actual_mean, expected_mean, atol=0.01)
+    actual_mean = samples["x"].mean(0)
+    assert_close(actual_mean, expected_mean, atol=0.01)
