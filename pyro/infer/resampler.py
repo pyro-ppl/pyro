@@ -24,9 +24,9 @@ class Resampler:
 
     :param callable guide: A pyro model that takes no arguments. The guide
         should be diffuse, covering more space than the subsequent ``model``
-        passed to :meth:`sample`.
+        passed to :meth:`sample`. Must be vectorizable via ``pyro.plate``.
     :param callable simulator: An optional larger pyro model with a superset of
-        the guide's latent variables.
+        the guide's latent variables. Must be vectorizable via ``pyro.plate``.
     :param int num_guide_samples: Number of inital samples to draw from the
         guide. This should be much larger than the ``num_samples`` requested in
         subsequent calls to :meth:`sample`.
@@ -77,7 +77,7 @@ class Resampler:
         distribution, samples will show low diversity.
 
         :param callable model: A model with the same latent variables as the
-            original ``guide``.
+            original ``guide``. Must be vectorizable via ``pyro.plate``.
         :param int num_samples: The number of samples to draw.
         :param bool stable: Whether to use piecewise-constant multinomial
             sampling. Set to True for visualization, False for Monte Carlo
@@ -85,7 +85,6 @@ class Resampler:
         :returns: A dictionary of stacked samples.
         :rtype: Dict[str, torch.Tensor]
         """
-        # Importance sample: keep all weights >= 1; subsample weights < 1.
         num_guide_samples = len(self._old_logp)
         with pyro.plate("particles", num_guide_samples, dim=self._particle_dim):
             trace = poutine.trace(poutine.condition(model, self._samples)).get_trace()
