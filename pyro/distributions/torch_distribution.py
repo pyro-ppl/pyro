@@ -479,7 +479,7 @@ class ExpandedDistribution(TorchDistribution):
             log_prob = log_prob.expand(shape)
             if isinstance(score_function, torch.Tensor):
                 score_function = score_function.expand(shape)
-            if isinstance(score_function, torch.Tensor):
+            if isinstance(entropy_term, torch.Tensor):
                 entropy_term = entropy_term.expand(shape)
         return ScoreParts(log_prob, score_function, entropy_term)
 
