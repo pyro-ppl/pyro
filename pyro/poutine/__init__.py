@@ -20,6 +20,7 @@ from .handlers import (
     seed,
     trace,
     uncondition,
+    substitute,
 )
 from .messenger import unwrap
 from .runtime import NonlocalExit, get_mask

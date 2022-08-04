@@ -74,6 +74,7 @@ from .scale_messenger import ScaleMessenger
 from .seed_messenger import SeedMessenger
 from .trace_messenger import TraceMessenger
 from .uncondition_messenger import UnconditionMessenger
+from .substitute_messenger import SubstituteMessenger
 
 ############################################
 # Begin primitive operations
@@ -97,6 +98,7 @@ _msngrs = [
     SeedMessenger,
     TraceMessenger,
     UnconditionMessenger,
+    SubstituteMessenger,
 ]
 
 
