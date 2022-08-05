@@ -626,6 +626,7 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
                         dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
                         obs=Vindex(sequences)[batch, t],
                     )
+                x_prev = x_curr
 
 
 # Let's see how vectorizing time dimension changes the shapes of sample sites:
@@ -644,11 +645,11 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
 #                      value       16  1  1  1 |
 #                   y_0 dist       16 10  1 51 |
 #                      value          10  1 51 |
-#  x_slice(0, 71, None) dist          10 71  1 |
+#  x_slice(0, 71, None) dist       16 10 71  1 |
 #                      value    16  1  1  1  1 |
 #  y_slice(0, 71, None) dist    16  1 10 71 51 |
 #                      value          10 71 51 |
-#  x_slice(1, 72, None) dist          10 71  1 |
+#  x_slice(1, 72, None) dist    16  1 10 71  1 |
 #                      value 16  1  1  1  1  1 |
 #  y_slice(1, 72, None) dist 16  1  1 10 71 51 |
 #                      value          10 71 51 |
