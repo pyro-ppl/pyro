@@ -1074,6 +1074,3 @@ class OneWayNormalRandomEffects(TestCase):
 
         group_loc_error = param_abs_error("group_loc_param", self.post_group_locs)
         assert_equal(0.0, group_loc_error, prec=0.08)
-
-    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False):
-        pass
