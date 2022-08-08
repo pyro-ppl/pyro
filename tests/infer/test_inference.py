@@ -1029,16 +1029,17 @@ class OneWayNormalRandomEffects(TestCase):
         ) / (obs_prec + self.group_prec)
 
     def test_renyi_reparameterized(self):
-        self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2))
+        self.do_elbo_test(True, 10_000, RenyiELBO(num_particles=2))
+
+    def test_renyi_vectorized(self):
+        self.do_elbo_test(
+            True,
+            15_000,
+            RenyiELBO(num_particles=2, vectorize_particles=True, max_plate_nesting=3),
+        )
 
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 15000, RenyiELBO(alpha=0.2, num_particles=2))
-
-    def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 5000, Trace_ELBO())
-
-    def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 35_000, Trace_ELBO())
 
     def do_elbo_test(self, reparameterized, n_steps, loss, debug=False):
         def model():
