@@ -101,7 +101,7 @@ def get_plate_stacks(trace):
 
 def get_nonparticle_plate_dims(sites):
     """
-    Return a list of unique dims of all plates except the par
+    Return a list of unique dims of all plates except vectorized particles
     """
     plate_sets = [
         site["cond_indep_stack"] for site in sites if site["type"] == "sample"
