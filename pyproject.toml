@@ -1,4 +1,10 @@
 [tool.black]
-line-length = 120
-target-version = ['py37']
-include = '*.p pyro examples tests scripts profiler'
+include = '''
+(
+  pyro/.*\.py
+  | examples/.*\.py
+  | tests/.*\.py
+  | scripts/.*\.py
+  | profiler/.*\.py
+)
+'''
