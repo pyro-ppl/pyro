@@ -120,7 +120,7 @@ def test_marginal(equation):
 def test_require_backward_memory_leak():
     # Using clone resolves memory leak.
     for i in range(10):
-        x = torch.tensor(0.)
+        x = torch.tensor(0.0)
         require_backward(x)
         x._pyro_backward.process(x.clone())
 
@@ -130,7 +130,7 @@ def test_require_backward_memory_leak():
 
     # Using [...] creates memory leak.
     for i in range(10):
-        x = torch.tensor(0.)
+        x = torch.tensor(0.0)
         require_backward(x)
         x._pyro_backward.process(x[...])
 
