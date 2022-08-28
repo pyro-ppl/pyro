@@ -117,7 +117,12 @@ def test_marginal(equation):
         assert_equal(expected, actual)
 
 
+@pytest.mark.filterwarnings("ignore:.*reduce_op is deprecated")
 def test_require_backward_memory_leak():
+    tensors = [o for o in gc.get_objects() if torch.is_tensor(o)]
+    num_global_tensors = len(tensors)
+    del tensors
+
     # Using clone resolves memory leak.
     for i in range(10):
         x = torch.tensor(0.0)
@@ -125,7 +130,7 @@ def test_require_backward_memory_leak():
         x._pyro_backward.process(x.clone())
 
     tensors = [o for o in gc.get_objects() if torch.is_tensor(o)]
-    assert len(tensors) <= 5
+    assert len(tensors) <= 5 + num_global_tensors
     del tensors
 
     # Using [...] creates memory leak.
@@ -135,4 +140,4 @@ def test_require_backward_memory_leak():
         x._pyro_backward.process(x[...])
 
     tensors = [o for o in gc.get_objects() if torch.is_tensor(o)]
-    assert len(tensors) >= 15
+    assert len(tensors) >= 15 + num_global_tensors

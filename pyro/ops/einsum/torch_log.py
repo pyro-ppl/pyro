@@ -23,6 +23,9 @@ def einsum(equation, *operands):
 
     inputs, output = equation.split("->")
     if inputs == output:
+        # Originally we return `operands[0][...]` but that caused
+        # memory leak in PyTorch >= 1.11 (issue #3068). Hence we
+        # return `operands[0].clone()` here.
         return operands[0].clone()  # create a new object
     inputs = inputs.split(",")
 
