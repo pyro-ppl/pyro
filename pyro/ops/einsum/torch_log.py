@@ -23,7 +23,7 @@ def einsum(equation, *operands):
 
     inputs, output = equation.split("->")
     if inputs == output:
-        return operands[0][...]  # create a new object
+        return operands[0].clone()  # create a new object
     inputs = inputs.split(",")
 
     shifts = []
