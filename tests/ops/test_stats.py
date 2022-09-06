@@ -105,13 +105,32 @@ def test_statistics_A_ok_with_sample_shape(statistics, sample_shape):
 
 def test_autocorrelation():
     x = torch.arange(10.0)
-    with xfail_if_not_implemented():
-        actual = autocorrelation(x)
+    actual = autocorrelation(x)
     assert_equal(
         actual,
         torch.tensor([1, 0.78, 0.52, 0.21, -0.13, -0.52, -0.94, -1.4, -1.91, -2.45]),
         prec=0.01,
     )
+
+
+def test_autocorrelation_trivial():
+    x = torch.zeros(10)
+    actual = autocorrelation(x)
+    assert_equal(actual, torch.ones(10), prec=0.01)
+
+
+def test_autocorrelation_vectorized():
+    # make a mostly noisy x with a couple constant series
+    x = torch.randn(3, 4, 5)
+    x[1, 2] = 0
+    x[2, 3] = 1
+
+    actual = autocorrelation(x, dim=-1)
+    expected = torch.tensor([[autocorrelation(xij).tolist() for xij in xi] for xi in x])
+    assert_equal(actual, expected)
+
+    assert (actual[1, 2] == 1).all()
+    assert (actual[2, 3] == 1).all()
 
 
 def test_autocovariance():

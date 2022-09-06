@@ -140,7 +140,7 @@ def main(args):
         ylim=ylim,
         title="Posterior \n(vanilla HMC)",
     )
-    sns.kdeplot(vanilla_samples[:, 0], vanilla_samples[:, 1], ax=ax2)
+    sns.kdeplot(x=vanilla_samples[:, 0], y=vanilla_samples[:, 1], ax=ax2)
 
     # 3(a). Fit a diagonal normal autoguide
     logging.info("\nFitting a DiagNormal autoguide ...")
@@ -157,7 +157,7 @@ def main(args):
         ylim=ylim,
         title="Posterior \n(DiagNormal autoguide)",
     )
-    sns.kdeplot(guide_samples[:, 0], guide_samples[:, 1], ax=ax3)
+    sns.kdeplot(x=guide_samples[:, 0], y=guide_samples[:, 1], ax=ax3)
 
     # 3(b). Draw samples using NeuTra HMC
     logging.info("\nDrawing samples using DiagNormal autoguide + NeuTra HMC ...")
@@ -165,7 +165,7 @@ def main(args):
     neutra_model = poutine.reparam(model, config=lambda _: neutra)
     mcmc = run_hmc(args, neutra_model)
     zs = mcmc.get_samples()["x_shared_latent"]
-    sns.scatterplot(zs[:, 0], zs[:, 1], alpha=0.2, ax=ax4)
+    sns.scatterplot(x=zs[:, 0], y=zs[:, 1], alpha=0.2, ax=ax4)
     ax4.set(
         xlabel="x0",
         ylabel="x1",
@@ -182,7 +182,7 @@ def main(args):
         ylim=ylim,
         title="Posterior (transformed) \n(DiagNormal + NeuTra HMC)",
     )
-    sns.kdeplot(samples[:, 0], samples[:, 1], ax=ax5)
+    sns.kdeplot(x=samples[:, 0], y=samples[:, 1], ax=ax5)
 
     # 4(a). Fit a BNAF autoguide
     logging.info("\nFitting a BNAF autoguide ...")
@@ -201,7 +201,7 @@ def main(args):
         ylim=ylim,
         title="Posterior \n(BNAF autoguide)",
     )
-    sns.kdeplot(guide_samples[:, 0], guide_samples[:, 1], ax=ax6)
+    sns.kdeplot(x=guide_samples[:, 0], y=guide_samples[:, 1], ax=ax6)
 
     # 4(b). Draw samples using NeuTra HMC
     logging.info("\nDrawing samples using BNAF autoguide + NeuTra HMC ...")
@@ -209,7 +209,7 @@ def main(args):
     neutra_model = poutine.reparam(model, config=lambda _: neutra)
     mcmc = run_hmc(args, neutra_model)
     zs = mcmc.get_samples()["x_shared_latent"]
-    sns.scatterplot(zs[:, 0], zs[:, 1], alpha=0.2, ax=ax7)
+    sns.scatterplot(x=zs[:, 0], y=zs[:, 1], alpha=0.2, ax=ax7)
     ax7.set(
         xlabel="x0",
         ylabel="x1",
@@ -226,13 +226,13 @@ def main(args):
         ylim=ylim,
         title="Posterior (transformed) \n(BNAF + NeuTra HMC)",
     )
-    sns.kdeplot(samples[:, 0], samples[:, 1], ax=ax8)
+    sns.kdeplot(x=samples[:, 0], y=samples[:, 1], ax=ax8)
 
     plt.savefig(os.path.join(os.path.dirname(__file__), "neutra.pdf"))
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.1")
+    assert pyro.__version__.startswith("1.8.2")
     parser = argparse.ArgumentParser(
         description="Example illustrating NeuTra Reparametrizer"
     )

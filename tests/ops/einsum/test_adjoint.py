@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import gc
 import itertools
 
 import pytest
@@ -114,3 +115,29 @@ def test_marginal(equation):
         )
         actual = operand._pyro_backward_result
         assert_equal(expected, actual)
+
+
+@pytest.mark.filterwarnings("ignore:.*reduce_op is deprecated")
+def test_require_backward_memory_leak():
+    tensors = [o for o in gc.get_objects() if torch.is_tensor(o)]
+    num_global_tensors = len(tensors)
+    del tensors
+
+    # Using clone resolves memory leak.
+    for i in range(10):
+        x = torch.tensor(0.0)
+        require_backward(x)
+        x._pyro_backward.process(x.clone())
+
+    tensors = [o for o in gc.get_objects() if torch.is_tensor(o)]
+    assert len(tensors) <= 5 + num_global_tensors
+    del tensors
+
+    # Using [...] creates memory leak.
+    for i in range(10):
+        x = torch.tensor(0.0)
+        require_backward(x)
+        x._pyro_backward.process(x[...])
+
+    tensors = [o for o in gc.get_objects() if torch.is_tensor(o)]
+    assert len(tensors) >= 15 + num_global_tensors

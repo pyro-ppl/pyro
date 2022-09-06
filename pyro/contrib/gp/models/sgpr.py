@@ -19,10 +19,10 @@ class SparseGPRegression(GPModel):
     the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
     compute its inverse (for log likelihood and for prediction). By introducing an
     additional inducing-input parameter :math:`X_u`, we can reduce computational cost
-    by approximate :math:`k(X, X)` by a low-rank Nymstr\u00F6m approximation :math:`Q`
+    by approximate :math:`k(X, X)` by a low-rank Nystr\u00F6m approximation :math:`Q`
     (see reference [1]), where
 
-    .. math:: Q = k(X, X_u) k(X,X)^{-1} k(X_u, X).
+    .. math:: Q = k(X, X_u) k(X_u,X_u)^{-1} k(X_u, X).
 
     Given inputs :math:`X`, their noisy observations :math:`y`, and the inducing-input
     parameters :math:`X_u`, the model takes the form:
@@ -62,7 +62,7 @@ class SparseGPRegression(GPModel):
 
     + Variational Free Energy (VFE), which is similar to DTC but has an additional
       `trace_term` in the model's log likelihood. This additional term makes "VFE"
-      equivalent to the variational approach in :class:`.SparseVariationalGP`
+      equivalent to the variational approach in :class:`.VariationalSparseGP`
       (see reference [2]).
 
     .. note:: This model has :math:`\\mathcal{O}(NM^2)` complexity for training,

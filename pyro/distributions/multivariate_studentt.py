@@ -36,7 +36,9 @@ class MultivariateStudentT(TorchDistribution):
         assert scale_tril.shape[-2:] == (dim, dim)
         if not isinstance(df, torch.Tensor):
             df = loc.new_tensor(df)
-        batch_shape = broadcast_shape(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
+        batch_shape = torch.broadcast_shapes(
+            df.shape, loc.shape[:-1], scale_tril.shape[:-2]
+        )
         event_shape = torch.Size((dim,))
         self.df = df.expand(batch_shape)
         self.loc = loc.expand(batch_shape + event_shape)

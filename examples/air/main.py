@@ -50,7 +50,7 @@ def count_accuracy(X, true_counts, air, batch_size):
         true_counts_m = count_vec_to_mat(true_counts_batch, 2)
         inferred_counts_m = count_vec_to_mat(inferred_counts, 3)
         counts += torch.mm(true_counts_m.t(), inferred_counts_m)
-        error_ind = 1 - (true_counts_batch == inferred_counts)
+        error_ind = 1 - (true_counts_batch == inferred_counts).long()
         error_ix = error_ind.nonzero(as_tuple=False).squeeze()
         error_latents.append(
             latents_to_tensor((z_where, z_pres)).index_select(0, error_ix)
@@ -272,7 +272,7 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.1")
+    assert pyro.__version__.startswith("1.8.2")
     parser = argparse.ArgumentParser(
         description="Pyro AIR example", argument_default=argparse.SUPPRESS
     )
