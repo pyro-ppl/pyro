@@ -73,7 +73,7 @@ EXTRAS_REQUIRE = [
     "pandas",
     "pillow==8.2.0",  # https://github.com/pytorch/pytorch/issues/61125
     "scikit-learn",
-    "seaborn",
+    "seaborn>=0.11.0",
     "wget",
     "lap",
     # 'biopython>=1.54',
