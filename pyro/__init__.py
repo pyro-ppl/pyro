@@ -26,7 +26,7 @@ from pyro.primitives import (
 from pyro.util import set_rng_seed
 
 # After changing this, run scripts/update_version.py
-version_prefix = "1.8.1"
+version_prefix = "1.8.2"
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
