@@ -165,7 +165,7 @@ def main(args):
     neutra_model = poutine.reparam(model, config=lambda _: neutra)
     mcmc = run_hmc(args, neutra_model)
     zs = mcmc.get_samples()["x_shared_latent"]
-    sns.scatterplot(zs[:, 0], zs[:, 1], alpha=0.2, ax=ax4)
+    sns.scatterplot(x=zs[:, 0], y=zs[:, 1], alpha=0.2, ax=ax4)
     ax4.set(
         xlabel="x0",
         ylabel="x1",
@@ -209,7 +209,7 @@ def main(args):
     neutra_model = poutine.reparam(model, config=lambda _: neutra)
     mcmc = run_hmc(args, neutra_model)
     zs = mcmc.get_samples()["x_shared_latent"]
-    sns.scatterplot(zs[:, 0], zs[:, 1], alpha=0.2, ax=ax7)
+    sns.scatterplot(x=zs[:, 0], y=zs[:, 1], alpha=0.2, ax=ax7)
     ax7.set(
         xlabel="x0",
         ylabel="x1",
