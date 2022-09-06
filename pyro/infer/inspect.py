@@ -22,29 +22,34 @@ except ImportError:
     graphviz = SimpleNamespace(Digraph=object)  # for type hints
 
 
-def is_sample_site(msg):
+def is_sample_site(msg, *, include_deterministic=False):
     if msg["type"] != "sample":
         return False
     if site_is_subsample(msg):
         return False
 
-    # Ignore masked observations.
-    if msg["is_observed"] and msg["mask"] is False:
-        return False
+    if not include_deterministic:
+        # Ignore masked observations.
+        if msg["is_observed"] and msg["mask"] is False:
+            return False
 
-    # Exclude deterministic sites.
-    fn = msg["fn"]
-    while hasattr(fn, "base_dist"):
-        fn = fn.base_dist
-    if type(fn).__name__ == "Delta":
-        return False
+        # Exclude deterministic sites.
+        fn = msg["fn"]
+        while hasattr(fn, "base_dist"):
+            fn = fn.base_dist
+        if type(fn).__name__ == "Delta":
+            return False
 
     return True
 
 
 class TrackProvenance(Messenger):
+    def __init__(self, *, include_deterministic=False):
+        super().__init__()
+        self.include_deterministic = include_deterministic
+
     def _pyro_post_sample(self, msg):
-        if is_sample_site(msg):
+        if is_sample_site(msg, include_deterministic=self.include_deterministic):
             provenance = frozenset({msg["name"]})  # track only direct dependencies
             value = detach_provenance(msg["value"])
             msg["value"] = ProvenanceTensor(value, provenance)
@@ -237,6 +242,8 @@ def get_model_relations(
     model: Callable,
     model_args: Optional[tuple] = None,
     model_kwargs: Optional[dict] = None,
+    *,
+    include_deterministic: bool = False,
 ):
     """
     Infer relations of RVs and plates from given model and optionally data.
@@ -278,7 +285,7 @@ def get_model_relations(
         model_kwargs = {}
 
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
-        with TrackProvenance():
+        with TrackProvenance(include_deterministic=include_deterministic):
             trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
 
     sample_sample = {}
@@ -531,6 +538,7 @@ def render_model(
     filename: Optional[str] = None,
     render_distributions: bool = False,
     render_params: bool = False,
+    include_deterministic: bool = False,
 ) -> "graphviz.Digraph":
     """
     Renders a model using `graphviz <https://graphviz.org>`_ .
@@ -546,6 +554,8 @@ def render_model(
     :param bool render_distributions: Whether to include RV distribution
         annotations (and param constraints) in the plot.
     :param bool render_params: Whether to show params inthe plot.
+    :param bool include_deterministic: Whether to include deterministic
+        dependencies in the plot.
     :returns: A model graph.
     :rtype: graphviz.Digraph
     """
@@ -555,7 +565,9 @@ def render_model(
     assert model_kwargs is None or isinstance(
         model_kwargs, dict
     ), "model_kwargs must be None or dict"
-    relations = get_model_relations(model, model_args, model_kwargs)
+    relations = get_model_relations(
+        model, model_args, model_kwargs, include_deterministic=include_deterministic
+    )
     graph_spec = generate_graph_specification(relations, render_params=render_params)
     graph = render_graph(graph_spec, render_distributions=render_distributions)
 

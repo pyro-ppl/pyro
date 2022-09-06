@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing.fakes import NonreparameterizedNormal
-from pyro.infer.inspect import get_dependencies
+from pyro.infer.inspect import get_dependencies, get_model_relations
 
 
 @pytest.mark.parametrize("grad_enabled", [True, False])
@@ -23,7 +23,7 @@ def test_get_dependencies(grad_enabled):
         g = pyro.sample("g", dist.Bernoulli(logits=e + f), obs=torch.tensor(0.0))
 
         with pyro.plate("p", len(data)):
-            d_ = d.detach()  # this results in a known failure
+            d_ = d.detach()
             h = pyro.sample("h", dist.Normal(c, d_.exp()))
             i = pyro.deterministic("i", h + 1)
             j = pyro.sample("j", dist.Delta(h + 1), obs=h + 1)
@@ -422,4 +422,110 @@ def test_nested_plate_collider():
             "c": {"c": {"i"}, "d": _},
         },
     }
+    assert actual == expected
+
+
+@pytest.mark.parametrize("include_deterministic", [False, True])
+def test_get_model_relations(include_deterministic):
+    def model(data):
+        a = pyro.sample("a", dist.Normal(0, 1))
+        b = pyro.sample("b", dist.Normal(a, 1))
+        c = pyro.sample("c", dist.Normal(a, b.exp()))
+        d = pyro.sample("d", dist.Bernoulli(logits=c), obs=torch.tensor(0.0))
+
+        with pyro.plate("p", len(data)):
+            e = pyro.sample("e", dist.Normal(a, b.exp()))
+            f = pyro.deterministic("f", e + 1)
+            g = pyro.sample("g", dist.Delta(e + 1), obs=e + 1)
+            h = pyro.sample("h", dist.Delta(e + 1))
+            i = pyro.sample("i", dist.Normal(e, (f + g + h).exp()), obs=data)
+
+        return [a, b, c, d, e, f, g, h, i]
+
+    data = torch.randn(3)
+    actual = get_model_relations(
+        model,
+        (data,),
+        include_deterministic=include_deterministic,
+    )
+
+    if include_deterministic:
+        expected = {
+            "observed": ["d", "f", "g", "i"],
+            "param_constraint": {},
+            "plate_sample": {"p": ["e", "f", "g", "h", "i"]},
+            "sample_dist": {
+                "a": "Normal",
+                "b": "Normal",
+                "c": "Normal",
+                "d": "Bernoulli",
+                "e": "Normal",
+                "f": "Delta",
+                "g": "Delta",
+                "h": "Delta",
+                "i": "Normal",
+            },
+            "sample_param": {
+                "a": [],
+                "b": [],
+                "c": [],
+                "d": [],
+                "e": [],
+                "f": [],
+                "g": [],
+                "h": [],
+                "i": [],
+            },
+            "sample_sample": {
+                "a": [],
+                "b": ["a"],
+                "c": ["b", "a"],
+                "d": ["c"],
+                "e": ["b", "a"],
+                "f": [],
+                "g": ["e"],
+                "h": ["e"],
+                "i": ["f", "g", "h", "e"],
+            },
+        }
+    else:
+        expected = {
+            "observed": ["d", "f", "g", "i"],
+            "param_constraint": {},
+            "plate_sample": {"p": ["e", "f", "g", "h", "i"]},
+            "sample_dist": {
+                "a": "Normal",
+                "b": "Normal",
+                "c": "Normal",
+                "d": "Bernoulli",
+                "e": "Normal",
+                "f": "Delta",
+                "g": "Delta",
+                "h": "Delta",
+                "i": "Normal",
+            },
+            "sample_param": {
+                "a": [],
+                "b": [],
+                "c": [],
+                "d": [],
+                "e": [],
+                "f": [],
+                "g": [],
+                "h": [],
+                "i": [],
+            },
+            "sample_sample": {
+                "a": [],
+                "b": ["a"],
+                "c": ["b", "a"],
+                "d": ["c"],
+                "e": ["b", "a"],
+                "f": [],
+                "g": ["e"],
+                "h": ["e"],
+                "i": ["e"],
+            },
+        }
+
     assert actual == expected
