@@ -125,3 +125,24 @@ def test_bernoulli_entropy_grad(temp):
             expected, actual
         ),
     )
+
+
+def test_bernoulli_expand():
+    d = RelaxedBernoulliStraightThrough(probs=torch.tensor(0.5), temperature=1.0)
+    assert d.has_rsample
+    x = d()
+    assert ((x == 0) | (x == 1)).all()
+
+    d2 = d.expand([5])
+    assert d2.has_rsample
+    x = d2()
+    assert ((x == 0) | (x == 1)).all()
+
+
+def test_():
+    n = 2
+    p_m = pyro.sample('p_m', dist.Beta(self.activation_probability_alpha,
+                                       self.activation_probability_beta
+                                      ).expand([1,1,n]).to_event(3))
+    x = pyro.sample('x', RelaxedBernoulliStraightThrough(probs=p_m, temperature=1e-3))
+    assert ((x == 0) | (x == 1)).all()
